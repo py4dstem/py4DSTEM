@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1395</width>
+    <height>1028</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Microscope</string>
+  </property>
+  <property name="unifiedTitleAndToolBarOnMac">
+   <bool>false</bool>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0">
+    <item>
+     <widget class="QFrame" name="frame">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>271</width>
+        <height>601</height>
+       </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Plain</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <widget class="QGroupBox" name="groupBox_scanarea">
+         <property name="title">
+          <string>2D Scan Area</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout">
+          <item row="0" column="3">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>µm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="v0_doubleSpinBox">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <double>25.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QDoubleSpinBox" name="h1_doubleSpinBox">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <double>45.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QDoubleSpinBox" name="dv_doubleSpinBox">
+            <property name="decimals">
+             <number>4</number>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="dv_label">
+            <property name="text">
+             <string>dV:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="2">
+           <widget class="QLabel" name="label_7">
+            <property name="text">
+             <string>um</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="dh_label">
+            <property name="text">
+             <string>dH:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QDoubleSpinBox" name="dh_doubleSpinBox">
+            <property name="decimals">
+             <number>4</number>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="2">
+           <widget class="QLabel" name="label_9">
+            <property name="text">
+             <string>um</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="h_label">
+            <property name="text">
+             <string>H:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QDoubleSpinBox" name="v1_doubleSpinBox">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <double>45.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="h0_doubleSpinBox">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <double>25.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="3">
+           <widget class="QLabel" name="label_4">
+            <property name="text">
+             <string>µm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="v_label">
+            <property name="text">
+             <string>V:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="2">
+           <widget class="QPushButton" name="pushButton">
+            <property name="text">
+             <string>Start</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="2" colspan="2">
+           <widget class="QPushButton" name="pushButton_2">
+            <property name="text">
+             <string>Stop</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="widget" native="true">
+         <layout class="QHBoxLayout" name="horizontalLayout"/>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="tabShape">
+       <enum>QTabWidget::Rounded</enum>
+      </property>
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="example_tab">
+       <attribute name="title">
+        <string>Example Scan</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="plot2d_layout" stretch="0,1">
+        <item>
+         <widget class="QGroupBox" name="example_controls_groupBox">
+          <property name="title">
+           <string>Controls</string>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_17">
+           <item row="0" column="0">
+            <widget class="QPushButton" name="example_scan_start_pushButton">
+             <property name="text">
+              <string>Start Example  Scan</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QPushButton" name="example_scan_interrupt_pushButton">
+             <property name="text">
+              <string>Interrupt Example Scan</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QPushButton" name="example_scan_clearfig_pushButton">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>Clear Figure</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="example_scan_plot_widget">
+          <property name="title">
+           <string>Plot</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_24"/>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="hardware_tab">
+       <attribute name="title">
+        <string>Hardware</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_6">
+        <item>
+         <widget class="QScrollArea" name="hardware_tab_scrollArea">
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOff</enum>
+          </property>
+          <property name="sizeAdjustPolicy">
+           <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
+          </property>
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="hardware_tab_scrollArea_content_widget">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>59</width>
+             <height>24</height>
+            </rect>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_7"/>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="measurements_tab">
+       <attribute name="title">
+        <string>Measurement</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_12">
+        <item>
+         <widget class="QScrollArea" name="scrollArea">
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOff</enum>
+          </property>
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="measurements_tab_scrollArea_content_widget">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>59</width>
+             <height>24</height>
+            </rect>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_13"/>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+   <zorder>tabWidget</zorder>
+   <zorder>frame</zorder>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1395</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <tabstops>
+  <tabstop>h0_doubleSpinBox</tabstop>
+  <tabstop>h1_doubleSpinBox</tabstop>
+  <tabstop>v0_doubleSpinBox</tabstop>
+  <tabstop>v1_doubleSpinBox</tabstop>
+  <tabstop>dh_doubleSpinBox</tabstop>
+  <tabstop>dv_doubleSpinBox</tabstop>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>hardware_tab_scrollArea</tabstop>
+  <tabstop>scrollArea</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
