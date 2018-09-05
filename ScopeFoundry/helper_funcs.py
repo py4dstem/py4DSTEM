@@ -6,19 +6,19 @@ class OrderedAttrDict(object):
 
     def __init__(self):
         self._odict = OrderedDict()
-        
+
     def add(self, name, obj):
         self._odict[name] = obj
         self.__dict__[name] = obj
         return obj
-    
+
     def keys(self):
         return self._odict.keys()
     def values(self):
         return self._dict.values()
     def items(self):
         return self._odict.items()
-    
+
     def __len__(self):
         return len(self._odict)
 
