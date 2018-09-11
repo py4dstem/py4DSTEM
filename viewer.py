@@ -28,6 +28,7 @@ from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
 import dm3_lib as dm3
 from control_panel import ControlPanel
+from datacube import DataCube
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -191,21 +192,22 @@ class DataViewer(QtCore.QObject):
     ######### Methods controlling responses to user inputs #########
 
     def load_file(self):
+        """
+        Loads a file by creating and storing a DataCube object
+        """
         fname = self.settings.data_filename.val
         print("Loading file",fname)
 
-        try:
-            self.dm3f = dm3.DM3(fname, debug=True)
-            self.data_3Dflattened = self.dm3f.imagedata
-        except Exception as err:
-            print("Failed to load", err)
-            self.data_3Dflattened = np.random.rand(100,512,512)
-        self.R_N, self.Q_Ny, self.Q_Nx = self.data_3Dflattened.shape
+        # Instantiate DataCube object
+        self.datacube = DataCube(fname)
+
+        # Update scan shape information
+        self.R_N = self.datacube.R_N
+        self.settings.R_Nx.update_value(1)
+        self.settings.R_Ny.update_value(self.R_N)
 
         self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
 
-        self.settings.R_Nx.update_value(1)
-        self.settings.R_Ny.update_value(self.R_N)
         return
 
     def update_virtual_image(self):
@@ -229,7 +231,7 @@ class DataViewer(QtCore.QObject):
         self.settings.R_Ny.update_value(int(self.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
         try:
-            self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+            self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
             pass
         if hasattr(self, "virtual_detector_roi"):
@@ -241,13 +243,12 @@ class DataViewer(QtCore.QObject):
         self.settings.R_Nx.update_value(int(self.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
         try:
-            self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+            self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
             pass
         if hasattr(self, "virtual_detector_roi"):
             self.update_virtual_image()
         return
-
 
     def exec_(self):
         return self.qtapp.exec_()
@@ -255,6 +256,32 @@ class DataViewer(QtCore.QObject):
 
 
     ####### DEPRECATED ##########
+
+    #def update_scan_shape_Nx(self):
+    #    R_Nx = self.settings.R_Nx.val
+    #    self.settings.R_Ny.update_value(int(self.R_N/R_Nx))
+    #    R_Ny = self.settings.R_Ny.val
+    #    try:
+    #        self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+    #    except ValueError:
+    #        pass
+    #    if hasattr(self, "virtual_detector_roi"):
+    #        self.update_virtual_image()
+    #    return
+
+    #def update_scan_shape_Ny(self):
+    #    R_Ny = self.settings.R_Ny.val
+    #    self.settings.R_Nx.update_value(int(self.R_N/R_Ny))
+    #    R_Nx = self.settings.R_Nx.val
+    #    try:
+    #        self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+    #    except ValueError:
+    #        pass
+    #    if hasattr(self, "virtual_detector_roi"):
+    #        self.update_virtual_image()
+    #    return
+
+
 
     #def on_stem_pt_roi_change(self):
     #    roi_state = self.stem_pt_roi.saveState()
@@ -269,6 +296,25 @@ class DataViewer(QtCore.QObject):
     #    slices, transforms = self.virtual_aperture_roi.getArraySlice(self.data_3Dflattened, self.stack_imv.getImageItem())
     #    slice_x, slice_y, slice_z = slices
     #    self.stem_imv.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
+
+    #def load_file(self):
+    #    fname = self.settings.data_filename.val
+    #    print("Loading file",fname)
+    #
+    #    try:
+    #        self.dm3f = dm3.DM3(fname, debug=True)
+    #        self.data_3Dflattened = self.dm3f.imagedata
+    #    except Exception as err:
+    #        print("Failed to load", err)
+    #        self.data_3Dflattened = np.random.rand(100,512,512)
+    #    self.R_N, self.Q_Ny, self.Q_Nx = self.data_3Dflattened.shape
+    #
+    #    self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
+    #
+    #    self.settings.R_Nx.update_value(1)
+    #    self.settings.R_Ny.update_value(self.R_N)
+    #    return
+
 
 ############### End of class ###############
 
