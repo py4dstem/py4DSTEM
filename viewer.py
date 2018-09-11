@@ -1,12 +1,22 @@
 ######## Viewer for 4D STEM data ########
 #
-# Defines a class -- Interactive4DSTEMDataViewer - enabling a simple GUI for
+# Defines a class -- DataViewer - enabling a simple GUI for
 # interacting with 4D STEM datasets.
 #
 # Relevant documentation for lower level code:
-# ScopeFoundry is a flexible package for both scientific data visualization and control of labrotory experiments.  See http://www.scopefoundry.org/.
-#  Qt is being run through Pyside/PySide2/PyQt/Qt for Python. See https://www.qt.io/qt-for-python. 
-# pyqtgraph is a library which facilitates fast-running scientific visualization.  See http://pyqtgraph.org/.
+#
+# ScopeFoundry 
+# ScopeFoundry is a flexible package for both scientific data visualization and control of labrotory experiments.  See http://www.scopefoundry.org/.  This code uses the ScopeFoundary object
+# LQCollection, which enables intelligent interactive storage of logged quantities.
+#
+# Qt
+#  Qt is being run through Pyside/PySide2/PyQt/Qt for Python. See https://www.qt.io/qt-for-python. Presently PySide is being used.  
+# TODO: (maybe) use PySide2 (moves some objects from QtGui to the newer QtWidgets. Or (maybe)
+# use qtpy, a small wrapper which supports systems with either PySide or PySide2 (basically, for
+# python 2 or 3).
+#
+# pyqtgraph
+# pyqtgraph is a library which facilitates fast-running scientific visualization.  See http://pyqtgraph.org/. pyqtgraph is being used for the final data displays.
 
 
 from __future__ import division, print_function
@@ -28,14 +38,14 @@ else:
     from qtconsole.inprocess import QtInProcessKernelManager
 
 
-class Interactive4DSTEMDataViewer(QtCore.QObject):
+class DataViewer(QtCore.QObject):
     """
-    Interactive4DSTEMDataViewer objects inherit from the ScopeFoundry.BaseApp class.
+    DataViewer objects inherit from the ScopeFoundry.BaseApp class.
     ScopeFoundry.BaseApp objects inherit from the QtCore.QObject class.
     Additional functionality is provided by pyqtgraph widgets.
 
     The class is used by instantiating and then entering the main Qt loop with, e.g.:
-        app = Interactive4DSTEMDataViewer(sys.argv)
+        app = DataViewer(sys.argv)
         app.exec_()
     """
     def __init__(self, argv):
@@ -186,15 +196,13 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
 
         try:
             self.dm3f = dm3.DM3(fname, debug=True)
-            self.stack_data = self.dm3f.imagedata
+            self.data_3Dflattened = self.dm3f.imagedata
         except Exception as err:
             print("Failed to load", err)
-            self.stack_data = np.random.rand(100,512,512)
-        self.R_N, self.Q_Ny, self.Q_Nx = self.stack_data.shape
-        if hasattr(self, 'stem_pt_roi'):
-            self.on_stem_pt_roi_change()
+            self.data_3Dflattened = np.random.rand(100,512,512)
+        self.R_N, self.Q_Ny, self.Q_Nx = self.data_3Dflattened.shape
 
-        self.diffraction_space_widget.setImage(self.stack_data.swapaxes(1,2))
+        self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
 
         self.settings.R_Nx.update_value(1)
         self.settings.R_Ny.update_value(self.R_N)
@@ -203,7 +211,7 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
     def update_virtual_image(self):
         roi_state = self.virtual_detector_roi.saveState()
         x0,y0 = roi_state['pos']
-        slices, transforms = self.virtual_detector_roi.getArraySlice(self.stack_data, self.diffraction_space_widget.getImageItem())
+        slices, transforms = self.virtual_detector_roi.getArraySlice(self.data_3Dflattened, self.diffraction_space_widget.getImageItem())
         slice_x, slice_y, slice_z = slices
         self.real_space_widget.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
         return
@@ -221,7 +229,7 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         self.settings.R_Ny.update_value(int(self.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
         try:
-            self.data4D = self.stack_data.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+            self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
         except ValueError:
             pass
         if hasattr(self, "virtual_detector_roi"):
@@ -233,7 +241,7 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         self.settings.R_Nx.update_value(int(self.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
         try:
-            self.data4D = self.stack_data.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+            self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
         except ValueError:
             pass
         if hasattr(self, "virtual_detector_roi"):
@@ -248,25 +256,25 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
 
     ####### DEPRECATED ##########
 
-    def on_stem_pt_roi_change(self):
-        roi_state = self.stem_pt_roi.saveState()
-        x0,y0 = roi_state['pos']
-        xc,yc = x0+1, y0+1
-        stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
-        self.stack_imv.setCurrentIndex(stack_num)
+    #def on_stem_pt_roi_change(self):
+    #    roi_state = self.stem_pt_roi.saveState()
+    #    x0,y0 = roi_state['pos']
+    #    xc,yc = x0+1, y0+1
+    #    stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
+    #    self.stack_imv.setCurrentIndex(stack_num)
 
-    def on_real_space_roi_change(self):
-        roi_state = self.real_space_roi.saveState()
-        x0,y0 = roi_state['pos']
-        slices, transforms = self.virtual_aperture_roi.getArraySlice(self.stack_data, self.stack_imv.getImageItem())
-        slice_x, slice_y, slice_z = slices
-        self.stem_imv.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
+    #def on_real_space_roi_change(self):
+    #    roi_state = self.real_space_roi.saveState()
+    #    x0,y0 = roi_state['pos']
+    #    slices, transforms = self.virtual_aperture_roi.getArraySlice(self.data_3Dflattened, self.stack_imv.getImageItem())
+    #    slice_x, slice_y, slice_z = slices
+    #    self.stem_imv.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
 
 ############### End of class ###############
 
 
 if __name__=="__main__":
-    app = Interactive4DSTEMDataViewer(sys.argv)
+    app = DataViewer(sys.argv)
 
     sys.exit(app.exec_())
 

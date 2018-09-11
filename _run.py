@@ -1,7 +1,7 @@
-from ncem_4D_stem_quickview import Interactive4DSTEMDataViewer
+from viewer import DataViewer
 import sys
 
 if __name__ == '__main__':
-    app = Interactive4DSTEMDataViewer(sys.argv)
+    app = DataViewer(sys.argv)
 
     sys.exit(app.exec_())
