@@ -17,6 +17,7 @@ from ScopeFoundry import LQCollection
 from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
 import dm3_lib as dm3
+from control_panel import ControlPanel
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -101,7 +102,8 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         """
         Set up the control window for diffraction space.
         """
-        self.diffraction_space_control_widget = load_qt_ui_file(sibling_path(__file__, "diffraction_space_control_widget.ui"))
+        #self.diffraction_space_control_widget = load_qt_ui_file(sibling_path(__file__, "diffraction_space_control_widget.ui"))
+        self.diffraction_space_control_widget = ControlPanel()
         self.diffraction_space_control_widget.setWindowTitle("Diffraction space")
         self.diffraction_space_control_widget.show()
         self.diffraction_space_control_widget.raise_()
@@ -116,7 +118,8 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         # File loading
         self.settings.New('data_filename',dtype='file')
         self.settings.data_filename.connect_to_browse_widgets(self.diffraction_space_control_widget.lineEdit_LoadFile, self.diffraction_space_control_widget.pushButton_BrowseFiles)
-        self.diffraction_space_control_widget.pushButton_LoadFile.clicked.connect(self.load_file)
+        self.settings.data_filename.updated_value.connect(self.load_file)
+        #self.diffraction_space_control_widget.pushButton_LoadFile.clicked.connect(self.load_file)
 
         # Scan shape
         self.settings.New('R_Nx', dtype=int, initial=1)
@@ -135,7 +138,7 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         Set up the control window.
         """
         self.real_space_control_widget = load_qt_ui_file(sibling_path(__file__, "real_space_control_widget.ui"))
-        self.diffraction_space_control_widget.setWindowTitle("Real space")
+        self.real_space_control_widget.setWindowTitle("Real space")
         self.real_space_control_widget.show()
         self.real_space_control_widget.raise_()
         return self.real_space_control_widget
@@ -163,7 +166,7 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         Arrange windows and their geometries.
         """
         self.diffraction_space_widget.setGeometry(100,0,600,600)
-        self.diffraction_space_control_widget.setGeometry(0,0,200,600)
+        self.diffraction_space_control_widget.setGeometry(0,0,350,600)
         self.real_space_widget.setGeometry(700,0,600,600)
         self.real_space_control_widget.setGeometry(1150,0,200,600)
         self.console_widget.setGeometry(0,670,1300,170)
@@ -171,8 +174,8 @@ class Interactive4DSTEMDataViewer(QtCore.QObject):
         self.console_widget.raise_()
         self.real_space_control_widget.raise_()
         self.real_space_widget.raise_()
-        self.diffraction_space_control_widget.raise_()
         self.diffraction_space_widget.raise_()
+        self.diffraction_space_control_widget.raise_()
         return
 
     ######### Methods controlling responses to user inputs #########
