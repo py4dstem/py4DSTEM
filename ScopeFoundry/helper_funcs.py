@@ -1,4 +1,4 @@
-from PySide import QtCore, QtGui, QtUiTools
+from PySide2 import QtCore, QtGui, QtUiTools
 from collections import OrderedDict
 import os
 
@@ -48,7 +48,7 @@ class CloseEventEater(QtCore.QObject):
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Close:
             # eat close event
-            print "close"
+            print("close")
             reply = QtGui.QMessageBox.question(None, 
                                                self.title, 
                                                self.message,

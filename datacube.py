@@ -11,7 +11,7 @@
 import hyperspy.api as hs
 import numpy as np
 
-class DataCube(Object):
+class DataCube(object):
 
     def __init__(self, filename):
         self.read_data(filename)

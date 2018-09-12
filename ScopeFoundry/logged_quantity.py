@@ -1,4 +1,4 @@
-from PySide import  QtCore, QtGui
+from PySide2 import  QtCore, QtWidgets, QtGui
 import pyqtgraph
 import numpy as np
 from collections import OrderedDict
@@ -149,8 +149,8 @@ class LoggedQuantity(QtCore.QObject):
 
 
     def connect_bidir_to_widget(self, widget):
-        print type(widget)
-        if type(widget) == QtGui.QDoubleSpinBox:
+        print(type(widget))
+        if type(widget) == QtWidgets.QDoubleSpinBox:
             #self.updated_value[float].connect(widget.setValue )
             #widget.valueChanged[float].connect(self.update_value)
             widget.setKeyboardTracking(False)
@@ -168,7 +168,7 @@ class LoggedQuantity(QtCore.QObject):
             #if not self.ro:
             widget.valueChanged[float].connect(self.update_value)
 
-        elif type(widget) == QtGui.QSpinBox:
+        elif type(widget) == QtWidgets.QSpinBox:
             #self.updated_value[float].connect(widget.setValue )
             #widget.valueChanged[float].connect(self.update_value)
             widget.setKeyboardTracking(False)
@@ -186,26 +186,26 @@ class LoggedQuantity(QtCore.QObject):
             #if not self.ro:
             widget.valueChanged[int].connect(self.update_value)
 
-        elif type(widget) == QtGui.QCheckBox:
-            print self.name
+        elif type(widget) == QtWidgets.QCheckBox:
+            print(self.name)
             #self.updated_value[bool].connect(widget.checkStateSet)
             #widget.stateChanged[int].connect(self.update_value)
             # Ed's version
-            print "connecting checkbox widget"
+            print("connecting checkbox widget")
             self.updated_value[bool].connect(widget.setChecked)
             widget.toggled[bool].connect(self.update_value)
             if self.ro:
                 #widget.setReadOnly(True)
                 widget.setEnabled(False)
-        elif type(widget) == QtGui.QLineEdit:
+        elif type(widget) == QtWidgets.QLineEdit:
             self.updated_text_value[str].connect(widget.setText)
             if self.ro:
                 widget.setReadOnly(True)  # FIXME
             def on_edit_finished():
-                print "on_edit_finished", self.name
+                print("on_edit_finished", self.name)
                 self.update_value(widget.text())
             widget.editingFinished.connect(on_edit_finished)
-        elif type(widget) == QtGui.QPlainTextEdit:
+        elif type(widget) == QtWidgets.QPlainTextEdit:
             # FIXME doesn't quite work right: a signal character resets cursor position
             self.updated_text_value[str].connect(widget.setPlainText)
             # TODO Read only
@@ -213,7 +213,7 @@ class LoggedQuantity(QtCore.QObject):
                 self.update_value(widget.toPlainText())
             widget.textChanged.connect(set_from_plaintext)
 
-        elif type(widget) == QtGui.QComboBox:
+        elif type(widget) == QtWidgets.QComboBox:
             # need to have a choice list to connect to a QComboBox
             assert self.choices is not None
             widget.clear() # removes all old choices
@@ -245,7 +245,7 @@ class LoggedQuantity(QtCore.QObject):
                         int=integer)
             if self.ro:
                 widget.setEnabled(False)
-                widget.setButtonSymbols(QtGui.QAbstractSpinBox.NoButtons)
+                widget.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
                 widget.setReadOnly(True)
             widget.setDecimals(self.spinbox_decimals)
             widget.setSingleStep(self.spinbox_step)
@@ -253,7 +253,7 @@ class LoggedQuantity(QtCore.QObject):
             #if not self.ro:
                 #widget.valueChanged[float].connect(self.update_value)
             widget.valueChanged.connect(self.update_value)
-        elif type(widget) == QtGui.QLabel:
+        elif type(widget) == QtWidgets.QLabel:
             self.updated_text_value.connect(widget.setText)
         else:
             raise ValueError("Unknown widget type")
@@ -268,7 +268,7 @@ class LoggedQuantity(QtCore.QObject):
         self.choices = choices
 
         for widget in self.widget_list:
-            if type(widget) == QtGui.QComboBox:
+            if type(widget) == QtWidgets.QComboBox:
                 # need to have a choice list to connect to a QComboBox
                 assert self.choices is not None
                 widget.clear() # removes all old choices
@@ -287,7 +287,7 @@ class LoggedQuantity(QtCore.QObject):
     def change_readonly(self, ro=True):
         self.ro = ro
         for widget in self.widget_list:
-            if type(widget) in [QtGui.QDoubleSpinBox, pyqtgraph.widgets.SpinBox.SpinBox]:
+            if type(widget) in [QtWidgets.QDoubleSpinBox, pyqtgraph.widgets.SpinBox.SpinBox]:
                 widget.setReadOnly(self.ro)
             #elif
         self.updated_readonly.emit(self.ro)
@@ -305,16 +305,16 @@ class FileLQ(LoggedQuantity):
         self.default_dir = default_dir
 
     def connect_to_browse_widgets(self, lineEdit, pushButton):
-        assert type(lineEdit) == QtGui.QLineEdit
+        assert type(lineEdit) == QtWidgets.QLineEdit
         self.connect_bidir_to_widget(lineEdit)
 
-        assert type(pushButton) == QtGui.QPushButton
+        assert type(pushButton) == QtWidgets.QPushButton
         pushButton.clicked.connect(self.file_browser)
 
     def file_browser(self):
         # TODO add default directory, etc
-        fname, _ = QtGui.QFileDialog.getOpenFileName(None)
-        print repr(fname)
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None)
+        print(repr(fname))
         if fname:
             self.update_value(fname)
 
@@ -355,7 +355,7 @@ class ArrayLQ(LoggedQuantity):
     def same_values(self, v1, v2):
         if v1.shape == v2.shape:
             return np.all(v1 == v2)
-            print "same_values", v2-v1, np.all(v1 == v2)
+            print("same_values", v2-v1, np.all(v1 == v2))
         else:
             return False
 
@@ -380,7 +380,7 @@ class ArrayLQ(LoggedQuantity):
         return np.array(x, dtype=self.dtype)
 
     def send_display_updates(self, force=False):
-        print self.name, 'send_display_updates'
+        print(self.name, 'send_display_updates')
         #print "send_display_updates: {} force={}".format(self.name, force)
         if force or np.any(self.oldval != self.val):
 
@@ -433,11 +433,11 @@ class LQRange(QtCore.QObject):
         self.step.updated_value.connect(self.recalc_with_new_step)
 
     def recalc_with_new_num(self, new_num):
-        print "recalc_with_new_num", new_num
+        print("recalc_with_new_num", new_num)
         self.array = np.linspace(self.min.val, self.max.val, int(new_num))
         if len(self.array) > 1:
             new_step = self.array[1]-self.array[0]
-            print "    new_step inside new_num", new_step
+            print("    new_step inside new_num", new_step)
             self.step.update_value(new_step)#, send_signal=True, update_hardware=False)
             self.step.send_display_updates(force=True)
         self.updated_range.emit()
@@ -449,21 +449,21 @@ class LQRange(QtCore.QObject):
         self.updated_range.emit()
 
     def recalc_with_new_step(self,new_step):
-        print "-->recalc_with_new_step"
+        print("-->recalc_with_new_step")
         if len(self.array) > 1:
             old_step = self.array[1]-self.array[0]
         else:
             old_step = np.nan
         diff = np.abs(old_step - new_step)
-        print "step diff", diff
+        print("step diff", diff)
         if diff < 10**(-self.step.spinbox_decimals):
-            print "steps close enough, no more recalc"
+            print("steps close enough, no more recalc")
             return
         else:
             new_num = int((((self.max.val - self.min.val)/new_step)+1))
             self.array = np.linspace(self.min.val, self.max.val, new_num)
             new_step1 = self.array[1]-self.array[0]
-            print "recalc_with_new_step", new_step, new_num, new_step1
+            print("recalc_with_new_step", new_step, new_num, new_step1)
             #self.step.val = new_step1
             #self.num.val = new_num
             #self.step.update_value(new_step1, send_signal=False)
@@ -484,7 +484,7 @@ class LQCollection(object):
 
     def New(self, name, dtype=float, **kwargs):
         is_array = kwargs.pop('array', False)
-        print name, 'is_array', is_array
+        print(name, 'is_array', is_array)
         if is_array:
             lq = ArrayLQ(name=name, dtype=dtype, **kwargs)
         else:
@@ -520,6 +520,6 @@ def print_signals_and_slots(obj):
     for i in xrange(obj.metaObject().methodCount()):
         m = obj.metaObject().method(i)
         if m.methodType() == QtCore.QMetaMethod.MethodType.Signal:
-            print "SIGNAL: sig=", m.signature(), "hooked to nslots=",obj.receivers(QtCore.SIGNAL(m.signature()))
+            print("SIGNAL: sig=", m.signature(), "hooked to nslots=",obj.receivers(QtCore.SIGNAL(m.signature())))
         elif m.methodType() == QtCore.QMetaMethod.MethodType.Slot:
-            print "SLOT: sig=", m.signature()
+            print("SLOT: sig=", m.signature())

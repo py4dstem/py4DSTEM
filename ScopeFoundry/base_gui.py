@@ -9,9 +9,9 @@ import datetime
 import numpy as np
 import collections
 from collections import OrderedDict
-import ConfigParser
+import configparser
 
-from PySide import QtCore, QtGui, QtUiTools
+from PySide2 import QtCore, QtGui, QtUiTools
 import pyqtgraph as pg
 #import pyqtgraph.console
 import IPython
@@ -29,14 +29,13 @@ from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as Navigatio
 
 from matplotlib.figure import Figure
 
-from logged_quantity import LoggedQuantity, LQCollection
+from .logged_quantity import LoggedQuantity, LQCollection
 
-from helper_funcs import confirm_on_close, load_qt_ui_file, OrderedAttrDict
+from .helper_funcs import confirm_on_close, load_qt_ui_file, OrderedAttrDict
 
 #from equipment.image_display import ImageDisplay
 
-import h5_io
-
+from .h5_io import h5_base_file, h5_create_measurement_group
 
 
 class BaseApp(QtCore.QObject):
@@ -101,10 +100,10 @@ class BaseApp(QtCore.QObject):
         with open(fname, 'wb') as configfile:
             config.write(configfile)
 
-        print "ini settings saved to", fname, config.optionxform
+        print("ini settings saved to", fname, config.optionxform)
 
     def settings_load_ini(self, fname):
-        print "ini settings loading from", fname
+        print("ini settings loading from", fname)
 
         def str2bool(v):
             return v.lower() in ("yes", "true", "t", "1")
@@ -115,7 +114,7 @@ class BaseApp(QtCore.QObject):
 
         if 'app' in config.sections():
             for lqname, new_val in config.items('app'):
-                print lqname
+                print(lqname)
                 lq = self.settings.as_dict().get(lqname)
                 if lq:
                     if lq.dtype == bool:
@@ -125,7 +124,7 @@ class BaseApp(QtCore.QObject):
     def settings_save_ini_ask(self, dir=None, save_ro=True):
         # TODO add default directory, etc
         fname, _ = QtGui.QFileDialog.getSaveFileName(self.ui, caption=u'Save Settings', dir=u"", filter=u"Settings (*.ini)")
-        print repr(fname)
+        print(repr(fname))
         if fname:
             self.settings_save_ini(fname, save_ro=save_ro)
         return fname
@@ -133,7 +132,7 @@ class BaseApp(QtCore.QObject):
     def settings_load_ini_ask(self, dir=None):
         # TODO add default directory, etc
         fname, _ = QtGui.QFileDialog.getOpenFileName(None, "Settings (*.ini)")
-        print repr(fname)
+        print(repr(fname))
         if fname:
             self.settings_load_ini(fname)
         return fname
@@ -175,7 +174,7 @@ class BaseMicroscopeApp(BaseApp):
 
         # Setup the figures         
         for name, measure in self.measurement_components.items():
-            print "setting up figures for", name, "measurement", measure.name
+            print("setting up figures for", name, "measurement", measure.name)
             measure.setup_figure()
 
         if hasattr(self.ui, 'console_pushButton'):
@@ -210,7 +209,7 @@ class BaseMicroscopeApp(BaseApp):
     """
 
     def add_pg_graphics_layout(self, name, widget):
-        print "---adding pg GraphicsLayout figure", name, widget
+        print("---adding pg GraphicsLayout figure", name, widget)
         if name in self.figs:
             return self.figs[name]
         else:
@@ -229,7 +228,7 @@ class BaseMicroscopeApp(BaseApp):
         """creates a matplotlib figure attaches it to the qwidget specified
         (widget needs to have a layout set (preferably verticalLayout)
         adds a figure to self.figs"""
-        print "---adding figure", name, widget
+        print("---adding figure", name, widget)
         if name in self.figs:
             return self.figs[name]
         else:
@@ -258,10 +257,10 @@ class BaseMicroscopeApp(BaseApp):
         return measure
 
     def settings_save_h5(self, fname):
-        with h5_io.h5_base_file(self, fname) as h5_file:
+        with h5_base_file(self, fname) as h5_file:
             for measurement in self.measurements.values():
-                h5_io.h5_create_measurement_group(measurement, h5_file)
-            print "settings saved to", h5_file.filename
+                h5_create_measurement_group(measurement, h5_file)
+            print("settings saved to", h5_file.filename)
 
     def settings_save_ini(self, fname, save_ro=True, save_gui=True, save_hardware=True, save_measurements=True):
         import ConfigParser
@@ -288,12 +287,12 @@ class BaseMicroscopeApp(BaseApp):
         with open(fname, 'wb') as configfile:
             config.write(configfile)
 
-        print "ini settings saved to", fname, config.optionxform
+        print("ini settings saved to", fname, config.optionxform)
 
 
 
     def settings_load_ini(self, fname):
-        print "ini settings loading from", fname
+        print("ini settings loading from", fname)
 
         def str2bool(v):
             return v.lower() in ("yes", "true", "t", "1")
@@ -313,7 +312,7 @@ class BaseMicroscopeApp(BaseApp):
 
         for hc_name, hc in self.hardware_components.items():
             section_name = 'hardware/'+hc_name
-            print section_name
+            print(section_name)
             if section_name in config.sections():
                 for lqname, new_val in config.items(section_name):
                     try:
@@ -323,7 +322,7 @@ class BaseMicroscopeApp(BaseApp):
                         if not lq.ro:
                             lq.update_value(new_val)
                     except Exception as err:
-                        print "-->Failed to load config for {}/{}, new val {}: {}".format(section_name, lqname, new_val, repr(err))
+                        print("-->Failed to load config for {}/{}, new val {}: {}".format(section_name, lqname, new_val, repr(err)))
 
         for meas_name, measurement in self.measurement_components.items():
             section_name = 'measurement/'+meas_name
@@ -335,7 +334,7 @@ class BaseMicroscopeApp(BaseApp):
                     if not lq.ro:
                         lq.update_value(new_val)
 
-        print "ini settings loaded from", fname
+        print("ini settings loaded from", fname)
 
     def settings_load_h5(self, fname):
         import h5py

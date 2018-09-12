@@ -1,16 +1,16 @@
 #!/Users/Ben/Code/anaconda2/envs/py3/bin/python
 
 import sys
-from PySide import QtCore, QtGui
+from PySide2 import QtCore, QtWidgets, QtGui
 
 
-class ControlPanel(QtGui.QWidget):
+class ControlPanel(QtWidgets.QWidget):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
 
         # Container widget        
-        scrollableWidget = QtGui.QWidget()
-        layout = QtGui.QVBoxLayout(self)
+        scrollableWidget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(self)
 
         ##### Make sub-widgets #####
         # For each, provide handles to connect to their widgets
@@ -37,15 +37,15 @@ class ControlPanel(QtGui.QWidget):
         scrollableWidget.setLayout(layout)
 
         # Scroll Area Properties
-        scrollArea = QtGui.QScrollArea()
+        scrollArea = QtWidgets.QScrollArea()
         scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         scrollArea.setWidgetResizable(True)
         scrollArea.setWidget(scrollableWidget)
-        scrollArea.setFrameStyle(QtGui.QFrame.NoFrame)
+        scrollArea.setFrameStyle(QtWidgets.QFrame.NoFrame)
 
         # Set the scroll area container to fill the layout of the entire ControlPanel widget
-        vLayout = QtGui.QVBoxLayout(self)
+        vLayout = QtWidgets.QVBoxLayout(self)
         vLayout.addWidget(scrollArea)
         self.setLayout(vLayout)
 
@@ -55,90 +55,90 @@ class ControlPanel(QtGui.QWidget):
 
 
 
-class DataLoadingWidget(QtGui.QWidget):
+class DataLoadingWidget(QtWidgets.QWidget):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
 
         # Label, Line Edit, Browse Button
-        self.label_Filename = QtGui.QLabel("Filename")
-        self.lineEdit_LoadFile = QtGui.QLineEdit("")
-        self.pushButton_BrowseFiles = QtGui.QPushButton("Browse")
+        self.label_Filename = QtWidgets.QLabel("Filename")
+        self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
+        self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
 
         # Title
-        title_row = QtGui.QLabel("Load Data")
+        title_row = QtWidgets.QLabel("Load Data")
         titleFont = QtGui.QFont()
         titleFont.setBold(True)
         title_row.setFont(titleFont)
 
         # Layout
-        top_row = QtGui.QHBoxLayout()
+        top_row = QtWidgets.QHBoxLayout()
         top_row.addWidget(self.label_Filename, stretch=0)
         top_row.addWidget(self.lineEdit_LoadFile, stretch=5)
 
-        layout = QtGui.QVBoxLayout()
+        layout = QtWidgets.QVBoxLayout()
         layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
-        #verticalSpacer = QtGui.QSpacerItem(0, 10, QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        #verticalSpacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         #layout.addItem(verticalSpacer)
         layout.addLayout(top_row)
         layout.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
 
         self.setLayout(layout)
         self.setFixedWidth(260)
-        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed,QtGui.QSizePolicy.Fixed))
+        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
-class DataCubeSizeAndShapeWidget(QtGui.QWidget):
+class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
     def __init__(self):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
 
         # Reshaping - Nx and Ny
-        self.spinBox_Nx = QtGui.QSpinBox()
-        self.spinBox_Ny = QtGui.QSpinBox()
+        self.spinBox_Nx = QtWidgets.QSpinBox()
+        self.spinBox_Ny = QtWidgets.QSpinBox()
         self.spinBox_Nx.setMaximum(100000)
         self.spinBox_Ny.setMaximum(100000)
 
-        layout_spinBoxRow = QtGui.QHBoxLayout()
-        layout_spinBoxRow.addWidget(QtGui.QLabel("Nx"),0,QtCore.Qt.AlignRight)
+        layout_spinBoxRow = QtWidgets.QHBoxLayout()
+        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Nx"),0,QtCore.Qt.AlignRight)
         layout_spinBoxRow.addWidget(self.spinBox_Nx)
-        layout_spinBoxRow.addWidget(QtGui.QLabel("Ny"),0,QtCore.Qt.AlignRight)
+        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Ny"),0,QtCore.Qt.AlignRight)
         layout_spinBoxRow.addWidget(self.spinBox_Ny)
 
-        layout_Reshaping = QtGui.QVBoxLayout()
-        layout_Reshaping.addWidget(QtGui.QLabel("Scan shape"),0,QtCore.Qt.AlignCenter)
+        layout_Reshaping = QtWidgets.QVBoxLayout()
+        layout_Reshaping.addWidget(QtWidgets.QLabel("Scan shape"),0,QtCore.Qt.AlignCenter)
         layout_Reshaping.addLayout(layout_spinBoxRow)
 
         # Binning
-        self.lineEdit_Binning = QtGui.QLineEdit("")
-        self.pushButton_Binning = QtGui.QPushButton("Bin Data")
+        self.lineEdit_Binning = QtWidgets.QLineEdit("")
+        self.pushButton_Binning = QtWidgets.QPushButton("Bin Data")
 
-        layout_binningRow = QtGui.QHBoxLayout()
-        layout_binningRow.addWidget(QtGui.QLabel("Bin by:"))
+        layout_binningRow = QtWidgets.QHBoxLayout()
+        layout_binningRow.addWidget(QtWidgets.QLabel("Bin by:"))
         layout_binningRow.addWidget(self.lineEdit_Binning)
         layout_binningRow.addWidget(self.pushButton_Binning)
 
-        layout_Binning = QtGui.QVBoxLayout()
-        layout_Binning.addWidget(QtGui.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
+        layout_Binning = QtWidgets.QVBoxLayout()
+        layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
         layout_Binning.addLayout(layout_binningRow)
 
         # Cropping
-        self.pushButton_SetCropWindow = QtGui.QPushButton("Set Crop Window")
-        self.pushButton_CropData = QtGui.QPushButton("Crop Data")
+        self.pushButton_SetCropWindow = QtWidgets.QPushButton("Set Crop Window")
+        self.pushButton_CropData = QtWidgets.QPushButton("Crop Data")
 
-        layout_croppingRow = QtGui.QHBoxLayout()
+        layout_croppingRow = QtWidgets.QHBoxLayout()
         layout_croppingRow.addWidget(self.pushButton_SetCropWindow)
         layout_croppingRow.addWidget(self.pushButton_CropData)
 
-        layout_Cropping = QtGui.QVBoxLayout()
-        layout_Cropping.addWidget(QtGui.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
+        layout_Cropping = QtWidgets.QVBoxLayout()
+        layout_Cropping.addWidget(QtWidgets.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
         layout_Cropping.addLayout(layout_croppingRow)
 
         # Title
-        title_row = QtGui.QLabel("Reshape, bin, and crop")
+        title_row = QtWidgets.QLabel("Reshape, bin, and crop")
         titleFont = QtGui.QFont()
         titleFont.setBold(True)
         title_row.setFont(titleFont)
 
         # Layout
-        layout = QtGui.QVBoxLayout()
+        layout = QtWidgets.QVBoxLayout()
         layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
         layout.addLayout(layout_Reshaping)
         layout.addLayout(layout_Binning)
@@ -146,10 +146,10 @@ class DataCubeSizeAndShapeWidget(QtGui.QWidget):
 
         self.setLayout(layout)
         self.setFixedWidth(260)
-        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed,QtGui.QSizePolicy.Fixed))
+        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 if __name__ == '__main__':
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
 
     controlPanel = ControlPanel()
     controlPanel.show()
@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
 
 
-#app = QtGui.QApplication(sys.argv)
+#app = QtWidgets.QApplication(sys.argv)
 #controlPanel = ControlPanel()
 #controlPanel.show()
 #sys.exit(app.exec_())

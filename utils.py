@@ -1,5 +1,5 @@
 import os
-from PySide import QtCore, QtGui, QtUiTools
+from PySide2 import QtCore, QtGui, QtUiTools
 import pyqtgraph as pg
 
 

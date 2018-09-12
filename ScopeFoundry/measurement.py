@@ -5,7 +5,7 @@ Created on Tue Apr  1 09:25:48 2014
 @author: esbarnard
 """
 
-from PySide import QtCore, QtGui
+from PySide2 import QtCore, QtGui
 import threading
 import time
 from ScopeFoundry.logged_quantity import LQCollection
@@ -60,11 +60,11 @@ class Measurement(QtCore.QObject):
         try:
             self._add_control_widgets_to_measurements_tab()
         except Exception as err:
-            print "MeasurementComponent: could not add to measurement tab", self.name,  err
+            print("MeasurementComponent: could not add to measurement tab", self.name,  err)
         try:
             self._add_control_widgets_to_measurements_tree()
         except Exception as err:
-            print "MeasurementComponent: could not add to measurement tree", self.name,  err
+            print("MeasurementComponent: could not add to measurement tree", self.name,  err)
 
 
     def setup(self):
@@ -75,12 +75,12 @@ class Measurement(QtCore.QObject):
         #raise NotImplementedError()
         
     def setup_figure(self):
-        print "Empty setup_figure called"
+        print("Empty setup_figure called")
         pass
     
     @QtCore.Slot()
     def start(self):
-        print "measurement", self.name, "start"
+        print("measurement", self.name, "start")
         self.interrupt_measurement_called = False
         if (self.acq_thread is not None) and self.is_measuring():
             raise RuntimeError("Cannot start a new measurement while still measuring")
@@ -117,7 +117,7 @@ class Measurement(QtCore.QObject):
                 
     @QtCore.Slot()
     def interrupt(self):
-        print "measurement", self.name, "interrupt"
+        print("measurement", self.name, "interrupt")
         self.interrupt_measurement_called = True
         self.activation.update_value(False)
         #Make sure display is up to date        
@@ -125,7 +125,7 @@ class Measurement(QtCore.QObject):
 
 
     def start_stop(self, start):
-        print self.name, "start_stop", start
+        print(self.name, "start_stop", start)
         if start:
             self.start()
         else:
@@ -152,7 +152,7 @@ class Measurement(QtCore.QObject):
             self.update_display()
         except Exception as err:
             pass
-            print self.name, "Failed to update figure:", err            
+            print(self.name, "Failed to update figure:", err)
         finally:
             if not self.is_measuring():
                 self.display_update_timer.stop()

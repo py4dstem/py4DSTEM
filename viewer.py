@@ -20,10 +20,10 @@
 
 
 from __future__ import division, print_function
-from PySide import QtCore, QtGui
+from PySide2 import QtCore, QtWidgets
 import numpy as np
 import sys, os
-from ScopeFoundry import LQCollection
+from ScopeFoundry import BaseApp, LQCollection
 from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
 import dm3_lib as dm3
@@ -56,9 +56,9 @@ class DataViewer(QtCore.QObject):
         self.this_dir, self.this_filename = os.path.split(__file__)
 
         # Set a pointer referring to the application object
-        self.qtapp = QtGui.QApplication.instance()
+        self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
-            self.qtapp = QtGui.QApplication(argv)
+            self.qtapp = QtWidgets.QApplication(argv)
 
         # TODO: consider removing dependency on LQCollection object 
         self.settings = LQCollection()
