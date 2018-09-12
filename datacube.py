@@ -15,7 +15,6 @@ class DataCube(object):
 
     def __init__(self, filename):
         self.read_data(filename)
-        self.set_scan_shape()
 
     def read_data(self,filename):
         #Load data
@@ -48,14 +47,26 @@ class DataCube(object):
         except ValueError:
             pass
 
-    def set_diffraction_space_view(self,R_Ny,R_Nx):
+    def get_diffraction_space_view(self,y=0,x=0):
         """
-        Set the image in diffraction space
+        Returns the image in diffraction space, and a Bool indicating success or failure.
         """
+        self.x,self.y = x,y
         try:
-            self.data4D = self.raw_data.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
-            self.R_Ny,self.R_Nx = R_Ny, R_Nx
-        except ValueError:
-            pass
+            return self.data4D[y,x,:,:].T, 1
+        except IndexError:
+            return 0, 0
+
+    def get_real_space_view(self,slice_y,slice_x):
+        """
+        Returns the image in diffraction space.
+        """
+        return self.data4D[:,:,slice_y,slice_x].sum(axis=(2,3)).T, 1
+
+    #def get_summed_diffraction_pattern(self):
+    #    """
+    #    Get the average diffraction pattern from the entire dataset.
+    #    """
+    #    return self.data4D.sum(axis=(0,1))
 
 

@@ -11,7 +11,7 @@ import collections
 from collections import OrderedDict
 import configparser
 
-from PySide2 import QtCore, QtGui, QtUiTools
+from PySide2 import QtCore, QtWidgets, QtUiTools
 import pyqtgraph as pg
 #import pyqtgraph.console
 import IPython
@@ -45,9 +45,9 @@ class BaseApp(QtCore.QObject):
         self.this_dir, self.this_filename = os.path.split(__file__)
 
 
-        self.qtapp = QtGui.QApplication.instance()
+        self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
-            self.qtapp = QtGui.QApplication(argv)
+            self.qtapp = QtWidgets.QApplication(argv)
 
 
 
@@ -123,7 +123,7 @@ class BaseApp(QtCore.QObject):
 
     def settings_save_ini_ask(self, dir=None, save_ro=True):
         # TODO add default directory, etc
-        fname, _ = QtGui.QFileDialog.getSaveFileName(self.ui, caption=u'Save Settings', dir=u"", filter=u"Settings (*.ini)")
+        fname, _ = QtWidgets.QFileDialog.getSaveFileName(self.ui, caption=u'Save Settings', dir=u"", filter=u"Settings (*.ini)")
         print(repr(fname))
         if fname:
             self.settings_save_ini(fname, save_ro=save_ro)
@@ -131,7 +131,7 @@ class BaseApp(QtCore.QObject):
 
     def settings_load_ini_ask(self, dir=None):
         # TODO add default directory, etc
-        fname, _ = QtGui.QFileDialog.getOpenFileName(None, "Settings (*.ini)")
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None, "Settings (*.ini)")
         print(repr(fname))
         if fname:
             self.settings_load_ini(fname)
@@ -355,12 +355,12 @@ class BaseMicroscopeApp(BaseApp):
 
 
     def settings_save_dialog(self):
-        fname, selectedFilter = QtGui.QFileDialog.getSaveFileName(self.ui, "Save Settings file", "", "Settings File (*.ini)")
+        fname, selectedFilter = QtWidgets.QFileDialog.getSaveFileName(self.ui, "Save Settings file", "", "Settings File (*.ini)")
         if fname:
             self.settings_save_ini(fname)
 
     def settings_load_dialog(self):
-        fname, selectedFilter = QtGui.QFileDialog.getOpenFileName(self.ui,"Open Settings file", "", "Settings File (*.ini *.h5)")
+        fname, selectedFilter = QtWidgets.QFileDialog.getOpenFileName(self.ui,"Open Settings file", "", "Settings File (*.ini *.h5)")
         self.settings_load_ini(fname)
 
 

@@ -63,51 +63,19 @@ class DataViewer(QtCore.QObject):
         # TODO: consider removing dependency on LQCollection object 
         self.settings = LQCollection()
 
+        # Set up temporary datacube
+        self.datacube = DataCube("sample_data.dm3")
+
         # Set up widgets
-        self.setup_diffraction_space_widget()
-        self.setup_real_space_widget()
         self.setup_diffraction_space_control_widget()
         self.setup_real_space_control_widget()
+        self.setup_diffraction_space_widget()
+        self.setup_real_space_widget()
         self.setup_console_widget()
         self.setup_geometry()
         return
 
     ############ Setup methods #############
-
-    def setup_diffraction_space_widget(self):
-        """
-        Set up the diffraction space window.
-        """
-        # Create pyqtgraph ImageView object
-        self.diffraction_space_widget = pg.ImageView()
-        self.diffraction_space_widget.setImage(np.random.random((512,512)))
-
-        # Create virtual detector ROI selector 
-        self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
-        self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
-        self.virtual_detector_roi.sigRegionChanged.connect(self.update_virtual_image)
-
-        # Name, show, return
-        self.diffraction_space_widget.setWindowTitle('Diffraction Space')
-        self.diffraction_space_widget.show()
-        return self.diffraction_space_widget
-
-    def setup_real_space_widget(self):
-        """
-        Set up the real space window.
-        """
-        # Create pyqtgraph ImageView object
-        self.real_space_widget = pg.ImageView()
-        self.real_space_widget.setImage(np.random.random((512,512)))
-
-        # Add point selector connected to displayed diffraction pattern
-        self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
-        self.real_space_point_selector.sigRegionChanged.connect(self.update_diffraction_view)
-
-        # Name, show, return
-        self.real_space_widget.setWindowTitle('Real Space')
-        self.real_space_widget.show()
-        return self.real_space_widget
 
     def setup_diffraction_space_control_widget(self):
         """
@@ -153,6 +121,41 @@ class DataViewer(QtCore.QObject):
         self.real_space_control_widget.show()
         self.real_space_control_widget.raise_()
         return self.real_space_control_widget
+
+    def setup_diffraction_space_widget(self):
+        """
+        Set up the diffraction space window.
+        """
+        # Create pyqtgraph ImageView object
+        self.diffraction_space_widget = pg.ImageView()
+        self.diffraction_space_widget.setImage(np.random.random((512,512)))
+
+        # Create virtual detector ROI selector 
+        self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
+        self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
+        self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+
+        # Name, show, return
+        self.diffraction_space_widget.setWindowTitle('Diffraction Space')
+        self.diffraction_space_widget.show()
+        return self.diffraction_space_widget
+
+    def setup_real_space_widget(self):
+        """
+        Set up the real space window.
+        """
+        # Create pyqtgraph ImageView object
+        self.real_space_widget = pg.ImageView()
+        self.real_space_widget.setImage(np.random.random((512,512)))
+
+        # Add point selector connected to displayed diffraction pattern
+        self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
+        self.real_space_point_selector.sigRegionChanged.connect(self.update_diffraction_space_view)
+
+        # Name, show, return
+        self.real_space_widget.setWindowTitle('Real Space')
+        self.real_space_widget.show()
+        return self.real_space_widget
 
     def setup_console_widget(self):
         self.kernel_manager = QtInProcessKernelManager()
@@ -206,49 +209,97 @@ class DataViewer(QtCore.QObject):
         self.settings.R_Nx.update_value(1)
         self.settings.R_Ny.update_value(self.R_N)
 
-        self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
+        # Set the diffraction space image
+        self.update_diffraction_space_view()
+        self.update_real_space_view()
+
+        # Intial normalization of diffraction space view
+        self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
+        self.diffraction_space_widget.normalize(self.diffraction_space_widget.getImage())
+
+        #self.diffraction_space_view = self.datacube.get_diffraction_space_view()
+        #self.diffraction_space_widget.setImage(self.diffraction_space_view)
+
+        # Set the real space image
+        #self.real_space_view = self.datacube.get_real_space_view()
+        #self.real_space_widget.setImage(self.real_space_view)
 
         return
 
-    def update_virtual_image(self):
-        roi_state = self.virtual_detector_roi.saveState()
-        x0,y0 = roi_state['pos']
-        slices, transforms = self.virtual_detector_roi.getArraySlice(self.data_3Dflattened, self.diffraction_space_widget.getImageItem())
-        slice_x, slice_y, slice_z = slices
-        self.real_space_widget.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
+    def load_sample_data(self):
+        """
+        Loads a file by creating and storing a DataCube object
+        """
+        fname = "sample_data.dm3"
+        print("Loading file",fname)
+
+        # Instantiate DataCube object
+        self.datacube = DataCube(fname)
+        self.datacube.set_scan_shape(10,10)
+
+        # Update scan shape information
+        self.R_N = self.datacube.R_N
+        self.settings.R_Nx.update_value(10)
+        self.settings.R_Ny.update_value(10)
+
+        # Set the diffraction space image
+        self.diffraction_space_widget.setImage(self.datacube.data4D[0,0,:,:])
+        #self.diffraction_space_widget.setImage(self.datacube.get_summed_diffraction_pattern())
+        #self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
+
         return
 
-    def update_diffraction_view(self):
+    def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
         x0,y0 = roi_state['pos']
-        xc,yc = x0+1,y0+1
-        stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
-        self.diffraction_space_widget.setCurrentIndex(stack_num)
+        xc,yc = int(x0+1),int(y0+1)
+
+        # Set the diffraction space image
+        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
+        if success:
+            self.diffraction_space_view = new_diffraction_space_view
+            self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
+        else:
+            pass
+        return
+
+    def update_real_space_view(self):
+        # Get slices corresponding to ROI
+        slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+        slice_x,slice_y = slices
+
+        # Set the real space view
+        new_real_space_view, success = self.datacube.get_real_space_view(slice_y,slice_x)
+        if success:
+            self.real_space_view = new_real_space_view
+            self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+        else:
+            pass
         return
 
     def update_scan_shape_Nx(self):
         R_Nx = self.settings.R_Nx.val
-        self.settings.R_Ny.update_value(int(self.R_N/R_Nx))
+        self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
+            self.update_real_space_view()
         except ValueError:
             pass
-        if hasattr(self, "virtual_detector_roi"):
-            self.update_virtual_image()
         return
 
     def update_scan_shape_Ny(self):
         R_Ny = self.settings.R_Ny.val
-        self.settings.R_Nx.update_value(int(self.R_N/R_Ny))
+        self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
             pass
-        if hasattr(self, "virtual_detector_roi"):
-            self.update_virtual_image()
+        #if hasattr(self, "virtual_detector_roi"):
+        #    self.update_real_space_view()
         return
+
 
     def exec_(self):
         return self.qtapp.exec_()
@@ -256,6 +307,23 @@ class DataViewer(QtCore.QObject):
 
 
     ####### DEPRECATED ##########
+
+
+    #def update_real_space_view(self):
+    #    roi_state = self.virtual_detector_roi.saveState()
+    #    x0,y0 = roi_state['pos']
+    #    slices, transforms = self.virtual_detector_roi.getArraySlice(self.data_3Dflattened, self.diffraction_space_widget.getImageItem())
+    #    slice_x, slice_y, slice_z = slices
+    #    self.real_space_widget.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
+    #    return
+
+    #def update_diffraction_view(self):
+    #    roi_state = self.real_space_point_selector.saveState()
+    #    x0,y0 = roi_state['pos']
+    #    xc,yc = x0+1,y0+1
+    #    stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
+    #    self.diffraction_space_widget.setCurrentIndex(stack_num)
+    #    return
 
     #def update_scan_shape_Nx(self):
     #    R_Nx = self.settings.R_Nx.val
@@ -266,7 +334,7 @@ class DataViewer(QtCore.QObject):
     #    except ValueError:
     #        pass
     #    if hasattr(self, "virtual_detector_roi"):
-    #        self.update_virtual_image()
+    #        self.update_real_space_view()
     #    return
 
     #def update_scan_shape_Ny(self):
@@ -278,7 +346,7 @@ class DataViewer(QtCore.QObject):
     #    except ValueError:
     #        pass
     #    if hasattr(self, "virtual_detector_roi"):
-    #        self.update_virtual_image()
+    #        self.update_real_space_view()
     #    return
 
 
