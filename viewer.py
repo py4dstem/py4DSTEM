@@ -73,6 +73,13 @@ class DataViewer(QtCore.QObject):
         self.setup_real_space_widget()
         self.setup_console_widget()
         self.setup_geometry()
+
+        # Set up initial views in real and diffraction space
+        self.update_diffraction_space_view()
+        self.update_real_space_view()
+        self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
+        self.diffraction_space_widget.normRadioChanged()
+
         return
 
     ############ Setup methods #############
@@ -98,7 +105,6 @@ class DataViewer(QtCore.QObject):
         self.settings.New('data_filename',dtype='file')
         self.settings.data_filename.connect_to_browse_widgets(self.diffraction_space_control_widget.lineEdit_LoadFile, self.diffraction_space_control_widget.pushButton_BrowseFiles)
         self.settings.data_filename.updated_value.connect(self.load_file)
-        #self.diffraction_space_control_widget.pushButton_LoadFile.clicked.connect(self.load_file)
 
         # Scan shape
         self.settings.New('R_Nx', dtype=int, initial=1)
@@ -213,16 +219,9 @@ class DataViewer(QtCore.QObject):
         self.update_diffraction_space_view()
         self.update_real_space_view()
 
-        # Intial normalization of diffraction space view
+        # Initial normalization of diffraction space view
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
-        self.diffraction_space_widget.normalize(self.diffraction_space_widget.getImage())
-
-        #self.diffraction_space_view = self.datacube.get_diffraction_space_view()
-        #self.diffraction_space_widget.setImage(self.diffraction_space_view)
-
-        # Set the real space image
-        #self.real_space_view = self.datacube.get_real_space_view()
-        #self.real_space_widget.setImage(self.real_space_view)
+        self.diffraction_space_widget.normRadioChanged()
 
         return
 
