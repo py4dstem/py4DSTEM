@@ -254,7 +254,7 @@ class DataViewer(QtCore.QObject):
         xc,yc = int(x0+1),int(y0+1)
 
         # Set the diffraction space image
-        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
+        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(yc,xc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
             self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
