@@ -27,7 +27,7 @@ from ScopeFoundry import BaseApp, LQCollection
 from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
 import dm3_lib as dm3
-from control_panel import ControlPanel
+from control_panel import ControlPanel, PreprocessingWidget
 from datacube import DataCube
 
 import IPython
@@ -82,7 +82,9 @@ class DataViewer(QtCore.QObject):
 
         return
 
-    ############ Setup methods #############
+    ###############################################
+    ############ Widget setup methods #############
+    ###############################################
 
     def setup_diffraction_space_control_widget(self):
         """
@@ -109,12 +111,13 @@ class DataViewer(QtCore.QObject):
         # Scan shape
         self.settings.New('R_Nx', dtype=int, initial=1)
         self.settings.New('R_Ny', dtype=int, initial=1)
-
         self.settings.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
         self.settings.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
-
         self.settings.R_Nx.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Nx)
         self.settings.R_Ny.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Ny)
+
+        # Preprocessing
+        self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
 
         return self.diffraction_space_control_widget
 
@@ -225,29 +228,6 @@ class DataViewer(QtCore.QObject):
 
         return
 
-    def load_sample_data(self):
-        """
-        Loads a file by creating and storing a DataCube object
-        """
-        fname = "sample_data.dm3"
-        print("Loading file",fname)
-
-        # Instantiate DataCube object
-        self.datacube = DataCube(fname)
-        self.datacube.set_scan_shape(10,10)
-
-        # Update scan shape information
-        self.R_N = self.datacube.R_N
-        self.settings.R_Nx.update_value(10)
-        self.settings.R_Ny.update_value(10)
-
-        # Set the diffraction space image
-        self.diffraction_space_widget.setImage(self.datacube.data4D[0,0,:,:])
-        #self.diffraction_space_widget.setImage(self.datacube.get_summed_diffraction_pattern())
-        #self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
-
-        return
-
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
         x0,y0 = roi_state['pos']
@@ -295,92 +275,37 @@ class DataViewer(QtCore.QObject):
             self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
             pass
-        #if hasattr(self, "virtual_detector_roi"):
-        #    self.update_real_space_view()
         return
+
+    ############ Preprocessing ###########
+
+    def preprocess(self):
+        """
+        Binning and cropping.
+        This method:
+            1) opens a separate dialog for preprocessing parameter control
+            2) places crop ROIs in both real and diffraction space
+            3) on clicking 'Execute', performs specified preprocessing, altering datacube object,
+                 then exits the dialog
+            4) on clicking "Cancel', exits without any preprocessing.
+        """
+        # Make widget
+        self.preprocessing_widget = PreprocessingWidget()
+        self.preprocessing_widget.setWindowTitle("Preprocessing")
+        self.preprocessing_widget.show()
+        self.preprocessing_widget.raise_()
+
+        self.settings.New('binning', dtype=int, initial=1)
+        self.settings.New('crop_Rx_slice', dtype=int)
+        self.settings.New('crop_Ry_slice', dtype=int)
+        self.settings.New('crop_Qx_slice', dtype=int)
+        self.settings.New('crop_Qy_slice', dtype=int)
 
 
     def exec_(self):
         return self.qtapp.exec_()
 
 
-
-    ####### DEPRECATED ##########
-
-
-    #def update_real_space_view(self):
-    #    roi_state = self.virtual_detector_roi.saveState()
-    #    x0,y0 = roi_state['pos']
-    #    slices, transforms = self.virtual_detector_roi.getArraySlice(self.data_3Dflattened, self.diffraction_space_widget.getImageItem())
-    #    slice_x, slice_y, slice_z = slices
-    #    self.real_space_widget.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
-    #    return
-
-    #def update_diffraction_view(self):
-    #    roi_state = self.real_space_point_selector.saveState()
-    #    x0,y0 = roi_state['pos']
-    #    xc,yc = x0+1,y0+1
-    #    stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
-    #    self.diffraction_space_widget.setCurrentIndex(stack_num)
-    #    return
-
-    #def update_scan_shape_Nx(self):
-    #    R_Nx = self.settings.R_Nx.val
-    #    self.settings.R_Ny.update_value(int(self.R_N/R_Nx))
-    #    R_Ny = self.settings.R_Ny.val
-    #    try:
-    #        self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
-    #    except ValueError:
-    #        pass
-    #    if hasattr(self, "virtual_detector_roi"):
-    #        self.update_real_space_view()
-    #    return
-
-    #def update_scan_shape_Ny(self):
-    #    R_Ny = self.settings.R_Ny.val
-    #    self.settings.R_Nx.update_value(int(self.R_N/R_Ny))
-    #    R_Nx = self.settings.R_Nx.val
-    #    try:
-    #        self.data4D = self.data_3Dflattened.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
-    #    except ValueError:
-    #        pass
-    #    if hasattr(self, "virtual_detector_roi"):
-    #        self.update_real_space_view()
-    #    return
-
-
-
-    #def on_stem_pt_roi_change(self):
-    #    roi_state = self.stem_pt_roi.saveState()
-    #    x0,y0 = roi_state['pos']
-    #    xc,yc = x0+1, y0+1
-    #    stack_num = self.settings.R_Nx.val*int(yc)+int(xc)
-    #    self.stack_imv.setCurrentIndex(stack_num)
-
-    #def on_real_space_roi_change(self):
-    #    roi_state = self.real_space_roi.saveState()
-    #    x0,y0 = roi_state['pos']
-    #    slices, transforms = self.virtual_aperture_roi.getArraySlice(self.data_3Dflattened, self.stack_imv.getImageItem())
-    #    slice_x, slice_y, slice_z = slices
-    #    self.stem_imv.setImage(self.data4D[:,:,slice_y, slice_x].sum(axis=(2,3)).T)
-
-    #def load_file(self):
-    #    fname = self.settings.data_filename.val
-    #    print("Loading file",fname)
-    #
-    #    try:
-    #        self.dm3f = dm3.DM3(fname, debug=True)
-    #        self.data_3Dflattened = self.dm3f.imagedata
-    #    except Exception as err:
-    #        print("Failed to load", err)
-    #        self.data_3Dflattened = np.random.rand(100,512,512)
-    #    self.R_N, self.Q_Ny, self.Q_Nx = self.data_3Dflattened.shape
-    #
-    #    self.diffraction_space_widget.setImage(self.data_3Dflattened.swapaxes(1,2))
-    #
-    #    self.settings.R_Nx.update_value(1)
-    #    self.settings.R_Ny.update_value(self.R_N)
-    #    return
 
 
 ############### End of class ###############
