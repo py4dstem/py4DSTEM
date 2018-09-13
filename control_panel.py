@@ -19,6 +19,7 @@ class ControlPanel(QtWidgets.QWidget):
         dataLoader = DataLoadingWidget()
         self.lineEdit_LoadFile = dataLoader.lineEdit_LoadFile
         self.pushButton_BrowseFiles = dataLoader.pushButton_BrowseFiles
+        self.pushButton_Preprocess = dataLoader.pushButton_Preprocess
 
         # Data cube size and shape
         sizeAndShapeEditor = DataCubeSizeAndShapeWidget()
@@ -28,8 +29,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_Binning = sizeAndShapeEditor.pushButton_Binning
         self.pushButton_SetCropWindow = sizeAndShapeEditor.pushButton_SetCropWindow
         self.pushButton_CropData = sizeAndShapeEditor.pushButton_CropData
-
-
 
         # Create and set layout
         layout.addWidget(dataLoader)
@@ -63,6 +62,7 @@ class DataLoadingWidget(QtWidgets.QWidget):
         self.label_Filename = QtWidgets.QLabel("Filename")
         self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
+        self.pushButton_Preprocess = QtWidgets.QPushButton("Preprocess")
 
         # Title
         title_row = QtWidgets.QLabel("Load Data")
@@ -74,13 +74,12 @@ class DataLoadingWidget(QtWidgets.QWidget):
         top_row = QtWidgets.QHBoxLayout()
         top_row.addWidget(self.label_Filename, stretch=0)
         top_row.addWidget(self.lineEdit_LoadFile, stretch=5)
+        top_row.addWidget(self.pushButton_BrowseFiles, stretch=0)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
-        #verticalSpacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-        #layout.addItem(verticalSpacer)
         layout.addLayout(top_row)
-        layout.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
+        layout.addWidget(self.pushButton_Preprocess,0,QtCore.Qt.AlignRight)
 
         self.setLayout(layout)
         self.setFixedWidth(260)
@@ -143,6 +142,77 @@ class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
         layout.addLayout(layout_Reshaping)
         layout.addLayout(layout_Binning)
         layout.addLayout(layout_Cropping)
+
+        self.setLayout(layout)
+        self.setFixedWidth(260)
+        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+class PreprocessingWidget(QtWidgets.QWidget):
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+
+        # Reshaping - Nx and Ny
+        self.spinBox_Nx = QtWidgets.QSpinBox()
+        self.spinBox_Ny = QtWidgets.QSpinBox()
+        self.spinBox_Nx.setMaximum(100000)
+        self.spinBox_Ny.setMaximum(100000)
+
+        layout_Reshaping_Nx = QtWidgets.QHBoxLayout()
+        layout_Reshaping_Nx.addWidget(QtWidgets.QLabel("Nx"),0,QtCore.Qt.AlignRight)
+        layout_Reshaping_Nx.addWidget(self.spinBox_Nx)
+        layout_Reshaping_Ny = QtWidgets.QHBoxLayout()
+        layout_Reshaping_Ny.addWidget(QtWidgets.QLabel("Ny"),0,QtCore.Qt.AlignRight)
+        layout_Reshaping_Ny.addWidget(self.spinBox_Ny)
+
+        layout_Reshaping_N = QtWidgets.QVBoxLayout()
+        layout_Reshaping_N.addLayout(layout_Reshaping_Nx)
+        layout_Reshaping_N.addLayout(layout_Reshaping_Ny)
+
+        layout_Reshaping = QtWidgets.QHBoxLayout()
+        layout_Reshaping.addWidget(QtWidgets.QLabel("Scan shape"),0,QtCore.Qt.AlignCenter)
+        layout_Reshaping.addLayout(layout_Reshaping_N)
+
+        # Binning
+        self.spinBox_Binning = QtWidgets.QSpinBox()
+        self.spinBox_Nx.setMaximum(100000)
+
+        layout_Binning = QtWidgets.QHBoxLayout()
+        layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
+        layout_Binning.addWidget(self.spinBox_Binning,0,QtCore.Qt.AlignRight)
+
+        # Cropping
+        self.checkBox_Crop_Real = QtWidgets.QCheckBox()
+        self.checkBox_Crop_Diffraction = QtWidgets.QCheckBox()
+
+        layout_Cropping_Real = QtWidgets.QHBoxLayout()
+        layout_Cropping_Real.addWidget(QtWidgets.QLabel("Real Space"),0,QtCore.Qt.AlignRight)
+        layout_Cropping_Real.addWidget(self.checkBox_Crop_Real,0,QtCore.Qt.AlignRight)
+        layout_Cropping_Diffraction = QtWidgets.QHBoxLayout()
+        layout_Cropping_Diffraction.addWidget(QtWidgets.QLabel("Diffraction Space"),0,QtCore.Qt.AlignRight)
+        layout_Cropping_Diffraction.addWidget(self.checkBox_Crop_Diffraction,0,QtCore.Qt.AlignRight)
+
+        layout_Cropping_RHS = QtWidgets.QVBoxLayout()
+        layout_Cropping_RHS.addLayout(layout_Cropping_Real)
+        layout_Cropping_RHS.addLayout(layout_Cropping_Diffraction)
+
+        layout_Cropping = QtWidgets.QHBoxLayout()
+        layout_Cropping.addWidget(QtWidgets.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
+        layout_Cropping.addLayout(layout_Cropping_RHS)
+
+        # Excute
+        self.pushButton_Execute = QtWidgets.QPushButton("Execute")
+        self.pushButton_Cancel = QtWidgets.QPushButton("Cancel")
+
+        layout_Execute = QtWidgets.QHBoxLayout()
+        layout_Execute.addWidget(self.pushButton_Cancel)
+        layout_Execute.addWidget(self.pushButton_Execute)
+
+        # Layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(layout_Reshaping)
+        layout.addLayout(layout_Binning)
+        layout.addLayout(layout_Cropping)
+        layout.addLayout(layout_Execute)
 
         self.setLayout(layout)
         self.setFixedWidth(260)
