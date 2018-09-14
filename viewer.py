@@ -335,7 +335,8 @@ class DataViewer(QtCore.QObject):
             self.real_space_widget.getView().addItem(self.crop_roi_real)
         else:
             if hasattr(self,'crop_roi_real'):
-                self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
+                self.real_space_widget.getView().removeItem(self.crop_roi_real)
+                self.crop_roi_real = None
             else:
                 pass
 
@@ -349,7 +350,8 @@ class DataViewer(QtCore.QObject):
             self.diffraction_space_widget.getView().addItem(self.crop_roi_diffraction)
         else:
             if hasattr(self,'crop_roi_diffraction'):
-                self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
+                self.diffraction_space_widget.getView().removeItem(self.crop_roi_diffraction)
+                self.crop_roi_diffraction = None
             else:
                 pass
 
