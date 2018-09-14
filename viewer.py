@@ -295,11 +295,115 @@ class DataViewer(QtCore.QObject):
         self.preprocessing_widget.show()
         self.preprocessing_widget.raise_()
 
-        self.settings.New('binning', dtype=int, initial=1)
-        self.settings.New('crop_Rx_slice', dtype=int)
-        self.settings.New('crop_Ry_slice', dtype=int)
-        self.settings.New('crop_Qx_slice', dtype=int)
-        self.settings.New('crop_Qy_slice', dtype=int)
+        # Create new settings
+        self.settings.New('binning_r', dtype=int, initial=1)
+        self.settings.New('binning_q', dtype=int, initial=1)
+        self.settings.New('cropped_r', dtype=bool)
+        self.settings.New('cropped_q', dtype=bool)
+        self.settings.New('crop_rx_min', dtype=int)
+        self.settings.New('crop_rx_max', dtype=int)
+        self.settings.New('crop_ry_min', dtype=int)
+        self.settings.New('crop_ry_max', dtype=int)
+        self.settings.New('crop_qx_min', dtype=int)
+        self.settings.New('crop_qx_max', dtype=int)
+        self.settings.New('crop_qy_min', dtype=int)
+        self.settings.New('crop_qy_max', dtype=int)
+
+        # Reshaping
+        self.settings.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
+        self.settings.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
+
+        # Binning
+        self.settings.binning_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
+        self.settings.binning_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
+
+        # Cropping
+        self.preprocessing_widget.checkBox_Crop_Real.stateChanged.connect(self.toggleCropROI_real)
+        self.preprocessing_widget.checkBox_Crop_Diffraction.stateChanged.connect(self.toggleCropROI_diffraction)
+
+        # Cancel or execute
+        self.preprocessing_widget.pushButton_Cancel.clicked.connect(self.cancel_preprocessing)
+        self.preprocessing_widget.pushButton_Execute.clicked.connect(self.execute_preprocessing)
+
+    def toggleCropROI_real(self,on=True):
+        """
+        Checks if checkbox is True or False.  If True, makes a RIO.  If False, removes the ROI.
+        """
+        if self.preprocessing_widget.checkBox_Crop_Real.isChecked():
+            self.crop_roi_real = pg.RectROI([0,0], [self.datacube.R_Nx, self.datacube.R_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
+            self.crop_roi_real.setPen(color='r')
+            self.real_space_widget.getView().addItem(self.crop_roi_real)
+        else:
+            if hasattr(self,'crop_roi_real'):
+                self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
+            else:
+                pass
+
+    def toggleCropROI_diffraction(self,on=True):
+        """
+        Checks if checkbox is True or False.  If True, makes a RIO.  If False, removes the ROI.
+        """
+        if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
+            self.crop_roi_diffraction = pg.RectROI([0,0], [self.datacube.Q_Nx,self.datacube.Q_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
+            self.crop_roi_diffraction.setPen(color='r')
+            self.diffraction_space_widget.getView().addItem(self.crop_roi_diffraction)
+        else:
+            if hasattr(self,'crop_roi_diffraction'):
+                self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
+            else:
+                pass
+
+    def cancel_preprocessing(self):
+        # Update settings to reflect no changes
+        self.settings.binning_r.update_value(False)
+        self.settings.binning_q.update_value(False)
+        self.settings.cropped_r.update_value(False)
+        self.settings.cropped_q.update_value(False)
+        self.settings.crop_rx_min.update_value(False)
+        self.settings.crop_rx_max.update_value(False)
+        self.settings.crop_ry_min.update_value(False)
+        self.settings.crop_ry_max.update_value(False)
+        self.settings.crop_qx_min.update_value(False)
+        self.settings.crop_qx_max.update_value(False)
+        self.settings.crop_qy_min.update_value(False)
+        self.settings.crop_qy_max.update_value(False)
+
+        if hasattr(self,'crop_roi_real'):
+            self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
+        if hasattr(self,'crop_roi_diffraction'):
+            self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
+
+        self.preprocessing_widget.close()
+
+    def execute_preprocessing(self):
+
+        if self.preprocessing_widget.checkBox_Crop_Real.isChecked():
+            self.settings.cropped_r.update_value(True)
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_rx,slice_ry = slices_r
+            self.settings.crop_rx_min.update_value(slice_rx.start)
+            self.settings.crop_rx_max.update_value(slice_rx.stop)
+            self.settings.crop_ry_min.update_value(slice_ry.start)
+            self.settings.crop_ry_max.update_value(slice_ry.stop)
+        if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
+            self.settings.cropped_q.update_value(True)
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_qx,slice_qy = slices_q
+            self.settings.crop_qx_min.update_value(slice_qx.start)
+            self.settings.crop_qx_max.update_value(slice_qx.stop)
+            self.settings.crop_qy_min.update_value(slice_qy.start)
+            self.settings.crop_qy_max.update_value(slice_qy.stop)
+
+        # Update settings
+        # Crop and bin
+        #self.datacube.data4D.CropAndBin(self.settings.binning_r.val, self.settings.binning_q.val, slice_ry, slice_rx, slice_qy, slice_qx)
+
+        if hasattr(self,'crop_roi_real'):
+            self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
+        if hasattr(self,'crop_roi_diffraction'):
+            self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
+
+        self.preprocessing_widget.close()
 
 
     def exec_(self):
