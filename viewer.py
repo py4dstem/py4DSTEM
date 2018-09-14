@@ -27,7 +27,7 @@ from ScopeFoundry import BaseApp, LQCollection
 from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
 import dm3_lib as dm3
-from control_panel import ControlPanel, PreprocessingWidget
+from dialogs import ControlPanel, PreprocessingWidget
 from datacube import DataCube
 
 import IPython
