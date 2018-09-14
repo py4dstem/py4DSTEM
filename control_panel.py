@@ -173,27 +173,41 @@ class PreprocessingWidget(QtWidgets.QWidget):
         layout_Reshaping.addLayout(layout_Reshaping_N)
 
         # Binning
-        self.spinBox_Binning = QtWidgets.QSpinBox()
-        self.spinBox_Nx.setMaximum(100000)
+        self.spinBox_Binning_real = QtWidgets.QSpinBox()
+        self.spinBox_Binning_diffraction = QtWidgets.QSpinBox()
+        self.spinBox_Binning_real.setMaximum(1000)
+        self.spinBox_Binning_diffraction.setMaximum(1000)
+
+        layout_Binning_Diffraction = QtWidgets.QHBoxLayout()
+        layout_Binning_Diffraction.addWidget(QtWidgets.QLabel("Q"),0,QtCore.Qt.AlignRight)
+        layout_Binning_Diffraction.addWidget(self.spinBox_Binning_diffraction,0,QtCore.Qt.AlignRight)
+        layout_Binning_Real = QtWidgets.QHBoxLayout()
+        layout_Binning_Real.addWidget(QtWidgets.QLabel("R"),0,QtCore.Qt.AlignRight)
+        layout_Binning_Real.addWidget(self.spinBox_Binning_real,0,QtCore.Qt.AlignRight)
+
+        layout_Binning_RHS = QtWidgets.QVBoxLayout()
+        layout_Binning_RHS.addLayout(layout_Binning_Diffraction)
+        layout_Binning_RHS.addLayout(layout_Binning_Real)
 
         layout_Binning = QtWidgets.QHBoxLayout()
         layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
-        layout_Binning.addWidget(self.spinBox_Binning,0,QtCore.Qt.AlignRight)
+        layout_Binning.addLayout(layout_Binning_RHS)
+
 
         # Cropping
         self.checkBox_Crop_Real = QtWidgets.QCheckBox()
         self.checkBox_Crop_Diffraction = QtWidgets.QCheckBox()
 
-        layout_Cropping_Real = QtWidgets.QHBoxLayout()
-        layout_Cropping_Real.addWidget(QtWidgets.QLabel("Real Space"),0,QtCore.Qt.AlignRight)
-        layout_Cropping_Real.addWidget(self.checkBox_Crop_Real,0,QtCore.Qt.AlignRight)
         layout_Cropping_Diffraction = QtWidgets.QHBoxLayout()
-        layout_Cropping_Diffraction.addWidget(QtWidgets.QLabel("Diffraction Space"),0,QtCore.Qt.AlignRight)
+        layout_Cropping_Diffraction.addWidget(QtWidgets.QLabel("Q"),0,QtCore.Qt.AlignRight)
         layout_Cropping_Diffraction.addWidget(self.checkBox_Crop_Diffraction,0,QtCore.Qt.AlignRight)
+        layout_Cropping_Real = QtWidgets.QHBoxLayout()
+        layout_Cropping_Real.addWidget(QtWidgets.QLabel("R"),0,QtCore.Qt.AlignRight)
+        layout_Cropping_Real.addWidget(self.checkBox_Crop_Real,0,QtCore.Qt.AlignRight)
 
         layout_Cropping_RHS = QtWidgets.QVBoxLayout()
-        layout_Cropping_RHS.addLayout(layout_Cropping_Real)
         layout_Cropping_RHS.addLayout(layout_Cropping_Diffraction)
+        layout_Cropping_RHS.addLayout(layout_Cropping_Real)
 
         layout_Cropping = QtWidgets.QHBoxLayout()
         layout_Cropping.addWidget(QtWidgets.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
