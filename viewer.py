@@ -387,6 +387,9 @@ class DataViewer(QtCore.QObject):
             self.settings.crop_rx_max.update_value(slice_rx.stop)
             self.settings.crop_ry_min.update_value(slice_ry.start)
             self.settings.crop_ry_max.update_value(slice_ry.stop)
+        else:
+            self.settings.cropped_r.update_value(False)
+            slice_rx, slice_ry = None, None
         if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
             self.settings.cropped_q.update_value(True)
             slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
@@ -395,10 +398,18 @@ class DataViewer(QtCore.QObject):
             self.settings.crop_qx_max.update_value(slice_qx.stop)
             self.settings.crop_qy_min.update_value(slice_qy.start)
             self.settings.crop_qy_max.update_value(slice_qy.stop)
+        else:
+            self.settings.cropped_q.update_value(False)
+            slice_qx, slice_qy = None, None
 
         # Update settings
         # Crop and bin
-        #self.datacube.data4D.CropAndBin(self.settings.binning_r.val, self.settings.binning_q.val, slice_ry, slice_rx, slice_qy, slice_qx)
+        self.datacube.cropAndBin(self.settings.binning_r.val, self.settings.binning_q.val, self.settings.cropped_r, self.settings.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
+        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings.binning_q.val)
+        self.virtual_detector_roi.scale(1/self.settings.binning_q.val)
+        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings.binning_r.val)
+        self.update_diffraction_space_view()
+        self.update_real_space_view()
 
         if hasattr(self,'crop_roi_real'):
             self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
