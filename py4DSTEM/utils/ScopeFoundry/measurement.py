@@ -8,8 +8,8 @@ Created on Tue Apr  1 09:25:48 2014
 from PySide2 import QtCore, QtGui
 import threading
 import time
-from ScopeFoundry.logged_quantity import LQCollection
-from ScopeFoundry.helper_funcs import load_qt_ui_file
+from utils.ScopeFoundry.logged_quantity import LQCollection
+from utils.ScopeFoundry.helper_funcs import load_qt_ui_file
 from collections import OrderedDict
 import pyqtgraph as pg
 

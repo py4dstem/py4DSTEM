@@ -1,4 +1,4 @@
-from viewer import DataViewer
+from gui.viewer import DataViewer
 import sys
 
 if __name__ == '__main__':

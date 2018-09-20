@@ -1,0 +1,14 @@
+Decide on licensing!
+
+Good options:
+
+-GNU GPLv3
+--"The GNU GPLv3 also lets people do almost anything they want with your project, except to distribute closed source versions."
+--https://choosealicense.com/licenses/gpl-3.0/
+
+-MIT License
+--"The MIT License is short and to the point. It lets people do almost anything they want with your project, including to make and distribute closed source versions."
+--https://choosealicense.com/licenses/mit/
+
+
+
