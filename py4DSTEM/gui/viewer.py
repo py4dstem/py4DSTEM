@@ -23,12 +23,13 @@ from __future__ import division, print_function
 from PySide2 import QtCore, QtWidgets
 import numpy as np
 import sys, os
-from ScopeFoundry import BaseApp, LQCollection
-from utils import load_qt_ui_file, sibling_path, pg_point_roi
 import pyqtgraph as pg
-import dm3_lib as dm3
-from dialogs import ControlPanel, PreprocessingWidget
-from datacube import DataCube
+
+from gui.dialogs import ControlPanel, PreprocessingWidget
+from process.datastructure.datacube import DataCube
+from utils.ScopeFoundry import BaseApp, LQCollection
+from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
+import utils.dm3_lib as dm3
 
 import IPython
 if IPython.version_info[0] < 4:
