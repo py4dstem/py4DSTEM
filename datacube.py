@@ -69,6 +69,11 @@ class DataCube(object):
         return self.data4D[:,:,slice_y,slice_x].sum(axis=(2,3)).T, 1
 
     def cropAndBin(self, bin_r, bin_q, crop_r, crop_q, slice_ry, slice_rx, slice_qy, slice_qx):
+        # If binning is being performed, edit crop window as neededd
+
+        # Crop data
+
+        # Bin data
         self.bin_diffraction(bin_q)
         self.bin_real(bin_r)
         pass
