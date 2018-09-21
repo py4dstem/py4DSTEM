@@ -10,10 +10,7 @@
 # LQCollection, which enables intelligent interactive storage of logged quantities.
 #
 # Qt
-#  Qt is being run through Pyside/PySide2/PyQt/Qt for Python. See https://www.qt.io/qt-for-python. Presently PySide is being used.  
-# TODO: (maybe) use PySide2 (moves some objects from QtGui to the newer QtWidgets. Or (maybe)
-# use qtpy, a small wrapper which supports systems with either PySide or PySide2 (basically, for
-# python 2 or 3).
+#  Qt is being run through PySide2 (i.e. Qt for Python). See https://www.qt.io/qt-for-python. Presently PySide is being used.  Note thay PySide2 is only supported in python 3.
 #
 # pyqtgraph
 # pyqtgraph is a library which facilitates fast-running scientific visualization.  See http://pyqtgraph.org/. pyqtgraph is being used for the final data displays.
