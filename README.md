@@ -23,4 +23,4 @@ v. 0.1
 
 ## License
 
-TBD - MIT or GNU GPLv3
+GNU GPLv3
