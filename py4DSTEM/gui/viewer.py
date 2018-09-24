@@ -25,9 +25,9 @@ import gc
 
 from gui.dialogs import ControlPanel, PreprocessingWidget
 from process.datastructure.datacube import DataCube
-from utils.ScopeFoundry import BaseApp, LQCollection
+from utils.ScopeFoundry import LQCollection
 from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
-from io.reader import read_data
+from readwrite.reader import read_data
 import utils.dm3_lib as dm3
 
 import IPython
@@ -41,10 +41,6 @@ else:
 
 class DataViewer(QtCore.QObject):
     """
-    DataViewer objects inherit from the ScopeFoundry.BaseApp class.
-    ScopeFoundry.BaseApp objects inherit from the QtCore.QObject class.
-    Additional functionality is provided by pyqtgraph widgets.
-
     The class is used by instantiating and then entering the main Qt loop with, e.g.:
         app = DataViewer(sys.argv)
         app.exec_()
@@ -64,7 +60,7 @@ class DataViewer(QtCore.QObject):
         self.settings = LQCollection()
 
         # Set up temporary datacube
-        self.datacube = DataCube("sample_data.dm3")
+        self.datacube = read_data("sample_data.dm3")
 
         # Set up widgets
         self.setup_diffraction_space_control_widget()

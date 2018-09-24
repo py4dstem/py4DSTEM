@@ -26,7 +26,8 @@ class DataCube(object):
         self.data4D = data
         self.R_Ny, self.R_Nx = R_Ny, R_Nx
         self.Q_Ny, self.Q_Nx = Q_Ny, Q_Nx
-        self.R = R_Ny*R_Nx
+        self.R_N = R_Ny*R_Nx
+        self.set_scan_shape(self.R_Ny,self.R_Nx)
         self.original_metadata_shortlist = original_metadata_shortlist
         self.original_metadata_all = original_metadata_all
         self.filename = filename
@@ -37,7 +38,7 @@ class DataCube(object):
         TODO: insert catch for 4D data being reshaped.  Presently only 3D data supported.
         """
         try:
-            self.data4D = self.data4D.reshape(self.R_Ny*self.R_Nx,self.Q_Ny,self.Q_Nx).reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
+            self.data4D = self.data4D.reshape(self.R_N,self.Q_Ny,self.Q_Nx).reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
             #self.data4D = self.self.data4D.reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
             self.R_Ny,self.R_Nx = R_Ny, R_Nx
         except ValueError:
