@@ -21,11 +21,13 @@ from PySide2 import QtCore, QtWidgets
 import numpy as np
 import sys, os
 import pyqtgraph as pg
+import gc
 
 from gui.dialogs import ControlPanel, PreprocessingWidget
 from process.datastructure.datacube import DataCube
 from utils.ScopeFoundry import BaseApp, LQCollection
 from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
+from io.reader import read_data
 import utils.dm3_lib as dm3
 
 import IPython
@@ -209,12 +211,14 @@ class DataViewer(QtCore.QObject):
         print("Loading file",fname)
 
         # Instantiate DataCube object
-        self.datacube = DataCube(fname)
+        self.datacube = None
+        gc.collect()
+        self.datacube = read_data(fname)
 
         # Update scan shape information
         self.R_N = self.datacube.R_N
-        self.settings.R_Nx.update_value(1)
-        self.settings.R_Ny.update_value(self.R_N)
+        self.settings.R_Nx.update_value(self.datacube.R_Nx)
+        self.settings.R_Ny.update_value(self.datacube.R_Ny)
 
         # Set the diffraction space image
         self.update_diffraction_space_view()
