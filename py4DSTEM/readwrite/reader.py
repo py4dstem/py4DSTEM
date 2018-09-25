@@ -47,7 +47,7 @@ def read_other_file(filename):
                             filename=filename)
     except Exception as err:
         print("Failed to load", err)
-        print("Initializing random datacube!!!!")
+        print("Initializing random datacube...")
         return DataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
                         filename=None)
 

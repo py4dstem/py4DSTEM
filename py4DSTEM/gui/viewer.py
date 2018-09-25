@@ -99,10 +99,12 @@ class DataViewer(QtCore.QObject):
         # -call methods
         ##############################
 
+        print("\nCheckpoint 1\n")
         # File loading
         self.settings.New('data_filename',dtype='file')
         self.settings.data_filename.connect_to_browse_widgets(self.diffraction_space_control_widget.lineEdit_LoadFile, self.diffraction_space_control_widget.pushButton_BrowseFiles)
         self.settings.data_filename.updated_value.connect(self.load_file)
+        print("\nCheckpoint 2\n")
 
         # Scan shape
         self.settings.New('R_Nx', dtype=int, initial=1)
@@ -114,6 +116,7 @@ class DataViewer(QtCore.QObject):
 
         # Preprocessing
         self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
+        print("\nCheckpoint 3\n")
 
         return self.diffraction_space_control_widget
 
