@@ -2,7 +2,7 @@
 
 import h5py
 import numpy as np
-import hyperspy
+from hyperspy.misc.utils import DictionaryTreeBrowser
 import hyperspy.api as hs
 from os.path import splitext
 from process.datastructure.datacube import DataCube
@@ -184,7 +184,7 @@ class h5writer(object):
         """
         Determines if a node in a hyperspy metadata structure is a parent or terminal leaf.
         """
-        if type(node)==hyperspy.misc.utils.DictionaryTreeBrowser:
+        if type(node)==DictionaryTreeBrowser:
             return True
         else:
             return False
@@ -253,7 +253,7 @@ class h5writer(object):
 
     @staticmethod
     def istree_hs(node):
-        if type(node)==hyperspy.misc.utils.DictionaryTreeBrowser:
+        if type(node)==DictionaryTreeBrowser:
             return True
         else:
             return False
