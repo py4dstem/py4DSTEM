@@ -20,6 +20,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.lineEdit_LoadFile = dataLoader.lineEdit_LoadFile
         self.pushButton_BrowseFiles = dataLoader.pushButton_BrowseFiles
         self.pushButton_Preprocess = dataLoader.pushButton_Preprocess
+        self.pushButton_SaveAs = dataLoader.pushButton_SaveAs
 
         # Data cube size and shape
         sizeAndShapeEditor = DataCubeSizeAndShapeWidget()
@@ -63,9 +64,10 @@ class DataLoadingWidget(QtWidgets.QWidget):
         self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
         self.pushButton_Preprocess = QtWidgets.QPushButton("Preprocess")
+        self.pushButton_SaveAs = QtWidgets.QPushButton("Save as...")
 
         # Title
-        title_row = QtWidgets.QLabel("Load Data")
+        title_row = QtWidgets.QLabel("Load and Save")
         titleFont = QtGui.QFont()
         titleFont.setBold(True)
         title_row.setFont(titleFont)
@@ -76,10 +78,14 @@ class DataLoadingWidget(QtWidgets.QWidget):
         top_row.addWidget(self.lineEdit_LoadFile, stretch=5)
         top_row.addWidget(self.pushButton_BrowseFiles, stretch=0)
 
+        bottom_row = QtWidgets.QHBoxLayout()
+        bottom_row.addWidget(self.pushButton_SaveAs,0,QtCore.Qt.AlignLeft)
+        bottom_row.addWidget(self.pushButton_Preprocess,0,QtCore.Qt.AlignRight)
+
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
         layout.addLayout(top_row)
-        layout.addWidget(self.pushButton_Preprocess,0,QtCore.Qt.AlignRight)
+        layout.addLayout(bottom_row)
 
         self.setLayout(layout)
         self.setFixedWidth(260)
@@ -231,6 +237,38 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.setLayout(layout)
         self.setFixedWidth(260)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+class SaveWidget(QtWidgets.QWidget):
+    """
+    Takes one argument - save_path - a string with a filename for the output file.
+    """
+    def __init__(self, save_path):
+        QtWidgets.QWidget.__init__(self)
+
+        # Label, Line Edit
+        self.label_SaveAs = QtWidgets.QLabel("Save as: ")
+        self.lineEdit_SavePath = QtWidgets.QLineEdit(save_path)
+        self.pushButton_Execute = QtWidgets.QPushButton("Save")
+        self.pushButton_Cancel = QtWidgets.QPushButton("Cancel")
+
+        # Layout
+        top_row = QtWidgets.QHBoxLayout()
+        top_row.addWidget(self.label_SaveAs, stretch=0)
+        top_row.addWidget(self.lineEdit_SavePath, stretch=5)
+
+        bottom_row = QtWidgets.QHBoxLayout()
+        bottom_row.addWidget(self.pushButton_Cancel,0,QtCore.Qt.AlignLeft)
+        bottom_row.addWidget(self.pushButton_Execute,0,QtCore.Qt.AlignRight)
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(top_row)
+        layout.addLayout(bottom_row)
+
+        self.setLayout(layout)
+        #self.setFixedWidth(260)
+        #self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)

@@ -134,7 +134,7 @@ class DataCube(object):
 
         self.setup_metadata_search_dicts()
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_microscope_search_dict, self.metadata.microscope)
-
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_processing_search_dict, self.metadata.processing)
 
     @staticmethod
     def get_metadata_from_original_metadata(hs_tree, metadata_search_dict, metadata_dict):
@@ -205,6 +205,10 @@ class DataCube(object):
             'K_pix_size' : [ '' ],
             'K_units' : [ '' ],
             'probe_FWHM_nm' : [ '' ]
+        }
+
+        self.original_to_processing_search_dict = {
+            'original_filename' : [ 'original_filename' ]
         }
 
 ################## END OF DATACUBE OBJECT ################

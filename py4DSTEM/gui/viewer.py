@@ -23,11 +23,12 @@ import sys, os
 import pyqtgraph as pg
 import gc
 
-from gui.dialogs import ControlPanel, PreprocessingWidget
+from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget
 from process.datastructure.datacube import DataCube
 from utils.ScopeFoundry import LQCollection
 from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
 from readwrite.reader import read_data
+from readwrite.writer import save_from_datacube
 import utils.dm3_lib as dm3
 
 import IPython
@@ -114,8 +115,9 @@ class DataViewer(QtCore.QObject):
         self.settings.R_Nx.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Nx)
         self.settings.R_Ny.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Ny)
 
-        # Preprocessing
+        # Preprocessing and Saving
         self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
+        self.diffraction_space_control_widget.pushButton_SaveAs.clicked.connect(self.save_as)
         print("\nCheckpoint 3\n")
 
         return self.diffraction_space_control_widget
@@ -418,6 +420,37 @@ class DataViewer(QtCore.QObject):
             self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
 
         self.preprocessing_widget.close()
+
+    ############ Saving ###########
+
+    def save_as(self):
+        """
+        Saving files to the .h5 format.
+        This method:
+            1) opens a separate dialog
+            2) puts a name in the "Save as:" field according to the original filename and any
+               preprocessing that's been done
+            2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
+        """
+        # Make widget
+        save_path = os.path.splitext(self.settings.data_filename.val)[0]+'.h5'
+        self.save_widget = SaveWidget(save_path)
+        self.save_widget.setWindowTitle("Save as...")
+        self.save_widget.show()
+        self.save_widget.raise_()
+
+        # Cancel or save
+        self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
+        self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
+
+    def cancel_saveas(self):
+        self.save_widget.close()
+
+    def execute_saveas(self):
+        save_from_datacube(self)
+        self.save_widget.close()
+
+
 
 
     def exec_(self):
