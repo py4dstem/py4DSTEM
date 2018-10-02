@@ -279,65 +279,22 @@ class EditMetadataWidget(QtWidgets.QWidget):
     def __init__(self, datacube):
         QtWidgets.QWidget.__init__(self)
 
-        self.tab_microscope = QtWidgets.QWidget()
-        self.tab_sample = QtWidgets.QWidget()
-        self.tab_user = QtWidgets.QWidget()
-        self.tab_processing = QtWidgets.QWidget()
-        self.tab_calibration = QtWidgets.QWidget()
-        self.tab_comments = QtWidgets.QWidget()
+        self.tab_microscope = self.make_tab(datacube.metadata.microscope)
+        self.tab_sample = self.make_tab(datacube.metadata.sample)
+        self.tab_user = self.make_tab(datacube.metadata.user)
+        self.tab_processing = self.make_tab(datacube.metadata.processing)
+        self.tab_calibration = self.make_tab(datacube.metadata.calibration)
 
-        # Microscope tab
-        tab_microscope_layout = QtWidgets.QVBoxLayout()
-        for key,value in datacube.metadata.microscope.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_microscope_layout.addLayout(current_row)
-        self.tab_microscope.setLayout(tab_microscope_layout)
-
-        # Sample tab
-        tab_sample_layout = QtWidgets.QVBoxLayout()
-        for key,value in datacube.metadata.sample.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_sample_layout.addLayout(current_row)
-        self.tab_sample.setLayout(tab_sample_layout)
-
-        # User tab
-        tab_user_layout = QtWidgets.QVBoxLayout()
-        for key,value in datacube.metadata.user.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_user_layout.addLayout(current_row)
-        self.tab_user.setLayout(tab_user_layout)
-
-        # Processing tab
-        tab_processing_layout = QtWidgets.QVBoxLayout()
-        for key,value in datacube.metadata.processing.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_processing_layout.addLayout(current_row)
-        self.tab_processing.setLayout(tab_processing_layout)
-
-        # Calibration tab
-        tab_calibration_layout = QtWidgets.QVBoxLayout()
-        for key,value in datacube.metadata.calibration.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_calibration_layout.addLayout(current_row)
-        self.tab_calibration.setLayout(tab_calibration_layout)
-
-        # Comments tab
+        # Comments tab - make separately to create larger text box
         tab_comments_layout = QtWidgets.QVBoxLayout()
         for key,value in datacube.metadata.comments.items():
-            current_row = QtWidgets.QHBoxLayout()
-            current_row.addWidget(QtWidgets.QLabel(key))
-            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
-            tab_comments_layout.addLayout(current_row)
+            current_comment = QtWidgets.QVBoxLayout()
+            label = QtWidgets.QLabel(key)
+            textedit = QtWidgets.QPlainTextEdit(str(value))
+            current_comment.addWidget(label,0,QtCore.Qt.AlignLeft)
+            current_comment.addWidget(textedit)
+            tab_comments_layout.addLayout(current_comment)
+        self.tab_comments = QtWidgets.QWidget()
         self.tab_comments.setLayout(tab_comments_layout)
 
         # Add all tabs to TabWidget
@@ -366,6 +323,20 @@ class EditMetadataWidget(QtWidgets.QWidget):
         #self.setFixedWidth(260)
         #self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
+    @staticmethod
+    def make_tab(metadata_dict):
+        tab_layout = QtWidgets.QVBoxLayout()
+        for key,value in metadata_dict.items():
+            current_row = QtWidgets.QHBoxLayout()
+            label = QtWidgets.QLabel(key)
+            lineedit = QtWidgets.QLineEdit(str(value))
+            lineedit.setFixedWidth(180)
+            current_row.addWidget(label,0,QtCore.Qt.AlignRight)
+            current_row.addWidget(lineedit,0,QtCore.Qt.AlignRight)
+            tab_layout.addLayout(current_row)
+        tab = QtWidgets.QWidget()
+        tab.setLayout(tab_layout)
+        return tab
 
 
 if __name__ == '__main__':
