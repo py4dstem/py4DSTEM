@@ -11,6 +11,168 @@ import hyperspy
 import hyperspy.api as hs
 from os.path import splitext
 
+def save_from_datacube(datacube,outputfile):
+    """
+    Saves an h5 file from a datacube object and an output filepath.
+    """
+
+    ##### Make .h5 file #####
+    print("Creating file {}...".format(outputfile))
+    f = h5py.File(outputfile,"w")
+    f.attrs.create("version_major",0)
+    f.attrs.create("version_minor",2)
+    group_data = f.create_group("4D-STEM_data")
+
+
+    ##### Write metadata #####
+    print("Writing metadata...")
+
+    # Create metadata groups
+    group_metadata = group_data.create_group("metadata")
+    group_original_metadata = group_metadata.create_group("original")
+    group_microscope_metadata = group_metadata.create_group("microscope")
+    group_sample_metadata = group_metadata.create_group("sample")
+    group_user_metadata = group_metadata.create_group("user")
+    group_processing_metadata = group_metadata.create_group("processing")
+    group_calibration_metadata = group_metadata.create_group("calibration")
+    group_comments_metadata = group_metadata.create_group("comments")
+    group_original_metadata_all = group_original_metadata.create_group("all")
+    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
+
+    # Transfer original metadata trees
+    transfer_metadata_tree(datacube.metadata.original.shortlist,group_original_metadata_shortlist)
+    transfer_metadata_tree(datacube.metadata.original.all,group_original_metadata_all)
+
+    # Transfer datacube metadata dictionaries
+    transfer_metadata_dict(datacube.metadata.microscope,group_microscope_metadata)
+    transfer_metadata_dict(datacube.metadata.sample,group_sample_metadata)
+    transfer_metadata_dict(datacube.metadata.user,group_user_metadata)
+    transfer_metadata_dict(datacube.metadata.processing,group_processing_metadata)
+    transfer_metadata_dict(datacube.metadata.calibration,group_calibration_metadata)
+    transfer_metadata_dict(datacube.metadata.comments,group_comments_metadata)
+
+
+    ##### Write datacube group #####
+    group_datacube = group_data.create_group("datacube")
+    group_datacube.attrs.create("emd_group_type",1)
+
+    # TODO: consider defining data chunking here, keeping k-space slices together
+    data_datacube = group_datacube.create_dataset("datacube", data=datacube.data4D)
+
+    # Dimensions
+    assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
+    R_Ny,R_Nx,K_Ny,K_Nx = data_datacube.shape
+    data_R_Ny = group_datacube.create_dataset("dim1",(R_Ny,))
+    data_R_Nx = group_datacube.create_dataset("dim2",(R_Nx,))
+    data_K_Ny = group_datacube.create_dataset("dim3",(K_Ny,))
+    data_K_Nx = group_datacube.create_dataset("dim4",(K_Nx,))
+
+    # Populate uncalibrated dimensional axes
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
+    data_R_Nx[...] = np.arange(0,R_Nx)
+    data_R_Nx.attrs.create("name",np.string_("R_x"))
+    data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_K_Ny[...] = np.arange(0,K_Ny)
+    data_K_Ny.attrs.create("name",np.string_("K_y"))
+    data_K_Ny.attrs.create("units",np.string_("[pix]"))
+    data_K_Nx[...] = np.arange(0,K_Nx)
+    data_K_Nx.attrs.create("name",np.string_("K_x"))
+    data_K_Nx.attrs.create("units",np.string_("[pix]"))
+
+    # Calibrate axes, if calibrations are present
+
+    # Calibrate R axes
+    try:
+        R_pix_size = datacube.metadata.calibration["R_pix_size"]
+        data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+        data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+        # Set R axis units
+        try:
+            R_units = datacube.metadata.calibration["R_units"]
+            data_R_Nx.attrs["units"] = R_units
+            data_R_Ny.attrs["units"] = R_units
+        except KeyError:
+            print("WARNING: Real space calibration found and applied, however, units were",
+                   "not identified and have been left in pixels.")
+    except KeyError:
+        print("No real space calibration found.")
+
+    # Calibrate K axes
+    try:
+        K_pix_size = datacube.metadata.calibration["K_pix_size"]
+        data_K_Ny[...] = np.arange(0,K_Ny*K_pix_size,K_pix_size)
+        data_K_Nx[...] = np.arange(0,K_Nx*K_pix_size,K_pix_size)
+        # Set K axis units
+        try:
+            K_units = datacube.metadata.calibration["K_units"]
+            data_K_Nx.attrs["units"] = K_units
+            data_K_Ny.attrs["units"] = K_units
+        except KeyError:
+            print("WARNING: Diffraction space calibration found and applied, however, units",
+                   "were not identified and have been left in pixels.")
+    except KeyError:
+        print("No diffraction space calibration found.")
+
+    ##### Finish and close #####
+    print("Done.")
+    f.close()
+
+
+#### Functions for original metadata transfer ####
+
+def transfer_metadata_tree(tree,group):
+    """
+    Transfers metadata from hyperspy.misc.utils.DictionaryTreeBrowser objects to a tree of .h5
+    groups (non-terminal nodes) and attrs (terminal nodes).
+
+    Accepts two arguments:
+        tree - a hyperspy.misc.utils.DictionaryTreeBrowser object, containing metadata
+        group - an hdf5 file group, which will become the root node of a copy of tree
+    """
+    for key in tree.keys():
+        if istree_hs(tree[key]):
+            subgroup = group.create_group(key)
+            transfer_metadata_tree(tree[key],subgroup)
+        else:
+            if type(tree[key])==str:
+                group.attrs.create(key,np.string_(tree[key]))
+            else:
+                group.attrs.create(key,tree[key])
+
+def istree_hs(node):
+    """
+    Determines if a node in a hyperspy metadata structure is a parent or terminal leaf.
+    """
+    if type(node)==hyperspy.misc.utils.DictionaryTreeBrowser:
+        return True
+    else:
+        return False
+
+def transfer_metadata_dict(dictionary,group):
+    """
+    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
+    to attrs in a .h5 group.
+
+    Accepts two arguments:
+        dictionary - a dictionary of metadata
+        group - an hdf5 file group, which will become the root node of a copy of tree
+    """
+    for key,val in dictionary.items():
+        if type(val)==str:
+            group.attrs.create(key,np.string_(val))
+        else:
+            group.attrs.create(key,val)
+
+
+
+
+
+
+
+
+
 class h5writer(object):
 
     def __init__(self,inputfile,outputfile=None):
@@ -183,37 +345,6 @@ class h5writer(object):
                     if found:
                         return found,val
         return False, -1
-
-
-    def transfer_metadata(self,tree,group):
-        """
-        Transfers metadata from any data format readable in hyperspy into a well-formated
-        tree of metadata in the new .h5 file.
-
-        Accepts two arguments:
-            tree - a dictionary tree of metadata, in the format output by hyperspy
-            group - an hdf5 file group to place metadata in
-        The information in metadata_tree is then added to group, preserving the tree's
-        structure, such that non-terminal nodes become groups, and terminal nodes become
-        attributes.
-        """
-        for key in tree.keys():
-            if self.istree_hs(tree[key]):
-                subgroup = group.create_group(key)
-                self.transfer_metadata(tree[key],subgroup)
-            else:
-                if type(tree[key])==str:
-                    group.attrs.create(key,np.string_(tree[key]))
-                else:
-                    group.attrs.create(key,tree[key])
-
-    @staticmethod
-    def istree_hs(node):
-        if type(node)==hyperspy.misc.utils.DictionaryTreeBrowser:
-            return True
-        else:
-            return False
-
 
     def make_microscope_metadata_dict(self):
         """

@@ -20,6 +20,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.lineEdit_LoadFile = dataLoader.lineEdit_LoadFile
         self.pushButton_BrowseFiles = dataLoader.pushButton_BrowseFiles
         self.pushButton_Preprocess = dataLoader.pushButton_Preprocess
+        self.pushButton_EditMetadata = dataLoader.pushButton_EditMetadata
         self.pushButton_SaveAs = dataLoader.pushButton_SaveAs
 
         # Data cube size and shape
@@ -64,6 +65,7 @@ class DataLoadingWidget(QtWidgets.QWidget):
         self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
         self.pushButton_Preprocess = QtWidgets.QPushButton("Preprocess")
+        self.pushButton_EditMetadata = QtWidgets.QPushButton("Edit Metdata")
         self.pushButton_SaveAs = QtWidgets.QPushButton("Save as...")
 
         # Title
@@ -80,6 +82,7 @@ class DataLoadingWidget(QtWidgets.QWidget):
 
         bottom_row = QtWidgets.QHBoxLayout()
         bottom_row.addWidget(self.pushButton_SaveAs,0,QtCore.Qt.AlignLeft)
+        bottom_row.addWidget(self.pushButton_EditMetadata,0,QtCore.Qt.AlignCenter)
         bottom_row.addWidget(self.pushButton_Preprocess,0,QtCore.Qt.AlignRight)
 
         layout = QtWidgets.QVBoxLayout()
@@ -88,7 +91,7 @@ class DataLoadingWidget(QtWidgets.QWidget):
         layout.addLayout(bottom_row)
 
         self.setLayout(layout)
-        self.setFixedWidth(260)
+        self.setFixedWidth(300)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
@@ -150,7 +153,7 @@ class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
         layout.addLayout(layout_Cropping)
 
         self.setLayout(layout)
-        self.setFixedWidth(260)
+        self.setFixedWidth(300)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 class PreprocessingWidget(QtWidgets.QWidget):
@@ -235,7 +238,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         layout.addLayout(layout_Execute)
 
         self.setLayout(layout)
-        self.setFixedWidth(260)
+        self.setFixedWidth(300)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 class SaveWidget(QtWidgets.QWidget):
@@ -263,6 +266,101 @@ class SaveWidget(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(top_row)
         layout.addLayout(bottom_row)
+
+        self.setLayout(layout)
+        #self.setFixedWidth(260)
+        #self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+class EditMetadataWidget(QtWidgets.QWidget):
+    """
+    Creates a widget for viewing and editing metadata. Must receive a DataCube object as an
+    argument, to populate metadata fields.
+    """
+    def __init__(self, datacube):
+        QtWidgets.QWidget.__init__(self)
+
+        self.tab_microscope = QtWidgets.QWidget()
+        self.tab_sample = QtWidgets.QWidget()
+        self.tab_user = QtWidgets.QWidget()
+        self.tab_processing = QtWidgets.QWidget()
+        self.tab_calibration = QtWidgets.QWidget()
+        self.tab_comments = QtWidgets.QWidget()
+
+        # Microscope tab
+        tab_microscope_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.microscope.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_microscope_layout.addLayout(current_row)
+        self.tab_microscope.setLayout(tab_microscope_layout)
+
+        # Sample tab
+        tab_sample_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.sample.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_sample_layout.addLayout(current_row)
+        self.tab_sample.setLayout(tab_sample_layout)
+
+        # User tab
+        tab_user_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.user.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_user_layout.addLayout(current_row)
+        self.tab_user.setLayout(tab_user_layout)
+
+        # Processing tab
+        tab_processing_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.processing.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_processing_layout.addLayout(current_row)
+        self.tab_processing.setLayout(tab_processing_layout)
+
+        # Calibration tab
+        tab_calibration_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.calibration.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_calibration_layout.addLayout(current_row)
+        self.tab_calibration.setLayout(tab_calibration_layout)
+
+        # Comments tab
+        tab_comments_layout = QtWidgets.QVBoxLayout()
+        for key,value in datacube.metadata.comments.items():
+            current_row = QtWidgets.QHBoxLayout()
+            current_row.addWidget(QtWidgets.QLabel(key))
+            current_row.addWidget(QtWidgets.QLineEdit(str(value)))
+            tab_comments_layout.addLayout(current_row)
+        self.tab_comments.setLayout(tab_comments_layout)
+
+        # Add all tabs to TabWidget
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(self.tab_microscope,"Microscope")
+        self.tabs.addTab(self.tab_sample,"Sample")
+        self.tabs.addTab(self.tab_user,"User")
+        self.tabs.addTab(self.tab_processing,"Processing")
+        self.tabs.addTab(self.tab_calibration,"Calibration")
+        self.tabs.addTab(self.tab_comments,"Comments")
+
+        # Excute
+        self.pushButton_Save = QtWidgets.QPushButton("Save")
+        self.pushButton_Cancel = QtWidgets.QPushButton("Cancel")
+
+        layout_Execute = QtWidgets.QHBoxLayout()
+        layout_Execute.addWidget(self.pushButton_Cancel)
+        layout_Execute.addWidget(self.pushButton_Save)
+
+        # Layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.tabs)
+        layout.addLayout(layout_Execute)
 
         self.setLayout(layout)
         #self.setFixedWidth(260)
