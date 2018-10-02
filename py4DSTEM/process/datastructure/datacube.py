@@ -212,48 +212,58 @@ class DataCube(object):
         will not be in the original metadata should be entered as keys with an empty seach list.
         """
         self.original_to_microscope_search_dict = {
-            'accelerating_voltage_kV' : [ 'beam_energy' ],
-            'camera_length_mm' : [ 'camera_length' ],
+            'accelerating_voltage' : [ 'beam_energy' ],
+            'accelerating_voltage_units' : [ '' ],
+            'camera_length' : [ 'camera_length' ],
+            'camera_length_units' : [ '' ],
             'C2_aperture' : [ '' ],
             'convergence_semiangle_mrad' : [ '' ],
             'spot_size' : [ '' ],
             'scan_rotation_degrees' : [ '' ],
-            'dwell_time_ms' : [ '' ],
+            'dwell_time' : [ '' ],
+            'dwell_time_units' : [ '' ],
             'scan_size_Ny' : [ '' ],
             'scan_size_Nx' : [ '' ],
             'R_pix_size' : [ '' ],
-            'R_units' : [ '' ],
+            'R_pix_units' : [ '' ],
             'K_pix_size' : [ '' ],
-            'K_units' : [ '' ],
-            'probe_FWHM_nm' : [ '' ]
+            'K_pix_units' : [ '' ],
+            'probe_FWHM_nm' : [ '' ],
+            'acquisition_date' : [ '' ]
         }
 
         self.original_to_sample_search_dict = {
-            'sample_metadata_1' : [ '' ],
-            'sample_metadata_2' : [ '' ],
-            'sample_metadata_3' : [ '' ]
+            'sample' : [ '' ],
+            'preparation_method' : [ '' ],
+            'growth_method' : [ '' ],
+            'grown_by' : [ '' ],
+            'other_notes' : [ '' ]
         }
 
         self.original_to_user_search_dict = {
-            'user_metadata_1' : [ '' ],
-            'user_metadata_2' : [ '' ],
-            'user_metadata_3' : [ '' ]
+            'name' : [ '' ],
+            'institution' : [ '' ],
+            'department' : [ '' ],
+            'contact_email' : [ '' ],
+            'contact_number' : [ '' ]
         }
 
         self.original_to_processing_search_dict = {
-            'original_filename' : [ 'original_filename' ]
+            'original_filename' : [ 'original_filename' ],
+            'binning' : [ '' ],
+            'cropping' : [ '' ]
         }
 
         self.original_to_calibration_search_dict = {
-            'calibration_metadata_1' : [ '' ],
-            'calibration_metadata_2' : [ '' ],
-            'calibration_metadata_3' : [ '' ]
+            'R_pix_size' : [ '' ],
+            'R_pix_units' : [ '' ],
+            'K_pix_size' : [ '' ],
+            'K_pix_units' : [ '' ],
+            'R_to_K_rotation_degrees' : [ '' ]
         }
 
         self.original_to_comments_search_dict = {
-            'comments_metadata_1' : [ '' ],
-            'comments_metadata_2' : [ '' ],
-            'comments_metadata_3' : [ '' ]
+            'comments' : [ '' ]
         }
 
     @staticmethod

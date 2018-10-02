@@ -98,6 +98,9 @@ def save_from_datacube(datacube,outputfile):
                    "not identified and have been left in pixels.")
     except KeyError:
         print("No real space calibration found.")
+    except TypeError:
+        # If R_pix_size is a str, i.e. has not been entered, pass
+        pass
 
     # Calibrate K axes
     try:
@@ -114,6 +117,10 @@ def save_from_datacube(datacube,outputfile):
                    "were not identified and have been left in pixels.")
     except KeyError:
         print("No diffraction space calibration found.")
+    except TypeError:
+        # If K_pix_size is a str, i.e. has not been entered, pass
+        pass
+
 
     ##### Finish and close #####
     print("Done.")

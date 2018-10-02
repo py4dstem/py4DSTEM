@@ -450,7 +450,11 @@ class DataViewer(QtCore.QObject):
             metadata_dict = getattr(self.datacube.metadata, metadata_dict_name)
             for row in tab.layout().children():
                 key=row.itemAt(0).widget().text()
-                value=row.itemAt(1).widget().text()
+                try:
+                    value=row.itemAt(1).widget().text()
+                except AttributeError:
+                    # Catches alternate widget (QPlainTextEdit) in comments tab
+                    value=row.itemAt(1).widget().toPlainText()
                 try:
                     value=float(value)
                 except ValueError:
