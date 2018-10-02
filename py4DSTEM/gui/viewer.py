@@ -23,7 +23,7 @@ import sys, os
 import pyqtgraph as pg
 import gc
 
-from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget
+from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from process.datastructure.datacube import DataCube
 from utils.ScopeFoundry import LQCollection
 from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
@@ -117,6 +117,7 @@ class DataViewer(QtCore.QObject):
 
         # Preprocessing and Saving
         self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
+        self.diffraction_space_control_widget.pushButton_EditMetadata.clicked.connect(self.edit_metadata)
         self.diffraction_space_control_widget.pushButton_SaveAs.clicked.connect(self.save_as)
         print("\nCheckpoint 3\n")
 
@@ -421,6 +422,45 @@ class DataViewer(QtCore.QObject):
 
         self.preprocessing_widget.close()
 
+    def edit_metadata(self):
+        """
+        Creates a popup dialog with tabs for different metadata groups, and fields in each
+        group with current, editable metadata values.
+        """
+        # Make widget
+        self.EditMetadataWidget = EditMetadataWidget(self.datacube)
+        self.EditMetadataWidget.setWindowTitle("Metadata Editor")
+        self.EditMetadataWidget.show()
+        self.EditMetadataWidget.raise_()
+
+        # Cancel or save
+        self.EditMetadataWidget.pushButton_Cancel.clicked.connect(self.cancel_editMetadata)
+        self.EditMetadataWidget.pushButton_Save.clicked.connect(self.save_editMetadata)
+
+    def cancel_editMetadata(self):
+        self.EditMetadataWidget.close()
+
+    def save_editMetadata(self):
+        print("Updating metadata...")
+        for i in range(self.EditMetadataWidget.tabs.count()):
+            tab = self.EditMetadataWidget.tabs.widget(i)
+            # Get appropriate metadata dict
+            tabname = self.EditMetadataWidget.tabs.tabText(i)
+            metadata_dict_name = [name for name in self.datacube.metadata.__dict__.keys() if tabname[1:] in name][0]
+            metadata_dict = getattr(self.datacube.metadata, metadata_dict_name)
+            for row in tab.layout().children():
+                key=row.itemAt(0).widget().text()
+                value=row.itemAt(1).widget().text()
+                try:
+                    value=float(value)
+                except ValueError:
+                    pass
+                metadata_dict[key]=value
+        self.EditMetadataWidget.close()
+        print("Done.")
+
+
+
     ############ Saving ###########
 
     def save_as(self):
@@ -447,7 +487,9 @@ class DataViewer(QtCore.QObject):
         self.save_widget.close()
 
     def execute_saveas(self):
-        save_from_datacube(self)
+        f = self.save_widget.lineEdit_SavePath.text()
+        print("Saving file to {}.".format(f))
+        save_from_datacube(self.datacube,f)
         self.save_widget.close()
 
 

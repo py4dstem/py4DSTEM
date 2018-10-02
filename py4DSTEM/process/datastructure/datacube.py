@@ -131,10 +131,25 @@ class DataCube(object):
         self.metadata.user = dict()
         self.metadata.processing = dict()
         self.metadata.calibration = dict()
+        self.metadata.comments = dict()
 
         self.setup_metadata_search_dicts()
+
+        # Get metadata from original metadata. Search first the complete list, then the shortlist,
+        # so any shortlist values present will overwrite the complete items.
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_microscope_search_dict, self.metadata.microscope)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_sample_search_dict, self.metadata.sample)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_user_search_dict, self.metadata.user)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_processing_search_dict, self.metadata.processing)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_calibration_search_dict, self.metadata.calibration)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_comments_search_dict, self.metadata.comments)
+
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_microscope_search_dict, self.metadata.microscope)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_sample_search_dict, self.metadata.sample)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_user_search_dict, self.metadata.user)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_processing_search_dict, self.metadata.processing)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_calibration_search_dict, self.metadata.calibration)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_comments_search_dict, self.metadata.comments)
 
     @staticmethod
     def get_metadata_from_original_metadata(hs_tree, metadata_search_dict, metadata_dict):
@@ -148,6 +163,7 @@ class DataCube(object):
             metadata_dict - a dictionary to put the found key:value pairs into
         """
         for attr, keys in metadata_search_dict.items():
+            metadata_dict[attr]=""
             for key in keys:
                 found, value = DataCube.search_hs_tree(key, hs_tree)
                 if found:
@@ -189,6 +205,11 @@ class DataCube(object):
         Keys become the keys in the final, active metadata dictioaries; values are lists
         containing the corresponding keys to find in the hyperspy trees of the original metadata.
         These objects live in the DataCube class scope.
+
+        Note that items that are not found will still be stored as a key in the relevant metadata
+        dictionary, with the empty string as its value.  This allows these fields to populate
+        in the relevant places - i.e. the metadata editor dialog. Thus any desired fields which
+        will not be in the original metadata should be entered as keys with an empty seach list.
         """
         self.original_to_microscope_search_dict = {
             'accelerating_voltage_kV' : [ 'beam_energy' ],
@@ -207,9 +228,40 @@ class DataCube(object):
             'probe_FWHM_nm' : [ '' ]
         }
 
+        self.original_to_sample_search_dict = {
+            'sample_metadata_1' : [ '' ],
+            'sample_metadata_2' : [ '' ],
+            'sample_metadata_3' : [ '' ]
+        }
+
+        self.original_to_user_search_dict = {
+            'user_metadata_1' : [ '' ],
+            'user_metadata_2' : [ '' ],
+            'user_metadata_3' : [ '' ]
+        }
+
         self.original_to_processing_search_dict = {
             'original_filename' : [ 'original_filename' ]
         }
+
+        self.original_to_calibration_search_dict = {
+            'calibration_metadata_1' : [ '' ],
+            'calibration_metadata_2' : [ '' ],
+            'calibration_metadata_3' : [ '' ]
+        }
+
+        self.original_to_comments_search_dict = {
+            'comments_metadata_1' : [ '' ],
+            'comments_metadata_2' : [ '' ],
+            'comments_metadata_3' : [ '' ]
+        }
+
+    @staticmethod
+    def add_metadata_item(key,value,metadata_dict):
+        """
+        Adds a single item, given by the pair key:value, to the metadata dictionary metadata_dict
+        """
+        metadata_dict[key] = value
 
 ################## END OF DATACUBE OBJECT ################
 
