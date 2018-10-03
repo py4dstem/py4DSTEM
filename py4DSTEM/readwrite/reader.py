@@ -11,18 +11,56 @@ def read_data(filename):
     """
     Takes a filename as input, and outputs a DataCube object.
 
-    If filename is a .h5 file,
-    read_data() checks if the file was written by py4DSTEM.  If it was, the metadata are read
-    and saved directly.  Otherwise, the file is read with hyperspy, and metadata is scraped and
-    saved from the hyperspy file.
+    If filename is a .h5 file, read_data() checks if the file was written by py4DSTEM.  If it
+    was, the metadata are read and saved directly.  Otherwise, the file is read with hyperspy,
+    and metadata is scraped and saved from the hyperspy file.
     """
-    if splitext(filename)[1] == ".h5":
-        print("{} is an HDF5 file.  Reading...".format(filename))
-        return read_py4DSTEM_file(filename)
-    # Load data
+    # Check if file was written by py4DSTEM
+    try:
+        h5_file = h5py.File(filename,'r')
+        if is_py4DSTEMfile(h5_file):
+            print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
+            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+            return DataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'],
+                            R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
+                            is_py4DSTEM_file=True, h5_file=h5_file)
+    except IOError:
+        pass
+
+    # Use hyperspy
     else:
-        print("{} is not an HDF5 file.  Reading with hyperspy...".format(filename))
-        return read_other_file(filename)
+        print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
+        try:
+            hyperspy_file = hs.load(filename)
+            if len(hyperspy_file.data.shape)==3:
+                R_N, Q_Ny, Q_Nx = hyperspy_file.data.shape
+                R_Ny, R_Nx = R_N, 1
+            elif len(hyperspy_file.data.shape)==4:
+                R_Ny, R_Nx, Q_Ny, Q_Nx = hyperspy_file.data.shape
+            else:
+                print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
+                print("Initializing random datacube...")
+                return DataCube(data=np.random.rand(100,512,512),
+                                R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                                filename=filename,is_py4DSTEM_file=False)
+            return DataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                                original_metadata_shortlist=hyperspy_file.metadata,
+                                original_metadata_all=hyperspy_file.original_metadata,
+                                filename=filename,is_py4DSTEM_file=False)
+        except Exception as err:
+            print("Failed to load", err)
+            print("Initializing random datacube...")
+            return DataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                            filename=None,is_py4DSTEM_file=False)
+
+
+def is_py4DSTEMfile(h5_file):
+    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4D-STEM_data' in h5_file.keys()):
+        return True
+    else:
+        return False
+
+
 
 def read_py4DSTEM_file(filename):
     h5_file = h5py.File(filename,'r')
@@ -38,12 +76,6 @@ def read_py4DSTEM_file(filename):
     # (2) copy the attributes from the metadata groups into the corresponding dictionaries
     # (3) rework instantiation of DataCube objects to allow for data loading/importing diffs
     #original_metadata_shortlist = 
-
-def is_py4DSTEMfile(h5_file):
-    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4D-STEM_data' in h5_file.keys()):
-        return True
-    else:
-        return False
 
 def read_other_file(filename):
     try:
