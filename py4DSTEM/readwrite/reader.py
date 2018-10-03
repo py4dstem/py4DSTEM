@@ -24,10 +24,26 @@ def read_data(filename):
         print("{} is not an HDF5 file.  Reading with hyperspy...".format(filename))
         return read_other_file(filename)
 
-# TODO: add this! #
 def read_py4DSTEM_file(filename):
-    print("Reading h5 files is not yet supported! Check back very soon.")
-    pass
+    h5_file = h5py.File(filename,'r')
+    if not is_py4DSTEMfile(h5_file):
+        read_other_file(filename)
+    R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+    ## NEXT STEPS:
+    # (0) reconsider the order in which these things need to be done! In particular, it seems
+    # possible that (3) may obviate the need for (1) and (2)
+    # (1) convert the original_metadata h5 trees back to hs.misc.util.DictionaryTreeBrowser
+    # objects, OR, determine that it is not necessary (?) and build in a catch to avoid trying
+    # to use these objects when they're absent
+    # (2) copy the attributes from the metadata groups into the corresponding dictionaries
+    # (3) rework instantiation of DataCube objects to allow for data loading/importing diffs
+    #original_metadata_shortlist = 
+
+def is_py4DSTEMfile(h5_file):
+    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4D-STEM_data' in h5_file.keys()):
+        return True
+    else:
+        return False
 
 def read_other_file(filename):
     try:
