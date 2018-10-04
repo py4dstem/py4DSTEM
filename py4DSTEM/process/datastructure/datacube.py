@@ -128,8 +128,10 @@ class DataCube(object):
         self.setup_metadata_search_dicts()
 
         # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.get_original_metadata_fom_h5_file(h5_file['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
-        self.get_original_metadata_fom_h5_file(h5_file['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
+        self.metadata.original.shortlist = MetadataCollection('shortlist')
+        self.metadata.original.all = MetadataCollection('all')
+        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
+        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
         self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
@@ -176,10 +178,10 @@ class DataCube(object):
         self.metadata.calibration = dict()
         self.metadata.comments = dict()
 
-    def get_original_metadata_fom_h5_file(self, h5_metadata_group, datacube_metadata_group):
+    def get_original_metadata_from_h5_file(self, h5_metadata_group, datacube_metadata_group):
         if len(h5_metadata_group.attrs)>0:
             datacube_metadata_group.metadata_items = dict()
-            self.get_metadata_from_h5_file(h5_metadata_group, datacube_metadata_group.items)
+            self.get_metadata_from_h5_file(h5_metadata_group, datacube_metadata_group.metadata_items)
         for subgroup_key in h5_metadata_group.keys():
             vars(datacube_metadata_group)[subgroup_key] = MetadataCollection(subgroup_key)
             self.get_original_metadata_from_h5_file(h5_metadata_group[subgroup_key], vars(datacube_metadata_group)[subgroup_key])
