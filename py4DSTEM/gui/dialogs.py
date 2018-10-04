@@ -290,7 +290,12 @@ class EditMetadataWidget(QtWidgets.QWidget):
         for key,value in datacube.metadata.comments.items():
             current_comment = QtWidgets.QVBoxLayout()
             label = QtWidgets.QLabel(key)
-            textedit = QtWidgets.QPlainTextEdit(str(value))
+            print("\nText is: {}\nText type is: {}.".format(value,type(value)))
+            try:
+                text = value.decode('utf-8')
+            except AttributeError:
+                text = str(value)
+            textedit = QtWidgets.QPlainTextEdit(text)
             current_comment.addWidget(label,0,QtCore.Qt.AlignLeft)
             current_comment.addWidget(textedit)
             tab_comments_layout.addLayout(current_comment)
@@ -329,7 +334,12 @@ class EditMetadataWidget(QtWidgets.QWidget):
         for key,value in metadata_dict.items():
             current_row = QtWidgets.QHBoxLayout()
             label = QtWidgets.QLabel(key)
-            lineedit = QtWidgets.QLineEdit(str(value))
+            print("\nText is: {}\nText type is: {}.".format(value,type(value)))
+            try:
+                text = value.decode('utf-8')
+            except AttributeError:
+                text = str(value)
+            lineedit = QtWidgets.QLineEdit(text)
             lineedit.setFixedWidth(180)
             current_row.addWidget(label,0,QtCore.Qt.AlignRight)
             current_row.addWidget(lineedit,0,QtCore.Qt.AlignRight)
