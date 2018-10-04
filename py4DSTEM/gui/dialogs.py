@@ -290,7 +290,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         for key,value in datacube.metadata.comments.items():
             current_comment = QtWidgets.QVBoxLayout()
             label = QtWidgets.QLabel(key)
-            print("\nText is: {}\nText type is: {}.".format(value,type(value)))
             try:
                 text = value.decode('utf-8')
             except AttributeError:
@@ -334,7 +333,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         for key,value in metadata_dict.items():
             current_row = QtWidgets.QHBoxLayout()
             label = QtWidgets.QLabel(key)
-            print("\nText is: {}\nText type is: {}.".format(value,type(value)))
             try:
                 text = value.decode('utf-8')
             except AttributeError:
