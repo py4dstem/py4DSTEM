@@ -26,7 +26,7 @@ import gc
 from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from process.datastructure.datacube import DataCube
 from utils.ScopeFoundry import LQCollection
-from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi
+from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi, LQCollection_py4DSTEM
 from readwrite.reader import read_data
 from readwrite.writer import save_from_datacube
 import utils.dm3_lib as dm3
@@ -59,6 +59,7 @@ class DataViewer(QtCore.QObject):
 
         # TODO: consider removing dependency on LQCollection object 
         self.settings = LQCollection()
+        self.settings_py4DSTEM = LQCollection_py4DSTEM()
 
         # Set up temporary datacube
         self.datacube = read_data("sample_data.dm3")
@@ -108,12 +109,12 @@ class DataViewer(QtCore.QObject):
         print("\nCheckpoint 2\n")
 
         # Scan shape
-        self.settings.New('R_Nx', dtype=int, initial=1)
-        self.settings.New('R_Ny', dtype=int, initial=1)
-        self.settings.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
-        self.settings.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
-        self.settings.R_Nx.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Nx)
-        self.settings.R_Ny.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Ny)
+        self.settings_py4DSTEM.New('R_Nx', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('R_Ny', dtype=int, initial=1)
+        self.settings_py4DSTEM.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
+        self.settings_py4DSTEM.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
+        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Nx)
+        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Ny)
 
         # Preprocessing and Saving
         self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
@@ -219,8 +220,8 @@ class DataViewer(QtCore.QObject):
 
         # Update scan shape information
         self.R_N = self.datacube.R_N
-        self.settings.R_Nx.update_value(self.datacube.R_Nx)
-        self.settings.R_Ny.update_value(self.datacube.R_Ny)
+        self.settings_py4DSTEM.R_Nx.update_value(self.datacube.R_Nx)
+        self.settings_py4DSTEM.R_Ny.update_value(self.datacube.R_Ny)
 
         # Set the diffraction space image
         self.update_diffraction_space_view()
@@ -261,9 +262,9 @@ class DataViewer(QtCore.QObject):
         return
 
     def update_scan_shape_Nx(self):
-        R_Nx = self.settings.R_Nx.val
-        self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
-        R_Ny = self.settings.R_Ny.val
+        R_Nx = self.settings_py4DSTEM.R_Nx.val
+        self.settings_py4DSTEM.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
+        R_Ny = self.settings_py4DSTEM.R_Ny.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
             self.update_real_space_view()
@@ -272,9 +273,9 @@ class DataViewer(QtCore.QObject):
         return
 
     def update_scan_shape_Ny(self):
-        R_Ny = self.settings.R_Ny.val
-        self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
-        R_Nx = self.settings.R_Nx.val
+        R_Ny = self.settings_py4DSTEM.R_Ny.val
+        self.settings_py4DSTEM.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
+        R_Nx = self.settings_py4DSTEM.R_Nx.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
@@ -314,8 +315,8 @@ class DataViewer(QtCore.QObject):
         self.settings.New('crop_qy_max', dtype=int)
 
         # Reshaping
-        self.settings.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
-        self.settings.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
+        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
+        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
 
         # Binning
         self.settings.binning_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
