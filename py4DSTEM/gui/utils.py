@@ -54,9 +54,7 @@ class LQCollection_py4DSTEM(object):
         self._logged_quantities = dict()
 
     def New(self, name, dtype=float, **kwargs):
-        if 'array' in kwargs.keys():
-            lq = ArrayLQ_py4DSTEM(name=name, dtype=dtype, **kwargs)
-        elif dtype == 'file':
+        if dtype == 'file':
             lq = FileLQ_py4DSTEM(name=name, **kwargs)
         else:
             lq = LoggedQuantity_py4DSTEM(name=name, dtype=dtype, **kwargs)
@@ -142,12 +140,6 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
 
         elif type(widget) == QtWidgets.QSpinBox:
             widget.setKeyboardTracking(False)
-            #if self.vmin is not None:
-            #    widget.setMinimum(self.vmin)
-            #if self.vmax is not None:
-            #    widget.setMaximum(self.vmax)
-            #if self.unit is not None:
-            #    widget.setSuffix(" "+self.unit)
             widget.setSingleStep(self.spinbox_step)
             widget.setValue(self.val)
 
@@ -160,7 +152,9 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
 
         elif type(widget) == QtWidgets.QLineEdit:
             self.updated_value[str].connect(widget.setText)
-            widget.editingFinished[str].connect(self.update_value)
+            def on_edit_finished():
+                self.update_value(widget.text())
+            widget.editingFinished.connect(on_edit_finished)
 
         elif type(widget) == QtWidget.QLabel:
             self.updated_value[str].connect(widget.setText)
@@ -196,16 +190,26 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
 
     ########## End of LoggedQuantity object ##########
 
-#class FileLQ(QtCore.QObject):
+class FileLQ_py4DSTEM(LoggedQuantity_py4DSTEM):
 
-#    def __init__(name, **kwargs):
-#        pass
+    def __init__(self, name, default_dir=None, **kwargs):
+        kwargs.pop('dtype',None)
+        LoggedQuantity_py4DSTEM.__init__(self,name,dtype=str,**kwargs)
+        self.default_dir = default_dir
 
+    def connect_to_browse_widgets(self, lineEdit, pushButton):
+        assert type(lineEdit) == QtWidgets.QLineEdit
+        self.connect_bidir_to_widget(lineEdit)
 
-#class ArrayLQ(QtCore.QObject):
+        assert type(pushButton) == QtWidgets.QPushButton
+        pushButton.clicked.connect(self.file_browser)
 
-#    def __init__(name, dtype=float, **kwargs):
-#        pass
+    def file_browser(self):
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None)
+        print(repr(fname))
+        if fname:
+            self.update_value(fname)
+
 
 
 
