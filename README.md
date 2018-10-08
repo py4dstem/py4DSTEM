@@ -34,18 +34,30 @@ Redundant information in overlapping Bragg disks can be leveraged to deconvolve 
 Variance in the data intensity can be used to extract correlation functions describing the short and medium range order and disorder.
 
 
-### What are some of the challenges of analysis of 4D STEM data?
+### What are some of the challenges of analysis of 4D-STEM data?
 
 In terms of hardware, 4D-STEM has been made possible by the advent of electron detectors with the speed and dynamic range necessary to capture complete diffraction patterns at each scan position fast enough that sample drift is not prohibitive.
 In terms of data analysis, 4D-STEM is where the field of STEM butts heads with the big data problem.
+A typical 4D-STEM scan can generate a gigabyte of data in under a minute, where the specific data rate depends on the detector and will continue to increase with new hardware developements.
+The capacity to handle terabytes of raw data from a single session is required.
 
-Since the turn of the millenium, the availability of aberration corrected instruments has made STEM an increasingly invaluable tool in direct interrogation of matter at the atomic scale.
-//A key advantage of STEM, as in all imaging methods, is the preeminence of local, as opposed to average, structure -- today, analysis of defects, polarization fields, compositional gradients, and so on are all accessible at the scale of individual atoms.
-Individual images are frequently so information-rich as to warrant detailed and individually-tailored analysis.
+The size and complexity of 4D-STEM data makes the initial stages of data screening and preprocessing both more challenging and more important.
+The ability to quickly scan through data becomes non-trivial, as many possible 2D slices through a given 4D datacube are possible, and which are most relavant will vary on a case-by-case basis.
+For these large datasets, compression without sacrificing useful information takes on increasing importance.
 
+Analysis of 4D-STEM data can involve significant amounts of data processing.
+A growing number of excellent studies devoted to untangling these complex datasets in the most useful ways can be found in the literature, demonstrating 4D-STEM based mapping of everything from strain to local magnetic fields to non-spectroscopic composition maps and much more.
+At this stage, these works tend to operate on the scale of individual datasets, demonstrating the principles and requisite machinery for new forms of 4D-STEM data analysis.
+However, maximizing the impact of these tools to answer the broadest possible array of scientifc questions requires both accessibility and scalability.
+In light of the size of the data and the complexity of its analysis, these both represent significant challenges.
 
 
 ### How does py4DSTEM help?
+
+py4DSTEM is here to help!
+
+
+
 
 ## Getting started
 
@@ -54,7 +66,8 @@ Installing and running the code
 ### Dependencies
 
 hyperspy
-
+h5py
+pyqtgraph
 
 ## Versioning
 
