@@ -1,20 +1,24 @@
-######## Viewer for 4D STEM data ########
-#
-# Defines a class -- DataViewer - enabling a simple GUI for
-# interacting with 4D STEM datasets.
-#
-# Relevant documentation for lower level code:
-#
-# ScopeFoundry 
-# ScopeFoundry is a flexible package for both scientific data visualization and control of labrotory experiments.  See http://www.scopefoundry.org/.  This code uses the ScopeFoundary object
-# LQCollection, which enables intelligent interactive storage of logged quantities.
-#
-# Qt
-#  Qt is being run through PySide2 (i.e. Qt for Python). See https://www.qt.io/qt-for-python. Presently PySide is being used.  Note thay PySide2 is only supported in python 3.
-#
-# pyqtgraph
-# pyqtgraph is a library which facilitates fast-running scientific visualization.  See http://pyqtgraph.org/. pyqtgraph is being used for the final data displays.
-
+################################ Viewer for 4D STEM data ####################################
+#                                                                                           #
+# Defines a class -- DataViewer - enabling a simple GUI for interacting with 4D STEM        #
+# datasets.                                                                                 #
+#                                                                                           #
+#                                                                                           #
+# Relevant documentation for lower level code:                                              #
+#                                                                                           #
+# Qt is being run through PySide2 (i.e. Qt for Python). See https://www.qt.io/qt-for-python.#
+# Note thay PySide2 is only supported in python 3.                                          #
+#                                                                                           #
+# pyqtgraph facilitates fast-running scientific visualization.  See http://pyqtgraph.org/.  #
+# pyqtgraph is being used for the final data displays.                                      #
+#                                                                                           #
+# ScopeFoundry is an open source package for control of laboratory experiments as well as   #
+# some scientific data visualization.  See http://www.scopefoundry.org/.  This code uses    #
+# a simplified version of ScopeFoundry's LoggedQuantity and LQCollection objects to serve   #
+# as an interface connecting GUI entries, stored quantities, and updates to visualiation    #
+# and analysis; see gui/utils.py.                                                           #
+#                                                                                           #
+#############################################################################################
 
 from __future__ import division, print_function
 from PySide2 import QtCore, QtWidgets
@@ -201,7 +205,9 @@ class DataViewer(QtCore.QObject):
         self.diffraction_space_control_widget.raise_()
         return
 
-    ######### Methods controlling responses to user inputs #########
+    ################################################################
+    ######### Methods connected to user input changes ##############
+    ################################################################
 
     def load_file(self):
         """
