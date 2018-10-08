@@ -102,7 +102,6 @@ class DataViewer(QtCore.QObject):
         # -call methods
         ##############################
 
-        print("\nCheckpoint 1\n")
         # File loading
         self.settings_py4DSTEM.New('data_filename',dtype='file')
         self.settings_py4DSTEM.data_filename.connect_to_browse_widgets(self.diffraction_space_control_widget.lineEdit_LoadFile, self.diffraction_space_control_widget.pushButton_BrowseFiles)
