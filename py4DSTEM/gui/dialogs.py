@@ -16,25 +16,28 @@ class ControlPanel(QtWidgets.QWidget):
         # For each, provide handles to connect to their widgets
 
         # File loading
-        dataLoader = DataLoadingWidget()
-        self.lineEdit_LoadFile = dataLoader.lineEdit_LoadFile
-        self.pushButton_BrowseFiles = dataLoader.pushButton_BrowseFiles
-        self.pushButton_Preprocess = dataLoader.pushButton_Preprocess
-        self.pushButton_EditMetadata = dataLoader.pushButton_EditMetadata
-        self.pushButton_SaveAs = dataLoader.pushButton_SaveAs
+        self.dataLoader = HideableWidget('Load, Preprocess, Save',DataLoadingWidget())
+        self.lineEdit_LoadFile = self.dataLoader.widget.lineEdit_LoadFile
+        self.pushButton_BrowseFiles = self.dataLoader.widget.pushButton_BrowseFiles
+        self.pushButton_Preprocess = self.dataLoader.widget.pushButton_Preprocess
+        self.pushButton_EditMetadata = self.dataLoader.widget.pushButton_EditMetadata
+        self.pushButton_SaveAs = self.dataLoader.widget.pushButton_SaveAs
 
         # Data cube size and shape
-        sizeAndShapeEditor = DataCubeSizeAndShapeWidget()
-        self.spinBox_Nx = sizeAndShapeEditor.spinBox_Nx
-        self.spinBox_Ny = sizeAndShapeEditor.spinBox_Ny
-        self.lineEdit_Binning = sizeAndShapeEditor.lineEdit_Binning
-        self.pushButton_Binning = sizeAndShapeEditor.pushButton_Binning
-        self.pushButton_SetCropWindow = sizeAndShapeEditor.pushButton_SetCropWindow
-        self.pushButton_CropData = sizeAndShapeEditor.pushButton_CropData
+        self.sizeAndShapeEditor = HideableWidget('Reshape',DataCubeSizeAndShapeWidget(),initial_state=False)
+        self.spinBox_Nx = self.sizeAndShapeEditor.widget.spinBox_Nx
+        self.spinBox_Ny = self.sizeAndShapeEditor.widget.spinBox_Ny
+        self.lineEdit_Binning = self.sizeAndShapeEditor.widget.lineEdit_Binning
+        self.pushButton_Binning = self.sizeAndShapeEditor.widget.pushButton_Binning
+        self.pushButton_SetCropWindow = self.sizeAndShapeEditor.widget.pushButton_SetCropWindow
+        self.pushButton_CropData = self.sizeAndShapeEditor.widget.pushButton_CropData
 
         # Create and set layout
-        layout.addWidget(dataLoader)
-        layout.addWidget(sizeAndShapeEditor)
+        layout.addWidget(self.dataLoader,0,QtCore.Qt.AlignTop)
+        layout.addWidget(self.sizeAndShapeEditor,0,QtCore.Qt.AlignTop)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
         scrollableWidget.setLayout(layout)
 
         # Scroll Area Properties
@@ -48,6 +51,7 @@ class ControlPanel(QtWidgets.QWidget):
         # Set the scroll area container to fill the layout of the entire ControlPanel widget
         vLayout = QtWidgets.QVBoxLayout(self)
         vLayout.addWidget(scrollArea)
+        vLayout.setContentsMargins(0,0,0,0)
         self.setLayout(vLayout)
 
         # Set geometry
@@ -69,10 +73,10 @@ class DataLoadingWidget(QtWidgets.QWidget):
         self.pushButton_SaveAs = QtWidgets.QPushButton("Save as...")
 
         # Title
-        title_row = QtWidgets.QLabel("Load and Save")
-        titleFont = QtGui.QFont()
-        titleFont.setBold(True)
-        title_row.setFont(titleFont)
+        #title_row = QtWidgets.QLabel("Load and Save")
+        #titleFont = QtGui.QFont()
+        #titleFont.setBold(True)
+        #title_row.setFont(titleFont)
 
         # Layout
         top_row = QtWidgets.QHBoxLayout()
@@ -86,7 +90,7 @@ class DataLoadingWidget(QtWidgets.QWidget):
         bottom_row.addWidget(self.pushButton_Preprocess,0,QtCore.Qt.AlignRight)
 
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
+        #layout.addWidget(title_row,0,QtCore.Qt.AlignCenter)
         layout.addLayout(top_row)
         layout.addLayout(bottom_row)
 
@@ -345,6 +349,64 @@ class EditMetadataWidget(QtWidgets.QWidget):
         tab = QtWidgets.QWidget()
         tab.setLayout(tab_layout)
         return tab
+
+
+class QHLine(QtWidgets.QFrame):
+    def __init__(self):
+        super(QHLine, self).__init__()
+        self.setFrameShape(QtWidgets.QFrame.HLine)
+        self.setFrameShadow(QtWidgets.QFrame.Raised)
+        self.setLineWidth(1)
+
+class HideableWidget(QtWidgets.QWidget):
+
+    def __init__(self, title, widget, initial_state=True):
+        """
+        Makes a widget with a bar at the top with the title and a checkbox controlling the
+        widget's visibility.
+        Accepts:
+            title:  str
+            widget: QWidget object
+            initial_state: bool, indicating if the widget is visible or not on loading
+        """
+        QtWidgets.QWidget.__init__(self)
+        self.widget = widget
+
+        # Checkbox controlling whether widget is hidden
+        self.checkBox_ToggleHiding = QtWidgets.QCheckBox()
+
+        # Title
+        self.label_Title = QtWidgets.QLabel(title)
+        titleFont = QtGui.QFont()
+        titleFont.setPointSize(11)
+        titleFont.setItalic(True)
+        self.label_Title.setFont(titleFont)
+
+        title_layout = QtWidgets.QHBoxLayout()
+        title_layout.addWidget(self.checkBox_ToggleHiding,0,QtCore.Qt.AlignLeft)
+        title_layout.addWidget(self.label_Title,1,QtCore.Qt.AlignLeft)
+        title_layout.setContentsMargins(0,0,0,0)
+        title_frame = QtWidgets.QFrame()
+        title_frame.setFrameShadow(QtWidgets.QFrame.Plain)
+        title_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        title_frame.setLineWidth(1)
+        title_frame.setLayout(title_layout)
+
+        #palatte = title_row.palette()
+        #p.setColor(w.backgroundRole(), Qt.red)
+        #w.setPalette(p)
+
+        # Layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(title_frame,0)
+        layout.addWidget(self.widget,1,QtCore.Qt.AlignTop)
+        self.setLayout(layout)
+
+        # Connect checkbox to toggling visibility
+        self.checkBox_ToggleHiding.stateChanged.connect(widget.setVisible)
+
+        self.checkBox_ToggleHiding.setChecked(initial_state)
+        self.widget.setVisible(initial_state)
 
 
 if __name__ == '__main__':

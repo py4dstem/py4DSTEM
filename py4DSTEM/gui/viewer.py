@@ -1,7 +1,6 @@
 ################################ Viewer for 4D STEM data ####################################
 #                                                                                           #
-# Defines a class -- DataViewer - enabling a simple GUI for interacting with 4D STEM        #
-# datasets.                                                                                 #
+# Defines a class -- DataViewer -- creating a GUI for interacting with 4D STEM datasets.    #
 #                                                                                           #
 #                                                                                           #
 # Relevant documentation for lower level code:                                              #
@@ -67,7 +66,6 @@ class DataViewer(QtCore.QObject):
 
         # Set up widgets
         self.setup_diffraction_space_control_widget()
-        self.setup_real_space_control_widget()
         self.setup_diffraction_space_widget()
         self.setup_real_space_widget()
         self.setup_console_widget()
@@ -123,16 +121,6 @@ class DataViewer(QtCore.QObject):
         print("\nCheckpoint 3\n")
 
         return self.diffraction_space_control_widget
-
-    def setup_real_space_control_widget(self):
-        """
-        Set up the control window.
-        """
-        self.real_space_control_widget = load_qt_ui_file(sibling_path(__file__, "real_space_control_widget.ui"))
-        self.real_space_control_widget.setWindowTitle("Real space")
-        self.real_space_control_widget.show()
-        self.real_space_control_widget.raise_()
-        return self.real_space_control_widget
 
     def setup_diffraction_space_widget(self):
         """
@@ -191,22 +179,23 @@ class DataViewer(QtCore.QObject):
         """
         Arrange windows and their geometries.
         """
-        self.diffraction_space_widget.setGeometry(100,0,600,600)
+        self.diffraction_space_widget.setGeometry(200,0,600,600)
         self.diffraction_space_control_widget.setGeometry(0,0,350,600)
-        self.real_space_widget.setGeometry(700,0,600,600)
-        self.real_space_control_widget.setGeometry(1150,0,200,600)
+        self.real_space_widget.setGeometry(800,0,600,600)
         self.console_widget.setGeometry(0,670,1300,170)
 
         self.console_widget.raise_()
-        self.real_space_control_widget.raise_()
         self.real_space_widget.raise_()
         self.diffraction_space_widget.raise_()
         self.diffraction_space_control_widget.raise_()
         return
 
-    ################################################################
-    ######### Methods connected to user input changes ##############
-    ################################################################
+    ##################################################################
+    ########## Methods connected to user input changes ###############
+    ##################################################################
+
+
+    ############ Loading and Saving ###########
 
     def load_file(self):
         """
@@ -234,6 +223,38 @@ class DataViewer(QtCore.QObject):
         self.diffraction_space_widget.normRadioChanged()
 
         return
+
+    def save_as(self):
+        """
+        Saving files to the .h5 format.
+        This method:
+            1) opens a separate dialog
+            2) puts a name in the "Save as:" field according to the original filename and any
+               preprocessing that's been done
+            2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
+        """
+        # Make widget
+        save_path = os.path.splitext(self.settings_py4DSTEM.data_filename.val)[0]+'.h5'
+        self.save_widget = SaveWidget(save_path)
+        self.save_widget.setWindowTitle("Save as...")
+        self.save_widget.show()
+        self.save_widget.raise_()
+
+        # Cancel or save
+        self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
+        self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
+
+    def cancel_saveas(self):
+        self.save_widget.close()
+
+    def execute_saveas(self):
+        f = self.save_widget.lineEdit_SavePath.text()
+        print("Saving file to {}.".format(f))
+        save_from_datacube(self.datacube,f)
+        self.save_widget.close()
+
+
+    ############ Data slicing and reshaping ###########
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
@@ -283,6 +304,51 @@ class DataViewer(QtCore.QObject):
         except ValueError:
             pass
         return
+
+
+    ############ Metadata handling ###########
+
+    def edit_metadata(self):
+        """
+        Creates a popup dialog with tabs for different metadata groups, and fields in each
+        group with current, editable metadata values.
+        """
+        # Make widget
+        self.EditMetadataWidget = EditMetadataWidget(self.datacube)
+        self.EditMetadataWidget.setWindowTitle("Metadata Editor")
+        self.EditMetadataWidget.show()
+        self.EditMetadataWidget.raise_()
+
+        # Cancel or save
+        self.EditMetadataWidget.pushButton_Cancel.clicked.connect(self.cancel_editMetadata)
+        self.EditMetadataWidget.pushButton_Save.clicked.connect(self.save_editMetadata)
+
+    def cancel_editMetadata(self):
+        self.EditMetadataWidget.close()
+
+    def save_editMetadata(self):
+        print("Updating metadata...")
+        for i in range(self.EditMetadataWidget.tabs.count()):
+            tab = self.EditMetadataWidget.tabs.widget(i)
+            # Get appropriate metadata dict
+            tabname = self.EditMetadataWidget.tabs.tabText(i)
+            metadata_dict_name = [name for name in self.datacube.metadata.__dict__.keys() if tabname[1:] in name][0]
+            metadata_dict = getattr(self.datacube.metadata, metadata_dict_name)
+            for row in tab.layout().children():
+                key=row.itemAt(0).widget().text()
+                try:
+                    value=row.itemAt(1).widget().text()
+                except AttributeError:
+                    # Catches alternate widget (QPlainTextEdit) in comments tab
+                    value=row.itemAt(1).widget().toPlainText()
+                try:
+                    value=float(value)
+                except ValueError:
+                    pass
+                metadata_dict[key]=value
+        self.EditMetadataWidget.close()
+        print("Done.")
+
 
     ############ Preprocessing ###########
 
@@ -425,80 +491,6 @@ class DataViewer(QtCore.QObject):
 
         self.preprocessing_widget.close()
 
-    def edit_metadata(self):
-        """
-        Creates a popup dialog with tabs for different metadata groups, and fields in each
-        group with current, editable metadata values.
-        """
-        # Make widget
-        self.EditMetadataWidget = EditMetadataWidget(self.datacube)
-        self.EditMetadataWidget.setWindowTitle("Metadata Editor")
-        self.EditMetadataWidget.show()
-        self.EditMetadataWidget.raise_()
-
-        # Cancel or save
-        self.EditMetadataWidget.pushButton_Cancel.clicked.connect(self.cancel_editMetadata)
-        self.EditMetadataWidget.pushButton_Save.clicked.connect(self.save_editMetadata)
-
-    def cancel_editMetadata(self):
-        self.EditMetadataWidget.close()
-
-    def save_editMetadata(self):
-        print("Updating metadata...")
-        for i in range(self.EditMetadataWidget.tabs.count()):
-            tab = self.EditMetadataWidget.tabs.widget(i)
-            # Get appropriate metadata dict
-            tabname = self.EditMetadataWidget.tabs.tabText(i)
-            metadata_dict_name = [name for name in self.datacube.metadata.__dict__.keys() if tabname[1:] in name][0]
-            metadata_dict = getattr(self.datacube.metadata, metadata_dict_name)
-            for row in tab.layout().children():
-                key=row.itemAt(0).widget().text()
-                try:
-                    value=row.itemAt(1).widget().text()
-                except AttributeError:
-                    # Catches alternate widget (QPlainTextEdit) in comments tab
-                    value=row.itemAt(1).widget().toPlainText()
-                try:
-                    value=float(value)
-                except ValueError:
-                    pass
-                metadata_dict[key]=value
-        self.EditMetadataWidget.close()
-        print("Done.")
-
-
-
-    ############ Saving ###########
-
-    def save_as(self):
-        """
-        Saving files to the .h5 format.
-        This method:
-            1) opens a separate dialog
-            2) puts a name in the "Save as:" field according to the original filename and any
-               preprocessing that's been done
-            2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
-        """
-        # Make widget
-        save_path = os.path.splitext(self.settings_py4DSTEM.data_filename.val)[0]+'.h5'
-        self.save_widget = SaveWidget(save_path)
-        self.save_widget.setWindowTitle("Save as...")
-        self.save_widget.show()
-        self.save_widget.raise_()
-
-        # Cancel or save
-        self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
-        self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
-
-    def cancel_saveas(self):
-        self.save_widget.close()
-
-    def execute_saveas(self):
-        f = self.save_widget.lineEdit_SavePath.text()
-        print("Saving file to {}.".format(f))
-        save_from_datacube(self.datacube,f)
-        self.save_widget.close()
-
 
 
 
@@ -506,9 +498,7 @@ class DataViewer(QtCore.QObject):
         return self.qtapp.exec_()
 
 
-
-
-############### End of class ###############
+################################ End of class ##################################
 
 
 if __name__=="__main__":

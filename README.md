@@ -8,18 +8,20 @@ A graphical user interface facilites rapid data exploration, and live testing an
 For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
 For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
 
-py4DSTEM is open source, ``copy left'' software.
+py4DSTEM is open source, copyleft software.
+It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
 ## Quick overview
 
 4DSTEM is a powerful, versatile, emerging technique in the field nanocharacterization.
+This section provides a brief description of what 4D-STEM is, some of the challenges associated with 4D-STEM, and how py4DSTEM helps address these challenges.
 
 ### What is 4D-STEM?
 
-In a Scanning Transmission Electron Microscopy Experiment (STEM), a beam of high energy electrons is focused to a very fine probe -- on the order of or smaller than the atomic lattice spacings -- and rastered across the surface of the sample.
+In a Scanning Transmission Electron Microscopy Experiment (STEM), a beam of high energy electrons is focused to a very fine probe - on the order of or smaller than the atomic lattice spacings - and rastered across the surface of the sample.
 In traditional STEM, a (two dimensional) image is formed by populating the value of each pixel by the number of electrons (times a scaling factor) scattered into a detector at each beam position.
-The geometry of the detector -- it's size, shape, and position in the microscope's diffraction plane -- determines which electrons are collected, and therefore what the primary image contrast mechanisms will be.
+The geometry of the detector - it's size, shape, and position in the microscope's diffraction plane - determines which electrons are collected, and therefore what the primary image contrast mechanisms will be.
 For instance, high-angle annular dark-field detectors collect only electrons scattered to high angles, and are popular because with these detectors image contrast generally scales monotonically with the projected potential of the sample.
 
 4D-STEM stands for 4-Dimensional Scanning Transmission Electron Microscopy.
