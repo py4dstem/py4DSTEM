@@ -41,7 +41,7 @@ else:
     from qtconsole.inprocess import QtInProcessKernelManager
 
 
-class DataViewer(QtCore.QObject):
+class DataViewer(QtWidgets.QMainWindow):
     """
     The class is used by instantiating and then entering the main Qt loop with, e.g.:
         app = DataViewer(sys.argv)
@@ -51,25 +51,52 @@ class DataViewer(QtCore.QObject):
         """
         Initialize class, setting up windows and widgets.
         """
+        QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
-        # Set a pointer referring to the application object
+        # Define this as the QApplication object
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
 
-        #self.settings = LQCollection()
+        # Make settings collection
         self.settings_py4DSTEM = LQCollection_py4DSTEM()
+
+
+
+        # Make the central widget, containing the real and diffraction space views
+        #self.setWindowTitle("py4DSTEM")
+        #self.data_view_widget = self.setup_data_view_widget()
+        #self.setCentralWidget(self.data_view_widget)
+
+        # Set up sub-windows, add to main window, and arrange
+        self.control_widget = self.setup_control_widget()
+        self.diffraction_space_widget = self.setup_diffraction_space_widget()
+        self.real_space_widget = self.setup_real_space_widget()
+        self.console_widget = self.setup_console_widget()
+
+        self.real_space_widget.show()
+        self.real_space_widget.raise_()
+        self.diffraction_space_widget.show()
+        self.diffraction_space_widget.raise_()
+        self.console_widget.show()
+        self.console_widget.raise_()
+        self.control_widget.show()
+        self.control_widget.raise_()
+
+        #self.mainWindow.addSubWindow(self.control_widget)
+        #print(type(self.diffraction_space_widget))
+        #self.mainWindow.addSubWindow(self.diffraction_space_widget)
+        #self.mainWindow.addSubWindow(self.real_space_widget)
+
+        #self.mainWindow.addSubWindow(self.console_widget)
+
+        self.setup_geometry()
+        #self.show()
+        #self.raise_()
 
         # Set up temporary datacube
         self.datacube = read_data("sample_data.dm3")
-
-        # Set up widgets
-        self.setup_diffraction_space_control_widget()
-        self.setup_diffraction_space_widget()
-        self.setup_real_space_widget()
-        self.setup_console_widget()
-        self.setup_geometry()
 
         # Set up initial views in real and diffraction space
         self.update_diffraction_space_view()
@@ -79,48 +106,100 @@ class DataViewer(QtCore.QObject):
 
         return
 
+
     ###############################################
     ############ Widget setup methods #############
     ###############################################
 
-    def setup_diffraction_space_control_widget(self):
+    def setup_control_widget(self):
         """
         Set up the control window for diffraction space.
         """
-        #self.diffraction_space_control_widget = load_qt_ui_file(sibling_path(__file__, "diffraction_space_control_widget.ui"))
-        self.diffraction_space_control_widget = ControlPanel()
-        self.diffraction_space_control_widget.setWindowTitle("Diffraction space")
-        self.diffraction_space_control_widget.show()
-        self.diffraction_space_control_widget.raise_()
+        #self.control_widget = load_qt_ui_file(sibling_path(__file__, "control_widget.ui"))
+        self.control_widget = ControlPanel()
+        self.control_widget.setWindowTitle("Control Panel")
+        #self.control_widget.show()
+        #self.control_widget.raise_()
 
-        ########## Controls ##########
+        ############################ Controls ##########################
         # For each control:
-        # -create references in self.settings
-        # -connect UI changes to updates in self.settings
-        # -call methods
-        ##############################
+        #  -creates items in self.settings
+        #  -connects UI changes to updates in self.settings
+        #  -connects updates in self.settings items to function calls
+        #  -connects button clicks to function calls
+        ################################################################
 
-        # File loading
+        # Load
         self.settings_py4DSTEM.New('data_filename',dtype='file')
-        self.settings_py4DSTEM.data_filename.connect_to_browse_widgets(self.diffraction_space_control_widget.lineEdit_LoadFile, self.diffraction_space_control_widget.pushButton_BrowseFiles)
+        self.settings_py4DSTEM.data_filename.connect_to_browse_widgets(self.control_widget.lineEdit_LoadFile, self.control_widget.pushButton_BrowseFiles)
         self.settings_py4DSTEM.data_filename.updated_value.connect(self.load_file)
-        print("\nCheckpoint 2\n")
 
-        # Scan shape
+        # Preprocess
         self.settings_py4DSTEM.New('R_Nx', dtype=int, initial=1)
         self.settings_py4DSTEM.New('R_Ny', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('bin_r', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('bin_q', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('crop_r_showROI', dtype=bool, initial=False)
+        self.settings_py4DSTEM.New('crop_q_showROI', dtype=bool, initial=False)
+        self.settings_py4DSTEM.New('isCropped_r', dtype=bool, initial=False)
+        self.settings_py4DSTEM.New('isCropped_q', dtype=bool, initial=False)
+        self.settings_py4DSTEM.New('crop_rx_min', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_rx_max', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_ry_min', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_ry_max', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_qx_min', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_qx_max', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_qy_min', dtype=int, initial=0)
+        self.settings_py4DSTEM.New('crop_qy_max', dtype=int, initial=0)
+
+        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.control_widget.spinBox_Nx)
+        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.control_widget.spinBox_Ny)
+        self.settings_py4DSTEM.bin_r.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Real)
+        self.settings_py4DSTEM.bin_q.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Diffraction)
+        self.settings_py4DSTEM.crop_r_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Real)
+        self.settings_py4DSTEM.crop_q_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Diffraction)
+        # more?
+
         self.settings_py4DSTEM.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
         self.settings_py4DSTEM.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
-        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Nx)
-        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.diffraction_space_control_widget.spinBox_Ny)
+        self.settings_py4DSTEM.crop_r_showROI.updated_value.connect(self.crop_r_toggleROI)
+        self.settings_py4DSTEM.crop_q_showROI.updated_value.connect(self.crop_q_toggleROI)
+
+        # Cancel or execute
+        #self.preprocessing_widget.pushButton_Cancel.clicked.connect(self.cancel_preprocessing)
+        #self.preprocessing_widget.pushButton_Execute.clicked.connect(self.execute_preprocessing)
+
 
         # Preprocessing and Saving
-        self.diffraction_space_control_widget.pushButton_Preprocess.clicked.connect(self.preprocess)
-        self.diffraction_space_control_widget.pushButton_EditMetadata.clicked.connect(self.edit_metadata)
-        self.diffraction_space_control_widget.pushButton_SaveAs.clicked.connect(self.save_as)
+        self.control_widget.pushButton_EditFileMetadata.clicked.connect(self.edit_metadata)
+        self.control_widget.pushButton_SaveFile.clicked.connect(self.save_as)
         print("\nCheckpoint 3\n")
 
-        return self.diffraction_space_control_widget
+        return self.control_widget
+
+    def setup_data_view_widget(self):
+        """
+        Set up the data view widget, containing the real and diffraction space viewers.
+        """
+        #self.diffraction_space_widget = self.setup_diffraction_space_widget()
+        #self.real_space_widget = self.setup_real_space_widget()
+
+        self.data_view_widget = QtWidgets.QWidget()
+
+        #pgImView1 = pg.ImageView(parent=self.data_view_widget)
+        #pgImView2 = pg.ImageView(parent=self.data_view_widget)
+
+        layout = QtWidgets.QHBoxLayout()
+
+        layout.addWidget(QtWidgets.QLabel('Diffraction View'))
+        layout.addWidget(QtWidgets.QLabel('Real View'))
+
+        #layout.addWidget(self.diffraction_space_widget,1)
+        #layout.addWidget(self.real_space_widget,1)
+
+        self.data_view_widget.setLayout(layout)
+
+        return self.data_view_widget
 
     def setup_diffraction_space_widget(self):
         """
@@ -128,16 +207,15 @@ class DataViewer(QtCore.QObject):
         """
         # Create pyqtgraph ImageView object
         self.diffraction_space_widget = pg.ImageView()
-        self.diffraction_space_widget.setImage(np.random.random((512,512)))
+        self.diffraction_space_widget.setImage(np.zeros((512,512)))
 
         # Create virtual detector ROI selector 
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
         self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
         self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
 
-        # Name, show, return
+        # Name and return
         self.diffraction_space_widget.setWindowTitle('Diffraction Space')
-        self.diffraction_space_widget.show()
         return self.diffraction_space_widget
 
     def setup_real_space_widget(self):
@@ -146,15 +224,14 @@ class DataViewer(QtCore.QObject):
         """
         # Create pyqtgraph ImageView object
         self.real_space_widget = pg.ImageView()
-        self.real_space_widget.setImage(np.random.random((512,512)))
+        self.real_space_widget.setImage(np.zeros((512,512)))
 
         # Add point selector connected to displayed diffraction pattern
         self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
         self.real_space_point_selector.sigRegionChanged.connect(self.update_diffraction_space_view)
 
-        # Name, show, return
+        # Name and return
         self.real_space_widget.setWindowTitle('Real Space')
-        self.real_space_widget.show()
         return self.real_space_widget
 
     def setup_console_widget(self):
@@ -171,7 +248,6 @@ class DataViewer(QtCore.QObject):
         self.console_widget.kernel_manager = self.kernel_manager
         self.console_widget.kernel_client = self.kernel_client
 
-        self.console_widget.show()
         return self.console_widget
 
 
@@ -180,14 +256,14 @@ class DataViewer(QtCore.QObject):
         Arrange windows and their geometries.
         """
         self.diffraction_space_widget.setGeometry(200,0,600,600)
-        self.diffraction_space_control_widget.setGeometry(0,0,350,600)
+        self.control_widget.setGeometry(0,0,350,600)
         self.real_space_widget.setGeometry(800,0,600,600)
         self.console_widget.setGeometry(0,670,1300,170)
 
         self.console_widget.raise_()
         self.real_space_widget.raise_()
         self.diffraction_space_widget.raise_()
-        self.diffraction_space_control_widget.raise_()
+        self.control_widget.raise_()
         return
 
     ##################################################################
@@ -369,8 +445,8 @@ class DataViewer(QtCore.QObject):
         self.preprocessing_widget.raise_()
 
         # Create new settings
-        self.settings_py4DSTEM.New('binning_r', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('binning_q', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('bin_r', dtype=int, initial=1)
+        self.settings_py4DSTEM.New('bin_q', dtype=int, initial=1)
         self.settings_py4DSTEM.New('cropped_r', dtype=bool)
         self.settings_py4DSTEM.New('cropped_q', dtype=bool)
         self.settings_py4DSTEM.New('crop_rx_min', dtype=int)
@@ -387,8 +463,8 @@ class DataViewer(QtCore.QObject):
         self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
 
         # Binning
-        self.settings_py4DSTEM.binning_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
-        self.settings_py4DSTEM.binning_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
+        self.settings_py4DSTEM.bin_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
+        self.settings_py4DSTEM.bin_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
 
         # Cropping
         self.preprocessing_widget.checkBox_Crop_Real.stateChanged.connect(self.toggleCropROI_real)
@@ -398,11 +474,11 @@ class DataViewer(QtCore.QObject):
         self.preprocessing_widget.pushButton_Cancel.clicked.connect(self.cancel_preprocessing)
         self.preprocessing_widget.pushButton_Execute.clicked.connect(self.execute_preprocessing)
 
-    def toggleCropROI_real(self,on=True):
+    def crop_r_toggleROI(self, show=True):
         """
-        Checks if checkbox is True or False.  If True, makes a RIO.  If False, removes the ROI.
+        If show=True, makes an RIO.  If False, removes the ROI.
         """
-        if self.preprocessing_widget.checkBox_Crop_Real.isChecked():
+        if show:
             self.crop_roi_real = pg.RectROI([0,0], [self.datacube.R_Nx, self.datacube.R_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
             self.crop_roi_real.setPen(color='r')
             self.real_space_widget.getView().addItem(self.crop_roi_real)
@@ -413,11 +489,11 @@ class DataViewer(QtCore.QObject):
             else:
                 pass
 
-    def toggleCropROI_diffraction(self,on=True):
+    def crop_q_toggleROI(self, show=True):
         """
-        Checks if checkbox is True or False.  If True, makes a RIO.  If False, removes the ROI.
+        If show=True, makes an RIO.  If False, removes the ROI.
         """
-        if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
+        if show:
             self.crop_roi_diffraction = pg.RectROI([0,0], [self.datacube.Q_Nx,self.datacube.Q_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
             self.crop_roi_diffraction.setPen(color='r')
             self.diffraction_space_widget.getView().addItem(self.crop_roi_diffraction)
@@ -430,8 +506,8 @@ class DataViewer(QtCore.QObject):
 
     def cancel_preprocessing(self):
         # Update settings to reflect no changes
-        self.settings_py4DSTEM.binning_r.update_value(False)
-        self.settings_py4DSTEM.binning_q.update_value(False)
+        self.settings_py4DSTEM.bin_r.update_value(False)
+        self.settings_py4DSTEM.bin_q.update_value(False)
         self.settings_py4DSTEM.cropped_r.update_value(False)
         self.settings_py4DSTEM.cropped_q.update_value(False)
         self.settings_py4DSTEM.crop_rx_min.update_value(False)
@@ -477,10 +553,10 @@ class DataViewer(QtCore.QObject):
 
         # Update settings
         # Crop and bin
-        self.datacube.cropAndBin(self.settings_py4DSTEM.binning_r.val, self.settings_py4DSTEM.binning_q.val, self.settings_py4DSTEM.cropped_r, self.settings_py4DSTEM.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
-        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings_py4DSTEM.binning_q.val)
-        self.virtual_detector_roi.scale(1/self.settings_py4DSTEM.binning_q.val)
-        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings_py4DSTEM.binning_r.val)
+        self.datacube.cropAndBin(self.settings_py4DSTEM.bin_r.val, self.settings_py4DSTEM.bin_q.val, self.settings_py4DSTEM.cropped_r, self.settings_py4DSTEM.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
+        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings_py4DSTEM.bin_q.val)
+        self.virtual_detector_roi.scale(1/self.settings_py4DSTEM.bin_q.val)
+        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings_py4DSTEM.bin_r.val)
         self.update_diffraction_space_view()
         self.update_real_space_view()
 
