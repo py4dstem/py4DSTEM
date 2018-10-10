@@ -36,16 +36,16 @@ def pg_point_roi(view_box):
 
 ############### Logged Quantities ###############
 
-class LQCollection_py4DSTEM(object):
+class LQCollection(object):
 
     def __init__(self):
         self._logged_quantities = dict()
 
     def New(self, name, dtype=float, **kwargs):
         if dtype == 'file':
-            lq = FileLQ_py4DSTEM(name=name, **kwargs)
+            lq = FileLQ(name=name, **kwargs)
         else:
-            lq = LoggedQuantity_py4DSTEM(name=name, dtype=dtype, **kwargs)
+            lq = LoggedQuantity(name=name, dtype=dtype, **kwargs)
         self._logged_quantities[name] = lq
         self.__dict__[name] = lq
         return lq
@@ -54,7 +54,7 @@ class LQCollection_py4DSTEM(object):
         return self._logged_quantities
 
 
-class LoggedQuantity_py4DSTEM(QtCore.QObject):
+class LoggedQuantity(QtCore.QObject):
 
     updated_value = QtCore.pyqtSignal(object)  # Emitted on val update
 
@@ -175,11 +175,11 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
 
     ########## End of LoggedQuantity object ##########
 
-class FileLQ_py4DSTEM(LoggedQuantity_py4DSTEM):
+class FileLQ(LoggedQuantity):
 
     def __init__(self, name, default_dir=None, **kwargs):
         kwargs.pop('dtype',None)
-        LoggedQuantity_py4DSTEM.__init__(self,name,dtype=str,**kwargs)
+        LoggedQuantity.__init__(self,name,dtype=str,**kwargs)
         self.default_dir = default_dir
 
     def connect_to_browse_widgets(self, lineEdit, pushButton):

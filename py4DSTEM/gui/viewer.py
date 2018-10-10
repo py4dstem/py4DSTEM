@@ -28,7 +28,7 @@ import gc
 
 from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from process.datastructure.datacube import DataCube
-from gui.utils import sibling_path, pg_point_roi, LQCollection_py4DSTEM
+from gui.utils import sibling_path, pg_point_roi, LQCollection
 from readwrite.reader import read_data
 from readwrite.writer import save_from_datacube
 
@@ -60,7 +60,7 @@ class DataViewer(QtWidgets.QMainWindow):
             self.qtapp = QtWidgets.QApplication(argv)
 
         # Make settings collection
-        self.settings_py4DSTEM = LQCollection_py4DSTEM()
+        self.settings = LQCollection()
 
         # Set up sub-windows and arrange into primary py4DSTEM window
         self.diffraction_space_widget = self.setup_diffraction_space_widget()
@@ -102,39 +102,39 @@ class DataViewer(QtWidgets.QMainWindow):
         ################################################################
 
         # Load
-        self.settings_py4DSTEM.New('data_filename',dtype='file')
-        self.settings_py4DSTEM.data_filename.connect_to_browse_widgets(self.control_widget.lineEdit_LoadFile, self.control_widget.pushButton_BrowseFiles)
-        self.settings_py4DSTEM.data_filename.updated_value.connect(self.load_file)
+        self.settings.New('data_filename',dtype='file')
+        self.settings.data_filename.connect_to_browse_widgets(self.control_widget.lineEdit_LoadFile, self.control_widget.pushButton_BrowseFiles)
+        self.settings.data_filename.updated_value.connect(self.load_file)
 
         # Preprocess
-        self.settings_py4DSTEM.New('R_Nx', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('R_Ny', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('bin_r', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('bin_q', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('crop_r_showROI', dtype=bool, initial=False)
-        self.settings_py4DSTEM.New('crop_q_showROI', dtype=bool, initial=False)
-        self.settings_py4DSTEM.New('isCropped_r', dtype=bool, initial=False)
-        self.settings_py4DSTEM.New('isCropped_q', dtype=bool, initial=False)
-        self.settings_py4DSTEM.New('crop_rx_min', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_rx_max', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_ry_min', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_ry_max', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_qx_min', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_qx_max', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_qy_min', dtype=int, initial=0)
-        self.settings_py4DSTEM.New('crop_qy_max', dtype=int, initial=0)
+        self.settings.New('R_Nx', dtype=int, initial=1)
+        self.settings.New('R_Ny', dtype=int, initial=1)
+        self.settings.New('bin_r', dtype=int, initial=1)
+        self.settings.New('bin_q', dtype=int, initial=1)
+        self.settings.New('crop_r_showROI', dtype=bool, initial=False)
+        self.settings.New('crop_q_showROI', dtype=bool, initial=False)
+        self.settings.New('isCropped_r', dtype=bool, initial=False)
+        self.settings.New('isCropped_q', dtype=bool, initial=False)
+        self.settings.New('crop_rx_min', dtype=int, initial=0)
+        self.settings.New('crop_rx_max', dtype=int, initial=0)
+        self.settings.New('crop_ry_min', dtype=int, initial=0)
+        self.settings.New('crop_ry_max', dtype=int, initial=0)
+        self.settings.New('crop_qx_min', dtype=int, initial=0)
+        self.settings.New('crop_qx_max', dtype=int, initial=0)
+        self.settings.New('crop_qy_min', dtype=int, initial=0)
+        self.settings.New('crop_qy_max', dtype=int, initial=0)
 
-        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.control_widget.spinBox_Nx)
-        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.control_widget.spinBox_Ny)
-        self.settings_py4DSTEM.bin_r.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Real)
-        self.settings_py4DSTEM.bin_q.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Diffraction)
-        self.settings_py4DSTEM.crop_r_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Real)
-        self.settings_py4DSTEM.crop_q_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Diffraction)
+        self.settings.R_Nx.connect_bidir_to_widget(self.control_widget.spinBox_Nx)
+        self.settings.R_Ny.connect_bidir_to_widget(self.control_widget.spinBox_Ny)
+        self.settings.bin_r.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Real)
+        self.settings.bin_q.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Diffraction)
+        self.settings.crop_r_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Real)
+        self.settings.crop_q_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Diffraction)
 
-        self.settings_py4DSTEM.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
-        self.settings_py4DSTEM.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
-        self.settings_py4DSTEM.crop_r_showROI.updated_value.connect(self.crop_r_toggleROI)
-        self.settings_py4DSTEM.crop_q_showROI.updated_value.connect(self.crop_q_toggleROI)
+        self.settings.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
+        self.settings.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
+        self.settings.crop_r_showROI.updated_value.connect(self.crop_r_toggleROI)
+        self.settings.crop_q_showROI.updated_value.connect(self.crop_q_toggleROI)
 
         self.control_widget.pushButton_CropData.clicked.connect(self.crop_data)
         self.control_widget.pushButton_BinData.clicked.connect(self.bin_data)
@@ -209,6 +209,8 @@ class DataViewer(QtWidgets.QMainWindow):
         layout_data_and_control = QtWidgets.QHBoxLayout()
         layout_data_and_control.addWidget(self.control_widget,0)
         layout_data_and_control.addLayout(layout_data,1)
+        layout_data_and_control.setSpacing(0)
+        layout_data_and_control.setContentsMargins(0,0,0,0)
 
         self.main_window.setLayout(layout_data_and_control)
 
@@ -230,7 +232,7 @@ class DataViewer(QtWidgets.QMainWindow):
         """
         Loads a file by creating and storing a DataCube object
         """
-        fname = self.settings_py4DSTEM.data_filename.val
+        fname = self.settings.data_filename.val
         print("Loading file",fname)
 
         # Instantiate DataCube object
@@ -240,8 +242,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         # Update scan shape information
         self.R_N = self.datacube.R_N
-        self.settings_py4DSTEM.R_Nx.update_value(self.datacube.R_Nx)
-        self.settings_py4DSTEM.R_Ny.update_value(self.datacube.R_Ny)
+        self.settings.R_Nx.update_value(self.datacube.R_Nx)
+        self.settings.R_Ny.update_value(self.datacube.R_Ny)
 
         # Set the diffraction space image
         self.update_diffraction_space_view()
@@ -281,7 +283,7 @@ class DataViewer(QtWidgets.QMainWindow):
             2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
         """
         # Make widget
-        save_path = os.path.splitext(self.settings_py4DSTEM.data_filename.val)[0]+'.h5'
+        save_path = os.path.splitext(self.settings.data_filename.val)[0]+'.h5'
         self.save_widget = SaveWidget(save_path)
         self.save_widget.setWindowTitle("Save as...")
         self.save_widget.show()
@@ -332,9 +334,9 @@ class DataViewer(QtWidgets.QMainWindow):
         return
 
     def update_scan_shape_Nx(self):
-        R_Nx = self.settings_py4DSTEM.R_Nx.val
-        self.settings_py4DSTEM.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
-        R_Ny = self.settings_py4DSTEM.R_Ny.val
+        R_Nx = self.settings.R_Nx.val
+        self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
+        R_Ny = self.settings.R_Ny.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
             self.update_real_space_view()
@@ -343,9 +345,9 @@ class DataViewer(QtWidgets.QMainWindow):
         return
 
     def update_scan_shape_Ny(self):
-        R_Ny = self.settings_py4DSTEM.R_Ny.val
-        self.settings_py4DSTEM.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
-        R_Nx = self.settings_py4DSTEM.R_Nx.val
+        R_Ny = self.settings.R_Ny.val
+        self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
+        R_Nx = self.settings.R_Nx.val
         try:
             self.datacube.set_scan_shape(R_Ny, R_Nx)
         except ValueError:
@@ -416,26 +418,26 @@ class DataViewer(QtWidgets.QMainWindow):
         self.preprocessing_widget.raise_()
 
         # Create new settings
-        self.settings_py4DSTEM.New('bin_r', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('bin_q', dtype=int, initial=1)
-        self.settings_py4DSTEM.New('cropped_r', dtype=bool)
-        self.settings_py4DSTEM.New('cropped_q', dtype=bool)
-        self.settings_py4DSTEM.New('crop_rx_min', dtype=int)
-        self.settings_py4DSTEM.New('crop_rx_max', dtype=int)
-        self.settings_py4DSTEM.New('crop_ry_min', dtype=int)
-        self.settings_py4DSTEM.New('crop_ry_max', dtype=int)
-        self.settings_py4DSTEM.New('crop_qx_min', dtype=int)
-        self.settings_py4DSTEM.New('crop_qx_max', dtype=int)
-        self.settings_py4DSTEM.New('crop_qy_min', dtype=int)
-        self.settings_py4DSTEM.New('crop_qy_max', dtype=int)
+        self.settings.New('bin_r', dtype=int, initial=1)
+        self.settings.New('bin_q', dtype=int, initial=1)
+        self.settings.New('cropped_r', dtype=bool)
+        self.settings.New('cropped_q', dtype=bool)
+        self.settings.New('crop_rx_min', dtype=int)
+        self.settings.New('crop_rx_max', dtype=int)
+        self.settings.New('crop_ry_min', dtype=int)
+        self.settings.New('crop_ry_max', dtype=int)
+        self.settings.New('crop_qx_min', dtype=int)
+        self.settings.New('crop_qx_max', dtype=int)
+        self.settings.New('crop_qy_min', dtype=int)
+        self.settings.New('crop_qy_max', dtype=int)
 
         # Reshaping
-        self.settings_py4DSTEM.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
-        self.settings_py4DSTEM.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
+        self.settings.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
+        self.settings.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
 
         # Binning
-        self.settings_py4DSTEM.bin_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
-        self.settings_py4DSTEM.bin_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
+        self.settings.bin_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
+        self.settings.bin_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
 
         # Cropping
         self.preprocessing_widget.checkBox_Crop_Real.stateChanged.connect(self.toggleCropROI_real)
@@ -477,18 +479,18 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def cancel_preprocessing(self):
         # Update settings to reflect no changes
-        self.settings_py4DSTEM.bin_r.update_value(False)
-        self.settings_py4DSTEM.bin_q.update_value(False)
-        self.settings_py4DSTEM.cropped_r.update_value(False)
-        self.settings_py4DSTEM.cropped_q.update_value(False)
-        self.settings_py4DSTEM.crop_rx_min.update_value(False)
-        self.settings_py4DSTEM.crop_rx_max.update_value(False)
-        self.settings_py4DSTEM.crop_ry_min.update_value(False)
-        self.settings_py4DSTEM.crop_ry_max.update_value(False)
-        self.settings_py4DSTEM.crop_qx_min.update_value(False)
-        self.settings_py4DSTEM.crop_qx_max.update_value(False)
-        self.settings_py4DSTEM.crop_qy_min.update_value(False)
-        self.settings_py4DSTEM.crop_qy_max.update_value(False)
+        self.settings.bin_r.update_value(False)
+        self.settings.bin_q.update_value(False)
+        self.settings.cropped_r.update_value(False)
+        self.settings.cropped_q.update_value(False)
+        self.settings.crop_rx_min.update_value(False)
+        self.settings.crop_rx_max.update_value(False)
+        self.settings.crop_ry_min.update_value(False)
+        self.settings.crop_ry_max.update_value(False)
+        self.settings.crop_qx_min.update_value(False)
+        self.settings.crop_qx_max.update_value(False)
+        self.settings.crop_qy_min.update_value(False)
+        self.settings.crop_qy_max.update_value(False)
 
         if hasattr(self,'crop_roi_real'):
             self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
@@ -500,34 +502,34 @@ class DataViewer(QtWidgets.QMainWindow):
     def execute_preprocessing(self):
 
         if self.preprocessing_widget.checkBox_Crop_Real.isChecked():
-            self.settings_py4DSTEM.cropped_r.update_value(True)
+            self.settings.cropped_r.update_value(True)
             slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_rx,slice_ry = slices_r
-            self.settings_py4DSTEM.crop_rx_min.update_value(slice_rx.start)
-            self.settings_py4DSTEM.crop_rx_max.update_value(slice_rx.stop)
-            self.settings_py4DSTEM.crop_ry_min.update_value(slice_ry.start)
-            self.settings_py4DSTEM.crop_ry_max.update_value(slice_ry.stop)
+            self.settings.crop_rx_min.update_value(slice_rx.start)
+            self.settings.crop_rx_max.update_value(slice_rx.stop)
+            self.settings.crop_ry_min.update_value(slice_ry.start)
+            self.settings.crop_ry_max.update_value(slice_ry.stop)
         else:
-            self.settings_py4DSTEM.cropped_r.update_value(False)
+            self.settings.cropped_r.update_value(False)
             slice_rx, slice_ry = None, None
         if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
-            self.settings_py4DSTEM.cropped_q.update_value(True)
+            self.settings.cropped_q.update_value(True)
             slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_qx,slice_qy = slices_q
-            self.settings_py4DSTEM.crop_qx_min.update_value(slice_qx.start)
-            self.settings_py4DSTEM.crop_qx_max.update_value(slice_qx.stop)
-            self.settings_py4DSTEM.crop_qy_min.update_value(slice_qy.start)
-            self.settings_py4DSTEM.crop_qy_max.update_value(slice_qy.stop)
+            self.settings.crop_qx_min.update_value(slice_qx.start)
+            self.settings.crop_qx_max.update_value(slice_qx.stop)
+            self.settings.crop_qy_min.update_value(slice_qy.start)
+            self.settings.crop_qy_max.update_value(slice_qy.stop)
         else:
-            self.settings_py4DSTEM.cropped_q.update_value(False)
+            self.settings.cropped_q.update_value(False)
             slice_qx, slice_qy = None, None
 
         # Update settings
         # Crop and bin
-        self.datacube.cropAndBin(self.settings_py4DSTEM.bin_r.val, self.settings_py4DSTEM.bin_q.val, self.settings_py4DSTEM.cropped_r, self.settings_py4DSTEM.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
-        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings_py4DSTEM.bin_q.val)
-        self.virtual_detector_roi.scale(1/self.settings_py4DSTEM.bin_q.val)
-        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings_py4DSTEM.bin_r.val)
+        self.datacube.cropAndBin(self.settings.bin_r.val, self.settings.bin_q.val, self.settings.cropped_r, self.settings.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
+        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings.bin_q.val)
+        self.virtual_detector_roi.scale(1/self.settings.bin_q.val)
+        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings.bin_r.val)
         self.update_diffraction_space_view()
         self.update_real_space_view()
 
