@@ -1,7 +1,7 @@
 #!/Users/Ben/Code/anaconda2/envs/py3/bin/python
 
 import sys
-from PySide2 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtWidgets, QtGui
 
 # Set global style parameters
 
