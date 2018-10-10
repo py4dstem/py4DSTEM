@@ -62,38 +62,12 @@ class DataViewer(QtWidgets.QMainWindow):
         # Make settings collection
         self.settings_py4DSTEM = LQCollection_py4DSTEM()
 
-
-
-        # Make the central widget, containing the real and diffraction space views
-        #self.setWindowTitle("py4DSTEM")
-        #self.data_view_widget = self.setup_data_view_widget()
-        #self.setCentralWidget(self.data_view_widget)
-
-        # Set up sub-windows, add to main window, and arrange
-        self.control_widget = self.setup_control_widget()
+        # Set up sub-windows and arrange into primary py4DSTEM window
         self.diffraction_space_widget = self.setup_diffraction_space_widget()
         self.real_space_widget = self.setup_real_space_widget()
+        self.control_widget = self.setup_control_widget()
         self.console_widget = self.setup_console_widget()
-
-        self.real_space_widget.show()
-        self.real_space_widget.raise_()
-        self.diffraction_space_widget.show()
-        self.diffraction_space_widget.raise_()
-        self.console_widget.show()
-        self.console_widget.raise_()
-        self.control_widget.show()
-        self.control_widget.raise_()
-
-        #self.mainWindow.addSubWindow(self.control_widget)
-        #print(type(self.diffraction_space_widget))
-        #self.mainWindow.addSubWindow(self.diffraction_space_widget)
-        #self.mainWindow.addSubWindow(self.real_space_widget)
-
-        #self.mainWindow.addSubWindow(self.console_widget)
-
-        self.setup_geometry()
-        #self.show()
-        #self.raise_()
+        self.main_window = self.setup_main_window()
 
         # Set up temporary datacube
         self.datacube = read_data("sample_data.dm3")
@@ -175,30 +149,6 @@ class DataViewer(QtWidgets.QMainWindow):
 
         return self.control_widget
 
-    def setup_data_view_widget(self):
-        """
-        Set up the data view widget, containing the real and diffraction space viewers.
-        """
-        #self.diffraction_space_widget = self.setup_diffraction_space_widget()
-        #self.real_space_widget = self.setup_real_space_widget()
-
-        self.data_view_widget = QtWidgets.QWidget()
-
-        #pgImView1 = pg.ImageView(parent=self.data_view_widget)
-        #pgImView2 = pg.ImageView(parent=self.data_view_widget)
-
-        layout = QtWidgets.QHBoxLayout()
-
-        layout.addWidget(QtWidgets.QLabel('Diffraction View'))
-        layout.addWidget(QtWidgets.QLabel('Real View'))
-
-        #layout.addWidget(self.diffraction_space_widget,1)
-        #layout.addWidget(self.real_space_widget,1)
-
-        self.data_view_widget.setLayout(layout)
-
-        return self.data_view_widget
-
     def setup_diffraction_space_widget(self):
         """
         Set up the diffraction space window.
@@ -242,27 +192,37 @@ class DataViewer(QtWidgets.QMainWindow):
         self.kernel_client.start_channels()
 
         self.console_widget = RichJupyterWidget()
-        self.console_widget.setWindowTitle("4D-STEM IPython Console")
+        self.console_widget.setWindowTitle("py4DSTEM IPython Console")
         self.console_widget.kernel_manager = self.kernel_manager
         self.console_widget.kernel_client = self.kernel_client
 
         return self.console_widget
 
 
-    def setup_geometry(self):
+    def setup_main_window(self):
         """
-        Arrange windows and their geometries.
+        Setup main window, arranging sub-windows inside
         """
-        self.diffraction_space_widget.setGeometry(200,0,600,600)
-        self.control_widget.setGeometry(0,0,350,600)
-        self.real_space_widget.setGeometry(800,0,600,600)
-        self.console_widget.setGeometry(0,670,1300,170)
+        self.main_window = QtWidgets.QWidget()
+        self.main_window.setWindowTitle("py4DSTEM")
 
+        layout_data = QtWidgets.QHBoxLayout()
+        layout_data.addWidget(self.diffraction_space_widget,1)
+        layout_data.addWidget(self.real_space_widget,1)
+
+        layout_data_and_control = QtWidgets.QHBoxLayout()
+        layout_data_and_control.addWidget(self.control_widget,0)
+        layout_data_and_control.addLayout(layout_data,1)
+
+        self.main_window.setLayout(layout_data_and_control)
+
+        self.main_window.setGeometry(0,0,1400,600)
+        self.console_widget.setGeometry(0,670,1400,170)
+        self.main_window.show()
+        self.main_window.raise_()
+        self.console_widget.show()
         self.console_widget.raise_()
-        self.real_space_widget.raise_()
-        self.diffraction_space_widget.raise_()
-        self.control_widget.raise_()
-        return
+        return self.main_window
 
     ##################################################################
     ########## Methods connected to user input changes ###############
