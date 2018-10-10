@@ -130,22 +130,18 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings_py4DSTEM.bin_q.connect_bidir_to_widget(self.control_widget.spinBox_Bin_Diffraction)
         self.settings_py4DSTEM.crop_r_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Real)
         self.settings_py4DSTEM.crop_q_showROI.connect_bidir_to_widget(self.control_widget.checkBox_Crop_Diffraction)
-        # more?
 
         self.settings_py4DSTEM.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
         self.settings_py4DSTEM.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
         self.settings_py4DSTEM.crop_r_showROI.updated_value.connect(self.crop_r_toggleROI)
         self.settings_py4DSTEM.crop_q_showROI.updated_value.connect(self.crop_q_toggleROI)
 
-        # Cancel or execute
-        #self.preprocessing_widget.pushButton_Cancel.clicked.connect(self.cancel_preprocessing)
-        #self.preprocessing_widget.pushButton_Execute.clicked.connect(self.execute_preprocessing)
-
-
-        # Preprocessing and Saving
-        self.control_widget.pushButton_EditFileMetadata.clicked.connect(self.edit_metadata)
-        self.control_widget.pushButton_SaveFile.clicked.connect(self.save_as)
-        print("\nCheckpoint 3\n")
+        self.control_widget.pushButton_CropData.clicked.connect(self.crop_data)
+        self.control_widget.pushButton_BinData.clicked.connect(self.bin_data)
+        self.control_widget.pushButton_EditFileMetadata.clicked.connect(self.edit_file_metadata)
+        self.control_widget.pushButton_EditDirectoryMetadata.clicked.connect(self.edit_directory_metadata)
+        self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
+        self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
 
         return self.control_widget
 
@@ -228,8 +224,7 @@ class DataViewer(QtWidgets.QMainWindow):
     ########## Methods connected to user input changes ###############
     ##################################################################
 
-
-    ############ Loading and Saving ###########
+    ############ Loading ###########
 
     def load_file(self):
         """
@@ -258,7 +253,25 @@ class DataViewer(QtWidgets.QMainWindow):
 
         return
 
-    def save_as(self):
+    ############## Preprocess ###########
+
+    def crop_data(self):
+        print('crop data pressed')
+        pass
+
+    def bin_data(self):
+        print('bin data pressed')
+        pass
+
+    def save_directory(self):
+        print('save directory metadata pressed')
+        pass
+
+    def edit_directory_metadata(self):
+        print('edit directory metadata pressed')
+        pass
+
+    def save_file(self):
         """
         Saving files to the .h5 format.
         This method:
@@ -342,7 +355,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
     ############ Metadata handling ###########
 
-    def edit_metadata(self):
+    def edit_file_metadata(self):
         """
         Creates a popup dialog with tabs for different metadata groups, and fields in each
         group with current, editable metadata values.

@@ -47,20 +47,23 @@ class ControlPanel(QtWidgets.QWidget):
         self.spinBox_Ny = self.widget_LoadPreprocessSave.widget.spinBox_Ny
         self.spinBox_Bin_Real = self.widget_LoadPreprocessSave.widget.spinBox_Bin_Real
         self.spinBox_Bin_Diffraction = self.widget_LoadPreprocessSave.widget.spinBox_Bin_Diffraction
+        self.pushButton_BinData = self.widget_LoadPreprocessSave.widget.pushButton_BinData
         self.checkBox_Crop_Real = self.widget_LoadPreprocessSave.widget.checkBox_Crop_Real
         self.checkBox_Crop_Diffraction = self.widget_LoadPreprocessSave.widget.checkBox_Crop_Diffraction
+        self.pushButton_CropData = self.widget_LoadPreprocessSave.widget.pushButton_CropData
         self.pushButton_EditFileMetadata = self.widget_LoadPreprocessSave.widget.pushButton_EditFileMetadata
+        self.pushButton_EditDirectoryMetadata = self.widget_LoadPreprocessSave.widget.pushButton_EditDirectoryMetadata
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
 
         # Data cube size and shape
         self.sizeAndShapeEditor = HideableWidget('Reshape',DataCubeSizeAndShapeWidget(),initial_state=False)
-        self.spinBox_Nx = self.sizeAndShapeEditor.widget.spinBox_Nx
-        self.spinBox_Ny = self.sizeAndShapeEditor.widget.spinBox_Ny
-        self.lineEdit_Binning = self.sizeAndShapeEditor.widget.lineEdit_Binning
-        self.pushButton_Binning = self.sizeAndShapeEditor.widget.pushButton_Binning
-        self.pushButton_SetCropWindow = self.sizeAndShapeEditor.widget.pushButton_SetCropWindow
-        self.pushButton_CropData = self.sizeAndShapeEditor.widget.pushButton_CropData
+        self.spinBox_Nx_depre = self.sizeAndShapeEditor.widget.spinBox_Nx
+        self.spinBox_Ny_depre = self.sizeAndShapeEditor.widget.spinBox_Ny
+        self.lineEdit_Binning_depre = self.sizeAndShapeEditor.widget.lineEdit_Binning
+        self.pushButton_BinData_depre = self.sizeAndShapeEditor.widget.pushButton_BinData
+        self.pushButton_SetCropWindow_depre = self.sizeAndShapeEditor.widget.pushButton_SetCropWindow
+        self.pushButton_CropData_depre = self.sizeAndShapeEditor.widget.pushButton_CropData
 
         # Create and set layout
         layout.addWidget(self.widget_LoadPreprocessSave,0,QtCore.Qt.AlignTop)
@@ -125,9 +128,12 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.spinBox_Ny = preprocess_widget.spinBox_Ny
         self.spinBox_Bin_Real = preprocess_widget.spinBox_Bin_Real
         self.spinBox_Bin_Diffraction = preprocess_widget.spinBox_Bin_Diffraction
+        self.pushButton_BinData = preprocess_widget.pushButton_BinData
         self.checkBox_Crop_Real = preprocess_widget.checkBox_Crop_Real
         self.checkBox_Crop_Diffraction = preprocess_widget.checkBox_Crop_Diffraction
+        self.pushButton_CropData = preprocess_widget.pushButton_CropData
         self.pushButton_EditFileMetadata = preprocess_widget.pushButton_EditFileMetadata
+        self.pushButton_EditDirectoryMetadata = preprocess_widget.pushButton_EditDirectoryMetadata
 
         # Save
         save_widget = QtWidgets.QWidget()
@@ -167,8 +173,8 @@ class PreprocessingWidget(QtWidgets.QWidget):
         # Reshape
         self.spinBox_Nx = QtWidgets.QSpinBox()
         self.spinBox_Ny = QtWidgets.QSpinBox()
-        self.spinBox_Nx.setMaximum(100000)
-        self.spinBox_Ny.setMaximum(100000)
+        self.spinBox_Nx.setMinimum(1)
+        self.spinBox_Ny.setMinimum(1)
         self.label_Nx = QtWidgets.QLabel("Nx")
         self.label_Ny = QtWidgets.QLabel("Ny")
         self.label_Reshape = QtWidgets.QLabel("Reshape  ")
@@ -200,7 +206,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.spinBox_Bin_Diffraction = QtWidgets.QSpinBox()
         self.spinBox_Bin_Real.setMaximum(1000)
         self.spinBox_Bin_Diffraction.setMaximum(1000)
-        self.pushButton_Bin = QtWidgets.QPushButton("Bin")
+        self.pushButton_BinData = QtWidgets.QPushButton("Bin")
 
         self.spinBox_Bin_Real.setFont(normalFont)
         self.spinBox_Bin_Diffraction.setFont(normalFont)
@@ -208,7 +214,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.label_Bin_R = QtWidgets.QLabel("R ")
         self.label_Bin_Q.setFont(smallFont)
         self.label_Bin_R.setFont(smallFont)
-        self.pushButton_Bin.setFont(normalFont)
+        self.pushButton_BinData.setFont(normalFont)
 
         layout_Bin_Diffraction = QtWidgets.QHBoxLayout()
         layout_Bin_Diffraction.addWidget(self.label_Bin_Q,0,QtCore.Qt.AlignRight)
@@ -223,17 +229,17 @@ class PreprocessingWidget(QtWidgets.QWidget):
 
         layout_Bin = QtWidgets.QHBoxLayout()
         layout_Bin.addLayout(layout_Bin_SpinBoxes,2)
-        layout_Bin.addWidget(self.pushButton_Bin,1,QtCore.Qt.AlignCenter)
+        layout_Bin.addWidget(self.pushButton_BinData,1,QtCore.Qt.AlignCenter)
         layout_Bin.setContentsMargins(10,0,0,0)
 
         # Crop
         self.checkBox_Crop_Real = QtWidgets.QCheckBox()
         self.checkBox_Crop_Diffraction = QtWidgets.QCheckBox()
-        self.pushButton_Crop = QtWidgets.QPushButton("Crop")
+        self.pushButton_CropData = QtWidgets.QPushButton("Crop")
         self.label_Crop_Q = QtWidgets.QLabel("Q ")
         self.label_Crop_R = QtWidgets.QLabel("R ")
 
-        self.pushButton_Crop.setFont(normalFont)
+        self.pushButton_CropData.setFont(normalFont)
         self.label_Crop_Q.setFont(smallFont)
         self.label_Crop_R.setFont(smallFont)
 
@@ -250,7 +256,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
 
         layout_Crop = QtWidgets.QHBoxLayout()
         layout_Crop.addLayout(layout_Crop_CheckBoxes,4)
-        layout_Crop.addWidget(self.pushButton_Crop,1,QtCore.Qt.AlignLeft)
+        layout_Crop.addWidget(self.pushButton_CropData,1,QtCore.Qt.AlignLeft)
         layout_Crop.setSpacing(0)
         layout_Crop.setContentsMargins(0,0,10,0)
 
@@ -316,12 +322,12 @@ class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
 
         # Binning
         self.lineEdit_Binning = QtWidgets.QLineEdit("")
-        self.pushButton_Binning = QtWidgets.QPushButton("Bin Data")
+        self.pushButton_BinData = QtWidgets.QPushButton("Bin Data")
 
         layout_binningRow = QtWidgets.QHBoxLayout()
         layout_binningRow.addWidget(QtWidgets.QLabel("Bin by:"))
         layout_binningRow.addWidget(self.lineEdit_Binning)
-        layout_binningRow.addWidget(self.pushButton_Binning)
+        layout_binningRow.addWidget(self.pushButton_BinData)
 
         layout_Binning = QtWidgets.QVBoxLayout()
         layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
