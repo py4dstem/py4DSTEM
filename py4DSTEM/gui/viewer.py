@@ -20,7 +20,7 @@
 #############################################################################################
 
 from __future__ import division, print_function
-from PySide2 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 import numpy as np
 import sys, os
 import pyqtgraph as pg
@@ -28,7 +28,7 @@ import gc
 
 from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from process.datastructure.datacube import DataCube
-from gui.utils import load_qt_ui_file, sibling_path, pg_point_roi, LQCollection_py4DSTEM
+from gui.utils import sibling_path, pg_point_roi, LQCollection_py4DSTEM
 from readwrite.reader import read_data
 from readwrite.writer import save_from_datacube
 
@@ -118,8 +118,6 @@ class DataViewer(QtWidgets.QMainWindow):
         #self.control_widget = load_qt_ui_file(sibling_path(__file__, "control_widget.ui"))
         self.control_widget = ControlPanel()
         self.control_widget.setWindowTitle("Control Panel")
-        #self.control_widget.show()
-        #self.control_widget.raise_()
 
         ############################ Controls ##########################
         # For each control:

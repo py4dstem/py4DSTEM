@@ -10,7 +10,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 """
 
 import os
-from PySide2 import QtCore, QtGui, QtWidgets, QtUiTools
+from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 
 
@@ -20,18 +20,6 @@ def sibling_path(fpath, fname):
     fname in the same directory.
     """
     return os.path.join(os.path.dirname(fpath), fname)
-
-
-def load_qt_ui_file(ui_filename):
-    """
-    Loads a ui file specifying a user interface configuration
-    """
-    ui_loader = QtUiTools.QUiLoader()
-    ui_file = QtCore.QFile(ui_filename)
-    ui_file.open(QtCore.QFile.ReadOnly)
-    ui = ui_loader.load(ui_file)
-    ui_file.close()
-    return ui
 
 def pg_point_roi(view_box):
     """
@@ -68,7 +56,7 @@ class LQCollection_py4DSTEM(object):
 
 class LoggedQuantity_py4DSTEM(QtCore.QObject):
 
-    updated_value = QtCore.Signal((float,),(int,),(bool,),(str,),())  # Emitted on val update
+    updated_value = QtCore.pyqtSignal(object)  # Emitted on val update
 
     def __init__(self, name, dtype=float, initial=0,
                  vmin=-1e12, vmax=+1e12,
@@ -93,11 +81,11 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
         self.widget_list = []
 
 
-    @QtCore.Slot(float)
-    @QtCore.Slot(int)
-    @QtCore.Slot(bool)
-    @QtCore.Slot(str)
-    @QtCore.Slot()
+    @QtCore.pyqtSlot(float)
+    @QtCore.pyqtSlot(int)
+    @QtCore.pyqtSlot(bool)
+    @QtCore.pyqtSlot(str)
+    @QtCore.pyqtSlot()
     def update_value(self, new_val, send_signal=True):
 
         # If the value hasn't changed, do nothing
@@ -112,10 +100,7 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
             self.send_display_updates()
 
     def send_display_updates(self):
-        self.updated_value[float].emit(self.val)
-        self.updated_value[int].emit(self.val)
-        self.updated_value[str].emit(str(self.val))
-        self.updated_value[()].emit()
+        self.updated_value.emit(self.coerce_to_type(self.val))
 
     def connect_bidir_to_widget(self, widget):
         """
@@ -135,29 +120,29 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
             widget.setSingleStep(self.spinbox_step)
             widget.setValue(self.val)
 
-            self.updated_value[float].connect(widget.setValue)
-            widget.valueChanged[float].connect(self.update_value)
+            self.updated_value.connect(widget.setValue)
+            widget.valueChanged.connect(self.update_value)
 
         elif type(widget) == QtWidgets.QSpinBox:
             widget.setKeyboardTracking(False)
             widget.setSingleStep(self.spinbox_step)
             widget.setValue(self.val)
 
-            self.updated_value[int].connect(widget.setValue)
-            widget.valueChanged[int].connect(self.update_value)
+            self.updated_value.connect(widget.setValue)
+            widget.valueChanged.connect(self.update_value)
 
         elif type(widget) == QtWidgets.QCheckBox:
-            self.updated_value[bool].connect(widget.setChecked)
-            widget.toggled[bool].connect(self.update_value)
+            self.updated_value.connect(widget.setChecked)
+            widget.toggled.connect(self.update_value)
 
         elif type(widget) == QtWidgets.QLineEdit:
-            self.updated_value[str].connect(widget.setText)
+            self.updated_value.connect(widget.setText)
             def on_edit_finished():
                 self.update_value(widget.text())
             widget.editingFinished.connect(on_edit_finished)
 
         elif type(widget) == QtWidget.QLabel:
-            self.updated_value[str].connect(widget.setText)
+            self.updated_value.connect(widget.setText)
 
         elif type(widget) == pg.widgets.SpinBox.SpinBox:
             suffix = self.unit
@@ -176,7 +161,7 @@ class LoggedQuantity_py4DSTEM(QtCore.QObject):
             widget.setDecimals(self.spinbox_decimals)
             widget.setSingleStep(self.spinbox_step)
 
-            self.updated_value[float].connect(widget.setValue)
+            self.updated_value.connect(widget.setValue)
             widget.valueChanged.connect(self.update_value)
 
         else:
