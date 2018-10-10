@@ -1,3 +1,4 @@
+from PySide2 import QtWidgets
 from gui.viewer import DataViewer
 import sys
 
