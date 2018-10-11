@@ -7,10 +7,8 @@
 
 import h5py
 import numpy as np
-import hyperspy
-import hyperspy.api as hs
-from os.path import splitext
-from process.datastructure.datacube import MetadataCollection
+from hyperspy.misc.utils import DictionaryTreeBrowser
+from ..process.datastructure.datacube import MetadataCollection
 
 def save_from_datacube(datacube,outputfile):
     """
@@ -41,7 +39,7 @@ def save_from_datacube(datacube,outputfile):
     group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
 
     # Transfer original metadata trees
-    if type(datacube.metadata.original.shortlist)==hyperspy.misc.utils.DictionaryTreeBrowser:
+    if type(datacube.metadata.original.shortlist)==DictionaryTreeBrowser:
         transfer_metadata_tree_hs(datacube.metadata.original.shortlist,group_original_metadata_shortlist)
         transfer_metadata_tree_hs(datacube.metadata.original.all,group_original_metadata_all)
     else:
@@ -157,7 +155,7 @@ def istree_hs(node):
     """
     Determines if a node in a hyperspy metadata structure is a parent or terminal leaf.
     """
-    if type(node)==hyperspy.misc.utils.DictionaryTreeBrowser:
+    if type(node)==DictionaryTreeBrowser:
         return True
     else:
         return False

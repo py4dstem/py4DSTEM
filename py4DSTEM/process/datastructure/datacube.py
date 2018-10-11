@@ -16,11 +16,8 @@
 # subgroups, both the original hyperspy metadata (in an identical tree structure, written in .h5
 # groups/attrs), and the metadata used by py4DSTEM
 
-
-import hyperspy.api as hs
 from hyperspy.misc.utils import DictionaryTreeBrowser
-import numpy as np
-from process.preprocess import preprocess
+from .. import preprocess
 
 class DataCube(object):
 
