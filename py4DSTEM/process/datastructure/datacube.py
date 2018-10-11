@@ -48,8 +48,9 @@ class DataCube(object):
         try:
             self.data4D = self.data4D.reshape(self.R_N,self.Q_Ny,self.Q_Nx).reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
             self.R_Ny,self.R_Nx = R_Ny, R_Nx
+            return 1
         except ValueError:
-            pass
+            return 0
 
     def get_diffraction_space_view(self,y=0,x=0):
         """

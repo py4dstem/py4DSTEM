@@ -5,8 +5,7 @@
 #                                                                                           #
 # Relevant documentation for lower level code:                                              #
 #                                                                                           #
-# Qt is being run through PySide2 (i.e. Qt for Python). See https://www.qt.io/qt-for-python.#
-# Note thay PySide2 is only supported in python 3.                                          #
+# Qt is being run through PyQt5.  See http://pyqt.sourceforge.net/Docs/PyQt5/.              #
 #                                                                                           #
 # pyqtgraph facilitates fast-running scientific visualization.  See http://pyqtgraph.org/.  #
 # pyqtgraph is being used for the final data displays.                                      #
@@ -238,7 +237,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def load_file(self):
         """
-        Loads a file by creating and storing a DataCube object
+        Loads a file by creating and storing a DataCube object.
         """
         fname = self.settings.data_filename.val
         print("Loading file",fname)
@@ -249,17 +248,20 @@ class DataViewer(QtWidgets.QMainWindow):
         self.datacube = read_data(fname)
 
         # Update scan shape information
-        self.R_N = self.datacube.R_N
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
         self.settings.R_Ny.update_value(self.datacube.R_Ny)
 
-        # Set the diffraction space image
+        # Update data views
         self.update_diffraction_space_view()
         self.update_real_space_view()
 
-        # Initial normalization of diffraction space view
+        # Normalize diffraction space view
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
+
+        # Set scan size maxima
+        self.control_widget.spinBox_Nx.setMaximum(self.datacube.R_N)
+        self.control_widget.spinBox_Ny.setMaximum(self.datacube.R_N)
 
         return
 
@@ -271,50 +273,19 @@ class DataViewer(QtWidgets.QMainWindow):
         R_Nx = self.settings.R_Nx.val
         self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
-        try:
-            self.datacube.set_scan_shape(R_Ny, R_Nx)
+        if self.datacube.set_scan_shape(R_Ny, R_Nx):
             self.update_real_space_view()
-        except ValueError:
+        else:
             pass
-        return
 
     def update_scan_shape_Ny(self):
         R_Ny = self.settings.R_Ny.val
         self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
-        try:
-            self.datacube.set_scan_shape(R_Ny, R_Nx)
-        except ValueError:
-            pass
-        return
-
-    def update_diffraction_space_view(self):
-        roi_state = self.real_space_point_selector.saveState()
-        x0,y0 = roi_state['pos']
-        xc,yc = int(x0+1),int(y0+1)
-
-        # Set the diffraction space image
-        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(yc,xc)
-        if success:
-            self.diffraction_space_view = new_diffraction_space_view
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
+        if self.datacube.set_scan_shape(R_Ny, R_Nx):
+            self.update_real_space_view()
         else:
             pass
-        return
-
-    def update_real_space_view(self):
-        # Get slices corresponding to ROI
-        slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
-        slice_x,slice_y = slices
-
-        # Set the real space view
-        new_real_space_view, success = self.datacube.get_real_space_view(slice_y,slice_x)
-        if success:
-            self.real_space_view = new_real_space_view
-            self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
-        else:
-            pass
-        return
 
     ### Crop ###
 
@@ -430,6 +401,40 @@ class DataViewer(QtWidgets.QMainWindow):
     def save_directory(self):
         print('save directory metadata pressed')
         pass
+
+    ################## Display data slices ##################
+
+    def update_diffraction_space_view(self):
+        roi_state = self.real_space_point_selector.saveState()
+        x0,y0 = roi_state['pos']
+        xc,yc = int(x0+1),int(y0+1)
+
+        # Set the diffraction space image
+        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(yc,xc)
+        if success:
+            self.diffraction_space_view = new_diffraction_space_view
+            self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
+        else:
+            pass
+        return
+
+    def update_real_space_view(self):
+        # Get slices corresponding to ROI
+        slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+        slice_x,slice_y = slices
+
+        # Set the real space view
+        new_real_space_view, success = self.datacube.get_real_space_view(slice_y,slice_x)
+        if success:
+            self.real_space_view = new_real_space_view
+            self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+        else:
+            pass
+        return
+
+
+
+
 
 
     ############ Deprecated functions ###########
