@@ -25,11 +25,11 @@ import sys, os
 import pyqtgraph as pg
 import gc
 
-from gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
-from process.datastructure.datacube import DataCube
-from gui.utils import sibling_path, pg_point_roi, LQCollection
-from readwrite.reader import read_data
-from readwrite.writer import save_from_datacube
+from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
+from .utils import sibling_path, pg_point_roi, LQCollection
+from ..readwrite.reader import read_data
+from ..readwrite.writer import save_from_datacube
+from ..process.datastructure.datacube import DataCube
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -463,6 +463,15 @@ class DataViewer(QtWidgets.QMainWindow):
         self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
         self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
 
+    def cancel_saveas(self):
+        self.save_widget.close()
+
+    def execute_saveas(self):
+        f = self.save_widget.lineEdit_SavePath.text()
+        print("Saving file to {}".format(f))
+        save_from_datacube(self.datacube,f)
+        self.save_widget.close()
+
     def save_directory(self):
         print('save directory metadata pressed')
         pass
@@ -578,10 +587,6 @@ class DataViewer(QtWidgets.QMainWindow):
 ################################ End of class ##################################
 
 
-if __name__=="__main__":
-    app = DataViewer(sys.argv)
-
-    sys.exit(app.exec_())
 
 
 

@@ -9,8 +9,8 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
     -connection to widgets: they support a single interface for connecting to GUI widgets
 """
 
-import os
-from PyQt5 import QtCore, QtGui, QtWidgets
+from os.path import join, dirname
+from PyQt5 import QtCore, QtWidgets
 import pyqtgraph as pg
 
 
@@ -19,7 +19,7 @@ def sibling_path(fpath, fname):
     Given a file with absolute path fpath, returns the absolute path to another file with name
     fname in the same directory.
     """
-    return os.path.join(os.path.dirname(fpath), fname)
+    return join(dirname(fpath), fname)
 
 def pg_point_roi(view_box):
     """

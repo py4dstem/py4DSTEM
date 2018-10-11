@@ -7,8 +7,6 @@
 # will be identical to
 #       datacube.preprocess_function(*args)
 
-import numpy as np
-
 def set_scan_shape(datacube,R_Ny,R_Nx):
     """
     Reshape the data given the real space scan shape.

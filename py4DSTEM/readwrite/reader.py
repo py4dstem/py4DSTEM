@@ -2,10 +2,8 @@
 
 import h5py
 import numpy as np
-from hyperspy.misc.utils import DictionaryTreeBrowser
 import hyperspy.api as hs
-from os.path import splitext
-from process.datastructure.datacube import DataCube
+from ..process.datastructure.datacube import DataCube
 
 def read_data(filename):
     """
