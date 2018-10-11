@@ -388,6 +388,9 @@ class DataViewer(QtWidgets.QMainWindow):
             self.settings.R_Nx.update_value(self.datacube.R_Nx,send_signal=False)
             # Update display
             self.update_real_space_view()
+        # Set bin factors back to 1
+        self.settings.bin_q.update_value(1)
+        self.settings.bin_r.update_value(1)
 
 
 
