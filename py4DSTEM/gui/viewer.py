@@ -265,7 +265,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
         return
 
-    ############## Preprocess ###########
+    ############## Preprocess ##############
 
     ### Scan Shape ###
 
@@ -273,19 +273,17 @@ class DataViewer(QtWidgets.QMainWindow):
         R_Nx = self.settings.R_Nx.val
         self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
-        if self.datacube.set_scan_shape(R_Ny, R_Nx):
-            self.update_real_space_view()
-        else:
-            pass
+
+        self.datacube.set_scan_shape(R_Ny, R_Nx)
+        self.update_real_space_view()
 
     def update_scan_shape_Ny(self):
         R_Ny = self.settings.R_Ny.val
         self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
-        if self.datacube.set_scan_shape(R_Ny, R_Nx):
-            self.update_real_space_view()
-        else:
-            pass
+
+        self.datacube.set_scan_shape(R_Ny, R_Nx)
+        self.update_real_space_view()
 
     ### Crop ###
 
@@ -320,7 +318,46 @@ class DataViewer(QtWidgets.QMainWindow):
                 pass
 
     def crop_data(self):
-        print('crop data pressed')
+        # Real space
+        if self.control_widget.checkBox_Crop_Real.isChecked():
+            # Get crop limits from ROI
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0].T, self.real_space_widget.getImageItem())
+            slice_rx,slice_ry = slices_r
+            crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
+            crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
+            # Crop data
+            self.datacube.crop_data_real(crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max)
+            # Update settings
+            self.settings.crop_ry_min.update_value(crop_Ry_min)
+            self.settings.crop_ry_max.update_value(crop_Ry_max)
+            self.settings.crop_rx_min.update_value(crop_Rx_min)
+            self.settings.crop_rx_max.update_value(crop_Rx_max)
+            self.settings.isCropped_r.update_value(True)
+            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
+            self.settings.R_Nx.update_value(self.datacube.R_Nx,send_signal=False)
+            # Uncheck crop checkbox and remove ROI
+            self.control_widget.checkBox_Crop_Real.setChecked(False)
+            # Update display
+            sys.stdout.flush()
+            self.update_real_space_view()
+        else:
+            self.settings.isCropped_r.update_value(False)
+
+        # Update values in settings
+
+        # self.settings.isCropped_r.update_value(False)
+        # self.settings.isCropped_q.update_value(False)
+        # self.settings.crop_rx_min.update_value(False)
+        # self.settings.crop_rx_max.update_value(False)
+        # self.settings.crop_ry_min.update_value(False)
+        # self.settings.crop_ry_max.update_value(False)
+        # self.settings.crop_qx_min.update_value(False)
+        # self.settings.crop_qx_max.update_value(False)
+        # self.settings.crop_qy_min.update_value(False)
+        # self.settings.crop_qy_max.update_value(False)
+
+        # Update views
+
         pass
 
     ### Bin ###
@@ -402,7 +439,7 @@ class DataViewer(QtWidgets.QMainWindow):
         print('save directory metadata pressed')
         pass
 
-    ################## Display data slices ##################
+    ################## Slice data ##################
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()

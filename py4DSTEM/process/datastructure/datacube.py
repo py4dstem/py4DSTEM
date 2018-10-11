@@ -20,6 +20,7 @@
 import hyperspy.api as hs
 from hyperspy.misc.utils import DictionaryTreeBrowser
 import numpy as np
+from process.preprocess import preprocess
 
 class DataCube(object):
 
@@ -41,42 +42,19 @@ class DataCube(object):
         else:
             self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
 
+    ############### Preprocess ##############
+
     def set_scan_shape(self,R_Ny,R_Nx):
         """
         Reshape the data given the real space scan shape.
         """
-        try:
-            self.data4D = self.data4D.reshape(self.R_N,self.Q_Ny,self.Q_Nx).reshape(R_Ny,R_Nx,self.Q_Ny,self.Q_Nx)
-            self.R_Ny,self.R_Nx = R_Ny, R_Nx
-            return 1
-        except ValueError:
-            return 0
+        self = preprocess.set_scan_shape(self,R_Ny,R_Nx)
 
-    def get_diffraction_space_view(self,y=0,x=0):
-        """
-        Returns the image in diffraction space, and a Bool indicating success or failure.
-        """
-        self.x,self.y = x,y
-        try:
-            return self.data4D[y,x,:,:].T, 1
-        except IndexError:
-            return 0, 0
+    def crop_data_diffraction(self,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max):
+        self = preprocess.crop_data_diffraction(self,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max)
 
-    def get_real_space_view(self,slice_y,slice_x):
-        """
-        Returns the image in diffraction space.
-        """
-        return self.data4D[:,:,slice_y,slice_x].sum(axis=(2,3)).T, 1
-
-    def cropAndBin(self, bin_r, bin_q, crop_r, crop_q, slice_ry, slice_rx, slice_qy, slice_qx):
-        # If binning is being performed, edit crop window as neededd
-
-        # Crop data
-
-        # Bin data
-        self.bin_diffraction(bin_q)
-        self.bin_real(bin_r)
-        pass
+    def crop_data_real(self,crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max):
+        self = preprocess.crop_data_real(self,crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max)
 
 
     def bin_diffraction(self,bin_q):
@@ -112,6 +90,24 @@ class DataCube(object):
                 self.data4D = self.data4D[:-(R_Ny%bin_r),:-(R_Nx%bin_r),:,:]
             self.data4D = self.data4D.reshape(int(R_Ny/bin_r),bin_r,int(R_Nx/bin_r),bin_r,Q_Ny,Q_Nx).sum(axis=(1,3))
             return
+
+    ################ Slice data #################
+
+    def get_diffraction_space_view(self,y=0,x=0):
+        """
+        Returns the image in diffraction space, and a Bool indicating success or failure.
+        """
+        self.x,self.y = x,y
+        try:
+            return self.data4D[y,x,:,:].T, 1
+        except IndexError:
+            return 0, 0
+
+    def get_real_space_view(self,slice_y,slice_x):
+        """
+        Returns the image in diffraction space.
+        """
+        return self.data4D[:,:,slice_y,slice_x].sum(axis=(2,3)).T, 1
 
 
     ###################### METADATA HANDLING ########################
