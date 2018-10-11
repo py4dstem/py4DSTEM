@@ -175,6 +175,8 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.spinBox_Ny = QtWidgets.QSpinBox()
         self.spinBox_Nx.setMinimum(1)
         self.spinBox_Ny.setMinimum(1)
+        self.spinBox_Nx.setMaximum(1000000)
+        self.spinBox_Ny.setMaximum(1000000)
         self.label_Nx = QtWidgets.QLabel("Nx")
         self.label_Ny = QtWidgets.QLabel("Ny")
         self.label_Reshape = QtWidgets.QLabel("Reshape  ")
