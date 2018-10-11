@@ -372,8 +372,24 @@ class DataViewer(QtWidgets.QMainWindow):
     ### Bin ###
 
     def bin_data(self):
-        print('bin data pressed')
-        pass
+        # Get bin factors from GUI
+        bin_factor_Q = self.settings.bin_q.val
+        bin_factor_R = self.settings.bin_r.val
+        if bin_factor_Q>1:
+            # Bin data
+            self.datacube.bin_data_diffraction(bin_factor_Q)
+            # Update display
+            self.update_diffraction_space_view()
+        if bin_factor_R>1:
+            # Bin data
+            self.datacube.bin_data_real(bin_factor_R)
+            # Update settings
+            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
+            self.settings.R_Nx.update_value(self.datacube.R_Nx,send_signal=False)
+            # Update display
+            self.update_real_space_view()
+
+
 
     ### Metadata ###
 
