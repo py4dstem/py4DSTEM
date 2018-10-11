@@ -21,17 +21,11 @@ def set_scan_shape(datacube,R_Ny,R_Nx):
         return datacube
 
 def crop_data_diffraction(datacube,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max):
-    crop_Qy_min,crop_Qx_min = max(0,crop_Qy_min),max(0,crop_Qx_min)
-    crop_Qy_max,crop_Qx_max = min(datacube.Q_Ny,crop_Qy_max),min(datacube.Q_Nx,crop_Qx_max)
-
     datacube.data4D = datacube.data4D[:,:,crop_Qy_min:crop_Qy_max,crop_Qx_min:crop_Qx_max]
     datacube.Q_Ny, datacube.Q_Nx = crop_Qy_max-crop_Qy_min, crop_Qx_max-crop_Qx_min
     return datacube
 
 def crop_data_real(datacube,crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max):
-    crop_Ry_min,crop_Rx_min = max(0,crop_Ry_min),max(0,crop_Rx_min)
-    crop_Ry_max,crop_Rx_max = min(datacube.R_Ny,crop_Ry_max),min(datacube.R_Nx,crop_Rx_max)
-
     datacube.data4D = datacube.data4D[crop_Ry_min:crop_Ry_max,crop_Rx_min:crop_Rx_max,:,:]
     datacube.R_Ny, datacube.R_Nx = crop_Ry_max-crop_Ry_min, crop_Rx_max-crop_Rx_min
     datacube.R_N = datacube.R_Ny*datacube.R_Nx
