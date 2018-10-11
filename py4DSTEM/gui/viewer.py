@@ -318,6 +318,29 @@ class DataViewer(QtWidgets.QMainWindow):
                 pass
 
     def crop_data(self):
+
+        # Diffraction space
+        if self.control_widget.checkBox_Crop_Diffraction.isChecked():
+            # Get crop limits from ROI
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:].T, self.diffraction_space_widget.getImageItem())
+            slice_qx,slice_qy = slices_q
+            crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
+            crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
+            # Crop data
+            self.datacube.crop_data_diffraction(crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max)
+            # Update settings
+            self.settings.crop_qy_min.update_value(crop_Qy_min)
+            self.settings.crop_qy_max.update_value(crop_Qy_max)
+            self.settings.crop_qx_min.update_value(crop_Qx_min)
+            self.settings.crop_qx_max.update_value(crop_Qx_max)
+            self.settings.isCropped_q.update_value(True)
+            # Uncheck crop checkbox and remove ROI
+            self.control_widget.checkBox_Crop_Diffraction.setChecked(False)
+            # Update display
+            self.update_diffraction_space_view()
+        else:
+            self.settings.isCropped_q.update_value(False)
+
         # Real space
         if self.control_widget.checkBox_Crop_Real.isChecked():
             # Get crop limits from ROI
@@ -338,7 +361,6 @@ class DataViewer(QtWidgets.QMainWindow):
             # Uncheck crop checkbox and remove ROI
             self.control_widget.checkBox_Crop_Real.setChecked(False)
             # Update display
-            sys.stdout.flush()
             self.update_real_space_view()
         else:
             self.settings.isCropped_r.update_value(False)
