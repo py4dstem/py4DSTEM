@@ -181,6 +181,9 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.label_Ny = QtWidgets.QLabel("Ny")
         self.label_Reshape = QtWidgets.QLabel("Reshape  ")
 
+        self.spinBox_Nx.setMaximumWidth(60)
+        self.spinBox_Ny.setMaximumWidth(60)
+
         self.spinBox_Nx.setFont(normalFont)
         self.spinBox_Ny.setFont(normalFont)
         self.label_Nx.setFont(smallFont)
@@ -199,8 +202,8 @@ class PreprocessingWidget(QtWidgets.QWidget):
         layout_Reshape_N.addLayout(layout_Reshape_Ny,0)
 
         layout_Reshape = QtWidgets.QHBoxLayout()
-        layout_Reshape.addWidget(self.label_Reshape,1,QtCore.Qt.AlignRight)
-        layout_Reshape.addLayout(layout_Reshape_N,1)
+        layout_Reshape.addWidget(self.label_Reshape,4,QtCore.Qt.AlignRight)
+        layout_Reshape.addLayout(layout_Reshape_N,5)
         layout_Reshape.setContentsMargins(0,0,0,13)
 
         # Bin
