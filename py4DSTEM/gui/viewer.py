@@ -80,7 +80,6 @@ class DataViewer(QtWidgets.QMainWindow):
 
         return
 
-
     ###############################################
     ############ Widget setup methods #############
     ###############################################
@@ -93,13 +92,13 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget = ControlPanel()
         self.control_widget.setWindowTitle("Control Panel")
 
-        ############################ Controls ##########################
-        # For each control:
-        #  -creates items in self.settings
-        #  -connects UI changes to updates in self.settings
-        #  -connects updates in self.settings items to function calls
-        #  -connects button clicks to function calls
-        ################################################################
+        ############################ Controls ###############################
+        # For each control:                                                 # 
+        #   -creates items in self.settings                                 #
+        #   -connects UI changes to updates in self.settings                # 
+        #   -connects updates in self.settings items to function calls      #
+        #   -connects button clicks to function calls                       #
+        #####################################################################
 
         # Load
         self.settings.New('data_filename',dtype='file')
@@ -133,8 +132,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.settings.R_Nx.updated_value.connect(self.update_scan_shape_Nx)
         self.settings.R_Ny.updated_value.connect(self.update_scan_shape_Ny)
-        self.settings.crop_r_showROI.updated_value.connect(self.crop_r_toggleROI)
-        self.settings.crop_q_showROI.updated_value.connect(self.crop_q_toggleROI)
+        self.settings.crop_r_showROI.updated_value.connect(self.toggleCropROI_real)
+        self.settings.crop_q_showROI.updated_value.connect(self.toggleCropROI_diffraction)
 
         self.control_widget.pushButton_CropData.clicked.connect(self.crop_data)
         self.control_widget.pushButton_BinData.clicked.connect(self.bin_data)
@@ -223,10 +222,19 @@ class DataViewer(QtWidgets.QMainWindow):
         return self.main_window
 
     ##################################################################
-    ########## Methods connected to user input changes ###############
+    ############## Methods connecting to user inputs #################
     ##################################################################
 
-    ############ Loading ###########
+    ##################################################################
+    # In general, these methods collect any relevant user inputs,    #
+    # then pass them to functions defined elsewhere, often in e.g.   #
+    # the process directory.                                         #
+    # Additional functionality here should be avoided, to ensure     #
+    # consistent output between processing run through the GUI       #
+    # or from the command line.                                      # 
+    ##################################################################
+
+    ################ Load ################
 
     def load_file(self):
         """
@@ -257,53 +265,28 @@ class DataViewer(QtWidgets.QMainWindow):
 
     ############## Preprocess ###########
 
-    def crop_data(self):
-        print('crop data pressed')
-        pass
+    ### Scan Shape ###
 
-    def bin_data(self):
-        print('bin data pressed')
-        pass
+    def update_scan_shape_Nx(self):
+        R_Nx = self.settings.R_Nx.val
+        self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
+        R_Ny = self.settings.R_Ny.val
+        try:
+            self.datacube.set_scan_shape(R_Ny, R_Nx)
+            self.update_real_space_view()
+        except ValueError:
+            pass
+        return
 
-    def save_directory(self):
-        print('save directory metadata pressed')
-        pass
-
-    def edit_directory_metadata(self):
-        print('edit directory metadata pressed')
-        pass
-
-    def save_file(self):
-        """
-        Saving files to the .h5 format.
-        This method:
-            1) opens a separate dialog
-            2) puts a name in the "Save as:" field according to the original filename and any
-               preprocessing that's been done
-            2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
-        """
-        # Make widget
-        save_path = os.path.splitext(self.settings.data_filename.val)[0]+'.h5'
-        self.save_widget = SaveWidget(save_path)
-        self.save_widget.setWindowTitle("Save as...")
-        self.save_widget.show()
-        self.save_widget.raise_()
-
-        # Cancel or save
-        self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
-        self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
-
-    def cancel_saveas(self):
-        self.save_widget.close()
-
-    def execute_saveas(self):
-        f = self.save_widget.lineEdit_SavePath.text()
-        print("Saving file to {}.".format(f))
-        save_from_datacube(self.datacube,f)
-        self.save_widget.close()
-
-
-    ############ Data slicing and reshaping ###########
+    def update_scan_shape_Ny(self):
+        R_Ny = self.settings.R_Ny.val
+        self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
+        R_Nx = self.settings.R_Nx.val
+        try:
+            self.datacube.set_scan_shape(R_Ny, R_Nx)
+        except ValueError:
+            pass
+        return
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
@@ -333,29 +316,49 @@ class DataViewer(QtWidgets.QMainWindow):
             pass
         return
 
-    def update_scan_shape_Nx(self):
-        R_Nx = self.settings.R_Nx.val
-        self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
-        R_Ny = self.settings.R_Ny.val
-        try:
-            self.datacube.set_scan_shape(R_Ny, R_Nx)
-            self.update_real_space_view()
-        except ValueError:
-            pass
-        return
+    ### Crop ###
 
-    def update_scan_shape_Ny(self):
-        R_Ny = self.settings.R_Ny.val
-        self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
-        R_Nx = self.settings.R_Nx.val
-        try:
-            self.datacube.set_scan_shape(R_Ny, R_Nx)
-        except ValueError:
-            pass
-        return
+    def toggleCropROI_real(self, show=True):
+        """
+        If show=True, makes an RIO.  If False, removes the ROI.
+        """
+        if show:
+            self.crop_roi_real = pg.RectROI([0,0], [self.datacube.R_Nx, self.datacube.R_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
+            self.crop_roi_real.setPen(color='r')
+            self.real_space_widget.getView().addItem(self.crop_roi_real)
+        else:
+            if hasattr(self,'crop_roi_real'):
+                self.real_space_widget.getView().removeItem(self.crop_roi_real)
+                self.crop_roi_real = None
+            else:
+                pass
 
+    def toggleCropROI_diffraction(self, show=True):
+        """
+        If show=True, makes an RIO.  If False, removes the ROI.
+        """
+        if show:
+            self.crop_roi_diffraction = pg.RectROI([0,0], [self.datacube.Q_Nx,self.datacube.Q_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
+            self.crop_roi_diffraction.setPen(color='r')
+            self.diffraction_space_widget.getView().addItem(self.crop_roi_diffraction)
+        else:
+            if hasattr(self,'crop_roi_diffraction'):
+                self.diffraction_space_widget.getView().removeItem(self.crop_roi_diffraction)
+                self.crop_roi_diffraction = None
+            else:
+                pass
 
-    ############ Metadata handling ###########
+    def crop_data(self):
+        print('crop data pressed')
+        pass
+
+    ### Bin ###
+
+    def bin_data(self):
+        print('bin data pressed')
+        pass
+
+    ### Metadata ###
 
     def edit_file_metadata(self):
         """
@@ -398,84 +401,39 @@ class DataViewer(QtWidgets.QMainWindow):
         self.EditMetadataWidget.close()
         print("Done.")
 
+    def edit_directory_metadata(self):
+        print('edit directory metadata pressed')
+        pass
 
-    ############ Preprocessing ###########
+    ### Save ###
 
-    def preprocess(self):
+    def save_file(self):
         """
-        Binning and cropping.
+        Saving files to the .h5 format.
         This method:
-            1) opens a separate dialog for preprocessing parameter control
-            2) places crop ROIs in both real and diffraction space
-            3) on clicking 'Execute', performs specified preprocessing, altering datacube object,
-                 then exits the dialog
-            4) on clicking "Cancel', exits without any preprocessing.
+            1) opens a separate dialog
+            2) puts a name in the "Save as:" field according to the original filename and any
+               preprocessing that's been done
+            2) Exits with or without saving when 'Save' or 'Cancel' buttons are pressed.
         """
         # Make widget
-        self.preprocessing_widget = PreprocessingWidget()
-        self.preprocessing_widget.setWindowTitle("Preprocessing")
-        self.preprocessing_widget.show()
-        self.preprocessing_widget.raise_()
+        save_path = os.path.splitext(self.settings.data_filename.val)[0]+'.h5'
+        self.save_widget = SaveWidget(save_path)
+        self.save_widget.setWindowTitle("Save as...")
+        self.save_widget.show()
+        self.save_widget.raise_()
 
-        # Create new settings
-        self.settings.New('bin_r', dtype=int, initial=1)
-        self.settings.New('bin_q', dtype=int, initial=1)
-        self.settings.New('cropped_r', dtype=bool)
-        self.settings.New('cropped_q', dtype=bool)
-        self.settings.New('crop_rx_min', dtype=int)
-        self.settings.New('crop_rx_max', dtype=int)
-        self.settings.New('crop_ry_min', dtype=int)
-        self.settings.New('crop_ry_max', dtype=int)
-        self.settings.New('crop_qx_min', dtype=int)
-        self.settings.New('crop_qx_max', dtype=int)
-        self.settings.New('crop_qy_min', dtype=int)
-        self.settings.New('crop_qy_max', dtype=int)
+        # Cancel or save
+        self.save_widget.pushButton_Cancel.clicked.connect(self.cancel_saveas)
+        self.save_widget.pushButton_Execute.clicked.connect(self.execute_saveas)
 
-        # Reshaping
-        self.settings.R_Nx.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Nx)
-        self.settings.R_Ny.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Ny)
+    def save_directory(self):
+        print('save directory metadata pressed')
+        pass
 
-        # Binning
-        self.settings.bin_r.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_real)
-        self.settings.bin_q.connect_bidir_to_widget(self.preprocessing_widget.spinBox_Binning_diffraction)
 
-        # Cropping
-        self.preprocessing_widget.checkBox_Crop_Real.stateChanged.connect(self.toggleCropROI_real)
-        self.preprocessing_widget.checkBox_Crop_Diffraction.stateChanged.connect(self.toggleCropROI_diffraction)
+    ############ Deprecated functions ###########
 
-        # Cancel or execute
-        self.preprocessing_widget.pushButton_Cancel.clicked.connect(self.cancel_preprocessing)
-        self.preprocessing_widget.pushButton_Execute.clicked.connect(self.execute_preprocessing)
-
-    def crop_r_toggleROI(self, show=True):
-        """
-        If show=True, makes an RIO.  If False, removes the ROI.
-        """
-        if show:
-            self.crop_roi_real = pg.RectROI([0,0], [self.datacube.R_Nx, self.datacube.R_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
-            self.crop_roi_real.setPen(color='r')
-            self.real_space_widget.getView().addItem(self.crop_roi_real)
-        else:
-            if hasattr(self,'crop_roi_real'):
-                self.real_space_widget.getView().removeItem(self.crop_roi_real)
-                self.crop_roi_real = None
-            else:
-                pass
-
-    def crop_q_toggleROI(self, show=True):
-        """
-        If show=True, makes an RIO.  If False, removes the ROI.
-        """
-        if show:
-            self.crop_roi_diffraction = pg.RectROI([0,0], [self.datacube.Q_Nx,self.datacube.Q_Ny], pen=(3,9), removable=True, translateSnap=True, scaleSnap=True)
-            self.crop_roi_diffraction.setPen(color='r')
-            self.diffraction_space_widget.getView().addItem(self.crop_roi_diffraction)
-        else:
-            if hasattr(self,'crop_roi_diffraction'):
-                self.diffraction_space_widget.getView().removeItem(self.crop_roi_diffraction)
-                self.crop_roi_diffraction = None
-            else:
-                pass
 
     def cancel_preprocessing(self):
         # Update settings to reflect no changes
