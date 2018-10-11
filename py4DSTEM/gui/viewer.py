@@ -326,6 +326,8 @@ class DataViewer(QtWidgets.QMainWindow):
             slice_qx,slice_qy = slices_q
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
             crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
+            crop_Qy_min, crop_Qy_max = max(0,crop_Qy_min), min(self.datacube.Q_Ny,crop_Qy_max)
+            crop_Qx_min, crop_Qx_max = max(0,crop_Qx_min), min(self.datacube.Q_Nx,crop_Qx_max)
             # Crop data
             self.datacube.crop_data_diffraction(crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max)
             # Update settings
@@ -348,6 +350,8 @@ class DataViewer(QtWidgets.QMainWindow):
             slice_rx,slice_ry = slices_r
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
             crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
+            crop_Ry_min, crop_Ry_max = max(0,crop_Ry_min), min(self.datacube.R_Ny,crop_Ry_max)
+            crop_Rx_min, crop_Rx_max = max(0,crop_Rx_min), min(self.datacube.R_Nx,crop_Rx_max)
             # Crop data
             self.datacube.crop_data_real(crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max)
             # Update settings
@@ -364,23 +368,6 @@ class DataViewer(QtWidgets.QMainWindow):
             self.update_real_space_view()
         else:
             self.settings.isCropped_r.update_value(False)
-
-        # Update values in settings
-
-        # self.settings.isCropped_r.update_value(False)
-        # self.settings.isCropped_q.update_value(False)
-        # self.settings.crop_rx_min.update_value(False)
-        # self.settings.crop_rx_max.update_value(False)
-        # self.settings.crop_ry_min.update_value(False)
-        # self.settings.crop_ry_max.update_value(False)
-        # self.settings.crop_qx_min.update_value(False)
-        # self.settings.crop_qx_max.update_value(False)
-        # self.settings.crop_qy_min.update_value(False)
-        # self.settings.crop_qy_max.update_value(False)
-
-        # Update views
-
-        pass
 
     ### Bin ###
 
