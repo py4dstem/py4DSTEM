@@ -7,6 +7,9 @@
 # will be identical to
 #       datacube.preprocess_function(*args)
 
+from ..log import log
+
+@log
 def set_scan_shape(datacube,R_Ny,R_Nx):
     """
     Reshape the data given the real space scan shape.
@@ -18,17 +21,20 @@ def set_scan_shape(datacube,R_Ny,R_Nx):
     except ValueError:
         return datacube
 
+@log
 def crop_data_diffraction(datacube,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max):
     datacube.data4D = datacube.data4D[:,:,crop_Qy_min:crop_Qy_max,crop_Qx_min:crop_Qx_max]
     datacube.Q_Ny, datacube.Q_Nx = crop_Qy_max-crop_Qy_min, crop_Qx_max-crop_Qx_min
     return datacube
 
+@log
 def crop_data_real(datacube,crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max):
     datacube.data4D = datacube.data4D[crop_Ry_min:crop_Ry_max,crop_Rx_min:crop_Rx_max,:,:]
     datacube.R_Ny, datacube.R_Nx = crop_Ry_max-crop_Ry_min, crop_Rx_max-crop_Rx_min
     datacube.R_N = datacube.R_Ny*datacube.R_Nx
     return datacube
 
+@log
 def bin_data_diffraction(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
@@ -51,6 +57,7 @@ def bin_data_diffraction(datacube, bin_factor):
         datacube.R_Ny,datacube.R_Nx,datacube.Q_Ny,datacube.Q_Nx = datacube.data4D.shape
         return datacube
 
+@log
 def bin_data_real(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.

@@ -1,14 +1,14 @@
 # Creates a function decorator which causes a function to be logged every time it's used
 
 from collections import OrderedDict
-from inspect import signature
+import inspect
 
 def log(function):
 
     # Get the parameters and default arguments
-    sig = inspect.signature(function)
+    signature = inspect.signature(function)
     params = OrderedDict()
-    for key,value in sig.parameters.items():
+    for key,value in signature.parameters.items():
         if value.default is inspect._empty:
             params[key] = None
         else:
@@ -23,7 +23,11 @@ def log(function):
             params[key] = value
 
         # Perform logging
-        print(params)
+        print("Log entry:")
+        print("Function called: "+function.__name__)
+        print("Parameters and values:")
+        for key, value in params.items():
+            print("{} : {}".format(key,value))
 
         return function(*args,**kwargs)
 
