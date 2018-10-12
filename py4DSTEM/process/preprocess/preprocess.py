@@ -69,7 +69,6 @@ def bin_data_real(datacube, bin_factor):
             datacube.data4D = datacube.data4D[:,:-(R_Nx%bin_factor),:,:]
         else:
             datacube.data4D = datacube.data4D[:-(R_Ny%bin_factor),:-(R_Nx%bin_factor),:,:]
-        print(datacube.data4D.shape)
         datacube.data4D = datacube.data4D.reshape(int(R_Ny/bin_factor),bin_factor,int(R_Nx/bin_factor),bin_factor,Q_Ny,Q_Nx).sum(axis=(1,3))
         datacube.R_Ny,datacube.R_Nx,datacube.Q_Ny,datacube.Q_Nx = datacube.data4D.shape
         return datacube
