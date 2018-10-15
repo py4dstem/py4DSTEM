@@ -30,13 +30,13 @@ class Logger(object):
 
         def show_item(self, index):
             log_item = self.logged_items[index]
-            print("Log index {}, at time {}:{}:{}, {}-{}-{}:".format(index,
-                                                                  log_item.datetime.tm_hour,
-                                                                  log_item.datetime.tm_min,
-                                                                  log_item.datetime.tm_sec,
+            print("*** Log index {}, at time {}{}{}_{}:{}:{} ***".format(index,
                                                                   log_item.datetime.tm_year,
                                                                   log_item.datetime.tm_mon,
-                                                                  log_item.datetime.tm_mday))
+                                                                  log_item.datetime.tm_mday,
+                                                                  log_item.datetime.tm_hour,
+                                                                  log_item.datetime.tm_min,
+                                                                  log_item.datetime.tm_sec))
             print("Function: \t{}".format(log_item.function))
             print("Inputs:")
             for key, value in log_item.inputs.items():
@@ -101,11 +101,5 @@ def log(function):
         return function(*args,**kwargs)
 
     return logged_function
-
-
-
-
-
-
 
 

@@ -65,6 +65,44 @@ def is_py4DSTEMfile(h5_file):
         return False
 
 
+def show_log(filename):
+    """
+    Takes a filename as input, determines if it was written by py4DSTEM, and if it was prints
+    the file's log.
+    """
+    print("Reading log for file {}...\n".format(filename))
+    # Check if file was written by py4DSTEM
+    try:
+        h5_file = h5py.File(filename,'r')
+        if is_py4DSTEMfile(h5_file):
+            try:
+                log_group = h5_file['log']
+                for i in range(len(log_group.keys())):
+                    key = 'log_item_'+str(i)
+                    show_log_item(i, log_group[key])
+                h5_file.close()
+            except KeyError:
+                print("Log cannot be read - HDF5 file has no log group.")
+                h5_file.close()
+        else:
+            h5_file.close()
+    except IOError:
+        print("Log cannot be read - file is not an HDF5 file.")
+
+def show_log_item(index, log_item):
+    time = log_item.attrs['time'].decode('utf-8')
+    function = log_item.attrs['function'].decode('utf-8')
+    version = log_item.attrs['version']
+
+    print("*** Log index {}, at time {} ***".format(index, time))
+    print("Function: \t{}".format(function))
+    print("Inputs:")
+    for key,value in log_item['inputs'].attrs.items():
+        if type(value)==np.bytes_:
+            print("\t\t{}\t{}".format(key,value.decode('utf-8')))
+        else:
+            print("\t\t{}\t{}".format(key,value))
+    print("Version: \t{}\n".format(version))
 
 
 
@@ -76,52 +114,67 @@ def is_py4DSTEMfile(h5_file):
 # |--grp: 4D-STEM_data
 #             |
 #             |--grp: datacube
-#             |          |--attr: emd_group_type=1
-#             |          |--data: datacube
-#             |          |--data: dim1
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim2
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim3
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim4
+#             |         |--attr: emd_group_type=1
+#             |         |--data: datacube
+#             |         |--data: dim1
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim2
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim3
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim4
 #             |               |--attr: name="R_y"
 #             |               |--attr: units="[n_m]"
 #             |
 #             |--grp: processing
-#             |          |--# This will contain objects created and used during processing
-#             |          |--# e.g. vacuum probe, shifts from scan coils, binary masks,
-#             |          |--#      convolution kernels, etc.
+#             |         |--# This will contain objects created and used during processing
+#             |         |--# e.g. vacuum probe, shifts from scan coils, binary masks,
+#             |         |--#      convolution kernels, etc.
+#             |
+#             |--grp: log
+#             |         |-grp: log_item_1
+#             |         |   |--attr: function="function"
+#             |         |   |--grp: inputs
+#             |         |   |    |--attr: input1=val1
+#             |         |   |    |--attr: input2=val2
+#             |         |   |    |--...
+#             |         |   |
+#             |         |   |--attr: version=0.1
+#             |         |   |--attr: time="20181015_16:09:42"
+#             |         |
+#             |         |-grp: log_item_2
+#             |         |-...
 #             |
 #             |--grp: metadata
-#                        |--grp: original
-#                        |   |--# Raw metadata from original files
-#                        |
-#                        |--grp: microscope
-#                        |   |--# Acquisition parameters
-#                        |   |--# Accelerating voltage, camera length, convergence angle, 
-#                        |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
-#                        |   |--# scan shape, probe FWHM
-#                        |
-#                        |--grp: sample
-#                        |   |--# Material, preparation
-#                        |
-#                        |--grp: user
-#                        |   |--# Name, instituion, dept, contact email
-#                        |
-#                        |--grp: processing
-#                        |   |--# original file name, processing perfomed - binning, cropping
-#                        |   |--# Consider attaching logs
-#                        |
-#                        |--grp: calibration
-#                        |   |--# R pixel size, K pixel size, R/K rotation offset
-#                        |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
-#                        |   |--# sizes), quantities here are calculated from data rather than
-#                        |   |--# being read from the instrument
-#                        |
-#                        |--grp: comments
+#                       |--grp: original
+#                       |   |--# Raw metadata from original files
+#                       |
+#                       |--grp: microscope
+#                       |   |--# Acquisition parameters
+#                       |   |--# Accelerating voltage, camera length, convergence angle, 
+#                       |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
+#                       |   |--# scan shape, probe FWHM
+#                       |
+#                       |--grp: sample
+#                       |   |--# Material, preparation
+#                       |
+#                       |--grp: user
+#                       |   |--# Name, instituion, dept, contact email
+#                       |
+#                       |--grp: processing
+#                       |   |--# original file name, processing perfomed - binning, cropping
+#                       |   |--# Consider attaching logs
+#                       |
+#                       |--grp: calibration
+#                       |   |--# R pixel size, K pixel size, R/K rotation offset
+#                       |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
+#                       |   |--# sizes), quantities here are calculated from data rather than
+#                       |   |--# being read from the instrument
+#                       |
+#
+
 
 

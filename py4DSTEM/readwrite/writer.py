@@ -242,7 +242,7 @@ def write_log_item(group_log, index, logged_item):
     write_time_to_log_item(group_logitem, logged_item.datetime)
 
 def write_time_to_log_item(group_logitem, datetime):
-    date = str(datetime.tm_year)+'_'+str(datetime.tm_mon)+'_'+str(datetime.tm_mday)
+    date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
     time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
     group_logitem.attrs.create('time', np.string_(date+'__'+time))
 
