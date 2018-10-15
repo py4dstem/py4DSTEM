@@ -1,35 +1,104 @@
 # Creates a function decorator which causes a function to be logged every time it's used
 
 from collections import OrderedDict
+from time import localtime
 import inspect
+
+
+class Logger(object):
+    """
+    The Logger class is a singleton, ensuring that only one logger exists.
+    """
+    instance = None
+
+    class __Logger(object):
+        def __init__(self):
+            self.log_index = 0
+            self.logged_items = OrderedDict()
+
+        def add_item(self, function, inputs, version, datetime):
+            log_item = LogItem(function=function,
+                               inputs=inputs,
+                               version=version,
+                               datetime=datetime)
+            self.logged_items[self.log_index] = log_item
+            self.log_index += 1
+
+        def show_item(self, index):
+            log_item = self.logged_items[index]
+            print("Log index {}, at time {}:{}:{}, {}-{}-{}:".format(index,
+                                                                  log_item.datetime.tm_hour,
+                                                                  log_item.datetime.tm_min,
+                                                                  log_item.datetime.tm_sec,
+                                                                  log_item.datetime.tm_year,
+                                                                  log_item.datetime.tm_mon,
+                                                                  log_item.datetime.tm_mday))
+            print("Function: \t{}".format(log_item.function))
+            print("Inputs:")
+            for key, value in log_item.inputs.items():
+                print("\t\t{}\t{}".format(key,value))
+            print("Version: \t{}\n".format(log_item.version))
+
+        def show_log(self):
+            for i in range(self.log_index):
+                self.show_item(i)
+
+    def __new__(cls):
+        if not Logger.instance:
+            Logger.instance = Logger.__Logger()
+        return Logger.instance
+
+    def __getattr__(self,name):
+        return getattr(self.instance,name)
+
+    def __setattr__(self,name):
+        return setattr(self.instance,name)
+
+class LogItem(object):
+
+    def __init__(self, function, inputs, version, datetime):
+        self.function = function
+        self.inputs = inputs
+        self.version = version
+        self.datetime = datetime
+
+logger = Logger()
 
 def log(function):
 
+    global logger
+
     # Get the parameters and default arguments
     signature = inspect.signature(function)
-    params = OrderedDict()
+    inputs = OrderedDict()
     for key,value in signature.parameters.items():
         if value.default is inspect._empty:
-            params[key] = None
+            inputs[key] = None
         else:
-            params[key] = value.default
+            inputs[key] = value.default
 
     # Define the new function
     def logged_function(*args,**kwargs):
         for i in range(len(args)):
-            key = list(params.items())[i][0]
-            params[key] = args[i]
+            key = list(inputs.items())[i][0]
+            inputs[key] = args[i]
         for key,value in kwargs.items():
-            params[key] = value
+            inputs[key] = value
 
         # Perform logging
-        print("Log entry:")
-        print("Function called: "+function.__name__)
-        print("Parameters and values:")
-        for key, value in params.items():
-            print("{} : {}".format(key,value))
+        logger.add_item(function = function.__name__,
+                                 inputs = inputs,
+                                 version = 0.1,
+                                 datetime = localtime())
 
         return function(*args,**kwargs)
 
     return logged_function
+
+
+
+
+
+
+
 
