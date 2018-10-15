@@ -8,8 +8,10 @@
 import h5py
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..process.datastructure.datacube import MetadataCollection
-from ..process.log import log
+from ..process.datastructure.datacube import MetadataCollection, DataCube
+from ..process.log import log, Logger
+
+logger = Logger()
 
 @log
 def save_from_datacube(datacube,outputfile):
@@ -127,6 +129,12 @@ def save_from_datacube(datacube,outputfile):
         pass
 
 
+    ##### Write log #####
+    group_log = f.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
+
+
     ##### Finish and close #####
     print("Done.")
     f.close()
@@ -217,6 +225,27 @@ def transfer_metadata_dict(dictionary,group):
             group.attrs.create(key,val)
 
 
+#### Functions for writing logs ####
+
+def write_log_item(group_log, index, logged_item):
+    group_logitem = group_log.create_group('log_item_'+str(index))
+    group_logitem.attrs.create('function', np.string_(logged_item.function))
+    group_inputs = group_logitem.create_group('inputs')
+    for key,value in logged_item.inputs.items():
+        if type(value)==str:
+            group_inputs.attrs.create(key, np.string_(value))
+        elif type(value)==DataCube:
+            group_inputs.attrs.create(key, np.string_("DataCube_id"+str(id(value))))
+        else:
+            group_inputs.attrs.create(key, value)
+    group_logitem.attrs.create('version', logged_item.version)
+    write_time_to_log_item(group_logitem, logged_item.datetime)
+
+def write_time_to_log_item(group_logitem, datetime):
+    date = str(datetime.tm_year)+'_'+str(datetime.tm_mon)+'_'+str(datetime.tm_mday)
+    time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
+    group_logitem.attrs.create('time', np.string_(date+'__'+time))
+
 
 ############################### File structure ###############################
 #
@@ -226,52 +255,66 @@ def transfer_metadata_dict(dictionary,group):
 # |--grp: 4D-STEM_data
 #             |
 #             |--grp: datacube
-#             |          |--attr: emd_group_type=1
-#             |          |--data: datacube
-#             |          |--data: dim1
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim2
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim3
-#             |          |    |--attr: name="R_y"
-#             |          |    |--attr: units="[n_m]"
-#             |          |--data: dim4
+#             |         |--attr: emd_group_type=1
+#             |         |--data: datacube
+#             |         |--data: dim1
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim2
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim3
+#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: units="[n_m]"
+#             |         |--data: dim4
 #             |               |--attr: name="R_y"
 #             |               |--attr: units="[n_m]"
 #             |
 #             |--grp: processing
-#             |          |--# This will contain objects created and used during processing
-#             |          |--# e.g. vacuum probe, shifts from scan coils, binary masks,
-#             |          |--#      convolution kernels, etc.
+#             |         |--# This will contain objects created and used during processing
+#             |         |--# e.g. vacuum probe, shifts from scan coils, binary masks,
+#             |         |--#      convolution kernels, etc.
+#             |
+#             |--grp: log
+#             |         |-grp: log_item_1
+#             |         |   |--attr: function="function"
+#             |         |   |--grp: inputs
+#             |         |   |    |--attr: input1=val1
+#             |         |   |    |--attr: input2=val2
+#             |         |   |    |--...
+#             |         |   |
+#             |         |   |--attr: version=0.1
+#             |         |   |--attr: time="20181015_16:09:42"
+#             |         |
+#             |         |-grp: log_item_2
+#             |         |-...
 #             |
 #             |--grp: metadata
-#                        |--grp: original
-#                        |   |--# Raw metadata from original files
-#                        |
-#                        |--grp: microscope
-#                        |   |--# Acquisition parameters
-#                        |   |--# Accelerating voltage, camera length, convergence angle, 
-#                        |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
-#                        |   |--# scan shape, probe FWHM
-#                        |
-#                        |--grp: sample
-#                        |   |--# Material, preparation
-#                        |
-#                        |--grp: user
-#                        |   |--# Name, instituion, dept, contact email
-#                        |
-#                        |--grp: processing
-#                        |   |--# original file name, processing perfomed - binning, cropping
-#                        |   |--# Consider attaching logs
-#                        |
-#                        |--grp: calibration
-#                        |   |--# R pixel size, K pixel size, R/K rotation offset
-#                        |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
-#                        |   |--# sizes), quantities here are calculated from data rather than
-#                        |   |--# being read from the instrument
-#                        |
-#                        |--grp: comments
+#                       |--grp: original
+#                       |   |--# Raw metadata from original files
+#                       |
+#                       |--grp: microscope
+#                       |   |--# Acquisition parameters
+#                       |   |--# Accelerating voltage, camera length, convergence angle, 
+#                       |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
+#                       |   |--# scan shape, probe FWHM
+#                       |
+#                       |--grp: sample
+#                       |   |--# Material, preparation
+#                       |
+#                       |--grp: user
+#                       |   |--# Name, instituion, dept, contact email
+#                       |
+#                       |--grp: processing
+#                       |   |--# original file name, processing perfomed - binning, cropping
+#                       |   |--# Consider attaching logs
+#                       |
+#                       |--grp: calibration
+#                       |   |--# R pixel size, K pixel size, R/K rotation offset
+#                       |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
+#                       |   |--# sizes), quantities here are calculated from data rather than
+#                       |   |--# being read from the instrument
+#                       |
+#                       |--grp: comments
 
 
