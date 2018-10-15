@@ -4,6 +4,10 @@ from collections import OrderedDict
 from time import localtime
 import inspect
 
+# Get the current version in __version__
+from os.path import dirname, abspath
+pwd = dirname(abspath(__file__))
+exec(open(pwd+'/../../version.py').read())
 
 class Logger(object):
     """
@@ -88,7 +92,7 @@ def log(function):
         # Perform logging
         logger.add_item(function = function.__name__,
                                  inputs = inputs,
-                                 version = 0.1,
+                                 version = __version__,
                                  datetime = localtime())
 
         return function(*args,**kwargs)

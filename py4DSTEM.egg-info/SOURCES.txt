@@ -11,6 +11,7 @@ py4DSTEM/gui/dialogs.py
 py4DSTEM/gui/utils.py
 py4DSTEM/gui/viewer.py
 py4DSTEM/process/__init__.py
+py4DSTEM/process/log.py
 py4DSTEM/process/datastructure/__init__.py
 py4DSTEM/process/datastructure/datacube.py
 py4DSTEM/process/preprocess/__init__.py
