@@ -4,7 +4,9 @@ import h5py
 import numpy as np
 import hyperspy.api as hs
 from ..process.datastructure.datacube import DataCube
+from ..process.log import log
 
+@log
 def read_data(filename):
     """
     Takes a filename as input, and outputs a DataCube object.

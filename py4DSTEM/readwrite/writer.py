@@ -9,7 +9,9 @@ import h5py
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..process.datastructure.datacube import MetadataCollection
+from ..process.log import log
 
+@log
 def save_from_datacube(datacube,outputfile):
     """
     Saves an h5 file from a datacube object and an output filepath.
