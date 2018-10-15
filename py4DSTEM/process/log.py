@@ -40,7 +40,10 @@ class Logger(object):
             print("Function: \t{}".format(log_item.function))
             print("Inputs:")
             for key, value in log_item.inputs.items():
-                print("\t\t{}\t{}".format(key,value))
+                if type(value).__name__=='DataCube':
+                    print("\t\t{}\t{}".format(key,"DataCube_id"+str(id(value))))
+                else:
+                    print("\t\t{}\t{}".format(key,value))
             print("Version: \t{}\n".format(log_item.version))
 
         def show_log(self):
