@@ -64,13 +64,63 @@ py4DSTEM is here to help!
 
 ## Getting started
 
-Installing and running the code
+### Installation
+
+Use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
+
+```
+git clone https://github.com/bsavitzky/py4DSTEM.git
+```
+
+Next, ensure the dependencies (see below) are installed in a python 3 environment.  In anaconda, you can use:
+
+```
+conda install hyperspy
+conda install h5py
+conda install pyqtgraph
+conda install PyQt5
+```
+
+Alternatively, you can use the python package manager pip:
+
+```
+pip install hyperspy
+pip install h5py
+pip install pyqtgraph
+pip install PyQt5
+```
+
+Finally, navigate to the py4DSTEM root directory and run the setup.py script by calling:
+
+```
+python setup.py install
+```
+
+That's it!
+
+### Running py4DSTEM with the GUI
+
+From the package root directory, launch the GUI with:
+
+```
+python runGUI.py
+```
+
+### Running py4DSTEM from an python interpreter
+
+In a python interpreter, py4DSTEM can now be imported in the usual way:
+
+```
+import py4DSTEM
+```
+
 
 ### Dependencies
 
 * hyperspy
 * h5py
-* pyqtgraph
+* pyqtgraph (GUI only)
+* PyQt5 (GUI only)
 
 ## Versioning
 
