@@ -68,9 +68,9 @@ Installing and running the code
 
 ### Dependencies
 
-hyperspy
-h5py
-pyqtgraph
+*hyperspy
+*h5py
+*pyqtgraph
 
 ## Versioning
 
