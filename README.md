@@ -3,14 +3,14 @@
 The aim of py4DSTEM is to provide a comprehensive suite of tools for interacting with, visualizing, and analyzing 4DSTEM data.
 Intended applications include generating virtual images; classification and segmentation; mapping orientation, crystallinity, and strain fields; and other analytical tools including ptychography and fluctuation electron microscopy.
 
-py4DSTEM is designed to be used at three possible levels of interaction.
+py4DSTEM can be used at three distinct levels of interaction.
 A graphical user interface facilites rapid data exploration, and live testing and tuning of analysis parameters.
 For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
 For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
 
+
 py4DSTEM is open source, copyleft software.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
-
 
 ## Quick overview
 
@@ -51,8 +51,8 @@ For these large datasets, compression without sacrificing useful information tak
 Analysis of 4D-STEM data can involve significant amounts of data processing.
 A growing number of excellent studies devoted to untangling these complex datasets in the most useful ways can be found in the literature, demonstrating 4D-STEM based mapping of everything from strain to local magnetic fields to non-spectroscopic composition maps and much more.
 At this stage, these works tend to operate on the scale of individual datasets, demonstrating the principles and requisite machinery for new forms of 4D-STEM data analysis.
-However, maximizing the impact of these tools to answer the broadest possible array of scientifc questions requires both accessibility and scalability.
-In light of the size of the data and the complexity of its analysis, these both represent significant challenges.
+However, maximizing the impact of these tools to answer the broadest possible array of scientifc questions requires accessibility, scalability, and reproducibility.
+In light of the size of the data and the variety and complexity of approaches to its analyses, these represent significant challenges.
 
 
 ### How does py4DSTEM help?
@@ -68,9 +68,9 @@ Installing and running the code
 
 ### Dependencies
 
-*hyperspy
-*h5py
-*pyqtgraph
+* hyperspy
+* h5py
+* pyqtgraph
 
 ## Versioning
 
