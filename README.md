@@ -81,7 +81,8 @@ conda install pyqtgraph
 conda install PyQt5
 ```
 
-Alternatively, you can use the python package manager pip:
+Using anaconda is recommended.
+If you prefer, you can use the python package manager pip:
 
 ```
 pip install hyperspy
