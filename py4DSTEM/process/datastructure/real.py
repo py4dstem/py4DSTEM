@@ -6,7 +6,7 @@
 
 class RealSlice(object):
 
-    def __init__(self, parentDataCube, data):
+    def __init__(self, data, parentDataCube):
         """
         Instantiate a RealSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with real space of the parent datacube.
