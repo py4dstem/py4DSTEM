@@ -6,7 +6,7 @@
 
 class DiffractionSlice(object):
 
-    def __init__(self, parentDataCube, data):
+    def __init__(self, data, parentDataCube):
         """
         Instantiate a DiffractionSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with diffraction space of the parent datacube.
