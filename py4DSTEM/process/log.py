@@ -2,7 +2,7 @@
 #
 # All instances of the Logger class point to a single instance, which keeps a running inventory
 # of function calls which are flagged for logging. 
-# Each such fucntion call is stored in a single LogItem object, which is stored at a particular
+# Each such function call is stored in a single LogItem object, which is stored at a particular
 # index in the Logger.
 # A function decorator, @log, is defined which causes decorated functions to get logged whenever
 # called.
