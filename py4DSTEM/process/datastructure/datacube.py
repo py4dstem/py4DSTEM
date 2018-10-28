@@ -97,16 +97,16 @@ class DataCube(object):
         # Copy original metadata from .h5 trees to an equivalent tree structure
         self.metadata.original.shortlist = MetadataCollection('shortlist')
         self.metadata.original.all = MetadataCollection('all')
-        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
-        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
+        self.get_original_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
+        self.get_original_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['original']['all'],self.metadata.original.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['sample'],self.metadata.sample)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['user'],self.metadata.user)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['processing'],self.metadata.processing)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['calibration'],self.metadata.calibration)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['comments'],self.metadata.comments)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['microscope'],self.metadata.microscope)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['sample'],self.metadata.sample)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['user'],self.metadata.user)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['processing'],self.metadata.processing)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['calibration'],self.metadata.calibration)
+        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['comments'],self.metadata.comments)
 
     def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
         self.setup_metadata_containers()

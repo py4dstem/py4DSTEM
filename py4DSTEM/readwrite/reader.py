@@ -21,8 +21,8 @@ def read_data(filename):
         h5_file = h5py.File(filename,'r')
         if is_py4DSTEMfile(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
-            datacube = DataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
+            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['datacube']['datacube'].shape
+            datacube = DataCube(data=h5_file['4DSTEM_experiment']['datacube']['datacube'].value,
                             R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
                             is_py4DSTEM_file=True, h5_file=h5_file)
             h5_file.close()
@@ -59,7 +59,7 @@ def read_data(filename):
 
 
 def is_py4DSTEMfile(h5_file):
-    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4D-STEM_data' in h5_file.keys()):
+    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4DSTEM_experiment' in h5_file.keys()):
         return True
     else:
         return False
@@ -111,7 +111,7 @@ def show_log_item(index, log_item):
 # /
 # |--attr: version_major=0
 # |--attr: version_minor=2
-# |--grp: 4D-STEM_data
+# |--grp: 4DSTEM_experiment
 #             |
 #             |--grp: datacube
 #             |         |--attr: emd_group_type=1
