@@ -33,27 +33,23 @@
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
 
+
 class DataCube(object):
 
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, original_metadata_shortlist=None, original_metadata_all=None, filename=None, is_py4DSTEM_file=False, h5_file=None):
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx)
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
         # Initialize DataCube, set dimensions
-        self.filename = filename
         self.data4D = data
         self.R_Ny, self.R_Nx = R_Ny, R_Nx
         self.Q_Ny, self.Q_Nx = Q_Ny, Q_Nx
         self.R_N = R_Ny*R_Nx
         self.set_scan_shape(self.R_Ny,self.R_Nx)
 
-        # Handle metadata
-        if is_py4DSTEM_file:
-            self.setup_metadata_py4DSTEM_file(h5_file)
-        else:
-            self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
+    ############### Processing functions, organized by file in process directory ##############
 
-    ############### Preprocess ##############
+    ############### preprocess.py ##############
 
     def set_scan_shape(self,R_Ny,R_Nx):
         """
@@ -93,6 +89,28 @@ class DataCube(object):
         """
         return self.data4D[:,:,slice_y,slice_x].sum(axis=(2,3)).T, 1
 
+########################## END OF DATACUBE OBJECT ########################
+
+
+class RawDataCube(DataCube):
+
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx,
+                 is_py4DSTEM_file=False, h5_file=None,
+                 original_metadata_shortlist=None, original_metadata_all=None):
+        """
+        Instantiate a RawDataCube object.
+        Sets the data and scan dimensions.
+        Additionally handles metadata in one of two ways - either for native py4DSTEM files, or
+        for non-native files.
+        """
+        # Initialize DataCube, set dimensions
+        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx)
+
+        # Handle metadata
+        if is_py4DSTEM_file:
+            self.setup_metadata_py4DSTEM_file(h5_file)
+        else:
+            self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
 
     ###################### METADATA HANDLING ########################
     # Metadata is structured as follows:
@@ -141,7 +159,6 @@ class DataCube(object):
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_user_search_dict, self.metadata.user)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_calibration_search_dict, self.metadata.calibration)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_comments_search_dict, self.metadata.comments)
-
 
     def setup_metadata_containers(self):
         """
@@ -285,8 +302,7 @@ class DataCube(object):
         """
         metadata_dict[key] = value
 
-################## END OF DATACUBE OBJECT ################
-
+########################## END OF RAWDATACUBE OBJECT ########################
 
 
 class MetadataCollection(object):
