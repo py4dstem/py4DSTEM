@@ -357,5 +357,74 @@ def write_time_to_log_item(group_logitem, datetime):
 #                       |   |--# being read from the instrument
 #                       |
 #                       |--grp: comments
+#
+#
+
+############################### File structure ###############################
+############################## Abridged version ##############################
+#
+# /
+# |--grp: 4DSTEM_experiment
+#             |
+#             |--grp: datacube
+#             |         |--data: datacube
+#             |         |--data: dim1,dim2,dim3,dim4
+#             |
+#             |--grp: processing
+#             |         |
+#             |         |--grp: datacubes
+#             |         |   |
+#             |         |   |--grp: processed_datacube_1
+#             |         |   |    |--data: datacube
+#             |         |   |    |--data: dim1,dim2,dim3,dim4
+#             |         |   |
+#             |         |   |--grp: processed_datacube_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: diffraction
+#             |         |   |
+#             |         |   |--grp: diffraction_slice_1
+#             |         |   |    |--data: diffractionslice
+#             |         |   |    |--data: dim1,dim2
+#             |         |   |
+#             |         |   |--grp: diffraction_slice_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: real
+#             |         |   |
+#             |         |   |--grp: real_slice_1
+#             |         |   |    |--data: realslice
+#             |         |   |    |--data: dim1,dim2
+#             |         |   |
+#             |         |   |--grp: real_slice_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: pointlists
+#             |             |
+#             |             |--grp: point_list_1
+#             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
+#             |             |    |--attr: dimensions=val
+#             |             |    |--data: point_list
+#             |             |
+#             |             |--grp: point_list_2
+#             |             |    |
+#             |             :    :
+#             |
+#             |--grp: log
+#             |         |-grp: log_item_1
+#             |         |-grp: log_item_2
+#             |         |-...
+#             |
+#             |--grp: metadata
+#                       |--grp: original
+#                       |--grp: microscope
+#                       |--grp: sample
+#                       |--grp: user
+#                       |--grp: calibration
+#                       |--grp: comments
+
 
 
