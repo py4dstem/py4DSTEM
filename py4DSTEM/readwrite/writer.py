@@ -24,7 +24,7 @@ def save_from_datacube(datacube,outputfile):
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
     f.attrs.create("version_minor",2)
-    group_data = f.create_group("4D-STEM_data")
+    group_data = f.create_group("4DSTEM_experiment")
 
 
     ##### Write metadata #####
@@ -252,7 +252,7 @@ def write_time_to_log_item(group_logitem, datetime):
 # /
 # |--attr: version_major=0
 # |--attr: version_minor=2
-# |--grp: 4D-STEM_data
+# |--grp: 4DSTEM_experiment
 #             |
 #             |--grp: datacube
 #             |         |--attr: emd_group_type=1
