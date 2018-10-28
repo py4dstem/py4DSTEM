@@ -1,11 +1,22 @@
 # Defines the DataObjectTracker class.
 #
-# All instances of the Logger class point to a single instance, which keeps a running inventory
-# of function calls which are flagged for logging. 
-# Each such function call is stored in a single LogItem object, which is stored at a particular
-# index in the Logger.
-# A function decorator, @log, is defined which causes decorated functions to get logged whenever
-# called.
+# Each RawDataCube object contains a DataObjectTracker instance, which keeps track of all the
+# data objects created - DataCube, DiffractionSlice, RealSlice, and PointList objects - with 
+# reference to this dataset.
+# Reference to each such object is contained in a DataObjectLog class instance, which stores:
+#   -a pointer to the object, 
+#   -log info
+#       -log index of object creation
+#       -log indices of object modification
+#   -save info. Boolean which determines behavior for this object on saving:
+#       -if True, save this object in its entirity
+#       -if False, save object name and log info, but not the actual data
+# When an object is added to a RawDataCube's DataObjectTracker, the original object adds that
+# RawDataCube instance to its list of parents, ensuring the relationships can be deterimined in
+# either direction.
+#
+# A function decorator, @log_object_modification, is defined which causes decorated functions 
+# to add entries in the log info of the DataObjectLog associated with any modified objects.
 
 from collections import OrderedDict
 from time import localtime
