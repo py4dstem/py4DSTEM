@@ -104,7 +104,6 @@ class DataCube(object):
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['microscope'],self.metadata.microscope)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['sample'],self.metadata.sample)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['user'],self.metadata.user)
-        self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['processing'],self.metadata.processing)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['calibration'],self.metadata.calibration)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['comments'],self.metadata.comments)
 
@@ -120,14 +119,12 @@ class DataCube(object):
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_microscope_search_dict, self.metadata.microscope)
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_sample_search_dict, self.metadata.sample)
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_user_search_dict, self.metadata.user)
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_processing_search_dict, self.metadata.processing)
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_calibration_search_dict, self.metadata.calibration)
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_comments_search_dict, self.metadata.comments)
 
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_microscope_search_dict, self.metadata.microscope)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_sample_search_dict, self.metadata.sample)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_user_search_dict, self.metadata.user)
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_processing_search_dict, self.metadata.processing)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_calibration_search_dict, self.metadata.calibration)
         self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_comments_search_dict, self.metadata.comments)
 
@@ -141,7 +138,6 @@ class DataCube(object):
         self.metadata.microscope = dict()
         self.metadata.sample = dict()
         self.metadata.user = dict()
-        self.metadata.processing = dict()
         self.metadata.calibration = dict()
         self.metadata.comments = dict()
 
@@ -236,7 +232,8 @@ class DataCube(object):
             'K_pix_size' : [ '' ],
             'K_pix_units' : [ '' ],
             'probe_FWHM_nm' : [ '' ],
-            'acquisition_date' : [ '' ]
+            'acquisition_date' : [ '' ],
+            'original_filename' : [ 'original_filename' ],
         }
 
         self.original_to_sample_search_dict = {
@@ -253,12 +250,6 @@ class DataCube(object):
             'department' : [ '' ],
             'contact_email' : [ '' ],
             'contact_number' : [ '' ]
-        }
-
-        self.original_to_processing_search_dict = {
-            'original_filename' : [ 'original_filename' ],
-            'binning' : [ '' ],
-            'cropping' : [ '' ]
         }
 
         self.original_to_calibration_search_dict = {
