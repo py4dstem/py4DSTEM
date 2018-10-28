@@ -271,9 +271,54 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |               |--attr: units="[n_m]"
 #             |
 #             |--grp: processing
-#             |         |--# This will contain objects created and used during processing
-#             |         |--# e.g. vacuum probe, shifts from scan coils, binary masks,
-#             |         |--#      convolution kernels, etc.
+#             |         |
+#             |         |--grp: datacubes
+#             |         |   |
+#             |         |   |--grp: processed_datacube_1
+#             |         |   |    |--attr: emd_group_type=1
+#             |         |   |    |--data: datacube
+#             |         |   |    |--data: dim1,dim2,dim3,dim4
+#             |         |   |    |--data: modification_log_indices
+#             |         |   |
+#             |         |   |--grp: processed_datacube_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: diffraction
+#             |         |   |
+#             |         |   |--grp: diffraction_slice_1
+#             |         |   |    |--attr: emd_group_type=1
+#             |         |   |    |--data: diffractionslice
+#             |         |   |    |--data: dim1,dim2
+#             |         |   |    |--data: modification_log_indices
+#             |         |   |
+#             |         |   |--grp: diffraction_slice_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: real
+#             |         |   |
+#             |         |   |--grp: real_slice_1
+#             |         |   |    |--attr: emd_group_type=1
+#             |         |   |    |--data: realslice
+#             |         |   |    |--data: dim1,dim2
+#             |         |   |    |--data: modification_log_indices
+#             |         |   |
+#             |         |   |--grp: real_slice_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: pointlists
+#             |             |
+#             |             |--grp: point_list_1
+#             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
+#             |             |    |--attr: dimensions=val
+#             |             |    |--data: point_list
+#             |             |    |--data: modification_log_indices
+#             |             |
+#             |             |--grp: point_list_2
+#             |             |    |
+#             |             :    :
 #             |
 #             |--grp: log
 #             |         |-grp: log_item_1
@@ -304,10 +349,6 @@ def write_time_to_log_item(group_logitem, datetime):
 #                       |
 #                       |--grp: user
 #                       |   |--# Name, instituion, dept, contact email
-#                       |
-#                       |--grp: processing
-#                       |   |--# original file name, processing perfomed - binning, cropping
-#                       |   |--# Consider attaching logs
 #                       |
 #                       |--grp: calibration
 #                       |   |--# R pixel size, K pixel size, R/K rotation offset
