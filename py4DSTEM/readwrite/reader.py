@@ -3,13 +3,13 @@
 import h5py
 import numpy as np
 import hyperspy.api as hs
-from ..process.datastructure.datacube import DataCube
+from ..process.datastructure.datacube import RawDataCube
 from ..process.log import log
 
 @log
 def read_data(filename):
     """
-    Takes a filename as input, and outputs a DataCube object.
+    Takes a filename as input, and outputs a RawDataCube object.
 
     If filename is a .h5 file, read_data() checks if the file was written by py4DSTEM.  If it
     was, the metadata are read and saved directly.  Otherwise, the file is read with hyperspy,
@@ -22,11 +22,11 @@ def read_data(filename):
         if is_py4DSTEMfile(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
             R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['datacube']['datacube'].shape
-            datacube = DataCube(data=h5_file['4DSTEM_experiment']['datacube']['datacube'].value,
-                            R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
+            rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['datacube']['datacube'].value,
+                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
                             is_py4DSTEM_file=True, h5_file=h5_file)
             h5_file.close()
-            return datacube
+            return rawdatacube
         else:
             h5_file.close()
     except IOError:
@@ -44,18 +44,18 @@ def read_data(filename):
         else:
             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
             print("Initializing random datacube...")
-            return DataCube(data=np.random.rand(100,512,512),
+            return RawDataCube(data=np.random.rand(100,512,512),
                             R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
-                            filename=filename,is_py4DSTEM_file=False)
-        return DataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            is_py4DSTEM_file=False)
+        return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            is_py4DSTEM_file=False,
                             original_metadata_shortlist=hyperspy_file.metadata,
-                            original_metadata_all=hyperspy_file.original_metadata,
-                            filename=filename,is_py4DSTEM_file=False)
+                            original_metadata_all=hyperspy_file.original_metadata)
     except Exception as err:
         print("Failed to load", err)
         print("Initializing random datacube...")
-        return DataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
-                        filename=None,is_py4DSTEM_file=False)
+        return RawDataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                        is_py4DSTEM_file=False)
 
 
 def is_py4DSTEMfile(h5_file):
