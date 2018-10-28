@@ -1,30 +1,20 @@
-# Creates a DataObjectTracker class, which keeps track of all data objects created from a single
-# raw DataCube object.  Each *raw* datacube object will contain its own DataObjectTracker.
+# Defines the DataObjectTracker class.
 #
-# Each instances of the DataObjectTracker class keeps a running inventory of all data objects - 
-# DataCube, DiffractionSlice, RealSlice, and PointList objects - associated with the tracker's
-# raw DataCube.
-# Each such object is stored in a single DataObject class instance, which is stored in the
-# DataObjectTracker.
-# The information stored about each object is:
-#   -parent data:
-#       -pointers to data-containing class instance(s) directly used to define this object
-#   -log info: 
-#       -log index of creation
-#       -log indices of any modifications
-#   -save info
-#       -Boolean specifying save behavior
-#       -if True, save entire object
-#       -if False, save name/log info, but not data
+# All instances of the Logger class point to a single instance, which keeps a running inventory
+# of function calls which are flagged for logging. 
+# Each such function call is stored in a single LogItem object, which is stored at a particular
+# index in the Logger.
+# A function decorator, @log, is defined which causes decorated functions to get logged whenever
+# called.
 
-#from collections import OrderedDict
-#from time import localtime
-#import inspect
+from collections import OrderedDict
+from time import localtime
+import inspect
 
 # Get the current version in __version__
-#from os.path import dirname, abspath
-#pwd = dirname(abspath(__file__))
-#exec(open(pwd+'/../../version.py').read())
+from os.path import dirname, abspath
+pwd = dirname(abspath(__file__))
+exec(open(pwd+'/../../version.py').read())
 
 class Logger(object):
     """
