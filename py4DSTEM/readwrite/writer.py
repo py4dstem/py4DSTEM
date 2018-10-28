@@ -8,7 +8,7 @@
 import h5py
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..process.datastructure.datacube import MetadataCollection, DataCube
+from ..process.datastructure.datacube import MetadataCollection, DataCube, RawDataCube
 from ..process.log import log, Logger
 
 logger = Logger()
@@ -234,6 +234,8 @@ def write_log_item(group_log, index, logged_item):
             group_inputs.attrs.create(key, np.string_(value))
         elif type(value)==DataCube:
             group_inputs.attrs.create(key, np.string_("DataCube_id"+str(id(value))))
+        elif type(value)==RawDataCube:
+            group_inputs.attrs.create(key, np.string_("RawDataCube_id"+str(id(value))))
         else:
             group_inputs.attrs.create(key, value)
     group_logitem.attrs.create('version', logged_item.version)
