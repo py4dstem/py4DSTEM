@@ -36,7 +36,6 @@ def save_from_datacube(datacube,outputfile):
     group_microscope_metadata = group_metadata.create_group("microscope")
     group_sample_metadata = group_metadata.create_group("sample")
     group_user_metadata = group_metadata.create_group("user")
-    group_processing_metadata = group_metadata.create_group("processing")
     group_calibration_metadata = group_metadata.create_group("calibration")
     group_comments_metadata = group_metadata.create_group("comments")
     group_original_metadata_all = group_original_metadata.create_group("all")
@@ -54,7 +53,6 @@ def save_from_datacube(datacube,outputfile):
     transfer_metadata_dict(datacube.metadata.microscope,group_microscope_metadata)
     transfer_metadata_dict(datacube.metadata.sample,group_sample_metadata)
     transfer_metadata_dict(datacube.metadata.user,group_user_metadata)
-    transfer_metadata_dict(datacube.metadata.processing,group_processing_metadata)
     transfer_metadata_dict(datacube.metadata.calibration,group_calibration_metadata)
     transfer_metadata_dict(datacube.metadata.comments,group_comments_metadata)
 
