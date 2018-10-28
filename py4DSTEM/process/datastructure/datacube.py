@@ -36,7 +36,7 @@ from .. import preprocess
 
 class DataCube(object):
 
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx)
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx):
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
@@ -103,7 +103,7 @@ class RawDataCube(DataCube):
         Additionally handles metadata in one of two ways - either for native py4DSTEM files, or
         for non-native files.
         """
-        # Initialize DataCube, set dimensions
+        # Initialize RawDataCube, set dimensions
         DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx)
 
         # Handle metadata
@@ -189,7 +189,7 @@ class RawDataCube(DataCube):
     def get_metadata_from_original_metadata(hs_tree, metadata_search_dict, metadata_dict):
         """
         Finds the relavant metadata in the original_metadata objects and populates the
-        corresponding DataCube instance attributes.
+        corresponding RawDataCube instance attributes.
         Accepts:
             hs_tree -   a hyperspy.misc.utils.DictionaryTreeBrowser object
             metadata_search_dict -  a dictionary with the attributes to search and the keys
@@ -199,7 +199,7 @@ class RawDataCube(DataCube):
         for attr, keys in metadata_search_dict.items():
             metadata_dict[attr]=""
             for key in keys:
-                found, value = DataCube.search_hs_tree(key, hs_tree)
+                found, value = RawDataCube.search_hs_tree(key, hs_tree)
                 if found:
                     metadata_dict[attr]=value
                     break
@@ -216,11 +216,11 @@ class RawDataCube(DataCube):
             return False, -1
         else:
             for hs_key in hs_tree.keys():
-                if not DataCube.istree_hs(hs_tree[hs_key]):
+                if not RawDataCube.istree_hs(hs_tree[hs_key]):
                     if key==hs_key:
                         return True, hs_tree[hs_key]
                 else:
-                    found, val = DataCube.search_hs_tree(key, hs_tree[hs_key])
+                    found, val = RawDataCube.search_hs_tree(key, hs_tree[hs_key])
                     if found:
                         return found, val
             return False, -1
@@ -238,7 +238,7 @@ class RawDataCube(DataCube):
         from the original metadata.
         Keys become the keys in the final, active metadata dictioaries; values are lists
         containing the corresponding keys to find in the hyperspy trees of the original metadata.
-        These objects live in the DataCube class scope.
+        These objects live in the RawDataCube class scope.
 
         Note that items that are not found will still be stored as a key in the relevant metadata
         dictionary, with the empty string as its value.  This allows these fields to populate
