@@ -12,6 +12,9 @@
 # All objects containing py4DSTEM data - e.g. RawDataCube, DataCube, DiffractionSlice, 
 # RealSlice, and PointList objects - inherit from DataObject.
 # Only RawDataCube instances may have an empty parent list.
+#
+# The log_modification() method is called once on instantiation of a DataObject, and again by
+# the @log decorator function whenever it identifies any of its arguments as DataObjects.
 
 from ..log import Logger
 logger = Logger()
@@ -46,5 +49,36 @@ class DataObject(object):
     def get_current_log_index():
         global logger
         return logger.log_index
+
+
+# Defines the DataObjectTracker class.
+#
+# Each RawDataCube object contains a DataObjectTracker instance, which keeps track of all the
+# data objects created - DataCube, DiffractionSlice, RealSlice, and PointList objects - with 
+# reference to this dataset.
+# The DataObjectTracker stores a list of DataObject instances, and knows how to retreive or
+# modify their attributes, in particular:
+#   -log info
+#       -log index of object creation
+#       -log indices of object modification
+#   -save info. Boolean which determines behavior for this object on saving:
+#       -if True, save this object in its entirity
+#       -if False, save object name and log info, but not the actual data
+# When an object is added to a RawDataCube's DataObjectTracker, the original DataObject adds that
+# RawDataCube instance to its list of parents, ensuring the relationships can be deterimined in
+# either direction.
+
+from .datastructure.dataobject import DataObject
+
+class DataObjectTracker(object):
+
+    def __init__(self):
+
+        self.dataobject_list = list()
+
+    def new_dataobject(self, dataobject):
+        assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
+
+
 
 
