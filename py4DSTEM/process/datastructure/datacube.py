@@ -21,7 +21,7 @@
 
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
-from .dataobject import DataObject
+from .dataobject import DataObject, DataObjectTracker
 
 class DataCube(DataObject):
 
@@ -96,6 +96,9 @@ class RawDataCube(DataCube):
         """
         # Initialize RawDataCube, set dimensions
         DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent=None)
+
+        # Set up DataObjectTracker
+        self.dataobjecttracker = DataObjectTracker(self)
 
         # Handle metadata
         if is_py4DSTEM_file:
