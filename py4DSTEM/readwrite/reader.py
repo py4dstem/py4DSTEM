@@ -23,7 +23,7 @@ def read_data(filename):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
             R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['datacube']['datacube'].shape
             rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['datacube']['datacube'].value,
-                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx, parent=None,
                             is_py4DSTEM_file=True, h5_file=h5_file)
             h5_file.close()
             return rawdatacube
@@ -45,17 +45,17 @@ def read_data(filename):
             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
             print("Initializing random datacube...")
             return RawDataCube(data=np.random.rand(100,512,512),
-                            R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                            R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512, parent=None,
                             is_py4DSTEM_file=False)
         return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
-                            is_py4DSTEM_file=False,
+                            parent=None, is_py4DSTEM_file=False,
                             original_metadata_shortlist=hyperspy_file.metadata,
                             original_metadata_all=hyperspy_file.original_metadata)
     except Exception as err:
         print("Failed to load", err)
         print("Initializing random datacube...")
         return RawDataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
-                        is_py4DSTEM_file=False)
+                           parent=None, is_py4DSTEM_file=False)
 
 
 def is_py4DSTEMfile(h5_file):
