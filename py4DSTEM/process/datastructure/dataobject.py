@@ -31,15 +31,51 @@ class DataObject(object):
         self.default_save_behavior = default_save_behavior
 
         self.parents_and_save_behavior = list()
-        self.new_parent(parent=parent, save_behavior=default_save_behavior)
+        self.new_parent(parent=parent, save_behavior=self.default_save_behavior)
 
         self.modification_log = list()
         self.log_modification()
 
-    def new_parent(self, parent, save_behavior):
+    def new_parent(self, parent, **kwargs):
+        if not 'save_behavior' in kwargs.keys():
+            save_behavior = self.default_save_behavior
         if parent is not None:
-            self.parents_and_save_behavior.append((parent,save_behavior))
-            # Add this DataObject to the parent's DataObjectTracker
+            if not parent in self.get_parent_list():
+                self.parents_and_save_behavior.append((parent,save_behavior))
+            else:
+                self.change_save_behavior(parent, save_behavior)
+            # Check if the DataObject is in the parent's DataObjectTracker(s)
+            # (If parent is not a raw datacube, note that it could have multiple trackers)
+            # If not, add this DataObject to the parent's DataObjectTracker
+            dataobjecttrackers = get_dataobjecttrackers(parent)
+            for tracker in dataobjecttrackers:
+                if not tracker.contains_dataobject(self):
+                    tracker.new_dataobject(self, save_behavior=save_behavior)
+
+    def get_dataobjecttrackers(self, dataobject):
+        # Get all DataObjectTrackers associated with dataobject
+        # Does not do a recursive search - rather, looks in dataobject and its direct parents
+        dataobjecttrackers = []
+        try:
+            tracker = dataobject.dataobjecttracker
+            dataobjecttrackers.append(tracker)
+        except AttributeError:
+            pass
+        for parent in dataobject.get_parent_list():
+            try:
+                tracker = parent.dataobjecttracker
+                dataobjecttrackers.append(tracker)
+            except AttributeError:
+                pass
+        return dataobjecttrackers
+
+    def get_parent_list(self):
+        return [item[0] for item in self.parents_and_save_behavior]
+
+    def change_save_behavior(self, parent, save_behavior):
+        assert parent in self.get_parent_list()
+        index = self.get_parent_list().index()
+        self.parent_and_save_behavior[index][1] = save_behavior
 
     def log_modification(self):
         index = self.get_current_log_index()-1
@@ -68,17 +104,29 @@ class DataObject(object):
 # RawDataCube instance to its list of parents, ensuring the relationships can be deterimined in
 # either direction.
 
-from .datastructure.dataobject import DataObject
-
 class DataObjectTracker(object):
 
-    def __init__(self):
+    def __init__(self, rawdatacube):
 
+        self.rawdatacube = rawdatacube
         self.dataobject_list = list()
 
-    def new_dataobject(self, dataobject):
+    def new_dataobject(self, dataobject, **kwargs):
         assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
+        if not dataobject in self.dataobject_list:
+            self.dataobject_list.append(dataobject)
+        # Check if the DataObject's parent list contains this tracker's top level RawDataCube.
+        # If not, add that RawDataCube to the DataObjects parent list.
+        if not self.contains_rawdatacube(dataobject, self.rawdatacube):
+            if 'save_behavior' in kwargs.keys():
+                dataobject.new_parent(self.rawdatacube, kwargs['save_behavior'])
+            else:
+                dataobject.new_parent(self.rawdatacube)
 
+    def contains_rawdatacube(self, dataobject, rawdatacube):
+        return rawdatacube in dataobject.get_parent_list()
 
+    def contains_dataobject(self, dataobject):
+        return dataobject in self.dataobject_list
 
 
