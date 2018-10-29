@@ -29,7 +29,7 @@ class DataCube(DataObject):
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
-        DataObject.__init__(self,parent=parent)
+        DataObject.__init__(self, parent=parent)
 
         # Initialize DataCube, set dimensions
         self.data4D = data
