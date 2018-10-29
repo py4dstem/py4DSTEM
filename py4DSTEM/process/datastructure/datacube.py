@@ -21,14 +21,16 @@
 
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
+from .dataobject import DataObject
 
+class DataCube(DataObject):
 
-class DataCube(object):
-
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx):
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent):
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
+        DataObject.__init__(self,parent=parent)
+
         # Initialize DataCube, set dimensions
         self.data4D = data
         self.R_Ny, self.R_Nx = R_Ny, R_Nx
@@ -83,7 +85,7 @@ class DataCube(object):
 
 class RawDataCube(DataCube):
 
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx,
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent,
                  is_py4DSTEM_file=False, h5_file=None,
                  original_metadata_shortlist=None, original_metadata_all=None):
         """
@@ -93,7 +95,7 @@ class RawDataCube(DataCube):
         for non-native files.
         """
         # Initialize RawDataCube, set dimensions
-        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx)
+        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent=parent)
 
         # Handle metadata
         if is_py4DSTEM_file:
