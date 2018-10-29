@@ -9,6 +9,9 @@ import h5py
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..process.datastructure.datacube import MetadataCollection, DataCube, RawDataCube
+from ..process.datastructure.diffraction import DiffractionSlice
+from ..process.datastructure.real import RealSlice
+from ..process.datastructure.pointlist import PointList
 from ..process.log import log, Logger
 
 logger = Logger()
@@ -64,77 +67,39 @@ def save_from_datacube(datacube,outputfile):
         write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Data #####
-    # First save top level raw datacube
-    # Then save all other data in the DataObjectTracker to the processing group
+    # First, save top level raw datacube
     group_rawdatacube = group_data.create_group("rawdatacube")
-    group_rawdatacube.attrs.create("emd_group_type",1)
+    save_datacube_group(group_rawdatacube, datacube)
 
-    # TODO: consider defining data chunking here, keeping k-space slices together
-    data_datacube = group_rawdatacube.create_dataset("datacube", data=datacube.data4D)
+    # Second, save all other data in the DataObjectTracker to the processing group
+    group_processing = group_data.create_group("processing")
+    group_processed_datacubes = group_processing.create_group("datacubes")
+    group_diffraction_slices = group_processing.create_group("diffraction")
+    group_real_slices = group_processing.create_group("real")
+    group_point_lists = group_processing.create_group("pointlist")
+    for dataobject in datacube.dataobjecttracker.dataobject_list:
+        ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0
+        save_behavior = dataobject.get_save_behavior(datacube) # Boolean
+        if isinstance(dataobject, DataCube):
+            group_new_datacube = group_processed_datacubes.create_group("datacube_"+str(ind_dcs))
+            save_datacube_group(group_new_datacube, dataobject, save_behavior)
+            ind_dcs += 1
+        elif isinstance(dataobject, DiffractionSlice):
+            group_new_diffraction_slice = group_diffraction_slices.create_group("diffractionslice_"+str(ind_dfs))
+            save_diffraction_group(group_new_diffraction_slice, dataobject, save_behavior)
+            ind_dfs += 1
+        elif isinstance(dataobject, RealSlice):
+            group_new_real_slice = group_real_slices.create_group("realslice_"+str(ind_rls))
+            save_real_group(group_new_real_slice, dataobject, save_behavior)
+            ind_rls += 1
+        elif isinstance(dataobject, PointList):
+            group_new_point_list = group_point_lists.create_group("pointlist_"+str(ind_ptl))
+            save_pointlist_group(group_point_list, dataobject, save_behavior)
+            ind_ptl += 1
+        else:
+            print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, or PointList instance.".format(dataobject,type(dataobject)))
 
-    # Dimensions
-    assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
-    R_Ny,R_Nx,K_Ny,K_Nx = data_datacube.shape
-    data_R_Ny = group_rawdatacube.create_dataset("dim1",(R_Ny,))
-    data_R_Nx = group_rawdatacube.create_dataset("dim2",(R_Nx,))
-    data_K_Ny = group_rawdatacube.create_dataset("dim3",(K_Ny,))
-    data_K_Nx = group_rawdatacube.create_dataset("dim4",(K_Nx,))
-
-    # Populate uncalibrated dimensional axes
-    data_R_Ny[...] = np.arange(0,R_Ny)
-    data_R_Ny.attrs.create("name",np.string_("R_y"))
-    data_R_Ny.attrs.create("units",np.string_("[pix]"))
-    data_R_Nx[...] = np.arange(0,R_Nx)
-    data_R_Nx.attrs.create("name",np.string_("R_x"))
-    data_R_Nx.attrs.create("units",np.string_("[pix]"))
-    data_K_Ny[...] = np.arange(0,K_Ny)
-    data_K_Ny.attrs.create("name",np.string_("K_y"))
-    data_K_Ny.attrs.create("units",np.string_("[pix]"))
-    data_K_Nx[...] = np.arange(0,K_Nx)
-    data_K_Nx.attrs.create("name",np.string_("K_x"))
-    data_K_Nx.attrs.create("units",np.string_("[pix]"))
-
-    # Calibrate axes, if calibrations are present
-
-    # Calibrate R axes
-    try:
-        R_pix_size = datacube.metadata.calibration["R_pix_size"]
-        data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
-        data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
-        # Set R axis units
-        try:
-            R_units = datacube.metadata.calibration["R_units"]
-            data_R_Nx.attrs["units"] = R_units
-            data_R_Ny.attrs["units"] = R_units
-        except KeyError:
-            print("WARNING: Real space calibration found and applied, however, units were",
-                   "not identified and have been left in pixels.")
-    except KeyError:
-        print("No real space calibration found.")
-    except TypeError:
-        # If R_pix_size is a str, i.e. has not been entered, pass
-        pass
-
-    # Calibrate K axes
-    try:
-        K_pix_size = datacube.metadata.calibration["K_pix_size"]
-        data_K_Ny[...] = np.arange(0,K_Ny*K_pix_size,K_pix_size)
-        data_K_Nx[...] = np.arange(0,K_Nx*K_pix_size,K_pix_size)
-        # Set K axis units
-        try:
-            K_units = datacube.metadata.calibration["K_units"]
-            data_K_Nx.attrs["units"] = K_units
-            data_K_Ny.attrs["units"] = K_units
-        except KeyError:
-            print("WARNING: Diffraction space calibration found and applied, however, units",
-                   "were not identified and have been left in pixels.")
-    except KeyError:
-        print("No diffraction space calibration found.")
-    except TypeError:
-        # If K_pix_size is a str, i.e. has not been entered, pass
-        pass
-
-
+        save_dataobject(dataobject, save_behavior=save_behavior)
 
     ##### Finish and close #####
     print("Done.")
@@ -146,19 +111,19 @@ def save_from_datacube(datacube,outputfile):
 
 #### Functions for writing dataobjects to .h5 ####
 
-def save_datacube(group, datacube):
-    group_datacube.attrs.create("emd_group_type",1)
+def save_datacube_group(group, datacube):
+    group.attrs.create("emd_group_type",1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    data_datacube = group_datacube.create_dataset("datacube", data=datacube.data4D)
+    data_datacube = group.create_dataset("datacube", data=datacube.data4D)
 
     # Dimensions
     assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
     R_Ny,R_Nx,K_Ny,K_Nx = data_datacube.shape
-    data_R_Ny = group_datacube.create_dataset("dim1",(R_Ny,))
-    data_R_Nx = group_datacube.create_dataset("dim2",(R_Nx,))
-    data_K_Ny = group_datacube.create_dataset("dim3",(K_Ny,))
-    data_K_Nx = group_datacube.create_dataset("dim4",(K_Nx,))
+    data_R_Ny = group.create_dataset("dim1",(R_Ny,))
+    data_R_Nx = group.create_dataset("dim2",(R_Nx,))
+    data_K_Ny = group.create_dataset("dim3",(K_Ny,))
+    data_K_Nx = group.create_dataset("dim4",(K_Nx,))
 
     # Populate uncalibrated dimensional axes
     data_R_Ny[...] = np.arange(0,R_Ny)
@@ -214,6 +179,14 @@ def save_datacube(group, datacube):
         # If K_pix_size is a str, i.e. has not been entered, pass
         pass
 
+def save_diffraction_group(group, diffractionslice, save_behavior):
+    pass
+
+def save_real_group(group, realslice, save_behavior):
+    pass
+
+def save_pointlist_group(group, pointlist, save_behavior):
+    pass
 
 
 #### Functions for original metadata transfer ####
@@ -386,7 +359,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: pointlists
+#             |         |--grp: pointlist
 #             |             |
 #             |             |--grp: point_list_1
 #             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
@@ -480,7 +453,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: pointlists
+#             |         |--grp: pointlist
 #             |             |
 #             |             |--grp: point_list_1
 #             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
