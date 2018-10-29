@@ -19,6 +19,8 @@ def save_from_datacube(datacube,outputfile):
     Saves an h5 file from a datacube object and an output filepath.
     """
 
+    assert isinstance(datacube, RawDataCube)
+
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
@@ -27,7 +29,7 @@ def save_from_datacube(datacube,outputfile):
     group_data = f.create_group("4DSTEM_experiment")
 
 
-    ##### Write metadata #####
+    ##### Metadata #####
     print("Writing metadata...")
 
     # Create metadata groups
@@ -56,9 +58,95 @@ def save_from_datacube(datacube,outputfile):
     transfer_metadata_dict(datacube.metadata.calibration,group_calibration_metadata)
     transfer_metadata_dict(datacube.metadata.comments,group_comments_metadata)
 
+    ##### Log #####
+    group_log = f.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
 
-    ##### Write datacube group #####
-    group_datacube = group_data.create_group("datacube")
+    ##### Data #####
+    # First save top level raw datacube
+    # Then save all other data in the DataObjectTracker to the processing group
+    group_rawdatacube = group_data.create_group("rawdatacube")
+    group_rawdatacube.attrs.create("emd_group_type",1)
+
+    # TODO: consider defining data chunking here, keeping k-space slices together
+    data_datacube = group_rawdatacube.create_dataset("datacube", data=datacube.data4D)
+
+    # Dimensions
+    assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
+    R_Ny,R_Nx,K_Ny,K_Nx = data_datacube.shape
+    data_R_Ny = group_rawdatacube.create_dataset("dim1",(R_Ny,))
+    data_R_Nx = group_rawdatacube.create_dataset("dim2",(R_Nx,))
+    data_K_Ny = group_rawdatacube.create_dataset("dim3",(K_Ny,))
+    data_K_Nx = group_rawdatacube.create_dataset("dim4",(K_Nx,))
+
+    # Populate uncalibrated dimensional axes
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
+    data_R_Nx[...] = np.arange(0,R_Nx)
+    data_R_Nx.attrs.create("name",np.string_("R_x"))
+    data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_K_Ny[...] = np.arange(0,K_Ny)
+    data_K_Ny.attrs.create("name",np.string_("K_y"))
+    data_K_Ny.attrs.create("units",np.string_("[pix]"))
+    data_K_Nx[...] = np.arange(0,K_Nx)
+    data_K_Nx.attrs.create("name",np.string_("K_x"))
+    data_K_Nx.attrs.create("units",np.string_("[pix]"))
+
+    # Calibrate axes, if calibrations are present
+
+    # Calibrate R axes
+    try:
+        R_pix_size = datacube.metadata.calibration["R_pix_size"]
+        data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+        data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+        # Set R axis units
+        try:
+            R_units = datacube.metadata.calibration["R_units"]
+            data_R_Nx.attrs["units"] = R_units
+            data_R_Ny.attrs["units"] = R_units
+        except KeyError:
+            print("WARNING: Real space calibration found and applied, however, units were",
+                   "not identified and have been left in pixels.")
+    except KeyError:
+        print("No real space calibration found.")
+    except TypeError:
+        # If R_pix_size is a str, i.e. has not been entered, pass
+        pass
+
+    # Calibrate K axes
+    try:
+        K_pix_size = datacube.metadata.calibration["K_pix_size"]
+        data_K_Ny[...] = np.arange(0,K_Ny*K_pix_size,K_pix_size)
+        data_K_Nx[...] = np.arange(0,K_Nx*K_pix_size,K_pix_size)
+        # Set K axis units
+        try:
+            K_units = datacube.metadata.calibration["K_units"]
+            data_K_Nx.attrs["units"] = K_units
+            data_K_Ny.attrs["units"] = K_units
+        except KeyError:
+            print("WARNING: Diffraction space calibration found and applied, however, units",
+                   "were not identified and have been left in pixels.")
+    except KeyError:
+        print("No diffraction space calibration found.")
+    except TypeError:
+        # If K_pix_size is a str, i.e. has not been entered, pass
+        pass
+
+
+
+    ##### Finish and close #####
+    print("Done.")
+    f.close()
+
+
+################### END OF save_from_datacube() FUNCTION #####################
+
+
+#### Functions for writing dataobjects to .h5 ####
+
+def save_datacube(group, datacube):
     group_datacube.attrs.create("emd_group_type",1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
@@ -126,16 +214,6 @@ def save_from_datacube(datacube,outputfile):
         # If K_pix_size is a str, i.e. has not been entered, pass
         pass
 
-
-    ##### Write log #####
-    group_log = f.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
-
-
-    ##### Finish and close #####
-    print("Done.")
-    f.close()
 
 
 #### Functions for original metadata transfer ####

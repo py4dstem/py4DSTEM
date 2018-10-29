@@ -21,8 +21,8 @@ def read_data(filename):
         h5_file = h5py.File(filename,'r')
         if is_py4DSTEMfile(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['datacube']['datacube'].shape
-            rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['datacube']['datacube'].value,
+            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
+            rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
                             R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
                             is_py4DSTEM_file=True, h5_file=h5_file)
             h5_file.close()
