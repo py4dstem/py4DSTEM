@@ -18,17 +18,6 @@
 # RawDataCube itself) can have its name and log info, but not raw data, saved by setting the
 # 'save' Boolean in the tracker to False. The existance of these objects is thus saved, and the
 # objects may be recreated using the log info.
-#
-### A note on metadata ##
-# Metadata exists in 3 different ways in the program.
-# (1) At readtime, hyperspy reads in the file and stores metadata in the native hyperspy tree
-# structure hyperspy.misc.utils.DictionaryTreeBrowser
-# (2) Any metadata that is important to the py4DSTEM will be saved as an attribute in the 
-# DataCube object.  The Datacube additionally keeps a copy of the original hyperspy metadata 
-# trees
-# (3) When saved to a .h5, metadata is copied into a metadata group.  This includes, in separate
-# subgroups, both the original hyperspy metadata (in an identical tree structure, written in .h5
-# groups/attrs), and the metadata used by py4DSTEM
 
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
@@ -313,4 +302,14 @@ class MetadataCollection(object):
         self.__name__ = name
 
 
+### A note on metadata ##
+# Metadata exists in 3 different ways in the program.
+# (1) At readtime, hyperspy reads in the file and stores metadata in the native hyperspy tree
+# structure hyperspy.misc.utils.DictionaryTreeBrowser
+# (2) Any metadata that is important to the py4DSTEM will be saved as an attribute in the 
+# DataCube object.  The Datacube additionally keeps a copy of the original hyperspy metadata 
+# trees
+# (3) When saved to a .h5, metadata is copied into a metadata group.  This includes, in separate
+# subgroups, both the original hyperspy metadata (in an identical tree structure, written in .h5
+# groups/attrs), and the metadata used by py4DSTEM
 
