@@ -1,3 +1,22 @@
+"""
+Once we have processed DataObjects…
+	-Placement in base DataObjectTracker:
+		-Placed correctly in tracker on instantiation
+		-Correctly saved from tracker
+			-With save_behavior flag set to True and False
+	-Other DataObjectTrackers
+		-Objects can be placed in multiple RawDataObject’s trackers
+		-DataObject parent list and tracker object lists are both correctly updated
+			-Regardless of where adding is done (i.e. from object or tracker)
+		-Saved from either / both RawDataCubes
+			-save_behavior is correct in each case, even when differs between two parents
+	-DataObject level logging
+		-Add object level logging in DataObject scope
+		-In @log function:
+			-check each input to see if it’s a DataObject
+			-If it is, add log index to DataObject.modification_log
+"""
+
 # Defines the DataObject class.
 #
 # The primary purpose of the DataObject class is to facilitate object level logging.
@@ -76,6 +95,11 @@ class DataObject(object):
         assert parent in self.get_parent_list()
         index = self.get_parent_list().index()
         self.parent_and_save_behavior[index][1] = save_behavior
+
+    def get_save_behavior(self, parent):
+        assert parent in self.get_parent_list()
+        index = self.get_parent_list().index()
+        return self.parent_and_save_behavior[index][1]
 
     def log_modification(self):
         index = self.get_current_log_index()-1
