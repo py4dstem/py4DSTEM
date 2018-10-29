@@ -39,7 +39,7 @@ class DataObject(object):
             # Add this DataObject to the parent's DataObjectTracker
 
     def log_modification(self):
-        index = self.get_current_log_index()
+        index = self.get_current_log_index()-1
         self.modification_log.append(index)
 
     @staticmethod
