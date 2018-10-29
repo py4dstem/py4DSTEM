@@ -85,7 +85,7 @@ class DataCube(DataObject):
 
 class RawDataCube(DataCube):
 
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent,
+    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx,
                  is_py4DSTEM_file=False, h5_file=None,
                  original_metadata_shortlist=None, original_metadata_all=None):
         """
@@ -95,7 +95,7 @@ class RawDataCube(DataCube):
         for non-native files.
         """
         # Initialize RawDataCube, set dimensions
-        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent=parent)
+        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent=None)
 
         # Handle metadata
         if is_py4DSTEM_file:
