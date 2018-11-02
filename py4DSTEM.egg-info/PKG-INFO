@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: py4DSTEM
-Version: 0.1
+Version: 0.2
 Summary: Open source processing and analysis of 4D STEM data.
 Home-page: https://github.com/bsavitzky/py4DSTEM/
 Author: Benjamin H. Savitzky
