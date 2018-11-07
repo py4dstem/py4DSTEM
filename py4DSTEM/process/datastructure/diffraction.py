@@ -21,3 +21,5 @@ class DiffractionSlice(DataObject):
         self.data2D = data
 
 
+
+

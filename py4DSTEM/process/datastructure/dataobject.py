@@ -56,7 +56,9 @@ class DataObject(object):
         self.log_modification()
 
     def new_parent(self, parent, **kwargs):
-        if not 'save_behavior' in kwargs.keys():
+        if 'save_behavior' in kwargs.keys():
+            save_behavior = kwargs['save_behavior']
+        else:
             save_behavior = self.default_save_behavior
         if parent is not None:
             if not parent in self.get_parent_list():
@@ -66,7 +68,7 @@ class DataObject(object):
             # Check if the DataObject is in the parent's DataObjectTracker(s)
             # (If parent is not a raw datacube, note that it could have multiple trackers)
             # If not, add this DataObject to the parent's DataObjectTracker
-            dataobjecttrackers = get_dataobjecttrackers(parent)
+            dataobjecttrackers = self.get_dataobjecttrackers(parent)
             for tracker in dataobjecttrackers:
                 if not tracker.contains_dataobject(self):
                     tracker.new_dataobject(self, save_behavior=save_behavior)
