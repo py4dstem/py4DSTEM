@@ -50,7 +50,7 @@ class PointList(DataObject):
 
     def add_point(self, point):
         point = tuple(point)
-        assert len(point)==len(self.dtype))
+        assert len(point)==len(self.dtype)
         self.data = np.append(self.data, np.array(point,dtype=self.dtype))
 
     def add_pointarray(self, pointarray):
