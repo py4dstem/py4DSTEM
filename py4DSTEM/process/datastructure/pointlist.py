@@ -50,14 +50,14 @@ class PointList(DataObject):
 
     def add_point(self, point):
         point = tuple(point)
-        assert(len(point)==len(self.dtype))
+        assert len(point)==len(self.dtype))
         self.data = np.append(self.data, np.array(point,dtype=self.dtype))
 
     def add_pointarray(self, pointarray):
         """
         pointarray must be an (n,m)-shaped ndarray, where m=len(coordinates), and n is the number of newpoints
         """
-        assert(pointarray.shape[1]==len(self.dtype))
+        assert pointarray.shape[1]==len(self.dtype)
         for point in pointarray:
             self.add_point(point)
 
@@ -65,7 +65,7 @@ class PointList(DataObject):
         """
         Appends the data from another PointList object to this one.  Their dtypes must agree.
         """
-        assert(self.dtype==pointlist.dtype)
+        assert self.dtype==pointlist.dtype
         self.data = np.append(self.data, pointlist.data)
 
     def sort(self, coordinate, order='descending'):
@@ -74,8 +74,8 @@ class PointList(DataObject):
         coordinate must be a field in self.dtype.
         order should be 'descending' or 'ascending'.
         """
-        assert(coordinate in self.dtype.names)
-        assert((order=='descending') or (order=='ascending'))
+        assert coordinate in self.dtype.names
+        assert (order=='descending') or (order=='ascending')
         if order=='ascending':
             self.data = np.sort(self.data, order=coordinate)
         else:
@@ -94,8 +94,8 @@ class PointList(DataObject):
         """
         deletemask = np.zeros(len(self.data),dtype=bool)
         for tup in coords_vals:
-            assert((len(tup)==2) or (len(tup)==3))
-            assert(tup[0] in self.dtype.names)
+            assert (len(tup)==2) or (len(tup)==3)
+            assert tup[0] in self.dtype.names
             if len(tup)==2:
                 name,val = tup
                 deletemask = deletemask | (self.data[name]!=val)
