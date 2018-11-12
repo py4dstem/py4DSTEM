@@ -96,12 +96,12 @@ class DataObject(object):
     def change_save_behavior(self, parent, save_behavior):
         assert parent in self.get_parent_list()
         index = self.get_parent_list().index()
-        self.parent_and_save_behavior[index][1] = save_behavior
+        self.parents_and_save_behavior[index][1] = save_behavior
 
     def get_save_behavior(self, parent):
         assert parent in self.get_parent_list()
-        index = self.get_parent_list().index()
-        return self.parent_and_save_behavior[index][1]
+        index = self.get_parent_list().index(parent)
+        return self.parents_and_save_behavior[index][1]
 
     def log_modification(self):
         index = self.get_current_log_index()-1

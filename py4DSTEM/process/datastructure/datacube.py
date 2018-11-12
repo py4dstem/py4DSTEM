@@ -25,28 +25,23 @@ from .dataobject import DataObject, DataObjectTracker
 
 class DataCube(DataObject):
 
-    def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent):
+    def __init__(self, data, parentDataCube):
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
-        DataObject.__init__(self, parent=parent)
+        DataObject.__init__(self, parent=parentDataCube)
+
+        if parentDataCube is not None:
+            self.R_Ny, self.R_Nx = parentDataCube.R_Ny, parentDataCube.R_Nx
+            self.Q_Ny, self.Q_Nx = parentDataCube.Q_Ny, parentDataCube.Q_Nx
+            self.R_N = parentDataCube.R_N
 
         # Initialize DataCube, set dimensions
         self.data4D = data
-        self.R_Ny, self.R_Nx = R_Ny, R_Nx
-        self.Q_Ny, self.Q_Nx = Q_Ny, Q_Nx
-        self.R_N = R_Ny*R_Nx
-        self.set_scan_shape(self.R_Ny,self.R_Nx)
 
     ############### Processing functions, organized by file in process directory ##############
 
     ############### preprocess.py ##############
-
-    def set_scan_shape(self,R_Ny,R_Nx):
-        """
-        Reshape the data given the real space scan shape.
-        """
-        self = preprocess.set_scan_shape(self,R_Ny,R_Nx)
 
     def crop_data_diffraction(self,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max):
         self = preprocess.crop_data_diffraction(self,crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max)
@@ -95,7 +90,12 @@ class RawDataCube(DataCube):
         for non-native files.
         """
         # Initialize RawDataCube, set dimensions
-        DataCube.__init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx, parent=None)
+        DataCube.__init__(self, data, parentDataCube=None)
+
+        self.R_Ny, self.R_Nx = R_Ny, R_Nx
+        self.Q_Ny, self.Q_Nx = Q_Ny, Q_Nx
+        self.R_N = R_Ny*R_Nx
+        self.set_scan_shape(self.R_Ny,self.R_Nx)
 
         # Set up DataObjectTracker
         self.dataobjecttracker = DataObjectTracker(self)
@@ -105,6 +105,12 @@ class RawDataCube(DataCube):
             self.setup_metadata_py4DSTEM_file(h5_file)
         else:
             self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
+
+    def set_scan_shape(self,R_Ny,R_Nx):
+        """
+        Reshape the data given the real space scan shape.
+        """
+        self = preprocess.set_scan_shape(self,R_Ny,R_Nx)
 
     ###################### METADATA HANDLING ########################
     # Metadata is structured as follows:
