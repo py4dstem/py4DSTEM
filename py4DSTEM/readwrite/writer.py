@@ -7,6 +7,7 @@
 
 import h5py
 import numpy as np
+from collections import OrderedDict
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..process.datastructure.datacube import MetadataCollection, DataCube, RawDataCube
 from ..process.datastructure.diffraction import DiffractionSlice
@@ -69,7 +70,7 @@ def save_from_datacube(datacube,outputfile):
     ##### Data #####
     # First, save top level raw datacube
     group_rawdatacube = group_data.create_group("rawdatacube")
-    save_datacube_group(group_rawdatacube, datacube)
+    save_datacube_group(group_rawdatacube, datacube, save_behavior=True)
 
     # Second, save all other data in the DataObjectTracker to the processing group
     group_processing = group_data.create_group("processing")
@@ -77,8 +78,8 @@ def save_from_datacube(datacube,outputfile):
     group_diffraction_slices = group_processing.create_group("diffraction")
     group_real_slices = group_processing.create_group("real")
     group_point_lists = group_processing.create_group("pointlist")
+    ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0
     for dataobject in datacube.dataobjecttracker.dataobject_list:
-        ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0
         save_behavior = dataobject.get_save_behavior(datacube) # Boolean
         if isinstance(dataobject, DataCube):
             group_new_datacube = group_processed_datacubes.create_group("datacube_"+str(ind_dcs))
@@ -94,12 +95,10 @@ def save_from_datacube(datacube,outputfile):
             ind_rls += 1
         elif isinstance(dataobject, PointList):
             group_new_point_list = group_point_lists.create_group("pointlist_"+str(ind_ptl))
-            save_pointlist_group(group_point_list, dataobject, save_behavior)
+            save_pointlist_group(group_new_point_list, dataobject, save_behavior)
             ind_ptl += 1
         else:
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, or PointList instance.".format(dataobject,type(dataobject)))
-
-        save_dataobject(dataobject, save_behavior=save_behavior)
 
     ##### Finish and close #####
     print("Done.")
@@ -111,79 +110,195 @@ def save_from_datacube(datacube,outputfile):
 
 #### Functions for writing dataobjects to .h5 ####
 
-def save_datacube_group(group, datacube):
+def save_datacube_group(group, datacube, save_behavior):
     group.attrs.create("emd_group_type",1)
 
-    # TODO: consider defining data chunking here, keeping k-space slices together
-    data_datacube = group.create_dataset("datacube", data=datacube.data4D)
+    # Regardless of save_behavior, store object log info
+    ### SAVE LOG INFO
 
-    # Dimensions
-    assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
-    R_Ny,R_Nx,K_Ny,K_Nx = data_datacube.shape
-    data_R_Ny = group.create_dataset("dim1",(R_Ny,))
-    data_R_Nx = group.create_dataset("dim2",(R_Nx,))
-    data_K_Ny = group.create_dataset("dim3",(K_Ny,))
-    data_K_Nx = group.create_dataset("dim4",(K_Nx,))
+    # Only save the data if save_behavior==True
+    if save_behavior:
 
-    # Populate uncalibrated dimensional axes
-    data_R_Ny[...] = np.arange(0,R_Ny)
-    data_R_Ny.attrs.create("name",np.string_("R_y"))
-    data_R_Ny.attrs.create("units",np.string_("[pix]"))
-    data_R_Nx[...] = np.arange(0,R_Nx)
-    data_R_Nx.attrs.create("name",np.string_("R_x"))
-    data_R_Nx.attrs.create("units",np.string_("[pix]"))
-    data_K_Ny[...] = np.arange(0,K_Ny)
-    data_K_Ny.attrs.create("name",np.string_("K_y"))
-    data_K_Ny.attrs.create("units",np.string_("[pix]"))
-    data_K_Nx[...] = np.arange(0,K_Nx)
-    data_K_Nx.attrs.create("name",np.string_("K_x"))
-    data_K_Nx.attrs.create("units",np.string_("[pix]"))
+        # TODO: consider defining data chunking here, keeping k-space slices together
+        data_datacube = group.create_dataset("datacube", data=datacube.data4D)
 
-    # Calibrate axes, if calibrations are present
+        # Dimensions
+        assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
+        R_Ny,R_Nx,Q_Ny,Q_Nx = data_datacube.shape
+        data_R_Ny = group.create_dataset("dim1",(R_Ny,))
+        data_R_Nx = group.create_dataset("dim2",(R_Nx,))
+        data_Q_Ny = group.create_dataset("dim3",(Q_Ny,))
+        data_Q_Nx = group.create_dataset("dim4",(Q_Nx,))
 
-    # Calibrate R axes
-    try:
-        R_pix_size = datacube.metadata.calibration["R_pix_size"]
-        data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
-        data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
-        # Set R axis units
-        try:
-            R_units = datacube.metadata.calibration["R_units"]
-            data_R_Nx.attrs["units"] = R_units
-            data_R_Ny.attrs["units"] = R_units
-        except KeyError:
-            print("WARNING: Real space calibration found and applied, however, units were",
-                   "not identified and have been left in pixels.")
-    except KeyError:
-        print("No real space calibration found.")
-    except TypeError:
-        # If R_pix_size is a str, i.e. has not been entered, pass
-        pass
+        # Populate uncalibrated dimensional axes
+        data_R_Ny[...] = np.arange(0,R_Ny)
+        data_R_Ny.attrs.create("name",np.string_("R_y"))
+        data_R_Ny.attrs.create("units",np.string_("[pix]"))
+        data_R_Nx[...] = np.arange(0,R_Nx)
+        data_R_Nx.attrs.create("name",np.string_("R_x"))
+        data_R_Nx.attrs.create("units",np.string_("[pix]"))
+        data_Q_Ny[...] = np.arange(0,Q_Ny)
+        data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+        data_Q_Ny.attrs.create("units",np.string_("[pix]"))
+        data_Q_Nx[...] = np.arange(0,Q_Nx)
+        data_Q_Nx.attrs.create("name",np.string_("Q_x"))
+        data_Q_Nx.attrs.create("units",np.string_("[pix]"))
 
-    # Calibrate K axes
-    try:
-        K_pix_size = datacube.metadata.calibration["K_pix_size"]
-        data_K_Ny[...] = np.arange(0,K_Ny*K_pix_size,K_pix_size)
-        data_K_Nx[...] = np.arange(0,K_Nx*K_pix_size,K_pix_size)
-        # Set K axis units
-        try:
-            K_units = datacube.metadata.calibration["K_units"]
-            data_K_Nx.attrs["units"] = K_units
-            data_K_Ny.attrs["units"] = K_units
-        except KeyError:
-            print("WARNING: Diffraction space calibration found and applied, however, units",
-                   "were not identified and have been left in pixels.")
-    except KeyError:
-        print("No diffraction space calibration found.")
-    except TypeError:
-        # If K_pix_size is a str, i.e. has not been entered, pass
-        pass
+        # Calibrate axes, if calibrations are present
+
+        # Calibrate R axes
+        #try:
+        #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
+        #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+        #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+        #    # Set R axis units
+        #    try:
+        #        R_units = datacube.metadata.calibration["R_units"]
+        #        data_R_Nx.attrs["units"] = R_units
+        #        data_R_Ny.attrs["units"] = R_units
+        #    except KeyError:
+        #        print("WARNING: Real space calibration found and applied, however, units were",
+        #               "not identified and have been left in pixels.")
+        #except KeyError:
+        #    print("No real space calibration found.")
+        #except TypeError:
+        #    # If R_pix_size is a str, i.e. has not been entered, pass
+        #    pass
+
+        # Calibrate Q axes
+        #try:
+        #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
+        #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
+        #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+        #    # Set Q axis units
+        #    try:
+        #        Q_units = datacube.metadata.calibration["Q_units"]
+        #        data_Q_Nx.attrs["units"] = Q_units
+        #        data_Q_Ny.attrs["units"] = Q_units
+        #    except KeyError:
+        #        print("WARNING: Diffraction space calibration found and applied, however, units",
+        #               "were not identified and have been left in pixels.")
+        #except KeyError:
+        #    print("No diffraction space calibration found.")
+        #except TypeError:
+        #    # If Q_pix_size is a str, i.e. has not been entered, pass
+        #    pass
 
 def save_diffraction_group(group, diffractionslice, save_behavior):
-    pass
+
+    # Regardless of save_behavior, store object log info
+    ### SAVE LOG INFO
+
+    # Only save the data if save_behavior==True
+    if save_behavior:
+
+        group.attrs.create("depth", diffractionslice.depth)
+        if diffractionslice.depth==1:
+            shape = diffractionslice.data2D.shape
+            data_diffractionslice = group.create_dataset("diffractionslice", data=diffractionslice.data2D)
+        else:
+            if type(diffractionslice.data2D)==OrderedDict:
+                shape = diffractionslice.data2D[list(diffractionslice.data2D.keys())[0]].shape
+                for key in diffractionslice.data2D.keys():
+                    data_diffractionslice = group.create_dataset(str(key), data=diffractionslice.data2D[key])
+            else:
+                shape = diffractionslice.data2D[0].shape
+                for i in range(diffractionslice.depth):
+                    data_diffractionslice = group.create_dataset("slice_"+str(i), data=diffractionslice.data2D[i])
+
+        # Dimensions
+        assert len(shape)==2, "Shape of diffractionslice is {}".format(len(shape))
+        Q_Ny,Q_Nx = shape
+        data_Q_Ny = group.create_dataset("dim1",(Q_Ny,))
+        data_Q_Nx = group.create_dataset("dim2",(Q_Nx,))
+
+        # Populate uncalibrated dimensional axes
+        data_Q_Ny[...] = np.arange(0,Q_Ny)
+        data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+        data_Q_Ny.attrs.create("units",np.string_("[pix]"))
+        data_Q_Nx[...] = np.arange(0,Q_Nx)
+        data_Q_Nx.attrs.create("name",np.string_("Q_x"))
+        data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+
+        # ToDo: axis calibration
+        # Requires pulling metadata from associated RawDataCube
+
+        # Calibrate axes, if calibrations are present
+        #try:
+        #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
+        #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
+        #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+        #    # Set Q axis units
+        #    try:
+        #        Q_units = datacube.metadata.calibration["Q_units"]
+        #        data_Q_Nx.attrs["units"] = Q_units
+        #        data_Q_Ny.attrs["units"] = Q_units
+        #    except KeyError:
+        #        print("WARNING: Diffraction space calibration found and applied, however, units",
+        #               "were not identified and have been left in pixels.")
+        #except KeyError:
+        #    print("No diffraction space calibration found.")
+        #except TypeError:
+        #    # If Q_pix_size is a str, i.e. has not been entered, pass
+        #    pass
 
 def save_real_group(group, realslice, save_behavior):
-    pass
+
+    # Regardless of save_behavior, store object log info
+    ### SAVE LOG INFO
+
+    # Only save the data if save_behavior==True
+    if save_behavior:
+
+        group.attrs.create("depth", realslice.depth)
+        if realslice.depth==1:
+            shape = realslice.data2D.shape
+            data_realslice = group.create_dataset("realslice", data=realslice.data2D)
+        else:
+            if type(realslice.data2D)==OrderedDict:
+                shape = realslice.data2D[list(realslice.data2D.keys())[0]].shape
+                for key in realslice.data2D.keys():
+                    data_realslice = group.create_dataset(str(key), data=realslice.data2D[key])
+            else:
+                shape = realslice.data2D[0].shape
+                for i in range(realslice.depth):
+                    data_realslice = group.create_dataset("slice_"+str(i), data=realslice.data2D[i])
+
+        # Dimensions
+        assert len(shape)==2, "Shape of realslice is {}".format(len(shape))
+        R_Ny,R_Nx = shape
+        data_R_Ny = group.create_dataset("dim1",(R_Ny,))
+        data_R_Nx = group.create_dataset("dim2",(R_Nx,))
+
+        # Populate uncalibrated dimensional axes
+        data_R_Ny[...] = np.arange(0,R_Ny)
+        data_R_Ny.attrs.create("name",np.string_("R_y"))
+        data_R_Ny.attrs.create("units",np.string_("[pix]"))
+        data_R_Nx[...] = np.arange(0,R_Nx)
+        data_R_Nx.attrs.create("name",np.string_("R_x"))
+        data_R_Nx.attrs.create("units",np.string_("[pix]"))
+
+        # ToDo: axis calibration
+        # Requires pulling metadata from associated RawDataCube
+
+        # Calibrate axes, if calibrations are present
+        #try:
+        #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
+        #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+        #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+        #    # Set R axis units
+        #    try:
+        #        R_units = datacube.metadata.calibration["R_units"]
+        #        data_R_Nx.attrs["units"] = R_units
+        #        data_R_Ny.attrs["units"] = R_units
+        #    except KeyError:
+        #        print("WARNING: Real space calibration found and applied, however, units",
+        #               "were not identified and have been left in pixels.")
+        #except KeyError:
+        #    print("No real space calibration found.")
+        #except TypeError:
+        #    # If R_pix_size is a str, i.e. has not been entered, pass
+        #    pass
 
 def save_pointlist_group(group, pointlist, save_behavior):
     pass
@@ -402,7 +517,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #                       |   |--# Name, instituion, dept, contact email
 #                       |
 #                       |--grp: calibration
-#                       |   |--# R pixel size, K pixel size, R/K rotation offset
+#                       |   |--# R pixel size, Q pixel size, R/Q rotation offset
 #                       |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
 #                       |   |--# sizes), quantities here are calculated from data rather than
 #                       |   |--# being read from the instrument
