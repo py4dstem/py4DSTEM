@@ -301,7 +301,19 @@ def save_real_group(group, realslice, save_behavior):
         #    pass
 
 def save_pointlist_group(group, pointlist, save_behavior):
-    pass
+
+    # Regardless of save_behavior, store object log info
+    ### SAVE LOG INFO
+
+    # Only save the data if save_behavior==True
+    if save_behavior:
+
+        for name in pointlist.dtype.names:
+            group_current_coord = group.create_group(name)
+            group_current_coord.attrs.create("name", np.string_(name))
+            group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
+            group_current_coord.create_dataset("data", data=pointlist.data[name])
+
 
 
 #### Functions for original metadata transfer ####
