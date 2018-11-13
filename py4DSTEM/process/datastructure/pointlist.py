@@ -13,7 +13,7 @@ class PointList(DataObject):
     Essentially a wrapper around a structured numpy array, with the py4DSTEM DataObject
     interface enabling saving and logging.
     """
-    def __init__(self, coordinates, parentDataCube, data=None, dtype=float):
+    def __init__(self, coordinates, parentDataCube, data=None, dtype=float, **kwargs):
         """
 		Instantiate a PointList object.
 		Defines the coordinates, data, and parentDataCube.
@@ -30,7 +30,7 @@ class PointList(DataObject):
             parentDataCube - a DataCube object
             dtype - optional, used if coordinates don't explicitly specify dtypes.
         """
-        DataObject.__init__(self, parent=parentDataCube)
+        DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
         self.default_dtype = dtype
@@ -83,8 +83,8 @@ class PointList(DataObject):
 
     def get_subpointlist(self, coords_vals):
         """
-        Returns a new PointList class instance, populated with points in self.data whose values for particular
-        fields agree with those specified in coords_vals.
+        Returns a new PointList class instance, populated with points in self.data whose values
+        for particular fields agree with those specified in coords_vals.
 
         Accepts:
             coords_vals - a list of 2-tuples (name, val) or 3-tuples (name, minval, maxval),

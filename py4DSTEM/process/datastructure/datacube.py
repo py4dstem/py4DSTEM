@@ -25,11 +25,11 @@ from .dataobject import DataObject, DataObjectTracker
 
 class DataCube(DataObject):
 
-    def __init__(self, data, parentDataCube):
+    def __init__(self, data, parentDataCube, **kwargs):
         """
         Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
         """
-        DataObject.__init__(self, parent=parentDataCube)
+        DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         if parentDataCube is not None:
             self.R_Ny, self.R_Nx = parentDataCube.R_Ny, parentDataCube.R_Nx

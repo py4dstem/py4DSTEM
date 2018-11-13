@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class RealSlice(DataObject):
 
-    def __init__(self, data, parentDataCube, slicelabels=None):
+    def __init__(self, data, parentDataCube, slicelabels=None, **kwargs):
         """
         Instantiate a RealSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with real space of the parent datacube.
@@ -20,7 +20,7 @@ class RealSlice(DataObject):
         If slicelabels is specified, it should be an n-tuple of strings, where
         n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
         """
-        DataObject.__init__(self, parent=parentDataCube)
+        DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
         self.R_Ny, self.R_Nx = self.parentDataCube.R_Ny, self.parentDataCube.R_Nx
