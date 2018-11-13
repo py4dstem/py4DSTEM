@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class DiffractionSlice(DataObject):
 
-    def __init__(self, data, parentDataCube, slicelabels=None):
+    def __init__(self, data, parentDataCube, slicelabels=None, **kwargs):
         """
         Instantiate a DiffractionSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with diffraction space of the parent datacube.
@@ -20,7 +20,7 @@ class DiffractionSlice(DataObject):
         If slicelabels is specified, it should be an n-tuple of strings, where
         n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
         """
-        DataObject.__init__(self, parent=parentDataCube)
+        DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
         self.Q_Ny, self.Q_Nx = self.parentDataCube.Q_Ny, self.parentDataCube.Q_Nx

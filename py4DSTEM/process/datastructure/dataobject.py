@@ -45,12 +45,12 @@ class DataObject(object):
         -maintins a list of save information for each parent RawDataCube
         -maintains a list of log indices when the object was created/modified
     """
-    def __init__(self, parent, default_save_behavior=True):
+    def __init__(self, parent, save_behavior=True):
 
-        self.default_save_behavior = default_save_behavior
+        self.save_behavior = save_behavior
 
         self.parents_and_save_behavior = list()
-        self.new_parent(parent=parent, save_behavior=self.default_save_behavior)
+        self.new_parent(parent=parent, save_behavior=self.save_behavior)
 
         self.modification_log = list()
         self.log_modification()
@@ -59,7 +59,7 @@ class DataObject(object):
         if 'save_behavior' in kwargs.keys():
             save_behavior = kwargs['save_behavior']
         else:
-            save_behavior = self.default_save_behavior
+            save_behavior = self.save_behavior
         if parent is not None:
             if not parent in self.get_parent_list():
                 self.parents_and_save_behavior.append((parent,save_behavior))
