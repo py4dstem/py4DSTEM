@@ -207,7 +207,7 @@ class DataObjectTracker(object):
 
     def change_save_behavior(self, dataobject, save_behavior):
         index = self.get_object_index(dataobject)
-        self.dataobjectlist[index][2] = save_behavior
+        self.dataobject_list[index][2] = save_behavior
 
     @show_object_list
     def get_dataobjects(self):
