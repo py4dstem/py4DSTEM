@@ -35,6 +35,7 @@ Once we have processed DataObjects…
 # The log_modification() method is called once on instantiation of a DataObject, and again by
 # the @log decorator function whenever it identifies any of its arguments as DataObjects.
 
+from functools import wraps
 from ..log import Logger
 logger = Logger()
 
@@ -45,9 +46,10 @@ class DataObject(object):
         -maintins a list of save information for each parent RawDataCube
         -maintains a list of log indices when the object was created/modified
     """
-    def __init__(self, parent, save_behavior=True):
+    def __init__(self, parent, save_behavior=True, name=''):
 
         self.save_behavior = save_behavior
+        self.name = name
 
         self.parents_and_save_behavior = list()
         self.new_parent(parent=parent, save_behavior=self.save_behavior)
@@ -103,6 +105,9 @@ class DataObject(object):
         index = self.get_parent_list().index(parent)
         return self.parents_and_save_behavior[index][1]
 
+    def has_parent(self, datacube):
+        return datacube in self.get_parent_list()
+
     def log_modification(self):
         index = self.get_current_log_index()-1
         self.modification_log.append(index)
@@ -130,6 +135,21 @@ class DataObject(object):
 # RawDataCube instance to its list of parents, ensuring the relationships can be deterimined in
 # either direction.
 
+# Decorator which enables more human-readable display of tracked dataobjects
+def show_object_list(method):
+    @wraps(method)
+    def wrapper(self, *args, show=False, **kwargs):
+        objectlist = method(self, *args, **kwargs)
+        if show:
+            print("{:^12}{:^48s}{:^20}".format('Index', 'Name', 'Type'))
+            for tup in objectlist:
+                print("{:<12}\t{:<48s}{:<20}".format(tup[0], tup[1], tup[2].__name__))
+            return
+        else:
+            return objectlist
+    return wrapper
+
+
 class DataObjectTracker(object):
 
     def __init__(self, rawdatacube):
@@ -140,19 +160,57 @@ class DataObjectTracker(object):
     def new_dataobject(self, dataobject, **kwargs):
         assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
         if not dataobject in self.dataobject_list:
-            self.dataobject_list.append(dataobject)
+            index = len(self.dataobject_list)
+            if 'name' in kwargs.keys():
+                name = kwargs['name']
+            else:
+                name = dataobject.name
+            objecttype = type(dataobject)
+            tup = (index, name, objecttype, dataobject)
+            self.dataobject_list.append(tup)
         # Check if the DataObject's parent list contains this tracker's top level RawDataCube.
         # If not, add that RawDataCube to the DataObjects parent list.
-        if not self.contains_rawdatacube(dataobject, self.rawdatacube):
+        if not dataobject.has_parent(self.rawdatacube):
             if 'save_behavior' in kwargs.keys():
                 dataobject.new_parent(self.rawdatacube, kwargs['save_behavior'])
             else:
                 dataobject.new_parent(self.rawdatacube)
 
-    def contains_rawdatacube(self, dataobject, rawdatacube):
-        return rawdatacube in dataobject.get_parent_list()
-
     def contains_dataobject(self, dataobject):
-        return dataobject in self.dataobject_list
+        return dataobject in [tup[3] for tup in self.dataobject_list]
+
+    @show_object_list
+    def get_dataobjects(self):
+        return self.dataobject_list
+
+    @show_object_list
+    def sort_dataobjects_by_name(self):
+        return [tup for tup in self.dataobject_list if tup[1]!=''] + \
+               [tup for tup in self.dataobject_list if tup[1]=='']
+
+    @show_object_list
+    def sort_dataobjects_by_type(self, objecttype=None):
+        if objecttype is None:
+            types=[]
+            for tup in self.dataobject_list:
+                if tup[2] not in types:
+                    types.append(tup[2])
+            l=[]
+            for objecttype in types:
+                l += [tup for tup in self.dataobject_list if tup[2]==objecttype]
+        else:
+            l = [tup for tup in self.dataobject_list if tup[2]==objecttype]
+        return l
+
+    @show_object_list
+    def get_object_by_name(self, name, exactmatch=False):
+        if exactmatch:
+            return [tup[3] for tup in self.dataobject_list if name == tup[1]]
+        else:
+            return [tup[3] for tup in self.dataobject_list if name in tup[1]]
+
+    @show_object_list
+    def get_object_by_index(self, index):
+        return self.dataobject_list[index][3]
 
 
