@@ -9,6 +9,7 @@
 
 from collections import OrderedDict
 from time import localtime
+from functools import wraps
 import inspect
 
 # Get the current version in __version__
@@ -92,6 +93,7 @@ def log(function):
             inputs[key] = value.default
 
     # Define the new function
+    @wraps(function)
     def logged_function(*args,**kwargs):
         for i in range(len(args)):
             key = list(inputs.items())[i][0]
