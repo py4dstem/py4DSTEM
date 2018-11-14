@@ -43,15 +43,16 @@ class DataObject(object):
     """
     A DataObject:
         -maintains list of parent RawDataCubes
-        -maintins a list of save information for each parent RawDataCube
+        -stores a name
+        -stores a (default) save behavior
         -maintains a list of log indices when the object was created/modified
     """
-    def __init__(self, parent, save_behavior=True, name=''):
+    def __init__(self, parent, save_behavior=False, name=''):
 
         self.save_behavior = save_behavior
         self.name = name
 
-        self.parents_and_save_behavior = list()
+        self.parents = list()
         self.new_parent(parent=parent, save_behavior=self.save_behavior)
 
         self.modification_log = list()
@@ -63,28 +64,31 @@ class DataObject(object):
         else:
             save_behavior = self.save_behavior
         if parent is not None:
-            if not parent in self.get_parent_list():
-                self.parents_and_save_behavior.append((parent,save_behavior))
+            if not parent in self.parents:
+                self.parents.append(parent)
+        # Check if the DataObject is in the parent's DataObjectTracker(s)
+        # (If parent is not a raw datacube, note that it could have multiple trackers)
+        # If not, add this DataObject and its save behavior to the parent's DataObjectTracker
+        if parent is None:
+            dataobjecttrackers = self.get_dataobjecttrackers()
+        else:
+            dataobjecttrackers = parent.get_dataobjecttrackers()
+        for tracker in dataobjecttrackers:
+            if not tracker.contains_dataobject(self):
+                tracker.new_dataobject(self, save_behavior=save_behavior)
             else:
-                self.change_save_behavior(parent, save_behavior)
-            # Check if the DataObject is in the parent's DataObjectTracker(s)
-            # (If parent is not a raw datacube, note that it could have multiple trackers)
-            # If not, add this DataObject to the parent's DataObjectTracker
-            dataobjecttrackers = self.get_dataobjecttrackers(parent)
-            for tracker in dataobjecttrackers:
-                if not tracker.contains_dataobject(self):
-                    tracker.new_dataobject(self, save_behavior=save_behavior)
+                tracker.change_save_behavior(self, save_behavior=save_behavior)
 
-    def get_dataobjecttrackers(self, dataobject):
+    def get_dataobjecttrackers(self):
         # Get all DataObjectTrackers associated with dataobject
         # Does not do a recursive search - rather, looks in dataobject and its direct parents
         dataobjecttrackers = []
         try:
-            tracker = dataobject.dataobjecttracker
+            tracker = self.dataobjecttracker
             dataobjecttrackers.append(tracker)
         except AttributeError:
             pass
-        for parent in dataobject.get_parent_list():
+        for parent in self.parents:
             try:
                 tracker = parent.dataobjecttracker
                 dataobjecttrackers.append(tracker)
@@ -92,21 +96,31 @@ class DataObject(object):
                 pass
         return dataobjecttrackers
 
-    def get_parent_list(self):
-        return [item[0] for item in self.parents_and_save_behavior]
+    def change_save_behavior(self, save_behavior, parent=None):
+        if parent is None:
+            trackers = self.get_dataobjecttrackers()
+        else:
+            assert parent in self.parents
+            trackers = parent.get_dataobjecttrackers()
+        for tracker in trackers:
+            tracker.change_save_behavior(self, save_behavior)
 
-    def change_save_behavior(self, parent, save_behavior):
-        assert parent in self.get_parent_list()
-        index = self.get_parent_list().index()
-        self.parents_and_save_behavior[index][1] = save_behavior
-
-    def get_save_behavior(self, parent):
-        assert parent in self.get_parent_list()
-        index = self.get_parent_list().index(parent)
-        return self.parents_and_save_behavior[index][1]
+    def get_save_behavior(self, parent=None):
+        if parent is None:
+            trackers = self.get_dataobjecttrackers()
+        else:
+            assert parent in self.parents()
+            trackers = parent.get_dataobjecttrackers()
+        ans = []
+        for tracker in trackers:
+            index = tracker.get_object_index(self)
+            save_behavior = tracker.dataobject_list[index][2]
+            parent = tracker.rawdatacube
+            ans.append((parent, save_behavior))
+        return ans
 
     def has_parent(self, datacube):
-        return datacube in self.get_parent_list()
+        return datacube in self.parents
 
     def log_modification(self):
         index = self.get_current_log_index()-1
@@ -125,15 +139,20 @@ class DataObject(object):
 # reference to this dataset.
 # The DataObjectTracker stores a list of DataObject instances, and knows how to retreive or
 # modify their attributes, in particular:
+#   -name
+#   -object type
+#   -save behavior
+#   -pointer to the object
+# To be implemented (eventually?)
 #   -log info
 #       -log index of object creation
 #       -log indices of object modification
-#   -save info. Boolean which determines behavior for this object on saving:
-#       -if True, save this object in its entirity
-#       -if False, save object name and log info, but not the actual data
 # When an object is added to a RawDataCube's DataObjectTracker, the original DataObject adds that
 # RawDataCube instance to its list of parents, ensuring the relationships can be deterimined in
 # either direction.
+# This interface works for now, but seems awfully kludgy.  The right move may be a database, but
+# it would be nice to avoid having an extra .db file floating around (and also needing to use
+# SQL / some database language), at least for now.
 
 # Decorator which enables more human-readable display of tracked dataobjects
 def show_object_list(method):
@@ -141,14 +160,18 @@ def show_object_list(method):
     def wrapper(self, *args, show=False, **kwargs):
         objectlist = method(self, *args, **kwargs)
         if show:
-            print("{:^12}{:^48s}{:^20}".format('Index', 'Name', 'Type'))
+            print("{:^8}{:^36s}{:^20}{:^10}".format('Index', 'Name', 'Type', 'Save'))
             for tup in objectlist:
-                print("{:<12}\t{:<48s}{:<20}".format(tup[0], tup[1], tup[2].__name__))
+                if tup[2]:
+                    save='Y'
+                else:
+                    save='N'
+                print("{:^8}{:<36s}{:<20}{:^10}".format(objectlist.index(tup),
+                                                     tup[0], tup[1].__name__, save))
             return
         else:
             return objectlist
     return wrapper
-
 
 class DataObjectTracker(object):
 
@@ -160,24 +183,31 @@ class DataObjectTracker(object):
     def new_dataobject(self, dataobject, **kwargs):
         assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
         if not dataobject in self.dataobject_list:
-            index = len(self.dataobject_list)
             if 'name' in kwargs.keys():
                 name = kwargs['name']
             else:
                 name = dataobject.name
+            if 'save_behavior' in kwargs.keys():
+                save_behavior = kwargs['save_behavior']
+            else:
+                save_behavior = dataobject.save_behavior
             objecttype = type(dataobject)
-            tup = (index, name, objecttype, dataobject)
-            self.dataobject_list.append(tup)
+            l = [name, objecttype, save_behavior, dataobject]
+            self.dataobject_list.append(l)
         # Check if the DataObject's parent list contains this tracker's top level RawDataCube.
         # If not, add that RawDataCube to the DataObjects parent list.
         if not dataobject.has_parent(self.rawdatacube):
-            if 'save_behavior' in kwargs.keys():
-                dataobject.new_parent(self.rawdatacube, kwargs['save_behavior'])
-            else:
-                dataobject.new_parent(self.rawdatacube)
+            dataobject.new_parent(self.rawdatacube)
 
     def contains_dataobject(self, dataobject):
-        return dataobject in [tup[3] for tup in self.dataobject_list]
+        return dataobject in [item[3] for item in self.dataobject_list]
+
+    def get_object_index(self, dataobject):
+        return [item[3] for item in self.dataobject_list].index(dataobject)
+
+    def change_save_behavior(self, dataobject, save_behavior):
+        index = self.get_object_index(dataobject)
+        self.dataobjectlist[index][2] = save_behavior
 
     @show_object_list
     def get_dataobjects(self):
@@ -185,29 +215,29 @@ class DataObjectTracker(object):
 
     @show_object_list
     def sort_dataobjects_by_name(self):
-        return [tup for tup in self.dataobject_list if tup[1]!=''] + \
-               [tup for tup in self.dataobject_list if tup[1]=='']
+        return [item for item in self.dataobject_list if item[0]!=''] + \
+               [item for item in self.dataobject_list if item[0]=='']
 
     @show_object_list
     def sort_dataobjects_by_type(self, objecttype=None):
         if objecttype is None:
             types=[]
-            for tup in self.dataobject_list:
-                if tup[2] not in types:
-                    types.append(tup[2])
+            for item in self.dataobject_list:
+                if item[1] not in types:
+                    types.append(item[1])
             l=[]
             for objecttype in types:
-                l += [tup for tup in self.dataobject_list if tup[2]==objecttype]
+                l += [item for item in self.dataobject_list if item[1]==objecttype]
         else:
-            l = [tup for tup in self.dataobject_list if tup[2]==objecttype]
+            l = [item for item in self.dataobject_list if item[1]==objecttype]
         return l
 
     @show_object_list
     def get_object_by_name(self, name, exactmatch=False):
         if exactmatch:
-            return [tup[3] for tup in self.dataobject_list if name == tup[1]]
+            return [item[3] for item in self.dataobject_list if name == item[0]]
         else:
-            return [tup[3] for tup in self.dataobject_list if name in tup[1]]
+            return [item[3] for item in self.dataobject_list if name in item[0]]
 
     @show_object_list
     def get_object_by_index(self, index):
