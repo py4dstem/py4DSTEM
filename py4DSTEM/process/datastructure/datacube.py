@@ -81,7 +81,7 @@ class DataCube(DataObject):
 class RawDataCube(DataCube):
 
     def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx,
-                 is_py4DSTEM_file=False, h5_file=None,
+                 is_py4DSTEM_file=False, h5_file=None, save_behavior=True,
                  original_metadata_shortlist=None, original_metadata_all=None):
         """
         Instantiate a RawDataCube object.
@@ -98,7 +98,7 @@ class RawDataCube(DataCube):
         self.set_scan_shape(self.R_Ny,self.R_Nx)
 
         # Set up DataObjectTracker
-        self.dataobjecttracker = DataObjectTracker(self)
+        self.dataobjecttracker = DataObjectTracker(self, save_behavior=True)
 
         # Handle metadata
         if is_py4DSTEM_file:
