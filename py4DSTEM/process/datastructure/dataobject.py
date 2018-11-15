@@ -161,13 +161,12 @@ def show_object_list(method):
         objectlist = method(self, *args, **kwargs)
         if show:
             print("{:^8}{:^36s}{:^20}{:^10}".format('Index', 'Name', 'Type', 'Save'))
-            for tup in objectlist:
-                if tup[2]:
+            for item in objectlist:
+                if item[3]:
                     save='Y'
                 else:
                     save='N'
-                print("{:^8}{:<36s}{:<20}{:^10}".format(objectlist.index(tup),
-                                                     tup[0], tup[1].__name__, save))
+                print("{:^8}{:<36s}{:<20}{:^10}".format(item[0],item[1],item[2].__name__,save))
             return
         else:
             return objectlist
@@ -183,16 +182,17 @@ class DataObjectTracker(object):
     def new_dataobject(self, dataobject, **kwargs):
         assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
         if not dataobject in self.dataobject_list:
+            index = len(self.dataobject_list)
             if 'name' in kwargs.keys():
                 name = kwargs['name']
             else:
                 name = dataobject.name
+            objecttype = type(dataobject)
             if 'save_behavior' in kwargs.keys():
                 save_behavior = kwargs['save_behavior']
             else:
                 save_behavior = dataobject.save_behavior
-            objecttype = type(dataobject)
-            l = [name, objecttype, save_behavior, dataobject]
+            l = [index, name, objecttype, save_behavior, dataobject]
             self.dataobject_list.append(l)
         # Check if the DataObject's parent list contains this tracker's top level RawDataCube.
         # If not, add that RawDataCube to the DataObjects parent list.
@@ -200,14 +200,14 @@ class DataObjectTracker(object):
             dataobject.new_parent(self.rawdatacube)
 
     def contains_dataobject(self, dataobject):
-        return dataobject in [item[3] for item in self.dataobject_list]
+        return dataobject in [item[4] for item in self.dataobject_list]
 
     def get_object_index(self, dataobject):
-        return [item[3] for item in self.dataobject_list].index(dataobject)
+        return [item[4] for item in self.dataobject_list].index(dataobject)
 
     def change_save_behavior(self, dataobject, save_behavior):
         index = self.get_object_index(dataobject)
-        self.dataobject_list[index][2] = save_behavior
+        self.dataobject_list[index][3] = save_behavior
 
     @show_object_list
     def get_dataobjects(self):
@@ -215,32 +215,32 @@ class DataObjectTracker(object):
 
     @show_object_list
     def sort_dataobjects_by_name(self):
-        return [item for item in self.dataobject_list if item[0]!=''] + \
-               [item for item in self.dataobject_list if item[0]=='']
+        return [item for item in self.dataobject_list if item[1]!=''] + \
+               [item for item in self.dataobject_list if item[1]=='']
 
     @show_object_list
     def sort_dataobjects_by_type(self, objecttype=None):
         if objecttype is None:
             types=[]
             for item in self.dataobject_list:
-                if item[1] not in types:
-                    types.append(item[1])
+                if item[2] not in types:
+                    types.append(item[2])
             l=[]
             for objecttype in types:
-                l += [item for item in self.dataobject_list if item[1]==objecttype]
+                l += [item for item in self.dataobject_list if item[2]==objecttype]
         else:
-            l = [item for item in self.dataobject_list if item[1]==objecttype]
+            l = [item for item in self.dataobject_list if item[2]==objecttype]
         return l
 
     @show_object_list
     def get_object_by_name(self, name, exactmatch=False):
         if exactmatch:
-            return [item[3] for item in self.dataobject_list if name == item[0]]
+            return [item[4] for item in self.dataobject_list if name == item[1]]
         else:
-            return [item[3] for item in self.dataobject_list if name in item[0]]
+            return [item[4] for item in self.dataobject_list if name in item[1]]
 
     @show_object_list
     def get_object_by_index(self, index):
-        return self.dataobject_list[index][3]
+        return self.dataobject_list[index][4]
 
 
