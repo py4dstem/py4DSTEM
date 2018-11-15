@@ -174,10 +174,14 @@ def show_object_list(method):
 
 class DataObjectTracker(object):
 
-    def __init__(self, rawdatacube):
-
+    def __init__(self, rawdatacube, save_behavior=True):
+        """
+        Instantiate a DataObjectTracker class instance with rawdatacube as its parent.
+        save_behavior refers to the save behavior of this RawDataCube instance.
+        """
         self.rawdatacube = rawdatacube
         self.dataobject_list = list()
+        self.new_dataobject(self.rawdatacube, save_behavior=True)
 
     def new_dataobject(self, dataobject, **kwargs):
         assert isinstance(dataobject, DataObject), "{} is not a DataObject instance".format(dataobject)
