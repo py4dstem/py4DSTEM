@@ -19,21 +19,23 @@ Once we have processed DataObjects…
 
 # Defines the DataObject class.
 #
-# The primary purpose of the DataObject class is to facilitate object level logging.
+# The purpose of the DataObject class is to:
+#   -create a single, uniform interface for all of the types of data py4DSTEM creates
+#   -facilitate tracking of which objects were created from, refer to, or interact with
+#    which parent DataCubes
+#   -(*eventually*) enable object level logging.
 # Each instance maintains:
 #   -a list of parent RawDataCube instances
 #   -log indices when the object was created or modified
-#   -save info, determining whether the complete data associated with the object is saved
-# With respect to save info, note that if the complete data is not saved, the object name and
-# log info still is, allowing it to be recreated. Save info must contain separate Boolean values
-# for each parent RawDataCube.
+#   -save info, determining whether the object should be saved
 #
 # All objects containing py4DSTEM data - e.g. RawDataCube, DataCube, DiffractionSlice, 
 # RealSlice, and PointList objects - inherit from DataObject.
 # Only RawDataCube instances may have an empty parent list.
 #
-# The log_modification() method is called once on instantiation of a DataObject, and again by
-# the @log decorator function whenever it identifies any of its arguments as DataObjects.
+# The log_modification() method is called once on instantiation of a DataObject.
+# For object-level logging, the @log decorator function should be called whenever it identifies 
+# any of its arguments as DataObjects.
 
 from functools import wraps
 from ..log import Logger
