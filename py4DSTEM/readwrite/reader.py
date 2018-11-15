@@ -21,10 +21,20 @@ def read_data(filename):
         h5_file = h5py.File(filename,'r')
         if is_py4DSTEMfile(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
-            datacube = DataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
-                            R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
-                            is_py4DSTEM_file=True, h5_file=h5_file)
+            version_major, version_minor = get_py4DSTEM_version(h5_file)
+            print("File version is {}.{}".format(version_major, version_minor))
+            if (version_major, version_minor) == (0,1):
+                R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+                datacube = DataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
+                                R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
+                                is_py4DSTEM_file=True, h5_file=h5_file)
+            elif (version_major, version_minor) == (0,2):
+                R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
+                datacube = DataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
+                                R_Ny=R_Ny,R_Nx=R_Nx,Q_Ny=Q_Ny,Q_Nx=Q_Nx,filename=filename,
+                                is_py4DSTEM_file=True, h5_file=h5_file)
+            else:
+                print("Error: unknown file version.")
             h5_file.close()
             return datacube
         else:
@@ -59,11 +69,15 @@ def read_data(filename):
 
 
 def is_py4DSTEMfile(h5_file):
-    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and ('4D-STEM_data' in h5_file.keys()):
+    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_experiment' in h5_file.keys())):
         return True
     else:
         return False
 
+def get_py4DSTEM_version(h5_file):
+    version_major = h5_file.attrs['version_major']
+    version_minor = h5_file.attrs['version_minor']
+    return version_major, version_minor
 
 def show_log(filename):
     """

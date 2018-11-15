@@ -94,19 +94,28 @@ class DataCube(object):
         self.setup_metadata_containers()
         self.setup_metadata_search_dicts()
 
+        version_major, version_minor = get_py4DSTEM_version(h5_file)
+        if (version_major, version_minor) == (0,1):
+            toplevel_key = '4D-STEM_data'
+        elif (version_major, version_minor) == (0,2):
+            toplevel_key = '4DSTEM_experiment'
+        else:
+            print("Error: unknown py4DSTEM file version, {}.{}".format(version_major, version_minor))
+
         # Copy original metadata from .h5 trees to an equivalent tree structure
         self.metadata.original.shortlist = MetadataCollection('shortlist')
         self.metadata.original.all = MetadataCollection('all')
-        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
-        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
+        self.get_original_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['original']['shortlist'],self.metadata.original.shortlist)
+        self.get_original_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['original']['all'],self.metadata.original.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['sample'],self.metadata.sample)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['user'],self.metadata.user)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['processing'],self.metadata.processing)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['calibration'],self.metadata.calibration)
-        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['comments'],self.metadata.comments)
+        self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['microscope'],self.metadata.microscope)
+        self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['sample'],self.metadata.sample)
+        self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['user'],self.metadata.user)
+        if (version_major, version_minor)==(0,1):
+            self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['processing'],self.metadata.processing)
+        self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['calibration'],self.metadata.calibration)
+        self.get_metadata_from_h5_file(h5_file[toplevel_key]['metadata']['comments'],self.metadata.comments)
 
     def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
         self.setup_metadata_containers()
@@ -290,6 +299,11 @@ class MetadataCollection(object):
     """
     def __init__(self,name):
         self.__name__ = name
+
+def get_py4DSTEM_version(h5_file):
+    version_major = h5_file.attrs['version_major']
+    version_minor = h5_file.attrs['version_minor']
+    return version_major, version_minor
 
 
 
