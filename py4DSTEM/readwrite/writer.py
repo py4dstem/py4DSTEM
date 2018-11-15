@@ -23,7 +23,7 @@ def save_from_datacube(datacube,outputfile):
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",2)
+    f.attrs.create("version_minor",1)
     group_data = f.create_group("4D-STEM_data")
 
 
