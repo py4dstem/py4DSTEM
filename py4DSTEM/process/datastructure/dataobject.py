@@ -212,8 +212,21 @@ class DataObjectTracker(object):
         return [item[4] for item in self.dataobject_list].index(dataobject)
 
     def change_save_behavior(self, dataobject, save_behavior):
-        index = self.get_object_index(dataobject)
-        self.dataobject_list[index][3] = save_behavior
+        """
+        If dataobject is a single DataObject instance, change its save behavior to save_behavior.
+        If dataobject is the string 'all', apply to all objects in the tracker.
+        If dataobject is a list of dataobjects, apply to all objects in the list.
+        """
+        if isinstance(dataobject, DataObject):
+            index = self.get_object_index(dataobject)
+            self.dataobject_list[index][3] = save_behavior
+        elif dataobject=='all':
+            self.change_all_save_behaviors(save_behavior)
+        elif isinstance(dataobject, list):
+            for obj in dataobject:
+                self.change_save_behavior(obj, save_behavior)
+        else:
+            print("{} is not a valid argument".format(dataobject))
 
     def change_all_save_behaviors(self, save_behavior):
         for i in range(len(self.dataobject_list)):
