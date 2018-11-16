@@ -395,7 +395,6 @@ def save_pointlist_group(group, pointlist):
 
     for name in pointlist.dtype.names:
         group_current_coord = group.create_group(name)
-        group_current_coord.attrs.create("name", np.string_(name))
         group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
