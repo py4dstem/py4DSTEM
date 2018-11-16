@@ -57,7 +57,7 @@ In light of the size of the data and the variety and complexity of approaches to
 
 ### How does py4DSTEM help?
 
-py4DSTEM is here to help!!
+py4DSTEM is here to help!
 
 
 
@@ -72,7 +72,7 @@ Download and installation instructions for Anaconda can be found at www.anaconda
 Next, ensure the dependencies (see below) are installed in a python 3 environment.  In anaconda, you can use:
 
 ```
-conda install hyperspy
+conda install hyperspy -c conda-forge
 conda install h5py
 conda install pyqtgraph
 conda install PyQt5
