@@ -70,9 +70,9 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
     group_rawdatacube = group_data.create_group("rawdatacube")
     group_processing = group_data.create_group("processing")
     group_processed_datacubes = group_processing.create_group("datacubes")
-    group_diffraction_slices = group_processing.create_group("diffraction")
-    group_real_slices = group_processing.create_group("real")
-    group_point_lists = group_processing.create_group("pointlist")
+    group_diffraction_slices = group_processing.create_group("diffractionslices")
+    group_real_slices = group_processing.create_group("realslices")
+    group_point_lists = group_processing.create_group("pointlists")
     ind_rdc, ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0,0
 
     # Loop through all objects in the DataObjectTracker and, if save_behavior==True, save
