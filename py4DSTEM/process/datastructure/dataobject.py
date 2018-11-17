@@ -232,6 +232,12 @@ class DataObjectTracker(object):
         for i in range(len(self.dataobject_list)):
             self.dataobject_list[i][3] = save_behavior
 
+    def change_save_behavior_by_index(self, index, save_behavior):
+        self.dataobject_list[index][3] = save_behavior
+
+    def get_save_behavior_list(self):
+        return [item[3] for item in self.dataobject_list]
+
     def show_dataobjects(self):
         self.get_dataobjects(show=True)
 
