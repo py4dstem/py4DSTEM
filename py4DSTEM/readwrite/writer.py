@@ -10,11 +10,12 @@ import numpy as np
 from collections import OrderedDict
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..process.datastructure import RawDataCube, DataCube, DiffractionSlice, RealSlice, PointList
-from ..process.datastructure import MetadataCollection, DataObjectTracker
+from ..process.datastructure import MetadataCollection, DataObjectTracker, DataObject
 from ..process.log import log, Logger
 
 logger = Logger()
 
+@log
 def save_from_dataobjecttracker(dataobjecttracker, outputfile):
     """
     Saves an h5 file from a DataObjectTracker object and an output filepath.
@@ -80,7 +81,6 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
         if save_behavior:
             name = item[1]
             dataobject = item[4]
-            print(name, dataobject)
             if isinstance(dataobject, RawDataCube):
                 if ind_rdc == 0:
                     save_datacube_group(group_rawdatacube, dataobject)
@@ -124,97 +124,61 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
     f.close()
 
 
+@log
+def save_dataobject(dataobject,outputfile):
+    """
+    Saves a .h5 file containing only a single DataObject instance to outputfile.
+    """
+    assert isinstance(dataobject, DataObject)
 
+    # Get current state of tracker
+    tracker = dataobject.get_dataobjecttrackers()[0]
+    tracker_save_behavior_list = tracker.get_save_behavior_list()
+
+    # Edit tracker so only dataobject has save_behavior==True
+    tracker.change_all_save_behaviors(False)
+    tracker.change_save_behavior(dataobject, True)
+
+    # Save
+    save_from_dataobjecttracker(tracker, outputfile)
+
+    # Revert tracker state
+    for i in range(len(tracker_save_behavior_list)):
+        tracker.change_save_behavior_by_index(i, tracker_save_behavior_list[i])
 
 @log
-def save_from_datacube(datacube,outputfile):
+def save_datacube(datacube,outputfile):
     """
-    Saves an h5 file from a datacube object and an output filepath.
+    Saves a .h5 file containing only a single DataCube instance to outputfile.
     """
+    assert isinstance(datacube, DataCube)
 
-    assert isinstance(datacube, RawDataCube)
+    save_dataobject(datacube, outputfile)
 
-    ##### Make .h5 file #####
-    print("Creating file {}...".format(outputfile))
-    f = h5py.File(outputfile,"w")
-    f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",2)
-    group_data = f.create_group("4DSTEM_experiment")
+@log
+def save(dataobject,outputfile):
+    """
+    Saves a .h5 file to outputpath.
+    If dataobject is a RawDataCube, save() identifies its DataObjectTracker and saves all objects
+    currently flagged for saving.
+    If dataobject is any other DataObject, save() identifies all associated trackers. If there is
+    only one tracker, all objects associated with this tracker are saved. If there are multiple
+    trackers, save() prints a warning message asking the user to specify a tracker.
+    """
+    assert isinstance(dataobject, DataObject)
 
-
-    ##### Metadata #####
-    print("Writing metadata...")
-
-    # Create metadata groups
-    group_metadata = group_data.create_group("metadata")
-    group_original_metadata = group_metadata.create_group("original")
-    group_microscope_metadata = group_metadata.create_group("microscope")
-    group_sample_metadata = group_metadata.create_group("sample")
-    group_user_metadata = group_metadata.create_group("user")
-    group_calibration_metadata = group_metadata.create_group("calibration")
-    group_comments_metadata = group_metadata.create_group("comments")
-    group_original_metadata_all = group_original_metadata.create_group("all")
-    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
-
-    # Transfer original metadata trees
-    if type(datacube.metadata.original.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(datacube.metadata.original.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(datacube.metadata.original.all,group_original_metadata_all)
+    if isinstance(dataobject, RawDataCube):
+        save_from_dataobjecttracker(dataobject.dataobjecttracker, outputfile)
     else:
-        transfer_metadata_tree_py4DSTEM(datacube.metadata.original.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(datacube.metadata.original.all,group_original_metadata_all)
-
-    # Transfer datacube metadata dictionaries
-    transfer_metadata_dict(datacube.metadata.microscope,group_microscope_metadata)
-    transfer_metadata_dict(datacube.metadata.sample,group_sample_metadata)
-    transfer_metadata_dict(datacube.metadata.user,group_user_metadata)
-    transfer_metadata_dict(datacube.metadata.calibration,group_calibration_metadata)
-    transfer_metadata_dict(datacube.metadata.comments,group_comments_metadata)
-
-    ##### Log #####
-    group_log = f.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
-
-    ##### Data #####
-    # First, save top level raw datacube
-    group_rawdatacube = group_data.create_group("rawdatacube")
-    save_datacube_group(group_rawdatacube, datacube, save_behavior=True)
-
-    # Second, save all other data in the DataObjectTracker to the processing group
-    group_processing = group_data.create_group("processing")
-    group_processed_datacubes = group_processing.create_group("datacubes")
-    group_diffraction_slices = group_processing.create_group("diffraction")
-    group_real_slices = group_processing.create_group("real")
-    group_point_lists = group_processing.create_group("pointlist")
-    ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0
-    for dataobject in datacube.dataobjecttracker.dataobject_list:
-        save_behavior = dataobject.get_save_behavior(datacube) # Boolean
-        if isinstance(dataobject, DataCube):
-            group_new_datacube = group_processed_datacubes.create_group("datacube_"+str(ind_dcs))
-            save_datacube_group(group_new_datacube, dataobject, save_behavior)
-            ind_dcs += 1
-        elif isinstance(dataobject, DiffractionSlice):
-            group_new_diffraction_slice = group_diffraction_slices.create_group("diffractionslice_"+str(ind_dfs))
-            save_diffraction_group(group_new_diffraction_slice, dataobject, save_behavior)
-            ind_dfs += 1
-        elif isinstance(dataobject, RealSlice):
-            group_new_real_slice = group_real_slices.create_group("realslice_"+str(ind_rls))
-            save_real_group(group_new_real_slice, dataobject, save_behavior)
-            ind_rls += 1
-        elif isinstance(dataobject, PointList):
-            group_new_point_list = group_point_lists.create_group("pointlist_"+str(ind_ptl))
-            save_pointlist_group(group_new_point_list, dataobject, save_behavior)
-            ind_ptl += 1
+        trackers = dataobject.get_dataobjecttrackers()
+        if len(trackers)==0:
+            print("Error: DataObject {} has no associated DataObjectTracker instances.".format(dataobject))
+        elif len(trackers)==1:
+            save_from_dataobjecttracker(trackers[0], outputfile)
         else:
-            print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, or PointList instance.".format(dataobject,type(dataobject)))
+            print("Error: DataObject {} has {} associated DataObjectTracker instances.".format(dataobject, len(trackers)))
 
-    ##### Finish and close #####
-    print("Done.")
-    f.close()
-
-
-################### END OF save_from_datacube() FUNCTION #####################
+################### END OF PRIMARY SAVE FUNCTIONS #####################
 
 
 #### Functions for writing dataobjects to .h5 ####
@@ -494,10 +458,26 @@ def write_log_item(group_log, index, logged_item):
     for key,value in logged_item.inputs.items():
         if type(value)==str:
             group_inputs.attrs.create(key, np.string_(value))
-        elif type(value)==DataCube:
-            group_inputs.attrs.create(key, np.string_("DataCube_id"+str(id(value))))
-        elif type(value)==RawDataCube:
-            group_inputs.attrs.create(key, np.string_("RawDataCube_id"+str(id(value))))
+        elif isinstance(value,DataObject):
+            if value.name == '':
+                if isinstance(value,RawDataCube):
+                    name = np.string_("RawDataCube_id"+str(id(value)))
+                elif isinstance(value,DataCube):
+                    name = np.string_("DataCube_id"+str(id(value)))
+                elif isinstance(value,DiffractionSlice):
+                    name = np.string_("DiffractionSlice_id"+str(id(value)))
+                elif isinstance(value,RealSlice):
+                    name = np.string_("RealSlice_id"+str(id(value)))
+                elif isinstance(value,PointList):
+                    name = np.string_("PointList_id"+str(id(value)))
+                else:
+                    name = np.string_("DataObject_id"+str(id(value)))
+            else:
+                name = np.string_(value.name)
+            group_inputs.attrs.create(key, name)
+        elif isinstance(value,DataObjectTracker):
+            name = np.string_("DataObjectTracker_id"+str(id(value)))
+            group_inputs.attrs.create(key, name)
         else:
             group_inputs.attrs.create(key, value)
     group_logitem.attrs.create('version', logged_item.version)
