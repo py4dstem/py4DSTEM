@@ -7,7 +7,7 @@ from ..process.datastructure.datacube import RawDataCube
 from ..process.log import log
 
 
-class FileObjectBrowser(object):
+class FileBrowser(object):
 
     def __init__(self, filepath):
         self.filepath = filepath
@@ -235,7 +235,7 @@ class FileObjectBrowser(object):
         self.file.close()
 
 
-###################### END FileObjectBrowser OBJECT #######################
+###################### END FileBrowser OBJECT #######################
 
 
 def is_py4DSTEM_file(h5_file):
