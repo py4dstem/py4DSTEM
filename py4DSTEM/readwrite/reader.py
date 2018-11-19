@@ -11,25 +11,270 @@ class FileObjectBrowser(object):
 
     def __init__(self, filepath):
         self.filepath = filepath
-        self.is_py4DSTEMfile = is_py4DSTEMfile(filepath)
-        if self.is_py4DSTEMfile:
-            self.version = get_py4DSTEM_version
+        self.is_py4DSTEM_file = is_py4DSTEM_file(self.filepath)
+        if self.is_py4DSTEM_file:
+            self.version = get_py4DSTEM_version(self.filepath)
+            self.file = h5py.File(filepath, 'r')
+            self.get_N_dataobjects()
+            #self.N_logentries = self.get_N_logentries()
+
+    def get_N_dataobjects(self):
+        if len(self.file['4DSTEM_experiment']['rawdatacube'])==0:
+            self.N_rawdatacubes = 0
+        else:
+            self.N_rawdatacubes = 1
+        self.N_datacubes = len(self.file['4DSTEM_experiment']['processing']['datacubes'])
+        self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
+        self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
+        self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
+        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
+
+        self.dataobject_lookup_arr = []
+        self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
+        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
+        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
+        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
+        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
+        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
+
+    def get_dataobject_info(self, index):
+        """
+        Returns a dictionary containing information about the object at index.
+        Dict keys includes 'name', 'type', and 'index'.
+        The folloring additional keys are object type dependent:
+            RawDataCube, DataCube: 'shape'
+            DiffractionSlice, RealSlice: 'depth', 'slices', 'shape'
+            PointList: 'coordinates', 'length'
+        """
+        objecttype = self.dataobject_lookup_arr[index]
+        mask = (self.dataobject_lookup_arr == objecttype)
+        objectindex = index - np.nonzero(mask)[0][0]
+
+        if objecttype == 'RawDataCube':
+            name = 'rawdatacube'
+            shape = self.file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
+            objectinfo = {'name':name, 'shape':shape, 'type':objecttype, 'index':index}
+        elif objecttype == 'DataCube':
+            name = list(self.file['4DSTEM_experiment']['processing']['datacubes'].keys())[objectindex]
+            shape = self.file['4DSTEM_experiment']['processing']['datacubes'][name]['datacube'].shape
+            objectinfo = {'name':name, 'shape':shape, 'type':objecttype, 'index':index}
+        elif objecttype == 'DiffractionSlice':
+            name = list(self.file['4DSTEM_experiment']['processing']['diffractionslices'].keys())[objectindex]
+            depth = self.file['4DSTEM_experiment']['processing']['diffractionslices'][name].attrs['depth']
+            slices = list(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name].keys())
+            slices.remove('dim1')
+            slices.remove('dim2')
+            shape = self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[0]].shape
+            objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape, 'type':objecttype, 'index':index}
+        elif objecttype == 'RealSlice':
+            name = list(self.file['4DSTEM_experiment']['processing']['realslices'].keys())[objectindex]
+            depth = self.file['4DSTEM_experiment']['processing']['realslices'][name].attrs['depth']
+            slices = list(self.file['4DSTEM_experiment']['processing']['realslices'][name].keys())
+            slices.remove('dim1')
+            slices.remove('dim2')
+            shape = self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[0]].shape
+            objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape, 'type':objecttype, 'index':index}
+        elif objecttype == 'PointList':
+            name = list(self.file['4DSTEM_experiment']['processing']['pointlists'].keys())[objectindex]
+            coordinates = list(self.file['4DSTEM_experiment']['processing']['pointlists'][name].keys())
+            length = self.file['4DSTEM_experiment']['processing']['pointlists'][name][coordinates[0]]['data'].shape[0]
+            objectinfo = {'name':name, 'coordinates':coordinates, 'length':length, 'type':objecttype, 'index':index}
+        else:
+            print("Error: unknown dataobject type {}.".format(objecttype))
+            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index}
+        return objectinfo
+
+    def get_dataobject(self, index):
+        """
+        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        """
+
+        if objecttype == 'RawDataCube':
+            pass
+        elif objecttype == 'DataCube':
+            pass
+        elif objecttype == 'DiffractionSlice':
+            pass
+        elif objecttype == 'RealSlice':
+            pass
+        elif objecttype == 'PointList':
+            pass
+        else:
+            pass
+        return dataobject
+
+    def show_dataobject(self, index):
+        """
+        Display the info about dataobject at index.
+        Two verbosity levels are supported through the 'v' boolean.
+        """
+        info = self.get_dataobject_info(index)
+
+        if info['type'] == 'RawDataCube':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Shape', str(info['shape'])))
+            print("{:<8}: {:<50}".format('Index', index))
+        elif info['type'] == 'DataCube':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Shape', str(info['shape'])))
+            print("{:<8}: {:<50}".format('Index', index))
+        elif info['type'] == 'DiffractionSlice':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Depth', info['depth']))
+            print("{:<8}: {:<50}".format('Slices', str(info['slices'])))
+            print("{:<8}: {:<50}".format('Shape', str(info['shape'])))
+            print("{:<8}: {:<50}".format('Index', index))
+        elif info['type'] == 'RealSlice':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Depth', info['depth']))
+            print("{:<8}: {:<50}".format('Slices', str(info['slices'])))
+            print("{:<8}: {:<50}".format('Shape', str(info['shape'])))
+            print("{:<8}: {:<50}".format('Index', index))
+        elif info['type'] == 'PointList':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Coords', str(info['coordinates'])))
+            print("{:<8}: {:<50}".format('Index', index))
+        else:
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Index', index))
+
+    def show_dataobjects(self, index=None, objecttype=None):
+        if index is not None:
+            self.show_dataobject(index)
+
+        elif objecttype is not None:
+            if objecttype == 'RawDataCube':
+                self.show_rawdatacubes()
+            elif objecttype == 'DataCube':
+                self.show_datacubes()
+            elif objecttype == 'DiffractionSlice':
+                self.show_diffractionslices()
+            elif objecttype == 'RealSlice':
+                self.show_realslices()
+            elif objecttype == 'PointList':
+                self.show_pointlists()
+            else:
+                print("Error: unknown objecttype {}.".format(objecttype))
+
+        else:
+            print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Type'))
+            for index in range(self.N_dataobjects):
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                objecttype = info['type']
+                print("{:^8}{:<36}{:<20}".format(index, name, objecttype))
+
+    def show_rawdatacubes(self):
+        if self.N_rawdatacubes == 0:
+            print("No RawDataCubes present.")
+        else:
+            print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
+            for index in (self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                shape = info['shape']
+                print("{:^8}{:<36}{:^20}".format(index, name, str(shape)))
+
+    def show_datacubes(self):
+        if self.N_datacubes == 0:
+            print("No DataCubes present.")
+        else:
+            print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
+            for index in (self.dataobject_lookup_arr=='DataCube').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                shape = info['shape']
+                print("{:^8}{:<36}{:^20}".format(index, name, str(shape)))
+
+    def show_diffractionslices(self):
+        if self.N_diffractionslices == 0:
+            print("No DiffractionSlices present.")
+        else:
+            print("{:^8}{:^36}{:^10}{:^20}".format('Index', 'Name', 'Depth', 'Shape'))
+            for index in (self.dataobject_lookup_arr=='DiffractionSlice').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                depth = info['depth']
+                shape = info['shape']
+                print("{:^8}{:<36}{:^10}{:^20}".format(index, name, depth, str(shape)))
+
+    def show_realslices(self):
+        if self.N_realslices == 0:
+            print("No RealSlices present.")
+        else:
+            print("{:^8}{:^36}{:^10}{:^20}".format('Index', 'Name', 'Depth', 'Shape'))
+            for index in (self.dataobject_lookup_arr=='RealSlice').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                depth = info['depth']
+                shape = info['shape']
+                print("{:^8}{:<36}{:^10}{:^20}".format(index, name, depth, str(shape)))
+
+    def show_pointlists(self):
+        if self.N_pointlists == 0:
+            print("No PointLists present.")
+        else:
+            print("{:^8}{:^36}{:^8}{:^24}".format('Index', 'Name', 'Length', 'Coordinates'))
+            for index in (self.dataobject_lookup_arr=='PointList').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                length = info['length']
+                coordinates = info['coordinates']
+                print("{:^8}{:<36}{:^8}{:^24}".format(index, name, length, str(coordinates)))
+
+    def open(self):
+        self.file = h5py.File(filepath, 'r')
+
+    def close(self):
+        self.file.close()
 
 
 ###################### END FileObjectBrowser OBJECT #######################
 
 
 def is_py4DSTEM_file(h5_file):
-    if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4DSTEM_experiment' in h5_file.keys()) or ('4D-STEM_data' in h5_file.keys())):
-        return True
+    """
+    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
+    py4DSTEM.
+    """
+    if isinstance(h5_file, h5py._hl.files.File):
+        if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4DSTEM_experiment' in h5_file.keys()) or ('4D-STEM_data' in h5_file.keys())):
+            return True
+        else:
+            return False
     else:
-        return False
+        try:
+            f = h5py.File(h5_file, 'r')
+            result = is_py4DSTEM_file(f)
+            f.close()
+            return result
+        except OSError:
+            return False
 
 def get_py4DSTEM_version(h5_file):
-    version_major = h5_file.attrs['version_major']
-    version_minor = h5_file.attrs['version_minor']
-    return version_major, version_minor
-
+    """
+    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
+    py4DSTEM.
+    """
+    if isinstance(h5_file, h5py._hl.files.File):
+        version_major = h5_file.attrs['version_major']
+        version_minor = h5_file.attrs['version_minor']
+        return version_major, version_minor
+    else:
+        try:
+            f = h5py.File(h5_file, 'r')
+            result = get_py4DSTEM_version(f)
+            f.close()
+            return result
+        except OSError:
+            print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
+            return (0,0)
 
 
 
@@ -47,7 +292,7 @@ def read(filename):
     # Check if file was written by py4DSTEM
     try:
         h5_file = h5py.File(filename,'r')
-        if is_py4DSTEMfile(h5_file):
+        if is_py4DSTEM_file(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
             R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
             rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
@@ -98,7 +343,7 @@ def read_data(filename):
     # Check if file was written by py4DSTEM
     try:
         h5_file = h5py.File(filename,'r')
-        if is_py4DSTEMfile(h5_file):
+        if is_py4DSTEM_file(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
             R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
             rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
@@ -146,7 +391,7 @@ def show_log(filename):
     # Check if file was written by py4DSTEM
     try:
         h5_file = h5py.File(filename,'r')
-        if is_py4DSTEMfile(h5_file):
+        if is_py4DSTEM_file(h5_file):
             try:
                 log_group = h5_file['log']
                 for i in range(len(log_group.keys())):

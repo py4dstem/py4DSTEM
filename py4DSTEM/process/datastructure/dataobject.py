@@ -162,7 +162,7 @@ def show_object_list(method):
     def wrapper(self, *args, show=False, **kwargs):
         objectlist = method(self, *args, **kwargs)
         if show:
-            print("{:^8}{:^36s}{:^20}{:^10}".format('Index', 'Name', 'Type', 'Save'))
+            print("{:^8}{:^36}{:^20}{:^10}".format('Index', 'Name', 'Type', 'Save'))
             for item in objectlist:
                 if item[3]:
                     save='Y'
