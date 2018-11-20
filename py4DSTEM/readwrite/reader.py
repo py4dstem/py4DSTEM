@@ -18,24 +18,15 @@ class FileBrowser(object):
             self.get_N_dataobjects()
             #self.N_logentries = self.get_N_logentries()
 
-    def get_N_dataobjects(self):
-        if len(self.file['4DSTEM_experiment']['rawdatacube'])==0:
-            self.N_rawdatacubes = 0
-        else:
-            self.N_rawdatacubes = 1
-        self.N_datacubes = len(self.file['4DSTEM_experiment']['processing']['datacubes'])
-        self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
-        self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
-        self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
-        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
+    ###### Open/close methods ######
 
-        self.dataobject_lookup_arr = []
-        self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
-        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
-        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
-        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
-        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
-        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
+    def open(self):
+        self.file = h5py.File(filepath, 'r')
+
+    def close(self):
+        self.file.close()
+
+    ###### Query dataobject info #####
 
     def get_dataobject_info(self, index):
         """
@@ -84,24 +75,26 @@ class FileBrowser(object):
             objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index}
         return objectinfo
 
-    def get_dataobject(self, index):
-        """
-        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
-        """
-
-        if objecttype == 'RawDataCube':
-            pass
-        elif objecttype == 'DataCube':
-            pass
-        elif objecttype == 'DiffractionSlice':
-            pass
-        elif objecttype == 'RealSlice':
-            pass
-        elif objecttype == 'PointList':
-            pass
+    def get_N_dataobjects(self):
+        if len(self.file['4DSTEM_experiment']['rawdatacube'])==0:
+            self.N_rawdatacubes = 0
         else:
-            pass
-        return dataobject
+            self.N_rawdatacubes = 1
+        self.N_datacubes = len(self.file['4DSTEM_experiment']['processing']['datacubes'])
+        self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
+        self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
+        self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
+        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
+
+        self.dataobject_lookup_arr = []
+        self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
+        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
+        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
+        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
+        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
+        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
+
+    ###### Display object info ######
 
     def show_dataobject(self, index):
         """
@@ -228,14 +221,41 @@ class FileBrowser(object):
                 coordinates = info['coordinates']
                 print("{:^8}{:<36}{:^8}{:^24}".format(index, name, length, str(coordinates)))
 
-    def open(self):
-        self.file = h5py.File(filepath, 'r')
+    ###### Retrieve dataobjects ######
 
-    def close(self):
-        self.file.close()
+    def get_dataobject(self, index):
+        """
+        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        """
+        info = self.get_dataobject_info(index)
+        name = info['name']
+        objecttype = info['type']
 
+        if objecttype == 'RawDataCube':
+            shape = info['shape']
+        elif objecttype == 'DataCube':
+            shape = info['shape']
+        elif objecttype == 'DiffractionSlice':
+            depth = info['depth']
+            slices = info['slices']
+            shape = info['shape']
+        elif objecttype == 'RealSlice':
+            depth = info['depth']
+            slices = info['slices']
+            shape = info['shape']
+        elif objecttype == 'PointList':
+            coords = info['coords']
+        else:
+            pass
 
-###################### END FileBrowser OBJECT #######################
+        return dataobject
+
+    ###### Log display and querry ######
+
+    def get_N_logentries(self):
+        return
+
+###################### END FileBrowser CLASS #######################
 
 
 def is_py4DSTEM_file(h5_file):
