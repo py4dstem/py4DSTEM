@@ -3,7 +3,9 @@
 import h5py
 import numpy as np
 import hyperspy.api as hs
-from ..process.datastructure.datacube import RawDataCube
+from ..process.datastructure import RawDataCube, DataCube
+from ..process.datastructure import DiffractionSlice, RealSlice
+from ..process.datastructure import PointList
 from ..process.log import log
 
 
@@ -15,7 +17,8 @@ class FileBrowser(object):
         if self.is_py4DSTEM_file:
             self.version = get_py4DSTEM_version(self.filepath)
             self.file = h5py.File(filepath, 'r')
-            self.get_N_dataobjects()
+            self.set_object_lookup_info()
+            self.rawdatacube = RawDataCube(data=np.array([0]),R_Ny=1,R_Nx=1,Q_Ny=1,Q_Nx=1)
             #self.N_logentries = self.get_N_logentries()
 
     ###### Open/close methods ######
@@ -37,9 +40,7 @@ class FileBrowser(object):
             DiffractionSlice, RealSlice: 'depth', 'slices', 'shape'
             PointList: 'coordinates', 'length'
         """
-        objecttype = self.dataobject_lookup_arr[index]
-        mask = (self.dataobject_lookup_arr == objecttype)
-        objectindex = index - np.nonzero(mask)[0][0]
+        objecttype, objectindex = self.get_object_lookup_info(index)
 
         if objecttype == 'RawDataCube':
             name = 'rawdatacube'
@@ -74,25 +75,6 @@ class FileBrowser(object):
             print("Error: unknown dataobject type {}.".format(objecttype))
             objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index}
         return objectinfo
-
-    def get_N_dataobjects(self):
-        if len(self.file['4DSTEM_experiment']['rawdatacube'])==0:
-            self.N_rawdatacubes = 0
-        else:
-            self.N_rawdatacubes = 1
-        self.N_datacubes = len(self.file['4DSTEM_experiment']['processing']['datacubes'])
-        self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
-        self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
-        self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
-        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
-
-        self.dataobject_lookup_arr = []
-        self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
-        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
-        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
-        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
-        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
-        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
 
     ###### Display object info ######
 
@@ -223,22 +205,60 @@ class FileBrowser(object):
 
     ###### Retrieve dataobjects ######
 
+    def set_object_lookup_info(self):
+        if len(self.file['4DSTEM_experiment']['rawdatacube'])==0:
+            self.N_rawdatacubes = 0
+        else:
+            self.N_rawdatacubes = 1
+        self.N_datacubes = len(self.file['4DSTEM_experiment']['processing']['datacubes'])
+        self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
+        self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
+        self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
+        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
+
+        self.dataobject_lookup_arr = []
+        self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
+        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
+        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
+        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
+        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
+        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
+
+    def get_object_lookup_info(self, index):
+        objecttype = self.dataobject_lookup_arr[index]
+        mask = (self.dataobject_lookup_arr == objecttype)
+        objectindex = index - np.nonzero(mask)[0][0]
+
+        return objecttype, objectindex
+
     def get_dataobject(self, index):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
+        objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
-        objecttype = info['type']
 
         if objecttype == 'RawDataCube':
             shape = info['shape']
+            self.rawdatacube.data4D = np.array(self.file['4DSTEM_experiment']['rawdatacube']['datacube'])
+            R_Ny, R_Nx, Q_Ny, Q_Nx = shape
+            self.rawdatacube.R_Ny = R_Ny
+            self.rawdatacube.R_Nx = R_Nx
+            self.rawdatacube.Q_Ny = Q_Ny
+            self.rawdatacube.Q_Nx = Q_Nx
+            self.rawdatacube.R_N = R_Ny*R_Nx
+            dataobject = self.rawdatacube
         elif objecttype == 'DataCube':
             shape = info['shape']
+            R_Ny, R_Nx, Q_Ny, Q_Nx = shape
+            data = np.array(self.file['4DSTEM_experiment']['processing']['datacubes'][name]['datacube'])
+            dataobject = DataCube(data=data, parentDataCube=self.rawdatacube, name=name)
         elif objecttype == 'DiffractionSlice':
             depth = info['depth']
             slices = info['slices']
             shape = info['shape']
+            dataobject = DiffractionSlice()
         elif objecttype == 'RealSlice':
             depth = info['depth']
             slices = info['slices']
@@ -257,44 +277,6 @@ class FileBrowser(object):
 
 ###################### END FileBrowser CLASS #######################
 
-
-def is_py4DSTEM_file(h5_file):
-    """
-    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
-    py4DSTEM.
-    """
-    if isinstance(h5_file, h5py._hl.files.File):
-        if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4DSTEM_experiment' in h5_file.keys()) or ('4D-STEM_data' in h5_file.keys())):
-            return True
-        else:
-            return False
-    else:
-        try:
-            f = h5py.File(h5_file, 'r')
-            result = is_py4DSTEM_file(f)
-            f.close()
-            return result
-        except OSError:
-            return False
-
-def get_py4DSTEM_version(h5_file):
-    """
-    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
-    py4DSTEM.
-    """
-    if isinstance(h5_file, h5py._hl.files.File):
-        version_major = h5_file.attrs['version_major']
-        version_minor = h5_file.attrs['version_minor']
-        return version_major, version_minor
-    else:
-        try:
-            f = h5py.File(h5_file, 'r')
-            result = get_py4DSTEM_version(f)
-            f.close()
-            return result
-        except OSError:
-            print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
-            return (0,0)
 
 
 
@@ -440,6 +422,48 @@ def show_log_item(index, log_item):
         else:
             print("\t\t{}\t{}".format(key,value))
     print("Version: \t{}\n".format(version))
+
+
+
+################# Utility functions ################
+
+def is_py4DSTEM_file(h5_file):
+    """
+    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
+    py4DSTEM.
+    """
+    if isinstance(h5_file, h5py._hl.files.File):
+        if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4DSTEM_experiment' in h5_file.keys()) or ('4D-STEM_data' in h5_file.keys())):
+            return True
+        else:
+            return False
+    else:
+        try:
+            f = h5py.File(h5_file, 'r')
+            result = is_py4DSTEM_file(f)
+            f.close()
+            return result
+        except OSError:
+            return False
+
+def get_py4DSTEM_version(h5_file):
+    """
+    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
+    py4DSTEM.
+    """
+    if isinstance(h5_file, h5py._hl.files.File):
+        version_major = h5_file.attrs['version_major']
+        version_minor = h5_file.attrs['version_minor']
+        return version_major, version_minor
+    else:
+        try:
+            f = h5py.File(h5_file, 'r')
+            result = get_py4DSTEM_version(f)
+            f.close()
+            return result
+        except OSError:
+            print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
+            return (0,0)
 
 
 ####### For filestructure summary, see end of writer.py #######
