@@ -19,6 +19,7 @@
 # 'save' Boolean in the tracker to False. The existance of these objects is thus saved, and the
 # objects may be recreated using the log info.
 
+import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
 from .dataobject import DataObject, DataObjectTracker
@@ -31,13 +32,12 @@ class DataCube(DataObject):
         """
         DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
-        if parentDataCube is not None:
-            self.R_Ny, self.R_Nx = parentDataCube.R_Ny, parentDataCube.R_Nx
-            self.Q_Ny, self.Q_Nx = parentDataCube.Q_Ny, parentDataCube.Q_Nx
-            self.R_N = parentDataCube.R_N
-
         # Initialize DataCube, set dimensions
         self.data4D = data
+
+        if not np.all([key in self.__dict__.keys() for key in ['R_Ny','R_Nx','Q_Ny','Q_Nx']]):
+            self.R_Ny, self.R_Nx, self.Q_Ny, self.Q_Nx = self.data4D.shape
+            self.R_N = self.R_Ny*self.R_Nx
 
     ############### Processing functions, organized by file in process directory ##############
 
@@ -89,12 +89,14 @@ class RawDataCube(DataCube):
         Additionally handles metadata in one of two ways - either for native py4DSTEM files, or
         for non-native files.
         """
-        # Initialize RawDataCube, set dimensions
-        DataCube.__init__(self, data, parentDataCube=None)
-
+        # Set dimensions
         self.R_Ny, self.R_Nx = R_Ny, R_Nx
         self.Q_Ny, self.Q_Nx = Q_Ny, Q_Nx
         self.R_N = R_Ny*R_Nx
+
+        # Initialize DataCube, setting data
+        DataCube.__init__(self, data, parentDataCube=None)
+
         self.set_scan_shape(self.R_Ny,self.R_Nx)
 
         # Set up DataObjectTracker

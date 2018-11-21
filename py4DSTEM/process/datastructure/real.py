@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class RealSlice(DataObject):
 
-    def __init__(self, data, parentDataCube, slicelabels=None, **kwargs):
+    def __init__(self, data, parentDataCube, slicelabels=None, R_Ny=None, R_Nx=None, **kwargs):
         """
         Instantiate a RealSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with real space of the parent datacube.
@@ -23,7 +23,14 @@ class RealSlice(DataObject):
         DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
-        self.R_Ny, self.R_Nx = self.parentDataCube.R_Ny, self.parentDataCube.R_Nx
+        if R_Ny is None:
+            self.R_Ny = self.parentDataCube.R_Ny
+        else:
+            self.R_Ny = R_Ny
+        if R_Nx is None:
+            self.R_Nx = self.parentDataCube.R_Nx
+        else:
+            self.R_Nx = R_Nx
 
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
