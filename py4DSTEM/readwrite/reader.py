@@ -112,6 +112,7 @@ class FileBrowser(object):
         elif info['type'] == 'PointList':
             print("{:<8}: {:<50}".format('Type', info['type']))
             print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Length', str(info['length'])))
             print("{:<8}: {:<50}".format('Coords', str(info['coordinates'])))
             print("{:<8}: {:<50}".format('Index', index))
         else:
@@ -249,26 +250,62 @@ class FileBrowser(object):
             self.rawdatacube.Q_Nx = Q_Nx
             self.rawdatacube.R_N = R_Ny*R_Nx
             dataobject = self.rawdatacube
+
         elif objecttype == 'DataCube':
             shape = info['shape']
             R_Ny, R_Nx, Q_Ny, Q_Nx = shape
             data = np.array(self.file['4DSTEM_experiment']['processing']['datacubes'][name]['datacube'])
             dataobject = DataCube(data=data, parentDataCube=self.rawdatacube, name=name)
+
         elif objecttype == 'DiffractionSlice':
             depth = info['depth']
             slices = info['slices']
             shape = info['shape']
-            dataobject = DiffractionSlice()
+            Q_Ny, Q_Nx = shape
+            if depth==1:
+                data = np.array(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[0]])
+            else:
+                data = np.empty((depth, shape[0], shape[1]))
+                for i in range(depth):
+                    data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[i]])
+            dataobject = DiffractionSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, Q_Ny=Q_Ny, Q_Nx=Q_Nx, name=name)
+
         elif objecttype == 'RealSlice':
             depth = info['depth']
             slices = info['slices']
             shape = info['shape']
+            R_Ny, R_Nx = shape
+            if depth==1:
+                data = np.array(self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[0]])
+            else:
+                data = np.empty((depth, shape[0], shape[1]))
+                for i in range(depth):
+                    data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[i]])
+            dataobject = RealSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, R_Ny=R_Ny, R_Nx=R_Nx, name=name)
+
         elif objecttype == 'PointList':
-            coords = info['coords']
+            coords = info['coordinates']
+            length = info['length']
+            coordinates = []
+            for i in range(len(coords)):
+                dtype = type(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coords[i]]['data'][0])
+                coordinates.append((coords[i], type))
+            dataobject = PointList(coordinates=coordinates, parentDataCube=self.rawdatacube, name=name)
+            for i in range(length):
+                new_point = tuple([self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'][i] for coord in coords])
+                dataobject.add_point(new_point)
+
         else:
-            pass
+            print("Unknown object type {}. Returning None.".format(objecttype))
+            dataobject = None
 
         return dataobject
+
+    def get_dataobjects(self, indices):
+        objects = []
+        for index in indices:
+            objects.append(self.get_dataobject(index))
+        return objects
 
     ###### Log display and querry ######
 
