@@ -82,7 +82,8 @@ class RawDataCube(DataCube):
 
     def __init__(self, data, R_Ny, R_Nx, Q_Ny, Q_Nx,
                  is_py4DSTEM_file=False, h5_file=None, save_behavior=True,
-                 original_metadata_shortlist=None, original_metadata_all=None):
+                 original_metadata_shortlist=None, original_metadata_all=None,
+                 py4DSTEM_version=None):
         """
         Instantiate a RawDataCube object.
         Sets the data and scan dimensions.
@@ -104,7 +105,10 @@ class RawDataCube(DataCube):
 
         # Handle metadata
         if is_py4DSTEM_file:
-            self.setup_metadata_py4DSTEM_file(h5_file)
+            if py4DSTEM_version == (0,1):
+                self.setup_metadata_py4DSTEM_file_v0_1(h5_file)
+            else:
+                self.setup_metadata_py4DSTEM_file(h5_file)
         else:
             self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
 
@@ -140,6 +144,23 @@ class RawDataCube(DataCube):
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['user'],self.metadata.user)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['calibration'],self.metadata.calibration)
         self.get_metadata_from_h5_file(h5_file['4DSTEM_experiment']['metadata']['comments'],self.metadata.comments)
+
+    def setup_metadata_py4DSTEM_file_v0_1(self, h5_file):
+        self.setup_metadata_containers()
+        self.setup_metadata_search_dicts()
+
+        # Copy original metadata from .h5 trees to an equivalent tree structure
+        self.metadata.original.shortlist = MetadataCollection('shortlist')
+        self.metadata.original.all = MetadataCollection('all')
+        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
+        self.get_original_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
+
+        # Copy metadata from .h5 groups to corresponding dictionaries
+        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
+        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['sample'],self.metadata.sample)
+        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['user'],self.metadata.user)
+        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['calibration'],self.metadata.calibration)
+        self.get_metadata_from_h5_file(h5_file['4D-STEM_data']['metadata']['comments'],self.metadata.comments)
 
     def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
         self.setup_metadata_containers()

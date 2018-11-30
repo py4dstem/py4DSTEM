@@ -1,4 +1,4 @@
-# Reads 4D-STEM data with hyperspy, stores as a DataCube object
+# Reads 4D-STEM data
 
 import h5py
 import numpy as np
@@ -497,6 +497,57 @@ def read_data(filename):
             rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
                             R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
                             is_py4DSTEM_file=True, h5_file=h5_file)
+            h5_file.close()
+            return rawdatacube
+        else:
+            h5_file.close()
+    except IOError:
+        pass
+
+    # Use hyperspy
+    print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
+    try:
+        hyperspy_file = hs.load(filename)
+        if len(hyperspy_file.data.shape)==3:
+            R_N, Q_Ny, Q_Nx = hyperspy_file.data.shape
+            R_Ny, R_Nx = R_N, 1
+        elif len(hyperspy_file.data.shape)==4:
+            R_Ny, R_Nx, Q_Ny, Q_Nx = hyperspy_file.data.shape
+        else:
+            print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
+            print("Initializing random datacube...")
+            return RawDataCube(data=np.random.rand(100,512,512),
+                            R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                            is_py4DSTEM_file=False)
+        return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            is_py4DSTEM_file=False,
+                            original_metadata_shortlist=hyperspy_file.metadata,
+                            original_metadata_all=hyperspy_file.original_metadata)
+    except Exception as err:
+        print("Failed to load", err)
+        print("Initializing random datacube...")
+        return RawDataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                           is_py4DSTEM_file=False)
+
+@log
+def read_data_v0_1(filename):
+    """
+    Takes a filename as input, and outputs a RawDataCube object.
+
+    If filename is a .h5 file, read_data() checks if the file was written by py4DSTEM.  If it
+    was, the metadata are read and saved directly.  Otherwise, the file is read with hyperspy,
+    and metadata is scraped and saved from the hyperspy file.
+    """
+    print("Reading file {}...\n".format(filename))
+    # Check if file was written by py4DSTEM
+    try:
+        h5_file = h5py.File(filename,'r')
+        if is_py4DSTEM_file(h5_file):
+            print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
+            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+            rawdatacube = RawDataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
+                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            is_py4DSTEM_file=True, h5_file=h5_file, py4DSTEM_version=(0,1))
             h5_file.close()
             return rawdatacube
         else:
