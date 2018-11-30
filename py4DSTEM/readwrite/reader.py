@@ -288,12 +288,14 @@ class FileBrowser(object):
             coords = info['coordinates']
             length = info['length']
             coordinates = []
-            for i in range(len(coords)):
-                dtype = type(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coords[i]]['data'][0])
-                coordinates.append((coords[i], type))
+            data_dict = {}
+            for coord in coords:
+                dtype = type(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'][0])
+                coordinates.append((coord, dtype))
+                data_dict[coord] = np.array(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'])
             dataobject = PointList(coordinates=coordinates, parentDataCube=self.rawdatacube, name=name)
             for i in range(length):
-                new_point = tuple([self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'][i] for coord in coords])
+                new_point = tuple([data_dict[coord][i] for coord in coords])
                 dataobject.add_point(new_point)
 
         else:
