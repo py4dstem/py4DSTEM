@@ -32,6 +32,7 @@ class PointList(DataObject):
         """
         DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
+        self.coordinates = coordinates
         self.parentDataCube = parentDataCube
         self.default_dtype = dtype
 
