@@ -11,14 +11,18 @@ from ..process.log import log
 
 class FileBrowser(object):
 
-    def __init__(self, filepath):
+    def __init__(self, filepath, rawdatacube=None):
         self.filepath = filepath
         self.is_py4DSTEM_file = is_py4DSTEM_file(self.filepath)
         if self.is_py4DSTEM_file:
             self.version = get_py4DSTEM_version(self.filepath)
             self.file = h5py.File(filepath, 'r')
             self.set_object_lookup_info()
-            self.rawdatacube = RawDataCube(data=np.array([0]),R_Ny=1,R_Nx=1,Q_Ny=1,Q_Nx=1)
+            if rawdatacube is None:
+                self.rawdatacube = RawDataCube(data=np.array([0]),R_Ny=1,R_Nx=1,Q_Ny=1,Q_Nx=1)
+            else:
+                assert isinstance(rawdatacube, RawDataCube)
+                self.rawdatacube = rawdatacube
             #self.N_logentries = self.get_N_logentries()
 
     ###### Open/close methods ######
