@@ -14,7 +14,9 @@ class FileBrowser(object):
     def __init__(self, filepath, rawdatacube=None):
         self.filepath = filepath
         self.is_py4DSTEM_file = is_py4DSTEM_file(self.filepath)
-        if self.is_py4DSTEM_file:
+        if not self.is_py4DSTEM_file:
+            print("Error: FileBrowser instance can't read {}, because it isn't recognized as a py4DSTEM file.".format(self.filepath))
+        else:
             self.version = get_py4DSTEM_version(self.filepath)
             self.file = h5py.File(filepath, 'r')
             self.set_object_lookup_info()
