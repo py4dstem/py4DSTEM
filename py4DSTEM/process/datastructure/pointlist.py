@@ -35,6 +35,7 @@ class PointList(DataObject):
         self.coordinates = coordinates
         self.parentDataCube = parentDataCube
         self.default_dtype = dtype
+        self.length = 0
 
         # Define the the data type for the PointList structured array
         if type(coordinates[0])==str:
@@ -53,6 +54,7 @@ class PointList(DataObject):
         point = tuple(point)
         assert len(point)==len(self.dtype)
         self.data = np.append(self.data, np.array(point,dtype=self.dtype))
+        self.length += 1
 
     def add_pointarray(self, pointarray):
         """
@@ -68,6 +70,7 @@ class PointList(DataObject):
         """
         assert self.dtype==pointlist.dtype
         self.data = np.append(self.data, pointlist.data)
+        self.length += pointlist.length
 
     def sort(self, coordinate, order='descending'):
         """
@@ -103,12 +106,13 @@ class PointList(DataObject):
             else:
                 name,minval,maxval = tup
                 deletemask = deletemask | (self.data[name]<minval) | (self.data[name]>=maxval)
-        new_pointlist = copy(self)
+        new_pointlist = self.copy()
         new_pointlist.remove_points(deletemask)
         return new_pointlist
 
     def remove_points(self, deletemask):
         self.data = np.delete(self.data, deletemask.nonzero()[0])
+        self.length -= len(deletemask.nonzero()[0])
 
     def copy(self, **kwargs):
         new_pointlist = copy(self)
