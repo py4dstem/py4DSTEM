@@ -110,3 +110,7 @@ class PointList(DataObject):
     def remove_points(self, deletemask):
         self.data = np.delete(self.data, deletemask.nonzero()[0])
 
+    def copy(self, **kwargs):
+        new_pointlist = copy(self)
+        DataObject.__init__(new_pointlist, parent=self.parentDataCube, **kwargs)
+        return new_pointlist
