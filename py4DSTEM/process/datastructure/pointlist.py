@@ -5,7 +5,7 @@
 # Qy,Qx,Ry,Rx, however, the class is flexible.
 
 import numpy as np
-from copy import copy, deepcopy
+from copy import copy
 from .dataobject import DataObject
 
 class PointList(DataObject):
@@ -60,7 +60,7 @@ class PointList(DataObject):
         """
         pointarray must be an (n,m)-shaped ndarray, where m=len(coordinates), and n is the number of newpoints
         """
-        assert pointarray.shape[1]==len(self.dtype)
+        assert len(pointarray[0])==len(self.dtype)
         for point in pointarray:
             self.add_point(point)
 
@@ -140,12 +140,11 @@ class PointList(DataObject):
         self.length -= len(deletemask.nonzero()[0])
 
     def copy(self, **kwargs):
-        new_pointlist = copy(self)
-        DataObject.__init__(new_pointlist, parent=self.parentDataCube, **kwargs)
+        new_pointlist = PointList(coordinates=self.coordinates,
+                                  parentDataCube=self.parentDataCube,
+                                  data=np.copy(self.data),
+                                  dtype=self.dtype,
+                                  **kwargs)
         return new_pointlist
 
-    def deepcopy(self, **kwargs):
-        new_pointlist = deepcopy(self)
-        DataObject.__init__(new_pointlist, parent=self.parentDataCube, **kwargs)
-        return new_pointlist
 
