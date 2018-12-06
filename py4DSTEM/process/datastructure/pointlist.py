@@ -39,7 +39,7 @@ class PointList(DataObject):
 
         # Define the the data type for the PointList structured array
         if type(coordinates[0])==str:
-            self.dtype = np.dtype([(name,default_type) for name in coordinates])
+            self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
             self.dtype = np.dtype(coordinates)
         else:
@@ -146,5 +146,51 @@ class PointList(DataObject):
                                   dtype=self.dtype,
                                   **kwargs)
         return new_pointlist
+
+
+class PointListArray(DataObject):
+    """
+    An object containing an array of PointLists.
+    Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
+    as real space scan positions R_Nx,R_Ny.
+    """
+    def __init__(self, coordinates, parentDataCube, shape=None, dtype=float, **kwargs):
+        """
+		Instantiate a PointListArray object.
+		Defines the coordinates, and parentDataCube by instantiating PointLists with these
+        parameters.
+        If shape=None, the shape defaults to the real space shape (R_Nx, R_Ny).
+
+		Inputs:
+			coordinates, parentDataCube - see PointList documentation
+            shape - optional, a 2-tuple of ints specifying the array shape.  If unspecified, the shape
+                    defaults to the real space shape (R_Nx, R_Ny).
+        """
+        DataObject.__init__(self, parent=parentDataCube, **kwargs)
+
+        self.coordinates = coordinates
+        self.parentDataCube = parentDataCube
+        self.default_dtype = dtype
+
+        if shape is None:
+            self.shape = (self.parentDataCube.R_Ny, self.parentDataCube.R_Nx)
+        else:
+            assert isinstance(shape,tuple), "If specified, shape must be a tuple."
+            assert len(shape) == 2, "If specified, shape must be a length 2 tuple."
+            self.shape = shape
+
+        self.pointlists = [[PointList(coordinates=self.coordinates,
+                            parentDataCube=self.parentDataCube,
+                            dtype = self.default_dtype,
+                            **kwargs) for i in range(self.shape[0])] for j in range(self.shape[1])]
+
+    def get_pointlist(self, i, j):
+        """
+        Returns the pointlist at i,j
+        """
+        return self.pointlists[i][j]
+
+
+
 
 

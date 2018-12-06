@@ -9,7 +9,8 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..process.datastructure import RawDataCube, DataCube, DiffractionSlice, RealSlice, PointList
+from ..process.datastructure import RawDataCube, DataCube, DiffractionSlice, RealSlice
+from ..process.datastructure import PointList, PointListArray
 from ..process.datastructure import MetadataCollection, DataObjectTracker, DataObject
 from ..process.log import log, Logger
 
@@ -73,7 +74,8 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
     group_diffraction_slices = group_processing.create_group("diffractionslices")
     group_real_slices = group_processing.create_group("realslices")
     group_point_lists = group_processing.create_group("pointlists")
-    ind_rdc, ind_dcs, ind_dfs, ind_rls, ind_ptl = 0,0,0,0,0
+    group_point_list_arrays = group_processing.create_group("pointlistarrays")
+    ind_rdc, ind_dcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
 
     # Loop through all objects in the DataObjectTracker and, if save_behavior==True, save
     for item in dataobjecttracker.dataobject_list:
@@ -114,10 +116,14 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
                 if name == '':
                     name = 'pointlist_'+str(ind_ptl)
                     ind_ptl += 1
-                group_new_point_list = group_point_lists.create_group(name)
-                save_pointlist_group(group_new_point_list, dataobject)
+            elif isinstance(dataobject, PointListArray):
+                if name == '':
+                    name = 'pointlistarray_'+str(ind_ptla)
+                    ind_ptla += 1
+                group_new_point_list_array = group_point_list_arrays.create_group(name)
+                save_pointlistarray_group(group_new_point_list_array, dataobject)
             else:
-                print("Error: object {} has type {}, and is not a RawDataCube, DataCube, DiffractionSlice, RealSlice, or PointList instance.".format(dataobject,type(dataobject)))
+                print("Error: object {} has type {}, and is not a RawDataCube, DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Finish and close #####
     print("Done.")
@@ -362,6 +368,13 @@ def save_pointlist_group(group, pointlist):
         group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
+def save_pointlistarray_group(group, pointlistarray):
+
+    for i in range(pointlistarray.shape[0]):
+        for j in range(pointlistarray.shape[1]):
+            group_current_arrayposition = group.create_group("{}_{}".format(i,j))
+            save_pointlist_group(group_current_arrayposition, pointlistarray.get_pointlist(i,j))
+
 
 
 #### Functions for original metadata transfer ####
@@ -470,6 +483,8 @@ def write_log_item(group_log, index, logged_item):
                     name = np.string_("RealSlice_id"+str(id(value)))
                 elif isinstance(value,PointList):
                     name = np.string_("PointList_id"+str(id(value)))
+                elif isinstance(value,PointListArray):
+                    name = np.string_("PointListArray_id"+str(id(value)))
                 else:
                     name = np.string_("DataObject_id"+str(id(value)))
             else:
