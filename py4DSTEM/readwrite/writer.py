@@ -116,6 +116,8 @@ def save_from_dataobjecttracker(dataobjecttracker, outputfile):
                 if name == '':
                     name = 'pointlist_'+str(ind_ptl)
                     ind_ptl += 1
+                group_new_pointlist = group_point_lists.create_group(name)
+                save_pointlist_group(group_new_pointlist, dataobject)
             elif isinstance(dataobject, PointListArray):
                 if name == '':
                     name = 'pointlistarray_'+str(ind_ptla)
