@@ -190,6 +190,22 @@ class PointListArray(DataObject):
         """
         return self.pointlists[i][j]
 
+    def copy(self, **kwargs):
+        """
+        Returns a copy of itself.
+        """
+        new_pointlistarray = PointListArray(coordinates=self.coordinates,
+                                            parentDataCube=self.parentDataCube,
+                                            shape=self.shape,
+                                            dtype=self.default_dtype,
+                                            **kwargs)
+
+        for i in range(new_pointlistarray.shape[0]):
+            for j in range(new_pointlistarray.shape[1]):
+                curr_pointlist = new_pointlistarray.get_pointlist(i,j)
+                curr_pointlist.add_pointlist(self.get_pointlist(i,j).copy())
+
+        return new_pointlistarray
 
 
 
