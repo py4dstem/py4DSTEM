@@ -86,7 +86,7 @@ class FileBrowser(object):
             for key in list(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name].keys()):
                 i0,j0 = int(key.split('_')[0]),int(key.split('_')[1])
                 i,j = max(i0,i),max(j0,j)
-            shape = (i,j)
+            shape = (i+1,j+1)
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape, 'type':objecttype, 'index':index}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
