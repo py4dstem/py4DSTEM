@@ -5,7 +5,7 @@ import numpy as np
 import hyperspy.api as hs
 from ..process.datastructure import RawDataCube, DataCube
 from ..process.datastructure import DiffractionSlice, RealSlice
-from ..process.datastructure import PointList
+from ..process.datastructure import PointList, PointListArray
 from ..process.log import log
 
 
@@ -46,6 +46,7 @@ class FileBrowser(object):
             RawDataCube, DataCube: 'shape'
             DiffractionSlice, RealSlice: 'depth', 'slices', 'shape'
             PointList: 'coordinates', 'length'
+            PointListArray: 'coordinates', 'shape'
         """
         objecttype, objectindex = self.get_object_lookup_info(index)
 
@@ -78,6 +79,15 @@ class FileBrowser(object):
             coordinates = list(self.file['4DSTEM_experiment']['processing']['pointlists'][name].keys())
             length = self.file['4DSTEM_experiment']['processing']['pointlists'][name][coordinates[0]]['data'].shape[0]
             objectinfo = {'name':name, 'coordinates':coordinates, 'length':length, 'type':objecttype, 'index':index}
+        elif objecttype == 'PointListArray':
+            name = list(self.file['4DSTEM_experiment']['processing']['pointlistarrays'].keys())[objectindex]
+            coordinates = list(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name]['0_0'].keys())
+            i,j=0,0
+            for key in list(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name].keys()):
+                i0,j0 = int(key.split('_')[0]),int(key.split('_')[1])
+                i,j = max(i0,i),max(j0,j)
+            shape = (i,j)
+            objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape, 'type':objecttype, 'index':index}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
             objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index}
@@ -122,6 +132,12 @@ class FileBrowser(object):
             print("{:<8}: {:<50}".format('Length', str(info['length'])))
             print("{:<8}: {:<50}".format('Coords', str(info['coordinates'])))
             print("{:<8}: {:<50}".format('Index', index))
+        elif info['type'] == 'PointListArray':
+            print("{:<8}: {:<50}".format('Type', info['type']))
+            print("{:<8}: {:<50}".format('Name', info['name']))
+            print("{:<8}: {:<50}".format('Shape', str(info['shape'])))
+            print("{:<8}: {:<50}".format('Coords', str(info['coordinates'])))
+            print("{:<8}: {:<50}".format('Index', index))
         else:
             print("{:<8}: {:<50}".format('Type', info['type']))
             print("{:<8}: {:<50}".format('Name', info['name']))
@@ -142,6 +158,8 @@ class FileBrowser(object):
                 self.show_realslices()
             elif objecttype == 'PointList':
                 self.show_pointlists()
+            elif objecttype == 'PointListArray':
+                self.show_pointlistarrays()
             else:
                 print("Error: unknown objecttype {}.".format(objecttype))
 
@@ -211,6 +229,18 @@ class FileBrowser(object):
                 coordinates = info['coordinates']
                 print("{:^8}{:<36}{:^8}{:^24}".format(index, name, length, str(coordinates)))
 
+    def show_pointlistarrays(self):
+        if self.N_pointlistarrays == 0:
+            print("No PointListArrays present.")
+        else:
+            print("{:^8}{:^36}{:^12}{:^24}".format('Index', 'Name', 'Shape', 'Coordinates'))
+            for index in (self.dataobject_lookup_arr=='PointListArray').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                shape = info['shape']
+                coordinates = info['coordinates']
+                print("{:^8}{:<36}{:^8}{:^24}".format(index, name, shape, str(coordinates)))
+
     ###### Retrieve dataobjects ######
 
     def set_object_lookup_info(self):
@@ -222,7 +252,8 @@ class FileBrowser(object):
         self.N_diffractionslices = len(self.file['4DSTEM_experiment']['processing']['diffractionslices'])
         self.N_realslices = len(self.file['4DSTEM_experiment']['processing']['realslices'])
         self.N_pointlists = len(self.file['4DSTEM_experiment']['processing']['pointlists'])
-        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists])
+        self.N_pointlistarrays = len(self.file['4DSTEM_experiment']['processing']['pointlistarrays'])
+        self.N_dataobjects = np.sum([self.N_rawdatacubes, self.N_datacubes, self.N_diffractionslices, self.N_realslices, self.N_pointlists, self.N_pointlistarrays])
 
         self.dataobject_lookup_arr = []
         self.dataobject_lookup_arr += ['RawDataCube' for i in range(self.N_rawdatacubes)]
@@ -230,6 +261,7 @@ class FileBrowser(object):
         self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
         self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
         self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
+        self.dataobject_lookup_arr += ['PointListArray' for i in range(self.N_pointlistarrays)]
         self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
 
     def get_object_lookup_info(self, index):
@@ -304,6 +336,24 @@ class FileBrowser(object):
                 new_point = tuple([data_dict[coord][i] for coord in coords])
                 dataobject.add_point(new_point)
 
+        elif objecttype == 'PointListArray':
+            shape = info['shape']
+            coords = info['coordinates']
+            coordinates = []
+            for coord in coords:
+                dtype = type(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name]['0_0'][coord]['data'][0])
+                coordinates.append((coord, dtype))
+            dataobject = PointListArray(coordinates=coordinates, parentDataCube=self.rawdatacube, shape=shape, name=name)
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    pointlist = dataobject.get_pointlist(i,j)
+                    data_dict = {}
+                    for coord in coords:
+                        data_dict[coord] = np.array(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name]['{}_{}'.format(i,j)][coord]['data'])
+                    for k in range(len(data_dict[coords[0]])):
+                        new_point = tuple([data_dict[coord][k] for coord in coords])
+                        pointlist.add_point(new_point)
+
         else:
             print("Unknown object type {}. Returning None.".format(objecttype))
             dataobject = None
@@ -343,6 +393,12 @@ class FileBrowser(object):
     def get_pointlists(self):
         objects = []
         for index in (self.dataobject_lookup_arr=='PointList').nonzero()[0]:
+            objects.append(self.get_dataobject(index))
+        return objects
+
+    def get_pointlistarrays(self):
+        objects = []
+        for index in (self.dataobject_lookup_arr=='PointListArray').nonzero()[0]:
             objects.append(self.get_dataobject(index))
         return objects
 
