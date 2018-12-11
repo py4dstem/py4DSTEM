@@ -75,7 +75,7 @@ def calculate_counting_threshhold(datacube,darkreference,sigmathresh=4,nsamples=
     #This flattens the array, it shouldn't make a copy of it
     sample = np.zeros((y,x,nsamples),dtype=np.int16)
     for i in range(nsamples):
-        sample[:,:,i] = np.asarray(datacube[:,:,samples[i]//z,samples[i]%t],dtype=np.int16)
+        sample[:,:,i] = np.asarray(datacube[:,:,samples[i]//t,samples[i]%t],dtype=np.int16)
         sample[:,:,i] -= darkreference[:,np.newaxis]
     sample  = np.ravel(sample)
     #Remove X-rays
@@ -192,8 +192,8 @@ def count_datacube(datacube,counted_shape,sigmathresh=4,nsamples=40,upperlimit=1
                 for i in range(num_electrons):
                     event = electron_posn[i,:]
                     electron_posn[i,:] += center_of_mass(workingarray[int(event[0]-1)
-                                                    :int(event[0]+1),int(event[1]-1)
-                                                    :int(event[1]+1)])
+                                                    :int(event[0]+2),int(event[1]-1)
+                                                    :int(event[1]+2)])
                 electron_posn -= np.asarray([1,1])[np.newaxis,:]
 
             if(plot_electrons):
