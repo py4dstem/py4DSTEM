@@ -28,7 +28,7 @@ import gc
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .utils import sibling_path, pg_point_roi, LQCollection
 from ..readwrite.reader import read_data
-from ..readwrite.writer import save_from_datacube
+from ..readwrite.writer import save_datacube
 from ..process.datastructure.datacube import DataCube
 
 import IPython
@@ -469,7 +469,7 @@ class DataViewer(QtWidgets.QMainWindow):
     def execute_saveas(self):
         f = self.save_widget.lineEdit_SavePath.text()
         print("Saving file to {}".format(f))
-        save_from_datacube(self.datacube,f)
+        save_datacube(self.datacube,f)
         self.save_widget.close()
 
     def save_directory(self):

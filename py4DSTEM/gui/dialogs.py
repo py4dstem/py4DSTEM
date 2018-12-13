@@ -404,7 +404,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         self.tab_microscope = self.make_tab(datacube.metadata.microscope)
         self.tab_sample = self.make_tab(datacube.metadata.sample)
         self.tab_user = self.make_tab(datacube.metadata.user)
-        self.tab_processing = self.make_tab(datacube.metadata.processing)
         self.tab_calibration = self.make_tab(datacube.metadata.calibration)
 
         # Comments tab - make separately to create larger text box
@@ -428,7 +427,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         self.tabs.addTab(self.tab_microscope,"Microscope")
         self.tabs.addTab(self.tab_sample,"Sample")
         self.tabs.addTab(self.tab_user,"User")
-        self.tabs.addTab(self.tab_processing,"Processing")
         self.tabs.addTab(self.tab_calibration,"Calibration")
         self.tabs.addTab(self.tab_comments,"Comments")
 
