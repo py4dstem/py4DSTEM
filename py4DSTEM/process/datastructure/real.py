@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class RealSlice(DataObject):
 
-    def __init__(self, data, parentDataCube, slicelabels=None, R_Ny=None, R_Nx=None, **kwargs):
+    def __init__(self, data, parentDataCube, slicelabels=None, R_Nx=None, R_Ny=None, **kwargs):
         """
         Instantiate a RealSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with real space of the parent datacube.
@@ -23,23 +23,23 @@ class RealSlice(DataObject):
         DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
-        if R_Ny is None:
-            self.R_Ny = self.parentDataCube.R_Ny
-        else:
-            self.R_Ny = R_Ny
         if R_Nx is None:
             self.R_Nx = self.parentDataCube.R_Nx
         else:
             self.R_Nx = R_Nx
+        if R_Ny is None:
+            self.R_Ny = self.parentDataCube.R_Ny
+        else:
+            self.R_Ny = R_Ny
 
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
         if len(shape)==2:
-            assert shape==(self.R_Ny,self.R_Nx), "Shape of data is {}, but shape of real space in parent DataCube is ({},{}).".format(data.shape,self.R_Ny,self.R_Nx)
+            assert shape==(self.R_Nx,self.R_Ny), "Shape of data is {}, but shape of real space in parent DataCube is ({},{}).".format(data.shape,self.R_Nx,self.R_Ny)
             self.depth=1
             self.data2D = data
         else:
-            assert shape[1:]==(self.R_Ny,self.R_Nx), "Shape of data is {}, but shape of real space in parent DataCube is ({},{}).".format(data.shape,self.R_Ny,self.R_Nx)
+            assert shape[1:]==(self.R_Nx,self.R_Ny), "Shape of data is {}, but shape of real space in parent DataCube is ({},{}).".format(data.shape,self.R_Nx,self.R_Ny)
             self.depth=shape[0]
             if slicelabels is None:
                 self.data2D = []

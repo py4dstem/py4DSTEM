@@ -110,31 +110,6 @@ class PointList(DataObject):
         new_pointlist.remove_points(deletemask)
         return new_pointlist
 
-    def get_subpointlist(self, coords_vals):
-        """
-        Returns a new PointList class instance, populated with points in self.data whose values
-        for particular fields agree with those specified in coords_vals.
-
-        Accepts:
-            coords_vals - a list of 2-tuples (name, val) or 3-tuples (name, minval, maxval),
-                          name should be a field in pointlist.dtype
-        Returns:
-            subpointlist - a new PointList class instance
-        """
-        deletemask = np.zeros(len(self.data),dtype=bool)
-        for tup in coords_vals:
-            assert (len(tup)==2) or (len(tup)==3)
-            assert tup[0] in self.dtype.names
-            if len(tup)==2:
-                name,val = tup
-                deletemask = deletemask | (self.data[name]!=val)
-            else:
-                name,minval,maxval = tup
-                deletemask = deletemask | (self.data[name]<minval) | (self.data[name]>=maxval)
-        new_pointlist = self.copy()
-        new_pointlist.remove_points(deletemask)
-        return new_pointlist
-
     def remove_points(self, deletemask):
         self.data = np.delete(self.data, deletemask.nonzero()[0])
         self.length -= len(deletemask.nonzero()[0])
@@ -173,7 +148,7 @@ class PointListArray(DataObject):
         self.default_dtype = dtype
 
         if shape is None:
-            self.shape = (self.parentDataCube.R_Ny, self.parentDataCube.R_Nx)
+            self.shape = (self.parentDataCube.R_Nx, self.parentDataCube.R_Ny)
         else:
             assert isinstance(shape,tuple), "If specified, shape must be a tuple."
             assert len(shape) == 2, "If specified, shape must be a length 2 tuple."
@@ -182,7 +157,7 @@ class PointListArray(DataObject):
         self.pointlists = [[PointList(coordinates=self.coordinates,
                             parentDataCube=self.parentDataCube,
                             dtype = self.default_dtype,
-                            **kwargs) for i in range(self.shape[0])] for j in range(self.shape[1])]
+                            **kwargs) for j in range(self.shape[1])] for i in range(self.shape[0])]
 
     def get_pointlist(self, i, j):
         """
