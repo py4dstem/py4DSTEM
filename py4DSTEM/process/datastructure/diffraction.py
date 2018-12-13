@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class DiffractionSlice(DataObject):
 
-    def __init__(self, data, parentDataCube, slicelabels=None, Q_Ny=None, Q_Nx=None, **kwargs):
+    def __init__(self, data, parentDataCube, slicelabels=None, Q_Nx=None, Q_Ny=None, **kwargs):
         """
         Instantiate a DiffractionSlice object.  Set the parent datacube, dimensions, and data.
         Confirms that the data shape agrees with diffraction space of the parent datacube.
@@ -23,23 +23,23 @@ class DiffractionSlice(DataObject):
         DataObject.__init__(self, parent=parentDataCube, **kwargs)
 
         self.parentDataCube = parentDataCube
-        if Q_Ny is None:
-            self.Q_Ny = self.parentDataCube.Q_Ny
-        else:
-            self.Q_Ny = Q_Ny
         if Q_Nx is None:
             self.Q_Nx = self.parentDataCube.Q_Nx
         else:
             self.Q_Nx = Q_Nx
+        if Q_Ny is None:
+            self.Q_Ny = self.parentDataCube.Q_Ny
+        else:
+            self.Q_Ny = Q_Ny
 
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
         if len(shape)==2:
-            assert shape==(self.Q_Ny,self.Q_Nx), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Ny, self.Q_Nx)
+            assert shape==(self.Q_Nx,self.Q_Ny), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Nx, self.Q_Ny)
             self.depth=1
             self.data2D = data
         else:
-            assert shape[1:]==(self.Q_Ny,self.Q_Nx), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Ny, self.Q_Nx)
+            assert shape[1:]==(self.Q_Nx,self.Q_Ny), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Nx, self.Q_Ny)
             self.depth=shape[0]
             if slicelabels is None:
                 self.data2D = []
