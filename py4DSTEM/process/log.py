@@ -1,7 +1,15 @@
-# Creates a function decorator which causes a function to be logged every time it's used
+# Creates a log singleton class, Logger, which will contain all program logs.
+#
+# All instances of the Logger class point to a single instance, which keeps a running inventory
+# of function calls which are flagged for logging. 
+# Each such function call is stored in a single LogItem object, which is stored at a particular
+# index in the Logger.
+# A function decorator, @log, is defined which causes decorated functions to get logged whenever
+# called.
 
 from collections import OrderedDict
 from time import localtime
+from functools import wraps
 import inspect
 
 # Get the current version in __version__
@@ -85,6 +93,7 @@ def log(function):
             inputs[key] = value.default
 
     # Define the new function
+    @wraps(function)
     def logged_function(*args,**kwargs):
         for i in range(len(args)):
             key = list(inputs.items())[i][0]

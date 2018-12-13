@@ -2,3 +2,4 @@
 .project
 .pydevproject
 *.swp
+*.ipynb_checkpoints*
