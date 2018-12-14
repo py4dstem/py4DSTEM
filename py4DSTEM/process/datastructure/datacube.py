@@ -43,6 +43,30 @@ class DataCube(DataObject):
 
     ############### preprocess.py ##############
 
+    def set_scan_shape(self,R_Nx,R_Ny):
+        """
+        Reshape the data given the real space scan shape.
+        """
+        self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
+
+    def swap_RQ(self):
+        """
+        Swap real and reciprocal space coordinates.
+        """
+        self = preprocess.swap_RQ(self)
+
+    def swap_Rxy(self):
+        """
+        Swap real space x and y coordinates.
+        """
+        self = preprocess.swap_Rxy(self)
+
+    def swap_Qxy(self):
+        """
+        Swap reciprocal space x and y coordinates.
+        """
+        self = preprocess.swap_Qxy(self)
+
     def crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
         self = preprocess.crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
 
@@ -111,12 +135,6 @@ class RawDataCube(DataCube):
                 self.setup_metadata_py4DSTEM_file(h5_file)
         else:
             self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
-
-    def set_scan_shape(self,R_Nx,R_Ny):
-        """
-        Reshape the data given the real space scan shape.
-        """
-        self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
 
     ###################### METADATA HANDLING ########################
     # Metadata is structured as follows:
