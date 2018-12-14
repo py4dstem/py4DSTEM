@@ -21,7 +21,7 @@ class FileBrowser(object):
             self.file = h5py.File(filepath, 'r')
             self.set_object_lookup_info()
             if rawdatacube is None:
-                self.rawdatacube = RawDataCube(data=np.array([0]),R_Ny=1,R_Nx=1,Q_Ny=1,Q_Nx=1)
+                self.rawdatacube = RawDataCube(data=np.array([0]),R_Nx=1,R_Ny=1,Q_Nx=1,Q_Ny=1)
             else:
                 assert isinstance(rawdatacube, RawDataCube)
                 self.rawdatacube = rawdatacube
@@ -282,17 +282,17 @@ class FileBrowser(object):
         if objecttype == 'RawDataCube':
             shape = info['shape']
             self.rawdatacube.data4D = np.array(self.file['4DSTEM_experiment']['rawdatacube']['datacube'])
-            R_Ny, R_Nx, Q_Ny, Q_Nx = shape
-            self.rawdatacube.R_Ny = R_Ny
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
             self.rawdatacube.R_Nx = R_Nx
-            self.rawdatacube.Q_Ny = Q_Ny
+            self.rawdatacube.R_Ny = R_Ny
             self.rawdatacube.Q_Nx = Q_Nx
-            self.rawdatacube.R_N = R_Ny*R_Nx
+            self.rawdatacube.Q_Ny = Q_Ny
+            self.rawdatacube.R_N = R_Nx*R_Ny
             dataobject = self.rawdatacube
 
         elif objecttype == 'DataCube':
             shape = info['shape']
-            R_Ny, R_Nx, Q_Ny, Q_Nx = shape
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
             data = np.array(self.file['4DSTEM_experiment']['processing']['datacubes'][name]['datacube'])
             dataobject = DataCube(data=data, parentDataCube=self.rawdatacube, name=name)
 
@@ -300,27 +300,27 @@ class FileBrowser(object):
             depth = info['depth']
             slices = info['slices']
             shape = info['shape']
-            Q_Ny, Q_Nx = shape
+            Q_Nx, Q_Ny = shape
             if depth==1:
                 data = np.array(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[0]])
             else:
                 data = np.empty((depth, shape[0], shape[1]))
                 for i in range(depth):
                     data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[i]])
-            dataobject = DiffractionSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, Q_Ny=Q_Ny, Q_Nx=Q_Nx, name=name)
+            dataobject = DiffractionSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
 
         elif objecttype == 'RealSlice':
             depth = info['depth']
             slices = info['slices']
             shape = info['shape']
-            R_Ny, R_Nx = shape
+            R_Nx, R_Ny = shape
             if depth==1:
                 data = np.array(self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[0]])
             else:
                 data = np.empty((depth, shape[0], shape[1]))
                 for i in range(depth):
                     data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[i]])
-            dataobject = RealSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, R_Ny=R_Ny, R_Nx=R_Nx, name=name)
+            dataobject = RealSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
 
         elif objecttype == 'PointList':
             coords = info['coordinates']
@@ -461,15 +461,15 @@ def read_non_py4DSTEM_file(filename):
     try:
         hyperspy_file = hs.load(filename)
         if len(hyperspy_file.data.shape)==3:
-            R_N, Q_Ny, Q_Nx = hyperspy_file.data.shape
-            R_Ny, R_Nx = R_N, 1
+            R_N, Q_Nx, Q_Ny = hyperspy_file.data.shape
+            R_Nx, R_Ny = R_N, 1
         elif len(hyperspy_file.data.shape)==4:
-            R_Ny, R_Nx, Q_Ny, Q_Nx = hyperspy_file.data.shape
+            R_Nx, R_Ny, Q_Nx, Q_Ny = hyperspy_file.data.shape
         else:
             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
             print("Returning None")
             return None
-        return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+        return RawDataCube(data=hyperspy_file.data, R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                             is_py4DSTEM_file=False,
                             original_metadata_shortlist=hyperspy_file.metadata,
                             original_metadata_all=hyperspy_file.original_metadata)
@@ -479,9 +479,9 @@ def read_non_py4DSTEM_file(filename):
         return None
 
 def read_version_0_1(browser):
-    R_Ny,R_Nx,Q_Ny,Q_Nx = browser.file['4D-STEM_data']['datacube']['datacube'].shape
+    R_Nx,R_Ny,Q_Nx,Q_Ny = browser.file['4D-STEM_data']['datacube']['datacube'].shape
     rawdatacube = RawDataCube(data=browser.file['4D-STEM_data']['datacube']['datacube'].value,
-                    R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                    R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                     is_py4DSTEM_file=True, h5_file=browser.file)
     return rawdatacube
 
@@ -555,9 +555,9 @@ def read_data(filename):
         h5_file = h5py.File(filename,'r')
         if is_py4DSTEM_file(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
+            R_Nx,R_Ny,Q_Nx,Q_Ny = h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].shape
             rawdatacube = RawDataCube(data=h5_file['4DSTEM_experiment']['rawdatacube']['datacube'].value,
-                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                             is_py4DSTEM_file=True, h5_file=h5_file)
             h5_file.close()
             return rawdatacube
@@ -571,24 +571,24 @@ def read_data(filename):
     try:
         hyperspy_file = hs.load(filename)
         if len(hyperspy_file.data.shape)==3:
-            R_N, Q_Ny, Q_Nx = hyperspy_file.data.shape
-            R_Ny, R_Nx = R_N, 1
+            R_N, Q_Nx, Q_Ny = hyperspy_file.data.shape
+            R_Nx, R_Ny = R_N, 1
         elif len(hyperspy_file.data.shape)==4:
-            R_Ny, R_Nx, Q_Ny, Q_Nx = hyperspy_file.data.shape
+            R_Nx, R_Ny, Q_Nx, Q_Ny = hyperspy_file.data.shape
         else:
             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
             print("Initializing random datacube...")
             return RawDataCube(data=np.random.rand(100,512,512),
-                            R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                            R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                             is_py4DSTEM_file=False)
-        return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+        return RawDataCube(data=hyperspy_file.data, R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                             is_py4DSTEM_file=False,
                             original_metadata_shortlist=hyperspy_file.metadata,
                             original_metadata_all=hyperspy_file.original_metadata)
     except Exception as err:
         print("Failed to load", err)
         print("Initializing random datacube...")
-        return RawDataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+        return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                            is_py4DSTEM_file=False)
 
 @log
@@ -606,9 +606,9 @@ def read_data_v0_1(filename):
         h5_file = h5py.File(filename,'r')
         if is_py4DSTEM_file(h5_file):
             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Ny,R_Nx,Q_Ny,Q_Nx = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+            R_Nx,R_Ny,Q_Nx,Q_Ny = h5_file['4D-STEM_data']['datacube']['datacube'].shape
             rawdatacube = RawDataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
-                            R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+                            R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                             is_py4DSTEM_file=True, h5_file=h5_file, py4DSTEM_version=(0,1))
             h5_file.close()
             return rawdatacube
@@ -622,24 +622,24 @@ def read_data_v0_1(filename):
     try:
         hyperspy_file = hs.load(filename)
         if len(hyperspy_file.data.shape)==3:
-            R_N, Q_Ny, Q_Nx = hyperspy_file.data.shape
-            R_Ny, R_Nx = R_N, 1
+            R_N, Q_Nx, Q_Ny = hyperspy_file.data.shape
+            R_Nx, R_Ny = R_N, 1
         elif len(hyperspy_file.data.shape)==4:
-            R_Ny, R_Nx, Q_Ny, Q_Nx = hyperspy_file.data.shape
+            R_Nx, R_Ny, Q_Nx, Q_Ny = hyperspy_file.data.shape
         else:
             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
             print("Initializing random datacube...")
             return RawDataCube(data=np.random.rand(100,512,512),
-                            R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+                            R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                             is_py4DSTEM_file=False)
-        return RawDataCube(data=hyperspy_file.data, R_Ny=R_Ny, R_Nx=R_Nx, Q_Ny=Q_Ny, Q_Nx=Q_Nx,
+        return RawDataCube(data=hyperspy_file.data, R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
                             is_py4DSTEM_file=False,
                             original_metadata_shortlist=hyperspy_file.metadata,
                             original_metadata_all=hyperspy_file.original_metadata)
     except Exception as err:
         print("Failed to load", err)
         print("Initializing random datacube...")
-        return RawDataCube(data=np.random.rand(100,512,512),R_Ny=10,R_Nx=10,Q_Ny=512,Q_Nx=512,
+        return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                            is_py4DSTEM_file=False)
 
 def get_py4DSTEM_version(h5_file):
