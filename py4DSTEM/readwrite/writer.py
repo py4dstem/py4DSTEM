@@ -199,33 +199,33 @@ def save_datacube_group(group, datacube):
 
     # Dimensions
     assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
-    R_Ny,R_Nx,Q_Ny,Q_Nx = data_datacube.shape
-    data_R_Ny = group.create_dataset("dim1",(R_Ny,))
-    data_R_Nx = group.create_dataset("dim2",(R_Nx,))
-    data_Q_Ny = group.create_dataset("dim3",(Q_Ny,))
-    data_Q_Nx = group.create_dataset("dim4",(Q_Nx,))
+    R_Nx,R_Ny,Q_Nx,Q_Ny = data_datacube.shape
+    data_R_Nx = group.create_dataset("dim1",(R_Nx,))
+    data_R_Ny = group.create_dataset("dim2",(R_Ny,))
+    data_Q_Nx = group.create_dataset("dim3",(Q_Nx,))
+    data_Q_Ny = group.create_dataset("dim4",(Q_Ny,))
 
     # Populate uncalibrated dimensional axes
-    data_R_Ny[...] = np.arange(0,R_Ny)
-    data_R_Ny.attrs.create("name",np.string_("R_y"))
-    data_R_Ny.attrs.create("units",np.string_("[pix]"))
     data_R_Nx[...] = np.arange(0,R_Nx)
     data_R_Nx.attrs.create("name",np.string_("R_x"))
     data_R_Nx.attrs.create("units",np.string_("[pix]"))
-    data_Q_Ny[...] = np.arange(0,Q_Ny)
-    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
-    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
     data_Q_Nx[...] = np.arange(0,Q_Nx)
     data_Q_Nx.attrs.create("name",np.string_("Q_x"))
     data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+    data_Q_Ny[...] = np.arange(0,Q_Ny)
+    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
     # Calibrate axes, if calibrations are present
 
     # Calibrate R axes
     #try:
     #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
-    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
     #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
     #    # Set R axis units
     #    try:
     #        R_units = datacube.metadata.calibration["R_units"]
@@ -243,8 +243,8 @@ def save_datacube_group(group, datacube):
     # Calibrate Q axes
     #try:
     #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
-    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
     #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
     #    # Set Q axis units
     #    try:
     #        Q_units = datacube.metadata.calibration["Q_units"]
@@ -277,17 +277,17 @@ def save_diffraction_group(group, diffractionslice):
 
     # Dimensions
     assert len(shape)==2, "Shape of diffractionslice is {}".format(len(shape))
-    Q_Ny,Q_Nx = shape
-    data_Q_Ny = group.create_dataset("dim1",(Q_Ny,))
-    data_Q_Nx = group.create_dataset("dim2",(Q_Nx,))
+    Q_Nx,Q_Ny = shape
+    data_Q_Nx = group.create_dataset("dim1",(Q_Nx,))
+    data_Q_Ny = group.create_dataset("dim2",(Q_Ny,))
 
     # Populate uncalibrated dimensional axes
-    data_Q_Ny[...] = np.arange(0,Q_Ny)
-    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
-    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
     data_Q_Nx[...] = np.arange(0,Q_Nx)
     data_Q_Nx.attrs.create("name",np.string_("Q_x"))
     data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+    data_Q_Ny[...] = np.arange(0,Q_Ny)
+    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
     # ToDo: axis calibration
     # Requires pulling metadata from associated RawDataCube
@@ -295,8 +295,8 @@ def save_diffraction_group(group, diffractionslice):
     # Calibrate axes, if calibrations are present
     #try:
     #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
-    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
     #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
     #    # Set Q axis units
     #    try:
     #        Q_units = datacube.metadata.calibration["Q_units"]
@@ -329,17 +329,17 @@ def save_real_group(group, realslice):
 
     # Dimensions
     assert len(shape)==2, "Shape of realslice is {}".format(len(shape))
-    R_Ny,R_Nx = shape
-    data_R_Ny = group.create_dataset("dim1",(R_Ny,))
-    data_R_Nx = group.create_dataset("dim2",(R_Nx,))
+    R_Nx,R_Ny = shape
+    data_R_Nx = group.create_dataset("dim1",(R_Nx,))
+    data_R_Ny = group.create_dataset("dim2",(R_Ny,))
 
     # Populate uncalibrated dimensional axes
-    data_R_Ny[...] = np.arange(0,R_Ny)
-    data_R_Ny.attrs.create("name",np.string_("R_y"))
-    data_R_Ny.attrs.create("units",np.string_("[pix]"))
     data_R_Nx[...] = np.arange(0,R_Nx)
     data_R_Nx.attrs.create("name",np.string_("R_x"))
     data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
 
     # ToDo: axis calibration
     # Requires pulling metadata from associated RawDataCube
@@ -347,8 +347,8 @@ def save_real_group(group, realslice):
     # Calibrate axes, if calibrations are present
     #try:
     #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
-    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
     #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
     #    # Set R axis units
     #    try:
     #        R_units = datacube.metadata.calibration["R_units"]
@@ -517,16 +517,16 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |--attr: emd_group_type=1
 #             |         |--data: datacube
 #             |         |--data: dim1
-#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: name="R_x"
 #             |         |    |--attr: units="[n_m]"
 #             |         |--data: dim2
 #             |         |    |--attr: name="R_y"
 #             |         |    |--attr: units="[n_m]"
 #             |         |--data: dim3
-#             |         |    |--attr: name="R_y"
+#             |         |    |--attr: name="Q_x"
 #             |         |    |--attr: units="[n_m]"
 #             |         |--data: dim4
-#             |               |--attr: name="R_y"
+#             |               |--attr: name="Q_y"
 #             |               |--attr: units="[n_m]"
 #             |
 #             |--grp: processing
@@ -570,7 +570,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |--grp: pointlist
 #             |             |
 #             |             |--grp: point_list_1
-#             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
+#             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
 #             |             |    |--attr: dimensions=val
 #             |             |    |--data: point_list
 #             |             |    |--data: modification_log_indices
@@ -664,7 +664,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |--grp: pointlist
 #             |             |
 #             |             |--grp: point_list_1
-#             |             |    |--attr: coordinates='Qy, Qx, Ry, Rx, Int, ...'
+#             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
 #             |             |    |--attr: dimensions=val
 #             |             |    |--data: point_list
 #             |             |
