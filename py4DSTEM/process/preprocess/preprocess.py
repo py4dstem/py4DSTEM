@@ -7,7 +7,11 @@
 # will be identical to
 #       datacube.preprocess_function(*args)
 
+import numpy as np
 from ..log import log
+
+
+### Editing datacube shape ###
 
 @log
 def set_scan_shape(datacube,R_Nx,R_Ny):
@@ -21,6 +25,42 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
     except ValueError:
         print("Can't reshape {} scan positions into a {}x{} array.".format(datacube.R_N, R_Nx, R_Ny))
         return datacube
+
+@log
+def swap_RQ(datacube):
+    """
+    Swaps real and reciprocal space coordinates, so that if
+        datacube.data4D.shape = (Rx,Ry,Qx,Qy)
+    Then
+        swap_RQ(datacube).data4D.shape = (Qx,Qy,Rx,Ry)
+    """
+    datacube.data4D = np.moveaxis(np.moveaxis(datacube.data4D,2,0),3,1)
+    datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.Q_Nx,datacube.Q_Ny,datacube.R_Nx,datacube.R_Ny
+
+@log
+def swap_Rxy(datacube):
+    """
+    Swaps real space x and y coordinates, so that if
+        datacube.data4D.shape = (Ry,Rx,Qx,Qy)
+    Then
+        swap_Rxy(datacube).data4D.shape = (Rx,Ry,Qx,Qy)
+    """
+    datacube.data4D = np.moveaxis(datacube.data4D,1,0)
+    datacube.R_Nx,datacube.R_Ny = datacube.R_Ny,datacube.R_Nx
+
+@log
+def swap_Qxy(datacube):
+    """
+    Swaps reciprocal space x and y coordinates, so that if
+        datacube.data4D.shape = (Rx,Ry,Qy,Qx)
+    Then
+        swap_Qxy(datacube).data4D.shape = (Rx,Ry,Qx,Qy)
+    """
+    datacube.data4D = np.moveaxis(datacube.data4D,3,2)
+    datacube.Q_Nx,datacube.Q_Ny = datacube.Q_Ny,datacube.Q_Nx
+
+
+### Cropping and binning ###
 
 @log
 def crop_data_diffraction(datacube,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
