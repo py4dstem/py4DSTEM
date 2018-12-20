@@ -274,7 +274,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings.R_Ny.update_value(int(self.datacube.R_N/R_Nx))
         R_Ny = self.settings.R_Ny.val
 
-        self.datacube.set_scan_shape(R_Ny, R_Nx)
+        self.datacube.set_scan_shape(R_Nx, R_Ny)
         self.update_real_space_view()
 
     def update_scan_shape_Ny(self):
@@ -282,7 +282,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings.R_Nx.update_value(int(self.datacube.R_N/R_Ny))
         R_Nx = self.settings.R_Nx.val
 
-        self.datacube.set_scan_shape(R_Ny, R_Nx)
+        self.datacube.set_scan_shape(R_Nx, R_Ny)
         self.update_real_space_view()
 
     ### Crop ###
@@ -322,19 +322,19 @@ class DataViewer(QtWidgets.QMainWindow):
         # Diffraction space
         if self.control_widget.checkBox_Crop_Diffraction.isChecked():
             # Get crop limits from ROI
-            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:].T, self.diffraction_space_widget.getImageItem())
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_qx,slice_qy = slices_q
-            crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
             crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
-            crop_Qy_min, crop_Qy_max = max(0,crop_Qy_min), min(self.datacube.Q_Ny,crop_Qy_max)
+            crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
             crop_Qx_min, crop_Qx_max = max(0,crop_Qx_min), min(self.datacube.Q_Nx,crop_Qx_max)
+            crop_Qy_min, crop_Qy_max = max(0,crop_Qy_min), min(self.datacube.Q_Ny,crop_Qy_max)
             # Crop data
-            self.datacube.crop_data_diffraction(crop_Qy_min,crop_Qy_max,crop_Qx_min,crop_Qx_max)
+            self.datacube.crop_data_diffraction(crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
             # Update settings
-            self.settings.crop_qy_min.update_value(crop_Qy_min)
-            self.settings.crop_qy_max.update_value(crop_Qy_max)
             self.settings.crop_qx_min.update_value(crop_Qx_min)
             self.settings.crop_qx_max.update_value(crop_Qx_max)
+            self.settings.crop_qy_min.update_value(crop_Qy_min)
+            self.settings.crop_qy_max.update_value(crop_Qy_max)
             self.settings.isCropped_q.update_value(True)
             # Uncheck crop checkbox and remove ROI
             self.control_widget.checkBox_Crop_Diffraction.setChecked(False)
@@ -346,22 +346,22 @@ class DataViewer(QtWidgets.QMainWindow):
         # Real space
         if self.control_widget.checkBox_Crop_Real.isChecked():
             # Get crop limits from ROI
-            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0].T, self.real_space_widget.getImageItem())
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0], self.real_space_widget.getImageItem())
             slice_rx,slice_ry = slices_r
-            crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
             crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
-            crop_Ry_min, crop_Ry_max = max(0,crop_Ry_min), min(self.datacube.R_Ny,crop_Ry_max)
+            crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
             crop_Rx_min, crop_Rx_max = max(0,crop_Rx_min), min(self.datacube.R_Nx,crop_Rx_max)
+            crop_Ry_min, crop_Ry_max = max(0,crop_Ry_min), min(self.datacube.R_Ny,crop_Ry_max)
             # Crop data
-            self.datacube.crop_data_real(crop_Ry_min,crop_Ry_max,crop_Rx_min,crop_Rx_max)
+            self.datacube.crop_data_real(crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max)
             # Update settings
-            self.settings.crop_ry_min.update_value(crop_Ry_min)
-            self.settings.crop_ry_max.update_value(crop_Ry_max)
             self.settings.crop_rx_min.update_value(crop_Rx_min)
             self.settings.crop_rx_max.update_value(crop_Rx_max)
+            self.settings.crop_ry_min.update_value(crop_Ry_min)
+            self.settings.crop_ry_max.update_value(crop_Ry_max)
             self.settings.isCropped_r.update_value(True)
-            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
             self.settings.R_Nx.update_value(self.datacube.R_Nx,send_signal=False)
+            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
             # Uncheck crop checkbox and remove ROI
             self.control_widget.checkBox_Crop_Real.setChecked(False)
             # Update display
@@ -384,8 +384,8 @@ class DataViewer(QtWidgets.QMainWindow):
             # Bin data
             self.datacube.bin_data_real(bin_factor_R)
             # Update settings
-            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
             self.settings.R_Nx.update_value(self.datacube.R_Nx,send_signal=False)
+            self.settings.R_Ny.update_value(self.datacube.R_Ny,send_signal=False)
             # Update display
             self.update_real_space_view()
         # Set bin factors back to 1
@@ -484,7 +484,7 @@ class DataViewer(QtWidgets.QMainWindow):
         xc,yc = int(x0+1),int(y0+1)
 
         # Set the diffraction space image
-        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(yc,xc)
+        new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
             self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
@@ -498,7 +498,7 @@ class DataViewer(QtWidgets.QMainWindow):
         slice_x,slice_y = slices
 
         # Set the real space view
-        new_real_space_view, success = self.datacube.get_real_space_view(slice_y,slice_x)
+        new_real_space_view, success = self.datacube.get_real_space_view(slice_x,slice_y)
         if success:
             self.real_space_view = new_real_space_view
             self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
