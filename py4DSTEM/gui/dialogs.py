@@ -25,7 +25,7 @@ smallFont.setPointSize(10)
 smallFont.setItalic(False)
 smallFont.setBold(False)
 
-control_panel_width=300
+control_panel_width=500
 
 
 class ControlPanel(QtWidgets.QWidget):
@@ -36,10 +36,11 @@ class ControlPanel(QtWidgets.QWidget):
         scrollableWidget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(self)
 
-        ############## Make sub-widgets ##############
-        # Provide handles to connect to their widgets
+        ############## Make sub-widgets ###############
+        # Provide handles to connect to their widgets #
+        ###############################################
 
-        # Load, Preprocess, Save
+        ########### Preprocessing sub-widget ##########
         self.widget_LoadPreprocessSave = HideableWidget('Load, Preprocess, Save',LoadPreprocessSaveWidget())
         self.lineEdit_LoadFile = self.widget_LoadPreprocessSave.widget.lineEdit_LoadFile
         self.pushButton_BrowseFiles = self.widget_LoadPreprocessSave.widget.pushButton_BrowseFiles
@@ -56,18 +57,22 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
 
-        # Data cube size and shape
-        self.sizeAndShapeEditor = HideableWidget('Reshape',DataCubeSizeAndShapeWidget(),initial_state=False)
-        self.spinBox_Nx_depre = self.sizeAndShapeEditor.widget.spinBox_Nx
-        self.spinBox_Ny_depre = self.sizeAndShapeEditor.widget.spinBox_Ny
-        self.lineEdit_Binning_depre = self.sizeAndShapeEditor.widget.lineEdit_Binning
-        self.pushButton_BinData_depre = self.sizeAndShapeEditor.widget.pushButton_BinData
-        self.pushButton_SetCropWindow_depre = self.sizeAndShapeEditor.widget.pushButton_SetCropWindow
-        self.pushButton_CropData_depre = self.sizeAndShapeEditor.widget.pushButton_CropData
+        ########### Preprocessing sub-widget ##########
+        #self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget(),initial_state=False)
+        #self.radioButton_RectDetector = self.virtualDetectors.widget.radioButton_RectDetector
+        #self.radioButton_CircDetector = self.virtualDetectors.widget.radioButton_CircDetector
+        #self.radioButton_AnnularDetector = self.virtualDetectors.widget.radioButton_AnnularDetector
+        #self.radioButton_Integrate = self.virtualDetectors.widget.radioButton_Integrate
+        #self.radioButton_CoM = self.virtualDetectors.widget.radioButton_CoM
+        #self.radioButton_DiffX = self.virtualDetectors.widget.radioButton_DiffX
+        #self.radioButton_DiffY = self.virtualDetectors.widget.radiuButton_DiffY
 
-        # Create and set layout
+        ####################################################
+        ############## Create and set layout ###############
+        ####################################################
+
         layout.addWidget(self.widget_LoadPreprocessSave,0,QtCore.Qt.AlignTop)
-        layout.addWidget(self.sizeAndShapeEditor,0,QtCore.Qt.AlignTop)
+        #layout.addWidget(self.virtualDetectors,0,QtCore.Qt.AlignTop)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
@@ -304,64 +309,6 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.setFixedWidth(control_panel_width)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
-
-class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-
-        # Reshaping - Nx and Ny
-        self.spinBox_Nx = QtWidgets.QSpinBox()
-        self.spinBox_Ny = QtWidgets.QSpinBox()
-        self.spinBox_Nx.setMaximum(100000)
-        self.spinBox_Ny.setMaximum(100000)
-
-        layout_spinBoxRow = QtWidgets.QHBoxLayout()
-        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Nx"),0,QtCore.Qt.AlignRight)
-        layout_spinBoxRow.addWidget(self.spinBox_Nx)
-        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Ny"),0,QtCore.Qt.AlignRight)
-        layout_spinBoxRow.addWidget(self.spinBox_Ny)
-
-        layout_Reshaping = QtWidgets.QVBoxLayout()
-        #layout_Reshaping.addWidget(QtWidgets.QLabel("Scan shape"),0,QtCore.Qt.AlignCenter)
-        layout_Reshaping.addLayout(layout_spinBoxRow)
-
-        # Binning
-        self.lineEdit_Binning = QtWidgets.QLineEdit("")
-        self.pushButton_BinData = QtWidgets.QPushButton("Bin Data")
-
-        layout_binningRow = QtWidgets.QHBoxLayout()
-        layout_binningRow.addWidget(QtWidgets.QLabel("Bin by:"))
-        layout_binningRow.addWidget(self.lineEdit_Binning)
-        layout_binningRow.addWidget(self.pushButton_BinData)
-
-        layout_Binning = QtWidgets.QVBoxLayout()
-        layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
-        layout_Binning.addLayout(layout_binningRow)
-
-        # Cropping
-        self.pushButton_SetCropWindow = QtWidgets.QPushButton("Set Crop Window")
-        self.pushButton_CropData = QtWidgets.QPushButton("Crop Data")
-
-        layout_croppingRow = QtWidgets.QHBoxLayout()
-        layout_croppingRow.addWidget(self.pushButton_SetCropWindow)
-        layout_croppingRow.addWidget(self.pushButton_CropData)
-
-        layout_Cropping = QtWidgets.QVBoxLayout()
-        layout_Cropping.addWidget(QtWidgets.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
-        layout_Cropping.addLayout(layout_croppingRow)
-
-        # Layout
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(SectionLabel('Scan Shape'))
-        layout.addLayout(layout_Reshaping)
-        layout.addLayout(layout_Binning)
-        layout.addLayout(layout_Cropping)
-        layout.setSpacing(0)
-        layout.setContentsMargins(0,0,0,0)
-
-        self.setLayout(layout)
-        self.setFixedWidth(control_panel_width)
-        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 class SaveWidget(QtWidgets.QWidget):
     """

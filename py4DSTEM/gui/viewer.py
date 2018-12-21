@@ -212,8 +212,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.main_window.setLayout(layout_data_and_control)
 
-        self.main_window.setGeometry(0,0,1400,600)
-        self.console_widget.setGeometry(0,670,1400,170)
+        self.main_window.setGeometry(0,0,3600,1600)
+        self.console_widget.setGeometry(0,1800,1600,250)
         self.main_window.show()
         self.main_window.raise_()
         self.console_widget.show()
