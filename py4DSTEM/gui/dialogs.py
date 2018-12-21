@@ -58,21 +58,24 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
 
         ########### Preprocessing sub-widget ##########
+        self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget())
         #self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget(),initial_state=False)
-        #self.radioButton_RectDetector = self.virtualDetectors.widget.radioButton_RectDetector
-        #self.radioButton_CircDetector = self.virtualDetectors.widget.radioButton_CircDetector
-        #self.radioButton_AnnularDetector = self.virtualDetectors.widget.radioButton_AnnularDetector
-        #self.radioButton_Integrate = self.virtualDetectors.widget.radioButton_Integrate
-        #self.radioButton_CoM = self.virtualDetectors.widget.radioButton_CoM
-        #self.radioButton_DiffX = self.virtualDetectors.widget.radioButton_DiffX
-        #self.radioButton_DiffY = self.virtualDetectors.widget.radiuButton_DiffY
+        self.radioButton_RectDetector = self.virtualDetectors.widget.radioButton_RectDetector
+        self.radioButton_CircDetector = self.virtualDetectors.widget.radioButton_CircDetector
+        self.radioButton_AnnularDetector = self.virtualDetectors.widget.radioButton_AnnularDetector
+        self.buttonGroup_DetectorShape = self.virtualDetectors.widget.buttonGroup_DetectorShape
+        self.radioButton_Integrate = self.virtualDetectors.widget.radioButton_Integrate
+        self.radioButton_CoM = self.virtualDetectors.widget.radioButton_CoM
+        self.radioButton_DiffX = self.virtualDetectors.widget.radioButton_DiffX
+        self.radioButton_DiffY = self.virtualDetectors.widget.radioButton_DiffY
+        self.buttonGroup_DetectorMode = self.virtualDetectors.widget.buttonGroup_DetectorMode
 
         ####################################################
         ############## Create and set layout ###############
         ####################################################
 
         layout.addWidget(self.widget_LoadPreprocessSave,0,QtCore.Qt.AlignTop)
-        #layout.addWidget(self.virtualDetectors,0,QtCore.Qt.AlignTop)
+        layout.addWidget(self.virtualDetectors,0,QtCore.Qt.AlignTop)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
@@ -98,6 +101,7 @@ class ControlPanel(QtWidgets.QWidget):
         #self.setFixedWidth(300)
 
 
+############ Control panel sub-widgets ############
 
 class LoadPreprocessSaveWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -309,6 +313,104 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.setFixedWidth(control_panel_width)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
+
+class VirtualDetectorsWidget(QtWidgets.QWidget):
+    def __init__(self):
+        """
+        Virtual detector shapes and modes are assigned integers IDs to connect the radio buttons
+        with the appropriate functions, as follows:
+
+        Shapes:
+            1: Rectangular
+            2: Circular
+            3: Annular
+        Modes:
+            1: Integrate
+            2: CoM
+            3: Difference, X
+            4: Difference, Y
+        """
+
+        QtWidgets.QWidget.__init__(self)
+
+        # Detector shape
+        detector_shape_widget = QtWidgets.QWidget()
+        detector_shape_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_RectDetector = QtWidgets.QRadioButton('Rectangular')
+        self.radioButton_CircDetector = QtWidgets.QRadioButton('Circular')
+        self.radioButton_AnnularDetector = QtWidgets.QRadioButton('Annular')
+
+        self.radioButton_RectDetector.setFont(normalFont)
+        self.radioButton_CircDetector.setFont(normalFont)
+        self.radioButton_AnnularDetector.setFont(normalFont)
+
+        detector_shape_widget_layout.addWidget(self.radioButton_RectDetector)
+        detector_shape_widget_layout.addWidget(self.radioButton_CircDetector)
+        detector_shape_widget_layout.addWidget(self.radioButton_AnnularDetector)
+        detector_shape_widget.setLayout(detector_shape_widget_layout)
+
+        # Create detector shape button group
+        self.buttonGroup_DetectorShape = QtWidgets.QButtonGroup()
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_RectDetector)
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_CircDetector)
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_AnnularDetector)
+
+        self.buttonGroup_DetectorShape.setId(self.radioButton_RectDetector, 0)
+        self.buttonGroup_DetectorShape.setId(self.radioButton_CircDetector, 1)
+        self.buttonGroup_DetectorShape.setId(self.radioButton_AnnularDetector, 2)
+
+        # Detector mode
+        detector_mode_widget = QtWidgets.QWidget()
+        detector_mode_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_Integrate = QtWidgets.QRadioButton('Integrate')
+        self.radioButton_CoM = QtWidgets.QRadioButton('Center of Mass')
+        self.radioButton_DiffX = QtWidgets.QRadioButton('Difference, X')
+        self.radioButton_DiffY = QtWidgets.QRadioButton('Difference, Y')
+
+        self.radioButton_Integrate.setFont(normalFont)
+        self.radioButton_CoM.setFont(normalFont)
+        self.radioButton_DiffX.setFont(normalFont)
+        self.radioButton_DiffY.setFont(normalFont)
+
+        detector_mode_widget_layout.addWidget(self.radioButton_Integrate)
+        detector_mode_widget_layout.addWidget(self.radioButton_CoM)
+        detector_mode_widget_layout.addWidget(self.radioButton_DiffX)
+        detector_mode_widget_layout.addWidget(self.radioButton_DiffY)
+        detector_mode_widget.setLayout(detector_mode_widget_layout)
+
+        # Create detector mode button group
+        self.buttonGroup_DetectorMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_Integrate)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_CoM)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_DiffX)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_DiffY)
+
+        self.buttonGroup_DetectorMode.setId(self.radioButton_Integrate, 0)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_CoM, 1)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_DiffX, 2)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_DiffY, 3)
+
+        # Layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(SectionLabel('Detector Shape'))
+        layout.addWidget(detector_shape_widget)
+        layout.addWidget(SectionLabel('Detetor Mode'))
+        layout.addWidget(detector_mode_widget)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        self.setFixedWidth(control_panel_width)
+        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+
+
+
+
+
+
+################### Non control-panel widgets #####################
 
 class SaveWidget(QtWidgets.QWidget):
     """
