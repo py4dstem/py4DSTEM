@@ -141,6 +141,16 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
         self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
 
+        # Virtual detectors
+        self.settings.New('virtual_detector_shape', dtype=int, initial=0)
+        self.settings.New('virtual_detector_mode', dtype=int, initial=0)
+
+        self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
+        self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
+
+        self.settings.virtual_detector_shape.updated_value.connect(self.update_virtual_detector_shape)
+        self.settings.virtual_detector_mode.updated_value.connect(self.update_virtual_detector_mode)
+
         return self.control_widget
 
     def setup_diffraction_space_widget(self):
@@ -503,6 +513,21 @@ class DataViewer(QtWidgets.QMainWindow):
     def save_directory(self):
         print('save directory metadata pressed')
         pass
+
+    ################# Virtual Detectors #################
+
+    def update_virtual_detector_shape(self):
+        detector_shape = self.settings.virtual_detector_shape.val
+        print(detector_shape)
+        pass
+
+    def update_virtual_detector_mode(self):
+        detector_mode = self.settings.virtual_detector_mode.val
+        print(detector_mode)
+        pass
+
+
+
 
     ################## Slice data ##################
 
