@@ -390,11 +390,25 @@ class DataViewer(QtWidgets.QMainWindow):
         bin_factor_Q = self.settings.bin_q.val
         bin_factor_R = self.settings.bin_r.val
         if bin_factor_Q>1:
+            # Move ROI selector
+            x0,y0 = self.virtual_detector_roi.x(), self.virtual_detector_roi.y()
+            x0_len,y0_len = self.virtual_detector_roi.size()
+            xf = int(x0/bin_factor_Q)
+            yf = int(y0/bin_factor_Q)
+            xf_len = int(x0_len/bin_factor_Q)
+            yf_len = int(y0_len/bin_factor_Q)
+            self.virtual_detector_roi.setPos((xf,yf))
+            self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
             self.datacube.bin_data_diffraction(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
         if bin_factor_R>1:
+            # Move point selector
+            x0,y0 = self.real_space_point_selector.x(),self.real_space_point_selector.y()
+            xf = int(x0/bin_factor_R)
+            yf = int(y0/bin_factor_R)
+            self.real_space_point_selector.setPos((xf,yf))
             # Bin data
             self.datacube.bin_data_real(bin_factor_R)
             # Update settings
