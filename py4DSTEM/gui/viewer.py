@@ -143,7 +143,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
         # Virtual detectors
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
-        self.settings.New('virtual_detector_mode', dtype=int, initial=0)
+        self.settings.New('virtual_detector_mode', dtype=int, initial=1)
 
         self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
         self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
@@ -517,11 +517,26 @@ class DataViewer(QtWidgets.QMainWindow):
     ################# Virtual Detectors #################
 
     def update_virtual_detector_shape(self):
+        """
+        Virtual detector shapes are mapped to integers, following the IDs assigned to the
+        radio buttons in VirtualDetectorWidget in dialogs.py.  They are as follows:
+            1: Rectangular
+            2: Circular
+            3: Annular
+        """
         detector_shape = self.settings.virtual_detector_shape.val
         print(detector_shape)
         pass
 
     def update_virtual_detector_mode(self):
+        """
+        Virtual detector modes are mapped to integers, following the IDs assigned to the
+        radio buttons in VirtualDetectorWidget in dialogs.py.  They are as follows:
+            1: Integrate
+            2: CoM
+            3: Difference, X
+            4: Difference, Y
+        """
         detector_mode = self.settings.virtual_detector_mode.val
         print(detector_mode)
         pass
