@@ -328,6 +328,15 @@ class DataViewer(QtWidgets.QMainWindow):
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
             crop_Qx_min, crop_Qx_max = max(0,crop_Qx_min), min(self.datacube.Q_Nx,crop_Qx_max)
             crop_Qy_min, crop_Qy_max = max(0,crop_Qy_min), min(self.datacube.Q_Ny,crop_Qy_max)
+            # Move ROI selector
+            x0,y0 = self.virtual_detector_roi.x(), self.virtual_detector_roi.y()
+            x0_len,y0_len = self.virtual_detector_roi.size()
+            xf = int(x0*(crop_Qx_max-crop_Qx_min)/self.datacube.Q_Nx)
+            yf = int(y0*(crop_Qy_max-crop_Qy_min)/self.datacube.Q_Ny)
+            xf_len = int(x0_len*(crop_Qx_max-crop_Qx_min)/self.datacube.Q_Nx)
+            yf_len = int(y0_len*(crop_Qy_max-crop_Qy_min)/self.datacube.Q_Ny)
+            self.virtual_detector_roi.setPos((xf,yf))
+            self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Crop data
             self.datacube.crop_data_diffraction(crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
             # Update settings
@@ -352,6 +361,11 @@ class DataViewer(QtWidgets.QMainWindow):
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
             crop_Rx_min, crop_Rx_max = max(0,crop_Rx_min), min(self.datacube.R_Nx,crop_Rx_max)
             crop_Ry_min, crop_Ry_max = max(0,crop_Ry_min), min(self.datacube.R_Ny,crop_Ry_max)
+            # Move point selector
+            x0,y0 = self.real_space_point_selector.x(),self.real_space_point_selector.y()
+            xf = int(x0*(crop_Rx_max-crop_Rx_min)/self.datacube.R_Nx)
+            yf = int(y0*(crop_Ry_max-crop_Ry_min)/self.datacube.R_Ny)
+            self.real_space_point_selector.setPos((xf,yf))
             # Crop data
             self.datacube.crop_data_real(crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max)
             # Update settings
