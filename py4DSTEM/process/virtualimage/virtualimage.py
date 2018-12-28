@@ -13,7 +13,6 @@
 #       virtual_image = datacube.function(slice_x, slice_y, *args)
 
 import numpy as np
-from ..log import log
 
 # Utility functions
 
@@ -37,23 +36,26 @@ def get_circ_mask(size_x,size_y,R=1):
 
 # Virtual images
 
-@log
 def get_virtual_image_rect(datacube, slice_x, slice_y):
     """
     Returns a virtual image as an ndarray, generated from a rectangular detector in integration
     mode. Also returns a bool indicating success or failure.
     """
-    return datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3)), 1
+    try:
+        return datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3)), 1
+    except ValueError:
+        return 0,0
 
-@log
 def get_virtual_image_circ(datacube, slice_x, slice_y):
     """
     Returns a virtual image as an ndarray, generated from a circular detector in integration
     mode. Also returns a bool indicating success or failure.
     """
-    return np.sum(datacube.data4D[:,:,slice_x,slice_y]*get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start), axis=(2,3)), 1
+    try:
+        return np.sum(datacube.data4D[:,:,slice_x,slice_y]*get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start), axis=(2,3)), 1
+    except ValueError:
+        return 0,0
 
-@log
 def get_virtual_image_annular(datacube, slice_x, slice_y, R):
     """
     Returns a virtual image as an ndarray, generated from an annular detector in integration
@@ -61,7 +63,10 @@ def get_virtual_image_annular(datacube, slice_x, slice_y, R):
     the inner to the outer detector radii.
     """
     mask = np.logical_xor(get_circ_mask(slice_x.stop-slice_x.start,slice_y.stop-slice_y.start), get_circ_mask(slice_x.stop-slice_x.start,slice_y.stop-slice_y.start,R))
-    return np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask, axis=(2,3)), 1
+    try:
+        return np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask, axis=(2,3)), 1
+    except ValueError:
+        return 0,0
 
 
 
