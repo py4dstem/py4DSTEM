@@ -22,6 +22,7 @@
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from .. import preprocess
+from .. import virtualimage
 from .dataobject import DataObject, DataObjectTracker
 
 class DataCube(DataObject):
@@ -93,11 +94,28 @@ class DataCube(DataObject):
         except IndexError:
             return 0, 0
 
-    def get_real_space_view(self,slice_x,slice_y):
+    def get_virtual_image_rect(self,slice_x,slice_y):
         """
-        Returns the image in diffraction space.
+        Returns a virtual image as an ndarray, generated from a rectangular detector in integration
+        mode. Also returns a bool indicating success or failure.
         """
-        return self.data4D[:,:,slice_x,slice_y].sum(axis=(2,3)), 1
+        return virtualimage.get_virtual_image_rect(self,slice_x,slice_y)
+
+    def get_virtual_image_circ(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in integration
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_circ(self,slice_x,slice_y)
+
+    def get_virtual_image_annular(self,slice_x,slice_y,R):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in integration
+        mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
+        of the inner to the outer detector radii.
+        """
+        return virtualimage.get_virtual_image_annular(self,slice_x,slice_y,R)
+
 
 ########################## END OF DATACUBE OBJECT ########################
 
