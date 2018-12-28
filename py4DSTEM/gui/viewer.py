@@ -564,13 +564,14 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_annulus_radii)
             self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_annulus_radii)
 
-
-            #self.virtual_detector_roi_outer.sigRegionChanged.connect(self.update_real_space_view)
+            # Connect to real space view update function
+            self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_real_space_view)
+            self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         else:
             print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
 
-        pass
+        self.update_real_space_view()
 
     def update_annulus_pos(self):
         """
@@ -607,8 +608,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
 
 
-
-    ################## Slice data ##################
+    ################## Get virtual images ##################
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
@@ -625,17 +625,56 @@ class DataViewer(QtWidgets.QMainWindow):
         return
 
     def update_real_space_view(self):
-        # Get slices corresponding to ROI
-        slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
-        slice_x,slice_y = slices
+        detector_shape = self.settings.virtual_detector_shape.val
 
-        # Set the real space view
-        new_real_space_view, success = self.datacube.get_real_space_view(slice_x,slice_y)
-        if success:
-            self.real_space_view = new_real_space_view
-            self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+        # Rectangular detector
+        if detector_shape == 0:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_rect(slice_x,slice_y)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
+        # Circular detector
+        elif detector_shape == 1:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_circ(slice_x,slice_y)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
+        # Annular detector
+        elif detector_shape == 2:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_inner_x,slice_inner_y = slices_inner
+            R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_annular(slice_x,slice_y,R)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
         else:
-            pass
+            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+
         return
 
 
