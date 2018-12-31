@@ -524,10 +524,10 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |    |--attr: units="[n_m]"
 #             |         |--data: dim3
 #             |         |    |--attr: name="Q_x"
-#             |         |    |--attr: units="[n_m]"
+#             |         |    |--attr: units="[n_m^-1]"
 #             |         |--data: dim4
 #             |               |--attr: name="Q_y"
-#             |               |--attr: units="[n_m]"
+#             |               |--attr: units="[n_m^-1]"
 #             |
 #             |--grp: processing
 #             |         |

@@ -141,6 +141,16 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
         self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
 
+        # Virtual detectors
+        self.settings.New('virtual_detector_shape', dtype=int, initial=0)
+        self.settings.New('virtual_detector_mode', dtype=int, initial=1)
+
+        self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
+        self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
+
+        self.settings.virtual_detector_shape.updated_value.connect(self.update_virtual_detector_shape)
+        self.settings.virtual_detector_mode.updated_value.connect(self.update_virtual_detector_mode)
+
         return self.control_widget
 
     def setup_diffraction_space_widget(self):
@@ -151,7 +161,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget = pg.ImageView()
         self.diffraction_space_widget.setImage(np.zeros((512,512)))
 
-        # Create virtual detector ROI selector 
+        # Create virtual detector ROI selector
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
         self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
         self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
@@ -212,8 +222,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.main_window.setLayout(layout_data_and_control)
 
-        self.main_window.setGeometry(0,0,1400,600)
-        self.console_widget.setGeometry(0,670,1400,170)
+        self.main_window.setGeometry(0,0,3600,1600)
+        self.console_widget.setGeometry(0,1800,1600,250)
         self.main_window.show()
         self.main_window.raise_()
         self.console_widget.show()
@@ -328,6 +338,15 @@ class DataViewer(QtWidgets.QMainWindow):
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
             crop_Qx_min, crop_Qx_max = max(0,crop_Qx_min), min(self.datacube.Q_Nx,crop_Qx_max)
             crop_Qy_min, crop_Qy_max = max(0,crop_Qy_min), min(self.datacube.Q_Ny,crop_Qy_max)
+            # Move ROI selector
+            x0,y0 = self.virtual_detector_roi.x(), self.virtual_detector_roi.y()
+            x0_len,y0_len = self.virtual_detector_roi.size()
+            xf = int(x0*(crop_Qx_max-crop_Qx_min)/self.datacube.Q_Nx)
+            yf = int(y0*(crop_Qy_max-crop_Qy_min)/self.datacube.Q_Ny)
+            xf_len = int(x0_len*(crop_Qx_max-crop_Qx_min)/self.datacube.Q_Nx)
+            yf_len = int(y0_len*(crop_Qy_max-crop_Qy_min)/self.datacube.Q_Ny)
+            self.virtual_detector_roi.setPos((xf,yf))
+            self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Crop data
             self.datacube.crop_data_diffraction(crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
             # Update settings
@@ -352,6 +371,11 @@ class DataViewer(QtWidgets.QMainWindow):
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
             crop_Rx_min, crop_Rx_max = max(0,crop_Rx_min), min(self.datacube.R_Nx,crop_Rx_max)
             crop_Ry_min, crop_Ry_max = max(0,crop_Ry_min), min(self.datacube.R_Ny,crop_Ry_max)
+            # Move point selector
+            x0,y0 = self.real_space_point_selector.x(),self.real_space_point_selector.y()
+            xf = int(x0*(crop_Rx_max-crop_Rx_min)/self.datacube.R_Nx)
+            yf = int(y0*(crop_Ry_max-crop_Ry_min)/self.datacube.R_Ny)
+            self.real_space_point_selector.setPos((xf,yf))
             # Crop data
             self.datacube.crop_data_real(crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max)
             # Update settings
@@ -376,11 +400,25 @@ class DataViewer(QtWidgets.QMainWindow):
         bin_factor_Q = self.settings.bin_q.val
         bin_factor_R = self.settings.bin_r.val
         if bin_factor_Q>1:
+            # Move ROI selector
+            x0,y0 = self.virtual_detector_roi.x(), self.virtual_detector_roi.y()
+            x0_len,y0_len = self.virtual_detector_roi.size()
+            xf = int(x0/bin_factor_Q)
+            yf = int(y0/bin_factor_Q)
+            xf_len = int(x0_len/bin_factor_Q)
+            yf_len = int(y0_len/bin_factor_Q)
+            self.virtual_detector_roi.setPos((xf,yf))
+            self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
             self.datacube.bin_data_diffraction(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
         if bin_factor_R>1:
+            # Move point selector
+            x0,y0 = self.real_space_point_selector.x(),self.real_space_point_selector.y()
+            xf = int(x0/bin_factor_R)
+            yf = int(y0/bin_factor_R)
+            self.real_space_point_selector.setPos((xf,yf))
             # Bin data
             self.datacube.bin_data_real(bin_factor_R)
             # Update settings
@@ -476,7 +514,101 @@ class DataViewer(QtWidgets.QMainWindow):
         print('save directory metadata pressed')
         pass
 
-    ################## Slice data ##################
+    ################# Virtual Detectors #################
+
+    def update_virtual_detector_shape(self):
+        """
+        Virtual detector shapes are mapped to integers, following the IDs assigned to the
+        radio buttons in VirtualDetectorWidget in dialogs.py.  They are as follows:
+            1: Rectangular
+            2: Circular
+            3: Annular
+        """
+        detector_shape = self.settings.virtual_detector_shape.val
+        x,y = self.diffraction_space_view.shape
+        x0,y0 = x/2, y/2
+        xr,yr = x/10,y/10
+
+        # Remove existing detector
+        if hasattr(self,'virtual_detector_roi'):
+            self.diffraction_space_widget.view.scene().removeItem(self.virtual_detector_roi)
+        if hasattr(self,'virtual_detector_roi_inner'):
+            self.diffraction_space_widget.view.scene().removeItem(self.virtual_detector_roi_inner)
+        if hasattr(self,'virtual_detector_roi_outer'):
+            self.diffraction_space_widget.view.scene().removeItem(self.virtual_detector_roi_outer)
+
+        # Rectangular detector
+        if detector_shape==0:
+            self.virtual_detector_roi = pg.RectROI([int(x0-xr/2),int(y0-yr/2)], [int(xr),int(yr)], pen=(3,9))
+            self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
+            self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+
+        # Circular detector
+        elif detector_shape==1:
+            self.virtual_detector_roi = pg.CircleROI([int(x0-xr/2),int(y0-yr/2)], [int(xr),int(yr)], pen=(3,9))
+            self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
+            self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+
+        # Annular dector
+        elif detector_shape==2:
+            # Make outer detector
+            self.virtual_detector_roi_outer = pg.CircleROI([int(x0-xr),int(y0-yr)], [int(2*xr),int(2*yr)], pen=(3,9))
+            self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi_outer)
+
+            # Make inner detector
+            self.virtual_detector_roi_inner = pg.CircleROI([int(x0-xr/2),int(y0-yr/2)], [int(xr),int(yr)], pen=(4,9), movable=False)
+            self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi_inner)
+
+            # Connect size/position of inner and outer detectors
+            self.virtual_detector_roi_outer.sigRegionChanged.connect(self.update_annulus_pos)
+            self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_annulus_radii)
+            self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_annulus_radii)
+
+            # Connect to real space view update function
+            self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_real_space_view)
+            self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_real_space_view)
+
+        else:
+            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+
+        self.update_real_space_view()
+
+    def update_annulus_pos(self):
+        """
+        Function to keep inner and outer rings of annulus aligned.
+        """
+        R_outer = self.virtual_detector_roi_outer.size().x()/2
+        R_inner = self.virtual_detector_roi_inner.size().x()/2
+        # Only outer annulus is draggable; when it moves, update position of inner annulus
+        x0 = self.virtual_detector_roi_outer.pos().x() + R_outer
+        y0 = self.virtual_detector_roi_outer.pos().y() + R_outer
+        self.virtual_detector_roi_inner.setPos(x0-R_inner, y0-R_inner)
+
+    def update_annulus_radii(self):
+        R_outer = self.virtual_detector_roi_outer.size().x()/2
+        R_inner = self.virtual_detector_roi_inner.size().x()/2
+        if R_outer < R_inner:
+            x0 = self.virtual_detector_roi_outer.pos().x() + R_outer
+            y0 = self.virtual_detector_roi_outer.pos().y() + R_outer
+            self.virtual_detector_roi_outer.setSize(2*R_inner+6)
+            self.virtual_detector_roi_outer.setPos(x0-R_inner-3,y0-R_inner-3)
+
+    def update_virtual_detector_mode(self):
+        """
+        Virtual detector modes are mapped to integers, following the IDs assigned to the
+        radio buttons in VirtualDetectorWidget in dialogs.py.  They are as follows:
+            1: Integrate
+            2: CoM
+            3: Difference, X
+            4: Difference, Y
+        """
+        detector_mode = self.settings.virtual_detector_mode.val
+        print(detector_mode)
+        pass
+
+
+
+    ################## Get virtual images ##################
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
@@ -493,17 +625,56 @@ class DataViewer(QtWidgets.QMainWindow):
         return
 
     def update_real_space_view(self):
-        # Get slices corresponding to ROI
-        slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
-        slice_x,slice_y = slices
+        detector_shape = self.settings.virtual_detector_shape.val
 
-        # Set the real space view
-        new_real_space_view, success = self.datacube.get_real_space_view(slice_x,slice_y)
-        if success:
-            self.real_space_view = new_real_space_view
-            self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+        # Rectangular detector
+        if detector_shape == 0:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_rect(slice_x,slice_y)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
+        # Circular detector
+        elif detector_shape == 1:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_circ(slice_x,slice_y)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
+        # Annular detector
+        elif detector_shape == 2:
+            # Get slices corresponding to ROI
+            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_x,slice_y = slices
+            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slice_inner_x,slice_inner_y = slices_inner
+            R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
+
+            # Get the virtual image and set the real space view
+            new_real_space_view, success = self.datacube.get_virtual_image_annular(slice_x,slice_y,R)
+            if success:
+                self.real_space_view = new_real_space_view
+                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+            else:
+                pass
+
         else:
-            pass
+            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+
         return
 
 
