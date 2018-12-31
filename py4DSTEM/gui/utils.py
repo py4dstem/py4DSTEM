@@ -131,6 +131,11 @@ class LoggedQuantity(QtCore.QObject):
             self.updated_value.connect(widget.setValue)
             widget.valueChanged.connect(self.update_value)
 
+        elif type(widget) == QtWidgets.QButtonGroup:
+            checkButtonById = lambda i: widget.button(i).setChecked(True)
+            self.updated_value.connect(checkButtonById)
+            widget.buttonClicked[int].connect(self.update_value)
+
         elif type(widget) == QtWidgets.QCheckBox:
             self.updated_value.connect(widget.setChecked)
             widget.toggled.connect(self.update_value)
