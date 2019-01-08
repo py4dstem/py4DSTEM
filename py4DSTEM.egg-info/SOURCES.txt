@@ -17,8 +17,15 @@ py4DSTEM/process/datastructure/dataobject.py
 py4DSTEM/process/datastructure/diffraction.py
 py4DSTEM/process/datastructure/pointlist.py
 py4DSTEM/process/datastructure/real.py
+py4DSTEM/process/fit/__init__.py
+py4DSTEM/process/fit/fit.py
+py4DSTEM/process/fit/functions.py
 py4DSTEM/process/preprocess/__init__.py
+py4DSTEM/process/preprocess/background_subtract.py
+py4DSTEM/process/preprocess/electron_counting.py
 py4DSTEM/process/preprocess/preprocess.py
+py4DSTEM/process/utils/__init__.py
+py4DSTEM/process/utils/utils.py
 py4DSTEM/readwrite/__init__.py
 py4DSTEM/readwrite/reader.py
 py4DSTEM/readwrite/writer.py
