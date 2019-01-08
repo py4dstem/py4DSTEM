@@ -94,27 +94,121 @@ class DataCube(DataObject):
         except IndexError:
             return 0, 0
 
-    def get_virtual_image_rect(self,slice_x,slice_y):
+    # Virtual images -- integrating
+
+    def get_virtual_image_rect_integrate(self,slice_x,slice_y):
         """
         Returns a virtual image as an ndarray, generated from a rectangular detector in integration
         mode. Also returns a bool indicating success or failure.
         """
-        return virtualimage.get_virtual_image_rect(self,slice_x,slice_y)
+        return virtualimage.get_virtual_image_rect_integrate(self,slice_x,slice_y)
 
-    def get_virtual_image_circ(self,slice_x,slice_y):
+    def get_virtual_image_circ_integrate(self,slice_x,slice_y):
         """
         Returns a virtual image as an ndarray, generated from a circular detector in integration
         mode. Also returns a bool indicating success or failure.
         """
-        return virtualimage.get_virtual_image_circ(self,slice_x,slice_y)
+        return virtualimage.get_virtual_image_circ_integrate(self,slice_x,slice_y)
 
-    def get_virtual_image_annular(self,slice_x,slice_y,R):
+    def get_virtual_image_annular_integrate(self,slice_x,slice_y,R):
         """
         Returns a virtual image as an ndarray, generated from a circular detector in integration
         mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
         of the inner to the outer detector radii.
         """
-        return virtualimage.get_virtual_image_annular(self,slice_x,slice_y,R)
+        return virtualimage.get_virtual_image_annular_integrate(self,slice_x,slice_y,R)
+
+    # Virtual images -- difference
+
+    def get_virtual_image_rect_diffX(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a rectangular detector in difference
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_rect_diffX(self,slice_x,slice_y)
+
+    def get_virtual_image_rect_diffY(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a rectangular detector in difference
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_rect_diffY(self,slice_x,slice_y)
+
+    def get_virtual_image_circ_diffX(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in difference
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_circ_diffX(self,slice_x,slice_y)
+
+    def get_virtual_image_circ_diffY(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in difference
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_circ_diffY(self,slice_x,slice_y)
+
+    def get_virtual_image_annular_diffX(self,slice_x,slice_y,R):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in difference
+        mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
+        of the inner to the outer detector radii.
+        """
+        return virtualimage.get_virtual_image_annular_diffX(self,slice_x,slice_y,R)
+
+    def get_virtual_image_annular_diffY(self,slice_x,slice_y,R):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in difference
+        mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
+        of the inner to the outer detector radii.
+        """
+        return virtualimage.get_virtual_image_annular_diffY(self,slice_x,slice_y,R)
+
+    # Virtual images -- CoM
+
+    def get_virtual_image_rect_CoMX(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a rectangular detector in CoM
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_rect_CoMX(self,slice_x,slice_y)
+
+    def get_virtual_image_rect_CoMY(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a rectangular detector in CoM
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_rect_CoMY(self,slice_x,slice_y)
+
+    def get_virtual_image_circ_CoMX(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in CoM
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_circ_CoMX(self,slice_x,slice_y)
+
+    def get_virtual_image_circ_CoMY(self,slice_x,slice_y):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in CoM
+        mode. Also returns a bool indicating success or failure.
+        """
+        return virtualimage.get_virtual_image_circ_CoMY(self,slice_x,slice_y)
+
+    def get_virtual_image_annular_CoMX(self,slice_x,slice_y,R):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in CoM
+        mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
+        of the inner to the outer detector radii.
+        """
+        return virtualimage.get_virtual_image_annular_CoMX(self,slice_x,slice_y,R)
+
+    def get_virtual_image_annular_CoMY(self,slice_x,slice_y,R):
+        """
+        Returns a virtual image as an ndarray, generated from a circular detector in CoM
+        mode. Also returns a bool indicating success or failure. The input parameter R is the ratio
+        of the inner to the outer detector radii.
+        """
+        return virtualimage.get_virtual_image_annular_CoMY(self,slice_x,slice_y,R)
 
 
 ########################## END OF DATACUBE OBJECT ########################
