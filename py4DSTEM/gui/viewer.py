@@ -73,6 +73,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         # Set up initial views in real and diffraction space
         self.update_diffraction_space_view()
+        self.update_virtual_detector_shape()
+        self.update_virtual_detector_mode()
         self.update_real_space_view()
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
@@ -143,7 +145,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
         # Virtual detectors
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
-        self.settings.New('virtual_detector_mode', dtype=int, initial=1)
+        self.settings.New('virtual_detector_mode', dtype=int, initial=0)
 
         self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
         self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
@@ -263,6 +265,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
         # Update data views
         self.update_diffraction_space_view()
+        self.update_virtual_detector_shape()
+        self.update_virtual_detector_mode()
         self.update_real_space_view()
 
         # Normalize diffraction space view
@@ -569,8 +573,9 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         else:
-            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+            raise ValueError("Unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
 
+        self.update_virtual_detector_mode()
         self.update_real_space_view()
 
     def update_annulus_pos(self):
@@ -597,15 +602,68 @@ class DataViewer(QtWidgets.QMainWindow):
         """
         Virtual detector modes are mapped to integers, following the IDs assigned to the
         radio buttons in VirtualDetectorWidget in dialogs.py.  They are as follows:
-            1: Integrate
-            2: CoM
-            3: Difference, X
-            4: Difference, Y
+            0: Integrate
+            1: Difference, X
+            2: Difference, Y
+            3: CoM, Y
+            4: CoM, X
         """
         detector_mode = self.settings.virtual_detector_mode.val
-        print(detector_mode)
-        pass
+        detector_shape = self.settings.virtual_detector_shape.val
 
+        # Integrating detector
+        if detector_mode==0:
+            if detector_shape==0:
+                self.get_virtual_image = self.datacube.get_virtual_image_rect_integrate
+            elif detector_shape==1:
+                self.get_virtual_image = self.datacube.get_virtual_image_circ_integrate
+            elif detector_shape==2:
+                self.get_virtual_image = self.datacube.get_virtual_image_annular_integrate
+            else:
+                raise ValueError("Unknown detector shape value {}".format(detector_shape))
+
+        # Difference detector
+        elif detector_mode==1:
+            if detector_shape==0:
+                self.get_virtual_image = self.datacube.get_virtual_image_rect_diffX
+            elif detector_shape==1:
+                self.get_virtual_image = self.datacube.get_virtual_image_circ_diffX
+            elif detector_shape==2:
+                self.get_virtual_image = self.datacube.get_virtual_image_annular_diffX
+            else:
+                raise ValueError("Unknown detector shape value {}".format(detector_shape))
+        elif detector_mode==2:
+            if detector_shape==0:
+                self.get_virtual_image = self.datacube.get_virtual_image_rect_diffY
+            elif detector_shape==1:
+                self.get_virtual_image = self.datacube.get_virtual_image_circ_diffY
+            elif detector_shape==2:
+                self.get_virtual_image = self.datacube.get_virtual_image_annular_diffY
+            else:
+                raise ValueError("Unknown detector shape value {}".format(detector_shape))
+
+        # CoM detector
+        elif detector_mode==3:
+            if detector_shape==0:
+                self.get_virtual_image = self.datacube.get_virtual_image_rect_CoMX
+            elif detector_shape==1:
+                self.get_virtual_image = self.datacube.get_virtual_image_circ_CoMX
+            elif detector_shape==2:
+                self.get_virtual_image = self.datacube.get_virtual_image_annular_CoMX
+            else:
+                raise ValueError("Unknown detector shape value {}".format(detector_shape))
+        elif detector_mode==4:
+            if detector_shape==0:
+                self.get_virtual_image = self.datacube.get_virtual_image_rect_CoMY
+            elif detector_shape==1:
+                self.get_virtual_image = self.datacube.get_virtual_image_circ_CoMY
+            elif detector_shape==2:
+                self.get_virtual_image = self.datacube.get_virtual_image_annular_CoMY
+            else:
+                raise ValueError("Unknown detector shape value {}".format(detector_shape))
+
+        else:
+            raise ValueError("Unknown detector mode value {}".format(detector_mode))
 
 
     ################## Get virtual images ##################
@@ -634,7 +692,7 @@ class DataViewer(QtWidgets.QMainWindow):
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
-            new_real_space_view, success = self.datacube.get_virtual_image_rect(slice_x,slice_y)
+            new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
@@ -648,7 +706,7 @@ class DataViewer(QtWidgets.QMainWindow):
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
-            new_real_space_view, success = self.datacube.get_virtual_image_circ(slice_x,slice_y)
+            new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
@@ -665,7 +723,7 @@ class DataViewer(QtWidgets.QMainWindow):
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
 
             # Get the virtual image and set the real space view
-            new_real_space_view, success = self.datacube.get_virtual_image_annular(slice_x,slice_y,R)
+            new_real_space_view, success = self.get_virtual_image(slice_x,slice_y,R)
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
@@ -676,78 +734,6 @@ class DataViewer(QtWidgets.QMainWindow):
             print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
 
         return
-
-
-
-
-
-
-    ############ Deprecated functions ###########
-
-
-    def cancel_preprocessing(self):
-        # Update settings to reflect no changes
-        self.settings.bin_r.update_value(False)
-        self.settings.bin_q.update_value(False)
-        self.settings.cropped_r.update_value(False)
-        self.settings.cropped_q.update_value(False)
-        self.settings.crop_rx_min.update_value(False)
-        self.settings.crop_rx_max.update_value(False)
-        self.settings.crop_ry_min.update_value(False)
-        self.settings.crop_ry_max.update_value(False)
-        self.settings.crop_qx_min.update_value(False)
-        self.settings.crop_qx_max.update_value(False)
-        self.settings.crop_qy_min.update_value(False)
-        self.settings.crop_qy_max.update_value(False)
-
-        if hasattr(self,'crop_roi_real'):
-            self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
-        if hasattr(self,'crop_roi_diffraction'):
-            self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
-
-        self.preprocessing_widget.close()
-
-    def execute_preprocessing(self):
-
-        if self.preprocessing_widget.checkBox_Crop_Real.isChecked():
-            self.settings.cropped_r.update_value(True)
-            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_rx,slice_ry = slices_r
-            self.settings.crop_rx_min.update_value(slice_rx.start)
-            self.settings.crop_rx_max.update_value(slice_rx.stop)
-            self.settings.crop_ry_min.update_value(slice_ry.start)
-            self.settings.crop_ry_max.update_value(slice_ry.stop)
-        else:
-            self.settings.cropped_r.update_value(False)
-            slice_rx, slice_ry = None, None
-        if self.preprocessing_widget.checkBox_Crop_Diffraction.isChecked():
-            self.settings.cropped_q.update_value(True)
-            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_qx,slice_qy = slices_q
-            self.settings.crop_qx_min.update_value(slice_qx.start)
-            self.settings.crop_qx_max.update_value(slice_qx.stop)
-            self.settings.crop_qy_min.update_value(slice_qy.start)
-            self.settings.crop_qy_max.update_value(slice_qy.stop)
-        else:
-            self.settings.cropped_q.update_value(False)
-            slice_qx, slice_qy = None, None
-
-        # Update settings
-        # Crop and bin
-        self.datacube.cropAndBin(self.settings.bin_r.val, self.settings.bin_q.val, self.settings.cropped_r, self.settings.cropped_q, slice_ry, slice_rx, slice_qy, slice_qx)
-        self.virtual_detector_roi.setPos(self.virtual_detector_roi.pos()/self.settings.bin_q.val)
-        self.virtual_detector_roi.scale(1/self.settings.bin_q.val)
-        self.real_space_point_selector.setPos(self.real_space_point_selector.pos()/self.settings.bin_r.val)
-        self.update_diffraction_space_view()
-        self.update_real_space_view()
-
-        if hasattr(self,'crop_roi_real'):
-            self.real_space_widget.view.scene().removeItem(self.crop_roi_real)
-        if hasattr(self,'crop_roi_diffraction'):
-            self.diffraction_space_widget.view.scene().removeItem(self.crop_roi_diffraction)
-
-        self.preprocessing_widget.close()
-
 
 
 
