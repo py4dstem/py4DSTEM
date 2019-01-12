@@ -665,6 +665,7 @@ class DataViewer(QtWidgets.QMainWindow):
         else:
             raise ValueError("Unknown detector mode value {}".format(detector_mode))
 
+        self.update_real_space_view()
 
     ################## Get virtual images ##################
 
