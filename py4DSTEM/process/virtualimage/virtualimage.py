@@ -70,7 +70,6 @@ def get_virtual_image_annular_integrate(datacube, slice_x, slice_y, R):
     mode. Also returns a bool indicating success or failure. The input parameter R is the ratio of
     the inner to the outer detector radii.
     """
-    print(R)
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
     try:
         return np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask, axis=(2,3)), 1
@@ -178,7 +177,7 @@ def get_virtual_image_rect_CoMX(datacube, slice_x, slice_y):
     Returns a virtual image as an ndarray, generated from a rectangular detector, in CoM
     mode. Also returns a bool indicating success or failure.
     """
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx,axis=(2,3))/datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3))
         return img, 1
@@ -190,7 +189,7 @@ def get_virtual_image_rect_CoMY(datacube, slice_x, slice_y):
     Returns a virtual image as an ndarray, generated from a rectangular detector, in CoM
     mode. Also returns a bool indicating success or failure.
     """
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry,axis=(2,3))/datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3))
         return img, 1
@@ -203,7 +202,7 @@ def get_virtual_image_circ_CoMX(datacube, slice_x, slice_y):
     mode. Also returns a bool indicating success or failure.
     """
     mask = get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start)
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
@@ -216,7 +215,7 @@ def get_virtual_image_circ_CoMY(datacube, slice_x, slice_y):
     mode. Also returns a bool indicating success or failure.
     """
     mask = get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start)
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
@@ -230,7 +229,7 @@ def get_virtual_image_annular_CoMX(datacube, slice_x, slice_y, R):
     the inner to the outer detector radii.
     """
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
@@ -244,7 +243,7 @@ def get_virtual_image_annular_CoMY(datacube, slice_x, slice_y, R):
     the inner to the outer detector radii.
     """
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
-    rx,ry = np.meshgrid(np.arange(slice_x.stop-slice_x.start),np.arange(slice_y.stop-slice_y.start))
+    ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
         img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
