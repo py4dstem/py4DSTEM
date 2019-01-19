@@ -166,7 +166,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create virtual detector ROI selector
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
         self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
-        self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+        self.virtual_detector_roi.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         # Name and return
         self.diffraction_space_widget.setWindowTitle('Diffraction Space')
@@ -545,13 +545,13 @@ class DataViewer(QtWidgets.QMainWindow):
         if detector_shape==0:
             self.virtual_detector_roi = pg.RectROI([int(x0-xr/2),int(y0-yr/2)], [int(xr),int(yr)], pen=(3,9))
             self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
-            self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+            self.virtual_detector_roi.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         # Circular detector
         elif detector_shape==1:
             self.virtual_detector_roi = pg.CircleROI([int(x0-xr/2),int(y0-yr/2)], [int(xr),int(yr)], pen=(3,9))
             self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi)
-            self.virtual_detector_roi.sigRegionChanged.connect(self.update_real_space_view)
+            self.virtual_detector_roi.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         # Annular dector
         elif detector_shape==2:
@@ -564,7 +564,7 @@ class DataViewer(QtWidgets.QMainWindow):
             self.diffraction_space_widget.getView().addItem(self.virtual_detector_roi_inner)
 
             # Connect size/position of inner and outer detectors
-            self.virtual_detector_roi_outer.sigRegionChanged.connect(self.update_annulus_pos)
+            self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_annulus_pos)
             self.virtual_detector_roi_outer.sigRegionChangeFinished.connect(self.update_annulus_radii)
             self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_annulus_radii)
 
