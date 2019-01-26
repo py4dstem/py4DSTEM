@@ -59,15 +59,6 @@ def get_cross_correlation(ar, kernel, corrPower=1):
     correlation, and values in between are hybrids.
     """
     m = np.fft.fft2(ar) * np.conj(np.fft.fft2(kernel))
-    cc = np.fft.ifft2(np.abs(m)**(corrPower) * np.exp(1j*np.angle(m)))
-
-def get_cross_correlation(ar, kernel, corrPower=1):
-    """
-    Calculates the cross correlation of ar with kernel.
-    corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
-    correlation, and values in between are hybrids.
-    """
-    m = np.fft.fft2(ar) * np.conj(np.fft.fft2(kernel))
     return np.real(np.fft.ifft2(np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))))
 
 def get_cross_correlation_fk(ar, fourierkernel, corrPower=1):
