@@ -92,5 +92,14 @@ def get_maximal_points(ar):
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
 
-
+def linear_interpolation_1D(ar,x):
+    """
+    Calculates the 1D linear interpolation of array ar at position x using the two nearest elements.
+    """
+    x0,x1 = int(np.floor(x)),int(np.ceil(x))
+    if x0==x1:
+        return ar[x0]
+    else:
+        dx = x-x0
+        return (1-dx)*ar[x0] + dx*ar[x1]
 
