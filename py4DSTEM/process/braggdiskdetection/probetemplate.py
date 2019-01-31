@@ -1,9 +1,11 @@
-# Functions for obtaining vacuum probe templates, including from vacuum scans, from a selected ROI
-# of a scan over vacuum, or synthetic probes.  Ultimately the purpose is to generate a kernel for
-# convolution with individual diffraction patterns to identify Bragg disks.  Kernel generation will
-# generally proceed in two steps, which will each correspond to a function call: first, obtaining 
-# or creating the diffraction pattern of a probe over vacuum, and second, turning the probe DP into
-# a convolution kernel by shifting and normalizing.
+# Functions for obtaining vacuum probe templates.
+#
+# Probe templates can be generated from vacuum scans, from a selected ROI of a vacuum region of a 
+# scan, or synthetic probes.  Ultimately the purpose is to generate a kernel for convolution with 
+# individual diffraction patterns to identify Bragg disks.  Kernel generation will generally proceed 
+# in two steps, which will each correspond to a function call: first, obtaining  or creating the 
+# diffraction pattern of a probe over vacuum, and second, turning the probe DP into a convolution
+# kernel by shifting and normalizing.
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation
