@@ -212,7 +212,7 @@ def count_datacube(datacube,counted_shape,sigmathresh=4,nsamples=40,upper_limit=
             #where the positions are fractions of the original array
             electron_posn /= np.asarray([max(y,x),max(y,x)])[np.newaxis,:]
             electron_posn = np.hstack((electron_posn
-                           ,np.asarray([tt,xx],dtype=np.float32)[np.newaxis,:]))
+                           ,np.asarray([tt,zz],dtype=np.float32)[np.newaxis,:]))
             if(e_list is None): e_list = electron_posn
             else:e_list = np.vstack((e_list,electron_posn))
     return electron_posn
