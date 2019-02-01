@@ -24,7 +24,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
         print()
 
 
-def get_dark_reference(datacube,ndrsamples=20,upperlimit=5,drwidth=100):
+def get_dark_reference(datacube,ndrsamples=20,upper_limit=5,drwidth=100):
     '''For a 4D-STEM datacube subtract the dark reference'''
     #Get dimensions
     y,x,z,t = np.shape(datacube)
@@ -133,7 +133,7 @@ def calculate_counting_threshhold(datacube,darkreference,sigmathresh=4,nsamples=
 
     return thresh
 
-def count_datacube(datacube,counted_shape,sigmathresh=4,nsamples=40,upperlimit=10,
+def count_datacube(datacube,counted_shape,sigmathresh=4,nsamples=40,upper_limit=10,
                          drwidth=100,sub_pixel=True,
                          plot_histogram=False,plot_electrons=False):
     data = datacube.data4D
@@ -143,7 +143,7 @@ def count_datacube(datacube,counted_shape,sigmathresh=4,nsamples=40,upperlimit=1
 
     print('Getting dark current reference')
     #Remove dark background
-    dr,mean,stddev = get_dark_reference(data,ndrsamples=nsamples,upperlimit=upper_limit,
+    dr,mean,stddev = get_dark_reference(data,ndrsamples=nsamples,upper_limit=upper_limit,
                                         drwidth=drwidth)
 
     print('Calculating threshhold')
