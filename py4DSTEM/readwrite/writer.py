@@ -9,9 +9,9 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..process.datastructure import RawDataCube, DataCube, DiffractionSlice, RealSlice
+from ..process.datastructure import DataCube, DiffractionSlice, RealSlice
 from ..process.datastructure import PointList, PointListArray
-from ..process.datastructure import MetadataCollection, DataObjectTracker, DataObject
+from ..process.datastructure import MetadataCollection, DataObject
 from ..process.log import log, Logger
 
 logger = Logger()
