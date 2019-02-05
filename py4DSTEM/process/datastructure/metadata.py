@@ -53,11 +53,11 @@ class Metadata(DataObject):
     def setup_metadata_py4DSTEM_file(self, filepath):
 
         # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.metadata.original.shortlist = MetadataCollection('shortlist')
-        self.metadata.original.all = MetadataCollection('all')
+        self.original_metadata.shortlist = MetadataCollection('shortlist')
+        self.original_metadata.all = MetadataCollection('all')
 
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['all'],self.metadata.original.all)
+        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['shortlist'],self.original_metadata.shortlist)
+        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['all'],self.original_metadata.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
         self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['microscope'],self.metadata.microscope)
@@ -69,10 +69,10 @@ class Metadata(DataObject):
     def setup_metadata_py4DSTEM_file_v0_1(self, filepath):
 
         # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.metadata.original.shortlist = MetadataCollection('shortlist')
-        self.metadata.original.all = MetadataCollection('all')
-        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['shortlist'],self.metadata.original.shortlist)
-        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['all'],self.metadata.original.all)
+        self.original_metadata.shortlist = MetadataCollection('shortlist')
+        self.original_metadata.all = MetadataCollection('all')
+        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['shortlist'],self.original_metadata.shortlist)
+        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['all'],self.original_metadata.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
         self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
@@ -84,8 +84,8 @@ class Metadata(DataObject):
     def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
 
         # Store original metadata
-        self.metadata.original.shortlist = original_metadata_shortlist
-        self.metadata.original.all = original_metadata_all
+        self.original_metadata.shortlist = original_metadata_shortlist
+        self.original_metadata.all = original_metadata_all
 
         # Search original metadata and use to populate metadata groups
         self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_microscope_search_dict, self.metadata.microscope)
@@ -105,7 +105,7 @@ class Metadata(DataObject):
         Creates the containers for metadata.
         """
         self.metadata = MetadataCollection('metadata')
-        self.metadata.original = MetadataCollection('original')
+        self.original_metadata = MetadataCollection('original metadata')
         self.metadata.microscope = dict()
         self.metadata.sample = dict()
         self.metadata.user = dict()
