@@ -474,7 +474,6 @@ def read(filename, load='all'):
     return output
 
 
-############ TODO NEXT: generate Metadata object from read_non_py4DSTEM_file
 def read_non_py4DSTEM_file(filename):
     """
     Read a non-py4DSTEM file using hyperspy.
@@ -495,8 +494,13 @@ def read_non_py4DSTEM_file(filename):
     # Get datacube
     datacube = DataCube(data = hyperspy_file.data)
 
-    # Set scan position, if in metadata
-    # TODO
+    # Set scan shape, if in metadata
+    try:
+        R_Nx = int(metadata.get_metadata_item('scan_size_Nx'))
+        R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
+        datacube.set_scan_shape(R_Nx, R_Ny)
+    except ValueError:
+        print("Warning: scan shape not detected in metadata; please set manually.")
 
     # Point to metadata from datacube
     datacube.metadata = metadata
