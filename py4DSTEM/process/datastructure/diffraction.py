@@ -1,56 +1,37 @@
 # Defines a class - DiffractionSlice - for storing / accessing / manipulating data that lives in
-# diffraction space.
-#
-# DiffractionSlice objects are generated from parent DataCube objects with various processing
-# functions, and must contain a reference to their parent DataCube instance.
+# diffraction space.  DiffractionSlice inherits from DataSlice.
 
 from collections import OrderedDict
 from .dataobject import DataObject
+from .dataslice import DataSlice
 
-class DiffractionSlice(DataObject):
+class DiffractionSlice(DataSlice):
 
-    def __init__(self, data, parentDataCube, slicelabels=None, Q_Nx=None, Q_Ny=None, **kwargs):
+    def __init__(self, data, Q_Nx=None, Q_Ny=None, slicelabels=None, **kwargs):
         """
-        Instantiate a DiffractionSlice object.  Set the parent datacube, dimensions, and data.
-        Confirms that the data shape agrees with diffraction space of the parent datacube.
-        If data is two dimensional, it is stored as self.data2D.
+        Instantiate a DiffractionSlice object.  Set the data and dimensions.
+
+        If data is two dimensional, it is stored as self.data2D, and has shape (Q_Nx, Q_Ny).
         If data is three dimensional, self.data2D is a list of slices of some depth,
-        where self.depth is data.shape[0].
+        where self.depth is data.shape[2], i.e. the shape is (Q_Nx, Q_Ny, depth).
         If slicelabels is unspecified, 2D slices can be accessed as self.data2D[i].
         If slicelabels is specified, it should be an n-tuple of strings, where
         n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
         """
-        DataObject.__init__(self, parent=parentDataCube, **kwargs)
-
-        self.parentDataCube = parentDataCube
+        # Get shape
         if Q_Nx is None:
-            self.Q_Nx = self.parentDataCube.Q_Nx
+            self.Q_Nx = data.shape[0]
         else:
             self.Q_Nx = Q_Nx
         if Q_Ny is None:
-            self.Q_Ny = self.parentDataCube.Q_Ny
+            self.Q_Ny = data.shape[1]
         else:
             self.Q_Ny = Q_Ny
 
-        shape = data.shape
-        assert (len(shape)==2) or (len(shape)==3)
-        if len(shape)==2:
-            assert shape==(self.Q_Nx,self.Q_Ny), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Nx, self.Q_Ny)
-            self.depth=1
-            self.data2D = data
-        else:
-            assert shape[1:]==(self.Q_Nx,self.Q_Ny), "Shape of data is {}, but shape of diffraction space in parent DataCube is ({},{}).".format(shape, self.Q_Nx, self.Q_Ny)
-            self.depth=shape[0]
-            if slicelabels is None:
-                self.data2D = []
-                for i in range(self.depth):
-                    self.data2D.append(data[i,:,:])
-            else:
-                assert len(slicelabels)==self.depth
-                self.data2D = OrderedDict()
-                for i in range(self.depth):
-                    self.data2D[slicelabels[i]]=data[i,:,:]
-
+        # Instantiate as DataSlice, setting up dimensions, depth, and slicelabels
+        DataSlice.__init__(self, data=data,
+                           Nx=self.Q_Nx, Ny=self.Q_Ny,
+                           slicelabels=slicelabels, **kwargs)
 
 
 
