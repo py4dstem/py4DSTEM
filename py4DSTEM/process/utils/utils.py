@@ -103,3 +103,36 @@ def linear_interpolation_1D(ar,x):
         dx = x-x0
         return (1-dx)*ar[x0] + dx*ar[x1]
 
+def radial_integral(ar, x0, y0):
+    """
+    Computes the radial integral of array ar from center x0,y0.
+
+    Based on efficient radial profile code found at www.astrobetter.com/wiki/python_radial_profiles,
+    with credit to Jessica R. Lu, Adam Ginsburg, and Ian J. Crossfield.
+    """
+    y,x = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
+    r = np.sqrt((x-x0)**2 + (y-y0)**2)
+
+    # Get sorted radii and ar values
+    ind = np.argsort(r.flat)
+    r_sorted = r.flat[ind]
+    vals_sorted = ar.flat[ind]
+
+    # Cast to int (i.e. set binsize = 1)
+    r_int = r_sorted.astype(int)
+
+    # Find all pixels within each radial bin
+    delta_r = r_int[1:] - r_int[:-1]
+    rind = np.where(delta_r)[0]       # Gives nonzero elements of delta_r, i.e. where radius changes
+    nr = rind[1:] - rind[:-1]         # Number of pixels represented in each bin
+
+    # Cumulative sum in each radius bin
+    cs_vals = np.cumsum(vals_sorted, dtype=float)
+    bin_sum = cs_vals[rind[1:]] - cs_vals[rind[:-1]]
+
+    return bin_sum / nr, bin_sum, nr, rind
+
+
+
+
+
