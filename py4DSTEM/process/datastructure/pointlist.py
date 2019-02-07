@@ -27,7 +27,6 @@ class PointList(DataObject):
             data - an (n,m)-shape ndarray, where m=len(coordinates), and n is the number of
                    points being specified additional data can be added later with the
                    add_point() method
-            parentDataCube - a DataCube object
             dtype - optional, used if coordinates don't explicitly specify dtypes.
         """
         DataObject.__init__(self, **kwargs)
@@ -47,7 +46,10 @@ class PointList(DataObject):
         self.data = np.array([],dtype=self.dtype)
 
         if data is not None:
-            self.add_pointarray(data)
+            if data.dtype == self.dtype:
+                self.add_pointlist(data)  # If types agree, add all at once
+            else:
+                self.add_pointarray(data) # Otherwise, add one by one
 
     def add_point(self, point):
         point = tuple(point)
@@ -69,7 +71,7 @@ class PointList(DataObject):
         """
         assert self.dtype==pointlist.dtype
         self.data = np.append(self.data, pointlist.data)
-        self.length += pointlist.length
+        self.length += len(pointlist)
 
     def sort(self, coordinate, order='descending'):
         """
@@ -115,11 +117,27 @@ class PointList(DataObject):
 
     def copy(self, **kwargs):
         new_pointlist = PointList(coordinates=self.coordinates,
-                                  parentDataCube=self.parentDataCube,
                                   data=np.copy(self.data),
                                   dtype=self.dtype,
                                   **kwargs)
         return new_pointlist
+
+    def add_coordinates(self, new_coords):
+        """
+        Creates a copy of the PointList, but with additional coordinates given by new_coords.
+        new_coords must be a string of 2-tuples, ('name', dtype)
+        """
+        coords = []
+        for key in self.dtype.fields.keys():
+            coords.append((key,self.dtype.fields[key][0]))
+        for coord in new_coords:
+            coords.append((coord[0],coord[1]))
+
+        data = np.zeros(self.length, np.dtype(coords))
+        for key in self.dtype.fields.keys():
+            data[key] = np.copy(self.data[key])
+
+        return PointList(coordinates=coords, data=data)
 
 
 class PointListArray(DataObject):
@@ -128,33 +146,35 @@ class PointListArray(DataObject):
     Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
     as real space scan positions R_Nx,R_Ny.
     """
-    def __init__(self, coordinates, parentDataCube, shape=None, dtype=float, **kwargs):
+    def __init__(self, coordinates, shape, dtype=float, **kwargs):
         """
 		Instantiate a PointListArray object.
-		Defines the coordinates, and parentDataCube by instantiating PointLists with these
-        parameters.
-        If shape=None, the shape defaults to the real space shape (R_Nx, R_Ny).
+		Creates a PointList with coordinates at each point of a 2D grid with a shape specified by
+        the shape argument.
 
 		Inputs:
-			coordinates, parentDataCube - see PointList documentation
-            shape - optional, a 2-tuple of ints specifying the array shape.  If unspecified, the shape
-                    defaults to the real space shape (R_Nx, R_Ny).
+			coordinates - see PointList documentation
+            shape - a 2-tuple of ints specifying the array shape.  Often the desired shape
+                    will be the real space shape (R_Nx, R_Ny).
         """
-        DataObject.__init__(self, parent=parentDataCube, **kwargs)
+        DataObject.__init__(self, **kwargs)
 
         self.coordinates = coordinates
-        self.parentDataCube = parentDataCube
         self.default_dtype = dtype
 
-        if shape is None:
-            self.shape = (self.parentDataCube.R_Nx, self.parentDataCube.R_Ny)
+        assert isinstance(shape,tuple), "Shape must be a tuple."
+        assert len(shape) == 2, "Shape must be a length 2 tuple."
+        self.shape = shape
+
+        # Define the data type for the structured arrays in the PointLists
+        if type(coordinates[0])==str:
+            self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
+        elif type(coordinates[0])==tuple:
+            self.dtype = np.dtype(coordinates)
         else:
-            assert isinstance(shape,tuple), "If specified, shape must be a tuple."
-            assert len(shape) == 2, "If specified, shape must be a length 2 tuple."
-            self.shape = shape
+            raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
 
         self.pointlists = [[PointList(coordinates=self.coordinates,
-                            parentDataCube=self.parentDataCube,
                             dtype = self.default_dtype,
                             **kwargs) for j in range(self.shape[1])] for i in range(self.shape[0])]
 
@@ -169,7 +189,6 @@ class PointListArray(DataObject):
         Returns a copy of itself.
         """
         new_pointlistarray = PointListArray(coordinates=self.coordinates,
-                                            parentDataCube=self.parentDataCube,
                                             shape=self.shape,
                                             dtype=self.default_dtype,
                                             **kwargs)
@@ -180,6 +199,36 @@ class PointListArray(DataObject):
                 curr_pointlist.add_pointlist(self.get_pointlist(i,j).copy())
 
         return new_pointlistarray
+
+    def add_coordinates(self, new_coords, **kwargs):
+        """
+        Creates a copy of the PointListArray, but with additional coordinates given by new_coords.
+        new_coords must be a string of 2-tuples, ('name', dtype)
+        """
+        coords = []
+        for key in self.dtype.fields.keys():
+            coords.append((key,self.dtype.fields[key][0]))
+        for coord in new_coords:
+            coords.append((coord[0],coord[1]))
+
+        new_pointlistarray = PointListArray(coordinates=coords,
+                                            shape=self.shape,
+                                            dtype=self.default_dtype,
+                                            **kwargs)
+
+        for i in range(new_pointlistarray.shape[0]):
+            for j in range(new_pointlistarray.shape[1]):
+                curr_pointlist_new = new_pointlistarray.get_pointlist(i,j)
+                curr_pointlist_old = self.get_pointlist(i,j)
+
+                data = np.zeros(curr_pointlist_old.length, np.dtype(coords))
+                for key in self.dtype.fields.keys():
+                    data[key] = np.copy(curr_pointlist_old.data[key])
+
+                curr_pointlist_new.add_pointlist(data)
+
+        return new_pointlistarray
+
 
 
 
