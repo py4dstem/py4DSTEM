@@ -4,14 +4,16 @@
 # of data py4DSTEM creates. It enables:
 #       -storing a name, which will be associated with the object on saving
 #       -linking to metadata
-#       -listing all py4DSTEM dataobject instances present in a python session
+#       -listing and searching all DataObjects, and DataObjects by the various child class types
 #
-# All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, 
-# RealSlice, and PointList objects - inherit from DataObject.
+# All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, RealSlice, and PointLists
+# - inherit from DataObject.
 
 #from functools import wraps
 #from ..log import Logger
 #logger = Logger()
+
+import weakref
 
 class DataObject(object):
     """
@@ -20,17 +22,30 @@ class DataObject(object):
         -stores pointer to metadata
         -enables listing all py4DSTEM dataobject instances in a session
     """
+    _instances = set()
+
     def __init__(self, name='', metadata=None, **kwargs):
 
         self.name = name
         self.metadata = metadata # TODO: point to metadata
+        self._instances.add(weakref.ref(self))
 
         # TODO: add logging of instantiation
 
-    # TODO
     @classmethod
     def getinstances(cls):
-        pass
+        """
+        Returns a generator of all DataObject instances.
+        """
+        dead = set()
+        for ref in cls._instances:
+            obj = ref()
+            if obj is not None:
+                yield obj
+            else:
+                dead.add(ref)
+        cls._instances -= dead
+
 
 
 # # Decorator which enables more human-readable display of tracked dataobjects
