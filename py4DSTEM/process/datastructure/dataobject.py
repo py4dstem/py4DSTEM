@@ -8,9 +8,6 @@
 #
 # All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, RealSlice, and PointLists
 # - inherit from DataObject.
-#
-# Note that searching functionality is defined in search.py, to avoid circular imports between
-# dataobject.py and the files defining the child classes.
 
 #from ..log import Logger
 #logger = Logger()
