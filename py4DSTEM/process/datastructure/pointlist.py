@@ -174,6 +174,7 @@ class PointListArray(DataObject):
         else:
             raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
 
+        kwargs['searchable']=False   # Ensure that the subpointlists don't all appear in searches
         self.pointlists = [[PointList(coordinates=self.coordinates,
                             dtype = self.default_dtype,
                             **kwargs) for j in range(self.shape[1])] for i in range(self.shape[0])]
