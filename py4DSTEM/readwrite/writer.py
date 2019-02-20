@@ -17,6 +17,127 @@ from ..process.log import log, Logger
 logger = Logger()
 
 @log
+def save_from_dataobject_list(dataobject_list, outputfile):
+    """
+    Saves an h5 file from a list of DataObjects and an output filepath.
+    """
+
+    assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
+
+    ##### Make .h5 file #####
+    print("Creating file {}...".format(outputfile))
+    f = h5py.File(outputfile,"w")
+    f.attrs.create("version_major",0)
+    f.attrs.create("version_minor",2)
+    group_data = f.create_group("4DSTEM_experiment")
+
+    ##### Metadata #####
+    print("Writing metadata...")
+
+    # Create metadata groups
+    group_metadata = group_data.create_group("metadata")
+    group_original_metadata = group_metadata.create_group("original")
+    group_microscope_metadata = group_metadata.create_group("microscope")
+    group_sample_metadata = group_metadata.create_group("sample")
+    group_user_metadata = group_metadata.create_group("user")
+    group_calibration_metadata = group_metadata.create_group("calibration")
+    group_comments_metadata = group_metadata.create_group("comments")
+    group_original_metadata_all = group_original_metadata.create_group("all")
+    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
+
+    # # Transfer original metadata trees
+    # if type(dataobjecttracker.rawdatacube.metadata.original.shortlist)==DictionaryTreeBrowser:
+    #     transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
+    #     transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
+    # else:
+    #     transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
+    #     transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
+
+    # # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
+    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.microscope,group_microscope_metadata)
+    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.sample,group_sample_metadata)
+    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.user,group_user_metadata)
+    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.calibration,group_calibration_metadata)
+    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.comments,group_comments_metadata)
+
+    ##### Log #####
+    group_log = group_data.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
+
+    ##### Data #####
+
+    # Write data groups
+    group_data = group_data.create_group("data")
+    group_datacubes = group_data.create_group("datacubes")
+    group_diffractionslices = group_data.create_group("diffractionslices")
+    group_realslices = group_data.create_group("realslices")
+    group_pointlists = group_data.create_group("pointlists")
+    group_pointlistarrays = group_data.create_group("pointlistarrays")
+    ind_dcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0
+
+    # Loop through and save all objects in the dataobjectlist
+    for dataobject in dataobject_list:
+        name = dataobject.name
+        if isinstance(dataobject, DataCube):
+            if name == '':
+                name = 'datacube_'+str(ind_dcs)
+                ind_dcs += 1
+            group_new_datacube = group_datacubes.create_group(name)
+            save_datacube_group(group_new_datacube, dataobject)
+        elif isinstance(dataobject, DiffractionSlice):
+            if name == '':
+                name = 'diffractionslice_'+str(ind_dfs)
+                ind_dfs += 1
+            group_new_diffractionslice = group_diffractionslices.create_group(name)
+            save_diffraction_group(group_new_diffractionslice, dataobject)
+        elif isinstance(dataobject, RealSlice):
+            if name == '':
+                name = 'realslice_'+str(ind_rls)
+                ind_rls += 1
+            group_new_realslice = group_realslices.create_group(name)
+            save_real_group(group_new_realslice, dataobject)
+        elif isinstance(dataobject, PointList):
+            if name == '':
+                name = 'pointlist_'+str(ind_ptl)
+                ind_ptl += 1
+            group_new_pointlist = group_pointlists.create_group(name)
+            save_pointlist_group(group_new_pointlist, dataobject)
+        elif isinstance(dataobject, PointListArray):
+            if name == '':
+                name = 'pointlistarray_'+str(ind_ptla)
+                ind_ptla += 1
+            group_new_pointlistarray = group_pointlistarrays.create_group(name)
+            save_pointlistarray_group(group_new_pointlistarray, dataobject)
+        else:
+            print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
+
+    ##### Finish and close #####
+    print("Done.")
+    f.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@log
 def save_from_dataobjecttracker(dataobjecttracker, outputfile):
     """
     Saves an h5 file from a DataObjectTracker object and an output filepath.
@@ -475,9 +596,7 @@ def write_log_item(group_log, index, logged_item):
             group_inputs.attrs.create(key, np.string_(value))
         elif isinstance(value,DataObject):
             if value.name == '':
-                if isinstance(value,RawDataCube):
-                    name = np.string_("RawDataCube_id"+str(id(value)))
-                elif isinstance(value,DataCube):
+                if isinstance(value,DataCube):
                     name = np.string_("DataCube_id"+str(id(value)))
                 elif isinstance(value,DiffractionSlice):
                     name = np.string_("DiffractionSlice_id"+str(id(value)))
@@ -492,11 +611,11 @@ def write_log_item(group_log, index, logged_item):
             else:
                 name = np.string_(value.name)
             group_inputs.attrs.create(key, name)
-        elif isinstance(value,DataObjectTracker):
-            name = np.string_("DataObjectTracker_id"+str(id(value)))
-            group_inputs.attrs.create(key, name)
         else:
-            group_inputs.attrs.create(key, value)
+            try:
+                group_inputs.attrs.create(key, value)
+            except TypeError:
+                group_inputs.attrs.create(key, np.string_(str(value)))
     group_logitem.attrs.create('version', logged_item.version)
     write_time_to_log_item(group_logitem, logged_item.datetime)
 
@@ -513,69 +632,71 @@ def write_time_to_log_item(group_logitem, datetime):
 # |--attr: version_minor=2
 # |--grp: 4DSTEM_experiment
 #             |
-#             |--grp: datacube
-#             |         |--attr: emd_group_type=1
-#             |         |--data: datacube
-#             |         |--data: dim1
-#             |         |    |--attr: name="R_x"
-#             |         |    |--attr: units="[n_m]"
-#             |         |--data: dim2
-#             |         |    |--attr: name="R_y"
-#             |         |    |--attr: units="[n_m]"
-#             |         |--data: dim3
-#             |         |    |--attr: name="Q_x"
-#             |         |    |--attr: units="[n_m^-1]"
-#             |         |--data: dim4
-#             |               |--attr: name="Q_y"
-#             |               |--attr: units="[n_m^-1]"
-#             |
-#             |--grp: processing
+#             |--grp: data
 #             |         |
 #             |         |--grp: datacubes
 #             |         |   |
-#             |         |   |--grp: processed_datacube_1
-#             |         |   |    |--attr: emd_group_type=1
-#             |         |   |    |--data: datacube
-#             |         |   |    |--data: dim1,dim2,dim3,dim4
-#             |         |   |    |--data: modification_log_indices
+#             |         |   |--grp: datacube_1
+#             |         |   |   |--attr: emd_group_type=1
+#             |         |   |   |--data: datacube
+#             |         |   |   |--data: dim1
+#             |         |   |   |    |--attr: name="R_x"
+#             |         |   |   |    |--attr: units="[n_m]"
+#             |         |   |   |--data: dim2
+#             |         |   |   |    |--attr: name="R_y"
+#             |         |   |   |    |--attr: units="[n_m]"
+#             |         |   |   |--data: dim3
+#             |         |   |   |    |--attr: name="Q_x"
+#             |         |   |   |    |--attr: units="[n_m^-1]"
+#             |         |   |   |--data: dim4
+#             |         |   |        |--attr: name="Q_y"
+#             |         |   |        |--attr: units="[n_m^-1]"
 #             |         |   |
-#             |         |   |--grp: processed_datacube_2
+#             |         |   |--grp: datacube_2
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: diffraction
+#             |         |--grp: diffractionslices
 #             |         |   |
-#             |         |   |--grp: diffraction_slice_1
+#             |         |   |--grp: diffractionslice_1
 #             |         |   |    |--attr: emd_group_type=1
 #             |         |   |    |--data: diffractionslice
 #             |         |   |    |--data: dim1,dim2
-#             |         |   |    |--data: modification_log_indices
 #             |         |   |
-#             |         |   |--grp: diffraction_slice_2
+#             |         |   |--grp: diffractionslice_2
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: real
+#             |         |--grp: realslices
 #             |         |   |
-#             |         |   |--grp: real_slice_1
+#             |         |   |--grp: realslice_1
 #             |         |   |    |--attr: emd_group_type=1
 #             |         |   |    |--data: realslice
 #             |         |   |    |--data: dim1,dim2
-#             |         |   |    |--data: modification_log_indices
 #             |         |   |
-#             |         |   |--grp: real_slice_2
+#             |         |   |--grp: realslice_2
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: pointlist
+#             |         |--grp: pointlists
+#             |         |   |
+#             |         |   |--grp: pointlist_1
+#             |         |   |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
+#             |         |   |    |--attr: dimensions=val
+#             |         |   |    |--data: point_list
+#             |         |   |
+#             |         |   |--grp: pointlist_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: pointlistarrays
 #             |             |
-#             |             |--grp: point_list_1
+#             |             |--grp: pointlistarray_1
 #             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
 #             |             |    |--attr: dimensions=val
 #             |             |    |--data: point_list
-#             |             |    |--data: modification_log_indices
 #             |             |
-#             |             |--grp: point_list_2
+#             |             |--grp: pointlistarray_2
 #             |             |    |
 #             |             :    :
 #             |
