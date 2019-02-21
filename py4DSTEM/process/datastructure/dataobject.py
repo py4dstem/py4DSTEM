@@ -44,9 +44,19 @@ class DataObject(object):
     _instances = []
 
     def __init__(self, name='', metadata=None, searchable=True, **kwargs):
+        """
+        Instantiate a DataObject instance.
 
+        Inputs:
+            name      a string which will be used to identify the object in .h5 files and logs
+            metadata  if specified, should point to a Metadata object, or to a DataObject.
+                      if metadata is a dataobject, self.metadata will point to DataObject.metadata.
+        """
         self.name = name
-        self.metadata = metadata # TODO: point to metadata
+        if isinstance(metadata, DataObject):
+            self.metadata = metadata.metadata
+        else:
+            self.metadata = None
         if searchable==True:
             self._instances.append(weakref.ref(self))
 
@@ -130,6 +140,12 @@ class DataObject(object):
     def get_dataobject_by_index(index):
         dataobject_list = DataObject.get_dataobject_list()
         return dataobject_list[index][3]
+
+    @staticmethod
+    @show_object_list
+    def get_dataobject_by_type(objecttype):
+        dataobject_list = DataObject.get_dataobject_list()
+        return [item[3] for item in dataobject_list if isinstance(item[3], objecttype)]
 
 
 
