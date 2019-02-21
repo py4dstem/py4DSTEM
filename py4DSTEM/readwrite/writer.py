@@ -11,15 +11,23 @@ from collections import OrderedDict
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..process.datastructure import DataCube, DiffractionSlice, RealSlice
 from ..process.datastructure import PointList, PointListArray
-from ..process.datastructure import MetadataCollection, DataObject
+from ..process.datastructure import MetadataCollection, Metadata, DataObject
 from ..process.log import log, Logger
 
 logger = Logger()
 
 @log
-def save_from_dataobject_list(dataobject_list, outputfile):
+def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
+
+    Accepts:
+        dataobject_list     a list of DataObjects to save
+        outputfile          path to an .h5 file to save
+        save_metadata       If True, automatically find the appropriate metadata object to save.
+                            If multiple possible metadata objects are found, set this flag to an
+                            integer index specifying which to use.
+                            Set this flag to False to save no metadata; not recommended.
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
@@ -32,7 +40,6 @@ def save_from_dataobject_list(dataobject_list, outputfile):
     group_data = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
-    print("Writing metadata...")
 
     # Create metadata groups
     group_metadata = group_data.create_group("metadata")
@@ -45,20 +52,25 @@ def save_from_dataobject_list(dataobject_list, outputfile):
     group_original_metadata_all = group_original_metadata.create_group("all")
     group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
 
-    # # Transfer original metadata trees
-    # if type(dataobjecttracker.rawdatacube.metadata.original.shortlist)==DictionaryTreeBrowser:
-    #     transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
-    #     transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
-    # else:
-    #     transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
-    #     transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
+    # If save_metadata isn't False, find metadata and save it
+    if save_metadata is not False:
+        print("Writing metadata...")
+        metadata = find_metadata(dataobject_list, save_metadata, f)
 
-    # # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
-    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.microscope,group_microscope_metadata)
-    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.sample,group_sample_metadata)
-    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.user,group_user_metadata)
-    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.calibration,group_calibration_metadata)
-    # transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.comments,group_comments_metadata)
+        # Transfer original metadata trees
+        if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+            transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
+        else:
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
+
+        # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
+        transfer_metadata_dict(metadata.data.microscope,group_microscope_metadata)
+        transfer_metadata_dict(metadata.data.sample,group_sample_metadata)
+        transfer_metadata_dict(metadata.data.user,group_user_metadata)
+        transfer_metadata_dict(metadata.data.calibration,group_calibration_metadata)
+        transfer_metadata_dict(metadata.data.comments,group_comments_metadata)
 
     ##### Log #####
     group_log = group_data.create_group("log")
@@ -486,12 +498,23 @@ def save_real_group(group, realslice):
 
 def save_pointlist_group(group, pointlist):
 
+    n_coords = len(pointlist.dtype.names)
+    coords = np.string_(str([coord for coord in pointlist.dtype.names]))
+    group.attrs.create("coordinates", coords)
+    group.attrs.create("dimensions", n_coords)
+    group.attrs.create("length", pointlist.length)
+
     for name in pointlist.dtype.names:
         group_current_coord = group.create_group(name)
         group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
 def save_pointlistarray_group(group, pointlistarray):
+
+    n_coords = len(pointlistarray.dtype.names)
+    coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
+    group.attrs.create("coordinates", coords)
+    group.attrs.create("dimensions", n_coords)
 
     for i in range(pointlistarray.shape[0]):
         for j in range(pointlistarray.shape[1]):
@@ -500,7 +523,62 @@ def save_pointlistarray_group(group, pointlistarray):
 
 
 
-#### Functions for original metadata transfer ####
+#### Metadata functions ####
+
+def find_metadata(dataobject_list, save_metadata, h5file):
+    """
+    Searches for a metadata object.
+
+    First searches the objects in dataobject_list for linked metadata objects. If exactly one is
+    found, returns it.
+    If none are found, searches for all metadata objects in memory. If exactly one is found, returns
+    it.
+    If none are still found, raises an exception with an error message suggesting saving with no
+    metadata by setting save_metadata to False.
+    If multiple metdata objects are found (either associated with the dataobject_list objects or in
+    memory), checks if save_metadata is an integer.
+    If not, prints a list of the metadata objects and associated indexes, and prompts the user to
+    select one by setting it to the value of the save_metadata flag.
+    If it is, returns the corresponding metadata object from the list of found metadata objects.
+    """
+    metadata_object_list = []
+    for dataobject in dataobject_list:
+        if dataobject.metadata is not None and dataobject.metadata not in metadata_object_list:
+            metadata_object_list.append(dataobject.metadata)
+    if len(metadata_object_list)==1:
+        return metadata_object_list[0]
+    elif len(metadata_object_list)==0:
+        metadata_object_list = DataObject.get_dataobject_by_type(Metadata)
+        if len(metadata_object_list)==1:
+            return metadata_object_list[0]
+        elif len(metadata_object_list)==0:
+            h5file.close()
+            raise Exception("No metadata found. To overide and save with no metadata (not recommended), use the metadata=False flag.")
+        else:
+            if save_metadata is True:
+                print("Several metadata objects found.")
+                print("To select one, set the save_metadata flag to the appropriate integer value:")
+                for i in range(len(metadata_object_list)):
+                    print("{}\t{}".format(i, metadata_object_list[i]))
+                print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
+                h5file.close()
+                raise Exception("Multiple metadata objects found. Select one or save without metadata.")
+            else:
+                assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
+                return metadata_object_list[save_metadata]
+    else:
+        if save_metadata is True:
+            print("Several metadata objects found.")
+            print("To select one, set the save_metadata flag to the appropriate integer value:")
+            for i in range(len(metadata_object_list)):
+                print("{}\t{}".format(i, metadata_object_list[i]))
+            print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
+            h5file.close()
+            raise Exception("Multiple metadata objects found. Select one or save without metadata.")
+        else:
+            assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
+            return metadata_object_list[save_metadata]
+
 
 def transfer_metadata_tree_hs(tree,group):
     """
@@ -585,7 +663,7 @@ def transfer_metadata_dict(dictionary,group):
             group.attrs.create(key,val)
 
 
-#### Functions for writing logs ####
+#### Logging functions ####
 
 def write_log_item(group_log, index, logged_item):
     group_logitem = group_log.create_group('log_item_'+str(index))
@@ -681,9 +759,14 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |--grp: pointlists
 #             |         |   |
 #             |         |   |--grp: pointlist_1
-#             |         |   |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
+#             |         |   |    |--attr: coordinates='coord_1, coord_2, ...'
 #             |         |   |    |--attr: dimensions=val
-#             |         |   |    |--data: point_list
+#             |         |   |    |--attr: length=val
+#             |         |   |    |--grp: coord_1
+#             |         |   |    |    |--attr: dtype
+#             |         |   |    |    |--data
+#             |         |   |    |--grp: coord_2
+#             |         |   |    :    :
 #             |         |   |
 #             |         |   |--grp: pointlist_2
 #             |         |   |    |
@@ -694,7 +777,9 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |             |--grp: pointlistarray_1
 #             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
 #             |             |    |--attr: dimensions=val
-#             |             |    |--data: point_list
+#             |             |    |--grp: 0_0 = pointlist at index 0,0
+#             |             |    |--grp: 0_1
+#             |             |    :
 #             |             |
 #             |             |--grp: pointlistarray_2
 #             |             |    |
@@ -746,19 +831,15 @@ def write_time_to_log_item(group_logitem, datetime):
 # /
 # |--grp: 4DSTEM_experiment
 #             |
-#             |--grp: datacube
-#             |         |--data: datacube
-#             |         |--data: dim1,dim2,dim3,dim4
-#             |
-#             |--grp: processing
+#             |--grp: data
 #             |         |
 #             |         |--grp: datacubes
 #             |         |   |
-#             |         |   |--grp: processed_datacube_1
+#             |         |   |--grp: datacube_1
 #             |         |   |    |--data: datacube
 #             |         |   |    |--data: dim1,dim2,dim3,dim4
 #             |         |   |
-#             |         |   |--grp: processed_datacube_2
+#             |         |   |--grp: datacube_2
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
@@ -782,14 +863,26 @@ def write_time_to_log_item(group_logitem, datetime):
 #             |         |   |    |
 #             |         |   :    :
 #             |         |
-#             |         |--grp: pointlist
+#             |         |--grp: pointlists
+#             |         |   |
+#             |         |   |--grp: pointlist_1
+#             |         |   |    |--grp: coord_1
+#             |         |   |    |    |--data
+#             |         |   |    |--grp: coord_2
+#             |         |   |    :    :
+#             |         |   |
+#             |         |   |--grp: pointlist_2
+#             |         |   |    |
+#             |         |   :    :
+#             |         |
+#             |         |--grp: pointlistarrays
 #             |             |
-#             |             |--grp: point_list_1
-#             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
-#             |             |    |--attr: dimensions=val
-#             |             |    |--data: point_list
+#             |             |--grp: pointlistarray_1
+#             |             |    |--grp: 0_0 = pointlist at index 0,0
+#             |             |    |--grp: 0_1
+#             |             |    :
 #             |             |
-#             |             |--grp: point_list_2
+#             |             |--grp: pointlistarray_2
 #             |             |    |
 #             |             :    :
 #             |
