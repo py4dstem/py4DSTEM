@@ -145,15 +145,6 @@ def save_dataobject(dataobject, outputfile, **kwargs):
     save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
 @log
-def save_datacube(datacube, outputfile, **kwargs):
-    """
-    Saves a .h5 file containing only a single DataCube instance to outputfile.
-    """
-    assert isinstance(datacube, DataCube)
-
-    save_dataobject(datacube, outputfile, **kwargs)
-
-@log
 def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
     Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of

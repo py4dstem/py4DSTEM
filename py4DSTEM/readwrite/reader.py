@@ -513,16 +513,6 @@ def read_non_py4DSTEM_file(filename):
 
 
 
-
-
-
-
-
-
-
-
-
-
 ################# Utility functions ################
 
 def is_py4DSTEM_file(h5_file):
