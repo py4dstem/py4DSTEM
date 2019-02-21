@@ -125,6 +125,8 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
                 ind_ptla += 1
             group_new_pointlistarray = group_pointlistarrays.create_group(name)
             save_pointlistarray_group(group_new_pointlistarray, dataobject)
+        elif isinstance(dataobject, Metadata):
+            pass
         else:
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
