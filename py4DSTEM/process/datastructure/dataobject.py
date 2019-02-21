@@ -62,6 +62,13 @@ class DataObject(object):
 
         # TODO: add logging of instantiation
 
+    def link_metadata(self, dataobject):
+        """
+        Sets self.metadata to point to dataobject.metadata.
+        If dataobject is a Metadata object, sets self.metadata to point to dataobject.
+        """
+        assert isinstance(dataobject, DataObject)
+        self.metadata = dataobject.metadata
 
     ############ Searching methods ############
 

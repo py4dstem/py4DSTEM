@@ -25,9 +25,10 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
         dataobject_list     a list of DataObjects to save
         outputfile          path to an .h5 file to save
         save_metadata       If True, automatically find the appropriate metadata object to save.
-                            If multiple possible metadata objects are found, set this flag to an
-                            integer index specifying which to use.
-                            Set this flag to False to save no metadata; not recommended.
+                            If multiple possible metadata objects are found, setting this flag to an
+                            integer index specifies which to use.
+                            Set save_metadata to a Metadata object to use that metadata.
+                            Set save_metadata to False to save no metadata; not recommended.
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
@@ -55,7 +56,10 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     # If save_metadata isn't False, find metadata and save it
     if save_metadata is not False:
         print("Writing metadata...")
-        metadata = find_metadata(dataobject_list, save_metadata, f)
+        if isinstance(save_metadata, Metadata):
+            metadata = save_metadata
+        else:
+            metadata = find_metadata(dataobject_list, save_metadata, f)
 
         # Transfer original metadata trees
         if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
@@ -128,198 +132,68 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     print("Done.")
     f.close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @log
-def save_from_dataobjecttracker(dataobjecttracker, outputfile):
-    """
-    Saves an h5 file from a DataObjectTracker object and an output filepath.
-    """
-
-    assert isinstance(dataobjecttracker, DataObjectTracker)
-
-    ##### Make .h5 file #####
-    print("Creating file {}...".format(outputfile))
-    f = h5py.File(outputfile,"w")
-    f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",2)
-    group_data = f.create_group("4DSTEM_experiment")
-
-    ##### Metadata #####
-    print("Writing metadata...")
-
-    # Create metadata groups
-    group_metadata = group_data.create_group("metadata")
-    group_original_metadata = group_metadata.create_group("original")
-    group_microscope_metadata = group_metadata.create_group("microscope")
-    group_sample_metadata = group_metadata.create_group("sample")
-    group_user_metadata = group_metadata.create_group("user")
-    group_calibration_metadata = group_metadata.create_group("calibration")
-    group_comments_metadata = group_metadata.create_group("comments")
-    group_original_metadata_all = group_original_metadata.create_group("all")
-    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
-
-    # Transfer original metadata trees
-    if type(dataobjecttracker.rawdatacube.metadata.original.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
-    else:
-        transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(dataobjecttracker.rawdatacube.metadata.original.all,group_original_metadata_all)
-
-    # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
-    transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.microscope,group_microscope_metadata)
-    transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.sample,group_sample_metadata)
-    transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.user,group_user_metadata)
-    transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.calibration,group_calibration_metadata)
-    transfer_metadata_dict(dataobjecttracker.rawdatacube.metadata.comments,group_comments_metadata)
-
-    ##### Log #####
-    group_log = group_data.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
-
-    ##### Data #####
-
-    # Write data groups
-    group_rawdatacube = group_data.create_group("rawdatacube")
-    group_processing = group_data.create_group("processing")
-    group_processed_datacubes = group_processing.create_group("datacubes")
-    group_diffraction_slices = group_processing.create_group("diffractionslices")
-    group_real_slices = group_processing.create_group("realslices")
-    group_point_lists = group_processing.create_group("pointlists")
-    group_point_list_arrays = group_processing.create_group("pointlistarrays")
-    ind_rdc, ind_dcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
-
-    # Loop through all objects in the DataObjectTracker and, if save_behavior==True, save
-    for item in dataobjecttracker.dataobject_list:
-        save_behavior = item[3]
-        if save_behavior:
-            name = item[1]
-            dataobject = item[4]
-            if isinstance(dataobject, RawDataCube):
-                if ind_rdc == 0:
-                    save_datacube_group(group_rawdatacube, dataobject)
-                    ind_rdc += 1
-                else:
-                    print("Warning: more than one RawDataCube found. Saving additional RawDataCubes to processing>datacubes.")
-                    if name == '':
-                        name = 'datacube_'+str(ind_dcs)
-                        ind_dcs += 1
-                    group_new_datacube = group_processed_datacubes.create_group(name)
-                    save_datacube_group(group_new_datacube, dataobject)
-            elif isinstance(dataobject, DataCube):
-                if name == '':
-                    name = 'datacube_'+str(ind_dcs)
-                    ind_dcs += 1
-                group_new_datacube = group_processed_datacubes.create_group(name)
-                save_datacube_group(group_new_datacube, dataobject)
-            elif isinstance(dataobject, DiffractionSlice):
-                if name == '':
-                    name = 'diffractionslice_'+str(ind_dfs)
-                    ind_dfs += 1
-                group_new_diffraction_slice = group_diffraction_slices.create_group(name)
-                save_diffraction_group(group_new_diffraction_slice, dataobject)
-            elif isinstance(dataobject, RealSlice):
-                if name == '':
-                    name = 'realslice_'+str(ind_rls)
-                    ind_rls += 1
-                group_new_real_slice = group_real_slices.create_group(name)
-                save_real_group(group_new_real_slice, dataobject)
-            elif isinstance(dataobject, PointList):
-                if name == '':
-                    name = 'pointlist_'+str(ind_ptl)
-                    ind_ptl += 1
-                group_new_pointlist = group_point_lists.create_group(name)
-                save_pointlist_group(group_new_pointlist, dataobject)
-            elif isinstance(dataobject, PointListArray):
-                if name == '':
-                    name = 'pointlistarray_'+str(ind_ptla)
-                    ind_ptla += 1
-                group_new_point_list_array = group_point_list_arrays.create_group(name)
-                save_pointlistarray_group(group_new_point_list_array, dataobject)
-            else:
-                print("Error: object {} has type {}, and is not a RawDataCube, DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
-
-    ##### Finish and close #####
-    print("Done.")
-    f.close()
-
-
-@log
-def save_dataobject(dataobject,outputfile):
+def save_dataobject(dataobject, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataObject instance to outputfile.
     """
     assert isinstance(dataobject, DataObject)
 
-    # Get current state of tracker
-    tracker = dataobject.get_dataobjecttrackers()[0]
-    tracker_save_behavior_list = tracker.get_save_behavior_list()
-
-    # Edit tracker so only dataobject has save_behavior==True
-    tracker.change_all_save_behaviors(False)
-    tracker.change_save_behavior(dataobject, True)
-
     # Save
-    save_from_dataobjecttracker(tracker, outputfile)
-
-    # Revert tracker state
-    for i in range(len(tracker_save_behavior_list)):
-        tracker.change_save_behavior_by_index(i, tracker_save_behavior_list[i])
+    save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
 @log
-def save_datacube(datacube,outputfile):
+def save_datacube(datacube, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataCube instance to outputfile.
     """
     assert isinstance(datacube, DataCube)
 
-    save_dataobject(datacube, outputfile)
+    save_dataobject(datacube, outputfile, **kwargs)
 
 @log
-def save(dataobject,outputfile):
+def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
-    Saves a .h5 file to outputpath.
-    If dataobject is a RawDataCube, save() identifies its DataObjectTracker and saves all objects
-    currently flagged for saving.
-    If dataobject is any other DataObject, save() identifies all associated trackers. If there is
-    only one tracker, all objects associated with this tracker are saved. If there are multiple
-    trackers, save() prints a warning message asking the user to specify a tracker.
+    Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
+    ints, in the list generated by DataObject.get_dataobjects().
     """
-    assert isinstance(dataobject, DataObject)
+    full_dataobject_list = DataObject.get_dataobjects()
+    dataobject_list = [full_dataobject_list[i] for i in index_list]
 
-    if isinstance(dataobject, RawDataCube):
-        save_from_dataobjecttracker(dataobject.dataobjecttracker, outputfile)
-    else:
-        trackers = dataobject.get_dataobjecttrackers()
-        if len(trackers)==0:
-            print("Error: DataObject {} has no associated DataObjectTracker instances.".format(dataobject))
-        elif len(trackers)==1:
-            save_from_dataobjecttracker(trackers[0], outputfile)
+    save_from_dataobject_list(dataobject_list, outputfile, **kwargs)
+
+@log
+def save(data, outputfile, **kwargs):
+    """
+    Saves a .h5 file to outputpath. What is saved depends on the arguement data.
+
+    If data is a DataObject, saves a .h5 file containing just this object.
+    If data is a list of DataObjects, saves a .h5 file containing all these objects.
+    If data is an int, saves a .h5 file containing the dataobject corresponding to this index in
+    DataObject.get_dataobjects().
+    If data is a list of indices, saves a .h5 file containing the objects corresponding to these
+    indices in DataObject.get_dataobjects().
+    If data is 'all', saves all DataObjects in memory to a .h5 file.
+    """
+    if isinstance(data, DataObject):
+        save_dataobject(data, outputfile, **kwargs)
+    elif isinstance(data, int):
+        save_dataobjects_by_indices([data], outputfile, **kwargs)
+    elif isinstance(data, list):
+        if all([isinstance(item,DataObject) for item in data]):
+            save_from_dataobject_list(data, outputfile, **kwargs)
+        elif all([isinstance(item,int) for item in data]):
+            save_dataobjects_by_indices(data, outputfile, **kwargs)
         else:
-            print("Error: DataObject {} has {} associated DataObjectTracker instances.".format(dataobject, len(trackers)))
+            print("Error: if data is a list, it must contain all ints or all DataObjects.")
+    elif data=='all':
+        save_from_dataobject_list(DataObject.get_dataobjects(), outputfile, **kwargs)
+    else:
+        print("Error: unrecognized value for argument data. Must be either a DataObject, a list of DataObjects, a list of ints, or the string 'all'.")
+
 
 ################### END OF PRIMARY SAVE FUNCTIONS #####################
+
 
 
 #### Functions for writing dataobjects to .h5 ####
