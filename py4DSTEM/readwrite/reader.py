@@ -167,15 +167,18 @@ class FileBrowser(object):
                 print("{:^8}{:<36}{:<20}".format(index, name, objecttype))
 
     def show_rawdatacubes(self):
-        if self.N_rawdatacubes == 0:
-            print("No RawDataCubes present.")
+        if self.version==(0,2):
+            if self.N_rawdatacubes == 0:
+                print("No RawDataCubes present.")
+            else:
+                print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
+                for index in (self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]:
+                    info = self.get_dataobject_info(index)
+                    name = info['name']
+                    shape = info['shape']
+                    print("{:^8}{:<36}{:^20}".format(index, name, str(shape)))
         else:
-            print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
-            for index in (self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]:
-                info = self.get_dataobject_info(index)
-                name = info['name']
-                shape = info['shape']
-                print("{:^8}{:<36}{:^20}".format(index, name, str(shape)))
+            print("RawDataCubes are not supported past v0.2.")
 
     def show_datacubes(self):
         if self.N_datacubes == 0:
@@ -366,26 +369,111 @@ class FileBrowser(object):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
+        if self.version==(0,3):
+            return self.get_dataobject_v0_3(index)
+        elif self.version==(0,2):
+            return self.get_dataobject_v0_2(index)
+        else:
+            print("Error: unrecognized py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
+
+    def get_dataobject_v0_3(self, index):
+        """
+        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        """
+        objecttype, objectindex = self.get_object_lookup_info(index)
+        info = self.get_dataobject_info(index)
+        name = info['name']
+
+        if objecttype == 'DataCube':
+            shape = info['shape']
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+            data = np.array(self.file['4DSTEM_experiment']['data']['datacubes'][name]['datacube'])
+            dataobject = DataCube(data=data, name=name)
+
+        elif objecttype == 'DiffractionSlice':
+            depth = info['depth']
+            slices = info['slices']
+            shape = info['shape']
+            Q_Nx, Q_Ny = shape
+            if depth==1:
+                data = np.array(self.file['4DSTEM_experiment']['data']['diffractionslices'][name][slices[0]])
+            else:
+                data = np.empty((shape[0], shape[1], depth))
+                for i in range(depth):
+                    data[:,:,i] = np.array(self.file['4DSTEM_experiment']['data']['diffractionslices'][name][slices[i]])
+            dataobject = DiffractionSlice(data=data, slicelabels=slices, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+
+        elif objecttype == 'RealSlice':
+            depth = info['depth']
+            slices = info['slices']
+            shape = info['shape']
+            R_Nx, R_Ny = shape
+            if depth==1:
+                data = np.array(self.file['4DSTEM_experiment']['data']['realslices'][name][slices[0]])
+            else:
+                data = np.empty((shape[0], shape[1], depth))
+                for i in range(depth):
+                    data[:,:,i] = np.array(self.file['4DSTEM_experiment']['data']['realslices'][name][slices[i]])
+            dataobject = RealSlice(data=data, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+
+        elif objecttype == 'PointList':
+            coords = info['coordinates']
+            length = info['length']
+            coordinates = []
+            data_dict = {}
+            for coord in coords:
+                dtype = type(self.file['4DSTEM_experiment']['data']['pointlists'][name][coord]['data'][0])
+                coordinates.append((coord, dtype))
+                data_dict[coord] = np.array(self.file['4DSTEM_experiment']['data']['pointlists'][name][coord]['data'])
+            dataobject = PointList(coordinates=coordinates, name=name)
+            for i in range(length):
+                new_point = tuple([data_dict[coord][i] for coord in coords])
+                dataobject.add_point(new_point)
+
+        elif objecttype == 'PointListArray':
+            shape = info['shape']
+            coords = info['coordinates']
+            coordinates = []
+            for coord in coords:
+                dtype = type(self.file['4DSTEM_experiment']['data']['pointlistarrays'][name]['0_0'][coord]['data'][0])
+                coordinates.append((coord, dtype))
+            dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    pointlist = dataobject.get_pointlist(i,j)
+                    data_dict = {}
+                    for coord in coords:
+                        data_dict[coord] = np.array(self.file['4DSTEM_experiment']['data']['pointlistarrays'][name]['{}_{}'.format(i,j)][coord]['data'])
+                    for k in range(len(data_dict[coords[0]])):
+                        new_point = tuple([data_dict[coord][k] for coord in coords])
+                        pointlist.add_point(new_point)
+
+        else:
+            print("Unknown object type {}. Returning None.".format(objecttype))
+            dataobject = None
+
+        return dataobject
+
+    def get_dataobject_v0_2(self, index):
+        """
+        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        """
         objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
 
         if objecttype == 'RawDataCube':
             shape = info['shape']
-            self.rawdatacube.data4D = np.array(self.file['4DSTEM_experiment']['rawdatacube']['datacube'])
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            self.rawdatacube.R_Nx = R_Nx
-            self.rawdatacube.R_Ny = R_Ny
-            self.rawdatacube.Q_Nx = Q_Nx
-            self.rawdatacube.Q_Ny = Q_Ny
-            self.rawdatacube.R_N = R_Nx*R_Ny
-            dataobject = self.rawdatacube
+            data = np.array(self.file['4DSTEM_experiment']['rawdatacube']['datacube'])
+
+            dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
             data = np.array(self.file['4DSTEM_experiment']['processing']['datacubes'][name]['datacube'])
-            dataobject = DataCube(data=data, parentDataCube=self.rawdatacube, name=name)
+            dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
             depth = info['depth']
@@ -398,7 +486,7 @@ class FileBrowser(object):
                 data = np.empty((depth, shape[0], shape[1]))
                 for i in range(depth):
                     data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['diffractionslices'][name][slices[i]])
-            dataobject = DiffractionSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+            dataobject = DiffractionSlice(data=data, slicelabels=slices, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
 
         elif objecttype == 'RealSlice':
             depth = info['depth']
@@ -411,7 +499,7 @@ class FileBrowser(object):
                 data = np.empty((depth, shape[0], shape[1]))
                 for i in range(depth):
                     data[i,:,:] = np.array(self.file['4DSTEM_experiment']['processing']['realslices'][name][slices[i]])
-            dataobject = RealSlice(data=data, parentDataCube=self.rawdatacube, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+            dataobject = RealSlice(data=data, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
 
         elif objecttype == 'PointList':
             coords = info['coordinates']
@@ -422,7 +510,7 @@ class FileBrowser(object):
                 dtype = type(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'][0])
                 coordinates.append((coord, dtype))
                 data_dict[coord] = np.array(self.file['4DSTEM_experiment']['processing']['pointlists'][name][coord]['data'])
-            dataobject = PointList(coordinates=coordinates, parentDataCube=self.rawdatacube, name=name)
+            dataobject = PointList(coordinates=coordinates, name=name)
             for i in range(length):
                 new_point = tuple([data_dict[coord][i] for coord in coords])
                 dataobject.add_point(new_point)
@@ -434,7 +522,7 @@ class FileBrowser(object):
             for coord in coords:
                 dtype = type(self.file['4DSTEM_experiment']['processing']['pointlistarrays'][name]['0_0'][coord]['data'][0])
                 coordinates.append((coord, dtype))
-            dataobject = PointListArray(coordinates=coordinates, parentDataCube=self.rawdatacube, shape=shape, name=name)
+            dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
             for i in range(shape[0]):
                 for j in range(shape[1]):
                     pointlist = dataobject.get_pointlist(i,j)
@@ -452,10 +540,15 @@ class FileBrowser(object):
         return dataobject
 
     def get_dataobjects(self, indices):
+        if indices=='all':
+            indices = range(self.N_dataobjects)
         objects = []
         for index in indices:
             objects.append(self.get_dataobject(index))
         return objects
+
+    def get_all_dataobjects(self):
+        return self.get_dataobjects('all')
 
     def get_rawdatacubes(self):
         objects = []
@@ -491,6 +584,18 @@ class FileBrowser(object):
         objects = []
         for index in (self.dataobject_lookup_arr=='PointListArray').nonzero()[0]:
             objects.append(self.get_dataobject(index))
+        return objects
+
+    def get_dataobject_by_name(self, name, exactmatch=True):
+        objects = []
+        for i in range(self.N_dataobjects):
+            objectname = self.get_dataobject_info(i)['name']
+            if exactmatch:
+                if name == objectname:
+                    objects.append(self.get_dataobject(i))
+            else:
+                if name in objectname:
+                    objects.append(self.get_dataobject(i))
         return objects
 
     ###### Log display and querry ######
