@@ -596,6 +596,8 @@ class FileBrowser(object):
             else:
                 if name in objectname:
                     objects.append(self.get_dataobject(i))
+        if len(objects)==1:
+            objects = objects[0]
         return objects
 
     ###### Log display and querry ######
@@ -610,41 +612,28 @@ class FileBrowser(object):
 ###################### BEGIN read FUNCTIONS ########################
 
 @log
-def read(filename, load='all'):
+def read(filename, load=None):
     """
     General read function.
 
     Takes a filename as input, and outputs some py4DSTEM dataobjects.
 
-    For non-py4DSTEM files, the output is a RawDataCube.
+    For non-py4DSTEM files, the output is a DataCube.
 
-    For py4DSTEM files, the behavior depends file version; each is discussed below.
-
-    py4DSTEM v0.1:
-    The output is a RawDataCube.
-
-    py4DSTEM v0.2:
-    Behavior depends onn the kwarg load, as follows:
+    For py4DSTEM files, the behavior depends on the kwarg load, as follows:
+    load = None
+        load the first DataObject found; useful for files containing only a single DataObject
     load = 'all':
-        load all dataobjects found in the file
-    load = 'datacube':
-        load a single datacube. If present, loads the rawdatacube, otherwise, loads the first
-        processed datacube found.
-    load = [0,1,5,8,...]:
-        If load is a list of ints, loads the set of objects found at those indices in the
-        a FileBrowser instantiated from filename.
-
-    py4DSTEM v0.3:
-    Similar to v0.2; the most significant change is the elimination of the RawDataCube object.
-    Behavior depends on the kwarg load, as follows:
-    load = 'all':
-        load all dataobjects found in the file
-    load = 'datacube':
-        load a single datacube. If multiple datacubes are present, load the first datacube found.
+        load all DataObjects found in the file
+    load = 'name':
+        load the DataObject(s) named 'name'. There is no catch for objects named 'all' - don't name
+        DataObjects 'all'! ;)
+    load_behavior = 5:
+        If load behavoir is an int, loads the object found at that index in a FileBrowser
+        instantiated from filename.
     load_behavior = [0,1,5,8,...]:
-        If load behavoir is a list of ints, loads the set of objects found at those indices in the
+        If load behavoir is a list of ints, loads the set of objects found at those indices in
         a FileBrowser instantiated from filename.
-
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
@@ -653,17 +642,22 @@ def read(filename, load='all'):
     else:
         browser = FileBrowser(filename)
         print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
-        if browser.version == (0,1):
-            output = read_version_0_1(browser)
-        elif browser.version == (0,2):
-            output = read_version_0_2(browser, load=load)
-        elif browser.version == (0,3):
-            output = read_version_0_3(browser, load=load)
+        if load is None:
+            output = browser.get_dataobject(0)
+        elif load == 'all':
+            output = browser.get_dataobjects('all')
+        elif type(load) == str:
+            output = browser.get_dataobject_by_name(name=load)
+        elif type(load) == int:
+            output = browser.get_dataobject(load)
+        elif type(load) == list:
+            assert all([isinstance(item,int) for item in load]), "If load is a list, it must be a list of ints specifying DataObject indices in the files associated FileBrowser."
+            output = browser.get_dataobjects(load)
         else:
-            print("Error. Unsupported py4DSTEM file version - v{}.{}. Returning None.".format(browser.version[0], browser.version[1]))
+            print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
             output = None
-        browser.close()
 
+        browser.close()
     return output
 
 
@@ -699,11 +693,6 @@ def read_non_py4DSTEM_file(filename):
     datacube.metadata = metadata
 
     return datacube
-
-
-
-
-
 
 
 ################# Utility functions ################
@@ -747,6 +736,47 @@ def get_py4DSTEM_version(h5_file):
             return (0,0)
 
 
+################# Log functions ################
+
+def show_log(filename):
+    """
+    Takes a filename as input, determines if it was written by py4DSTEM, and if it was prints
+    the file's log.
+    """
+    print("Reading log for file {}...\n".format(filename))
+    # Check if file was written by py4DSTEM
+    try:
+        h5_file = h5py.File(filename,'r')
+        if is_py4DSTEM_file(h5_file):
+            try:
+                log_group = h5_file['log']
+                for i in range(len(log_group.keys())):
+                    key = 'log_item_'+str(i)
+                    show_log_item(i, log_group[key])
+                h5_file.close()
+            except KeyError:
+                print("Log cannot be read - HDF5 file has no log group.")
+                h5_file.close()
+        else:
+            h5_file.close()
+    except IOError:
+        print("Log cannot be read - file is not an HDF5 file.")
+
+def show_log_item(index, log_item):
+    time = log_item.attrs['time'].decode('utf-8')
+    function = log_item.attrs['function'].decode('utf-8')
+    version = log_item.attrs['version']
+
+    print("*** Log index {}, at time {} ***".format(index, time))
+    print("Function: \t{}".format(function))
+    print("Inputs:")
+    for key,value in log_item['inputs'].attrs.items():
+        if type(value)==np.bytes_:
+            print("\t\t{}\t{}".format(key,value.decode('utf-8')))
+        else:
+            print("\t\t{}\t{}".format(key,value))
+    print("Version: \t{}\n".format(version))
+
 
 
 
@@ -776,68 +806,68 @@ def get_py4DSTEM_version(h5_file):
 ###################### File reading functions #######################
 
 
-def read_version_0_1(browser):
-    R_Nx,R_Ny,Q_Nx,Q_Ny = browser.file['4D-STEM_data']['datacube']['datacube'].shape
-    rawdatacube = RawDataCube(data=browser.file['4D-STEM_data']['datacube']['datacube'].value,
-                    R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
-                    is_py4DSTEM_file=True, h5_file=browser.file)
-    return rawdatacube
-
-def read_version_0_2(browser, load_behavior='all'):
-    """
-    Which dataobjects are returned is controlled by the load_behavior optional parameter, as follows:
-
-    load_behavior = 'all':
-        load all dataobjects found in the file
-    load_behavior = 'datacube':
-        load a single datacube. If present, loads the rawdatacube, otherwise, loads the first
-        processed datacube found.
-    load_behavior = [0,1,5,8,...]:
-        If load behavoir is a list of ints, loads the set of objects found at those indices in the
-        a FileBrowser instantiated from filename.
-    """
-    if load_behavior == 'all':
-        output = []
-        for i in range(browser.N_dataobjects):
-            output.append(browser.get_dataobject(i))
-
-    elif load_behavior == 'datacube':
-        try:
-            output = browser.get_rawdatacubes()[0]
-        except IndexError:
-            try:
-                output = browser.get_datacubes()[0]
-            except IndexError:
-                print("Error: no datacubes found. Returning None.")
-                output = None
-
-    elif isinstance(load_behavior, list):
-        assert all([isinstance(x,int) for x in load_behavior]), "Error: when load_behavior is a list, all elements must be of type int."
-        output = []
-        for i in load_behavior:
-            output.append(browser.get_dataobject(i))
-
-    else:
-        print("Error: unrecognized load_behavior {}. Must be 'all', 'datacube', or a list of ints.".format(load_behavior))
-
-    return output
-
-def read_datacube(filename):
-    return read(filename, load_behavior="datacube")
-
-def read_objects(filename, object_list):
-    """
-    Loads the set of objects found at the indices in object list in a FileBrowser instantiated from
-    filename. object_list should be a list of ints.
-    """
-    return read(filename, load_behavior=object_list)
-
-
-
-
-
-
-
+# def read_version_0_1(browser):
+#     R_Nx,R_Ny,Q_Nx,Q_Ny = browser.file['4D-STEM_data']['datacube']['datacube'].shape
+#     rawdatacube = RawDataCube(data=browser.file['4D-STEM_data']['datacube']['datacube'].value,
+#                     R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
+#                     is_py4DSTEM_file=True, h5_file=browser.file)
+#     return rawdatacube
+# 
+# def read_version_0_2(browser, load_behavior='all'):
+#     """
+#     Which dataobjects are returned is controlled by the load_behavior optional parameter, as follows:
+# 
+#     load_behavior = 'all':
+#         load all dataobjects found in the file
+#     load_behavior = 'datacube':
+#         load a single datacube. If present, loads the rawdatacube, otherwise, loads the first
+#         processed datacube found.
+#     load_behavior = [0,1,5,8,...]:
+#         If load behavoir is a list of ints, loads the set of objects found at those indices in the
+#         a FileBrowser instantiated from filename.
+#     """
+#     if load_behavior == 'all':
+#         output = []
+#         for i in range(browser.N_dataobjects):
+#             output.append(browser.get_dataobject(i))
+# 
+#     elif load_behavior == 'datacube':
+#         try:
+#             output = browser.get_rawdatacubes()[0]
+#         except IndexError:
+#             try:
+#                 output = browser.get_datacubes()[0]
+#             except IndexError:
+#                 print("Error: no datacubes found. Returning None.")
+#                 output = None
+# 
+#     elif isinstance(load_behavior, list):
+#         assert all([isinstance(x,int) for x in load_behavior]), "Error: when load_behavior is a list, all elements must be of type int."
+#         output = []
+#         for i in load_behavior:
+#             output.append(browser.get_dataobject(i))
+# 
+#     else:
+#         print("Error: unrecognized load_behavior {}. Must be 'all', 'datacube', or a list of ints.".format(load_behavior))
+# 
+#     return output
+# 
+# def read_datacube(filename):
+#     return read(filename, load_behavior="datacube")
+# 
+# def read_objects(filename, object_list):
+#     """
+#     Loads the set of objects found at the indices in object list in a FileBrowser instantiated from
+#     filename. object_list should be a list of ints.
+#     """
+#     return read(filename, load_behavior=object_list)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
 @log
 def read_data(filename):
     """
@@ -889,95 +919,56 @@ def read_data(filename):
         return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                            is_py4DSTEM_file=False)
 
-@log
-def read_data_v0_1(filename):
-    """
-    Takes a filename as input, and outputs a RawDataCube object.
-
-    If filename is a .h5 file, read_data() checks if the file was written by py4DSTEM.  If it
-    was, the metadata are read and saved directly.  Otherwise, the file is read with hyperspy,
-    and metadata is scraped and saved from the hyperspy file.
-    """
-    print("Reading file {}...\n".format(filename))
-    # Check if file was written by py4DSTEM
-    try:
-        h5_file = h5py.File(filename,'r')
-        if is_py4DSTEM_file(h5_file):
-            print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
-            R_Nx,R_Ny,Q_Nx,Q_Ny = h5_file['4D-STEM_data']['datacube']['datacube'].shape
-            rawdatacube = RawDataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
-                            R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
-                            is_py4DSTEM_file=True, h5_file=h5_file, py4DSTEM_version=(0,1))
-            h5_file.close()
-            return rawdatacube
-        else:
-            h5_file.close()
-    except IOError:
-        pass
-
-    # Use hyperspy
-    print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
-    try:
-        hyperspy_file = hs.load(filename)
-        if len(hyperspy_file.data.shape)==3:
-            R_N, Q_Nx, Q_Ny = hyperspy_file.data.shape
-            R_Nx, R_Ny = R_N, 1
-        elif len(hyperspy_file.data.shape)==4:
-            R_Nx, R_Ny, Q_Nx, Q_Ny = hyperspy_file.data.shape
-        else:
-            print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
-            print("Initializing random datacube...")
-            return RawDataCube(data=np.random.rand(100,512,512),
-                            R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
-                            is_py4DSTEM_file=False)
-        return RawDataCube(data=hyperspy_file.data, R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
-                            is_py4DSTEM_file=False,
-                            original_metadata_shortlist=hyperspy_file.metadata,
-                            original_metadata_all=hyperspy_file.original_metadata)
-    except Exception as err:
-        print("Failed to load", err)
-        print("Initializing random datacube...")
-        return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
-                           is_py4DSTEM_file=False)
-
-def show_log(filename):
-    """
-    Takes a filename as input, determines if it was written by py4DSTEM, and if it was prints
-    the file's log.
-    """
-    print("Reading log for file {}...\n".format(filename))
-    # Check if file was written by py4DSTEM
-    try:
-        h5_file = h5py.File(filename,'r')
-        if is_py4DSTEM_file(h5_file):
-            try:
-                log_group = h5_file['log']
-                for i in range(len(log_group.keys())):
-                    key = 'log_item_'+str(i)
-                    show_log_item(i, log_group[key])
-                h5_file.close()
-            except KeyError:
-                print("Log cannot be read - HDF5 file has no log group.")
-                h5_file.close()
-        else:
-            h5_file.close()
-    except IOError:
-        print("Log cannot be read - file is not an HDF5 file.")
-
-def show_log_item(index, log_item):
-    time = log_item.attrs['time'].decode('utf-8')
-    function = log_item.attrs['function'].decode('utf-8')
-    version = log_item.attrs['version']
-
-    print("*** Log index {}, at time {} ***".format(index, time))
-    print("Function: \t{}".format(function))
-    print("Inputs:")
-    for key,value in log_item['inputs'].attrs.items():
-        if type(value)==np.bytes_:
-            print("\t\t{}\t{}".format(key,value.decode('utf-8')))
-        else:
-            print("\t\t{}\t{}".format(key,value))
-    print("Version: \t{}\n".format(version))
+# @log
+# def read_data_v0_1(filename):
+#     """
+#     Takes a filename as input, and outputs a RawDataCube object.
+# 
+#     If filename is a .h5 file, read_data() checks if the file was written by py4DSTEM.  If it
+#     was, the metadata are read and saved directly.  Otherwise, the file is read with hyperspy,
+#     and metadata is scraped and saved from the hyperspy file.
+#     """
+#     print("Reading file {}...\n".format(filename))
+#     # Check if file was written by py4DSTEM
+#     try:
+#         h5_file = h5py.File(filename,'r')
+#         if is_py4DSTEM_file(h5_file):
+#             print("{} is a py4DSTEM HDF5 file.  Reading...".format(filename))
+#             R_Nx,R_Ny,Q_Nx,Q_Ny = h5_file['4D-STEM_data']['datacube']['datacube'].shape
+#             rawdatacube = RawDataCube(data=h5_file['4D-STEM_data']['datacube']['datacube'].value,
+#                             R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
+#                             is_py4DSTEM_file=True, h5_file=h5_file, py4DSTEM_version=(0,1))
+#             h5_file.close()
+#             return rawdatacube
+#         else:
+#             h5_file.close()
+#     except IOError:
+#         pass
+# 
+#     # Use hyperspy
+#     print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
+#     try:
+#         hyperspy_file = hs.load(filename)
+#         if len(hyperspy_file.data.shape)==3:
+#             R_N, Q_Nx, Q_Ny = hyperspy_file.data.shape
+#             R_Nx, R_Ny = R_N, 1
+#         elif len(hyperspy_file.data.shape)==4:
+#             R_Nx, R_Ny, Q_Nx, Q_Ny = hyperspy_file.data.shape
+#         else:
+#             print("Error: unexpected raw data shape of {}".format(hyperspy_file.data.shape))
+#             print("Initializing random datacube...")
+#             return RawDataCube(data=np.random.rand(100,512,512),
+#                             R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
+#                             is_py4DSTEM_file=False)
+#         return RawDataCube(data=hyperspy_file.data, R_Nx=R_Nx, R_Ny=R_Ny, Q_Nx=Q_Nx, Q_Ny=Q_Ny,
+#                             is_py4DSTEM_file=False,
+#                             original_metadata_shortlist=hyperspy_file.metadata,
+#                             original_metadata_all=hyperspy_file.original_metadata)
+#     except Exception as err:
+#         print("Failed to load", err)
+#         print("Initializing random datacube...")
+#         return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
+#                            is_py4DSTEM_file=False)
 
 
 
