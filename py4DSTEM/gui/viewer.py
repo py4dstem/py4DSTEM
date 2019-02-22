@@ -27,7 +27,7 @@ import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .utils import sibling_path, pg_point_roi, LQCollection
-from ..readwrite.reader import read_data
+from ..readwrite.reader import read
 from ..readwrite.writer import save_dataobject
 from ..process.datastructure.datacube import DataCube
 
@@ -69,7 +69,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.main_window = self.setup_main_window()
 
         # Set up temporary datacube
-        self.datacube = read_data("sample_data.dm3")
+        self.datacube = read("sample_data.dm3")
 
         # Set up initial views in real and diffraction space
         self.update_diffraction_space_view()
@@ -257,7 +257,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Instantiate DataCube object
         self.datacube = None
         gc.collect()
-        self.datacube = read_data(fname)
+        self.datacube = read(fname)
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
