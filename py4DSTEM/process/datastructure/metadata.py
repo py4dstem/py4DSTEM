@@ -28,6 +28,7 @@ class Metadata(DataObject):
             filepath                 (str) path to the py4DSTEM h5 file
         """
         DataObject.__init__(self)
+        self.metadata = self
 
         # Setup metadata containers
         self.setup_metadata_containers()
@@ -60,11 +61,11 @@ class Metadata(DataObject):
         self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['all'],self.original_metadata.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['microscope'],self.metadata.microscope)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['sample'],self.metadata.sample)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['user'],self.metadata.user)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['calibration'],self.metadata.calibration)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['comments'],self.metadata.comments)
+        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['microscope'],self.data.microscope)
+        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['sample'],self.data.sample)
+        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['user'],self.data.user)
+        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['calibration'],self.data.calibration)
+        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['comments'],self.data.comments)
 
     def setup_metadata_py4DSTEM_file_v0_1(self, filepath):
 
@@ -75,11 +76,11 @@ class Metadata(DataObject):
         self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['all'],self.original_metadata.all)
 
         # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['microscope'],self.metadata.microscope)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['sample'],self.metadata.sample)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['user'],self.metadata.user)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['calibration'],self.metadata.calibration)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['comments'],self.metadata.comments)
+        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['microscope'],self.data.microscope)
+        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['sample'],self.data.sample)
+        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['user'],self.data.user)
+        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['calibration'],self.data.calibration)
+        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['comments'],self.data.comments)
 
     def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
 
@@ -88,29 +89,29 @@ class Metadata(DataObject):
         self.original_metadata.all = original_metadata_all
 
         # Search original metadata and use to populate metadata groups
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_microscope_search_dict, self.metadata.microscope)
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_sample_search_dict, self.metadata.sample)
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_user_search_dict, self.metadata.user)
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_calibration_search_dict, self.metadata.calibration)
-        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_comments_search_dict, self.metadata.comments)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_microscope_search_dict, self.data.microscope)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_sample_search_dict, self.data.sample)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_user_search_dict, self.data.user)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_calibration_search_dict, self.data.calibration)
+        self.get_metadata_from_original_metadata(original_metadata_all, self.original_to_comments_search_dict, self.data.comments)
 
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_microscope_search_dict, self.metadata.microscope)
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_sample_search_dict, self.metadata.sample)
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_user_search_dict, self.metadata.user)
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_calibration_search_dict, self.metadata.calibration)
-        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_comments_search_dict, self.metadata.comments)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_microscope_search_dict, self.data.microscope)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_sample_search_dict, self.data.sample)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_user_search_dict, self.data.user)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_calibration_search_dict, self.data.calibration)
+        self.get_metadata_from_original_metadata(original_metadata_shortlist, self.original_to_comments_search_dict, self.data.comments)
 
     def setup_metadata_containers(self):
         """
         Creates the containers for metadata.
         """
-        self.metadata = MetadataCollection('metadata')
+        self.data = MetadataCollection('data')
         self.original_metadata = MetadataCollection('original metadata')
-        self.metadata.microscope = dict()
-        self.metadata.sample = dict()
-        self.metadata.user = dict()
-        self.metadata.calibration = dict()
-        self.metadata.comments = dict()
+        self.data.microscope = dict()
+        self.data.sample = dict()
+        self.data.user = dict()
+        self.data.calibration = dict()
+        self.data.comments = dict()
 
     def setup_metadata_search_dicts(self):
         """
@@ -250,11 +251,11 @@ class Metadata(DataObject):
 
     def get_metadata_item(self, key):
         """
-        Searches for key in the dictionaries found in self.metadata.  If present, returns its
+        Searches for key in the dictionaries found in self.data.  If present, returns its
         corresponding value; otherwise, returns None.
 
         Note that any metadata read by hyperspy into hyperspy's DictionaryTreeBrowser class
-        instances is not searched; only the dictionaries living in self.metadata are examined. Thus
+        instances is not searched; only the dictionaries living in self.data are examined. Thus
         if py4DSTEM did not scrape the information from a DictionaryTreeBrowser, and it was not
         entere otherwise (e.g. manually), this method will not find it.
 
@@ -264,10 +265,10 @@ class Metadata(DataObject):
         setup_metadata_dicts() method.
         """
         ans = []
-        for md_key in self.metadata.__dict__.keys():
+        for md_key in self.data.__dict__.keys():
 
             # For each item in self.metadat...
-            item = getattr(self.metadata, md_key)
+            item = getattr(self.data, md_key)
 
             # If it's a dictionary, search for key, and if presnt return its value
             if isinstance(item, dict):
