@@ -23,11 +23,6 @@ class FileBrowser(object):
             self.version = get_py4DSTEM_version(self.filepath)
             self.file = h5py.File(filepath, 'r')
             self.set_object_lookup_info()
-            if rawdatacube is None:
-                self.rawdatacube = RawDataCube(data=np.array([0]),R_Nx=1,R_Ny=1,Q_Nx=1,Q_Ny=1)
-            else:
-                assert isinstance(rawdatacube, RawDataCube)
-                self.rawdatacube = rawdatacube
             #self.N_logentries = self.get_N_logentries()
 
     ###### Open/close methods ######
@@ -746,11 +741,6 @@ def read_data_v0_1(filename):
         print("Initializing random datacube...")
         return RawDataCube(data=np.random.rand(100,512,512),R_Nx=10,R_Ny=10,Q_Nx=512,Q_Ny=512,
                            is_py4DSTEM_file=False)
-
-def get_py4DSTEM_version(h5_file):
-    version_major = h5_file.attrs['version_major']
-    version_minor = h5_file.attrs['version_minor']
-    return version_major, version_minor
 
 def show_log(filename):
     """
