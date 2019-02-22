@@ -37,7 +37,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",2)
+    f.attrs.create("version_minor",3)
     group_data = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
@@ -574,7 +574,7 @@ def write_time_to_log_item(group_logitem, datetime):
 #
 # /
 # |--attr: version_major=0
-# |--attr: version_minor=2
+# |--attr: version_minor=3
 # |--grp: 4DSTEM_experiment
 #             |
 #             |--grp: data
