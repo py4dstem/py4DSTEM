@@ -1,3 +1,3 @@
 from .filebrowser import *
-from .reader import *
-from .writer import *
+from .read import *
+from .write import *
