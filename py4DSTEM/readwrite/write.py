@@ -3,7 +3,7 @@
 # Files are readable as .emd files, with the datacube group conforming to the EMD data group 
 # specifications.
 #
-# See end of file for complete file structure.
+# See filestructure.txt for a description of the file structure.
 
 import h5py
 import numpy as np
@@ -37,7 +37,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",2)
+    f.attrs.create("version_minor",3)
     group_data = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
@@ -569,202 +569,6 @@ def write_time_to_log_item(group_logitem, datetime):
     time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
     group_logitem.attrs.create('time', np.string_(date+'__'+time))
 
-
-############################### File structure ###############################
-#
-# /
-# |--attr: version_major=0
-# |--attr: version_minor=2
-# |--grp: 4DSTEM_experiment
-#             |
-#             |--grp: data
-#             |         |
-#             |         |--grp: datacubes
-#             |         |   |
-#             |         |   |--grp: datacube_1
-#             |         |   |   |--attr: emd_group_type=1
-#             |         |   |   |--data: datacube
-#             |         |   |   |--data: dim1
-#             |         |   |   |    |--attr: name="R_x"
-#             |         |   |   |    |--attr: units="[n_m]"
-#             |         |   |   |--data: dim2
-#             |         |   |   |    |--attr: name="R_y"
-#             |         |   |   |    |--attr: units="[n_m]"
-#             |         |   |   |--data: dim3
-#             |         |   |   |    |--attr: name="Q_x"
-#             |         |   |   |    |--attr: units="[n_m^-1]"
-#             |         |   |   |--data: dim4
-#             |         |   |        |--attr: name="Q_y"
-#             |         |   |        |--attr: units="[n_m^-1]"
-#             |         |   |
-#             |         |   |--grp: datacube_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: diffractionslices
-#             |         |   |
-#             |         |   |--grp: diffractionslice_1
-#             |         |   |    |--attr: emd_group_type=1
-#             |         |   |    |--data: diffractionslice
-#             |         |   |    |--data: dim1,dim2
-#             |         |   |
-#             |         |   |--grp: diffractionslice_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: realslices
-#             |         |   |
-#             |         |   |--grp: realslice_1
-#             |         |   |    |--attr: emd_group_type=1
-#             |         |   |    |--data: realslice
-#             |         |   |    |--data: dim1,dim2
-#             |         |   |
-#             |         |   |--grp: realslice_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: pointlists
-#             |         |   |
-#             |         |   |--grp: pointlist_1
-#             |         |   |    |--attr: coordinates='coord_1, coord_2, ...'
-#             |         |   |    |--attr: dimensions=val
-#             |         |   |    |--attr: length=val
-#             |         |   |    |--grp: coord_1
-#             |         |   |    |    |--attr: dtype
-#             |         |   |    |    |--data
-#             |         |   |    |--grp: coord_2
-#             |         |   |    :    :
-#             |         |   |
-#             |         |   |--grp: pointlist_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: pointlistarrays
-#             |             |
-#             |             |--grp: pointlistarray_1
-#             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
-#             |             |    |--attr: dimensions=val
-#             |             |    |--grp: 0_0 = pointlist at index 0,0
-#             |             |    |--grp: 0_1
-#             |             |    :
-#             |             |
-#             |             |--grp: pointlistarray_2
-#             |             |    |
-#             |             :    :
-#             |
-#             |--grp: log
-#             |         |-grp: log_item_1
-#             |         |   |--attr: function="function"
-#             |         |   |--grp: inputs
-#             |         |   |    |--attr: input1=val1
-#             |         |   |    |--attr: input2=val2
-#             |         |   |    |--...
-#             |         |   |
-#             |         |   |--attr: version=0.1
-#             |         |   |--attr: time="20181015_16:09:42"
-#             |         |
-#             |         |-grp: log_item_2
-#             |         |-...
-#             |
-#             |--grp: metadata
-#                       |--grp: original
-#                       |   |--# Raw metadata from original files
-#                       |
-#                       |--grp: microscope
-#                       |   |--# Acquisition parameters
-#                       |   |--# Accelerating voltage, camera length, convergence angle, 
-#                       |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
-#                       |   |--# scan shape, probe FWHM
-#                       |
-#                       |--grp: sample
-#                       |   |--# Material, preparation
-#                       |
-#                       |--grp: user
-#                       |   |--# Name, instituion, dept, contact email
-#                       |
-#                       |--grp: calibration
-#                       |   |--# R pixel size, Q pixel size, R/Q rotation offset
-#                       |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
-#                       |   |--# sizes), quantities here are calculated from data rather than
-#                       |   |--# being read from the instrument
-#                       |
-#                       |--grp: comments
-#
-#
-
-############################### File structure ###############################
-############################## Abridged version ##############################
-#
-# /
-# |--grp: 4DSTEM_experiment
-#             |
-#             |--grp: data
-#             |         |
-#             |         |--grp: datacubes
-#             |         |   |
-#             |         |   |--grp: datacube_1
-#             |         |   |    |--data: datacube
-#             |         |   |    |--data: dim1,dim2,dim3,dim4
-#             |         |   |
-#             |         |   |--grp: datacube_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: diffraction
-#             |         |   |
-#             |         |   |--grp: diffraction_slice_1
-#             |         |   |    |--data: diffractionslice
-#             |         |   |    |--data: dim1,dim2
-#             |         |   |
-#             |         |   |--grp: diffraction_slice_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: real
-#             |         |   |
-#             |         |   |--grp: real_slice_1
-#             |         |   |    |--data: realslice
-#             |         |   |    |--data: dim1,dim2
-#             |         |   |
-#             |         |   |--grp: real_slice_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: pointlists
-#             |         |   |
-#             |         |   |--grp: pointlist_1
-#             |         |   |    |--grp: coord_1
-#             |         |   |    |    |--data
-#             |         |   |    |--grp: coord_2
-#             |         |   |    :    :
-#             |         |   |
-#             |         |   |--grp: pointlist_2
-#             |         |   |    |
-#             |         |   :    :
-#             |         |
-#             |         |--grp: pointlistarrays
-#             |             |
-#             |             |--grp: pointlistarray_1
-#             |             |    |--grp: 0_0 = pointlist at index 0,0
-#             |             |    |--grp: 0_1
-#             |             |    :
-#             |             |
-#             |             |--grp: pointlistarray_2
-#             |             |    |
-#             |             :    :
-#             |
-#             |--grp: log
-#             |         |-grp: log_item_1
-#             |         |-grp: log_item_2
-#             |         |-...
-#             |
-#             |--grp: metadata
-#                       |--grp: original
-#                       |--grp: microscope
-#                       |--grp: sample
-#                       |--grp: user
-#                       |--grp: calibration
-#                       |--grp: comments
 
 
 
