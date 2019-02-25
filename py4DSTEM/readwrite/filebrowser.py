@@ -28,7 +28,7 @@ class FileBrowser(object):
     ###### Open/close methods ######
 
     def open(self):
-        self.file = h5py.File(filepath, 'r')
+        self.file = h5py.File(self.filepath, 'r')
 
     def close(self):
         if 'file' in self.__dict__.keys():
