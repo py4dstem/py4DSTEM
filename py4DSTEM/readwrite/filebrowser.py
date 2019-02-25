@@ -365,12 +365,20 @@ class FileBrowser(object):
 
         return objecttype, objectindex
 
-    def get_dataobject(self, index):
+    def get_dataobject(self, dataobject):
         """
-        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        If dataobject is an int, instantiates a DataObject corresponding to the .h5 data pointed to
+        by this index.
+        If dataobject is a string, instantiates a DataObject with a matching name in the .h5 file.
         """
         if self.version==(0,3):
-            return self.get_dataobject_v0_3(index)
+            if isinstance(dataobject, int):
+                return self.get_dataobject_v0_3(dataobject)
+            elif isinstance(dataobject, str):
+                return self.get_dataobject_by_name(dataobject)
+            else:
+                print("Error: dataobject parameter must be type int or str.")
+                return None
         elif self.version==(0,2):
             return self.get_dataobject_v0_2(index)
         else:
