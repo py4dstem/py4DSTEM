@@ -1,4 +1,19 @@
-# Reads 4D-STEM data
+# Read 4DSTEM data
+#
+# File Formats
+# .h5 files conforming to the py4DSTEM format are, of course, supported. The complete py4DSTEM file
+# format is found in filestructure.txt.
+# For the vast wilderness of additional electron microscopy file formats, hyperspy
+# (www.hyperspy.org) is used to load data and scrape metadata. Most formats that hyperspy can read,
+# py4DSTEM will likely be able to handle, however, not all formats have been tested at this stage.
+#
+# Tested formats which py4DSTEM should read correctly include:
+#   .dm3
+#   .dm4
+#
+# An aside: the authors gratefully thank the developers of hyperspy for all their efforts - their
+# work has been a shining beacon amidst the dark and antiscientific morass of closed and proprietary
+# formats that plague the world of electron scattering. Friends: a thousand times, thank you! <3, b
 
 import hyperspy.api as hs
 from .filebrowser import FileBrowser, is_py4DSTEM_file
