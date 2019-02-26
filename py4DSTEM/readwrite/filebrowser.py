@@ -1,4 +1,9 @@
-# Reads 4D-STEM data
+# Defines the FileBrowser class
+#
+# A FileBrowser instance reads the data in a py4DSTEM .h5 file.
+# It can retrieve and search through the file data, metadata, and logs.
+# Data can be searched/sorted by DataObject type or by name, their properties can be examined, and
+# they can be loaded individually or in groups.
 
 import h5py
 import numpy as np
