@@ -46,8 +46,12 @@ class PointList(DataObject):
         self.data = np.array([],dtype=self.dtype)
 
         if data is not None:
-            if data.dtype == self.dtype:
+            if isinstance(data, PointListArray):
+                assert data.dtype == self.dtype, "Error: dtypes must agree"
                 self.add_pointlist(data)  # If types agree, add all at once
+            elif isinstance(data, np.ndarray):
+                assert data.dtype == self.dtype, "Error: dtypes must agree"
+                self.add_dataarray(data)  # If types agree, add all at once
             else:
                 self.add_pointarray(data) # Otherwise, add one by one
 
@@ -71,7 +75,15 @@ class PointList(DataObject):
         """
         assert self.dtype==pointlist.dtype
         self.data = np.append(self.data, pointlist.data)
-        self.length += len(pointlist)
+        self.length += pointlist.length
+
+    def add_dataarray(self, data):
+        """
+        Appends a properly formated numpy structured array.  Their dtypes must agree.
+        """
+        assert self.dtype==data.dtype
+        self.data = np.append(self.data, data)
+        self.length += len(data)
 
     def sort(self, coordinate, order='descending'):
         """
