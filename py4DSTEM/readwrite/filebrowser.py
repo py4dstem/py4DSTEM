@@ -380,7 +380,7 @@ class FileBrowser(object):
                 print("Error: dataobject parameter must be type int or str.")
                 return None
         elif self.version==(0,2):
-            return self.get_dataobject_v0_2(index)
+            return self.get_dataobject_v0_2(dataobject)
         else:
             print("Error: unrecognized py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
 
