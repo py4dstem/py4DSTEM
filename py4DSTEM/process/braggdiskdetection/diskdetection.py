@@ -273,6 +273,50 @@ def find_Bragg_disks(datacube, probe,
     return peaks
 
 
+def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, minPeakSpacing, maxNumPeaks):
+    """
+    Takes a PointListArray of detected Bragg peaks and applies additional thresholding, returning
+    the thresholded PointListArray. To skip a threshold, set that parameter to False.
 
+    Accepts:
+        pointlistarray        (PointListArray) The Bragg peaks.
+                              Must have coords=('qx','qy','intensity')
+        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
+        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
+        minRelativeIntensity  (float) the minimum allowed peak intensity, relative to the brightest
+                              peak in each diffraction pattern
+    """
+    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
+    for Rx in range(pointlistarray.shape[0]):
+        for Ry in range(pointlistarray.shape[1]):
+            pointlist = pointlistarray.get_pointlist(Rx,Ry)
+            pointlist.sort(coordinate='intensity', order='descending')
+
+            # Remove peaks below minRelativeIntensity threshold
+            if minRelativeIntensity is not False:
+                deletemask = pointlist.data['intensity']/max(pointlist.data['intensity']) < \
+                                                                               minRelativeIntensity
+                pointlist.remove_points(deletemask)
+
+            # Remove peaks that are too close together
+            if maxNumPeaks is not False:
+                r2 = minPeakSpacing**2
+                deletemask = np.zeros(pointlist.length, dtype=bool)
+                for i in range(pointlist.length):
+                    if deletemask[i] == False:
+                        tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
+                                     (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
+                        tooClose[:i+1] = False
+                        deletemask[tooClose] = True
+                pointlist.remove_points(deletemask)
+
+            # Keep only up to maxNumPeaks
+            if maxNumPeaks is not False:
+                if maxNumPeaks < pointlist.length:
+                    deletemask = np.zeros(pointlist.length, dtype=bool)
+                    deletemask[maxNumPeaks:] = True
+                    pointlist.remove_points(deletemask)
+
+    return pointlistarray
 
 
