@@ -13,10 +13,7 @@ from time import time
 from ..datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maximal_points
 
-### TODO: remove dc dependency, after removing requirement of parentDataCube in DataObjects
-
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                  dc, # TODO
                                   corrPower = 1,
                                   sigma = 2,
                                   edgeBoundary = 20,
@@ -85,7 +82,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # Make peaks PointList
     if peaks is None:
         coords = [('qx',float),('qy',float),('intensity',float)]
-        peaks = PointList(coordinates=coords, parentDataCube=dc) # TODO
+        peaks = PointList(coordinates=coords)
     else:
         assert(isinstance(peaks,PointList))
 
@@ -123,7 +120,6 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
 
 
 def find_Bragg_disks_single_DP(DP, probe_kernel,
-                               dc, # TODO
                                corrPower = 1,
                                sigma = 2,
                                edgeBoundary = 20,
@@ -155,7 +151,6 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
     """
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
     return find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                         dc = dc, # TODO
                                          corrPower = corrPower,
                                          sigma = sigma,
                                          edgeBoundary = edgeBoundary,
@@ -206,7 +201,6 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     for i in range(len(Rx)):
         DP = datacube.data4D[Rx[i],Ry[i],:,:]
         peaks.append(find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                                   datacube, # TODO
                                                    corrPower = corrPower,
                                                    sigma = sigma,
                                                    edgeBoundary = edgeBoundary,
@@ -252,7 +246,7 @@ def find_Bragg_disks(datacube, probe,
     """
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(coordinates=coords, parentDataCube=datacube) # TODO
+    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
 
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
@@ -265,7 +259,6 @@ def find_Bragg_disks(datacube, probe,
                 print("Analyzing scan position {}, {}...".format(Rx,Ry))
             DP = datacube.data4D[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                          datacube, # TODO
                                           corrPower = corrPower,
                                           sigma = sigma,
                                           edgeBoundary = edgeBoundary,
