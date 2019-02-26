@@ -99,31 +99,56 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
             if name == '':
                 name = 'datacube_'+str(ind_dcs)
                 ind_dcs += 1
-            group_new_datacube = group_datacubes.create_group(name)
+            try:
+                group_new_datacube = group_datacubes.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_datacubes.keys())])
+                name = name+"_"+str(N)
+                group_new_datacube = group_datacubes.create_group(name)
             save_datacube_group(group_new_datacube, dataobject)
         elif isinstance(dataobject, DiffractionSlice):
             if name == '':
                 name = 'diffractionslice_'+str(ind_dfs)
                 ind_dfs += 1
-            group_new_diffractionslice = group_diffractionslices.create_group(name)
+            try:
+                group_new_diffractionslice = group_diffractionslices.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_diffractionslices.keys())])
+                name = name+"_"+str(N)
+                group_new_diffractionslice = group_diffractionslices.create_group(name)
             save_diffraction_group(group_new_diffractionslice, dataobject)
         elif isinstance(dataobject, RealSlice):
             if name == '':
                 name = 'realslice_'+str(ind_rls)
                 ind_rls += 1
-            group_new_realslice = group_realslices.create_group(name)
+            try:
+                group_new_realslice = group_realslices.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_realslices.keys())])
+                name = name+"_"+str(N)
+                group_new_realslice = group_realslices.create_group(name)
             save_real_group(group_new_realslice, dataobject)
         elif isinstance(dataobject, PointList):
             if name == '':
                 name = 'pointlist_'+str(ind_ptl)
                 ind_ptl += 1
-            group_new_pointlist = group_pointlists.create_group(name)
+            try:
+                group_new_pointlist = group_pointlists.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_pointlists.keys())])
+                name = name+"_"+str(N)
+                group_new_pointlist = group_pointlists.create_group(name)
             save_pointlist_group(group_new_pointlist, dataobject)
         elif isinstance(dataobject, PointListArray):
             if name == '':
                 name = 'pointlistarray_'+str(ind_ptla)
                 ind_ptla += 1
-            group_new_pointlistarray = group_pointlistarrays.create_group(name)
+            try:
+                group_new_pointlistarray = group_pointlistarrays.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_pointlistarrays.keys())])
+                name = name+"_"+str(N)
+                group_new_pointlistarray = group_pointlistarrays.create_group(name)
             save_pointlistarray_group(group_new_pointlistarray, dataobject)
         elif isinstance(dataobject, Metadata):
             pass
