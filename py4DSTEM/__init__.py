@@ -1,7 +1,7 @@
 from . import process
-from . import readwrite
+from . import file
 from . import gui
 
-from .process.log import Logger
+from .file.log import Logger
 logger = Logger()
 

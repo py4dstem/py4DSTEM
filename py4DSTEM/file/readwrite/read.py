@@ -17,9 +17,9 @@
 
 import hyperspy.api as hs
 from .filebrowser import FileBrowser, is_py4DSTEM_file
-from ..process.datastructure import DataCube
-from ..process.datastructure import Metadata
-from ..process.log import log
+from ..datastructure import DataCube
+from ..datastructure import Metadata
+from ..log import log
 
 ###################### BEGIN read FUNCTIONS ########################
 
