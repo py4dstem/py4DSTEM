@@ -8,7 +8,7 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
-from ..log import log
+from ...file.log import log
 
 
 ### Editing datacube shape ###
