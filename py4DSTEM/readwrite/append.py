@@ -1,4 +1,4 @@
-# Append additional DataObjects to an existing py4DSTEM formatted /h5 file.
+# Append additional DataObjects to an existing py4DSTEM formatted .h5 file.
 # 
 # See filestructure.txt for a description of the file structure.
 
