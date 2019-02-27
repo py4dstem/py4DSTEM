@@ -1,5 +1,6 @@
 py4DSTEM files are HDF5 files with a specified group/attribute/data structure.
-First a detailed description, then an abridged description, of that structure may be found below.
+
+A detailed description is immediately below, followed by an abridged description.
 This file format is current as of py4DSTEM v0.3.
 
 

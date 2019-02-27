@@ -13,10 +13,7 @@ from time import time
 from ..datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maximal_points
 
-### TODO: remove dc dependency, after removing requirement of parentDataCube in DataObjects
-
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                  dc, # TODO
                                   corrPower = 1,
                                   sigma = 2,
                                   edgeBoundary = 20,
@@ -85,7 +82,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # Make peaks PointList
     if peaks is None:
         coords = [('qx',float),('qy',float),('intensity',float)]
-        peaks = PointList(coordinates=coords, parentDataCube=dc) # TODO
+        peaks = PointList(coordinates=coords)
     else:
         assert(isinstance(peaks,PointList))
 
@@ -123,7 +120,6 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
 
 
 def find_Bragg_disks_single_DP(DP, probe_kernel,
-                               dc, # TODO
                                corrPower = 1,
                                sigma = 2,
                                edgeBoundary = 20,
@@ -155,7 +151,6 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
     """
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
     return find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                         dc = dc, # TODO
                                          corrPower = corrPower,
                                          sigma = sigma,
                                          edgeBoundary = edgeBoundary,
@@ -206,7 +201,6 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     for i in range(len(Rx)):
         DP = datacube.data4D[Rx[i],Ry[i],:,:]
         peaks.append(find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                                   datacube, # TODO
                                                    corrPower = corrPower,
                                                    sigma = sigma,
                                                    edgeBoundary = edgeBoundary,
@@ -252,7 +246,7 @@ def find_Bragg_disks(datacube, probe,
     """
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(coordinates=coords, parentDataCube=datacube) # TODO
+    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
 
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
@@ -265,7 +259,6 @@ def find_Bragg_disks(datacube, probe,
                 print("Analyzing scan position {}, {}...".format(Rx,Ry))
             DP = datacube.data4D[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                          datacube, # TODO
                                           corrPower = corrPower,
                                           sigma = sigma,
                                           edgeBoundary = edgeBoundary,
@@ -280,6 +273,50 @@ def find_Bragg_disks(datacube, probe,
     return peaks
 
 
+def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, minPeakSpacing, maxNumPeaks):
+    """
+    Takes a PointListArray of detected Bragg peaks and applies additional thresholding, returning
+    the thresholded PointListArray. To skip a threshold, set that parameter to False.
 
+    Accepts:
+        pointlistarray        (PointListArray) The Bragg peaks.
+                              Must have coords=('qx','qy','intensity')
+        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
+        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
+        minRelativeIntensity  (float) the minimum allowed peak intensity, relative to the brightest
+                              peak in each diffraction pattern
+    """
+    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
+    for Rx in range(pointlistarray.shape[0]):
+        for Ry in range(pointlistarray.shape[1]):
+            pointlist = pointlistarray.get_pointlist(Rx,Ry)
+            pointlist.sort(coordinate='intensity', order='descending')
+
+            # Remove peaks below minRelativeIntensity threshold
+            if minRelativeIntensity is not False:
+                deletemask = pointlist.data['intensity']/max(pointlist.data['intensity']) < \
+                                                                               minRelativeIntensity
+                pointlist.remove_points(deletemask)
+
+            # Remove peaks that are too close together
+            if maxNumPeaks is not False:
+                r2 = minPeakSpacing**2
+                deletemask = np.zeros(pointlist.length, dtype=bool)
+                for i in range(pointlist.length):
+                    if deletemask[i] == False:
+                        tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
+                                     (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
+                        tooClose[:i+1] = False
+                        deletemask[tooClose] = True
+                pointlist.remove_points(deletemask)
+
+            # Keep only up to maxNumPeaks
+            if maxNumPeaks is not False:
+                if maxNumPeaks < pointlist.length:
+                    deletemask = np.zeros(pointlist.length, dtype=bool)
+                    deletemask[maxNumPeaks:] = True
+                    pointlist.remove_points(deletemask)
+
+    return pointlistarray
 
 

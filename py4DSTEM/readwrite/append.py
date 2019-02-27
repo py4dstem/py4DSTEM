@@ -1,8 +1,5 @@
-# Writing 4D-STEM data into an HDF5 file format
+# Append additional DataObjects to an existing py4DSTEM formatted .h5 file.
 # 
-# Files are readable as .emd files, with the datacube group conforming to the EMD data group 
-# specifications.
-#
 # See filestructure.txt for a description of the file structure.
 
 import h5py
@@ -13,8 +10,8 @@ from .write import save_pointlist_group, save_pointlistarray_group
 from ..process.datastructure import DataCube, DiffractionSlice, RealSlice
 from ..process.datastructure import PointList, PointListArray
 from ..process.datastructure import DataObject, Metadata
-from ..process.log import log, Logger
 
+from ..process.log import log, Logger
 logger = Logger()
 
 @log

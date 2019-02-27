@@ -1,8 +1,5 @@
-# Reading / writing 4D-STEM data into an HDF5 file format
+# Write py4DSTEM formatted .h5 files.
 # 
-# Files are readable as .emd files, with the datacube group conforming to the EMD data group 
-# specifications.
-#
 # See filestructure.txt for a description of the file structure.
 
 import h5py
