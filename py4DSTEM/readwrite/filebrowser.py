@@ -1,4 +1,9 @@
-# Reads 4D-STEM data
+# Defines the FileBrowser class
+#
+# A FileBrowser instance reads the data in a py4DSTEM .h5 file.
+# It can retrieve and search through the file data, metadata, and logs.
+# Data can be searched/sorted by DataObject type or by name, their properties can be examined, and
+# they can be loaded individually or in groups.
 
 import h5py
 import numpy as np
@@ -367,9 +372,11 @@ class FileBrowser(object):
 
     def get_dataobject(self, dataobject):
         """
-        If dataobject is an int, instantiates a DataObject corresponding to the .h5 data pointed to
+        Finds a single DataObject in the file, and returns it.
+
+        If dataobject is an int, finds the DataObject corresponding to the .h5 data pointed to
         by this index.
-        If dataobject is a string, instantiates a DataObject with a matching name in the .h5 file.
+        If dataobject is a string, finds the DataObject with a matching name in the .h5 file.
         """
         if self.version==(0,3):
             if isinstance(dataobject, int):
@@ -377,10 +384,9 @@ class FileBrowser(object):
             elif isinstance(dataobject, str):
                 return self.get_dataobject_by_name(dataobject)
             else:
-                print("Error: dataobject parameter must be type int or str.")
-                return None
+                raise Exception("Error: dataobject parameter must be type int or str.")
         elif self.version==(0,2):
-            return self.get_dataobject_v0_2(index)
+            return self.get_dataobject_v0_2(dataobject)
         else:
             print("Error: unrecognized py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
 
@@ -430,7 +436,11 @@ class FileBrowser(object):
             coordinates = []
             data_dict = {}
             for coord in coords:
-                dtype = type(self.file['4DSTEM_experiment']['data']['pointlists'][name][coord]['data'][0])
+                try:
+                    dtype = type(self.file['4DSTEM_experiment']['data']['pointlists'][name][coord]['data'][0])
+                except ValueError:
+                    print("dtype can't be retrieved. PointList may be empty.")
+                    dtype = None
                 coordinates.append((coord, dtype))
                 data_dict[coord] = np.array(self.file['4DSTEM_experiment']['data']['pointlists'][name][coord]['data'])
             dataobject = PointList(coordinates=coordinates, name=name)
@@ -550,6 +560,8 @@ class FileBrowser(object):
     def get_dataobjects(self, indices):
         if indices=='all':
             indices = range(self.N_dataobjects)
+        else:
+            assert all([isinstance(index,int) for index in indices])
         objects = []
         for index in indices:
             objects.append(self.get_dataobject(index))
@@ -559,40 +571,34 @@ class FileBrowser(object):
         return self.get_dataobjects('all')
 
     def get_rawdatacubes(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
+        indices = [index.item() for index in indices]  # Converts np.int64 -> int
+        return self.get_dataobjects(indices)
 
     def get_datacubes(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='DataCube').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='DataCube').nonzero()[0]
+        indices = [index.item() for index in indices]
+        return self.get_dataobjects(indices)
 
     def get_diffractionslices(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='DiffractionSlice').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='DiffractionSlice').nonzero()[0]
+        indices = [index.item() for index in indices]
+        return self.get_dataobjects(indices)
 
     def get_realslices(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='RealSlice').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='RealSlice').nonzero()[0]
+        indices = [index.item() for index in indices]
+        return self.get_dataobjects(indices)
 
     def get_pointlists(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='PointList').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='PointList').nonzero()[0]
+        indices = [index.item() for index in indices]
+        return self.get_dataobjects(indices)
 
     def get_pointlistarrays(self):
-        objects = []
-        for index in (self.dataobject_lookup_arr=='PointListArray').nonzero()[0]:
-            objects.append(self.get_dataobject(index))
-        return objects
+        indices = (self.dataobject_lookup_arr=='PointListArray').nonzero()[0]
+        indices = [index.item() for index in indices]
+        return self.get_dataobjects(indices)
 
     def get_dataobject_by_name(self, name, exactmatch=True):
         objects = []

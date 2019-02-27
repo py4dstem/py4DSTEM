@@ -26,6 +26,7 @@ class DataCube(DataObject):
             self.set_scan_shape(self.R_Nx,self.R_Ny)
         else:
             self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = data.shape
+            self.R_N = self.R_Nx*self.R_Ny
 
         # Set shape
         # TODO: look for shape in metadata
