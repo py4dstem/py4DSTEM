@@ -11,119 +11,6 @@ import h5py
 import dm
 import matplotlib as mpl
 
-# def cshift(x: torch.Tensor, shift: int, dim: int = -1):
-# 
-#     if 0 == shift:
-#         return x
-# 
-#     elif shift < 0:
-#         shift = -shift
-#         gap = x.index_select(dim, torch.arange(shift))
-#         return torch.cat([x.index_select(dim, torch.arange(shift, x.size(dim))), gap], dim=dim)
-# 
-#     else:
-#         shift = x.size(dim) - shift
-#         gap = x.index_select(dim, torch.arange(shift, x.size(dim)))
-#         return torch.cat([gap, x.index_select(dim, torch.arange(shift))], dim=dim)
-# 
-# def convolve(arr1,arr2):
-# 	'''Find the cross correlation of two arrays using the Fourier transform.
-#     Assumes that both arrays are periodic so can be circularly shifted.'''
-# 	return np.abs(ifft2(fft2(arr1,norm='ortho')*fft2(arr2,norm='ortho')
-#                                                          ,norm='ortho'))
-# 
-# def roll_zeropad(a, shift, axis=None):
-#     """
-#     Roll array elements along a given axis.
-# 
-#     Elements off the end of the array are treated as zeros.
-# 
-#     Parameters
-#     ----------
-#     a : array_like
-#         Input array.
-#     shift : int
-#         The number of places by which elements are shifted.
-#     axis : int, optional
-#         The axis along which elements are shifted.  By default, the array
-#         is flattened before shifting, after which the original
-#         shape is restored.
-# 
-#     Returns
-#     -------
-#     res : ndarray
-#         Output array, with the same shape as `a`.
-# 
-#     See Also
-#     --------
-#     roll     : Elements that roll off one end come back on the other.
-#     rollaxis : Roll the specified axis backwards, until it lies in a
-#                given position.
-# 
-#     Examples
-#     --------
-#     >>> x = np.arange(10)
-#     >>> roll_zeropad(x, 2)
-#     array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7])
-#     >>> roll_zeropad(x, -2)
-#     array([2, 3, 4, 5, 6, 7, 8, 9, 0, 0])
-# 
-#     >>> x2 = np.reshape(x, (2,5))
-#     >>> x2
-#     array([[0, 1, 2, 3, 4],
-#            [5, 6, 7, 8, 9]])
-#     >>> roll_zeropad(x2, 1)
-#     array([[0, 0, 1, 2, 3],
-#            [4, 5, 6, 7, 8]])
-#     >>> roll_zeropad(x2, -2)
-#     array([[2, 3, 4, 5, 6],
-#            [7, 8, 9, 0, 0]])
-#     >>> roll_zeropad(x2, 1, axis=0)
-#     array([[0, 0, 0, 0, 0],
-#            [0, 1, 2, 3, 4]])
-#     >>> roll_zeropad(x2, -1, axis=0)
-#     array([[5, 6, 7, 8, 9],
-#            [0, 0, 0, 0, 0]])
-#     >>> roll_zeropad(x2, 1, axis=1)
-#     array([[0, 0, 1, 2, 3],
-#            [0, 5, 6, 7, 8]])
-#     >>> roll_zeropad(x2, -2, axis=1)
-#     array([[2, 3, 4, 0, 0],
-#            [7, 8, 9, 0, 0]])
-# 
-#     >>> roll_zeropad(x2, 50)
-#     array([[0, 0, 0, 0, 0],
-#            [0, 0, 0, 0, 0]])
-#     >>> roll_zeropad(x2, -50)
-#     array([[0, 0, 0, 0, 0],
-#            [0, 0, 0, 0, 0]])
-#     >>> roll_zeropad(x2, 0)
-#     array([[0, 1, 2, 3, 4],
-#            [5, 6, 7, 8, 9]])
-# 
-#     """
-#     a = np.asanyarray(a)
-#     if shift == 0: return a
-#     if axis is None:
-#         n = a.size
-#         reshape = True
-#     else:
-#         n = a.shape[axis]
-#         reshape = False
-#     if np.abs(shift) > n:
-#         res = np.zeros_like(a)
-#     elif shift < 0:
-#         shift += n
-#         zeros = np.zeros_like(a.take(np.arange(n-shift), axis))
-#         res = np.concatenate((a.take(np.arange(n-shift,n), axis), zeros), axis)
-#     else:
-#         zeros = np.zeros_like(a.take(np.arange(n-shift,n), axis))
-#         res = np.concatenate((zeros, a.take(np.arange(n-shift), axis)), axis)
-#     if reshape:
-#         return res.reshape(a.shape)
-#     else:
-#         return res
-
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
                                                      length = 100, fill = '*'):
     """
@@ -316,7 +203,7 @@ def count_dm4(datacube,binfactor = 1,sigmathresh=4,
                                               astype(np.int16)).to(device)
 
     #Initialise integrated image
-    integrated = torch.from_numpy(np.zeros((y,x),dtype=np.int16)).to(device)
+    #integrated = torch.from_numpy(np.zeros((y,x),dtype=np.int16)).to(device)
 
     #Initialised counted image
     counted = torch.ones(x//binfactor,y//binfactor,z,t,dtype=torch.short).to(device)
@@ -394,37 +281,29 @@ if __name__=="__main__":
     plot_electrons = True
 
     Do_counting=True
-    #If dark_subtract=True then the original
-    #dm4 file will be loaded and dark subtraction
-    #performed
-    # dark_subtract = False
 
-    #Perform segmentation of labelled regions according
-    #to local maxima
-    local_max_segmentation = True
+    # dark_subtract = False             # If dark_subtract=True then the original dm4 file
+                                        # will be loaded and background subtraction performed
 
-    #Width of region from which to take Dark reference
-    drwidth = 100
-    #Number of samples of the dataset from which
-    #to construct dark reference image and ca;culate
-    #threshhold
-    nsamples = 40
+    local_max_segmentation = True       # Perform segmentation of labelled regions
+                                        # according
+                                        # to local maxima
 
-    #threshold for electron coutning
-    #is mean + sigma * this value
-    sigmathresh = 4
+    drwidth = 100                       # Width of region from which to take Dark reference
 
-    #Threshhold (in units of standard deviation) with
-    #which to remove x-ray counts
-    upper_limit = 30
+    nsamples = 40                       # Number of DP to randomly select from the dataset,
+                                        # from which to construct dark reference image,
+                                        # and calculate electron counting threshhold
 
+    sigmathresh = 4                     # threshold for electron coutning is 
+                                        # mean + sigma * this value
 
-    # thresh = 10.8
+    upper_limit = 30                    # Threshhold (in units of standard deviation) with
+                                        # which to remove x-ray counts
+
     thresh = None
+    # thresh = 10.8
     # thresh = 11.4429
-    #Shape of array into which the counted electrons will be downsampled
-
-
 
     # frames = 400
     #Load data using hyperspy
@@ -434,13 +313,22 @@ if __name__=="__main__":
         datacube = dm.dmReader(dm4filename,dSetNum=0,verbose=False)['data']
         datacube = np.moveaxis(datacube,(0,1),(2,3))
 
-        counted,integrated = count_dm4(datacube,sigmathresh=sigmathresh,
-                                      nsamples=nsamples,binfactor=6,
-                                      upperlimit=upper_limit,drwidth=drwidth,
-                                      sub_pixel=False,plot_histogram=plot_histogram,
-                                      plot_electrons=plot_electrons,thresh=thresh)
+        counted,integrated = count_datacube(datacube,
+                                            sigmathresh=sigmathresh,
+                                            nsamples=nsamples,
+                                            binfactor=6,
+                                            upperlimit=upper_limit,
+                                            drwidth=drwidth,
+                                            sub_pixel=False,
+                                            plot_histogram=plot_histogram,
+                                            plot_electrons=plot_electrons,
+                                            thresh=thresh)
+
         # Image.fromarray(np.asarray(integrated,dtype=np.float)).save('{0}_integrated.tif'.format(dm4filename.replace('.dm4','')))
         # Image.fromarray(np.asarray(np.sum(counted,axis=(2,3)),dtype=np.float)).save('{0}_counted.tif'.format(dm4filename.replace('.dm4','')))
+
+
+        # TODO: sync with write.py
 
         f = h5py.File(dm4filename.replace('.dm4','')+'.hdf5','w')
         f.attrs['version_major']=0
@@ -457,6 +345,8 @@ if __name__=="__main__":
         gpr = f.create_group('4D-STEM_data/metadata/calibration')
         gpr = f.create_group('4D-STEM_data/metadata/comments')
         f.close()
+
+# FORMAT HERE:
 # |--attr: version_major=0
 # |--attr: version_minor=2
 # |--grp: 4D-STEM_data
@@ -476,3 +366,135 @@ if __name__=="__main__":
 #             |         |--data: dim4
 #             |               |--attr: name="R_y"
 #             |               |--attr: units="[n_m]"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########### Deprecated funtions ##########
+
+# def cshift(x: torch.Tensor, shift: int, dim: int = -1):
+# 
+#     if 0 == shift:
+#         return x
+# 
+#     elif shift < 0:
+#         shift = -shift
+#         gap = x.index_select(dim, torch.arange(shift))
+#         return torch.cat([x.index_select(dim, torch.arange(shift, x.size(dim))), gap], dim=dim)
+# 
+#     else:
+#         shift = x.size(dim) - shift
+#         gap = x.index_select(dim, torch.arange(shift, x.size(dim)))
+#         return torch.cat([gap, x.index_select(dim, torch.arange(shift))], dim=dim)
+# 
+# def convolve(arr1,arr2):
+# 	'''Find the cross correlation of two arrays using the Fourier transform.
+#     Assumes that both arrays are periodic so can be circularly shifted.'''
+# 	return np.abs(ifft2(fft2(arr1,norm='ortho')*fft2(arr2,norm='ortho')
+#                                                          ,norm='ortho'))
+# 
+# def roll_zeropad(a, shift, axis=None):
+#     """
+#     Roll array elements along a given axis.
+# 
+#     Elements off the end of the array are treated as zeros.
+# 
+#     Parameters
+#     ----------
+#     a : array_like
+#         Input array.
+#     shift : int
+#         The number of places by which elements are shifted.
+#     axis : int, optional
+#         The axis along which elements are shifted.  By default, the array
+#         is flattened before shifting, after which the original
+#         shape is restored.
+# 
+#     Returns
+#     -------
+#     res : ndarray
+#         Output array, with the same shape as `a`.
+# 
+#     See Also
+#     --------
+#     roll     : Elements that roll off one end come back on the other.
+#     rollaxis : Roll the specified axis backwards, until it lies in a
+#                given position.
+# 
+#     Examples
+#     --------
+#     >>> x = np.arange(10)
+#     >>> roll_zeropad(x, 2)
+#     array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7])
+#     >>> roll_zeropad(x, -2)
+#     array([2, 3, 4, 5, 6, 7, 8, 9, 0, 0])
+# 
+#     >>> x2 = np.reshape(x, (2,5))
+#     >>> x2
+#     array([[0, 1, 2, 3, 4],
+#            [5, 6, 7, 8, 9]])
+#     >>> roll_zeropad(x2, 1)
+#     array([[0, 0, 1, 2, 3],
+#            [4, 5, 6, 7, 8]])
+#     >>> roll_zeropad(x2, -2)
+#     array([[2, 3, 4, 5, 6],
+#            [7, 8, 9, 0, 0]])
+#     >>> roll_zeropad(x2, 1, axis=0)
+#     array([[0, 0, 0, 0, 0],
+#            [0, 1, 2, 3, 4]])
+#     >>> roll_zeropad(x2, -1, axis=0)
+#     array([[5, 6, 7, 8, 9],
+#            [0, 0, 0, 0, 0]])
+#     >>> roll_zeropad(x2, 1, axis=1)
+#     array([[0, 0, 1, 2, 3],
+#            [0, 5, 6, 7, 8]])
+#     >>> roll_zeropad(x2, -2, axis=1)
+#     array([[2, 3, 4, 0, 0],
+#            [7, 8, 9, 0, 0]])
+# 
+#     >>> roll_zeropad(x2, 50)
+#     array([[0, 0, 0, 0, 0],
+#            [0, 0, 0, 0, 0]])
+#     >>> roll_zeropad(x2, -50)
+#     array([[0, 0, 0, 0, 0],
+#            [0, 0, 0, 0, 0]])
+#     >>> roll_zeropad(x2, 0)
+#     array([[0, 1, 2, 3, 4],
+#            [5, 6, 7, 8, 9]])
+# 
+#     """
+#     a = np.asanyarray(a)
+#     if shift == 0: return a
+#     if axis is None:
+#         n = a.size
+#         reshape = True
+#     else:
+#         n = a.shape[axis]
+#         reshape = False
+#     if np.abs(shift) > n:
+#         res = np.zeros_like(a)
+#     elif shift < 0:
+#         shift += n
+#         zeros = np.zeros_like(a.take(np.arange(n-shift), axis))
+#         res = np.concatenate((a.take(np.arange(n-shift,n), axis), zeros), axis)
+#     else:
+#         zeros = np.zeros_like(a.take(np.arange(n-shift,n), axis))
+#         res = np.concatenate((zeros, a.take(np.arange(n-shift), axis)), axis)
+#     if reshape:
+#         return res.reshape(a.shape)
+#     else:
+#         return res
+
+
+
+

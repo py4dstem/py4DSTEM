@@ -47,11 +47,11 @@ class PointList(DataObject):
 
         if data is not None:
             if isinstance(data, PointListArray):
-                assert data.dtype == self.dtype, "Error: dtypes must agree"
                 self.add_pointlist(data)  # If types agree, add all at once
             elif isinstance(data, np.ndarray):
-                assert data.dtype == self.dtype, "Error: dtypes must agree"
                 self.add_dataarray(data)  # If types agree, add all at once
+            elif isinstance(data, tuple):
+                self.add_tuple_of_nparrays(data)
             else:
                 self.add_pointarray(data) # Otherwise, add one by one
 
@@ -73,7 +73,7 @@ class PointList(DataObject):
         """
         Appends the data from another PointList object to this one.  Their dtypes must agree.
         """
-        assert self.dtype==pointlist.dtype
+        assert self.dtype==pointlist.dtype, "Error: dtypes must agree"
         self.data = np.append(self.data, pointlist.data)
         self.length += pointlist.length
 
@@ -81,9 +81,22 @@ class PointList(DataObject):
         """
         Appends a properly formated numpy structured array.  Their dtypes must agree.
         """
-        assert self.dtype==data.dtype
+        assert self.dtype==data.dtype, "Error: dtypes must agree"
         self.data = np.append(self.data, data)
         self.length += len(data)
+
+    def add_tuple_of_nparrays(self, data):
+        """
+        Appends data in the form of a tuple of ndarrays.
+        """
+        assert len(self.coordinates)==len(data), "Error: if data is a tuple, it must contain (# coords) numpy arrays."
+        length = len(data[0])
+        assert all([length==len(ar) for ar in data]), "Error: if data is a tuple, it must contain lists of equal length"
+        # Make structured numpy array
+        structured_data = np.array([tuple([ar[i] for ar in data]) for i in range(len(data[0]))],
+                                    self.dtype)
+        # Append to pointlist
+        self.add_dataarray(structured_data)
 
     def sort(self, coordinate, order='descending'):
         """
