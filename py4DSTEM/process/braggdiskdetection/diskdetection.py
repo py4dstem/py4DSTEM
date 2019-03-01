@@ -10,7 +10,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 
-from ..datastructure import PointList, PointListArray
+from ...file.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maximal_points
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,

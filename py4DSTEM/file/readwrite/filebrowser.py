@@ -8,11 +8,11 @@
 import h5py
 import numpy as np
 import hyperspy.api as hs
-from ..process.datastructure import DataCube
-from ..process.datastructure import DiffractionSlice, RealSlice
-from ..process.datastructure import PointList, PointListArray
-from ..process.datastructure import Metadata
-from ..process.log import log
+from ..datastructure import DataCube
+from ..datastructure import DiffractionSlice, RealSlice
+from ..datastructure import PointList, PointListArray
+from ..datastructure import Metadata
+from ..log import log
 
 
 ################### BEGIN FileBrowser CLASS ##################

@@ -238,7 +238,7 @@ class PointListArray(DataObject):
                 for key in self.dtype.fields.keys():
                     data[key] = np.copy(curr_pointlist_old.data[key])
 
-                curr_pointlist_new.add_pointlist(data)
+                curr_pointlist_new.add_dataarray(data)
 
         return new_pointlistarray
 

@@ -4,9 +4,9 @@
 # pointing to processing functions - generally defined in other files in the process directory.
 
 import numpy as np
-from .. import preprocess
-from .. import virtualimage
 from .dataobject import DataObject
+from ...process import preprocess
+from ...process import virtualimage
 
 class DataCube(DataObject):
 
