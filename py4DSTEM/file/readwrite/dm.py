@@ -2,30 +2,32 @@
 A module to load data and meta data from DM3 and DM4 files into python.
 
 On Memory mode:
-  The fileDM support and "on memory" mode that preoliads the file data in memory
+In a word, support memory mapping. Yes?
+The fileDM class supports an "on memory" mode that preloads the file data in memory
 and data read operations during data parsing are performed against memory. This
 is critical to matain good performance when the file resides in a parallel file
-system (PFS) because latency of seek operations PFSs is very high.
+system (PFS) because ithe latency of seek operations PFSs is very high.
 """
 
-import mmap
-from os import stat as fileStats
+import numpy as np
 import os
 from os.path import basename as osBasename
-
-import numpy as np
+from os import stat as fileStats
+import mmap
 
 
 class fileDM:
-    def __init__(self, filename, verbose = False, on_memory=False):
-        '''Init opening the file and reading in the header.
 
-        Args:
-            filename: string pointing to the filesystem location of the file.
-            verbose: if True, debug information is printed.
-            on_memory: if True, file data is pre-loaded in memory and all data
-              parsing is performed against memory. Use this mode if the file
-              is in a network based or paralle file system.
+    def __init__(self, filename, verbose=False, on_memory=False):
+        '''
+        Opens the file and reads its header.
+
+        Accepts:
+            filename:   (str) the file path.
+            verbose:    (bool) if True, debug information is printed.
+            on_memory:  (bool) if True, file data is pre-loaded in memory and all data
+                               parsing is performed against memory. Use this mode if the file
+                               is in a network based or paralle file system.
         '''
 
         self.filename = filename
@@ -38,9 +40,9 @@ class fileDM:
 
         # check for string
         if not isinstance(filename, str):
-            raise TypeError('Filename is supposed to be a string')
+            raise TypeError('Filename is supposed to be a string ;D')
 
-        #Add a top level variable to indicate verbosee output for debugging
+        #Add a top level variable to indicate verbose output for debugging
         self.v = verbose
 
         # try opening the file
@@ -125,9 +127,11 @@ class fileDM:
             return self.fid.tell()
 
     def fromfile(self, *args, **kwargs):
-        """ Reads data from a file or momery map.
+        """
+        Reads data from a file or memory map.
+
         Calls np.fromfile and np.frombuffer depending on the on_memory mode of
-        the fileDM.
+        the load_dmfile instance.
 
         Args, it supports whatever frombuffer, fromfile support but it requires:
             dtype: np.dtype (object or string) to be read.
@@ -137,11 +141,11 @@ class fileDM:
         """
         if self._on_memory:
             if "dtype" not in kwargs:
-                raise ValueError("In on_memory mode, reads require always a"
-                                 " named dtype argument to be specified.")
+                raise ValueError("In on_memory mode, reads require always a "
+                                 "named dtype argument to be specified.")
             if "count" not in kwargs:
-                raise ValueError("In on_memory mode, reads require always a"
-                                 " named count argument to be specified.")
+                raise ValueError("In on_memory mode, reads require always a "
+                                 "named count argument to be specified.")
 
             dtype=np.dtype(kwargs["dtype"])
             count=int(kwargs["count"])
@@ -154,16 +158,19 @@ class fileDM:
 
 
     def seek(self, fid, offset, from_what=0):
-        """Positions the reading head for fid. fid can be a file or memory map.
-        Follows the same convention as file.seek
+        """
+        Positions the reading head for fid.
+
+        fid can be a file or memory map. Follows the same convention as file.seek
 
         Args:
-            fid: file or memory map.
-            offset: number of bytes to move the head forward (positive value)
-              or backwards (negative value).
-            from_what: reference point to use in the head movement. 0:
-              for beginning of the file (default behavior), 1: from the
-              current head position, and 2: from the end of the file.
+            fid:       file or memory map.
+            offset:    number of bytes to move the head forward (positive value)
+                       or backwards (negative value).
+            from_what: reference point to use in the head movement. Options:
+                         0: beginning of the file (default behavior)
+                         1: from the current head position
+                         2: from the end of the file.
         """
         if self._on_memory:
             offset=int(offset)
@@ -182,7 +189,9 @@ class fileDM:
 
 
     def _validDM(self):
-        '''Test whether a file is a valid DM3 or DM4 file and written in Little Endian format
+        '''
+        Test whether a file is a valid DM3 or DM4 file, and
+        verify that it's written in Little Endian format
         '''
         output = True #output will stay == 1 if the file is a true DM4 file
 
@@ -699,8 +708,12 @@ class fileDM:
             raise IOError('Unsupported binary data type during conversion to numpy dtype. DM dataType == {}'.format(dd))
 
     def getDataset(self, index):
-        '''Retrieve a dataset from the DM file.
-        Note: Most DM3 and DM4 files contain a small "thumbnail" as the first dataset written as RGB data. This function ignores that dataset if it exists. To retrieve the thumbnail use the getThumbnail() function
+        '''
+        Retrieve a dataset from the DM file.
+
+        Note: Most DM3 and DM4 files contain a small "thumbnail" as the first dataset written as
+        RGB data. This function ignores that dataset if it exists. To retrieve the thumbnail use
+        the getThumbnail() function
         '''
         #The first dataset is usually a thumbnail. Test for this and skip the thumbnail automatically
         if self.numObjects == 1:
@@ -734,10 +747,10 @@ class fileDM:
                 outputDict['pixelSize'] = self.scale[jj:jj+self.dataShape[ii]][::-1]
                 outputDict['pixelOrigin'] = self.origin[jj:jj+self.dataShape[ii]][::-1]
             elif self.zSize2[ii] > 1: #4D data
-                # outputDict['data'] =  np.memmap(self.fid,dtype=self._DM2NPDataType(self.dataType[ii])
-                outputDict['data'] =  np.memmap(self.fid,dtype= '>u2'
-                                ,mode='r',shape=(self.zSize2[ii],self.zSize[ii],
-                                self.ySize[ii],self.xSize[ii]))
+                # outputDict['data'] =  np.memmap(self.fid,dtype=self._DM2NPDataType(self.dataType[ii]) ## Delete?
+                outputDict['data'] = np.memmap(self.fid,dtype= '>u2',
+                                               mode='r',shape=(self.zSize2[ii],self.zSize[ii],
+                                               self.ySize[ii],self.xSize[ii]))
                 # outputDict['data'] = self.fromfile(self.fid,count=pixelCount,
                 #                     dtype=self._DM2NPDataType(self.dataType[ii])
                 #                     ).reshape((self.zSize2[ii],self.zSize[ii],
@@ -765,11 +778,12 @@ class fileDM:
         self.seek(self.fid, self.dataOffset[0],0)
         return self._readRGB(self.ySize[0],self.xSize[0])
 
-def dmReader(fName,dSetNum=0,verbose=False):
-    '''Simple function to parse the file and read the requested dataset
+def dmReader(fName, dSetNum=0, verbose=False):
     '''
-    f1 = fileDM(fName,verbose) #open the file and init the class
-    f1.parseHeader() #parse the header
-    im1 = f1.getDataset(dSetNum) #get the requested dataset (first by default)
-    del f1 #delete the class and close the file
-    return im1 #return the dataset and metadata as a dictionary
+    Simple function to parse the file and read the requested dataset
+    '''
+    f1 = fileDM(fName,verbose)      #initialize a fileDM class instance, opening the file
+    f1.parseHeader()                #parse the header
+    im1 = f1.getDataset(dSetNum)    #get the requested dataset (first by default)
+    del f1                          #delete the class and close the file
+    return im1                      #return the dataset and metadata as a dictionary
