@@ -13,7 +13,7 @@ from ...file.datastructure import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
-                                            thresh_xray_Nsigma=10
+                                            thresh_xray_Nsigma=10,
                                             binfactor = 1,
                                             sub_pixel=True,
                                             output='pointlist'):
@@ -252,7 +252,7 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
             pointlist.add_tuple_of_nparrays((x,y))
 
-    return return pointlistarray
+    return pointlistarray
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
                                                      length = 100, fill = '*'):
@@ -310,7 +310,7 @@ if __name__=="__main__":
                                        thresh_xray_Nsigma=thresh_xray_Nsigma,
                                        binfactor=binfactor,
                                        sub_pixel=True,
-                                       output='pointlist'):
+                                       output='pointlist')
 
     # For outputting datacubes, wrap counted into a py4DSTEM DataCube
     if output=='datacube':
