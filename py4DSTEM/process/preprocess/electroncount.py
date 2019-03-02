@@ -64,11 +64,11 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
     # Get threshholds
     print('Calculating threshholds')
-    sigma_l, sigma_u = calculate_thresholds(datacube,
-                                            darkreference,
-                                            Nsamples=Nsamples,
-                                            thresh_bkgrd_Nsigma=thresh_bkgrnd_Nsigma,
-                                            thresh_xray_Nsigma=thresh_xray_Nsigma)
+    sigma_bkgrnd, sigma_xray = calculate_thresholds(datacube,
+                                                    darkreference,
+                                                    Nsamples=Nsamples,
+                                                    thresh_bkgrd_Nsigma=thresh_bkgrnd_Nsigma,
+                                                    thresh_xray_Nsigma=thresh_xray_Nsigma)
 
     # Make a torch device object, to interface numpy with the GPU
     # Put a few arrays on it - dark reference, counted image
@@ -84,8 +84,8 @@ def electron_count(datacube, darkreference, Nsamples=40,
             frame = datacube[:,:,Rx,Ry].astype(np.int16)    # Get frame from file
             gframe = torch.from_numpy(frame).to(device)     # Move frame to GPU
             workingarray = gframe-darkref                   # Subtract dark ref from frame
-            events = workingarray>thresh_l                  # Threshold electron events
-            events = thresh_u>workingarray
+            events = workingarray>thresh_bkgrnd             # Threshold electron events
+            events = thresh_xray>workingarray
 
             ## Keep events which are greater than all NN pixels ##
 
@@ -123,28 +123,36 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
 ####### Support functions ########
 
-def calculate_thresholds(datacube, darkreference, Nsamples=20,
-                                   thresh_lower=4,thresh_upper=10):
+def calculate_thresholds(datacube, darkreference,
+                                   Nsamples=20,
+                                   thresh_bkgrnd_Nsigma=4,
+                                   thresh_xray_Nsigma=10):
     """
     Calculate the upper and lower thresholds for thresholding what to register as
     an electron count.
 
     Both thresholds are determined from the histogram of detector pixel values summed over
     Nsamples frames. The thresholds are set to
-        thresh_u = mean(histogram)    + thresh_upper * std(histogram)
-        thresh_l = mean(guassian fit) + thresh_lower * std(gaussian fit)
+        thresh_xray_Nsigma =    mean(histogram)    + thresh_upper * std(histogram)
+        thresh_bkgrnd_N_sigma = mean(guassian fit) + thresh_lower * std(gaussian fit)
     For more info, see the count_datacube docstring.
 
     Accepts:
-        datacube        a 4D numpy.memmap of the data
-        darkreference   a 2D numpy.ndarray of the camera dark reference
-        Nsamples        number of random frames to sample
-        thresh_lower    stds above the mean of a gaussian fit which becomes the upper threshold
-        thresh_upper    stds above the mean of the histogram which becomes the upper threshold
+        datacube               a 4D numpy.memmap pointing to the datacube
+        darkreference          a 2D numpy.ndarray with the dark reference
+        Nsamples               the number of frames to use in dark reference
+                               and threshold calculation.
+        thresh_bkgrnd_Nsigma   background threshold is
+                                    mean(guassian fit) + (this #)*std(gaussian fit)
+                               where the gaussian fit is to the background noise.
+        thresh_xray_Nsigma     the X-ray threshold is
+                                    mean(hist) +/- (this #)*std(hist)
+                               where hist is the histogram of all pixel values in the
+                               Nsamples random frames
 
     Returns:
-        thresh_l        the lower threshold
-        thresh_u        the upper threshold
+        thresh_bkgrnd          the background threshold
+        thresh_xray            the X-ray threshold
     """
     Q_Nx,Q_Ny,R_Nx,R_Ny = datacube.shape
 
@@ -164,7 +172,7 @@ def calculate_thresholds(datacube, darkreference, Nsamples=20,
     # Get upper (X-ray) threshold
     mean = np.mean(sample)
     stddev = np.std(sample)
-    thresh_u = mean+thresh_upper*stddev
+    thresh_xray = mean+thresh_xray_Nsigma*stddev
 
     # Make a histogram
     binmax = min(int(np.ceil(np.amax(sample))),int(mean+sigmathresh*stddev))
@@ -182,13 +190,13 @@ def calculate_thresholds(datacube, darkreference, Nsamples=20,
 
     # Get initial guess
     p0 = [n.max(),(bins[n.argmax()+1]-bins[n.argmax()])/2,np.std(sample)]
-    p1,success = optimize.leastsq(errfunc,p0[:],args=(bins[:-1],n))   # Use the scipy optimize routine
+    p1,success = optimize.leastsq(errfunc,p0[:],args=(bins[:-1],n))  # Use the scipy optimize routine
     p1[1] += 0.5                            #Add a half to account for integer bin width
 
     # Set lower threshhold for electron counts to count
-    thresh_l = p1[1]+p1[2]*thresh_lower
+    thresh_bkgrnd = p1[1]+p1[2]*thresh_bkgrnd_Nsigma
 
-    return thresh_l, thresh_u
+    return thresh_bkgrnd, thresh_xray
 
 def torch_bin(array,device,factor=2):
     """
@@ -294,7 +302,7 @@ if __name__=="__main__":
     # Get dark reference
     darkreference = 1 # TODO: get_darkreference(datacube = ...!
                       # What we really need now is to tie the memory mapping in seamlessly with
-                      # DataCube.data4D, so that whether our data is memory mapped, we just
+                      # DataCube.data4D, so that whether or not our data is memory mapped, we just
                       # reference this as a numpy array.
 
     counted = count_datacube(datacube, darkreference, Nsamples=Nsamples,
