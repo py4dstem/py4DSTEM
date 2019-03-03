@@ -135,7 +135,7 @@ def calculate_thresholds(datacube, darkreference,
     Nsamples frames. The thresholds are set to
         thresh_xray_Nsigma =    mean(histogram)    + thresh_upper * std(histogram)
         thresh_bkgrnd_N_sigma = mean(guassian fit) + thresh_lower * std(gaussian fit)
-    For more info, see the count_datacube docstring.
+    For more info, see the electron_count docstring.
 
     Accepts:
         datacube               a 4D numpy.memmap pointing to the datacube
@@ -305,19 +305,19 @@ if __name__=="__main__":
                       # DataCube.data4D, so that whether or not our data is memory mapped, we just
                       # reference this as a numpy array.
 
-    counted = count_datacube(datacube, darkreference, Nsamples=Nsamples,
-                                       thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
-                                       thresh_xray_Nsigma=thresh_xray_Nsigma,
-                                       binfactor=binfactor,
-                                       sub_pixel=True,
-                                       output='pointlist')
+    electron_counted_data = electron_count(datacube, darkreference, Nsamples=Nsamples,
+                                           thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
+                                           thresh_xray_Nsigma=thresh_xray_Nsigma,
+                                           binfactor=binfactor,
+                                           sub_pixel=True,
+                                           output='pointlist')
 
     # For outputting datacubes, wrap counted into a py4DSTEM DataCube
     if output=='datacube':
-        counted = DataCube(data=counted)
+        electron_counted_data = DataCube(data=counted)
 
     output_path = dm4filename.replace('.dm4','.h5')
-    save(counted, output_path)
+    save(electron_counted_data, output_path)
 
 
 

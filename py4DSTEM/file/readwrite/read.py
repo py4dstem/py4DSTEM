@@ -16,6 +16,7 @@
 # formats that plague the world of electron scattering. Friends: a thousand times, thank you! <3, b
 
 import hyperspy.api as hs
+from .dm import dmReader
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
 from ..datastructure import Metadata
@@ -75,15 +76,25 @@ def read(filename, load=None):
 
 def read_non_py4DSTEM_file(filename):
     """
-    Read a non-py4DSTEM file using hyperspy.
+    Read a non-py4DSTEM file using hyperspy or, for .dm3/.dm4 files, using dm.py.
+    Files read with dm.py are memory mapped, and the output DataCube.data4d is a np.memmap.
     """
+    # Load .dm3/.dm4 files with dm.py
+    if filename.endswith('.dm3') or filename.endswith('.dm4'):
+        data = dmReader(filename,dSetNum=0,verbose=False)
+        # metadata = stuff - do this w/hyperspy
+        # hyperspy_file = hs.load(filename, lazy=True) # TODO: check behavior of lazy kw
+                                                       # what we want is to not load data at
+                                                       # all, just access to metadata
     # Load with hyperspy
-    try:
-        hyperspy_file = hs.load(filename)
-    except Exception as err:
-        print("Failed to load", err)
-        print("Returning None")
-        return None
+    else:
+        try:
+            hyperspy_file = hs.load(filename)
+            data = hyperspy_file.data
+        except Exception as err:
+            print("Failed to load", err)
+            print("Returning None")
+            return None
 
     # Get metadata
     metadata = Metadata(is_py4DSTEM_file = False,
