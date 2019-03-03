@@ -11,7 +11,7 @@ import dm
 
 from ...file.datastructure import PointListArray
 
-def count_datacube(datacube, darkreference, Nsamples=40,
+def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
                                             thresh_xray_Nsigma=10
                                             binfactor = 1,
@@ -133,7 +133,7 @@ def calculate_thresholds(datacube, darkreference, Nsamples=20,
     Nsamples frames. The thresholds are set to
         thresh_u = mean(histogram)    + thresh_upper * std(histogram)
         thresh_l = mean(guassian fit) + thresh_lower * std(gaussian fit)
-    For more info, see the count_datacube docstring.
+    For more info, see the electron_count docstring.
 
     Accepts:
         datacube        a 4D numpy.memmap of the data
@@ -271,7 +271,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
 
 if __name__=="__main__":
 
-    dm4filenames = ['Capture25.dm4','Capture26.dm4','Capture27.dm4','Capture28.dm4']
+    dm4_filepath = 'Capture25.dm4'
     drwidth = 100  # TODO: change to talk to new dark reference functions
     Nsamples = 40
     thresh_bkgrnd_Nsigma = 4
@@ -280,25 +280,27 @@ if __name__=="__main__":
     subpixel = False
     output = 'pointlist'
 
-    for dm4filename in dm4filenames:
-        datacube = dm.dmReader(dm4filename,dSetNum=0,verbose=False)['data']  # Get np.memmap dc
-        datacube = np.moveaxis(datacube,(0,1),(2,3))
+    # Get memory mapped datacube from dm4 file
+    datacube = dm.dmReader(dm4_filepath,dSetNum=0,verbose=False)['data']
+    datacube = np.moveaxis(datacube,(0,1),(2,3))
 
-        darkreference = 1 # TODO: get dark reference
+    # TODO: Get dark reference
+    darkreference = 1
 
-        counted = count_datacube(datacube, darkreference, Nsamples=Nsamples,
+    # Perform electron counting
+    electron_counted_data = electron_count(datacube, darkreference, Nsamples=Nsamples,
                                            thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
                                            thresh_xray_Nsigma=thresh_xray_Nsigma,
                                            binfactor=binfactor,
                                            sub_pixel=True,
                                            output='pointlist'):
 
-        # For outputting datacubes, wrap counted into a py4DSTEM DataCube
-        if output=='datacube':
-            counted = DataCube(data=counted)
+    # For outputting datacubes, wrap output into a py4DSTEM DataCube
+    if output=='datacube':
+        electron_counted_data = DataCube(data=electron_counted_data)
 
-        output_path = dm4filename.replace('.dm4','.h5')
-        save(counted, output_path)
+    output_path = dm4filename.replace('.dm4','.h5')
+    save(electron_counted_data, output_path)
 
 
 
