@@ -21,16 +21,15 @@ def electron_count(datacube, darkreference, Nsamples=40,
     Performs electron counting.
 
     The algorithm is as follows:
-    From a random sampling of frames, calculate a dark reference image, and an x-ray and
-    baclground threshold value. In each frame, subtract the background, then apply the two
-    thresholds. Find the local maxima with respect to the nearest neighbor pixels. These
-    are considered electron strike events.
+    From a random sampling of frames, calculate an x-ray and background threshold value. In each
+    frame, subtract the dark reference, then apply the two thresholds. Find all local maxima with
+    respect to the nearest neighbor pixels. These are considered electron strike events.
 
     Thresholds are specified in units of standard deviations, either of a gaussian fit to the
     histogram background noise (for thresh_bkgrnd) or of the histogram itself (for thresh_xray).
     The background (lower) threshold is more important; we will always be missing some real
-    electron counts, and will always be incorrectly counting some noise as events, and this
-    threshold controls their relative balance. The x-ray threshold may be set fairly high.
+    electron counts and incorrectly counting some noise as electron strikes - this threshold
+    controls their relative balance. The x-ray threshold may be set fairly high.
 
     Accepts:
         datacube               a 4D numpy.memmap pointing to the datacube
@@ -114,6 +113,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
                                             device,factor=binfactor),0,1).flip(0).flip(1)
             else:
                 # I'm not sure I understand this - we're flipping coordinates to match what?
+                # TODO: check array flipping - may vary by camera
                 counted[:,:,Rx,Ry]=torch.transpose(events.type(torch_.cuda.ShortTensor),0,1).flip(0).flip(1)
 
     if output=='datacube':
@@ -146,7 +146,7 @@ def calculate_thresholds(datacube, darkreference,
                                     mean(guassian fit) + (this #)*std(gaussian fit)
                                where the gaussian fit is to the background noise.
         thresh_xray_Nsigma     the X-ray threshold is
-                                    mean(hist) +/- (this #)*std(hist)
+                                    mean(hist) + (this #)*std(hist)
                                where hist is the histogram of all pixel values in the
                                Nsamples random frames
 
