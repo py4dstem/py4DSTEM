@@ -12,8 +12,9 @@
 #   .dm4
 #
 # An aside: the authors gratefully thank the developers of hyperspy for all their efforts - their
-# work has been a shining beacon amidst the dark and antiscientific morass of closed and proprietary
-# formats that plague the world of electron scattering. Friends: a thousand times, thank you! <3, b
+# work has been a shining beacon of light amidst the dark and antiscientific morass of closed and
+# proprietary formats that plague the world of electron scattering. Friends: a thousand times,
+# thank you! <3, b
 
 import hyperspy.api as hs
 from .dm import dmReader
@@ -49,7 +50,7 @@ def read(filename, load=None):
         a FileBrowser instantiated from filename.
     """
     if not is_py4DSTEM_file(filename):
-        print("{} is not a py4DSTEM file.  Reading with hyperspy...".format(filename))
+        print("{} is not a py4DSTEM file.".format(filename))
         output = read_non_py4DSTEM_file(filename)
 
     else:
@@ -76,19 +77,22 @@ def read(filename, load=None):
 
 def read_non_py4DSTEM_file(filename):
     """
-    Read a non-py4DSTEM file using hyperspy or, for .dm3/.dm4 files, using dm.py.
-    Files read with dm.py are memory mapped, and the output DataCube.data4d is a np.memmap.
+    Read a non-py4DSTEM file.
+
+    For .dm3/.dm4 files, using dm.py to read data to a memory mapped np.memmap object, which
+    is stored in the outpute DataCube.data4D.
+    For other file formats, read the data using hypespy.
+    For all non-py4DSTEM formats, attempt to read the metadata with hyperspy.
     """
     # Load .dm3/.dm4 files with dm.py
     if filename.endswith('.dm3') or filename.endswith('.dm4'):
-        data = dmReader(filename,dSetNum=0,verbose=False)
-        # metadata = stuff - do this w/hyperspy
-        # hyperspy_file = hs.load(filename, lazy=True) # TODO: check behavior of lazy kw
-                                                       # what we want is to not load data at
-                                                       # all, just access to metadata
+        print("{} is a DM file. Reading with dm.py...".format(filename))
+        data = dmReader(filename,dSetNum=0,verbose=False)['data']
+        hyperspy_file = hs.load(filename, lazy=True)     # For loading metadata
     # Load with hyperspy
     else:
         try:
+            print("Reading with hyperspy...".format(filename))
             hyperspy_file = hs.load(filename)
             data = hyperspy_file.data
         except Exception as err:
@@ -102,7 +106,7 @@ def read_non_py4DSTEM_file(filename):
                         original_metadata_all = hyperspy_file.original_metadata)
 
     # Get datacube
-    datacube = DataCube(data = hyperspy_file.data)
+    datacube = DataCube(data = data)
 
     # Set scan shape, if in metadata
     try:
@@ -110,7 +114,7 @@ def read_non_py4DSTEM_file(filename):
         R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
         datacube.set_scan_shape(R_Nx, R_Ny)
     except ValueError:
-        print("Warning: scan shape not detected in metadata; please set manually.")
+        print("Warning: scan shape not detected in metadata; please check / set manually.")
 
     # Point to metadata from datacube
     datacube.metadata = metadata
