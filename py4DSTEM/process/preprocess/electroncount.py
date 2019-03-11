@@ -1,7 +1,8 @@
 # Electron counting
 #
-# Electron counting is performed on the GPU, using torch to interface between numpy and the GPU.
-# Expects the datacube in numpy.memmap (memory mapped) form.
+# Includes functions for electron counting on either the CPU (electron_count) or the GPU
+# (electron_count_GPU).  For GPU electron counting, pytorch is used to interface between numpy and
+# the GPU, and the datacube is expected in numpy.memmap (memory mapped) form.
 
 import numpy as np
 from scipy import optimize
@@ -32,7 +33,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
     controls their relative balance. The x-ray threshold may be set fairly high.
 
     Accepts:
-        datacube               a 4D numpy.memmap pointing to the datacube
+        datacube               a 4D numpy.ndarray pointing to the datacube
                                note: the R/Q axes are flipped with respect to py4DSTEM DataCubes
         darkreference          a 2D numpy.ndarray with the dark reference
         Nsamples               the number of frames to use in dark reference
@@ -54,6 +55,118 @@ def electron_count(datacube, darkreference, Nsamples=40,
            - OR -
         datacube        if output=='datacube', output a 4D array of bools, with True indicating
                         electron strikes
+    """
+    assert isinstance(output, str), "output must be a str"
+    assert output in ['pointlist', 'datacube'], "output must be 'pointlist' or 'datacube'"
+
+    # Get dimensions
+    Q_Nx,Q_Ny,R_Nx,R_Ny = np.shape(datacube)
+
+    # Get threshholds
+    print('Calculating threshholds')
+    sigma_bkgrnd, sigma_xray = calculate_thresholds(datacube,
+                                                    darkreference,
+                                                    Nsamples=Nsamples,
+                                                    thresh_bkgrd_Nsigma=thresh_bkgrnd_Nsigma,
+                                                    thresh_xray_Nsigma=thresh_xray_Nsigma)
+
+    # Save to a new datacube
+    if output=='datacube':
+        counted = np.ones(Q_Nx//binfactor,Q_Ny//binfactor,R_Nx,R_Ny)
+        # Loop through frames
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                printProgressBar(R_Nx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                                                                                 length = 50)
+                frame = datacube[:,:,Rx,Ry].astype(np.int16)    # Get frame from file
+                workingarray = frame-darkref                    # Subtract dark ref from frame
+                events = workingarray>thresh_bkgrnd             # Threshold electron events
+                events = thresh_xray>workingarray
+
+                ## Keep events which are greater than all NN pixels ##
+
+                #Check pixel is greater than all adjacent pixels
+                log = workingarray[1:-1,:]>workingarray[0:-2,:]
+                events[1:-1,:] = events[1:-1,:] & log
+                log = workingarray[0:-1,:]>workingarray[1:-1,:]
+                events[0:-2,:] = events[0:-2,:] & log
+                log = workingarray[:,1:-1]>workingarray[:,0:-2]
+                events[:,1:-1] = events[:,1:-1] & log
+                log = workingarray[:,0:-2]>workingarray[:,1:-1]
+                events[:,0:-2] = events[:,0:-2] & log
+                #Check pixel is greater than adjacent diagonal pixels
+                log = workingarray[1:-1,1:-1]>workingarray[0:-2,0:-2]
+                events[1:-1,1:-1] = events[1:-1,1:-1] & log
+                log = workingarray[0:-2,1:-1]>workingarray[1:-1,0:-2]
+                events[0:-2,1:-1] = events[0:-2,1:-1] & log
+                log = workingarray[1:-1,0:-2]>workingarray[0:-2,1:-1]
+                events[2:-1,0:-2] = events[1:-1,0:-2] & log
+                log = workingarray[0:-2,0:-2]>workingarray[1:-1,1:-1]
+                events[0:-2,0:-2] = events[0:-2,0:-2] & log
+
+                if(binfactor>1):
+                    # Perform binning
+                    counted[:,:,Rx,Ry]=bin_counts(events, factor=binfactor)
+        return counted
+
+    # Save to a PointListArray
+    else:
+        coordinates = [('qx',int),('qy',int)]
+        pointlistarray = PointListArray(coordinates=coordinates, shape=(R_Nx,R_Ny))
+        # Loop through frames
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                printProgressBar(R_Nx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                                                                                 length = 50)
+                frame = datacube[:,:,Rx,Ry].astype(np.int16)    # Get frame from file
+                workingarray = frame-darkref                    # Subtract dark ref from frame
+                events = workingarray>thresh_bkgrnd             # Threshold electron events
+                events = thresh_xray>workingarray
+
+                ## Keep events which are greater than all NN pixels ##
+
+                #Check pixel is greater than all adjacent pixels
+                log = workingarray[1:-1,:]>workingarray[0:-2,:]
+                events[1:-1,:] = events[1:-1,:] & log
+                log = workingarray[0:-1,:]>workingarray[1:-1,:]
+                events[0:-2,:] = events[0:-2,:] & log
+                log = workingarray[:,1:-1]>workingarray[:,0:-2]
+                events[:,1:-1] = events[:,1:-1] & log
+                log = workingarray[:,0:-2]>workingarray[:,1:-1]
+                events[:,0:-2] = events[:,0:-2] & log
+                #Check pixel is greater than adjacent diagonal pixels
+                log = workingarray[1:-1,1:-1]>workingarray[0:-2,0:-2]
+                events[1:-1,1:-1] = events[1:-1,1:-1] & log
+                log = workingarray[0:-2,1:-1]>workingarray[1:-1,0:-2]
+                events[0:-2,1:-1] = events[0:-2,1:-1] & log
+                log = workingarray[1:-1,0:-2]>workingarray[0:-2,1:-1]
+                events[2:-1,0:-2] = events[1:-1,0:-2] & log
+                log = workingarray[0:-2,0:-2]>workingarray[1:-1,1:-1]
+                events[0:-2,0:-2] = events[0:-2,0:-2] & log
+
+                # Perform binning
+                if(binfactor>1):
+                    events=bin_counts(events, factor=binfactor)
+
+                # Save to PointListArray
+                x,y = np.nonzero(events)
+                pointlist = pointlistarray.get_pointlist(Rx,Ry)
+                pointlist.add_tuple_of_nparrays((x,y))
+
+    return pointlistarray
+
+def electron_count_GPU(datacube, darkreference, Nsamples=40,
+                                            thresh_bkgrnd_Nsigma=4,
+                                            thresh_xray_Nsigma=10,
+                                            binfactor = 1,
+                                            sub_pixel=True,
+                                            output='pointlist'):
+    """
+    Performs electron counting on the GPU.
+
+    Uses pytorch to interface between numpy and cuda.  Requires cuda and pytorch.
+    This function expects datacube to be a np.memmap object.
+    See electron_count() for additional documentation.
     """
     assert isinstance(output, str), "output must be a str"
     assert output in ['pointlist', 'datacube'], "output must be 'pointlist' or 'datacube'"
@@ -138,7 +251,7 @@ def calculate_thresholds(datacube, darkreference,
     For more info, see the electron_count docstring.
 
     Accepts:
-        datacube               a 4D numpy.memmap pointing to the datacube
+        datacube               a 4D numpy.ndarrau pointing to the datacube
         darkreference          a 2D numpy.ndarray with the dark reference
         Nsamples               the number of frames to use in dark reference
                                and threshold calculation.
@@ -197,6 +310,31 @@ def calculate_thresholds(datacube, darkreference,
     thresh_bkgrnd = p1[1]+p1[2]*thresh_bkgrnd_Nsigma
 
     return thresh_bkgrnd, thresh_xray
+
+def bin_counted(array,factor=2):
+    """
+    Bin data from a single frame using the CPU.
+
+    Accepts:
+        array       a 2D numpy array
+        factor      (int) the binning factor
+
+    Returns:
+        binned_ar   the binned array
+    """
+    x,y =  array.shape
+    binx,biny = x//factor,y//factor
+    xx,yy = binx*factor,biny*factor
+
+    # Make a binned array on the device
+    binned_ar = np.zeros((binx,biny))
+
+    # Collect pixel sums into new bins
+    for ix in range(factor):
+        for iy in range(factor):
+            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
+    return binned_ar
+
 
 def torch_bin(array,device,factor=2):
     """
