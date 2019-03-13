@@ -442,7 +442,7 @@ def find_metadata(dataobject_list, save_metadata, h5file):
             return metadata_object_list[0]
         elif len(metadata_object_list)==0:
             h5file.close()
-            raise Exception("No metadata found. To overide and save with no metadata (not recommended), use the metadata=False flag.")
+            raise Exception("No metadata found. To overide and save with no metadata (not recommended), use the save_metadata=False flag.")
         else:
             if save_metadata is True:
                 print("Several metadata objects found.")

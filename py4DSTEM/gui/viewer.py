@@ -69,7 +69,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.main_window = self.setup_main_window()
 
         # Set up temporary datacube
-        self.datacube = read("sample_data.dm3")
+        self.datacube = DataCube(data=np.zeros((10,10,10,10)))
 
         # Set up initial views in real and diffraction space
         self.update_diffraction_space_view()
