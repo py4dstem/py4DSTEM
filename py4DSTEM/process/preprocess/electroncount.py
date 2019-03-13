@@ -6,7 +6,6 @@
 
 import numpy as np
 from scipy import optimize
-import h5py
 
 from ..utils import get_maximal_points
 from ...file.datastructure import PointListArray
@@ -75,7 +74,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                printProgressBar(Rx*Ry+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                                  length = 50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference              # Subtract dark ref from frame
@@ -84,25 +83,6 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
                 ## Keep events which are greater than all NN pixels ##
                 events = get_maximal_points(workingarray*events)
-
-                #Check pixel is greater than all adjacent pixels
-                # log = workingarray[1:-1,:]>workingarray[0:-2,:]
-                # events[1:-1,:] = events[1:-1,:] & log
-                # log = workingarray[0:-1,:]>workingarray[1:-1,:]
-                # events[0:-2,:] = events[0:-2,:] & log
-                # log = workingarray[:,1:-1]>workingarray[:,0:-2]
-                # events[:,1:-1] = events[:,1:-1] & log
-                # log = workingarray[:,0:-2]>workingarray[:,1:-1]
-                # events[:,0:-2] = events[:,0:-2] & log
-                # #Check pixel is greater than adjacent diagonal pixels
-                # log = workingarray[1:-1,1:-1]>workingarray[0:-2,0:-2]
-                # events[1:-1,1:-1] = events[1:-1,1:-1] & log
-                # log = workingarray[0:-2,1:-1]>workingarray[1:-1,0:-2]
-                # events[0:-2,1:-1] = events[0:-2,1:-1] & log
-                # log = workingarray[1:-1,0:-2]>workingarray[0:-2,1:-1]
-                # events[2:-1,0:-2] = events[1:-1,0:-2] & log
-                # log = workingarray[0:-2,0:-2]>workingarray[1:-1,1:-1]
-                # events[0:-2,0:-2] = events[0:-2,0:-2] & log
 
                 if(binfactor>1):
                     # Perform binning
@@ -118,34 +98,15 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                printProgressBar(Rx*Ry+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                                  length = 50)
-                frame = datacube[:,:,Rx,Ry].astype(np.int16)    # Get frame from file
+                frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference              # Subtract dark ref from frame
                 events = workingarray>thresh_bkgrnd             # Threshold electron events
                 events *= thresh_xray>workingarray
 
                 ## Keep events which are greater than all NN pixels ##
                 events = get_maximal_points(workingarray*events)
-
-                #Check pixel is greater than all adjacent pixels
-                # log = workingarray[1:-1,:]>workingarray[0:-2,:]
-                # events[1:-1,:] = events[1:-1,:] & log
-                # log = workingarray[0:-1,:]>workingarray[1:-1,:]
-                # events[0:-2,:] = events[0:-2,:] & log
-                # log = workingarray[:,1:-1]>workingarray[:,0:-2]
-                # events[:,1:-1] = events[:,1:-1] & log
-                # log = workingarray[:,0:-2]>workingarray[:,1:-1]
-                # events[:,0:-2] = events[:,0:-2] & log
-                # #Check pixel is greater than adjacent diagonal pixels
-                # log = workingarray[1:-1,1:-1]>workingarray[0:-2,0:-2]
-                # events[1:-1,1:-1] = events[1:-1,1:-1] & log
-                # log = workingarray[0:-2,1:-1]>workingarray[1:-1,0:-2]
-                # events[0:-2,1:-1] = events[0:-2,1:-1] & log
-                # log = workingarray[1:-1,0:-2]>workingarray[0:-2,1:-1]
-                # events[2:-1,0:-2] = events[1:-1,0:-2] & log
-                # log = workingarray[0:-2,0:-2]>workingarray[1:-1,1:-1]
-                # events[0:-2,0:-2] = events[0:-2,0:-2] & log
 
                 # Perform binning
                 if(binfactor>1):
@@ -196,7 +157,7 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
     # Loop through frames
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            printProgressBar(R_Nx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+            printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                              length = 50)
             frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
             gframe = torch.from_numpy(frame).to(device)     # Move frame to GPU
@@ -372,8 +333,6 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
 
     Accepts:
         counted_datacube    a 4D array of bools, with true indicating an electron strike.
-                            should work with array in a torch GPU device, or as a standard
-                            numpy array
         subpixel            (bool) controls if subpixel electron strike positions are expected
 
     Returns:
@@ -396,6 +355,31 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
             pointlist.add_tuple_of_nparrays((x,y))
 
     return pointlistarray
+
+def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=False):
+    """
+    Converts an electron counted PointListArray to a datacube.
+
+    Accepts:
+        counted_pointlistarray      a PointListArray of electron strike events
+        shape                       a length 4 tuple of ints containing (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        subpixel            (bool) controls if subpixel electron strike positions are expected
+
+    Returns:
+        counted_datacube    a 4D array of bools, with true indicating an electron strike.
+    """
+    assert len(shape)==4
+    assert subpixel==False, "subpixel mode not presently supported."
+    R_Nx,R_Ny,Q_Nx,Q_Ny = shape
+    counted_datacube = np.zeros((R_Nx,R_Nx,Q_Nx,Q_Ny),dtype=bool)
+
+    # Loop through frames, adding electron counts to the datacube for each.
+    for Rx in range(R_Nx):
+        for Ry in range(R_Ny):
+            pointlist = counted_pointlistarray.get_pointlist(Rx,Ry)
+            counted_datacube[Rx,Ry,pointlist.data['qx'],pointlist.data['qy']] = True
+
+    return counted_datacube
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
                                                      length = 100, fill = '*'):
@@ -444,9 +428,6 @@ if __name__=="__main__":
 
     # Get dark reference
     darkreference = 1 # TODO: get_darkreference(datacube = ...!
-                      # What we really need now is to tie the memory mapping in seamlessly with
-                      # DataCube.data4D, so that whether or not our data is memory mapped, we just
-                      # reference this as a numpy array.
 
     electron_counted_data = electron_count(datacube, darkreference, Nsamples=Nsamples,
                                            thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
