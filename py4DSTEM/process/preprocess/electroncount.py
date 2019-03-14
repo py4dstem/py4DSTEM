@@ -86,7 +86,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
                 if(binfactor>1):
                     # Perform binning
-                    counted[Rx,Ry,:,:]=bin_counts(events, factor=binfactor)
+                    counted[Rx,Ry,:,:]=bin_counted(events, factor=binfactor)
                 else:
                     counted[Rx,Ry,:,:]=events
         return counted
@@ -110,7 +110,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
                 # Perform binning
                 if(binfactor>1):
-                    events=bin_counts(events, factor=binfactor)
+                    events=bin_counted(events, factor=binfactor)
 
                 # Save to PointListArray
                 x,y = np.nonzero(events)
