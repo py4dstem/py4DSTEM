@@ -20,6 +20,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   minRelativeIntensity = 0.005,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
+                                  return_cc = False,
                                   peaks = None):
     """
     Finds the Bragg disks in DP by cross, hybrid, or phase correlation with probe_kernel_FT.
@@ -57,6 +58,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
                              If peaks is not None, it is the PointList that detected peaks are added
@@ -116,7 +118,10 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         deletemask[maxNumPeaks:] = True
         peaks.remove_points(deletemask)
 
-    return peaks
+    if return_cc:
+        return peaks, cc
+    else:
+        return peaks
 
 
 def find_Bragg_disks_single_DP(DP, probe_kernel,
@@ -125,7 +130,8 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                edgeBoundary = 20,
                                minRelativeIntensity = 0.005,
                                minPeakSpacing = 60,
-                               maxNumPeaks = 70):
+                               maxNumPeaks = 70,
+                               return_cc = False):
     """
     Identical to find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
     real space, rather than Fourier space. For more info, see the find_Bragg_disks_single_DP_FK
@@ -144,6 +150,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        return_cc            (bool) if True, return the cross correlation
 
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
@@ -156,7 +163,8 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          edgeBoundary = edgeBoundary,
                                          minRelativeIntensity = minRelativeIntensity,
                                          minPeakSpacing = minPeakSpacing,
-                                         maxNumPeaks = maxNumPeaks)
+                                         maxNumPeaks = maxNumPeaks,
+                                         return_cc = return_cc)
 
 
 def find_Bragg_disks_selected(datacube, probe, Rx, Ry,

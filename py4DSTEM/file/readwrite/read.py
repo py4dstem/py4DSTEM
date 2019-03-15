@@ -85,10 +85,12 @@ def read_non_py4DSTEM_file(filename):
     For all non-py4DSTEM formats, attempt to read the metadata with hyperspy.
     """
     # Load .dm3/.dm4 files with dm.py
-    if filename.endswith('.dm3') or filename.endswith('.dm4'):
-        print("{} is a DM file. Reading with dm.py...".format(filename))
-        data = dmReader(filename,dSetNum=0,verbose=False)['data']
-        hyperspy_file = hs.load(filename, lazy=True)     # For loading metadata
+    if False:
+        pass
+    #if filename.endswith('.dm3') or filename.endswith('.dm4'):
+    #    print("{} is a DM file. Reading with dm.py...".format(filename))
+    #    data = dmReader(filename,dSetNum=0,verbose=False)['data']
+    #    hyperspy_file = hs.load(filename, lazy=True)     # For loading metadata
     # Load with hyperspy
     else:
         try:
