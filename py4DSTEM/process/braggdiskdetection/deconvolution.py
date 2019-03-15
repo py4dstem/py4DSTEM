@@ -13,9 +13,9 @@ def get_deconvolution(pointlistarray, Q_Nx, Q_Ny):
     Returns:
         deconvolution       (2D ndarray, shape (Q_Nx,Q_Ny))
     """
-    assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
+    #assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    #assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    #assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
     deconvolution = np.zeros((Q_Nx,Q_Ny))
     for Rx in range(pointlistarray.shape[0]):
         for Ry in range(pointlistarray.shape[1]):
