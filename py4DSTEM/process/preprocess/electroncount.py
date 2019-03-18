@@ -7,7 +7,7 @@
 import numpy as np
 from scipy import optimize
 
-from ..utils import get_maximal_points
+from ..utils import get_maximal_points, printProgressBar, printProgressBar, bin2D
 from ...file.datastructure import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
@@ -86,7 +86,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
                 if(binfactor>1):
                     # Perform binning
-                    counted[Rx,Ry,:,:]=bin_counted(events, factor=binfactor)
+                    counted[Rx,Ry,:,:]=bin2D(events, factor=binfactor)
                 else:
                     counted[Rx,Ry,:,:]=events
         return counted
@@ -110,7 +110,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
                 # Perform binning
                 if(binfactor>1):
-                    events=bin_counted(events, factor=binfactor)
+                    events=bin2D(events, factor=binfactor)
 
                 # Save to PointListArray
                 x,y = np.nonzero(events)
@@ -277,30 +277,6 @@ def calculate_thresholds(datacube, darkreference,
 
     return thresh_bkgrnd, thresh_xray
 
-def bin_counted(array,factor=2):
-    """
-    Bin data from a single frame using the CPU.
-
-    Accepts:
-        array       a 2D numpy array
-        factor      (int) the binning factor
-
-    Returns:
-        binned_ar   the binned array
-    """
-    x,y =  array.shape
-    binx,biny = x//factor,y//factor
-    xx,yy = binx*factor,biny*factor
-
-    # Make a binned array on the device
-    binned_ar = np.zeros((binx,biny))
-
-    # Collect pixel sums into new bins
-    for ix in range(factor):
-        for iy in range(factor):
-            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
-    return binned_ar
-
 
 def torch_bin(array,device,factor=2):
     """
@@ -380,27 +356,6 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
             counted_datacube[Rx,Ry,pointlist.data['qx'],pointlist.data['qy']] = True
 
     return counted_datacube
-
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
-                                                     length = 100, fill = '*'):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
-    # Print New Line on Complete
-    if iteration == total:
-        print()
 
 
 

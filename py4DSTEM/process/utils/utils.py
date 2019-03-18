@@ -132,6 +132,51 @@ def radial_integral(ar, x0, y0):
 
     return bin_sum / nr, bin_sum, nr, rind
 
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
+                                                     length = 100, fill = '*'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
+def bin2D(array, factor):
+    """
+    Bin a 2D ndarray by binfactor.
+
+    Accepts:
+        array       a 2D numpy array
+        factor      (int) the binning factor
+
+    Returns:
+        binned_ar   the binned array
+    """
+    x,y =  array.shape
+    binx,biny = x//factor,y//factor
+    xx,yy = binx*factor,biny*factor
+
+    # Make a binned array on the device
+    binned_ar = np.zeros((binx,biny))
+
+    # Collect pixel sums into new bins
+    for ix in range(factor):
+        for iy in range(factor):
+            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
+    return binned_ar
+
 
 
 
