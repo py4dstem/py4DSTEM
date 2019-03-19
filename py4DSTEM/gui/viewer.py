@@ -573,7 +573,7 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi_inner.sigRegionChangeFinished.connect(self.update_real_space_view)
 
         else:
-            raise ValueError("Unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+            raise ValueError("Unknown detector shape value {}.  Must be 0, 1, or 2.".format(detector_shape))
 
         self.update_virtual_detector_mode()
         self.update_real_space_view()
@@ -732,7 +732,7 @@ class DataViewer(QtWidgets.QMainWindow):
                 pass
 
         else:
-            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(dector_shape))
+            print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(detector_shape))
 
         return
 
