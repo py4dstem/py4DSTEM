@@ -94,13 +94,6 @@ def get_maximal_points(ar):
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
 
-def get_maximal_points_1D(ar):
-    """
-    For 1D array ar, returns an array of bools of the same shape which is True for all entries with
-    values larger than the 2 nearest neighbors.
-    """
-    return (ar>np.roll(ar,-1)) & (ar>np.roll(ar,+1))
-
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """
     Finds the indices where 1D array ar is a local maximum.
@@ -124,7 +117,7 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
         ar = gaussian_filter(ar,sigma)
 
     # Get maxima and intensity arrays
-    maxima_bool = get_maximal_points_1D(ar)
+    maxima_bool = (ar>np.roll(ar,-1)) & (ar>np.roll(ar,+1))
     x = np.arange(len(ar))[maxima_bool]
     intensity = ar[maxima_bool]
 
