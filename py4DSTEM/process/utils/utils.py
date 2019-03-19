@@ -1,6 +1,7 @@
 # Defines utility functions used by other functions in the /process/ directory.
 
 import numpy as np
+from scipy.ndimage.filters import gaussian_filter
 
 def make_Fourier_coords1D(N, pixelSize=1):
     """
@@ -85,12 +86,70 @@ def get_CoM(ar):
 
 def get_maximal_points(ar):
     """
-    Returns the points in an array with values larger than all 8 of their nearest neighbors.
+    For 2D array ar, returns an array of bools of the same shape which is True for all entries with
+    values larger than all 8 of their nearest neighbors.
     """
     return (ar>np.roll(ar,(-1,0),axis=(0,1))) & (ar>np.roll(ar,(1,0),axis=(0,1))) & \
            (ar>np.roll(ar,(0,-1),axis=(0,1))) & (ar>np.roll(ar,(0,1),axis=(0,1))) & \
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
+
+def get_maximal_points_1D(ar):
+    """
+    For 1D array ar, returns an array of bools of the same shape which is True for all entries with
+    values larger than the 2 nearest neighbors.
+    """
+    return (ar>np.roll(ar,-1)) & (ar>np.roll(ar,+1))
+
+def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
+    """
+    Finds the indices where 1D array ar is a local maximum.
+    Optional parameters allow blurring the array and filtering the output;
+    setting each to 0 turns (default) off these functions.
+
+    Accepts:
+        ar                    a 1D array
+        sigma                 gaussian blur std to apply to ar before finding maxima
+        minSpacing            if two maxima are found within minSpacing, the dimmer one is removed
+        minRelativeIntensity  maxima dimmer than minRelativeIntensity compared to the
+                              relativeToPeak'th brightest maximum are removed
+        relativeToPeak        0=brightest maximum. 1=next brightest, etc.
+
+    Returns:
+        An array of indices where ar is a local maximum, sorted by intensity.
+    """
+    assert len(ar.shape)==1, "ar must be 1D"
+    assert isinstance(relativeToPeak, (int,np.integer)), "relativeToPeak must be an int"
+    if sigma>0:
+        ar = gaussian_filter(ar,sigma)
+
+    # Get maxima and intensity arrays
+    maxima_bool = get_maximal_points_1D(ar)
+    x = np.arange(len(ar))[maxima_bool]
+    intensity = ar[maxima_bool]
+
+    # Sort by intensity
+    temp_ar = np.array([(x,inten) for inten,x in sorted(zip(intensity,x),reverse=True)])
+    x, intensity = temp_ar[:,0], temp_ar[:,1]
+
+    # Remove points which are too close
+    if minSpacing>0:
+        deletemask = np.zeros(len(x),dtype=bool)
+        for i in range(len(x)):
+            if not deletemask[i]:
+                delete = np.abs(x[i]-x) < minSpacing
+                delete[:i+1]=False
+                deletemask = deletemask | delete
+        x = np.delete(x, deletemask.nonzero()[0])
+        intensity = np.delete(intensity, deletemask.nonzero()[0])
+
+    # Remove points which are too dim
+    if minRelativeIntensity > 0:
+        deletemask = intensity/intensity[relativeToPeak] < minRelativeIntensity
+        x = np.delete(x, deletemask.nonzero()[0])
+        intensity = np.delete(intensity, deletemask.nonzero()[0])
+
+    return x.astype(int)
 
 def linear_interpolation_1D(ar,x):
     """
@@ -132,7 +191,7 @@ def radial_integral(ar, x0, y0):
 
     return bin_sum / nr, bin_sum, nr, rind
 
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
+def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1,
                                                      length = 100, fill = '*'):
     """
     Call in a loop to create terminal progress bar

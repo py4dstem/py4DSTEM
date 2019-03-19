@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 
 from ...file.datastructure import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maximal_points
+from ..utils import get_cross_correlation_fk, get_maximal_points, print_progress_bar
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -264,7 +264,8 @@ def find_Bragg_disks(datacube, probe,
     for Rx in range(datacube.R_Nx):
         for Ry in range(datacube.R_Ny):
             if verbose:
-                print("Analyzing scan position {}, {}...".format(Rx,Ry))
+                print_progress_bar(Rx*datacube.R_Ny+Ry+1, datacube.R_Nx*datacube.R_Ny,
+                                   prefix='Analyzing:', suffix='Complete', length=50)
             DP = datacube.data4D[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                           corrPower = corrPower,

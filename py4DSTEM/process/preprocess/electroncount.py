@@ -7,7 +7,7 @@
 import numpy as np
 from scipy import optimize
 
-from ..utils import get_maximal_points, printProgressBar, printProgressBar, bin2D
+from ..utils import get_maximal_points, print_progress_bar, bin2D
 from ...file.datastructure import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
@@ -74,7 +74,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                                  length = 50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference              # Subtract dark ref from frame
@@ -98,7 +98,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                                  length = 50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference              # Subtract dark ref from frame
@@ -157,7 +157,7 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
     # Loop through frames
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            printProgressBar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+            print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                              length = 50)
             frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
             gframe = torch.from_numpy(frame).to(device)     # Move frame to GPU
