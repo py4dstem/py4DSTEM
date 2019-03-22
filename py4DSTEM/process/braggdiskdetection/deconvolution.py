@@ -22,6 +22,9 @@ def get_deconvolution(pointlistarray, Q_Nx, Q_Ny):
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
             qx = np.round(pointlist.data['qx']).astype(int)
             qy = np.round(pointlist.data['qy']).astype(int)
+            mask = (qx>=0) * (qx<Q_Nx) * (qy>=0) * (qy<Q_Ny)
+            qx = qx[mask]
+            qy = qy[mask]
             deconvolution[qx,qy] += pointlist.data['intensity']
     return deconvolution
 
