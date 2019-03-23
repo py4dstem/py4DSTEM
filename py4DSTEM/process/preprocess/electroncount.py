@@ -1,14 +1,13 @@
 # Electron counting
 #
-# Electron counting is performed on the GPU, using torch to interface between numpy and the GPU.
-# Expects the datacube in numpy.memmap (memory mapped) form.
+# Includes functions for electron counting on either the CPU (electron_count) or the GPU
+# (electron_count_GPU).  For GPU electron counting, pytorch is used to interface between numpy and
+# the GPU, and the datacube is expected in numpy.memmap (memory mapped) form.
 
 import numpy as np
 from scipy import optimize
-import h5py
-import torch
-import dm
 
+from ..utils import get_maximal_points, print_progress_bar, bin2D
 from ...file.datastructure import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
@@ -21,19 +20,18 @@ def electron_count(datacube, darkreference, Nsamples=40,
     Performs electron counting.
 
     The algorithm is as follows:
-    From a random sampling of frames, calculate a dark reference image, and an x-ray and
-    baclground threshold value. In each frame, subtract the background, then apply the two
-    thresholds. Find the local maxima with respect to the nearest neighbor pixels. These
-    are considered electron strike events.
+    From a random sampling of frames, calculate an x-ray and background threshold value. In each
+    frame, subtract the dark reference, then apply the two thresholds. Find all local maxima with
+    respect to the nearest neighbor pixels. These are considered electron strike events.
 
     Thresholds are specified in units of standard deviations, either of a gaussian fit to the
     histogram background noise (for thresh_bkgrnd) or of the histogram itself (for thresh_xray).
     The background (lower) threshold is more important; we will always be missing some real
-    electron counts, and will always be incorrectly counting some noise as events, and this
-    threshold controls their relative balance. The x-ray threshold may be set fairly high.
+    electron counts and incorrectly counting some noise as electron strikes - this threshold
+    controls their relative balance. The x-ray threshold may be set fairly high.
 
     Accepts:
-        datacube               a 4D numpy.memmap pointing to the datacube
+        datacube               a 4D numpy.ndarray pointing to the datacube
                                note: the R/Q axes are flipped with respect to py4DSTEM DataCubes
         darkreference          a 2D numpy.ndarray with the dark reference
         Nsamples               the number of frames to use in dark reference
@@ -60,28 +58,108 @@ def electron_count(datacube, darkreference, Nsamples=40,
     assert output in ['pointlist', 'datacube'], "output must be 'pointlist' or 'datacube'"
 
     # Get dimensions
-    Q_Nx,Q_Ny,R_Nx,R_Ny = np.shape(datacube)
+    R_Nx,R_Ny,Q_Nx,Q_Ny = np.shape(datacube)
 
     # Get threshholds
     print('Calculating threshholds')
-    sigma_bkgrnd, sigma_xray = calculate_thresholds(datacube,
-                                                    darkreference,
-                                                    Nsamples=Nsamples,
-                                                    thresh_bkgrd_Nsigma=thresh_bkgrnd_Nsigma,
-                                                    thresh_xray_Nsigma=thresh_xray_Nsigma)
+    thresh_bkgrnd, thresh_xray = calculate_thresholds(datacube,
+                                                      darkreference,
+                                                      Nsamples=Nsamples,
+                                                      thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
+                                                      thresh_xray_Nsigma=thresh_xray_Nsigma)
+
+    # Save to a new datacube
+    if output=='datacube':
+        counted = np.ones((R_Nx,R_Ny,Q_Nx//binfactor,Q_Ny//binfactor))
+        # Loop through frames
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                                                                                 length = 50)
+                frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
+                workingarray = frame-darkreference              # Subtract dark ref from frame
+                events = workingarray>thresh_bkgrnd             # Threshold electron events
+                events *= thresh_xray>workingarray
+
+                ## Keep events which are greater than all NN pixels ##
+                events = get_maximal_points(workingarray*events)
+
+                if(binfactor>1):
+                    # Perform binning
+                    counted[Rx,Ry,:,:]=bin2D(events, factor=binfactor)
+                else:
+                    counted[Rx,Ry,:,:]=events
+        return counted
+
+    # Save to a PointListArray
+    else:
+        coordinates = [('qx',int),('qy',int)]
+        pointlistarray = PointListArray(coordinates=coordinates, shape=(R_Nx,R_Ny))
+        # Loop through frames
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+                                                                                 length = 50)
+                frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
+                workingarray = frame-darkreference              # Subtract dark ref from frame
+                events = workingarray>thresh_bkgrnd             # Threshold electron events
+                events *= thresh_xray>workingarray
+
+                ## Keep events which are greater than all NN pixels ##
+                events = get_maximal_points(workingarray*events)
+
+                # Perform binning
+                if(binfactor>1):
+                    events=bin2D(events, factor=binfactor)
+
+                # Save to PointListArray
+                x,y = np.nonzero(events)
+                pointlist = pointlistarray.get_pointlist(Rx,Ry)
+                pointlist.add_tuple_of_nparrays((x,y))
+
+    return pointlistarray
+
+def electron_count_GPU(datacube, darkreference, Nsamples=40,
+                                            thresh_bkgrnd_Nsigma=4,
+                                            thresh_xray_Nsigma=10,
+                                            binfactor = 1,
+                                            sub_pixel=True,
+                                            output='pointlist'):
+    """
+    Performs electron counting on the GPU.
+
+    Uses pytorch to interface between numpy and cuda.  Requires cuda and pytorch.
+    This function expects datacube to be a np.memmap object.
+    See electron_count() for additional documentation.
+    """
+    import torch
+    import dm
+    assert isinstance(output, str), "output must be a str"
+    assert output in ['pointlist', 'datacube'], "output must be 'pointlist' or 'datacube'"
+
+    # Get dimensions
+    R_Nx,R_Ny,Q_Nx,Q_Ny = np.shape(datacube)
+
+    # Get threshholds
+    print('Calculating threshholds')
+    thresh_bkgrnd, thresh_xray = calculate_thresholds(datacube,
+                                                      darkreference,
+                                                      Nsamples=Nsamples,
+                                                      thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
+                                                      thresh_xray_Nsigma=thresh_xray_Nsigma)
 
     # Make a torch device object, to interface numpy with the GPU
     # Put a few arrays on it - dark reference, counted image
     device = torch.device('cuda')
     darkref = torch.from_numpy(darkreference.astype(np.int16)).to(device)
-    counted = torch.ones(Q_Nx//binfactor,Q_Ny//binfactor,R_Nx,R_Ny,dtype=torch.short).to(device)
+    counted = torch.ones(R_Nx,R_Ny,Q_Nx//binfactor,Q_Ny//binfactor,dtype=torch.short).to(device)
 
     # Loop through frames
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            printProgressBar(R_Nx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
+            print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
                                                                              length = 50)
-            frame = datacube[:,:,Rx,Ry].astype(np.int16)    # Get frame from file
+            frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
             gframe = torch.from_numpy(frame).to(device)     # Move frame to GPU
             workingarray = gframe-darkref                   # Subtract dark ref from frame
             events = workingarray>thresh_bkgrnd             # Threshold electron events
@@ -92,7 +170,7 @@ def electron_count(datacube, darkreference, Nsamples=40,
             #Check pixel is greater than all adjacent pixels
             log = workingarray[1:-1,:]>workingarray[0:-2,:]
             events[1:-1,:] = events[1:-1,:] & log
-            log = workingarray[0:-1,:]>workingarray[1:-1,:]
+            log = workingarray[0:-2,:]>workingarray[1:-1,:]
             events[0:-2,:] = events[0:-2,:] & log
             log = workingarray[:,1:-1]>workingarray[:,0:-2]
             events[:,1:-1] = events[:,1:-1] & log
@@ -110,11 +188,12 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
             if(binfactor>1):
                 # Perform binning on GPU in torch_bin function
-                counted[:,:,Rx,Ry]=torch.transpose(torch_bin(events.type(torch.cuda.ShortTensor),
+                counted[Rx,Ry,:,:]=torch.transpose(torch_bin(events.type(torch.cuda.ShortTensor),
                                             device,factor=binfactor),0,1).flip(0).flip(1)
             else:
                 # I'm not sure I understand this - we're flipping coordinates to match what?
-                counted[:,:,Rx,Ry]=torch.transpose(events.type(torch_.cuda.ShortTensor),0,1).flip(0).flip(1)
+                # TODO: check array flipping - may vary by camera
+                counted[Rx,Ry,:,:]=torch.transpose(events.type(torch_.cuda.ShortTensor),0,1).flip(0).flip(1)
 
     if output=='datacube':
         return counted.cpu().numpy()
@@ -138,7 +217,7 @@ def calculate_thresholds(datacube, darkreference,
     For more info, see the electron_count docstring.
 
     Accepts:
-        datacube               a 4D numpy.memmap pointing to the datacube
+        datacube               a 4D numpy.ndarrau pointing to the datacube
         darkreference          a 2D numpy.ndarray with the dark reference
         Nsamples               the number of frames to use in dark reference
                                and threshold calculation.
@@ -146,7 +225,7 @@ def calculate_thresholds(datacube, darkreference,
                                     mean(guassian fit) + (this #)*std(gaussian fit)
                                where the gaussian fit is to the background noise.
         thresh_xray_Nsigma     the X-ray threshold is
-                                    mean(hist) +/- (this #)*std(hist)
+                                    mean(hist) + (this #)*std(hist)
                                where hist is the histogram of all pixel values in the
                                Nsamples random frames
 
@@ -154,7 +233,7 @@ def calculate_thresholds(datacube, darkreference,
         thresh_bkgrnd          the background threshold
         thresh_xray            the X-ray threshold
     """
-    Q_Nx,Q_Ny,R_Nx,R_Ny = datacube.shape
+    R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.shape
 
     # Select random set of frames
     nframes = R_Nx*R_Ny
@@ -165,7 +244,7 @@ def calculate_thresholds(datacube, darkreference,
     # Get frames and subtract dark references
     sample = np.zeros((Q_Nx,Q_Ny,Nsamples),dtype=np.int16)
     for i in range(Nsamples):
-        sample[:,:,i] = datacube[:,:,samples[i]//R_Nx,samples[i]%R_Ny]
+        sample[:,:,i] = datacube[samples[i]//R_Nx,samples[i]%R_Ny,:,:]
         sample[:,:,i] -= darkreference
     sample = np.ravel(sample)  # Flatten array
 
@@ -175,8 +254,8 @@ def calculate_thresholds(datacube, darkreference,
     thresh_xray = mean+thresh_xray_Nsigma*stddev
 
     # Make a histogram
-    binmax = min(int(np.ceil(np.amax(sample))),int(mean+sigmathresh*stddev))
-    binmin = max(int(np.ceil(np.amin(sample))),int(mean-sigmathresh*stddev))
+    binmax = min(int(np.ceil(np.amax(sample))),int(mean+thresh_xray*stddev))
+    binmin = max(int(np.ceil(np.amin(sample))),int(mean-thresh_xray*stddev))
     step = max(1,(binmax-binmin)//1000)
     bins = np.arange(binmin,binmax,step=step,dtype=np.int)
     n, bins = np.histogram(sample,bins=bins)
@@ -197,6 +276,7 @@ def calculate_thresholds(datacube, darkreference,
     thresh_bkgrnd = p1[1]+p1[2]*thresh_bkgrnd_Nsigma
 
     return thresh_bkgrnd, thresh_xray
+
 
 def torch_bin(array,device,factor=2):
     """
@@ -229,15 +309,13 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
 
     Accepts:
         counted_datacube    a 4D array of bools, with true indicating an electron strike.
-                            should work with array in a torch GPU device, or as a standard
-                            numpy array
         subpixel            (bool) controls if subpixel electron strike positions are expected
 
     Returns:
         pointlistarray      a PointListArray of electron strike events
     """
     # Get shape, initialize PointListArray
-    Q_Nx,Q_Ny,R_Nx,R_Ny = counted_datacube.shape
+    R_Nx,R_Ny,Q_Nx,Q_Ny = counted_datacube.shape
     if subpixel:
         coordinates = [('qx',float),('qy',float)]
     else:
@@ -247,33 +325,37 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
     # Loop through frames, adding electron counts to the PointListArray for each.
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            frame = counted_datacube[:,:,Rx,Ry]
+            frame = counted_datacube[Rx,Ry,:,:]
             x,y = np.nonzero(frame)
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
             pointlist.add_tuple_of_nparrays((x,y))
 
     return pointlistarray
 
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1,
-                                                     length = 100, fill = '*'):
+def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=False):
     """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
+    Converts an electron counted PointListArray to a datacube.
+
+    Accepts:
+        counted_pointlistarray      a PointListArray of electron strike events
+        shape                       a length 4 tuple of ints containing (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        subpixel            (bool) controls if subpixel electron strike positions are expected
+
+    Returns:
+        counted_datacube    a 4D array of bools, with true indicating an electron strike.
     """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
-    # Print New Line on Complete
-    if iteration == total:
-        print()
+    assert len(shape)==4
+    assert subpixel==False, "subpixel mode not presently supported."
+    R_Nx,R_Ny,Q_Nx,Q_Ny = shape
+    counted_datacube = np.zeros((R_Nx,R_Nx,Q_Nx,Q_Ny),dtype=bool)
+
+    # Loop through frames, adding electron counts to the datacube for each.
+    for Rx in range(R_Nx):
+        for Ry in range(R_Ny):
+            pointlist = counted_pointlistarray.get_pointlist(Rx,Ry)
+            counted_datacube[Rx,Ry,pointlist.data['qx'],pointlist.data['qy']] = True
+
+    return counted_datacube
 
 
 
@@ -301,9 +383,6 @@ if __name__=="__main__":
 
     # Get dark reference
     darkreference = 1 # TODO: get_darkreference(datacube = ...!
-                      # What we really need now is to tie the memory mapping in seamlessly with
-                      # DataCube.data4D, so that whether or not our data is memory mapped, we just
-                      # reference this as a numpy array.
 
     electron_counted_data = electron_count(datacube, darkreference, Nsamples=Nsamples,
                                            thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
