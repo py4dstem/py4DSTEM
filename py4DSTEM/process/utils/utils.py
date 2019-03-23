@@ -1,6 +1,7 @@
 # Defines utility functions used by other functions in the /process/ directory.
 
 import numpy as np
+from scipy.ndimage.filters import gaussian_filter
 
 def make_Fourier_coords1D(N, pixelSize=1):
     """
@@ -85,12 +86,63 @@ def get_CoM(ar):
 
 def get_maximal_points(ar):
     """
-    Returns the points in an array with values larger than all 8 of their nearest neighbors.
+    For 2D array ar, returns an array of bools of the same shape which is True for all entries with
+    values larger than all 8 of their nearest neighbors.
     """
     return (ar>np.roll(ar,(-1,0),axis=(0,1))) & (ar>np.roll(ar,(1,0),axis=(0,1))) & \
            (ar>np.roll(ar,(0,-1),axis=(0,1))) & (ar>np.roll(ar,(0,1),axis=(0,1))) & \
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
+
+def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
+    """
+    Finds the indices where 1D array ar is a local maximum.
+    Optional parameters allow blurring the array and filtering the output;
+    setting each to 0 turns (default) off these functions.
+
+    Accepts:
+        ar                    a 1D array
+        sigma                 gaussian blur std to apply to ar before finding maxima
+        minSpacing            if two maxima are found within minSpacing, the dimmer one is removed
+        minRelativeIntensity  maxima dimmer than minRelativeIntensity compared to the
+                              relativeToPeak'th brightest maximum are removed
+        relativeToPeak        0=brightest maximum. 1=next brightest, etc.
+
+    Returns:
+        An array of indices where ar is a local maximum, sorted by intensity.
+    """
+    assert len(ar.shape)==1, "ar must be 1D"
+    assert isinstance(relativeToPeak, (int,np.integer)), "relativeToPeak must be an int"
+    if sigma>0:
+        ar = gaussian_filter(ar,sigma)
+
+    # Get maxima and intensity arrays
+    maxima_bool = (ar>np.roll(ar,-1)) & (ar>np.roll(ar,+1))
+    x = np.arange(len(ar))[maxima_bool]
+    intensity = ar[maxima_bool]
+
+    # Sort by intensity
+    temp_ar = np.array([(x,inten) for inten,x in sorted(zip(intensity,x),reverse=True)])
+    x, intensity = temp_ar[:,0], temp_ar[:,1]
+
+    # Remove points which are too close
+    if minSpacing>0:
+        deletemask = np.zeros(len(x),dtype=bool)
+        for i in range(len(x)):
+            if not deletemask[i]:
+                delete = np.abs(x[i]-x) < minSpacing
+                delete[:i+1]=False
+                deletemask = deletemask | delete
+        x = np.delete(x, deletemask.nonzero()[0])
+        intensity = np.delete(intensity, deletemask.nonzero()[0])
+
+    # Remove points which are too dim
+    if minRelativeIntensity > 0:
+        deletemask = intensity/intensity[relativeToPeak] < minRelativeIntensity
+        x = np.delete(x, deletemask.nonzero()[0])
+        intensity = np.delete(intensity, deletemask.nonzero()[0])
+
+    return x.astype(int)
 
 def linear_interpolation_1D(ar,x):
     """
@@ -131,6 +183,51 @@ def radial_integral(ar, x0, y0):
     bin_sum = cs_vals[rind[1:]] - cs_vals[rind[:-1]]
 
     return bin_sum / nr, bin_sum, nr, rind
+
+def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1,
+                                                     length = 100, fill = '*'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
+def bin2D(array, factor):
+    """
+    Bin a 2D ndarray by binfactor.
+
+    Accepts:
+        array       a 2D numpy array
+        factor      (int) the binning factor
+
+    Returns:
+        binned_ar   the binned array
+    """
+    x,y =  array.shape
+    binx,biny = x//factor,y//factor
+    xx,yy = binx*factor,biny*factor
+
+    # Make a binned array on the device
+    binned_ar = np.zeros((binx,biny))
+
+    # Collect pixel sums into new bins
+    for ix in range(factor):
+        for iy in range(factor):
+            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
+    return binned_ar
 
 
 

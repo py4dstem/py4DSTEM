@@ -127,8 +127,7 @@ def get_background_streaks_x(datacube, width, N_frames, side='start'):
             refstrip += datacube.data4D[indices_x[i], indices_y[i], -width:, :].astype(float)
 
     # Calculate mean and return 1D array of streaks
-    bkgrnd_streaks = np.sum(refstrip, axis=0) / width / N_frames # TODO: check with Hamish:
-                                                                 # why was he using integer division?
+    bkgrnd_streaks = np.sum(refstrip, axis=0) // width // N_frames
 
     # Broadcast to 2D array
     darkref = np.zeros((datacube.Q_Nx,datacube.Q_Ny))
@@ -162,8 +161,7 @@ def get_background_streaks_y(datacube, N_frames, width, side='start'):
             refstrip += datacube.data4D[indices_x[i], indices_y[i], :, -width:].astype(float)
 
     # Calculate mean and return 1D array of streaks
-    bkgrnd_streaks = np.sum(refstrip, axis=1) / width / N_frames # TODO: check with Hamish:
-                                                                 # why was he using integer division?
+    bkgrnd_streaks = np.sum(refstrip, axis=1) // width // N_frames
 
     # Broadcast to 2D array
     darkref = np.zeros((datacube.Q_Nx,datacube.Q_Ny))
