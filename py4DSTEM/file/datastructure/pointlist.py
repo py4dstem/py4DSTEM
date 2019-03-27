@@ -85,6 +85,24 @@ class PointList(DataObject):
         self.data = np.append(self.data, data)
         self.length += len(data)
 
+    def add_unstructured_dataarray(self, data):
+        """
+        Appends data in the form of an unstructured data array.  User warning: be careful to make
+        sure the columns of the data are in the correct order, i.e. correspond to the order of the
+        PointList coordinates.
+        """
+        assert len(self.coordinates)==(data.shape[1]), "Error: number of data columns must match the number of PointList coords."
+        length = data.shape[1]
+
+        # Make structured numpy array
+        formats=''
+        for i in range(length):
+            formats += '{},'.format(self.dtype[i])
+        structured_data = np.core.records.fromarrays(data.T, names=self.dtype.names, formats=formats)
+
+        # Append to pointlist
+        self.add_dataarray(structured_data)
+
     def add_tuple_of_nparrays(self, data):
         """
         Appends data in the form of a tuple of ndarrays.
