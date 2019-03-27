@@ -57,7 +57,7 @@ def measure_elliptical_distortion(ar, x0, y0, r_inner, r_outer, datamask=None):
     a,b,theta = convert_ellipse_params(A,B,C)
     p1 = (x,y,a,b,theta)
 
-    return p1, p2, xs,ys,vals
+    return p1, p2
 
 def ellipse_err(p, x, y, val):
     """
