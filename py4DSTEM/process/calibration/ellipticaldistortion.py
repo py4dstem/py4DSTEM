@@ -2,6 +2,9 @@
 
 import numpy as np
 from scipy.optimize import leastsq
+from scipy.ndimage.filters import gaussian_filter
+
+from ..utils import get_CoM
 
 def measure_elliptical_distortion(ar, x0, y0, r_inner, r_outer, datamask=None):
     """
@@ -111,6 +114,55 @@ def correct_elliptical_distortion(braggpeaks, p):
             pointlist.data['qx'] = xyar_f[0,:]+x0
             pointlist.data['qy'] = xyar_f[1,:]+y0
     return braggpeaks_corrected
+
+def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_known, fitrad=6):
+    """
+    When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus about the
+    central beam, the answer is degenerate: an infinite number of ellipses correctly fit this
+    data.  Starting from one ellipse in the degenerate family of ellipses, this function selects
+    the ellipse which will yield a final angle of phi_known between a pair of the diffraction
+    peaks after performing elliptical distortion correction.
+
+    Accepts:
+        data        (ndarray) the data to fit, typically an average deconvolution
+        x           (float) the initial ellipse center, x
+        y           (float) the initial ellipse center, y
+        a           (float) the initial ellipse first semiaxis
+        b           (float) the initial ellipse second semiaxis
+        theta       (float) the initial ellipse angle, in radians
+        r_inner     (float) the fitting annulus inner radius
+        r_outer     (float) the fitting annulus outer radius
+        phi_known   (float) the known angle between a pair of diffraction peaks, in radians
+        fitrad      (float) the region about the fixed data point used to refine its position
+
+    Returns:
+        a_constrained   (float) the first semiaxis of the selected ellipse
+        b_constrained   (float) the second semiaxis of the selected ellipse
+    """
+    # Get constraining point
+    yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
+    rr = np.sqrt((xx-x)**2+(yy-y)**2)
+    mask = (rr>r_inner)*(rr<=r_outer)
+    x_fixed,y_fixed = np.unravel_index(np.argmax(gaussian_filter(data*mask,2)),(data.shape[0],data.shape[1]))
+    rr = np.sqrt((xx-x_fixed)**2+(yy-y_fixed)**2)
+    mask = rr<fitrad
+    x_fixed,y_fixed = get_CoM(data*mask)
+
+    # Transform constraining point coordinate system
+    x_fixed,y_fixed = x_fixed-x,y_fixed-y
+    T = np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]])
+    x_fixed,y_fixed = np.matmul(T,np.array([x_fixed,y_fixed]))
+
+    # Get semiaxes a,b for the specified theta
+    t = x_fixed/(a*np.cos(phi_known/2.))
+    a_constrained = a*t
+    b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
+
+    return a_constrained, b_constrained
+
+
+
+
 
 
 
