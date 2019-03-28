@@ -123,6 +123,9 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     the ellipse which will yield a final angle of phi_known between a pair of the diffraction
     peaks after performing elliptical distortion correction.
 
+    Note that there are two possible angles which phi_known might refer to. The function is
+    written such that phi_known should be the smaller of these two angles.
+
     Accepts:
         data        (ndarray) the data to fit, typically an average deconvolution
         x           (float) the initial ellipse center, x
