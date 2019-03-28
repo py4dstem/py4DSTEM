@@ -123,8 +123,9 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     the ellipse which will yield a final angle of phi_known between a pair of the diffraction
     peaks after performing elliptical distortion correction.
 
-    Note that there are two possible angles which phi_known might refer to. The function is
-    written such that phi_known should be the smaller of these two angles.
+    Note that there are two possible angles which phi_known might refer to, because the angle of
+    interest is well defined up to a complementary angle.  This function is written such that
+    phi_known should be the smaller of these two angles.
 
     Accepts:
         data        (ndarray) the data to fit, typically an average deconvolution
@@ -142,19 +143,32 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
         a_constrained   (float) the first semiaxis of the selected ellipse
         b_constrained   (float) the second semiaxis of the selected ellipse
     """
-    # Get constraining point
+    # Get 4 constraining points
+    xs,ys = np.zeros(4),np.zeros(4)
     yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
     rr = np.sqrt((xx-x)**2+(yy-y)**2)
-    mask = (rr>r_inner)*(rr<=r_outer)
-    x_fixed,y_fixed = np.unravel_index(np.argmax(gaussian_filter(data*mask,2)),(data.shape[0],data.shape[1]))
-    rr = np.sqrt((xx-x_fixed)**2+(yy-y_fixed)**2)
-    mask = rr<fitrad
-    x_fixed,y_fixed = get_CoM(data*mask)
+    annular_mask = (rr>r_inner)*(rr<=r_outer)
+    data_temp = np.zeros_like(data)
+    data_temp[annular_mask] = data[annular_mask]
+    for i in range(4):
+        x_constr,y_constr = np.unravel_index(np.argmax(gaussian_filter(data_temp,2)),(data.shape[0],data.shape[1]))
+        rr = np.sqrt((xx-x_constr)**2+(yy-y_constr)**2)
+        mask = rr<fitrad
+        xs[i],ys[i] = get_CoM(data*mask)
+        data_temp[mask] = 0
 
-    # Transform constraining point coordinate system
-    x_fixed,y_fixed = x_fixed-x,y_fixed-y
+    # Transform constraining points coordinate system
+    xs -= x
+    ys -= y
     T = np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]])
-    x_fixed,y_fixed = np.matmul(T,np.array([x_fixed,y_fixed]))
+    xs,ys = np.matmul(T,np.array([xs,ys]))
+
+    # Get symmetrized constraining point
+    angles = np.arctan2(ys,xs)
+    distances = np.hypot(xs,ys)
+    angle = np.mean(np.min(np.vstack([np.abs(angles),np.pi-np.abs(angles)]),axis=0))
+    distance = np.mean(distances)
+    x_fixed,y_fixed = distance*np.cos(angle),distance*np.sin(angle)
 
     # Get semiaxes a,b for the specified theta
     t = x_fixed/(a*np.cos(phi_known/2.))
@@ -162,6 +176,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
 
     return a_constrained, b_constrained
+
 
 
 
