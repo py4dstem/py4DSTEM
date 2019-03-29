@@ -3,4 +3,5 @@ from . import fit
 from . import preprocess
 from . import braggdiskdetection
 from . import calibration
+from . import latticevectors
 
