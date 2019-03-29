@@ -95,10 +95,10 @@ class PointList(DataObject):
         length = data.shape[1]
 
         # Make structured numpy array
-        formats=''
+        structured_data = np.empty(data.shape[0], dtype=self.dtype)
         for i in range(length):
-            formats += '{},'.format(self.dtype[i])
-        structured_data = np.core.records.fromarrays(data.T, names=self.dtype.names, formats=formats)
+            name = self.dtype.names[i]
+            structured_data[name] = data[:,i]
 
         # Append to pointlist
         self.add_dataarray(structured_data)
