@@ -94,11 +94,75 @@ def get_maximal_points(ar):
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
 
+def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0,
+                               minRelativeIntensity=0, maxNumPeaks=0):
+    """
+    Finds the indices where the 2D array ar is a local maximum.
+    Optional parameters allow blurring of the array and filtering of the output;
+    setting each of these to 0 (default) turns off these functions.
+
+    Accepts:
+        ar                      (ndarray) a 2D array
+        sigma                   (float) guassian blur std to applyu to ar before finding the maxima
+        edgeBoundary            (int) ignore maxima within edgeBoundary of the array edge
+        minSpacing              (float) if two maxima are found within minSpacing, the dimmer one
+                                is removed
+        minRelativeIntensity    (float) maxima dimmer than minRelativeIntensity compared to the
+                                brightest maximum are removed
+        maxNumPeaks             (int) return only the first maxNumPeaks maxima
+
+    Returns
+        maxima_x                  (ndarray) x-coords of the local maximum, sorted by intensity.
+        maxima_y                  (ndarray) y-coords of the local maximum, sorted by intensity.
+    """
+    # Get maxima
+    ar = gaussian_filter(ar,sigma)
+    maxima_bool = get_maximal_points(ar)
+
+    # Remove edges
+    if edgeBoundary > 0:
+        assert isinstance(edgeBoundary,(int,np.integer))
+        maxima_bool[:edgeBoundary,:] = False
+        maxima_bool[-edgeBoundary:,:] = False
+        maxima_bool[:,:edgeBoundary] = False
+        maxima_bool[:,-edgeBoundary:] = False
+
+    # Get indices, sorted by intensity
+    maxima_x,maxima_y = np.nonzero(maxima_bool)
+    dtype = np.dtype([('x',int),('y',int),('intensity',float)])
+    maxima = np.zeros(len(maxima_x),dtype=dtype)
+    maxima['x'] = maxima_x
+    maxima['y'] = maxima_y
+    maxima['intensity'] = ar[maxima_x,maxima_y]
+    maxima = np.sort(maxima,order='intensity')[::-1]
+
+    # Remove maxima which are too close
+    if minSpacing > 0:
+        deletemask = np.zeros(len(maxima),dtype=bool)
+        for i in range(len(maxima)):
+            if deletemask[i] == False:
+                tooClose = ( (maxima['x']-maxima['x'][i])**2 + \
+                             (maxima['y']-maxima['y'][i])**2 ) < minSpacing**2
+                tooClose[:i+1] = False
+                deletemask[tooClose] = True
+        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+
+    if minRelativeIntensity > 0:
+        deletemask = maxima['intensity']/max(maxima['intensity']) < minRelativeIntensity
+        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+
+    if maxNumPeaks > 0:
+        assert isinstance(maxNumPeaks,(int,np.integer))
+        if len(maxima) > maxNumPeaks:
+            maxima = maxima[:maxNumPeaks]
+
+    return maxima['x'],maxima['y']
+
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """
     Finds the indices where 1D array ar is a local maximum.
     Optional parameters allow blurring the array and filtering the output;
-    setting each to 0 turns (default) off these functions.
+    setting each to 0 (default) turns off these functions.
 
     Accepts:
         ar                    a 1D array
