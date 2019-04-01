@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 
 from ...file.datastructure import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maximal_points, print_progress_bar
+from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -72,14 +72,10 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     cc = np.maximum(cc,0)
     cc = gaussian_filter(cc, sigma)
 
-    # Get maximal points
-    max_points = get_maximal_points(cc)
-
-    # Remove points at edges
-    max_points[:edgeBoundary,:]=False
-    max_points[-edgeBoundary:,:]=False
-    max_points[:,:edgeBoundary]=False
-    max_points[:,-edgeBoundary:]=False
+    # Get maxima
+    maxima_x,maxima_y = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
+                                      minRelativeIntensity=minRelativeIntensity,
+                                      minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks)
 
     # Make peaks PointList
     if peaks is None:
@@ -87,36 +83,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         peaks = PointList(coordinates=coords)
     else:
         assert(isinstance(peaks,PointList))
-
-    # Populate peaks PointList
-    max_point_indices_x, max_point_indices_y = np.nonzero(max_points)
-    point_intensities = cc[max_point_indices_x,max_point_indices_y]
-    for i in range(len(point_intensities)):
-        new_point = (max_point_indices_x[i], max_point_indices_y[i], point_intensities[i])
-        peaks.add_point(new_point)
-
-    # Arrange peaks by intensity
-    peaks.sort(coordinate='intensity',order='descending')
-
-    # Remove peaks below minRelativeIntensity
-    deletemask = peaks.data['intensity']/max(peaks.data['intensity']) < minRelativeIntensity
-    peaks.remove_points(deletemask)
-
-    # Remove peaks closer together than minPeakSpacing
-    deletemask = np.zeros(peaks.length,dtype=bool)
-    for i in range(peaks.length):
-        if deletemask[i] == False:
-            tooClose = ( (peaks.data['qx']-peaks.data['qx'][i])**2 + \
-                         (peaks.data['qy']-peaks.data['qy'][i])**2 ) < minPeakSpacing**2
-            tooClose[:i+1] = False
-            deletemask[tooClose] = True
-    peaks.remove_points(deletemask)
-
-    # Remove peaks in excess of maxNumPeaks
-    if peaks.length > maxNumPeaks:
-        deletemask = np.zeros(peaks.length,dtype=bool)
-        deletemask[maxNumPeaks:] = True
-        peaks.remove_points(deletemask)
+    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,cc[maxima_x,maxima_y]))
 
     if return_cc:
         return peaks, cc

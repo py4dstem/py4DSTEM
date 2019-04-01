@@ -107,12 +107,17 @@ class PointList(DataObject):
         """
         Appends data in the form of a tuple of ndarrays.
         """
+        assert isinstance(data,tuple)
         assert len(self.coordinates)==len(data), "Error: if data is a tuple, it must contain (# coords) numpy arrays."
         length = len(data[0])
         assert all([length==len(ar) for ar in data]), "Error: if data is a tuple, it must contain lists of equal length"
+
         # Make structured numpy array
-        structured_data = np.array([tuple([ar[i] for ar in data]) for i in range(len(data[0]))],
-                                    self.dtype)
+        structured_data = np.empty(length, dtype=self.dtype)
+        for i in range(len(data)):
+            name = self.dtype.names[i]
+            structured_data[name] = data[i]
+
         # Append to pointlist
         self.add_dataarray(structured_data)
 
