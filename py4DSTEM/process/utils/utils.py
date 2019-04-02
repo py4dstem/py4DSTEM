@@ -94,8 +94,8 @@ def get_maximal_points(ar):
            (ar>np.roll(ar,(-1,-1),axis=(0,1))) & (ar>np.roll(ar,(-1,1),axis=(0,1))) & \
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
 
-def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0,
-                               minRelativeIntensity=0, maxNumPeaks=0):
+def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
+                                                             relativeToPeak=0, maxNumPeaks=0):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -108,12 +108,13 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0,
         minSpacing              (float) if two maxima are found within minSpacing, the dimmer one
                                 is removed
         minRelativeIntensity    (float) maxima dimmer than minRelativeIntensity compared to the
-                                brightest maximum are removed
+                                relativeToPeak'th brightest maximum are removed
+        relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks             (int) return only the first maxNumPeaks maxima
 
     Returns
-        maxima_x                  (ndarray) x-coords of the local maximum, sorted by intensity.
-        maxima_y                  (ndarray) y-coords of the local maximum, sorted by intensity.
+        maxima_x                (ndarray) x-coords of the local maximum, sorted by intensity.
+        maxima_y                (ndarray) y-coords of the local maximum, sorted by intensity.
     """
     # Get maxima
     ar = gaussian_filter(ar,sigma)
@@ -148,7 +149,8 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0,
         maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
     if minRelativeIntensity > 0:
-        deletemask = maxima['intensity']/max(maxima['intensity']) < minRelativeIntensity
+        assert isinstance(relativeToPeak,(int,np.integer))
+        deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
         maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
     if maxNumPeaks > 0:
