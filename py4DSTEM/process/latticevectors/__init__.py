@@ -1,5 +1,5 @@
 from .initialguess import *
 from .index import *
-from .refine import *
+from .fit import *
 from .strain import *
 
