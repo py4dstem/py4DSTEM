@@ -18,6 +18,7 @@
 
 import hyperspy.api as hs
 from .dm import dmReader
+from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
 from ..datastructure import Metadata
@@ -28,13 +29,12 @@ from ..log import log
 @log
 def read(filename, load=None):
     """
-    General read function.
+    General read function.  Takes a filename as input, and outputs some py4DSTEM dataobjects.
 
-    Takes a filename as input, and outputs some py4DSTEM dataobjects.
+    First checks to see if filename is a .h5 file conforming to the py4DSTEM format.
+    In either case, the precise behavior then depends on the kwarg load.
 
-    For non-py4DSTEM files, the output is a DataCube.
-
-    For py4DSTEM files, the behavior depends on the kwarg load, as follows:
+    For .h5 file conforming to the py4DSTEM format, behavior is as follows:
     load = None
         load the first DataObject found; useful for files containing only a single DataObject
     load = 'all':
@@ -48,10 +48,30 @@ def read(filename, load=None):
     load_behavior = [0,1,5,8,...]:
         If load behavoir is a list of ints, loads the set of objects found at those indices in
         a FileBrowser instantiated from filename.
+
+    For non-py4DSTEM files, the output is a DataCube, and load behavior is as follows:
+    load = None
+        attempt to load a datacube using hyperspy
+    load = 'dmmmap'
+        load a dm file (.d3 or .dm4), memory mapping the datacube, using dm.py
+    load = 'empad'
+        load an EMPAD formatted file, using empad.py
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
-        output = read_non_py4DSTEM_file(filename)
+        if load is None:
+            print("Reading with hyperspy...")
+            output = read_with_hyperspy(filename)
+        elif load == 'dmmmap':
+            print("Memory mapping a dm file...")
+            output = read_dm_mmap(filename)
+        elif load == 'empad':
+            print("Reading an EMPAD file...")
+            output = read_empad_file(filename)
+        else:
+            print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
+            output = None
+
 
     else:
         browser = FileBrowser(filename)
@@ -75,32 +95,18 @@ def read(filename, load=None):
     return output
 
 
-def read_non_py4DSTEM_file(filename):
+def read_with_hyperspy(filename):
     """
-    Read a non-py4DSTEM file.
-
-    For .dm3/.dm4 files, using dm.py to read data to a memory mapped np.memmap object, which
-    is stored in the outpute DataCube.data4D.
-    For other file formats, read the data using hypespy.
-    For all non-py4DSTEM formats, attempt to read the metadata with hyperspy.
+    Read a non-py4DSTEM file using hyperspy.
     """
-    # Load .dm3/.dm4 files with dm.py
-    if False:
-        pass
-    #if filename.endswith('.dm3') or filename.endswith('.dm4'):
-    #    print("{} is a DM file. Reading with dm.py...".format(filename))
-    #    data = dmReader(filename,dSetNum=0,verbose=False)['data']
-    #    hyperspy_file = hs.load(filename, lazy=True)     # For loading metadata
-    # Load with hyperspy
-    else:
-        try:
-            print("Reading with hyperspy...".format(filename))
-            hyperspy_file = hs.load(filename)
-            data = hyperspy_file.data
-        except Exception as err:
-            print("Failed to load", err)
-            print("Returning None")
-            return None
+    # Get data
+    try:
+        hyperspy_file = hs.load(filename)
+        data = hyperspy_file.data
+    except Exception as err:
+        print("Failed to load", err)
+        print("Returning None")
+        return None
 
     # Get metadata
     metadata = Metadata(is_py4DSTEM_file = False,
@@ -122,5 +128,67 @@ def read_non_py4DSTEM_file(filename):
     datacube.metadata = metadata
 
     return datacube
+
+def read_dm_mmap(filename):
+    """
+    Read a .dm3/.dm4 file, using dm.py to read data to a memory mapped np.memmap object, which
+    is stored in the outpute DataCube.data4D.
+
+    Read the metadata with hyperspy.
+    """
+    assert (filename.endswith('.dm3') or filename.endswith('.dm4')), 'File must be a .dm3 or .dm4'
+
+    # Load .dm3/.dm4 files with dm.py
+    data = dmReader(filename,dSetNum=0,verbose=False)['data']
+
+    # Get metadata
+    hyperspy_file = hs.load(filename, lazy=True)
+    metadata = Metadata(is_py4DSTEM_file = False,
+                        original_metadata_shortlist = hyperspy_file.metadata,
+                        original_metadata_all = hyperspy_file.original_metadata)
+
+    # Get datacube
+    datacube = DataCube(data = data)
+
+    # Set scan shape, if in metadata
+    try:
+        R_Nx = int(metadata.get_metadata_item('scan_size_Nx'))
+        R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
+        datacube.set_scan_shape(R_Nx, R_Ny)
+    except ValueError:
+        print("Warning: scan shape not detected in metadata; please check / set manually.")
+
+    # Point to metadata from datacube
+    datacube.metadata = metadata
+
+    return datacube
+
+def read_empad_file(filename):
+    """
+    Read an empad file, using empad.py to read the data.
+
+    Additionally reads and attaches metadata. # TODO
+    """
+    # Get data
+    data = read_empad(filename)
+
+    # Get metadata -- TODO
+    metadata = None
+
+    datacube = DataCube(data = data)
+    # datacube.metadata = metadata
+
+    return datacube
+
+
+
+
+
+
+
+
+
+
+
 
 
