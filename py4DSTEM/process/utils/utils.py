@@ -180,6 +180,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
             deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
             maxima['x'][i] += deltax
             maxima['y'][i] += deltay
+            maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
 
     return maxima['x'],maxima['y'],maxima['intensity']
 
@@ -238,11 +239,19 @@ def linear_interpolation_1D(ar,x):
     Calculates the 1D linear interpolation of array ar at position x using the two nearest elements.
     """
     x0,x1 = int(np.floor(x)),int(np.ceil(x))
-    if x0==x1:
-        return ar[x0]
-    else:
-        dx = x-x0
-        return (1-dx)*ar[x0] + dx*ar[x1]
+    dx = x-x0
+    return (1-dx)*ar[x0] + dx*ar[x1]
+
+def linear_interpolation_2D(ar,x,y):
+    """
+    Calculates the 2D linear interpolation of array ar at position x,y using the four nearest
+    array elements.
+    """
+    x0,x1 = int(np.floor(x)),int(np.ceil(x))
+    y0,y1 = int(np.floor(y)),int(np.ceil(y))
+    dx = x-x0
+    dy = y-y0
+    return (1-dx)*(1-dy)*ar[x0,y0] + (1-dx)*dy*ar[x0,y1] + dx*(1-dy)*ar[x1,y0] + dx*dy*ar[x1,y1]
 
 def radial_integral(ar, x0, y0):
     """
