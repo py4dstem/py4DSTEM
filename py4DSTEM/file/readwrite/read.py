@@ -23,6 +23,7 @@ from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
 from ..datastructure import Metadata
 from ..log import log
+from ...process.utils import bin2D
 
 ###################### BEGIN read FUNCTIONS ########################
 
@@ -171,6 +172,7 @@ def read_empad_file(filename):
     """
     # Get data
     data = read_empad(filename)
+    data = data[:,:,:128,:]
 
     # Get metadata -- TODO
     metadata = None

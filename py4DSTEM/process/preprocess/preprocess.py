@@ -8,8 +8,8 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
+from ..utils import bin2D
 from ...file.log import log
-
 
 ### Editing datacube shape ###
 
@@ -97,6 +97,25 @@ def bin_data_diffraction(datacube, bin_factor):
         datacube.data4D = datacube.data4D.reshape(R_Nx,R_Ny,int(Q_Nx/bin_factor),bin_factor,int(Q_Ny/bin_factor),bin_factor).sum(axis=(3,5))
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data4D.shape
         return datacube
+
+@log
+def bin_data_mmap(datacube, bin_factor):
+    """
+    Performs diffraction space binning of data by bin_factor.
+
+    Note that this function casts data
+    """
+    assert type(bin_factor) is int, "Error: binning factor {} is not an int.".format(bin_factor)
+    R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny
+
+    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype='uint32')
+    for Rx in range(datacube.R_Nx):
+        for Ry in range(datacube.R_Ny):
+            data[Rx,Ry,:,:] = bin2D(datacube.data4D[Rx,Ry,:,:],bin_factor)
+
+    datacube.data4D = data
+    datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data4D.shape
+    return datacube
 
 @log
 def bin_data_real(datacube, bin_factor):
