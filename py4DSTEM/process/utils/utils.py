@@ -95,7 +95,7 @@ def get_maximal_points(ar):
            (ar>np.roll(ar,(1,-1),axis=(0,1))) & (ar>np.roll(ar,(1,1),axis=(0,1)))
 
 def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                                                             relativeToPeak=0, maxNumPeaks=0):
+                                               relativeToPeak=0, maxNumPeaks=0, subpixel=True):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -111,6 +111,8 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                                 relativeToPeak'th brightest maximum are removed
         relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks             (int) return only the first maxNumPeaks maxima
+        subpixel                (bool) if False, return locally maximal pixels.
+                                if True, perform subpixel fitting
 
     Returns
         maxima_x                (ndarray) x-coords of the local maximum, sorted by intensity.
@@ -127,10 +129,15 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
         maxima_bool[-edgeBoundary:,:] = False
         maxima_bool[:,:edgeBoundary] = False
         maxima_bool[:,-edgeBoundary:] = False
+    elif subpixel is True:
+        maxima_bool[:1,:] = False
+        maxima_bool[-1:,:] = False
+        maxima_bool[:,:1] = False
+        maxima_bool[:,-1:] = False
 
     # Get indices, sorted by intensity
     maxima_x,maxima_y = np.nonzero(maxima_bool)
-    dtype = np.dtype([('x',int),('y',int),('intensity',float)])
+    dtype = np.dtype([('x',float),('y',float),('intensity',float)])
     maxima = np.zeros(len(maxima_x),dtype=dtype)
     maxima['x'] = maxima_x
     maxima['y'] = maxima_y
@@ -148,17 +155,33 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 deletemask[tooClose] = True
         maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
+    # Remove maxima which are too dim
     if minRelativeIntensity > 0:
         assert isinstance(relativeToPeak,(int,np.integer))
         deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
         maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
+    # Remove maxima in excess of maxNumPeaks
     if maxNumPeaks > 0:
         assert isinstance(maxNumPeaks,(int,np.integer))
         if len(maxima) > maxNumPeaks:
             maxima = maxima[:maxNumPeaks]
 
-    return maxima['x'],maxima['y']
+    # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
+    if subpixel is True:
+        for i in range(len(maxima)):
+            Ix1_ = ar[int(maxima['x'][i])-1,int(maxima['y'][i])]
+            Ix0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+            Ix1 = ar[int(maxima['x'][i])+1,int(maxima['y'][i])]
+            Iy1_ = ar[int(maxima['x'][i]),int(maxima['y'][i])-1]
+            Iy0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+            Iy1 = ar[int(maxima['x'][i]),int(maxima['y'][i])+1]
+            deltax = (Ix1 - Ix1_)/(4*Ix0 - 2*Ix1 - 2*Ix1_)
+            deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
+            maxima['x'][i] += deltax
+            maxima['y'][i] += deltay
+
+    return maxima['x'],maxima['y'],maxima['intensity']
 
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """
