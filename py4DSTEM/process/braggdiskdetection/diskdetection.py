@@ -20,6 +20,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   minRelativeIntensity = 0.005,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
+                                  subpixel = True,
                                   return_cc = False,
                                   peaks = None):
     """
@@ -58,6 +59,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        subpixel             (bool) if True, perform subpixel fitting to detected maxima
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -73,9 +75,10 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     cc = gaussian_filter(cc, sigma)
 
     # Get maxima
-    maxima_x,maxima_y = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
-                                      minRelativeIntensity=minRelativeIntensity,
-                                      minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks)
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
+                                                 minRelativeIntensity=minRelativeIntensity,
+                                                 minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
+                                                 subpixel=subpixel)
 
     # Make peaks PointList
     if peaks is None:
@@ -83,7 +86,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         peaks = PointList(coordinates=coords)
     else:
         assert(isinstance(peaks,PointList))
-    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,cc[maxima_x,maxima_y]))
+    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
 
     if return_cc:
         return peaks, cc
@@ -98,6 +101,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                minRelativeIntensity = 0.005,
                                minPeakSpacing = 60,
                                maxNumPeaks = 70,
+                               subpixel = True,
                                return_cc = False):
     """
     Identical to find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
@@ -117,6 +121,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        subpixel             (bool) if True, perform subpixel fitting to detected maxima
         return_cc            (bool) if True, return the cross correlation
 
     Returns:
@@ -131,6 +136,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          minRelativeIntensity = minRelativeIntensity,
                                          minPeakSpacing = minPeakSpacing,
                                          maxNumPeaks = maxNumPeaks,
+                                         subpixel = subpixel,
                                          return_cc = return_cc)
 
 
@@ -140,7 +146,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               edgeBoundary = 20,
                               minRelativeIntensity = 0.005,
                               minPeakSpacing = 60,
-                              maxNumPeaks = 70):
+                              maxNumPeaks = 70,
+                              subpixel = True):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
     cross, hybrid, or phase correlation with probe.
@@ -160,6 +167,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        subpixel             (bool) if True, perform subpixel fitting to detected maxima
 
     Returns:
         peaks                (n-tuple of PointLists, n=len(Rx)) the Bragg peak positions and
@@ -181,7 +189,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                                    edgeBoundary = edgeBoundary,
                                                    minRelativeIntensity = minRelativeIntensity,
                                                    minPeakSpacing = minPeakSpacing,
-                                                   maxNumPeaks = maxNumPeaks))
+                                                   maxNumPeaks = maxNumPeaks,
+                                                   subpixel = subpixel))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
                                                                    int(t/60), int(t%60)))
@@ -196,6 +205,7 @@ def find_Bragg_disks(datacube, probe,
                      minRelativeIntensity = 0.005,
                      minPeakSpacing = 60,
                      maxNumPeaks = 70,
+                     subpixel = True,
                      verbose = False):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
@@ -214,6 +224,7 @@ def find_Bragg_disks(datacube, probe,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
+        subpixel             (bool) if True, perform subpixel fitting to detected maxima
         verbose              (bool) if True, prints completion updates
 
     Returns:
@@ -241,6 +252,7 @@ def find_Bragg_disks(datacube, probe,
                                           minRelativeIntensity = minRelativeIntensity,
                                           minPeakSpacing = minPeakSpacing,
                                           maxNumPeaks = maxNumPeaks,
+                                          subpixel = subpixel,
                                           peaks = peaks.get_pointlist(Rx,Ry))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
