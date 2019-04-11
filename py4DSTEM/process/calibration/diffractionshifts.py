@@ -6,7 +6,7 @@ from scipy.optimize import leastsq
 
 from ...file.datastructure import PointListArray
 from ..braggdiskdetection import get_deconvolution
-from ..utils import get_CoM
+from ..utils import get_CoM, add_to_2D_array_from_floats
 
 def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     """
@@ -40,7 +40,7 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     # Get guess at position of unscattered beam
     deconvolution_all = get_deconvolution(Braggpeaks, Q_Nx, Q_Ny)
     if findcenter=='max':
-        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(deconvolution_all,2)),(Q_Nx,Q_Ny))
+        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(deconvolution_all,10)),(Q_Nx,Q_Ny))
     else:
         x0,y0 = get_CoM(deconvolution_all)
         deconvolution = np.zeros_like(deconvolution_all)
@@ -49,8 +49,10 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
                 pointlist = Braggpeaks.get_pointlist(Rx,Ry)
                 r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
                 index = np.argmin(r2)
-                deconvolution[int(pointlist.data['qx'][index]),int(pointlist.data['qy'][index])] += \
-                        pointlist.data['intensity'][index]
+                deconvolution = add_to_2D_array_from_floats(deconvolution,
+                                                            pointlist.data['qx'][index],
+                                                            pointlist.data['qy'][index],
+                                                            pointlist.data['intensity'][index])
         x0,y0 = get_CoM(deconvolution)
 
     # Get Bragg peak closest to unscattered beam at each scan position
@@ -62,8 +64,10 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
             pointlist = Braggpeaks.get_pointlist(Rx,Ry)
             r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
             index = np.argmin(r2)
-            deconvolution[int(pointlist.data['qx'][index]),int(pointlist.data['qy'][index])] += \
-                    pointlist.data['intensity'][index]
+            deconvolution = add_to_2D_array_from_floats(deconvolution,
+                                                        pointlist.data['qx'][index],
+                                                        pointlist.data['qy'][index],
+                                                        pointlist.data['intensity'][index])
             xshifts[Rx,Ry] = pointlist.data['qx'][index]
             yshifts[Rx,Ry] = pointlist.data['qy'][index]
 
