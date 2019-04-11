@@ -13,9 +13,7 @@ from functools import wraps
 import inspect
 
 # Get the current version in __version__
-from os.path import dirname, abspath
-pwd = dirname(abspath(__file__))
-exec(open(pwd+'/../../version.py').read())
+from ..version import __version__
 
 class Logger(object):
     """
