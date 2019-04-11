@@ -253,6 +253,23 @@ def linear_interpolation_2D(ar,x,y):
     dy = y-y0
     return (1-dx)*(1-dy)*ar[x0,y0] + (1-dx)*dy*ar[x0,y1] + dx*(1-dy)*ar[x1,y0] + dx*dy*ar[x1,y1]
 
+def add_to_2D_array_from_floats(ar,x,y,I):
+    """
+    Adds the value I to array ar, distributing the value between the four pixels nearest (x,y) using
+    linear interpolation.
+    """
+    Nx,Ny = ar.shape
+    x0,x1 = int(np.floor(x)),int(np.ceil(x))
+    y0,y1 = int(np.floor(y)),int(np.ceil(y))
+    if (x0>=0) and (y0>=0) and (x1<Nx) and (y1<Ny):
+        dx = x-x0
+        dy = y-y0
+        ar[x0,y0] += (1-dx)*(1-dy)*I
+        ar[x0,y1] += (1-dx)*dy*I
+        ar[x1,y0] += dx*(1-dy)*I
+        ar[x1,y1] += dx*dy*I
+    return ar
+
 def radial_integral(ar, x0, y0):
     """
     Computes the radial integral of array ar from center x0,y0.

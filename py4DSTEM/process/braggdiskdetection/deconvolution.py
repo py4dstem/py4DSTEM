@@ -1,6 +1,7 @@
 # Functions for calculating and making use of the average deconvolution
 
 import numpy as np
+from ..utils import add_to_2D_array_from_floats
 
 def get_deconvolution(pointlistarray, Q_Nx, Q_Ny):
     """
@@ -24,16 +25,8 @@ def get_deconvolution(pointlistarray, Q_Nx, Q_Ny):
             for i in range(pointlist.length):
                 qx = pointlist.data['qx'][i]
                 qy = pointlist.data['qy'][i]
-                qx0,qx1 = int(np.floor(qx)),int(np.ceil(qx))
-                qy0,qy1 = int(np.floor(qy)),int(np.ceil(qy))
-                if (qx0>=0) and (qy0>0) and (qx1<Q_Nx) and (qy1<Q_Ny):
-                    I = pointlist.data['intensity'][i]
-                    dqx = qx-qx0
-                    dqy = qy-qy0
-                    deconvolution[qx0,qy0] += (1-dqx)*(1-dqy)*I
-                    deconvolution[qx0,qy1] += (1-dqx)*dqy*I
-                    deconvolution[qx1,qy0] += dqx*(1-dqy)*I
-                    deconvolution[qx1,qy1] += dqx*dqy*I
+                I = pointlist.data['intensity'][i]
+                deconvolution = add_to_2D_array_from_floats(deconvolution,qx,qy,I)
     return deconvolution
 
 
