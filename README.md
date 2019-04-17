@@ -115,8 +115,8 @@ import py4DSTEM
 
 * hyperspy
 * h5py
-* pyqtgraph (GUI only)
-* PyQt5 (GUI only)
+* pyqtgraph
+* PyQt5
 
 ## Versioning
 
