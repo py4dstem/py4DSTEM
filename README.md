@@ -78,8 +78,6 @@ conda install pyqtgraph
 conda install PyQt5
 ```
 
-Note that pyqtgraph and PyQt5 are required for the GUI only.
-
 To get the py4DSTEM package, use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
 
 ```
