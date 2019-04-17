@@ -120,7 +120,7 @@ import py4DSTEM
 
 ## Versioning
 
-v. 0.1
+v. 0.3
 
 ## License
 
