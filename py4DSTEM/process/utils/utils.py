@@ -117,6 +117,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
     Returns
         maxima_x                (ndarray) x-coords of the local maximum, sorted by intensity.
         maxima_y                (ndarray) y-coords of the local maximum, sorted by intensity.
+        maxima_intensity        (ndarray) intensity of the local maxima
     """
     # Get maxima
     ar = gaussian_filter(ar,sigma)
