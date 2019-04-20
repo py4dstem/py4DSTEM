@@ -1,1 +1,1 @@
-from .braggvectorclustering import *
+from .braggvectorclassification import *
