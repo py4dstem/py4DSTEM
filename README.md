@@ -8,7 +8,6 @@ A graphical user interface facilites rapid data exploration, and live testing an
 For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
 For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
 
-
 py4DSTEM is open source, copyleft software.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
