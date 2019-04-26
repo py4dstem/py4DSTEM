@@ -159,8 +159,8 @@ def shift_braggpeaks(Braggpeaks, xshifts, yshifts):
     for Rx in range(shifted_Braggpeaks.shape[0]):
         for Ry in range(shifted_Braggpeaks.shape[1]):
             pointlist = shifted_Braggpeaks.get_pointlist(Rx,Ry)
-            shifts_qx = int(xshifts[Rx,Ry])
-            shifts_qy = int(yshifts[Rx,Ry])
+            shifts_qx = xshifts[Rx,Ry]
+            shifts_qy = yshifts[Rx,Ry]
             pointlist.data['qx'] -= shifts_qx
             pointlist.data['qy'] -= shifts_qy
 
