@@ -1,5 +1,4 @@
 import numpy as np
-import mrcfile
 from ..utils import get_shift_hybrid
 import matplotlib.pyplot as plt
 from ipywidgets import FloatProgress
@@ -7,6 +6,7 @@ from time import time
 from ...file.datastructure import DataCube
 
 def read_mrc_file(filename):
+	import mrcfile
 	# read in an *.mrc file as an MRC memmap
 	return mrcfile.mmap(filename,mode='r')
 
