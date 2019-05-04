@@ -19,6 +19,7 @@
 import hyperspy.api as hs
 from .dm import dmReader
 from .empad import read_empad
+from ...process.preprocess import read_mrc_file
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
 from ..datastructure import Metadata
@@ -57,6 +58,11 @@ def read(filename, load=None):
         load a dm file (.d3 or .dm4), memory mapping the datacube, using dm.py
     load = 'empad'
         load an EMPAD formatted file, using empad.py
+
+    For IDES Relativity mrc files, the output is a memory map to the "movie" which 
+    must be sliced into subframes using the relativity module in py4DTEM.process.preprocess
+    load = 'relativity'
+        load an MRC file from the IDES Relativity. See py4DSTEM.process.preprocess.relativity
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
@@ -69,6 +75,9 @@ def read(filename, load=None):
         elif load == 'empad':
             print("Reading an EMPAD file...")
             output = read_empad_file(filename)
+        elif load == 'relativity':
+            print("Reading an IDES Relativity MRC file...")
+            output = read_mrc_file(filename)
         else:
             print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
             output = None

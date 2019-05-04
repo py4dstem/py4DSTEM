@@ -40,6 +40,15 @@ def get_shift(ar1,ar2):
     xshift,yshift = np.unravel_index(np.argmax(cc),ar1.shape)
     return xshift,yshift
 
+def get_shift_hybrid(ar1,ar2,corrPower=1):
+    """
+    Determine the relative shift between a pair of same-size arrays, specifying the
+    power of correlation. 1=cross, 0=phase. Returns maximal pixel of the correlogram
+    """
+    cc = get_cross_correlation(ar1,ar2,corrPower)
+    xshift,yshift = np.unravel_index(np.argmax(cc),ar1.shape)
+    return xshift, yshift
+
 def get_shifted_ar(ar,xshift,yshift):
     """
 	Shifts array ar by the shift vector (xshift,yshift), using the Fourier shift theorem (i.e.
