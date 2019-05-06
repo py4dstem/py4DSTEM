@@ -1,4 +1,4 @@
-# Functions for calculating and making use of the average deconvolution
+# Functions for calculating and making use of the Bragg vector map
 
 import numpy as np
 from ..utils import add_to_2D_array_from_floats
