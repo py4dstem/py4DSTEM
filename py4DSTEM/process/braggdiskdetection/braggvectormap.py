@@ -14,10 +14,10 @@ def get_bragg_vector_map(pointlistarray, Q_Nx, Q_Ny):
     Returns:
         braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
     """
-    #assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
-    #assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    #assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    #assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
+    assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
+    assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     for Rx in range(pointlistarray.shape[0]):
         for Ry in range(pointlistarray.shape[1]):
