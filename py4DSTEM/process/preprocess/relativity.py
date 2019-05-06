@@ -110,9 +110,11 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, wx=500, wy=500):
 	"""
 	Slice the *.mrc movie into all of its subframes
 
-	mrc 		(MrcMemmap) memory map into the mrc file (opened by py4DSTEM.file.readwrite.read(...,load='relativity'))
+	mrc 		(MrcMemmap) memory map into the mrc file (such as opened by py4DSTEM.file.readwrite.read(...,load='relativity'))
 	scratch 	(str) path to a scratch file where a numpy memmap containing the re-sliced stack will be buffered
-				      NOTE! this will overwrite whatever file is at this path! be careful!
+		      	NOTE! this will overwrite whatever file is at this path! be careful!
+		      	ALSO NOTE! this file is where the data in the DataCube will actually live!
+		      	Either save the DataCube as a py4DSTEM *.h5 or use separate scratches for different data!
   	scanshape	(numpy array) 2-element array containing the scan shape (Rx, Ry)
 	optx, opty 	(numpy meshgrids) the optimized centers of the subframes from subframeAlign(...)
 	wx,wy 		(ints) subframe sizes x and y
@@ -145,5 +147,7 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, wx=500, wy=500):
 
 	dc = DataCube(vstack)
 	dc.set_scan_shape(scanshape[0],scanshape[1])
+
+	return dc
 
 
