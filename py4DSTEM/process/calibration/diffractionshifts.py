@@ -5,7 +5,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
 from ...file.datastructure import PointListArray
-from ..braggdiskdetection import get_deconvolution
+from ..braggdiskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats
 
 def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
@@ -13,9 +13,9 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     Gets the diffraction shifts.
 
     First, an guess at the unscattered beam position is determined, either by taking the CoM of the
-    average deconvolution, or by taking its maximal pixel.  If the CoM is used, an additional
-    refinement step is used where we take the CoM of a deconvolution contructed from a first guess
-    at the central Bragg peaks (as opposed to the average deconvolution of all BPs). Once a
+    Bragg vector map, or by taking its maximal pixel.  If the CoM is used, an additional
+    refinement step is used where we take the CoM of a Bragg vector map contructed from a first guess
+    at the central Bragg peaks (as opposed to the BVM of all BPs). Once a
     unscattered beam position is determined, the Bragg peak closest to this position is identified.
     The shifts in these peaks positions from their average are returned as the diffraction shifts.
 
@@ -28,7 +28,7 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     Returns:
         xshifts         ((R_Nx,R_Ny)-shaped array) the shifts in x
         yshifts         ((R_Nx,R_Ny)-shaped array) the shifts in y
-        deconvolution   ((R_Nx,R_Ny)-shaped array) the deconvolution of only the Bragg peaks
+        braggvectormap  ((R_Nx,R_Ny)-shaped array) the Bragg vector map of only the Bragg peaks
                         identified with the unscattered beam. Useful for diagnostic purposes.
     """
     assert isinstance(Braggpeaks, PointListArray), "Braggpeaks must be a PointListArray"
@@ -38,25 +38,25 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     R_Nx,R_Ny = Braggpeaks.shape
 
     # Get guess at position of unscattered beam
-    deconvolution_all = get_deconvolution(Braggpeaks, Q_Nx, Q_Ny)
+    braggvectormap_all = get_bragg_vector_map(Braggpeaks, Q_Nx, Q_Ny)
     if findcenter=='max':
-        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(deconvolution_all,10)),(Q_Nx,Q_Ny))
+        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(braggvectormap_all,10)),(Q_Nx,Q_Ny))
     else:
-        x0,y0 = get_CoM(deconvolution_all)
-        deconvolution = np.zeros_like(deconvolution_all)
+        x0,y0 = get_CoM(braggvectormap_all)
+        braggvectormap = np.zeros_like(braggvectormap_all)
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
                 pointlist = Braggpeaks.get_pointlist(Rx,Ry)
                 r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
                 index = np.argmin(r2)
-                deconvolution = add_to_2D_array_from_floats(deconvolution,
+                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
                                                             pointlist.data['qx'][index],
                                                             pointlist.data['qy'][index],
                                                             pointlist.data['intensity'][index])
-        x0,y0 = get_CoM(deconvolution)
+        x0,y0 = get_CoM(braggvectormap)
 
     # Get Bragg peak closest to unscattered beam at each scan position
-    deconvolution = np.zeros_like(deconvolution_all)
+    braggvectormap = np.zeros_like(braggvectormap_all)
     xshifts = np.zeros((R_Nx,R_Ny))
     yshifts = np.zeros((R_Nx,R_Ny))
     for Rx in range(R_Nx):
@@ -64,7 +64,7 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
             pointlist = Braggpeaks.get_pointlist(Rx,Ry)
             r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
             index = np.argmin(r2)
-            deconvolution = add_to_2D_array_from_floats(deconvolution,
+            braggvectormap = add_to_2D_array_from_floats(braggvectormap,
                                                         pointlist.data['qx'][index],
                                                         pointlist.data['qy'][index],
                                                         pointlist.data['intensity'][index])
@@ -73,7 +73,7 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
 
     xshifts -= np.average(xshifts)
     yshifts -= np.average(yshifts)
-    return xshifts, yshifts, deconvolution
+    return xshifts, yshifts, braggvectormap
 
 def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50):
     """
