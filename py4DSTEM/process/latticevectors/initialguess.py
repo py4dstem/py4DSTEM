@@ -6,16 +6,16 @@ from skimage.transform import radon
 
 from ..utils import get_maxima_1D
 
-def get_radon_scores(deconvolution, mask=None, N_angles=200, sigma=2, minSpacing=2,
+def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacing=2,
                                                                       minRelativeIntensity=0.05):
     """
     Calculates a score function, score(angle), representing the likelihood that angle is a principle
-    lattice direction of the lattice in deconvolution.
+    lattice direction of the lattice in braggvectormap.
 
     The procedure is as follows:
-    If mask is not None, ignore any data in deconvolution where mask is False. Useful for removing
+    If mask is not None, ignore any data in braggvectormap where mask is False. Useful for removing
     the unscattered beam, which can dominate the results.
-    Take the Radon transform of the (masked) deconvolution.
+    Take the Radon transform of the (masked) Bragg vector map.
     For each angle, get the corresponding slice of the sinogram, and calculate its score.
     If we let R_theta(r) be the sinogram slice at angle theta, and where r is the sinogram position
     coordinate, then the score of the slice is given by
@@ -24,8 +24,8 @@ def get_radon_scores(deconvolution, mask=None, N_angles=200, sigma=2, minSpacing
     maxima.  Thus the score is large when there are few maxima which are high intensity.
 
     Accepts:
-        deconvolution           (ndarray) the deconvolution
-        mask                    (ndarray of bools) ignore data in deconvolution wherever mask==False
+        braggvectormap          (ndarray) the Bragg vector map
+        mask                    (ndarray of bools) ignore data in braggvectormap wherever mask==False
         N_angles                (int) the number of angles at which to calculate the score
         sigma                   (float) smoothing parameter for local maximum identification
         minSpacing              (float) if two maxima are found in a radon slice closer than
@@ -36,14 +36,14 @@ def get_radon_scores(deconvolution, mask=None, N_angles=200, sigma=2, minSpacing
     Returns:
         scores                  (ndarray, len N_angles, floats) the scores for each angle
         thetas                  (ndarray, len N_angles, floats) the angles, in radians
-        sinogram                (ndarray) the radon transform of deconvolution(*mask)
+        sinogram                (ndarray) the radon transform of braggvectormap*mask
     """
     # Get sinogram
     thetas = np.linspace(0,180,N_angles)
     if mask is not None:
-        sinogram = radon(deconvolution*mask, theta=thetas, circle=False)
+        sinogram = radon(braggvectormap*mask, theta=thetas, circle=False)
     else:
-        sinogram = radon(deconvolution, theta=thetas, circle=False)
+        sinogram = radon(braggvectormap, theta=thetas, circle=False)
 
     # Get scores
     N_maxima = np.empty_like(thetas)
