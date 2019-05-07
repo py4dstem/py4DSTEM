@@ -117,7 +117,7 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, wx=500, wy=500):
 	dc 			(DataCube) a py4DSTEM DataCube containing the sliced up stack, in the correct order
 	"""
 
-	nframe = scansize.prod()//optx.size
+	nframe = scanshape.prod()//optx.size
 
 	dshape = (int(nframe),int(optx.size),wx,wy)
 
@@ -136,7 +136,7 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, wx=500, wy=500):
 
 	t = time() - t0
 
-	print("Sliced {} diffraction patterns in {}h {}m {}s".format(scansize.prod(), int(t/3600),int(t/60), int(t%60)))
+	print("Sliced {} diffraction patterns in {}h {}m {}s".format(scanshape.prod(), int(t/3600),int(t/60), int(t%60)))
 	mrc.close()
 
 	dc = DataCube(vstack)
