@@ -100,7 +100,7 @@ def subframeAlign(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, a
 	return bestx, besty, err
 
 
-def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, wx=500, wy=500):
+def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, startframe=0, wx=500, wy=500):
 	"""
 	Slice the *.mrc movie into all of its subframes
 
