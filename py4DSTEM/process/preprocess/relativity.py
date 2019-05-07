@@ -5,12 +5,6 @@ from ipywidgets import FloatProgress
 from time import time
 from ...file.datastructure import DataCube
 
-def read_mrc_file(filename):
-	import mrcfile
-	# read in an *.mrc file as an MRC memmap
-	return mrcfile.mmap(filename,mode='r')
-
-
 def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	"""
 	Slice a movie frame into subframes, given the center points x_cent and y_cent (which are numpy meshgrids)
