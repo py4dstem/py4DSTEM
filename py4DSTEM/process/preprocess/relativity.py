@@ -129,7 +129,7 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, startframe=0, wx=500, w
 	t0 = time()
 
 	for i in np.arange(startframe,startframe+nframe):
-		f.value = i
+		f.value = i-startframe
 		frame = mrc.data[int(i),:,:]
 		stack = slice_subframes(frame,optx,opty,wx,wy)
 		vstack[int(i-startframe),:,:,:] = np.transpose(stack,(2,0,1))
