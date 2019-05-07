@@ -19,7 +19,6 @@
 import hyperspy.api as hs
 from .dm import dmReader
 from .empad import read_empad
-from ...process.preprocess import read_mrc_file
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
 from ..datastructure import Metadata
@@ -76,8 +75,9 @@ def read(filename, load=None):
             print("Reading an EMPAD file...")
             output = read_empad_file(filename)
         elif load == 'relativity':
+            import mrcfile
             print("Reading an IDES Relativity MRC file...")
-            output = read_mrc_file(filename)
+            output = mrcfile.mmap(filename,mode='r')
         else:
             print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
             output = None
