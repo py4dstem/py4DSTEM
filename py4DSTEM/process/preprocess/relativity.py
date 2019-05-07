@@ -87,7 +87,7 @@ def subframeAlign(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, a
 
 	plt.show()
 
-	fig2, ax2 = subplots(xcent.shape[0],xcent.shape[1],figsize=(10,10)):
+	fig2, ax2 = subplots(xcent.shape[0],xcent.shape[1],figsize=(10,10))
 
 	for Rx in np.arange(xcent.shape[0]):
 		for Ry in np.arange(xcent.shape[1]):
