@@ -25,7 +25,7 @@ def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	return stack
 
 
-def subframeAlign(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, anchorDP=0, corrPower=0.5, damping=0.5 ):
+def subframeAlign(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, anchorDP=0, corrPower=0.5, damping=1 ):
 	"""
 	Detrmine the alignment of the subframes in a Relativity frame by gradient descent. Arguments are:
 
