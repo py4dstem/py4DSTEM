@@ -20,7 +20,7 @@ def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	for Rx in range(x_cent.shape[0]):
 		for Ry in range(x_cent.shape[1]):
 			DPind = np.ravel_multi_index((Rx,Ry),(x_cent.shape[0],x_cent.shape[1]))
-			stack[:,:,DPind] = np.roll(DP,(-(x_cent[Rx,Ry]-dx),-(y_cent[Rx,Ry]-dy)),axis=(0,1))[:wx,:wy]
+			stack[:,:,DPind] = np.roll(frame,(-(x_cent[Rx,Ry]-dx),-(y_cent[Rx,Ry]-dy)),axis=(0,1))[:wx,:wy]
 
 	return stack
 
