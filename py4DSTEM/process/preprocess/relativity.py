@@ -1,3 +1,16 @@
+# -*- coding: utf-8 -*-
+
+# Reads an IDES Relativity file, determines the locations of the subframes, and splits them into a stack.
+#
+# The IDES Relativity splits the camera area into a matrix of subframes, which gives a higher framerate than
+# the native capability of the camera (1280 fps in 4x4 mode on the NCEM ThemIS). The frames are slightly
+# overlapping and highly distorted. This file provides functions for reading the *.mrc movies containing
+# the frames, locating the subframes and cropping them, measuring the distortion in each subframe, and
+# finally extracting a corrected DataCube from the movie.
+# 
+# Created on 7 May 2019
+# @author: sezeltmann
+
 import numpy as np
 from ..utils import get_shift_hybrid
 import matplotlib.pyplot as plt
