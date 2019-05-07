@@ -11,16 +11,16 @@ def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	and the subframe width wx, wy
 	Returns a 3D stack of diffraction patterns.
 	"""
-	nDP = xcents.shape[0] * xcents.shape[1]
+	nDP = x_cent.shape[0] * x_cent.shape[1]
 	stack = np.zeros((wx,wy,nDP))
 
 	dx = np.round(wx/2).astype(int)
 	dy = np.round(wy/2).astype(int)
 
-	for Rx in range(xcents.shape[0]):
-		for Ry in range(xcents.shape[1]):
-			DPind = np.ravel_multi_index((Rx,Ry),(xcents.shape[0],xcents.shape[1]))
-			stack[:,:,DPind] = np.roll(DP,(-(xcents[Rx,Ry]-dx),-(ycents[Rx,Ry]-dy)),axis=(0,1))[:wx,:wy]
+	for Rx in range(x_cent.shape[0]):
+		for Ry in range(x_cent.shape[1]):
+			DPind = np.ravel_multi_index((Rx,Ry),(x_cent.shape[0],x_cent.shape[1]))
+			stack[:,:,DPind] = np.roll(DP,(-(x_cent[Rx,Ry]-dx),-(y_cent[Rx,Ry]-dy)),axis=(0,1))[:wx,:wy]
 
 	return stack
 
