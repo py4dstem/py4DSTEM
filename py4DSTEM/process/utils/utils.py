@@ -4,27 +4,6 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 
-def make_Fourier_coords1D(N, pixelSize=1):
-    """
-    Generates Fourier coordinates for a 1D array of length N.
-	Specifying the pixelSize argument sets a unit size.
-    """
-    if N%2 == 0:
-        q = np.roll( np.arange(-N/2,N/2)/(N*pixelSize), int(N/2))
-    else:
-        q = np.roll( np.arange((1-N)/2,(N+1)/2)/(N*pixelSize), int((1-N)/2))
-    return q
-
-def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
-    """
-    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
-	Specifying the pixelSize argument sets a unit size.
-	"""
-    qx = make_Fourier_coords1D(Nx,pixelSize)
-    qy = make_Fourier_coords1D(Ny,pixelSize)
-    qy,qx = np.meshgrid(qy,qx)
-    return qx,qy
-
 def get_shift(ar1,ar2):
     """
 	Determined the relative shift between a pair of identical arrays, or the shift giving
@@ -523,6 +502,27 @@ def rotate_point(origin, point, angle):
 
 
 
+# Deprecated make_Fourier_coords functions - these are identical to np.fft.fftfreq
 
+#def make_Fourier_coords1D(N, pixelSize=1):
+#    """
+#    Generates Fourier coordinates for a 1D array of length N.
+#	Specifying the pixelSize argument sets a unit size.
+#    """
+#    if N%2 == 0:
+#        q = np.roll( np.arange(-N/2,N/2)/(N*pixelSize), int(N/2))
+#    else:
+#        q = np.roll( np.arange((1-N)/2,(N+1)/2)/(N*pixelSize), int((1-N)/2))
+#    return q
+
+#def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
+#    """
+#    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
+#	Specifying the pixelSize argument sets a unit size.
+#	"""
+#    qx = make_Fourier_coords1D(Nx,pixelSize)
+#    qy = make_Fourier_coords1D(Ny,pixelSize)
+#    qy,qx = np.meshgrid(qy,qx)
+#    return qx,qy
 
 
