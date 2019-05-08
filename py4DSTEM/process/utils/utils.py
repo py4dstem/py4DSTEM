@@ -453,6 +453,75 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
 
     return vertex_list
 
+def pad_shift(ar, shift_x, shift_y):
+    """
+    Similar to np.roll, but designed for special handling of zero padded matrices.
+
+    In particular, for a zero-padded matrix ar and shift values (shift_x,shift_y) which are equal to
+    or less than the pad width, pad_shift is identical to np.roll.
+    For a zero-padded matrix ar and shift values (shift_x,shift_y) which are greater than the pad
+    width, values of ar which np.roll would 'wrap around' are instead set to zero.
+
+    For a 1D analog, np.roll and pad_shift are identical in the first case, but differ in the second:
+
+    Case 1:
+        np.roll(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
+        pad_shift(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
+
+    Case 2:
+        np.roll(np.array([0,0,1,1,1,0,0],3) = array([1,0,0,0,0,1,1])
+        pad_shift(np.array([0,0,1,1,1,0,0],3) = array([0,0,0,0,0,1,1])
+
+    Accepts:
+        ar          (ndarray) a 2D array
+        shift_x     (int) the x shift
+        shift_y     (int) the y shift
+
+    Returns:
+        shifted_ar  (ndarray) the shifted array
+    """
+    assert isinstance(shift_x,(int,np.integer))
+    assert isinstance(shift_y,(int,np.integer))
+
+    xend,yend = np.shape(ar)
+    xend,yend = xend-x,yend-y
+
+    return np.pad(ar, ((x*(x>=0),-x*(x<=0)),(y*(y>=0),-y*(y<=0))),
+                  mode='constant')[-x*(x<=0):-x*(x>=0)+xend*(x<=0), \
+                                   -y*(y<=0):-y*(y>=0)+yend*(y<=0)]
+
+def rotate_point(origin, point, angle):
+    """
+    Rotates point counterclockwise by angle about origin.
+
+    Accepts:
+        origin          (2-tuple of floats) the (x,y) coords of the origin
+        point           (2-tuple of floats) the (x,y) coords of the point
+        angle           (float) the rotation angle, in radians
+
+    Returns:
+        rotated_point   (2-tuple of floats) the (x,y) coords of the rotated point
+    """
+    ox,oy = origin
+    px,py = point
+
+    qx = ox + np.cos(angle)*(px-ox) - np.sin(angle)*(py-oy)
+    qy = oy + np.sin(angle)*(px-ox) + np.cos(angle)*(py-oy)
+
+    return qx,qy
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
