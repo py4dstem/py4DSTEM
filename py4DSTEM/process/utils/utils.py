@@ -4,6 +4,24 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 
+def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
+    """
+    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
+	Specifying the pixelSize argument sets a unit size.
+	"""
+    if hasattr(pixelSize,'__len__'):
+        assert len(pixelSize)==2
+        pixelSize_x = pixelSize[0]
+        pixelSize_y = pixelSize[1]
+    else:
+        pixelSize_x = pixelSize
+        pixelSize_y = pixelSize
+
+    qx = np.fft.fftfreq(Nx,pixelSize)
+    qy = np.fft.fftfreq(Ny,pixelSize)
+    qy,qx = np.meshgrid(qy,qx)
+    return qx,qy
+
 def get_shift(ar1,ar2):
     """
 	Determined the relative shift between a pair of identical arrays, or the shift giving
