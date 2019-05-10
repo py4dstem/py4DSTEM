@@ -1,5 +1,6 @@
 # Functions for differential phase contrast imaging
 
+import numpy as np
 
 #################### Functions for constructing the e-beam #################
 
