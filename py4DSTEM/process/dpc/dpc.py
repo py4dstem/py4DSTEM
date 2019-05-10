@@ -1,6 +1,39 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
+from ...file.datastructure import DataCube
+
+############################# DPC Functions ################################
+
+def get_CoM_images(datacube, mask):
+    """
+    Calculates two images - center of mass x and y - from a 4D-STEM datacube.
+
+    The centers of mass are calculated with respect to the uncalibrated coordinate system of the
+    detector - i.e. pixel sizes are unity, and no rotation or shifting of the origin are performed.
+    CoM images in different (rotated, shifted, rescaled) coordinate systems can be obtained by
+    passing this functions output into change_CoM_coords().
+
+    Accepts:
+        datacube        (DataCube) the 4D-STEM data
+    """
+    assert isinstance(datacube, DataCube)
+
+    qy,qx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
+    mass = np.sum(datacube.data4D, axis=(2,3))
+    CoMx = np.sum(dc.data4D*qx[np.newaxis,np.newaxis,:,:],axis=(2,3)) / mass
+    CoMy = np.sum(dc.data4D*qy[np.newaxis,np.newaxis,:,:],axis=(2,3)) / mass
+
+    return CoMx, CoMy
+
+def change_CoM_coords(params):
+    pass
+
+def get_phase_from_CoM(CoMx, CoMy, padding=0):
+    pass
+
+
+
 
 #################### Functions for constructing the e-beam #################
 
@@ -79,9 +112,6 @@ def sph_aberration(qr, lam, df=0, cs=0, c5=0):
     return chi
 
 
-
-
-
 ##################### Electron physics functions ########################
 
 def get_relativistic_mass_correction(E):
@@ -154,8 +184,8 @@ def make_qspace_coords(shape,qsize):
         qx          (2D ndarray) the x diffraction space coordinates
         qy          (2D ndarray) the y diffraction space coordinates
     """
-    qx = np.fft.fftfreq(size[0])*qsize[0]
-    qy = np.fft.fftfreq(size[1])*qsize[1]
+    qx = np.fft.fftfreq(shape[0])*qsize[0]
+    qy = np.fft.fftfreq(shape[1])*qsize[1]
     return qx,qy
 
 def pad_shift(ar, shift_x, shift_y):
