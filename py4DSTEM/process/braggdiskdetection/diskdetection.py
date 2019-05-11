@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 
 from ...file.datastructure import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar
+from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, multicorr
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -20,7 +20,8 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   minRelativeIntensity = 0.005,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
-                                  subpixel = True,
+                                  subpixel = 'poly',
+                                  upsample_factor = 8,
                                   return_cc = False,
                                   peaks = None):
     """
@@ -59,7 +60,12 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                              the intensity of the brightest peak
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
-        subpixel             (bool) if True, perform subpixel fitting to detected maxima
+        subpixel             (str)          'none': no subpixel fitting
+                                    default 'poly': polynomial interpolation of correlogram peaks
+                                                    (fairly fast but not very accurate)
+                                            'multicorr': uses the multicorr algorithm with 
+                                                        DFT upsampling
+        upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
