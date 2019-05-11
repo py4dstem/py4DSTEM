@@ -57,11 +57,15 @@ def read(filename, load=None):
         load a dm file (.d3 or .dm4), memory mapping the datacube, using dm.py
     load = 'empad'
         load an EMPAD formatted file, using empad.py
-
-    For IDES Relativity mrc files, the output is a memory map to the "movie" which 
-    must be sliced into subframes using the relativity module in py4DTEM.process.preprocess
     load = 'relativity'
-        load an MRC file from the IDES Relativity. See py4DSTEM.process.preprocess.relativity
+        load an MRC file written from the IDES Relativity subframing system, which generates
+        multiple small, tiled diffraction patterns on each detector frame; each subframe corresponds
+        to a distinct scan position, enabling faster effective frame rates than the camera readout
+        time, at the expense of subframe sampling size.
+        the output is a memory map to the 4D datacube, which must be sliced into subframes using the
+        relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
+        This functionality requires the mrcfile package, which can be installed with
+            pip install mrcfile
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
