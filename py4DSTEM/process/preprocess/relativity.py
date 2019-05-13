@@ -71,9 +71,9 @@ def subframe_align(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, 
                         away with no damping)
 
     Returns
-        bestx           words
-        besty           go
-        err             here
+        bestx           (2D array) optimized subframe centers
+        besty           (2D array) optimized subframe centers
+        err             (1D array) fit error for each gradient descent step
 	"""
 
 	err = np.zeros(niter)
