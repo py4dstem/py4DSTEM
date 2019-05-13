@@ -72,7 +72,6 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # Get cross correlation
     cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
     cc = np.maximum(cc,0)
-    cc = gaussian_filter(cc, sigma)
 
     # Get maxima
     maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
@@ -89,7 +88,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
 
     if return_cc:
-        return peaks, cc
+        return peaks, gaussian_filter(cc,sigma)
     else:
         return peaks
 
