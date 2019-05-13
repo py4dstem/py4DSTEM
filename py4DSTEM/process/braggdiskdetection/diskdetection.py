@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 
 from ...file.datastructure import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, multicorr
+from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -21,7 +21,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
                                   subpixel = 'poly',
-                                  upsample_factor = 8,
+                                  upsample_factor = 4,
                                   return_cc = False,
                                   peaks = None):
     """
@@ -75,16 +75,36 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
     """
-    # Get cross correlation
-    cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-    cc = np.maximum(cc,0)
-    cc = gaussian_filter(cc, sigma)
+    if subpixel != 'multicorr':
+        # Get cross correlation
+        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+        cc = np.maximum(cc,0)
 
-    # Get maxima
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
-                                                 minRelativeIntensity=minRelativeIntensity,
-                                                 minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
-                                                 subpixel=subpixel)
+        subpixel_option = (subpixel == 'poly')
+
+        # Get maxima
+        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
+                                                     minRelativeIntensity=minRelativeIntensity,
+                                                     minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
+                                                     subpixel=subpixel_option)
+
+    else:
+        # multicorr requires the complex correlogram
+        m = np.fft.fft2(DP) * probe_kernel_FT
+        ccc = np.fft.ifft2(np.abs(m)**(corrPower) * np.exp(1j*np.angle(m)))
+
+        cc = np.maximum(np.real(ccc),0)
+
+        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
+                                             minRelativeIntensity=minRelativeIntensity,
+                                             minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
+                                             subpixel=False)
+
+        # use the DFT upsample to refine the detected peaks (but not the intensity)
+        for ipeak in range(len(maxima_x)):
+            maxima_x[ipeak], maxima_y[ipeak] = upsampled_correlation(ccc,upsample_factor,np.array((maxima_x[ipeak],maxima_y[ipeak])))
+
+
 
     # Make peaks PointList
     if peaks is None:
@@ -107,7 +127,8 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                minRelativeIntensity = 0.005,
                                minPeakSpacing = 60,
                                maxNumPeaks = 70,
-                               subpixel = True,
+                               subpixel = 'poly',
+                               upsample_factor = 4,
                                return_cc = False):
     """
     Identical to find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
@@ -143,6 +164,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          minPeakSpacing = minPeakSpacing,
                                          maxNumPeaks = maxNumPeaks,
                                          subpixel = subpixel,
+                                         upsample_factor = 4,
                                          return_cc = return_cc)
 
 
@@ -153,7 +175,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               minRelativeIntensity = 0.005,
                               minPeakSpacing = 60,
                               maxNumPeaks = 70,
-                              subpixel = True):
+                              subpixel = 'poly',
+                              upsample_factor = 4):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
     cross, hybrid, or phase correlation with probe.
@@ -196,7 +219,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                                    minRelativeIntensity = minRelativeIntensity,
                                                    minPeakSpacing = minPeakSpacing,
                                                    maxNumPeaks = maxNumPeaks,
-                                                   subpixel = subpixel))
+                                                   subpixel = subpixel,
+                                                   upsample_factor = 4))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
                                                                    int(t/60), int(t%60)))
@@ -211,7 +235,8 @@ def find_Bragg_disks(datacube, probe,
                      minRelativeIntensity = 0.005,
                      minPeakSpacing = 60,
                      maxNumPeaks = 70,
-                     subpixel = True,
+                     subpixel = 'poly',
+                     upsample_factor = 4,
                      verbose = False):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
@@ -259,6 +284,7 @@ def find_Bragg_disks(datacube, probe,
                                           minPeakSpacing = minPeakSpacing,
                                           maxNumPeaks = maxNumPeaks,
                                           subpixel = subpixel,
+                                          upsample_factor = 4,
                                           peaks = peaks.get_pointlist(Rx,Ry))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
