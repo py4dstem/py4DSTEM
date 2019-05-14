@@ -193,7 +193,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                                    subpixel = subpixel))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
-                                                                   int(t/60), int(t%60)))
+                                                                   int((t%3600)/60), int(t%60)))
 
     return tuple(peaks)
 
