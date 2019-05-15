@@ -188,13 +188,13 @@ def make_qspace_coords(shape,qsize):
     qy = np.fft.fftfreq(shape[1])*qsize[1]
     return qx,qy
 
-def pad_shift(ar, shift_x, shift_y):
+def pad_shift(ar, x, y):
     """
     Similar to np.roll, but designed for special handling of zero padded matrices.
 
-    In particular, for a zero-padded matrix ar and shift values (shift_x,shift_y) which are equal to
+    In particular, for a zero-padded matrix ar and shift values (x,y) which are equal to
     or less than the pad width, pad_shift is identical to np.roll.
-    For a zero-padded matrix ar and shift values (shift_x,shift_y) which are greater than the pad
+    For a zero-padded matrix ar and shift values (x,y) which are greater than the pad
     width, values of ar which np.roll would 'wrap around' are instead set to zero.
 
     For a 1D analog, np.roll and pad_shift are identical in the first case, but differ in the second:
@@ -209,14 +209,14 @@ def pad_shift(ar, shift_x, shift_y):
 
     Accepts:
         ar          (ndarray) a 2D array
-        shift_x     (int) the x shift
-        shift_y     (int) the y shift
+        x           (int) the x shift
+        y           (int) the y shift
 
     Returns:
         shifted_ar  (ndarray) the shifted array
     """
-    assert isinstance(shift_x,(int,np.integer))
-    assert isinstance(shift_y,(int,np.integer))
+    assert isinstance(x,(int,np.integer))
+    assert isinstance(y,(int,np.integer))
 
     xend,yend = np.shape(ar)
     xend,yend = xend-x,yend-y
