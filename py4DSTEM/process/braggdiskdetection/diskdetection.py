@@ -77,33 +77,39 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
-    if subpixel != 'multicorr':
-        # multicorr requires the complex correlogram, so avoid it if possible
-        # Get cross correlation from py4DSTEM util function
+    if subpixel == 'none':
         cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
         cc = np.maximum(cc,0)
-
-        subpixel_option = (subpixel == 'poly')
-
-        # Get maxima
-        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
+        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
+                                                     edgeBoundary=edgeBoundary,
                                                      minRelativeIntensity=minRelativeIntensity,
-                                                     minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
-                                                     subpixel=subpixel_option)
-
+                                                     minSpacing=minPeakSpacing,
+                                                     maxNumPeaks=maxNumPeaks,
+                                                     subpixel=False)
+    elif subpixel == 'poly':
+        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+        cc = np.maximum(cc,0)
+        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
+                                                     edgeBoundary=edgeBoundary,
+                                                     minRelativeIntensity=minRelativeIntensity,
+                                                     minSpacing=minPeakSpacing,
+                                                     maxNumPeaks=maxNumPeaks,
+                                                     subpixel=True)
     else:
-        # multicorr subpixel:
+        # Multicorr subpixel:
         m = np.fft.fft2(DP) * probe_kernel_FT
         ccc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
 
         cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
 
-        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
-                                             minRelativeIntensity=minRelativeIntensity,
-                                             minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
-                                             subpixel=True)
+        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
+                                                     edgeBoundary=edgeBoundary,
+                                                     minRelativeIntensity=minRelativeIntensity,
+                                                     minSpacing=minPeakSpacing,
+                                                     maxNumPeaks=maxNumPeaks,
+                                                     subpixel=True)
 
-        # use the DFT upsample to refine the detected peaks (but not the intensity)
+        # Use the DFT upsample to refine the detected peaks (but not the intensity)
         for ipeak in range(len(maxima_x)):
             xyShift = np.array((maxima_x[ipeak],maxima_y[ipeak]))
             # we actually have to lose some precision and go down to half-pixel
@@ -115,8 +121,6 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
             subShift = upsampled_correlation(ccc,upsample_factor,xyShift)
             maxima_x[ipeak]=subShift[0]
             maxima_y[ipeak]=subShift[1]
-
-
 
     # Make peaks PointList
     if peaks is None:
