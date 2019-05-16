@@ -4,4 +4,5 @@ from . import preprocess
 from . import braggdiskdetection
 from . import calibration
 from . import latticevectors
+from . import classification
 

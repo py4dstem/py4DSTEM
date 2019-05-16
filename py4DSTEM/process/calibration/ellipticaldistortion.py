@@ -128,7 +128,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     phi_known should be the smaller of these two angles.
 
     Accepts:
-        data        (ndarray) the data to fit, typically an average deconvolution
+        data        (ndarray) the data to fit, typically a Bragg vector map
         x           (float) the initial ellipse center, x
         y           (float) the initial ellipse center, y
         a           (float) the initial ellipse first semiaxis
