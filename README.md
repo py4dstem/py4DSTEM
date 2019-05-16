@@ -8,7 +8,6 @@ A graphical user interface facilites rapid data exploration, and live testing an
 For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
 For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
 
-
 py4DSTEM is open source, copyleft software.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
@@ -77,8 +76,6 @@ conda install h5py
 conda install pyqtgraph
 conda install PyQt5
 ```
-
-Note that pyqtgraph and PyQt5 are required for the GUI only.
 
 To get the py4DSTEM package, use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
 
