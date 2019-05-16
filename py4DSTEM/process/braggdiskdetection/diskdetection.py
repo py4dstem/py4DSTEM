@@ -75,8 +75,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
     """
-
-    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option!"
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
     if subpixel != 'multicorr':
         # multicorr requires the complex correlogram, so avoid it if possible
@@ -128,7 +127,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
 
     if return_cc:
-        return peaks, cc
+        return peaks, gaussian_filter(cc,sigma)
     else:
         return peaks
 
