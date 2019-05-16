@@ -75,8 +75,12 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
     """
+
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option!"
+
     if subpixel != 'multicorr':
-        # Get cross correlation
+        # multicorr requires the complex correlogram, so avoid it if possible
+        # Get cross correlation from py4DSTEM util function
         cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
         cc = np.maximum(cc,0)
 
@@ -89,20 +93,29 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                                      subpixel=subpixel_option)
 
     else:
-        # multicorr requires the complex correlogram
+        # multicorr subpixel:
         m = np.fft.fft2(DP) * probe_kernel_FT
-        ccc = np.fft.ifft2(np.abs(m)**(corrPower) * np.exp(1j*np.angle(m)))
+        ccc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
 
-        cc = np.maximum(np.real(ccc),0)
+        cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
 
         maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma, edgeBoundary=edgeBoundary,
                                              minRelativeIntensity=minRelativeIntensity,
                                              minSpacing=minPeakSpacing, maxNumPeaks=maxNumPeaks,
-                                             subpixel=False)
+                                             subpixel=True)
 
         # use the DFT upsample to refine the detected peaks (but not the intensity)
         for ipeak in range(len(maxima_x)):
-            maxima_x[ipeak], maxima_y[ipeak] = upsampled_correlation(ccc,upsample_factor,np.array((maxima_x[ipeak],maxima_y[ipeak])))
+            xyShift = np.array((maxima_x[ipeak],maxima_y[ipeak]))
+            # we actually have to lose some precision and go down to half-pixel
+            # accuracy. this could also be done by a single upsampling at factor 2
+            # instead of get_maxima_2D.
+            xyShift[0] = np.round(xyShift[0] * 2) / 2
+            xyShift[1] = np.round(xyShift[1] * 2) / 2
+
+            subShift = upsampled_correlation(ccc,upsample_factor,xyShift)
+            maxima_x[ipeak]=subShift[0]
+            maxima_y[ipeak]=subShift[1]
 
 
 
