@@ -1,38 +1,243 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
+from ..utils import make_Fourier_coords2D
 from ...file.datastructure import DataCube
 
 ############################# DPC Functions ################################
 
-def get_CoM_images(datacube, mask):
+def get_CoM_images(datacube, mask=None, normalize=True):
     """
     Calculates two images - center of mass x and y - from a 4D-STEM datacube.
 
-    The centers of mass are calculated with respect to the uncalibrated coordinate system of the
-    detector - i.e. pixel sizes are unity, and no rotation or shifting of the origin are performed.
-    CoM images in different (rotated, shifted, rescaled) coordinate systems can be obtained by
-    passing this functions output into change_CoM_coords().
+    The centers of mass are returned in units of pixels and in the Qx/Qy detector coordinate system.
 
     Accepts:
         datacube        (DataCube) the 4D-STEM data
+        mask            (2D array) optionally, calculate the CoM only in the areas where mask==True
+        normalize       (bool) if true, subtract off the mean of the CoM images
+
+    Returns:
+        CoMx            (2D array) the center of mass x coordinate
+        CoMy            (2D array) the center of mass y coordinate
     """
     assert isinstance(datacube, DataCube)
+    assert isinstance(normalize, bool)
 
+    # Coordinates
     qy,qx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
-    mass = np.sum(datacube.data4D, axis=(2,3))
-    CoMx = np.sum(dc.data4D*qx[np.newaxis,np.newaxis,:,:],axis=(2,3)) / mass
-    CoMy = np.sum(dc.data4D*qy[np.newaxis,np.newaxis,:,:],axis=(2,3)) / mass
+    if mask is not None:
+        qx *= mask
+        qy *= mask
+
+    # Get CoM
+    CoMx = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    CoMy = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    mass = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    for Rx in range(datacube.R_Nx):
+        for Ry in range(datacube.R_Ny):
+            DP = datacube.data4D[Rx,Ry,:,:]
+            mass[Rx,Ry] = np.sum(DP*mask)
+            CoMx[Rx,Ry] = np.sum(qx*DP) / mass[Rx,Ry]
+            CoMy[Rx,Ry] = np.sum(qy*DP) / mass[Rx,Ry]
+
+    if normalize:
+        CoMx -= np.mean(CoMx)
+        CoMy -= np.mean(CoMy)
 
     return CoMx, CoMy
 
-def change_CoM_coords(params):
-    pass
+def get_rotation_and_flip(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1, return_costs=False):
+    """
+    Find the rotation offset between real space and diffraction space, and whether there exists a
+    relative axis flip their coordinate systems.
 
-def get_phase_from_CoM(CoMx, CoMy, padding=0):
-    pass
+    The idea of the algorithm is to find the rotation which best preserves self-consistency in the
+    observed CoM changes.  By 'self-consistency', we refer to the requirement that the CoM changes -
+    because they correspond to a gradient - must be a conservative vector field (i.e. path
+    independent).  This condition fails to be met when there exists some rotational offset between
+    real and diffraction space. Thus this algorithm performs gradient descent to minimize the square
+    of the sums of all the 4-pixel closed loop line integrals, while varying the rotation angle of
+    the diffraction space (CoMx/CoMy) axes.
 
+    Accepts:
+        CoMx            (2D array) the x coordinates of the diffraction space centers of mass
+        CoMy            (2D array) the y coordinates of the diffraction space centers of mass
+        Q_Nx            (int) the x shape of diffraction space
+        Q_Ny            (int) the y shape of diffraction space
+        n_iter          (int) the number of gradient descent iterations
+        stepsize        (float) the gradient descent step size (i.e. change to theta in a single
+                        step, relative to the gradient)
+        return_costs    (bool) if True, returns the theta values and costs, both with and without an
+                        axis flip, for all gradient descent steps, for diagnostic purposes
 
+    Returns:
+        theta           (float) the rotation angle between the real and diffraction space coordinates
+        flip            (bool) if True, the real and diffraction space coordinates are flipped
+                        relative to one another.  By convention, we take flip=True to correspond to
+                        the change CoMy --> -CoMy.
+        thetas          (float) returned iff return_costs is True. The theta values at each gradient
+                        descent step for flip=False
+        costs           (float) returned iff return_costs is True. The cost values at each gradient
+                        descent step for flip=False
+        thetas_f        (float) returned iff return_costs is True. The theta values for flip=True
+                        descent step for flip=False
+        costs_f         (float) returned iff return_costs is True. The cost values for flip=False
+    """
+    # Cost function coefficients, with / without flip
+    term1 = np.roll(CoMx,(0,-1),axis=(0,1)) - np.roll(CoMx,( 0,+1),axis=(0,1)) + \
+            np.roll(CoMy,(1, 0),axis=(0,1)) - np.roll(CoMy,(-1, 0),axis=(0,1))
+    term2 = np.roll(CoMx,(1, 0),axis=(0,1)) - np.roll(CoMx,(-1, 0),axis=(0,1)) + \
+            np.roll(CoMy,(0, 1),axis=(0,1)) - np.roll(CoMy,( 0,-1),axis=(0,1))
+
+    term1_f = np.roll( CoMx,(0,-1),axis=(0,1)) - np.roll( CoMx,( 0,+1),axis=(0,1)) + \
+              np.roll(-CoMy,(1, 0),axis=(0,1)) - np.roll(-CoMy,(-1, 0),axis=(0,1))
+    term2_f = np.roll( CoMx,(1, 0),axis=(0,1)) - np.roll( CoMx,(-1, 0),axis=(0,1)) + \
+              np.roll(-CoMy,(0, 1),axis=(0,1)) - np.roll(-CoMy,( 0,-1),axis=(0,1))
+
+    # Gradient descent
+
+    thetas = np.zeros(n_iter)
+    costs = np.zeros(n_iter)
+    theta = 0
+    for i in range(n_iter):
+        thetas[i] = theta
+        gradAll = stepsize * ( term1*np.cos(theta) + term2*np.sin(theta)) * \
+                             (-term1*np.sin(theta) + term2*np.cos(theta))
+        grad = np.mean(gradAll)
+        theta -= grad*stepsize
+        costs[i] = np.mean((term1*np.cos(theta) + term2*np.sin(theta))**2)
+
+    thetas_f = np.zeros(n_iter)
+    costs_f = np.zeros(n_iter)
+    theta = 0
+    for i in range(n_iter):
+        thetas_f[i] = theta
+        gradAll = stepsize * ( term1_f*np.cos(theta) + term2_f*np.sin(theta)) * \
+                             (-term1_f*np.sin(theta) + term2_f*np.cos(theta))
+        grad = np.mean(gradAll)
+        theta -= grad*stepsize
+        costs_f[i] = np.mean((term1_f*np.cos(theta) + term2_f*np.sin(theta))**2)
+
+    # Get rotation and flip
+    if costs_f[-1] < costs[-1]:
+        flip = True
+        theta = thetas_f[-1]
+    else:
+        flip = False
+        theta = thetas[-1]
+
+    if return_costs:
+        return theta, flip, thetas, costs, thetas_f, costs_f
+    else:
+        return theta, flip
+
+def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100, paddingfactor=2,
+                                                              stepsize=1, n_iter=10):
+    """
+    Calculate the phase of the sample transmittance from the diffraction centers of mass.
+    A bare bones description of the approach taken here is below - for detailed discussion of the
+    relevnt theory, see, e.g.:
+        Ishizuka et al, Microscopy (2017) 397-405
+        Close et al, Ultramicroscopy 159 (2015) 124-137
+        Wadell and Chapman, Optik 54 (1979) No. 2, 83-96
+
+    The idea here is that the deflection of the center of mass of the electron beam in the
+    diffraction plane scales linearly with the gradient of the phase of the sample transmittance.
+    When this correspondence holds, it is therefore possible to invert the differential equation and
+    extract the phase itself.* The primary assumption made is that the sample is well
+    described as a pure phase object (i.e. the real part of the transmittance is 1). The inversion
+    is performed in this algorithm in Fourier space, i.e. using the Fourier transform property
+    that derivatives in real space are turned into multiplication in Fourier space.
+
+    *Note: because in DPC a differential equation is being inverted - i.e. the  fundamental theorem
+    of calculus is invoked - one might be tempted to call this "integrated differential phase
+    contrast".  Strictly speaking, this term is redundant - performing an integration is simply how
+    DPC works.  Anyone who tells you otherwise is selling something.
+
+    Accepts:
+        CoMx            (2D array) the diffraction space centers of mass x coordinates
+        CoMy            (2D array) the diffraction space centers of mass y coordinates
+        theta           (float) the rotational offset between real and diffraction space coordinates
+        flip            (bool) whether or not the real and diffraction space coords contain a
+                        relative flip
+        regLowPass      (float) low pass regularization term for the Fourier integration operators
+        regHighPass     (float) high pass regularization term for the Fourier integration operators
+        paddingfactor   (int) padding to add to the CoM arrays for boundry condition handling.
+                        1 corresponds to no padding, 2 to doubling the array size, etc.
+        stepsize        (float) the stepsize in the iteration step which updates the phase
+        n_iter          (int) the number of iterations
+
+    Returns:
+        phase           (2D array) the phase of the sample transmittance
+        error           (1D array) the error - RMSD of the phase gradients compared to the CoM - at
+                        each iteration step
+    """
+    assert isinstance(flip,bool)
+    assert isinstance(paddingfactor,(int,np.integer))
+    assert isinstance(n_iter,(int,np.integer))
+
+    # Coordinates
+    R_Nx,R_Ny = CoMx.shape
+    R_Nx_padded,R_Ny_padded = R_Nx*paddingfactor,R_Ny*paddingfactor
+    qx,qy = make_Fourier_coords2D(R_Nx_padded,R_Ny_padded,pixelSize=1)
+    qr2 = qx**2 + qy**2
+
+    # Invese operators
+    denominator = qr2 + regHighPass + qr2**2*regLowPass
+    _ = np.seterr(divide='ignore')
+    denominator = 1./denominator
+    denominator[0,0] = 0
+    _ = np.seterr(divide='warn')
+    f = 1j * 0.25 * stepsize
+    qxOperator = f*qx*denominator
+    qyOperator = f*qy*denominator
+
+    # Perform rotation and flipping
+    if not flip:
+        CoMx_rot = CoMx*np.cos(theta) - CoMy*np.sin(theta)
+        CoMy_rot = CoMx*np.sin(theta) + CoMy*np.cos(theta)
+    if flip:
+        CoMx_rot = CoMx*np.cos(theta) + CoMy*np.sin(theta)
+        CoMy_rot = CoMx*np.sin(theta) - CoMy*np.cos(theta)
+
+    # Initializations
+    phase = np.zeros((R_Nx_padded,R_Ny_padded))
+    update = np.zeros((R_Nx_padded,R_Ny_padded))
+    dx = np.zeros((R_Nx_padded,R_Ny_padded))
+    dy = np.zeros((R_Nx_padded,R_Ny_padded))
+    error = np.zeros(n_iter)
+    mask = np.zeros((R_Nx_padded,R_Ny_padded),dtype=bool)
+    mask[:R_Nx,:R_Ny] = True
+    maskInv = mask==False
+
+    # Iterative reconstruction
+    for i in range(n_iter):
+
+        # Update gradient estimates using measured CoM values
+        dx[mask] -= CoMx_rot.ravel()
+        dy[mask] -= CoMy_rot.ravel()
+        dx[maskInv] = 0
+        dy[maskInv] = 0
+
+        # Calculate reconstruction update
+        update = np.real(np.fft.ifft2( np.fft.fft2(dx)*qxOperator + np.fft.fft2(dy)*qyOperator))
+
+        # Apply update
+        phase += stepsize*update
+
+        # Measure current phase gradients
+        dx = (np.roll(phase,(-1,0),axis=(0,1)) - np.roll(phase,(1,0),axis=(0,1))) / 2.
+        dy = (np.roll(phase,(0,-1),axis=(0,1)) - np.roll(phase,(0,1),axis=(0,1))) / 2.
+
+        # Estimate error from cost function, RMS deviation of gradients
+        xDiff = dx[mask] - CoMx_rot.ravel()
+        yDiff = dy[mask] - CoMy_rot.ravel()
+        error[i] = np.sqrt(np.mean((xDiff-np.mean(xDiff))**2 + (yDiff-np.mean(yDiff))**2))
+
+    phase = phase[:R_Nx,:R_Ny]
+
+    return phase, error
 
 
 #################### Functions for constructing the e-beam #################
@@ -168,82 +373,82 @@ def get_interaction_constant(E):
 
 ####################### Utility functions ##########################
 
-def make_qspace_coords(shape,qsize):
-    """
-    Creates a diffraction space coordinate grid.
-
-    Number of pixels in the grid (sampling) is given by shape = (Nx,Ny).
-    Extent of the grid is given by qsize = (xsize,ysize), where xsize,ysize are in inverse length
-    units, and are the number of pixels divided by the real space size.
-
-    Accepts:
-        shape       (2-tuple of ints) grid shape
-        qsize       (2-tuple of floats) grid size, in reciprocal length units
-
-    Returns:
-        qx          (2D ndarray) the x diffraction space coordinates
-        qy          (2D ndarray) the y diffraction space coordinates
-    """
-    qx = np.fft.fftfreq(shape[0])*qsize[0]
-    qy = np.fft.fftfreq(shape[1])*qsize[1]
-    return qx,qy
-
-def pad_shift(ar, x, y):
-    """
-    Similar to np.roll, but designed for special handling of zero padded matrices.
-
-    In particular, for a zero-padded matrix ar and shift values (x,y) which are equal to
-    or less than the pad width, pad_shift is identical to np.roll.
-    For a zero-padded matrix ar and shift values (x,y) which are greater than the pad
-    width, values of ar which np.roll would 'wrap around' are instead set to zero.
-
-    For a 1D analog, np.roll and pad_shift are identical in the first case, but differ in the second:
-
-    Case 1:
-        np.roll(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
-        pad_shift(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
-
-    Case 2:
-        np.roll(np.array([0,0,1,1,1,0,0],3) = array([1,0,0,0,0,1,1])
-        pad_shift(np.array([0,0,1,1,1,0,0],3) = array([0,0,0,0,0,1,1])
-
-    Accepts:
-        ar          (ndarray) a 2D array
-        x           (int) the x shift
-        y           (int) the y shift
-
-    Returns:
-        shifted_ar  (ndarray) the shifted array
-    """
-    assert isinstance(x,(int,np.integer))
-    assert isinstance(y,(int,np.integer))
-
-    xend,yend = np.shape(ar)
-    xend,yend = xend-x,yend-y
-
-    return np.pad(ar, ((x*(x>=0),-x*(x<=0)),(y*(y>=0),-y*(y<=0))),
-                  mode='constant')[-x*(x<=0):-x*(x>=0)+xend*(x<=0), \
-                                   -y*(y<=0):-y*(y>=0)+yend*(y<=0)]
-
-def rotate_point(origin, point, angle):
-    """
-    Rotates point counterclockwise by angle about origin.
-
-    Accepts:
-        origin          (2-tuple of floats) the (x,y) coords of the origin
-        point           (2-tuple of floats) the (x,y) coords of the point
-        angle           (float) the rotation angle, in radians
-
-    Returns:
-        rotated_point   (2-tuple of floats) the (x,y) coords of the rotated point
-    """
-    ox,oy = origin
-    px,py = point
-
-    qx = ox + np.cos(angle)*(px-ox) - np.sin(angle)*(py-oy)
-    qy = oy + np.sin(angle)*(px-ox) + np.cos(angle)*(py-oy)
-
-    return qx,qy
+# def make_qspace_coords(shape,qsize):
+#     """
+#     Creates a diffraction space coordinate grid.
+# 
+#     Number of pixels in the grid (sampling) is given by shape = (Nx,Ny).
+#     Extent of the grid is given by qsize = (xsize,ysize), where xsize,ysize are in inverse length
+#     units, and are the number of pixels divided by the real space size.
+# 
+#     Accepts:
+#         shape       (2-tuple of ints) grid shape
+#         qsize       (2-tuple of floats) grid size, in reciprocal length units
+# 
+#     Returns:
+#         qx          (2D ndarray) the x diffraction space coordinates
+#         qy          (2D ndarray) the y diffraction space coordinates
+#     """
+#     qx = np.fft.fftfreq(shape[0])*qsize[0]
+#     qy = np.fft.fftfreq(shape[1])*qsize[1]
+#     return qx,qy
+# 
+# def pad_shift(ar, x, y):
+#     """
+#     Similar to np.roll, but designed for special handling of zero padded matrices.
+# 
+#     In particular, for a zero-padded matrix ar and shift values (x,y) which are equal to
+#     or less than the pad width, pad_shift is identical to np.roll.
+#     For a zero-padded matrix ar and shift values (x,y) which are greater than the pad
+#     width, values of ar which np.roll would 'wrap around' are instead set to zero.
+# 
+#     For a 1D analog, np.roll and pad_shift are identical in the first case, but differ in the second:
+# 
+#     Case 1:
+#         np.roll(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
+#         pad_shift(np.array([0,0,1,1,1,0,0],2) = array([0,0,0,0,1,1,1])
+# 
+#     Case 2:
+#         np.roll(np.array([0,0,1,1,1,0,0],3) = array([1,0,0,0,0,1,1])
+#         pad_shift(np.array([0,0,1,1,1,0,0],3) = array([0,0,0,0,0,1,1])
+# 
+#     Accepts:
+#         ar          (ndarray) a 2D array
+#         x           (int) the x shift
+#         y           (int) the y shift
+# 
+#     Returns:
+#         shifted_ar  (ndarray) the shifted array
+#     """
+#     assert isinstance(x,(int,np.integer))
+#     assert isinstance(y,(int,np.integer))
+# 
+#     xend,yend = np.shape(ar)
+#     xend,yend = xend-x,yend-y
+# 
+#     return np.pad(ar, ((x*(x>=0),-x*(x<=0)),(y*(y>=0),-y*(y<=0))),
+#                   mode='constant')[-x*(x<=0):-x*(x>=0)+xend*(x<=0), \
+#                                    -y*(y<=0):-y*(y>=0)+yend*(y<=0)]
+# 
+# def rotate_point(origin, point, angle):
+#     """
+#     Rotates point counterclockwise by angle about origin.
+# 
+#     Accepts:
+#         origin          (2-tuple of floats) the (x,y) coords of the origin
+#         point           (2-tuple of floats) the (x,y) coords of the point
+#         angle           (float) the rotation angle, in radians
+# 
+#     Returns:
+#         rotated_point   (2-tuple of floats) the (x,y) coords of the rotated point
+#     """
+#     ox,oy = origin
+#     px,py = point
+# 
+#     qx = ox + np.cos(angle)*(px-ox) - np.sin(angle)*(py-oy)
+#     qy = oy + np.sin(angle)*(px-ox) + np.cos(angle)*(py-oy)
+# 
+#     return qx,qy
 
 
 
