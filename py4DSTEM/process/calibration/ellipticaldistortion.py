@@ -36,7 +36,7 @@ def measure_elliptical_distortion(ar, x0, y0, r_inner, r_outer, datamask=None):
                         p1 = (x,y,A,B,C)
     """
     # Get the datapoints to fit
-    yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[1]))
+    yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
     rr = np.sqrt((xx-x0)**2 + (yy-y0)**2)
     mask = (rr>r_inner) * (rr<=r_outer)
     if datamask is not None:
