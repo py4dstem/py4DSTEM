@@ -71,7 +71,7 @@ class BraggVectorClassification(object):
     """
 
     def __init__(self, braggpeaks, Qx, Qy, thresh=0.3, BP_fraction_thresh=0.1, max_iterations=200,
-                       X_is_boolean=True):
+                       X_is_boolean=True, n_corr_init=2):
         """
         Initializes a BraggVectorClassification instance, by
         1. Getting integer labels for all of the detected Bragg peaks according to which (Qx,Qy) is
@@ -92,6 +92,8 @@ class BraggVectorClassification(object):
             max_iterations      (int) algorithm terminates after this many iterations
             X_is_boolean        (bool) if True, populate X with bools (BP is or is not present)
                                 if False, populate X with floats (BP c.c. intensities)
+            n_corr_init         (int) seed new classes by finding maxima of the n-point joint
+                                probability function.  Must be 2 or 3.
         """
         assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
         assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
@@ -108,7 +110,8 @@ class BraggVectorClassification(object):
         # Get sets of integers representing the initial classes
         BP_sets = get_initial_classes(braggpeak_labels, N=len(Qx), thresh=thresh,
                                       BP_fraction_thresh=BP_fraction_thresh,
-                                      max_iterations=max_iterations)
+                                      max_iterations=max_iterations,
+                                      n_corr_init=n_corr_init)
 
         # Construct X, W, H matrices
         self.N_c = len(BP_sets)
@@ -577,13 +580,15 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy):
     return braggpeak_labels
 
 
-def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1, max_iterations=200):
+def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1, max_iterations=200,
+                        n_corr_init=2):
     """
     From the sets of Bragg peaks present at each scan position, get an initial guess classes at
     which Bragg peaks should be grouped together into classes.
 
     The algorithm is as follows:
-    1. Calculate a 3-point correlation function, i.e. f(i,j,k) = the probability that Bragg
+    1. Calculate an n-point correlation function, i.e. the joint probability of any given n
+    BPs coexisting in a diffraction pattern.  n is controlled by n_corr_init, and must be 2 or 3.
     peaks i, j, and k are all in the same DP.
     2. Find the BP triplet maximizing the 3-point function; include these three BPs in a class.
     3. Get all DPs containing the class BPs. From these, find the next most likely BP to also
@@ -603,6 +608,8 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
         BP_fraction_thresh  (float in [0,1]) algorithm terminates if fewer than this fraction
                             of the BPs have not been assigned to a class
         max_iterations      (int) algorithm terminates after this many iterations
+        n_corr_init         (int) seed new classes by finding maxima of the n-point joint
+                            probability function.  Must be 2 or 3.
 
     Returns:
         BP_sets             (list of sets) the sets of Bragg peaks constituting the classes
@@ -611,62 +618,118 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
     assert thresh >= 0 and thresh <= 1
     assert BP_fraction_thresh >= 0 and BP_fraction_thresh <= 1
     assert isinstance(max_iterations,(int,np.integer))
+    assert n_corr_init in (2,3)
     R_Nx = len(braggpeak_labels)
     R_Ny = len(braggpeak_labels[0])
 
-    # Get three-point function
-    threepoint_function = np.zeros((N,N,N))
-    for Rx in range(R_Nx):
-        for Ry in range(R_Ny):
-            s = braggpeak_labels[Rx][Ry]
-            perms = permutations(s,3)
-            for perm in perms:
-                threepoint_function[perm[0],perm[1],perm[2]] += 1
-    threepoint_function /= R_Nx*R_Ny
+    if n_corr_init == 2:
+        # Get two-point function
+        n_point_function = np.zeros((N,N))
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                s = braggpeak_labels[Rx][Ry]
+                perms = permutations(s,2)
+                for perm in perms:
+                    n_point_function[perm[0],perm[1]] += 1
+        n_point_function /= R_Nx*R_Ny
 
-    # Main loop
-    BP_sets = []
-    iteration = 0
-    unused_BPs = np.ones(N,dtype=bool)
-    seed_new_class = True
-    while seed_new_class:
-        ind1,ind2,ind3 = np.unravel_index(np.argmax(threepoint_function),(N,N,N))
-        BP_set = set([ind1,ind2,ind3])
-        grow_class = True
-        while grow_class:
-            frequencies = np.zeros(N)
-            N_elements = 0
-            for Rx in range(R_Nx):
-                for Ry in range(R_Ny):
-                    s = braggpeak_labels[Rx][Ry]
-                    if BP_set.issubset(s):
-                        N_elements += 1
-                        for i in s:
-                            frequencies[i] += 1
-            frequencies /= N_elements
+        # Main loop
+        BP_sets = []
+        iteration = 0
+        unused_BPs = np.ones(N,dtype=bool)
+        seed_new_class = True
+        while seed_new_class:
+            ind1,ind2 = np.unravel_index(np.argmax(n_point_function),(N,N))
+            BP_set = set([ind1,ind2])
+            grow_class = True
+            while grow_class:
+                frequencies = np.zeros(N)
+                N_elements = 0
+                for Rx in range(R_Nx):
+                    for Ry in range(R_Ny):
+                        s = braggpeak_labels[Rx][Ry]
+                        if BP_set.issubset(s):
+                            N_elements += 1
+                            for i in s:
+                                frequencies[i] += 1
+                frequencies /= N_elements
+                for i in BP_set:
+                    frequencies[i] = 0
+                ind_new = np.argmax(frequencies)
+                if frequencies[ind_new] > thresh:
+                    BP_set.add(ind_new)
+                else:
+                    grow_class = False
+
+            # Modify 2-point function, add new BP set to list, and decide to continue or stop
             for i in BP_set:
-                frequencies[i] = 0
-            ind_new = np.argmax(frequencies)
-            if frequencies[ind_new] > thresh:
-                BP_set.add(ind_new)
-            else:
-                grow_class = False
-
-        # Modify 3-point function, add new BP set to list, and decide to continue or stop
-        for i in BP_set:
-            threepoint_function[i,:,:] = 0
-            threepoint_function[:,i,:] = 0
-            threepoint_function[:,:,i] = 0
-            unused_BPs[i] = 0
-        for s in BP_sets:
-            if len(s) == len(s.union(BP_set)):
+                n_point_function[i,:] = 0
+                n_point_function[:,i] = 0
+                unused_BPs[i] = 0
+            for s in BP_sets:
+                if len(s) == len(s.union(BP_set)):
+                    seed_new_class = False
+            if seed_new_class is True:
+                BP_sets.append(BP_set)
+            iteration += 1
+            N_unused_BPs = np.sum(unused_BPs)
+            if iteration > max_iterations or N_unused_BPs < N*BP_fraction_thresh:
                 seed_new_class = False
-        if seed_new_class is True:
-            BP_sets.append(BP_set)
-        iteration += 1
-        N_unused_BPs = np.sum(unused_BPs)
-        if iteration > max_iterations or N_unused_BPs < N*BP_fraction_thresh:
-            seed_new_class = False
+
+    else:
+        # Get three-point function
+        n_point_function = np.zeros((N,N,N))
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                s = braggpeak_labels[Rx][Ry]
+                perms = permutations(s,3)
+                for perm in perms:
+                    n_point_function[perm[0],perm[1],perm[2]] += 1
+        n_point_function /= R_Nx*R_Ny
+
+        # Main loop
+        BP_sets = []
+        iteration = 0
+        unused_BPs = np.ones(N,dtype=bool)
+        seed_new_class = True
+        while seed_new_class:
+            ind1,ind2,ind3 = np.unravel_index(np.argmax(n_point_function),(N,N,N))
+            BP_set = set([ind1,ind2,ind3])
+            grow_class = True
+            while grow_class:
+                frequencies = np.zeros(N)
+                N_elements = 0
+                for Rx in range(R_Nx):
+                    for Ry in range(R_Ny):
+                        s = braggpeak_labels[Rx][Ry]
+                        if BP_set.issubset(s):
+                            N_elements += 1
+                            for i in s:
+                                frequencies[i] += 1
+                frequencies /= N_elements
+                for i in BP_set:
+                    frequencies[i] = 0
+                ind_new = np.argmax(frequencies)
+                if frequencies[ind_new] > thresh:
+                    BP_set.add(ind_new)
+                else:
+                    grow_class = False
+
+            # Modify 3-point function, add new BP set to list, and decide to continue or stop
+            for i in BP_set:
+                n_point_function[i,:,:] = 0
+                n_point_function[:,i,:] = 0
+                n_point_function[:,:,i] = 0
+                unused_BPs[i] = 0
+            for s in BP_sets:
+                if len(s) == len(s.union(BP_set)):
+                    seed_new_class = False
+            if seed_new_class is True:
+                BP_sets.append(BP_set)
+            iteration += 1
+            N_unused_BPs = np.sum(unused_BPs)
+            if iteration > max_iterations or N_unused_BPs < N*BP_fraction_thresh:
+                seed_new_class = False
 
     return BP_sets
 
