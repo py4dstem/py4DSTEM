@@ -22,21 +22,24 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     qy,qx = np.meshgrid(qy,qx)
     return qx,qy
 
-def get_shift(ar1,ar2):
+def get_shift(ar1,ar2,corrPower=1):
     """
-	Determined the relative shift between a pair of identical arrays, or the shift giving
+	Determine the relative shift between a pair of identical arrays, or the shift giving
 	best overlap.
-	Determines best shift in the simplest way, using the brightest pixel in the cross
-	correlation, and is limited to pixel resolution.
+
+	Shift determination uses the brightest pixel in the cross correlation, and is thus limited to
+    pixel resolution. corrPower specifies the cross correlation power, with 1 corresponding to a
+    cross correlation and 0 a phase correlation.
 
 	Inputs:
-		ar1,ar2	-	2D ndarrays
+		ar1,ar2     2D ndarrays
+        corrPower   float between 0 and 1, inclusive. 1=cross correlation, 0=phase correlation
 	Outputs:
 		shiftx,shifty - relative image shift, in pixels
     """
-    cc = np.fft.ifft2(np.fft.fft2(ar1)*np.conj(np.fft.fft2(ar2)))
+    cc = get_cross_correlation(ar1,ar2,corrPower)
     xshift,yshift = np.unravel_index(np.argmax(cc),ar1.shape)
-    return xshift,yshift
+    return xshift, yshift
 
 def get_shifted_ar(ar,xshift,yshift):
     """
