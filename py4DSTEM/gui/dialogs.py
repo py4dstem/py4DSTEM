@@ -25,7 +25,7 @@ smallFont.setPointSize(10)
 smallFont.setItalic(False)
 smallFont.setBold(False)
 
-control_panel_width=300
+control_panel_width=500
 
 
 class ControlPanel(QtWidgets.QWidget):
@@ -36,10 +36,11 @@ class ControlPanel(QtWidgets.QWidget):
         scrollableWidget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(self)
 
-        ############## Make sub-widgets ##############
-        # Provide handles to connect to their widgets
+        ############## Make sub-widgets ###############
+        # Provide handles to connect to their widgets #
+        ###############################################
 
-        # Load, Preprocess, Save
+        ########### Preprocessing sub-widget ##########
         self.widget_LoadPreprocessSave = HideableWidget('Load, Preprocess, Save',LoadPreprocessSaveWidget())
         self.lineEdit_LoadFile = self.widget_LoadPreprocessSave.widget.lineEdit_LoadFile
         self.pushButton_BrowseFiles = self.widget_LoadPreprocessSave.widget.pushButton_BrowseFiles
@@ -56,18 +57,26 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
 
-        # Data cube size and shape
-        self.sizeAndShapeEditor = HideableWidget('Reshape',DataCubeSizeAndShapeWidget(),initial_state=False)
-        self.spinBox_Nx_depre = self.sizeAndShapeEditor.widget.spinBox_Nx
-        self.spinBox_Ny_depre = self.sizeAndShapeEditor.widget.spinBox_Ny
-        self.lineEdit_Binning_depre = self.sizeAndShapeEditor.widget.lineEdit_Binning
-        self.pushButton_BinData_depre = self.sizeAndShapeEditor.widget.pushButton_BinData
-        self.pushButton_SetCropWindow_depre = self.sizeAndShapeEditor.widget.pushButton_SetCropWindow
-        self.pushButton_CropData_depre = self.sizeAndShapeEditor.widget.pushButton_CropData
+        ########### Preprocessing sub-widget ##########
+        self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget())
+        #self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget(),initial_state=False)
+        self.radioButton_RectDetector = self.virtualDetectors.widget.radioButton_RectDetector
+        self.radioButton_CircDetector = self.virtualDetectors.widget.radioButton_CircDetector
+        self.radioButton_AnnularDetector = self.virtualDetectors.widget.radioButton_AnnularDetector
+        self.buttonGroup_DetectorShape = self.virtualDetectors.widget.buttonGroup_DetectorShape
+        self.radioButton_Integrate = self.virtualDetectors.widget.radioButton_Integrate
+        self.radioButton_DiffX = self.virtualDetectors.widget.radioButton_DiffX
+        self.radioButton_DiffY = self.virtualDetectors.widget.radioButton_DiffY
+        self.radioButton_CoMX = self.virtualDetectors.widget.radioButton_CoMX
+        self.radioButton_CoMY = self.virtualDetectors.widget.radioButton_CoMY
+        self.buttonGroup_DetectorMode = self.virtualDetectors.widget.buttonGroup_DetectorMode
 
-        # Create and set layout
+        ####################################################
+        ############## Create and set layout ###############
+        ####################################################
+
         layout.addWidget(self.widget_LoadPreprocessSave,0,QtCore.Qt.AlignTop)
-        layout.addWidget(self.sizeAndShapeEditor,0,QtCore.Qt.AlignTop)
+        layout.addWidget(self.virtualDetectors,0,QtCore.Qt.AlignTop)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
@@ -93,6 +102,7 @@ class ControlPanel(QtWidgets.QWidget):
         #self.setFixedWidth(300)
 
 
+############ Control panel sub-widgets ############
 
 class LoadPreprocessSaveWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -305,63 +315,108 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
 
 
-class DataCubeSizeAndShapeWidget(QtWidgets.QWidget):
+class VirtualDetectorsWidget(QtWidgets.QWidget):
     def __init__(self):
+        """
+        Virtual detector shapes and modes are assigned integers IDs to connect the radio buttons
+        with the appropriate functions, as follows:
+
+        Shapes:
+            1: Rectangular
+            2: Circular
+            3: Annular
+        Modes:
+            1: Integrate
+            2: CoM
+            3: Difference, X
+            4: Difference, Y
+        """
+
         QtWidgets.QWidget.__init__(self)
 
-        # Reshaping - Nx and Ny
-        self.spinBox_Nx = QtWidgets.QSpinBox()
-        self.spinBox_Ny = QtWidgets.QSpinBox()
-        self.spinBox_Nx.setMaximum(100000)
-        self.spinBox_Ny.setMaximum(100000)
+        # Detector shape
+        detector_shape_widget = QtWidgets.QWidget()
+        detector_shape_widget_layout = QtWidgets.QVBoxLayout()
 
-        layout_spinBoxRow = QtWidgets.QHBoxLayout()
-        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Nx"),0,QtCore.Qt.AlignRight)
-        layout_spinBoxRow.addWidget(self.spinBox_Nx)
-        layout_spinBoxRow.addWidget(QtWidgets.QLabel("Ny"),0,QtCore.Qt.AlignRight)
-        layout_spinBoxRow.addWidget(self.spinBox_Ny)
+        self.radioButton_RectDetector = QtWidgets.QRadioButton('Rectangular')
+        self.radioButton_CircDetector = QtWidgets.QRadioButton('Circular')
+        self.radioButton_AnnularDetector = QtWidgets.QRadioButton('Annular')
 
-        layout_Reshaping = QtWidgets.QVBoxLayout()
-        #layout_Reshaping.addWidget(QtWidgets.QLabel("Scan shape"),0,QtCore.Qt.AlignCenter)
-        layout_Reshaping.addLayout(layout_spinBoxRow)
+        self.radioButton_RectDetector.setFont(normalFont)
+        self.radioButton_CircDetector.setFont(normalFont)
+        self.radioButton_AnnularDetector.setFont(normalFont)
 
-        # Binning
-        self.lineEdit_Binning = QtWidgets.QLineEdit("")
-        self.pushButton_BinData = QtWidgets.QPushButton("Bin Data")
+        detector_shape_widget_layout.addWidget(self.radioButton_RectDetector)
+        detector_shape_widget_layout.addWidget(self.radioButton_CircDetector)
+        detector_shape_widget_layout.addWidget(self.radioButton_AnnularDetector)
+        detector_shape_widget.setLayout(detector_shape_widget_layout)
 
-        layout_binningRow = QtWidgets.QHBoxLayout()
-        layout_binningRow.addWidget(QtWidgets.QLabel("Bin by:"))
-        layout_binningRow.addWidget(self.lineEdit_Binning)
-        layout_binningRow.addWidget(self.pushButton_BinData)
+        # Create detector shape button group
+        self.buttonGroup_DetectorShape = QtWidgets.QButtonGroup()
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_RectDetector)
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_CircDetector)
+        self.buttonGroup_DetectorShape.addButton(self.radioButton_AnnularDetector)
 
-        layout_Binning = QtWidgets.QVBoxLayout()
-        layout_Binning.addWidget(QtWidgets.QLabel("Binning"),0,QtCore.Qt.AlignCenter)
-        layout_Binning.addLayout(layout_binningRow)
+        self.buttonGroup_DetectorShape.setId(self.radioButton_RectDetector, 0)
+        self.buttonGroup_DetectorShape.setId(self.radioButton_CircDetector, 1)
+        self.buttonGroup_DetectorShape.setId(self.radioButton_AnnularDetector, 2)
 
-        # Cropping
-        self.pushButton_SetCropWindow = QtWidgets.QPushButton("Set Crop Window")
-        self.pushButton_CropData = QtWidgets.QPushButton("Crop Data")
+        # Detector mode
+        detector_mode_widget = QtWidgets.QWidget()
+        detector_mode_widget_layout = QtWidgets.QVBoxLayout()
 
-        layout_croppingRow = QtWidgets.QHBoxLayout()
-        layout_croppingRow.addWidget(self.pushButton_SetCropWindow)
-        layout_croppingRow.addWidget(self.pushButton_CropData)
+        self.radioButton_Integrate = QtWidgets.QRadioButton('Integrate')
+        self.radioButton_DiffX = QtWidgets.QRadioButton('Difference, X')
+        self.radioButton_DiffY = QtWidgets.QRadioButton('Difference, Y')
+        self.radioButton_CoMX = QtWidgets.QRadioButton('Center of Mass, X')
+        self.radioButton_CoMY = QtWidgets.QRadioButton('Center of Mass, Y')
 
-        layout_Cropping = QtWidgets.QVBoxLayout()
-        layout_Cropping.addWidget(QtWidgets.QLabel("Cropping"),0,QtCore.Qt.AlignCenter)
-        layout_Cropping.addLayout(layout_croppingRow)
+        self.radioButton_Integrate.setFont(normalFont)
+        self.radioButton_DiffX.setFont(normalFont)
+        self.radioButton_DiffY.setFont(normalFont)
+        self.radioButton_CoMX.setFont(normalFont)
+        self.radioButton_CoMY.setFont(normalFont)
+
+        detector_mode_widget_layout.addWidget(self.radioButton_Integrate)
+        detector_mode_widget_layout.addWidget(self.radioButton_DiffX)
+        detector_mode_widget_layout.addWidget(self.radioButton_DiffY)
+        detector_mode_widget_layout.addWidget(self.radioButton_CoMX)
+        detector_mode_widget_layout.addWidget(self.radioButton_CoMY)
+        detector_mode_widget.setLayout(detector_mode_widget_layout)
+
+        # Create detector mode button group
+        self.buttonGroup_DetectorMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_Integrate)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_DiffX)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_DiffY)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_CoMX)
+        self.buttonGroup_DetectorMode.addButton(self.radioButton_CoMY)
+
+        self.buttonGroup_DetectorMode.setId(self.radioButton_Integrate, 0)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_DiffX, 1)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_DiffY, 2)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_CoMX, 3)
+        self.buttonGroup_DetectorMode.setId(self.radioButton_CoMY, 4)
 
         # Layout
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(SectionLabel('Scan Shape'))
-        layout.addLayout(layout_Reshaping)
-        layout.addLayout(layout_Binning)
-        layout.addLayout(layout_Cropping)
+        layout.addWidget(SectionLabel('Detector Shape'))
+        layout.addWidget(detector_shape_widget)
+        layout.addWidget(SectionLabel('Detector Mode'))
+        layout.addWidget(detector_mode_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
-
         self.setLayout(layout)
         self.setFixedWidth(control_panel_width)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed))
+
+
+
+
+
+
+
+################### Non control-panel widgets #####################
 
 class SaveWidget(QtWidgets.QWidget):
     """
@@ -404,7 +459,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         self.tab_microscope = self.make_tab(datacube.metadata.microscope)
         self.tab_sample = self.make_tab(datacube.metadata.sample)
         self.tab_user = self.make_tab(datacube.metadata.user)
-        self.tab_processing = self.make_tab(datacube.metadata.processing)
         self.tab_calibration = self.make_tab(datacube.metadata.calibration)
 
         # Comments tab - make separately to create larger text box
@@ -428,7 +482,6 @@ class EditMetadataWidget(QtWidgets.QWidget):
         self.tabs.addTab(self.tab_microscope,"Microscope")
         self.tabs.addTab(self.tab_sample,"Sample")
         self.tabs.addTab(self.tab_user,"User")
-        self.tabs.addTab(self.tab_processing,"Processing")
         self.tabs.addTab(self.tab_calibration,"Calibration")
         self.tabs.addTab(self.tab_comments,"Comments")
 
