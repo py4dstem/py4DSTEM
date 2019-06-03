@@ -27,8 +27,8 @@ import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .utils import sibling_path, pg_point_roi, LQCollection
-from ..file.readwrite.read import read
-from ..file.readwrite.write import save_dataobject
+from ..file.io.read import read
+from ..file.io.write import save_dataobject
 from ..file.datastructure.datacube import DataCube
 
 import IPython
