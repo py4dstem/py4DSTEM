@@ -16,7 +16,7 @@
 # proprietary formats that plague the world of electron scattering. Friends: a thousand times,
 # thank you! <3, b
 
-import hyperspy.api as hs
+import hyperspy.api_nogui as hs
 from .dm import dmReader
 from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
