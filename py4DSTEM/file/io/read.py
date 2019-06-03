@@ -83,8 +83,7 @@ def read(filename, load=None):
             print("Reading an IDES Relativity MRC file...")
             output = mrcfile.mmap(filename,mode='r')
         else:
-            print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
-            output = None
+            raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
 
     else:
@@ -102,8 +101,7 @@ def read(filename, load=None):
             assert all([isinstance(item,int) for item in load]), "If load is a list, it must be a list of ints specifying DataObject indices in the files associated FileBrowser."
             output = browser.get_dataobjects(load)
         else:
-            print("Error: unknown value for parameter 'load' = {}. Returning None. See the read docstring for more info.".format(load))
-            output = None
+            raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
         browser.close()
     return output
@@ -114,13 +112,8 @@ def read_with_hyperspy(filename):
     Read a non-py4DSTEM file using hyperspy.
     """
     # Get data
-    try:
-        hyperspy_file = hs.load(filename)
-        data = hyperspy_file.data
-    except Exception as err:
-        print("Failed to load", err)
-        print("Returning None")
-        return None
+    hyperspy_file = hs.load(filename)
+    data = hyperspy_file.data
 
     # Get metadata
     metadata = Metadata(is_py4DSTEM_file = False,
