@@ -7,7 +7,6 @@
 
 import h5py
 import numpy as np
-import hyperspy.api as hs
 from ..datastructure import DataCube
 from ..datastructure import DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
