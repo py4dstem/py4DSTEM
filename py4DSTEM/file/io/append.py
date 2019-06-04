@@ -28,9 +28,10 @@ def append_from_dataobject_list(dataobject_list, filepath):
 
     #### Get info about existing .h5 file ####
     print("Opening file {}...".format(filepath))
-    assert is_py4DSTEM_file(filepath), "filepath paramter must point to an existing py4DSTEM file."
+    assert is_py4DSTEM_file(filepath), "filepath parameter must point to an existing py4DSTEM file."
     browser = FileBrowser(filepath)
-    assert browser.version == (0,3), "appending to py4DSTEM files only supported in v0.3 and higher."
+    if browser.version[0] == 0:
+        assert browser.version[1] >= 3, "appending to py4DSTEM files only supported in v0.3 and higher."
     N_dataobjects = browser.N_dataobjects
     N_datacubes = browser.N_datacubes
     N_diffractionslices = browser.N_diffractionslices
