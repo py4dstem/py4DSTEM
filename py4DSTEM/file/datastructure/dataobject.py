@@ -2,8 +2,8 @@
 #
 # The purpose of the DataObject class is to create a single, uniform interface for all of the types 
 # of data py4DSTEM creates. It enables:
-#       -searching and retrieving/listing dataobjects in memory, by name, by child class type
 #       -naming dataobjects
+#       -searching, listing, and retrieving dataobjects in memory, by name or by child class type
 #       -linking to metadata
 #
 # All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, RealSlice, and PointLists
@@ -30,7 +30,7 @@ def show_object_list(method):
     return wrapper
 
 
-################## BEGIN DataObject Class ###################
+################## BEGIN DataObject CLASS ###################
 
 class DataObject(object):
     """
