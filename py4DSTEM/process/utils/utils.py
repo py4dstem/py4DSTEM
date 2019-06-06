@@ -4,24 +4,21 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 
-def make_Fourier_coords1D(N, pixelSize=1):
-    """
-    Generates Fourier coordinates for a 1D array of length N.
-	Specifying the pixelSize argument sets a unit size.
-    """
-    if N%2 == 0:
-        q = np.roll( np.arange(-N/2,N/2)/(N*pixelSize), int(N/2))
-    else:
-        q = np.roll( np.arange((1-N)/2,(N+1)/2)/(N*pixelSize), int((1-N)/2))
-    return q
-
 def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     """
     Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
 	Specifying the pixelSize argument sets a unit size.
 	"""
-    qx = make_Fourier_coords1D(Nx,pixelSize)
-    qy = make_Fourier_coords1D(Ny,pixelSize)
+    if hasattr(pixelSize,'__len__'):
+        assert len(pixelSize)==2, "pixelSize must either be a scalar or have length 2"
+        pixelSize_x = pixelSize[0]
+        pixelSize_y = pixelSize[1]
+    else:
+        pixelSize_x = pixelSize
+        pixelSize_y = pixelSize
+
+    qx = np.fft.fftfreq(Nx,pixelSize_x)
+    qy = np.fft.fftfreq(Ny,pixelSize_y)
     qy,qx = np.meshgrid(qy,qx)
     return qx,qy
 
@@ -458,5 +455,38 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+# Deprecated make_Fourier_coords functions - these are identical to np.fft.fftfreq
+
+#def make_Fourier_coords1D(N, pixelSize=1):
+#    """
+#    Generates Fourier coordinates for a 1D array of length N.
+#	Specifying the pixelSize argument sets a unit size.
+#    """
+#    if N%2 == 0:
+#        q = np.roll( np.arange(-N/2,N/2)/(N*pixelSize), int(N/2))
+#    else:
+#        q = np.roll( np.arange((1-N)/2,(N+1)/2)/(N*pixelSize), int((1-N)/2))
+#    return q
+
+#def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
+#    """
+#    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
+#	Specifying the pixelSize argument sets a unit size.
+#	"""
+#    qx = make_Fourier_coords1D(Nx,pixelSize)
+#    qy = make_Fourier_coords1D(Ny,pixelSize)
+#    qy,qx = np.meshgrid(qy,qx)
+#    return qx,qy
 
 
