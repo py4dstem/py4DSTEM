@@ -43,10 +43,10 @@ def read(filename, load=None):
     load = 'name':
         load the DataObject(s) named 'name'. There is no catch for objects named 'all' - don't name
         DataObjects 'all'! ;)
-    load_behavior = 5:
+    load = 5:
         If load behavoir is an int, loads the object found at that index in a FileBrowser
         instantiated from filename.
-    load_behavior = [0,1,5,8,...]:
+    load = [0,1,5,8,...]:
         If load behavoir is a list of ints, loads the set of objects found at those indices in
         a FileBrowser instantiated from filename.
 
