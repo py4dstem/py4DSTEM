@@ -57,4 +57,37 @@ def get_bragg_vector_maxima_map(pointlistarray, Q_Nx, Q_Ny):
                 braggvectormap[qx,qy] = max(I,braggvectormap[qx,qy])
     return braggvectormap
 
+def get_weighted_bragg_vector_map(pointlistarray, Q_Nx, Q_Ny, weights):
+    """
+    Calculates the Bragg vector map from a PointListArray of Bragg peak positions, weighting the
+    Bragg peaks at each scan position according to the array weights.
+
+    Accepts:
+        pointlistarray      (PointListArray)
+        Q_Nx,Q_Ny           (ints)
+        weights             (2D array) The shape of weights must be (R_Nx,R_Ny)
+
+    Returns:
+        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+    """
+    assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
+    assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
+    assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
+    assert weights.shape == pointlistarray.shape, "weights must have shape (R_Nx,R_Ny)"
+
+    braggvectormap = np.zeros((Q_Nx,Q_Ny))
+    for Rx in range(pointlistarray.shape[0]):
+        for Ry in range(pointlistarray.shape[1]):
+            if weights[Rx,Ry] != 0:
+                pointlist = pointlistarray.get_pointlist(Rx,Ry)
+                for i in range(pointlist.length):
+                    qx = pointlist.data['qx'][i]
+                    qy = pointlist.data['qy'][i]
+                    I = pointlist.data['intensity'][i]
+                    braggvectormap = add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
+    return braggvectormap
+
+
+
 

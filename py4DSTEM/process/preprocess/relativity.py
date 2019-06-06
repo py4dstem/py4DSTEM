@@ -143,7 +143,7 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, startframe=0, wx=500, w
 
     Accepts:
         mrc         (MrcMemmap) memory map into the mrc file (such as opened by
-                    py4DSTEM.file.readwrite.read(...,load='relativity'))
+                    py4DSTEM.file.io.read(...,load='relativity'))
         scratch     (str) path to a scratch file where a numpy memmap containing the re-sliced stack
                     will be buffered
                     NOTE! this will overwrite whatever file is at this path! be careful!
