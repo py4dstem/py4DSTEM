@@ -59,21 +59,6 @@ def remove_from_index_list(indices, filepath):
     f.close()
 
 @log
-def remove_dataobject(index, filepath):
-    """
-    Remove a dataobject from the .h5 file at filepath.
-
-    Accepts:
-        index       (int) the index of the dataobject to be removed, according to a FileBrowser
-                    associated with filepath
-        filepath    path to the py4DSTEM .h5 file
-    """
-    assert isinstance(index, (int,np.integer))
-
-    # Remove
-    remove_from_index_list([index], filepath)
-
-@log
 def remove(dataobjects, filepath):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
