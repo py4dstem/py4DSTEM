@@ -71,7 +71,7 @@ def remove_dataobject(index, filepath):
     assert isinstance(index, (int,np.integer))
 
     # Remove
-    remove_from_dataobject_list([index], filepath)
+    remove_from_index_list([index], filepath)
 
 @log
 def remove(dataobjects, filepath):
