@@ -131,7 +131,7 @@ def read_with_hyperspy(filename):
     except ValueError:
         print("Warning: scan shape not detected in metadata; please check / set manually.")
 
-    # Point to metadata from datacube
+    # Link metadata and data
     datacube.metadata = metadata
 
     return datacube
@@ -165,7 +165,7 @@ def read_dm_mmap(filename):
     except ValueError:
         print("Warning: scan shape not detected in metadata; please check / set manually.")
 
-    # Point to metadata from datacube
+    # Link metadata and data
     datacube.metadata = metadata
 
     return datacube
