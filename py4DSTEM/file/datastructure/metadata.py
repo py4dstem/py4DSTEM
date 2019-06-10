@@ -5,20 +5,22 @@
 
 import numpy as np
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from .dataobject import DataObject
 
-class Metadata(DataObject):
+class Metadata(object):
 
     def __init__(self, is_py4DSTEM_file,
                  original_metadata_shortlist=None, original_metadata_all=None,
-                 filepath=None):
+                 filepath=None, name=''):
         """
         Instantiate a Metadata object.
         Metadata is populated in one of two ways - either for native py4DSTEM files or for
         non-native files - and the kwargs this method expects depend on this.
 
         Accepts (all):
-            is_py4DSTEM_file        (bool) flag indicating native or non-native py4DSTEM files
+            is_py4DSTEM_file        (bool or str) flag indicating native or non-native py4DSTEM file
+                                    if True/False. If str, should be 'copy', indicating that a
+                                    metadata object is being copied rather than generated from a file
+            name                    (str) a name for the object
 
         Accepts (non-py4DSTEM files):
             original_metadata_shortlist     (hyperspy Signal.metadata tree)
@@ -27,15 +29,16 @@ class Metadata(DataObject):
         Accepts (py4DSTEM file):
             filepath                 (str) path to the py4DSTEM h5 file
         """
-        DataObject.__init__(self)
-        self.metadata = self
-
         # Setup metadata containers
         self.setup_containers()
         self.setup_search_dicts()
 
+        # Copying Metadata objects
+        if is_py4DSTEM_file=='copy':
+            pass
+
         # For non-py4DSTEM files
-        if not is_py4DSTEM_file:
+        elif not is_py4DSTEM_file:
             self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
 
         # For py4DSTEM files
@@ -50,6 +53,9 @@ class Metadata(DataObject):
             else:
                 raise ValueError("Unrecognized py4DSTEM version, {}.{}".format(py4DSTEM_version[0],
                                                                            py4DSTEM_version[1]))
+
+        self.name = name
+        self.metadata = self
 
     ################ Setup methods ############### 
 
@@ -321,6 +327,30 @@ class Metadata(DataObject):
             return ans[0]
         else:
             return ans
+
+    ################ Copy metadata object ############### 
+
+    def copy(self):
+        """
+        Creates and returns a copy of itself.
+        """
+        metadata = Metadata(is_py4DSTEM_file='copy')
+        metadata.original_metadata.shortlist = self.original_metadata.shortlist
+        metadata.original_metadata.all = self.original_metadata.all
+
+        for k,v in self.microscope.items():
+            metadata.microscope[k] = v
+        for k,v in self.sample.items():
+            metadata.sample[k] = v
+        for k,v in self.user.items():
+            metadata.user[k] = v
+        for k,v in self.calibration.items():
+            metadata.calibration[k] = v
+        for k,v in self.comments.items():
+            metadata.comments[k] = v
+
+        return metadata
+
 
 
 ########################## END OF METADATA OBJECT ########################
