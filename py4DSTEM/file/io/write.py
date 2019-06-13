@@ -14,18 +14,13 @@ from ..log import log, Logger
 logger = Logger()
 
 @log
-def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
+def save_from_dataobject_list(dataobject_list, outputfile):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
     Accepts:
         dataobject_list     a list of DataObjects to save
         outputfile          path to an .h5 file to save
-        save_metadata       If True, automatically find the appropriate metadata object to save.
-                            If multiple possible metadata objects are found, setting this flag to an
-                            integer index specifies which to use.
-                            Set save_metadata to a Metadata object to use that metadata.
-                            Set save_metadata to False to save no metadata; not recommended.
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
@@ -35,53 +30,30 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
     f.attrs.create("version_minor",3)
-    group_data = f.create_group("4DSTEM_experiment")
+    group_toplevel = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
 
-    # Create metadata groups
-    group_metadata = group_data.create_group("metadata")
-    group_original_metadata = group_metadata.create_group("original")
-    group_microscope_metadata = group_metadata.create_group("microscope")
-    group_sample_metadata = group_metadata.create_group("sample")
-    group_user_metadata = group_metadata.create_group("user")
-    group_calibration_metadata = group_metadata.create_group("calibration")
-    group_comments_metadata = group_metadata.create_group("comments")
-    group_original_metadata_all = group_original_metadata.create_group("all")
-    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
+    # Find and label all metadata objects
+    metadata_list,i = [],0
+    for dataobject in dataobject_list:
+        if dataobject.metadata is not None:
+            assert isinstance(dataobject.metadata,Metadata), "DataObject.metadata must be a Metadata object or None for all DataObjects being saved."
+            if dataobject.metadata not in metadata_list:
+                metadata_list.append(dataobject.metadata)
+                dataobject.metadata._ind = i
+                i += 1
 
-    # If save_metadata isn't False, find metadata and save it
-    if save_metadata is not False:
-        print("Writing metadata...")
-        if isinstance(save_metadata, Metadata):
-            metadata = save_metadata
-        else:
-            metadata = find_metadata(dataobject_list, save_metadata, f)
-
-        # Transfer original metadata trees
-        if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
-            transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-            transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
-        else:
-            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
-
-        # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
-        transfer_metadata_dict(metadata.data.microscope,group_microscope_metadata)
-        transfer_metadata_dict(metadata.data.sample,group_sample_metadata)
-        transfer_metadata_dict(metadata.data.user,group_user_metadata)
-        transfer_metadata_dict(metadata.data.calibration,group_calibration_metadata)
-        transfer_metadata_dict(metadata.data.comments,group_comments_metadata)
-
-    ##### Log #####
-    group_log = group_data.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
+    # Save metadata
+    group_metadata = group_toplevel.create_group("metadata")
+    for metadata in metadata_list:
+        group_metadata_current = group_metadata.create_group("metadata_{}".format(metadata._ind))
+        save_metadata(metadata,group_metadata_current)
 
     ##### Data #####
 
     # Write data groups
-    group_data = group_data.create_group("data")
+    group_data = group_toplevel.create_group("data")
     group_datacubes = group_data.create_group("datacubes")
     group_diffractionslices = group_data.create_group("diffractionslices")
     group_realslices = group_data.create_group("realslices")
@@ -152,6 +124,11 @@ def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
         else:
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
+    ##### Log #####
+    group_log = group_toplevel.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
+
     ##### Finish and close #####
     print("Done.")
     f.close()
@@ -215,6 +192,8 @@ def save(data, outputfile, **kwargs):
 
 def save_datacube_group(group, datacube):
     group.attrs.create("emd_group_type",1)
+    if datacube.metadata is not None:
+        group.attrs.create("metadata",datacube.metadata._ind)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
     data_datacube = group.create_dataset("datacube", data=datacube.data4D)
@@ -282,7 +261,8 @@ def save_datacube_group(group, datacube):
     #    pass
 
 def save_diffraction_group(group, diffractionslice):
-
+    if diffractionslice.metadata is not None:
+        group.attrs.create("metadata",diffractionslice.metadata._ind)
     group.attrs.create("depth", diffractionslice.depth)
     if diffractionslice.depth==1:
         shape = diffractionslice.data2D.shape
@@ -334,7 +314,8 @@ def save_diffraction_group(group, diffractionslice):
     #    pass
 
 def save_real_group(group, realslice):
-
+    if realslice.metadata is not None:
+        group.attrs.create("metadata",realslice.metadata._ind)
     group.attrs.create("depth", realslice.depth)
     if realslice.depth==1:
         shape = realslice.data2D.shape
@@ -386,6 +367,8 @@ def save_real_group(group, realslice):
     #    pass
 
 def save_pointlist_group(group, pointlist):
+    if pointlist.metadata is not None:
+        group.attrs.create("metadata",pointlist.metadata._ind)
 
     n_coords = len(pointlist.dtype.names)
     coords = np.string_(str([coord for coord in pointlist.dtype.names]))
@@ -399,6 +382,8 @@ def save_pointlist_group(group, pointlist):
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
 def save_pointlistarray_group(group, pointlistarray):
+    if pointlistarray.metadata is not None:
+        group.attrs.create("metadata",pointlistarray.metadata._ind)
 
     n_coords = len(pointlistarray.dtype.names)
     coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
@@ -414,60 +399,50 @@ def save_pointlistarray_group(group, pointlistarray):
 
 #### Metadata functions ####
 
-def find_metadata(dataobject_list, save_metadata, h5file):
+def save_metadata(metadata,group):
     """
-    Searches for a metadata object.
+    Save metadata (Metadata object) into group (HDF5 group).
+    """
+    # Create subgroups
+    group_microscope_metadata = group.create_group("microscope")
+    group_sample_metadata = group.create_group("sample")
+    group_user_metadata = group.create_group("user")
+    group_calibration_metadata = group.create_group("calibration")
+    group_comments_metadata = group.create_group("comments")
 
-    First searches the objects in dataobject_list for linked metadata objects. If exactly one is
-    found, returns it.
-    If none are found, searches for all metadata objects in memory. If exactly one is found, returns
-    it.
-    If none are still found, raises an exception with an error message suggesting saving with no
-    metadata by setting save_metadata to False.
-    If multiple metdata objects are found (either associated with the dataobject_list objects or in
-    memory), checks if save_metadata is an integer.
-    If not, prints a list of the metadata objects and associated indexes, and prompts the user to
-    select one by setting it to the value of the save_metadata flag.
-    If it is, returns the corresponding metadata object from the list of found metadata objects.
-    """
-    metadata_object_list = []
-    for dataobject in dataobject_list:
-        if dataobject.metadata is not None and dataobject.metadata not in metadata_object_list:
-            metadata_object_list.append(dataobject.metadata)
-    if len(metadata_object_list)==1:
-        return metadata_object_list[0]
-    elif len(metadata_object_list)==0:
-        metadata_object_list = DataObject.get_dataobject_by_type(Metadata)
-        if len(metadata_object_list)==1:
-            return metadata_object_list[0]
-        elif len(metadata_object_list)==0:
-            h5file.close()
-            raise Exception("No metadata found. To overide and save with no metadata (not recommended), use the save_metadata=False flag.")
-        else:
-            if save_metadata is True:
-                print("Several metadata objects found.")
-                print("To select one, set the save_metadata flag to the appropriate integer value:")
-                for i in range(len(metadata_object_list)):
-                    print("{}\t{}".format(i, metadata_object_list[i]))
-                print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
-                h5file.close()
-                raise Exception("Multiple metadata objects found. Select one or save without metadata.")
-            else:
-                assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
-                return metadata_object_list[save_metadata]
+    group_original_metadata = group.create_group("original")
+    group_original_metadata_all = group_original_metadata.create_group("all")
+    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
+
+    # Transfer metadata dictionaries
+    transfer_metadata_dict(metadata.microscope,group_microscope_metadata)
+    transfer_metadata_dict(metadata.sample,group_sample_metadata)
+    transfer_metadata_dict(metadata.user,group_user_metadata)
+    transfer_metadata_dict(metadata.calibration,group_calibration_metadata)
+    transfer_metadata_dict(metadata.comments,group_comments_metadata)
+
+    # Transfer original metadata trees
+    if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+        transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+        transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
     else:
-        if save_metadata is True:
-            print("Several metadata objects found.")
-            print("To select one, set the save_metadata flag to the appropriate integer value:")
-            for i in range(len(metadata_object_list)):
-                print("{}\t{}".format(i, metadata_object_list[i]))
-            print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
-            h5file.close()
-            raise Exception("Multiple metadata objects found. Select one or save without metadata.")
-        else:
-            assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
-            return metadata_object_list[save_metadata]
+        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
 
+def transfer_metadata_dict(dictionary,group):
+    """
+    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
+    to attrs in a .h5 group.
+
+    Accepts two arguments:
+        dictionary - a dictionary of metadata
+        group - an hdf5 file group, which will become the root node of a copy of tree
+    """
+    for key,val in dictionary.items():
+        if type(val)==str:
+            group.attrs.create(key,np.string_(val))
+        else:
+            group.attrs.create(key,val)
 
 def transfer_metadata_tree_hs(tree,group):
     """
@@ -536,21 +511,6 @@ def is_metadata_dict(key):
     else:
         return False
 
-def transfer_metadata_dict(dictionary,group):
-    """
-    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
-    to attrs in a .h5 group.
-
-    Accepts two arguments:
-        dictionary - a dictionary of metadata
-        group - an hdf5 file group, which will become the root node of a copy of tree
-    """
-    for key,val in dictionary.items():
-        if type(val)==str:
-            group.attrs.create(key,np.string_(val))
-        else:
-            group.attrs.create(key,val)
-
 
 #### Logging functions ####
 
@@ -590,6 +550,7 @@ def write_time_to_log_item(group_logitem, datetime):
     date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
     time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
     group_logitem.attrs.create('time', np.string_(date+'__'+time))
+
 
 
 
