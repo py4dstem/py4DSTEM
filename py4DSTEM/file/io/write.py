@@ -29,7 +29,7 @@ def save_from_dataobject_list(dataobject_list, outputfile):
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
     f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",3)
+    f.attrs.create("version_minor",4)
     group_toplevel = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
