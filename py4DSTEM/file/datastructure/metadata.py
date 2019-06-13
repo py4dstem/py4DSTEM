@@ -196,7 +196,10 @@ class Metadata(object):
 
     def populate_metadata_from_h5_group(self, h5_metadata_group, target_metadata_dict):
         for attr in h5_metadata_group.attrs:
-            target_metadata_dict[attr] = h5_metadata_group.attrs[attr]
+            value = h5_metadata_group.attrs[attr]
+            if isinstance(value,bytes):
+                value = value.decode("utf-8")
+            target_metadata_dict[attr] = value
 
 
 
