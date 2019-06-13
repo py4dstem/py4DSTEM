@@ -43,10 +43,10 @@ def read(filename, load=None):
     load = 'name':
         load the DataObject(s) named 'name'. There is no catch for objects named 'all' - don't name
         DataObjects 'all'! ;)
-    load_behavior = 5:
+    load = 5:
         If load behavoir is an int, loads the object found at that index in a FileBrowser
         instantiated from filename.
-    load_behavior = [0,1,5,8,...]:
+    load = [0,1,5,8,...]:
         If load behavoir is a list of ints, loads the set of objects found at those indices in
         a FileBrowser instantiated from filename.
 
@@ -85,7 +85,6 @@ def read(filename, load=None):
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
-
     else:
         browser = FileBrowser(filename)
         print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
@@ -106,22 +105,22 @@ def read(filename, load=None):
         browser.close()
     return output
 
-
 def read_with_hyperspy(filename):
     """
     Read a non-py4DSTEM file using hyperspy.
     """
+    # Get metadata
+    metadata = Metadata(init='hs',filepath=filename)
+
     # Get data
     hyperspy_file = hs.load(filename)
     data = hyperspy_file.data
 
-    # Get metadata
-    metadata = Metadata(is_py4DSTEM_file = False,
-                        original_metadata_shortlist = hyperspy_file.metadata,
-                        original_metadata_all = hyperspy_file.original_metadata)
-
     # Get datacube
     datacube = DataCube(data = data)
+
+    # Link metadata and data
+    datacube.metadata = metadata
 
     # Set scan shape, if in metadata
     try:
@@ -130,9 +129,6 @@ def read_with_hyperspy(filename):
         datacube.set_scan_shape(R_Nx, R_Ny)
     except ValueError:
         print("Warning: scan shape not detected in metadata; please check / set manually.")
-
-    # Point to metadata from datacube
-    datacube.metadata = metadata
 
     return datacube
 
@@ -145,17 +141,17 @@ def read_dm_mmap(filename):
     """
     assert (filename.endswith('.dm3') or filename.endswith('.dm4')), 'File must be a .dm3 or .dm4'
 
+    # Get metadata
+    metadata = Metadata(init='hs',filepath=filename)
+
     # Load .dm3/.dm4 files with dm.py
     data = dmReader(filename,dSetNum=0,verbose=False)['data']
 
-    # Get metadata
-    hyperspy_file = hs.load(filename, lazy=True)
-    metadata = Metadata(is_py4DSTEM_file = False,
-                        original_metadata_shortlist = hyperspy_file.metadata,
-                        original_metadata_all = hyperspy_file.original_metadata)
-
     # Get datacube
     datacube = DataCube(data = data)
+
+    # Link metadata and data
+    datacube.metadata = metadata
 
     # Set scan shape, if in metadata
     try:
@@ -164,9 +160,6 @@ def read_dm_mmap(filename):
         datacube.set_scan_shape(R_Nx, R_Ny)
     except ValueError:
         print("Warning: scan shape not detected in metadata; please check / set manually.")
-
-    # Point to metadata from datacube
-    datacube.metadata = metadata
 
     return datacube
 
@@ -180,8 +173,10 @@ def read_empad_file(filename):
     data = read_empad(filename)
     data = data[:,:,:128,:]
 
-    # Get metadata -- TODO
+    # Get metadata
     metadata = None
+    #metadata = Metadata(init='empad',filepath=filename)  # TODO: add setup_metadata_empad method
+                                                          # to Metadata object
 
     datacube = DataCube(data = data)
     # datacube.metadata = metadata
