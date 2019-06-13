@@ -85,7 +85,6 @@ def read(filename, load=None):
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
-
     else:
         browser = FileBrowser(filename)
         print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
