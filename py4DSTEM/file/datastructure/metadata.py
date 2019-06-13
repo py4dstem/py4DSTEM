@@ -4,58 +4,46 @@
 # pointing to processing functions - generally defined in other files in the process directory.
 
 import numpy as np
+import hyperspy.api_nogui as hs
 from hyperspy.misc.utils import DictionaryTreeBrowser
 
 class Metadata(object):
 
-    def __init__(self, is_py4DSTEM_file,
-                 original_metadata_shortlist=None, original_metadata_all=None,
-                 filepath=None, name=''):
+    def __init__(self, init=None, filepath=None, metadata_ind=None):
         """
         Instantiate a Metadata object.
-        Metadata is populated in one of two ways - either for native py4DSTEM files or for
-        non-native files - and the kwargs this method expects depend on this.
+        Instantiation proceeds according to the argument of init, as described below.
 
-        Accepts (all):
-            is_py4DSTEM_file        (bool or str) flag indicating native or non-native py4DSTEM file
-                                    if True/False. If str, should be 'copy', indicating that a
-                                    metadata object is being copied rather than generated from a file
-            name                    (str) a name for the object
-
-        Accepts (non-py4DSTEM files):
-            original_metadata_shortlist     (hyperspy Signal.metadata tree)
-            original_metadata_all           (hyperspy Signal.original_metadata tree)
-
-        Accepts (py4DSTEM file):
-            filepath                 (str) path to the py4DSTEM h5 file
+        Accepts:
+            init            (str) controls instantiation behavior, as follows:
+                            'py4DSTEM'       initialize from a py4DSTEM file (v0.4 or greater)
+                            'hs'             initialize from a hyperspy file
+                            'empad'          initialize from an empad file
+                            None             perform no initialization; metadata dictionaries will
+                                             be created, but left empty
+            filepath        (str) path to the file.
+                            If init is not None, filepath must point to a valid file of the
+                            specified type.
+                            If init is 'py4DSTEM', filepath should be an *open* h5py file object.
+            metadata_ind    (int) required for init='py4DSTEM' and py4DSTEM version >= 0.4.
+                            Specifies which metadata group to use.
         """
+        assert(init in ['py4DSTEM','hs','empad',None])
+        if init is not None:
+            assert(filepath is not None)
+
         # Setup metadata containers
         self.setup_containers()
         self.setup_search_dicts()
 
-        # Copying Metadata objects
-        if is_py4DSTEM_file=='copy':
-            pass
+        # Populate metadata according to init
+        if init=='py4DSTEM':
+            self.setup_metadata_py4DSTEM(filepath,metadata_ind)
+        elif init=='hs':
+            self.setup_metadata_hs(filepath)
+        elif init=='empad':
+            self.setup_metadata_empad(filepath)
 
-        # For non-py4DSTEM files
-        elif not is_py4DSTEM_file:
-            self.setup_metadata_hs_file(original_metadata_shortlist, original_metadata_all)
-
-        # For py4DSTEM files
-        else:
-            py4DSTEM_version = get_py4DSTEM_version(filepath)
-            if py4DSTEM_version == (0,1):
-                self.setup_metadata_py4DSTEM_file_v0_1(filepath)
-            elif py4DSTEM_version == (0,2) or py4DSTEM_version == (0,3):
-                self.setup_metadata_py4DSTEM_file_v0_2_v0_3(filepath)
-            elif py4DSTEM_version == (0,4):
-                self.setup_metadata_py4DSTEM_file(filepath)
-            else:
-                raise ValueError("Unrecognized py4DSTEM version, {}.{}".format(py4DSTEM_version[0],
-                                                                           py4DSTEM_version[1]))
-
-        self.name = name
-        self.metadata = self
 
     ################ Setup methods ############### 
 
@@ -140,9 +128,90 @@ class Metadata(object):
         }
 
 
+    ################ py4DSTEM metadata ############### 
+
+    def setup_metadata_py4DSTEM(self, filepath, metadata_ind):
+
+        # Handle older file versions
+        py4DSTEM_version = get_py4DSTEM_version(filepath)
+        if py4DSTEM_version == (0,1):
+            self.setup_metadata_py4DSTEM_file_v0_1(filepath)
+        elif py4DSTEM_version == (0,2) or py4DSTEM_version == (0,3):
+            self.setup_metadata_py4DSTEM_file_v0_2_v0_3(filepath)
+        else:
+            assert(isinstance(metadata_ind,(int,np.integer)))
+
+            # Copy original metadata from .h5 trees to an equivalent tree structure
+            self.original_metadata.shortlist = MetadataCollection('shortlist')
+            self.original_metadata.all = MetadataCollection('all')
+
+            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/shortlist'.format(metadata_ind)],self.original_metadata.shortlist)
+            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/all'.format(metadata_ind)],self.original_metadata.all)
+
+            # Copy metadata from .h5 groups to corresponding dictionaries
+            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/microscope'.format(metadata_ind)],self.microscope)
+            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/sample'.format(metadata_ind)],self.sample)
+            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/user'.format(metadata_ind)],self.user)
+            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/calibration'.format(metadata_ind)],self.calibration)
+            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/comments'.format(metadata_ind)],self.comments)
+
+    def setup_metadata_py4DSTEM_file_v0_2_v0_3(self, filepath):
+
+        # Copy original metadata from .h5 trees to an equivalent tree structure
+        self.original_metadata.shortlist = MetadataCollection('shortlist')
+        self.original_metadata.all = MetadataCollection('all')
+
+        self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/original/shortlist'],self.original_metadata.shortlist)
+        self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/original/all'],self.original_metadata.all)
+
+        # Copy metadata from .h5 groups to corresponding dictionaries
+        self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/microscope'],self.data.microscope)
+        self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/sample'],self.data.sample)
+        self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/user'],self.data.user)
+        self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/calibration'],self.data.calibration)
+        self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/comments'],self.data.comments)
+
+    def setup_metadata_py4DSTEM_file_v0_1(self, filepath):
+
+        # Copy original metadata from .h5 trees to an equivalent tree structure
+        self.original_metadata.shortlist = MetadataCollection('shortlist')
+        self.original_metadata.all = MetadataCollection('all')
+        self.populate_original_metadata_from_h5_group(filepath['4D-STEM_data/metadata/original/shortlist'],self.original_metadata.shortlist)
+        self.populate_original_metadata_from_h5_group(filepath['4D-STEM_data/metadata/original/all'],self.original_metadata.all)
+
+        # Copy metadata from .h5 groups to corresponding dictionaries
+        self.populate_metadata_from_h5_group(filepath['4D-STEM_data/metadata/microscope'],self.data.microscope)
+        self.populate_metadata_from_h5_group(filepath['4D-STEM_data/metadata/sample'],self.data.sample)
+        self.populate_metadata_from_h5_group(filepath['4D-STEM_data/metadata/user'],self.data.user)
+        self.populate_metadata_from_h5_group(filepath['4D-STEM_data/metadata/calibration'],self.data.calibration)
+        self.populate_metadata_from_h5_group(filepath['4D-STEM_data/metadata/comments'],self.data.comments)
+
+    def populate_original_metadata_from_h5_group(self, h5_metadata_group, target_metadata_group):
+        if len(h5_metadata_group.attrs)>0:
+            target_metadata_group.metadata_items = dict()
+            self.populate_metadata_from_h5_group(h5_metadata_group, target_metadata_group.metadata_items)
+        for subgroup_key in h5_metadata_group.keys():
+            vars(target_metadata_group)[subgroup_key] = MetadataCollection(subgroup_key)
+            self.populate_original_metadata_from_h5_group(h5_metadata_group[subgroup_key], vars(target_metadata_group)[subgroup_key])
+
+    def populate_metadata_from_h5_group(self, h5_metadata_group, target_metadata_dict):
+        for attr in h5_metadata_group.attrs:
+            target_metadata_dict[attr] = h5_metadata_group.attrs[attr]
+
+
+
+
+
+
+
     ################ Hyperspy metadata ############### 
 
-    def setup_metadata_hs_file(self, original_metadata_shortlist=None, original_metadata_all=None):
+    def setup_metadata_hs(self, filepath):
+
+        # Get hyperspy metadata trees
+        hyperspy_file = hs.load(filepath, lazy=True)
+        original_metadata_shortlist = hyperspy_file.metadata
+        original_metadata_all = hyperspy_file.original_metadata
 
         # Store original metadata
         self.original_metadata.shortlist = original_metadata_shortlist
@@ -209,78 +278,6 @@ class Metadata(object):
             return False
 
 
-    ################ py4DSTEM metadata ############### 
-
-    def setup_metadata_py4DSTEM_file(self, filepath):
-
-        # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.original_metadata.shortlist = MetadataCollection('shortlist')
-        self.original_metadata.all = MetadataCollection('all')
-
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['shortlist'],self.original_metadata.shortlist)
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['all'],self.original_metadata.all)
-
-        # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['microscope'],self.microscope)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['sample'],self.sample)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['user'],self.user)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['calibration'],self.calibration)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['comments'],self.comments)
-
-    def setup_metadata_py4DSTEM_file_v0_2_v0_3(self, filepath):
-
-        # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.original_metadata.shortlist = MetadataCollection('shortlist')
-        self.original_metadata.all = MetadataCollection('all')
-
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['shortlist'],self.original_metadata.shortlist)
-        self.get_original_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['original']['all'],self.original_metadata.all)
-
-        # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['microscope'],self.data.microscope)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['sample'],self.data.sample)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['user'],self.data.user)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['calibration'],self.data.calibration)
-        self.get_metadata_from_filepath(filepath['4DSTEM_experiment']['metadata']['comments'],self.data.comments)
-
-    def setup_metadata_py4DSTEM_file_v0_1(self, filepath):
-
-        # Copy original metadata from .h5 trees to an equivalent tree structure
-        self.original_metadata.shortlist = MetadataCollection('shortlist')
-        self.original_metadata.all = MetadataCollection('all')
-        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['shortlist'],self.original_metadata.shortlist)
-        self.get_original_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['original']['all'],self.original_metadata.all)
-
-        # Copy metadata from .h5 groups to corresponding dictionaries
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['microscope'],self.data.microscope)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['sample'],self.data.sample)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['user'],self.data.user)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['calibration'],self.data.calibration)
-        self.get_metadata_from_filepath(filepath['4D-STEM_data']['metadata']['comments'],self.data.comments)
-
-
-    ################ Populate metadata ############### 
-
-    def get_original_metadata_from_filepath(self, h5_metadata_group, datacube_metadata_group):
-        if len(h5_metadata_group.attrs)>0:
-            datacube_metadata_group.metadata_items = dict()
-            self.get_metadata_from_filepath(h5_metadata_group, datacube_metadata_group.metadata_items)
-        for subgroup_key in h5_metadata_group.keys():
-            vars(datacube_metadata_group)[subgroup_key] = MetadataCollection(subgroup_key)
-            self.get_original_metadata_from_filepath(h5_metadata_group[subgroup_key], vars(datacube_metadata_group)[subgroup_key])
-
-
-    def get_metadata_from_filepath(self, h5_metadata_group, datacube_metadata_dict):
-        for attr in h5_metadata_group.attrs:
-            datacube_metadata_dict[attr] = h5_metadata_group.attrs[attr]
-
-    @staticmethod
-    def add_metadata_item(key,value,metadata_dict):
-        """
-        Adds a single item, given by the pair key:value, to the metadata dictionary metadata_dict
-        """
-        metadata_dict[key] = value
-
 
     ################ Retrieve metadata ############### 
 
@@ -334,7 +331,7 @@ class Metadata(object):
         """
         Creates and returns a copy of itself.
         """
-        metadata = Metadata(is_py4DSTEM_file='copy')
+        metadata = Metadata(init=None)
         metadata.original_metadata.shortlist = self.original_metadata.shortlist
         metadata.original_metadata.all = self.original_metadata.all
 
