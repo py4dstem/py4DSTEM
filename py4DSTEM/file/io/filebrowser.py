@@ -488,9 +488,12 @@ class FileBrowser(object):
         name = info['name']
         metadata_index = info['metadata']
 
-        if self.metadataobjects_in_memory[metadata_index] is None:
-            self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
-        metadata = self.metadataobjects_in_memory[metadata_index]
+        if metadata_index == -1:
+            metadata = None
+        else:
+            if self.metadataobjects_in_memory[metadata_index] is None:
+                self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+            metadata = self.metadataobjects_in_memory[metadata_index]
 
         if objecttype == 'DataCube':
             shape = info['shape']
@@ -737,7 +740,7 @@ class FileBrowser(object):
         if indices=='all':
             indices = range(self.N_dataobjects)
         else:
-            assert all([isinstance(index,(int,np.integer)) for index in indices])
+            assert all([isinstance(index,(int,np.integer)) for index in indices]), "Arguments to get_dataobjects must be integers; to retrieve a dataobject by name, use get_dataobject"
         objects = []
         for index in indices:
             objects.append(self.get_dataobject(index))

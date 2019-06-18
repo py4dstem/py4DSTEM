@@ -194,6 +194,8 @@ def save_datacube_group(group, datacube):
     group.attrs.create("emd_group_type",1)
     if datacube.metadata is not None:
         group.attrs.create("metadata",datacube.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
     data_datacube = group.create_dataset("datacube", data=datacube.data4D)
@@ -263,6 +265,9 @@ def save_datacube_group(group, datacube):
 def save_diffraction_group(group, diffractionslice):
     if diffractionslice.metadata is not None:
         group.attrs.create("metadata",diffractionslice.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
+
     group.attrs.create("depth", diffractionslice.depth)
     if diffractionslice.depth==1:
         shape = diffractionslice.data2D.shape
@@ -316,6 +321,9 @@ def save_diffraction_group(group, diffractionslice):
 def save_real_group(group, realslice):
     if realslice.metadata is not None:
         group.attrs.create("metadata",realslice.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
+
     group.attrs.create("depth", realslice.depth)
     if realslice.depth==1:
         shape = realslice.data2D.shape
@@ -369,6 +377,8 @@ def save_real_group(group, realslice):
 def save_pointlist_group(group, pointlist):
     if pointlist.metadata is not None:
         group.attrs.create("metadata",pointlist.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
 
     n_coords = len(pointlist.dtype.names)
     coords = np.string_(str([coord for coord in pointlist.dtype.names]))
@@ -384,6 +394,8 @@ def save_pointlist_group(group, pointlist):
 def save_pointlistarray_group(group, pointlistarray):
     if pointlistarray.metadata is not None:
         group.attrs.create("metadata",pointlistarray.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
 
     n_coords = len(pointlistarray.dtype.names)
     coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
