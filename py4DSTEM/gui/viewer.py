@@ -50,13 +50,13 @@ class DataViewer(QtWidgets.QMainWindow):
         """
         Initialize class, setting up windows and widgets.
         """
-        QtWidgets.QMainWindow.__init__(self)
-        self.this_dir, self.this_filename = os.path.split(__file__)
-
         # Define this as the QApplication object
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
+
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
 
         # Make settings collection
         self.settings = LQCollection()
@@ -678,7 +678,8 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False)
+            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+                                                   autoLevels=False,autoRange=False)
         else:
             pass
         return

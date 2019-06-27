@@ -118,3 +118,48 @@ def get_strain_from_reference_region(mask, uv_map):
     ux,uy,vx,vy = get_reference_uv(mask, uv_map)
     strain_map = get_strain_from_reference_uv(ux,uy,vx,vy,uv_map)
     return strain_map
+
+def get_rotated_strain_map(unrotated_strain_map, ux, uy):
+    """
+    Starting from a strain map defined with respect to the xy coordinate system of diffraction space,
+    i.e. where exx and eyy are the compression/tension along the Qx and Qy directions, respectively,
+    get a strain map defined with repsect to a right-handed uv coordinate system, with the u-axis
+    oriented along u=(ux,uy).
+
+    Accepts:
+        ux                      (float) diffraction space x coordinate of u
+        uy                      (float) diffraction space y coordinate of u
+        unrotated_strain_map    (RealSlice) a RealSlice object containing 2D arrays of the
+                                infinitessimal strain matrix elements, stored at
+                                        unrotated_strain_map.data2D['e_xx']
+                                        unrotated_strain_map.data2D['e_xy']
+                                        unrotated_strain_map.data2D['e_yy']
+                                        unrotated_strain_map.data2D['theta']
+
+    Returns:
+        rotated_strain_map      (RealSlice) the rotated counterpart to unrotated_strain_map, with
+                                the rotated_strain_map.data2D['e_xx'] element oriented along (ux,uy)
+    """
+    assert isinstance(unrotated_strain_map, RealSlice)
+    assert np.all([key in ['e_xx','e_xy','e_yy','theta'] for key in unrotated_strain_map.data2D.keys()])
+
+    theta = -np.arctan2(uy,ux)
+    cost = np.cos(theta)
+    sint = np.sin(theta)
+    cost2 = cost**2
+    sint2 = sint**2
+
+    Rx,Ry = unrotated_strain_map.data2D['e_xx'].shape
+    rotated_strain_map = RealSlice(data=np.zeros((Rx,Ry,4)),
+                                   slicelabels=['e_xx','e_xy','e_yy','theta'],
+                                   name=unrotated_strain_map.name+"_rotated_by_{}".format(np.degrees(theta)))
+
+    rotated_strain_map.data2D['e_xx'] = cost2*unrotated_strain_map.data2D['e_xx'] - 2*cost*sint*unrotated_strain_map.data2D['e_xy'] + sint2*unrotated_strain_map.data2D['e_yy']
+    rotated_strain_map.data2D['e_xy'] = cost*sint*(unrotated_strain_map.data2D['e_xx']-unrotated_strain_map.data2D['e_yy']) + (cost2-sint2)*unrotated_strain_map.data2D['e_xy']
+    rotated_strain_map.data2D['e_yy'] = sint2*unrotated_strain_map.data2D['e_xx'] + 2*cost*sint*unrotated_strain_map.data2D['e_xy'] + cost2*unrotated_strain_map.data2D['e_yy']
+    rotated_strain_map.data2D['theta'] = unrotated_strain_map.data2D['theta']
+
+    return rotated_strain_map
+
+
+
