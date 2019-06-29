@@ -66,6 +66,10 @@ def read(filename, load=None):
         relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
         This functionality requires the mrcfile package, which can be installed with
             pip install mrcfile
+    load = 'gatan_bin'
+        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be passed
+        as the argument. The reader searches for the *.gtg file that contains the metadata, then maps the 
+        chunked binary files. 
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
@@ -82,6 +86,9 @@ def read(filename, load=None):
             import mrcfile
             print("Reading an IDES Relativity MRC file...")
             output = mrcfile.mmap(filename,mode='r')
+        elif load == 'gatan_bin':
+            print('Reading Gatan binary files...')
+            output = read_gatan_binary(filename)
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
@@ -183,13 +190,21 @@ def read_empad_file(filename):
 
     return datacube
 
+def read_gatan_binary(filename):
+    """
+    Read a folder with Gatan binary files. The folder must contain a *.gtg file (this is where
+    the metadata for the whole dataset lives) as well as a sequence of *.bin files. DO NOT
+    change the folder structure, as this relies on having only one scan per folder (if you
+    have two scans with different names, this will fail.)
 
+    Requires ncempy: `pip install ncempy` and numba: `conda install numba`
+    """
+    from . import gatanK2
 
+    data_map = gatanK2.K2DataArray(filename)
+    datacube = DataCube(data = data_map)
 
-
-
-
-
+    return datacube
 
 
 
