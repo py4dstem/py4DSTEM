@@ -81,9 +81,17 @@ class K2DataArray(Sequence):
         self.shape = (R_Nx, R_Ny, Q_Nx, Q_Ny)
         self._hidden_stripe_noise_reduction = hidden_stripe_noise_reduction
 
+        self._attach_to_files()
+
         #self.metadata = gtg.allTags
                 
         super().__init__()
+
+
+    def __del__(self):
+        #detatch from the file handles
+        for i in range(8):
+            self._bin_files[i].close()
 
     #======== HANDLE SLICING AND len CALLS =========#
     def __getitem__(self,i):
@@ -123,32 +131,37 @@ class K2DataArray(Sequence):
     
     
     #====== READING FROM BINARY AND NOISE REDUCTION ======#
+    def _attach_to_files(self):
+        self._bin_files = np.empty(8,dtype=object)
+        for i in range(8):
+            binName = self._bin_prefix + str(i+1) + '.bin'
+            self._bin_files[i] = open(binName,'rb')
+
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
         for ii in range(8):
-                binName = self._bin_prefix + str(ii+1) + '.bin'
-                with open(binName,'rb') as f1:
+            binfile = self._bin_files[ii]
 
-                    xOffset = ii*256 #the x location of the sector for each BIN file
-                    syncBytes = 0 #set this to a default value to check for the proper syncBytes value
-                    f1.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
-                    #Read in a set of blocks
-                    for jj in range(0,32):
+            xOffset = ii*256 #the x location of the sector for each BIN file
+            syncBytes = 0 #set this to a default value to check for the proper syncBytes value
+            binfile.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
+            #Read in a set of blocks
+            for jj in range(0,32):
 
-                        #Read in the block header (40 bytes long). All are in 'network byte order a.k.a. big endian.
-                        syncBytes = np.fromfile(f1,count=1,dtype='>u4')[0] #must == 1426128895 or 0x55000ffff in python hex(syncBytes)
-                        if syncBytes != 0xffff0055:
-                            print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
-                            break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
+                #Read in the block header (40 bytes long). All are in 'network byte order a.k.a. big endian.
+                syncBytes = np.fromfile(binfile,count=1,dtype='>u4')[0] #must == 1426128895 or 0x55000ffff in python hex(syncBytes)
+                if syncBytes != 0xffff0055:
+                    print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
+                    break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
 
-                        f1.seek(24,1) #Skip the next comment block to to reduce number of reads.
+                binfile.seek(24,1) #Skip the next comment block to to reduce number of reads.
 
-                        firstPixels = np.fromfile(f1,count=4,dtype='>u2') #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
-                        f1.seek(4,1)
+                firstPixels = np.fromfile(binfile,count=4,dtype='>u2') #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
+                binfile.seek(4,1)
 
-                        #Read in the data from the binary file
-                        fullImage[firstPixels[1]:firstPixels[3]+1,firstPixels[0]+xOffset:firstPixels[2]+xOffset+1] = \
-                            _convert_uint12(np.fromfile(f1,count=22320,dtype=np.uint8)).reshape([930, 16])
+                #Read in the data from the binary file
+                fullImage[firstPixels[1]:firstPixels[3]+1,firstPixels[0]+xOffset:firstPixels[2]+xOffset+1] = \
+                    _convert_uint12(np.fromfile(binfile,count=22320,dtype=np.uint8)).reshape([930, 16])
         return fullImage
     
     @staticmethod
