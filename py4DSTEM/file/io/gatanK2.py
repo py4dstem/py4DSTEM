@@ -83,6 +83,9 @@ class K2DataArray(Sequence):
 
         self._attach_to_files()
 
+        self._stripe_dtype = np.dtype([ ('sync','>u4',1), \
+            ('header',np.void,24),('coords','>u2',4),('pad',np.void,4),('data','>u1',22320) ])
+
         #self.metadata = gtg.allTags
                 
         super().__init__()
@@ -145,23 +148,21 @@ class K2DataArray(Sequence):
             xOffset = ii*256 #the x location of the sector for each BIN file
             syncBytes = 0 #set this to a default value to check for the proper syncBytes value
             binfile.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
-            #Read in a set of blocks
-            for jj in range(0,32):
 
-                #Read in the block header (40 bytes long). All are in 'network byte order a.k.a. big endian.
-                syncBytes = np.fromfile(binfile,count=1,dtype='>u4')[0] #must == 1426128895 or 0x55000ffff in python hex(syncBytes)
-                if syncBytes != 0xffff0055:
+            # read a set of stripes:
+            stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+
+            # parse the stripe
+            for jj in range(0,32):
+                if stripe[jj]['sync'] != 0xffff0055:
                     print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
                     break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
 
-                binfile.seek(24,1) #Skip the next comment block to to reduce number of reads.
+                coords = stripe[jj]['coords']#first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
 
-                firstPixels = np.fromfile(binfile,count=4,dtype='>u2') #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
-                binfile.seek(4,1)
-
-                #Read in the data from the binary file
-                fullImage[firstPixels[1]:firstPixels[3]+1,firstPixels[0]+xOffset:firstPixels[2]+xOffset+1] = \
-                    _convert_uint12(np.fromfile(binfile,count=22320,dtype=np.uint8)).reshape([930, 16])
+                #place the data in the image
+                fullImage[coords[1]:coords[3]+1,coords[0]+xOffset:coords[2]+xOffset+1] = \
+                    _convert_uint12(stripe[jj]['data']).reshape([930, 16])
         return fullImage
     
     @staticmethod
