@@ -54,7 +54,7 @@ def read(filename, load=None):
     load = None
         attempt to load a datacube using hyperspy
     load = 'dmmmap'
-        load a dm file (.d3 or .dm4), memory mapping the datacube, using dm.py
+        load a dm file (.dm3 or .dm4), memory mapping the datacube, using dm.py
     load = 'empad'
         load an EMPAD formatted file, using empad.py
     load = 'relativity'
@@ -193,16 +193,22 @@ def read_empad_file(filename):
 def read_gatan_binary(filename):
     """
     Read a folder with Gatan binary files. The folder must contain a *.gtg file (this is where
-    the metadata for the whole dataset lives) as well as a sequence of *.bin files. DO NOT
+    the metadata for the whole dataset lives) as well as a sequence of 8 *.bin files. DO NOT
     change the folder structure, as this relies on having only one scan per folder (if you
     have two scans with different names, this will fail.)
 
     Requires ncempy: `pip install ncempy` and numba: `conda install numba`
     """
+
+    #this import is delayed to here so that numba is not a base dependency
     from . import gatanK2
 
     data_map = gatanK2.K2DataArray(filename)
     datacube = DataCube(data = data_map)
+
+    #metadata = Metadata(init='hs',filepath=datacube.data4D._gtg_file)
+
+    #datacube.metadata = metadata
 
     return datacube
 
