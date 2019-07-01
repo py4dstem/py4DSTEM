@@ -1,3 +1,7 @@
+# Open an interface to a Gatan K2 binary fileset, loading frames from disk as called.
+# While slicing (i.e. calling dc.data4D[__,__,__,__]) returns a numpy ndarray, the 
+# object is not itself a numpy array. 
+
 from collections.abc import Sequence
 import numpy as np
 import numba as nb
@@ -76,6 +80,8 @@ class K2DataArray(Sequence):
         
         self.shape = (R_Nx, R_Ny, Q_Nx, Q_Ny)
         self._hidden_stripe_noise_reduction = hidden_stripe_noise_reduction
+
+        #self.metadata = gtg.allTags
                 
         super().__init__()
 
@@ -116,7 +122,7 @@ class K2DataArray(Sequence):
         return np.prod(self.shape)
     
     
-    #====== READING FROM BINARY AND NOISE REDUCTION ======
+    #====== READING FROM BINARY AND NOISE REDUCTION ======#
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
         for ii in range(8):
@@ -147,7 +153,7 @@ class K2DataArray(Sequence):
     
     @staticmethod
     def _subtract_readout_noise(DP):
-        #subtract readout noise using the hidden 
+        #subtract readout noise using the hidden stripes
         darkref = np.average(DP[1792:,:],axis=0).astype(np.float32)
         DP -= darkref[np.newaxis,:]
         
@@ -159,9 +165,9 @@ class K2DataArray(Sequence):
     @dark_reference.setter
     def dark_reference(self,dr):
         assert dr.shape == (1792,1920), "Dark reference must be the size of an active frame"
-        assert dr.dtype == np.uint16, "Dark reference must be 16 bit unsigned"
-        self._user_dark_reference = np.zeros((1860,2048),dtype=np.uint16)
-        self._user_dark_reference = dr[:1792,:1920] = dr
+        #assert dr.dtype == np.uint16, "Dark reference must be 16 bit unsigned"
+        self._user_dark_reference = np.zeros((1860,2048),dtype=np.float32)
+        self._user_dark_reference[:1792,:1920] = dr
         
         #disable auto noise reduction
         self._hidden_stripe_noise_reduction = False
@@ -203,7 +209,7 @@ class K2DataArray(Sequence):
         nbytes = os.path.getsize(self._bin_prefix + '1.bin')
         return nbytes // (0x5758 * 32)
     
-# ======= UTILITIES OUTSIDE THE CLASS =====
+# ======= UTILITIES OUTSIDE THE CLASS ======#
 @nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=True,parallel=True)
 def _convert_uint12(data_chunk):
   """
