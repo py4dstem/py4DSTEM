@@ -5,7 +5,6 @@
 from collections.abc import Sequence
 import numpy as np
 import numba as nb
-from pdb import set_trace
 
 class K2DataArray(Sequence):
     """
@@ -19,9 +18,7 @@ class K2DataArray(Sequence):
     
     ===== Filtering and Noise Reduction =====
     This object is read-only---you cannot edit the data on disk, which means that some
-    DataCube functions like swap_RQ() will not work. If you want to edit the data, 
-    call the write_to_hdf5() method to read the entire stack into a py4DSTEM compatible *.h5
-    file, which can then be mapped in a writeable manner. 
+    DataCube functions like swap_RQ() will not work.
     
     The K2IS has a "resolution" of 1920x1792, but actually saves hidden stripes in the raw data. 
     By setting the hidden_stripe_noise_reduction flag to True, the electronic noise in these 
