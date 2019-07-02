@@ -36,20 +36,21 @@ def remove_from_index_list(indices, filepath):
 
     #### Open file for read/write ####
     f = h5py.File(filepath,"a")
+    topgroup = get_py4DSTEM_topgroup(f)
 
     # Delete objects
     for i in range(len(indices)):
         name,objtype = names[i],types[i]
         if objtype == "DataCube":
-            group = f['4DSTEM_experiment/data/datacubes']
+            group = f[topgroup + 'data/datacubes']
         elif objtype == "RealSlice":
-            group = f['4DSTEM_experiment/data/realslices']
+            group = f[topgroup + 'data/realslices']
         elif objtype == "DiffractionSlice":
-            group = f['4DSTEM_experiment/data/diffractionslices']
+            group = f[topgroup + 'data/diffractionslices']
         elif objtype == "PointList":
-            group = f['4DSTEM_experiment/data/pointlists']
+            group = f[topgroup + 'data/pointlists']
         elif objtype == "PointListArray":
-            group = f['4DSTEM_experiment/data/pointlistarrays']
+            group = f[topgroup + 'data/pointlistarrays']
         else:
             raise ValueError("Unknown DataObject type {}".format(objtype))
         del group[name]
@@ -78,6 +79,16 @@ def remove(dataobjects, filepath):
 
 
 ################### END OF REMOVE FUNCTIONS #####################
+def get_py4DSTEM_topgroup(h5_file):
+	"""
+	Accepts an open h5py File boject. Returns string of the top group name. 
+	"""
+	if ('4DSTEM_experiment' in h5_file.keys()) # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
+		return '4DSTEM_experiment/'
+	elif ('4DSTEM_simulation' in h5_file.keys()):
+		return '4DSTEM_simulation/'
+	else:
+		return '4D-STEM_data/'
 
 
 

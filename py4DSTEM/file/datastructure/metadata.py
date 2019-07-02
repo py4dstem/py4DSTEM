@@ -141,19 +141,20 @@ class Metadata(object):
         else:
             assert(isinstance(metadata_ind,(int,np.integer)))
 
+			topgroup = get_py4DSTEM_topgroup(filepath)
             # Copy original metadata from .h5 trees to an equivalent tree structure
             self.original_metadata.shortlist = MetadataCollection('shortlist')
             self.original_metadata.all = MetadataCollection('all')
 
-            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/shortlist'.format(metadata_ind)],self.original_metadata.shortlist)
-            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/all'.format(metadata_ind)],self.original_metadata.all)
+            self.populate_original_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/original/shortlist'.format(metadata_ind)],self.original_metadata.shortlist)
+            self.populate_original_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/original/all'.format(metadata_ind)],self.original_metadata.all)
 
             # Copy metadata from .h5 groups to corresponding dictionaries
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/microscope'.format(metadata_ind)],self.microscope)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/sample'.format(metadata_ind)],self.sample)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/user'.format(metadata_ind)],self.user)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/calibration'.format(metadata_ind)],self.calibration)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/comments'.format(metadata_ind)],self.comments)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/microscope'.format(metadata_ind)],self.microscope)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/sample'.format(metadata_ind)],self.sample)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/user'.format(metadata_ind)],self.user)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/calibration'.format(metadata_ind)],self.calibration)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/comments'.format(metadata_ind)],self.comments)
 
     def setup_metadata_py4DSTEM_file_v0_2_v0_3(self, filepath):
 
@@ -367,5 +368,16 @@ def get_py4DSTEM_version(filepath):
     version_major = filepath.attrs['version_major']
     version_minor = filepath.attrs['version_minor']
     return version_major, version_minor
+
+def get_py4DSTEM_topgroup(h5_file):
+	"""
+	Accepts an open h5py File boject. Returns string of the top group name. 
+	"""
+	if ('4DSTEM_experiment' in h5_file.keys()) # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
+		return '4DSTEM_experiment/'
+	elif ('4DSTEM_simulation' in h5_file.keys()):
+		return '4DSTEM_simulation/'
+	else:
+		return '4D-STEM_data/'
 
 

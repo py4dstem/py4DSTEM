@@ -42,14 +42,14 @@ def append_from_dataobject_list(dataobject_list, filepath):
 
     #### Open file for read/write ####
     f = h5py.File(filepath,"r+")
-
+    topgroup = get_py4DSTEM_topgroup(f)
     # Find data groups
-    group_data = f['4DSTEM_experiment']['data']
-    group_datacubes = f['4DSTEM_experiment']['data']['datacubes']
-    group_diffractionslices = f['4DSTEM_experiment']['data']['diffractionslices']
-    group_realslices = f['4DSTEM_experiment']['data']['realslices']
-    group_pointlists = f['4DSTEM_experiment']['data']['pointlists']
-    group_pointlistarrays = f['4DSTEM_experiment']['data']['pointlistarrays']
+    group_data = f[topgroup]['data']
+    group_datacubes = f[topgroup]['data']['datacubes']
+    group_diffractionslices = f[topgroup]['data']['diffractionslices']
+    group_realslices = f[topgroup]['data']['realslices']
+    group_pointlists = f[topgroup]['data']['pointlists']
+    group_pointlistarrays = f[topgroup]['data']['pointlistarrays']
 
     # Loop through and save all objects in the dataobjectlist
     for dataobject in dataobject_list:
@@ -168,6 +168,15 @@ def append(data, filepath, **kwargs):
 
 
 ################### END OF APPEND FUNCTIONS #####################
-
+def get_py4DSTEM_topgroup(h5_file):
+	"""
+	Accepts an open h5py File boject. Returns string of the top group name. 
+	"""
+	if ('4DSTEM_experiment' in h5_file.keys()) # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
+		return '4DSTEM_experiment/'
+	elif ('4DSTEM_simulation' in h5_file.keys()):
+		return '4DSTEM_simulation/'
+	else:
+		return '4D-STEM_data/'
 
 
