@@ -1,6 +1,6 @@
 # Open an interface to a Gatan K2 binary fileset, loading frames from disk as called.
 # While slicing (i.e. calling dc.data4D[__,__,__,__]) returns a numpy ndarray, the 
-# object is not itself a numpy array. 
+# object is not itself a numpy array, so most numpy functions do not operate on this.
 
 from collections.abc import Sequence
 import numpy as np
@@ -11,7 +11,7 @@ class K2DataArray(Sequence):
     """
     K2DataArray provides an interface to a set of Gatan K2IS binary output files.
     This object behaves *similar* to a numpy memmap into the data, and supports 4-D indexing
-    and slicing. "Slices" into this object return np.ndarray objects.
+    and slicing. Slices into this object return np.ndarray objects.
     
     The object is created by passing the path to any of: (i) the folder containing the
     raw data, (ii) the *.gtg metadata file, or (iii) one of the raw data *.bin files.
@@ -25,13 +25,13 @@ class K2DataArray(Sequence):
     
     The K2IS has a "resolution" of 1920x1792, but actually saves hidden stripes in the raw data. 
     By setting the hidden_stripe_noise_reduction flag to True, the electronic noise in these 
-    stripes is used to reduce the readout noise. 
+    stripes is used to reduce the readout noise. (This is on by default.)
     
-    If you want to take a separate background to subtract, use set_background() to specify this
+    If you want to take a separate background to subtract, set `dark_reference` to specify this
     background. This is then subtracted from the frames as they are called out (no matter where
     the object is referenced! So, for instance, Bragg disk detection will operate on the background-
     subtracted diffraction patterns!). However, mixing the auto-background and specified background 
-    is potentially dangerous and (currently!) not allowed. To switch from user-background to
+    is potentially dangerous and (currently!) not allowed. To switch back from user-background to
     auto-background, just delete the user background, i.e. `del(dc.data4D.dark_reference)`
     
     ===== NOTE =====
@@ -95,6 +95,7 @@ class K2DataArray(Sequence):
         #detatch from the file handles
         for i in range(8):
             self._bin_files[i].close()
+        super().__del__()
 
     #======== HANDLE SLICING AND len CALLS =========#
     def __getitem__(self,i):
@@ -103,6 +104,12 @@ class K2DataArray(Sequence):
         # take the input and parse it into coordinate arrays
         Rx, Ry = self._parse_slices(i[:2],'real')
         Qx,Qy = self._parse_slices(i[2:],'diffraction')
+
+        assert Rx.max() < self.shape[0], 'index out of range'
+        assert Ry.max() < self.shape[1], 'index out of range'
+        assert Qx.max() < self.shape[2], 'index out of range'
+        assert Qy.max() < self.shape[3], 'index out of range'
+
         # preallocate the output data array
         outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.float32)
         
@@ -111,10 +118,6 @@ class K2DataArray(Sequence):
             for sx in range(Rx.shape[0]):
                 scanx = Rx[sx,sy]
                 scany = Ry[sx,sy]
-
-                #check the realspace coordinates are valid
-                assert scanx < self.shape[0], 'index out of range'
-                assert scany < self.shape[1], 'index out of range'
 
                 frame = np.ravel_multi_index( (scanx,scany), (self.shape[0],self.shape[1]), order='F' )
                 DP = self._grab_frame(frame).astype(np.float32)
@@ -152,13 +155,13 @@ class K2DataArray(Sequence):
             # read a set of stripes:
             stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
 
-            # parse the stripe
+            # parse the stripes
             for jj in range(0,32):
                 if stripe[jj]['sync'] != 0xffff0055:
                     print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
                     break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
 
-                coords = stripe[jj]['coords']#first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
+                coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
 
                 #place the data in the image
                 fullImage[coords[1]:coords[3]+1,coords[0]+xOffset:coords[2]+xOffset+1] = \

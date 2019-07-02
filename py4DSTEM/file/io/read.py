@@ -197,6 +197,9 @@ def read_gatan_binary(filename):
     change the folder structure, as this relies on having only one scan per folder (if you
     have two scans with different names, this will fail.)
 
+    filename can refer to any of the *.bin files, the *.gtg file, or
+    the directory containing them.
+
     Requires ncempy: `pip install ncempy` and numba: `conda install numba`
     """
 
