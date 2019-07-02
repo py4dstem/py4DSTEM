@@ -7,7 +7,7 @@ from .dataslice import DataSlice
 
 class RealSlice(DataObject):
 
-    def __init__(self, data, R_Nx=None, R_Ny=None, slicelabels=None, **kwargs):
+    def __init__(self, data, R_Nx=None, R_Ny=None, R_Nz=None, slicelabels=None, **kwargs):
         """
         Instantiate a RealSlice object.  Set the data and dimensions.
 
@@ -28,9 +28,20 @@ class RealSlice(DataObject):
         else:
             self.R_Ny = R_Ny
 
+        if len(data.shape) == 3:
+            if slicelabels is None:
+                if R_Nz is None:
+                    self.R_Nz = data.shape[2]
+                else:
+                    self.R_Nz = R_Nz
+            else:
+                self.R_Nz = None #this is probably bad?
+        else:
+            self.R_Nz = None
+
         # Instantiate as DataSlice, setting up dimensions, depth, and slicelabels
         DataSlice.__init__(self, data=data,
-                           Nx=self.R_Nx, Ny=self.R_Ny,
+                           Nx=self.R_Nx, Ny=self.R_Ny, Nz=self.R_Nz,
                            slicelabels=slicelabels, **kwargs)
 
 
