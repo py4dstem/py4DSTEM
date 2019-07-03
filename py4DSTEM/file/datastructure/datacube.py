@@ -16,7 +16,7 @@ class DataCube(DataObject):
         """
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)
-        self.data4D = data
+        self.data = data
 
         # Set shape
         assert (len(data.shape)==3 or len(data.shape)==4)
@@ -31,7 +31,7 @@ class DataCube(DataObject):
         # Set shape
         # TODO: look for shape in metadata
         # TODO: AND/OR look for R_Nx... in kwargs
-        #self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = self.data4D.shape
+        #self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = self.data.shape
         #self.R_N = self.R_Nx*self.R_Ny
         #self.set_scan_shape(self.R_Nx,self.R_Ny)
 
@@ -88,7 +88,7 @@ class DataCube(DataObject):
         """
         self.Rx,self.Ry = Rx,Ry
         try:
-            return self.data4D[Rx,Ry,:,:], 1
+            return self.data[Rx,Ry,:,:], 1
         except IndexError:
             return 0, 0
 

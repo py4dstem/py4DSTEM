@@ -237,7 +237,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     # Loop over selected diffraction patterns
     t0 = time()
     for i in range(len(Rx)):
-        DP = datacube.data4D[Rx[i],Ry[i],:,:]
+        DP = datacube.data[Rx[i],Ry[i],:,:]
         peaks.append(find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                                    corrPower = corrPower,
                                                    sigma = sigma,
@@ -306,7 +306,7 @@ def find_Bragg_disks(datacube, probe,
             if verbose:
                 print_progress_bar(Rx*datacube.R_Ny+Ry+1, datacube.R_Nx*datacube.R_Ny,
                                    prefix='Analyzing:', suffix='Complete', length=50)
-            DP = datacube.data4D[Rx,Ry,:,:]
+            DP = datacube.data[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                           corrPower = corrPower,
                                           sigma = sigma,

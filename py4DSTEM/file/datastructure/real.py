@@ -11,12 +11,12 @@ class RealSlice(DataObject):
         """
         Instantiate a RealSlice object.  Set the data and dimensions.
 
-        If data is two dimensional, it is stored as self.data2D, and has shape (R_Nx, R_Ny).
-        If data is three dimensional, self.data2D is a list of slices of some depth,
+        If data is two dimensional, it is stored as self.data, and has shape (R_Nx, R_Ny).
+        If data is three dimensional, self.data is a list of slices of some depth,
         where self.depth is data.shape[2], i.e. the shape is (R_Nx, R_Ny, depth).
-        If slicelabels is unspecified, 2D slices can be accessed as self.data2D[i].
+        If slicelabels is unspecified, 2D slices can be accessed as self.data[i].
         If slicelabels is specified, it should be an n-tuple of strings, where
-        n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
+        n==self.depth, and 2D slices can be accessed as self.data[slicelabels[i]].
         """
         # Get shape
         if R_Nx is None:
