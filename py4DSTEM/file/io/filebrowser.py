@@ -26,7 +26,7 @@ class FileBrowser(object):
             ##version 0.5 is the first version to allow variable top level group names
             self.topgroup = get_py4DSTEM_topgroup(self.filepath)
         else:
-            self.topgroup = '4DSTEM_experiment'
+            self.topgroup = '4DSTEM_experiment/'
         #topgroup = ---
         self.file = h5py.File(filepath, 'r')
         self.set_object_lookup_info()
@@ -314,7 +314,7 @@ class FileBrowser(object):
             print("Error: unknown py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
             return None
 
-     def get_dataobject_info_v0_5(self, index):
+    def get_dataobject_info_v0_5(self, index):
         """
         Returns a dictionary containing information about the object at index for files written
         by py4DSTEM v0.5.
@@ -332,35 +332,44 @@ class FileBrowser(object):
             slices = list(self.file[self.topgroup + 'data/diffractionslices'][name].keys())
             slices.remove('dim1')
             slices.remove('dim2')
+            if('dim3' in slices):
+                slices.remove('dim3')
             shape = self.file[self.topgroup + 'data/diffractionslices'][name][slices[0]].shape
             metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
+            depth = 1
             objectinfo = {'name':name, 'slices':slices, 'shape':shape,
                           'type':objecttype, 'index':index, 'metadata':metadata}
-            ##TODO:throw error if for some reason shape is 3 and dim3 is also not specified
             if(len(shape) == 3):
-                if('dim3' in slices): #kinda redundant
-                    if(isinstance(slices['dim3'][0],str)) ##TODO: check if string vector reads in as a list, it probably won't and this won't work
-                        #write key if list is string based IE inhomogenous 3D array
-                        objectinfo['dim3'] = slices['dim3'] ##similarly, this might not be a list
-                    slices.remove('dim3')
+                objectinfo['depth'] = shape[2]
+                dim3 = self.file[self.topgroup+'data/diffractionslices'][name]['dim3']
+                if('S' in dim3.dtype.str): #Checks if fixed width C string
+                    with dim3.astype('S64'):
+                        bstrings = dim3[:]
+                    bstrings = [bstring.decode('UTF-8') for bstring in bstrings]
+                    #write key if list is string based IE inhomogenous 3D array
+                    objectinfo['dim3'] = bstrings
 
         elif objecttype == 'RealSlice':
             name = list(self.file[self.topgroup + 'data/realslices'].keys())[objectindex]
-            depth = self.file[self.topgroup + 'data/realslices'][name].attrs['depth']
             slices = list(self.file[self.topgroup + 'data/realslices'][name].keys())
             slices.remove('dim1')
             slices.remove('dim2')
+            if('dim3' in slices):
+                slices.remove('dim3')
             shape = self.file[self.topgroup + 'data/realslices'][name][slices[0]].shape
             metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
+            depth = 1
             objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape,
                           'type':objecttype, 'index':index, 'metadata':metadata}
-            ##TODO:throw error if for some reason shape is 3 and dim3 is also not specified
             if(len(shape) == 3):
-                if('dim3' in slices): #kinda redundant
-                    if(isinstance(slices['dim3'][0],str)) ##TODO: check if string vector reads in as a list, it probably won't and this won't work
-                        #write key if list is string based IE inhomogenous 3D array
-                        objectinfo['dim3'] = slices['dim3'] ##similarly, this might not be a list
-                    slices.remove('dim3')
+                objectinfo['depth'] = shape[2]
+                dim3 = self.file[self.topgroup+'data/realslices'][name]['dim3']
+                if('S' in dim3.dtype.str): #Checks if fixed width C string
+                    with dim3.astype('S64'):
+                        bstrings = dim3[:]
+                    bstrings = [bstring.decode('UTF-8') for bstring in bstrings]
+                    #write key if list is string based IE inhomogenous 3D array
+                    objectinfo['dim3'] = bstrings
 
         elif objecttype == 'PointList':
             name = list(self.file[self.topgroup + 'data/pointlists'].keys())[objectindex]
@@ -611,8 +620,8 @@ class FileBrowser(object):
             Q_Nx = shape[0]
             Q_Ny = shape[1]
             data = np.array(self.file[self.topgroup + 'data/diffractionslices'][name][slices[0]])
-            if(len(shape)==2)
-                dataobject = DiffractionSlice(data=data, slicelabels=None, Q_Nx=Q_Nx, Q_Ny=Q_Ny ,Q_Nz=None, name=name)
+            if(len(shape)==2):
+                dataobject = DiffractionSlice(data=data, slicelabels=slices, Q_Nx=Q_Nx, Q_Ny=Q_Ny ,Q_Nz=None, name=name)
             else:
                 if('dim3' in info.keys()):
                     ##TODO: slicelabels requires tuples of strings-> need to read in tuples of strings when dataobject is gotten
@@ -621,14 +630,14 @@ class FileBrowser(object):
                     dataobject = DiffractionSlice(data=data, slicelabels=None, Q_Nx=Q_Nx, Q_Ny=Q_Ny, Q_Nz=shape[2], name=name)
 
         elif objecttype == 'RealSlice':
-            depth = info['depth']
             slices = info['slices']
             shape = info['shape']
+            print(shape)
             R_Nx = shape[0]
             R_Ny = shape[1]
             data = np.array(self.file[self.topgroup + 'data/realslices'][name][slices[0]])
-            if(len(shape)==2)
-                dataobject = RealSlice(data=data, slicelabels=None, R_Nx=R_Nx, R_Ny=R_Ny, R_Nz=None, name=name)
+            if(len(shape)==2):
+                dataobject = RealSlice(data=data, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, R_Nz=None, name=name)
             else:
                 if('dim3' in info.keys()):
                     ##TODO: slicelabels requires tuples of strings-> need to read in tuples of strings when dataobject is gotten
@@ -982,7 +991,7 @@ class FileBrowser(object):
     ############# Metadata #############
 
     def get_metadataobject(self, index):
-        metadata_group = self.file[self.topgroup + metadata/metadata_{}'.format(index)]
+        metadata_group = self.file[self.topgroup + 'metadata/metadata_{}'.format(index)]
         return Metadata(init='py4DSTEM', filepath=self.file, metadata_ind=index)
 
 
@@ -1006,13 +1015,12 @@ def is_py4DSTEM_file(h5_file):
     if isinstance(h5_file, h5py._hl.files.File):
         if ('version_major' in h5_file.attrs) and ('version_minor' in h5_file.attrs) and (('4DSTEM_experiment' in h5_file.keys()) or ('4D-STEM_data' in h5_file.keys())):
             return True
-        elif:
+        else:
             #this searches for emd_group_type =2, version major, version minor in top set of keys
             for key in h5_file.keys():
                 if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
                     if h5_file[key].attrs['emd_group_type'] == 2:
                         return True
-        else:
             return False
     else:
         try:
@@ -1037,7 +1045,7 @@ def get_py4DSTEM_version(h5_file):
             #if not in root directory, will be in one of top groups
             for key in h5_file.keys():
                 if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
-                    if h5_file[key]['emd_group_type'] == 2:
+                    if h5_file[key].attrs['emd_group_type'] == 2:
                         version_major = h5_file[key].attrs['version_major']
                         version_minor = h5_file[key].attrs['version_minor']
                         break
@@ -1053,25 +1061,35 @@ def get_py4DSTEM_version(h5_file):
             return (0,0)
 
 def get_py4DSTEM_topgroup(h5_file):
-	"""
-	Accepts either a filepath or an open h5py File boject. Returns string of the top group name.
+    """
+    Accepts either a filepath or an open h5py File boject. Returns string of the top group name.
     Used in v0.5 and above; all other versions are defaulted to "4DSTEM_experiment"
     Currently makes a list of top groups, but it will only return the first valid top group.
     When multiple top groups is supported, all that should change is the return statement from
     return topgroups[0] -> return topgroups
-	"""
+    """
     if isinstance(h5_file, h5py._hl.files.File):
         topgroups = []
         for key in h5_file.keys():
              if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
-                    if h5_file[key]['emd_group_type'] == 2:
-                        topgroups.append(key)
+                    if h5_file[key].attrs['emd_group_type'] == 2:
+                        topgroups.append(key+'/')
         return topgroups[0]
     else:
-		f = h5py.File(h5_file, 'r')
-		result = get_py4DSTEM_topgroup(f)
-		f.close()
-		return result
+        f = h5py.File(h5_file, 'r')
+        result = get_py4DSTEM_topgroup(f)
+        f.close()
+        return result
+
+def check_version(current,minimum):
+    "Checks if current version is at least greater than required version."
+    test_sum = np.sum((np.subtract(current,minimum)>=0)*np.asarray((2,1)))
+    ref_sum = np.sum((np.asarray(minimum) >= 1)*np.asarray((2,1)))
+    if test_sum >= ref_sum:
+        #check to see if major and minor versions are >= in every category that exists in minimum required version
+        return True
+    else:
+        return False
 
 
 ################# Log functions ################
@@ -1114,18 +1132,3 @@ def show_log_item(index, log_item):
         else:
             print("\t\t{}\t{}".format(key,value))
     print("Version: \t{}\n".format(version))
-
-def check_version(current,minimum):
-    "Checks if current version is at least greater than required version."
-    test_sum = np.sum((np.subtract(current,minimum)>=0)*np.asarray((2,1)))
-    ref_sum = np.sum(minimum >= 1)*np.asarray((2,1))
-    if test_sum >= ref_sum:
-        #check to see if major and minor versions are >= in every category that exists in minimum required version
-        return True
-    else:
-        return False
-
-
-
-
-

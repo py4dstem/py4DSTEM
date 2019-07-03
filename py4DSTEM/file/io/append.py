@@ -169,14 +169,14 @@ def append(data, filepath, **kwargs):
 
 ################### END OF APPEND FUNCTIONS #####################
 def get_py4DSTEM_topgroup(h5_file):
-	"""
-	Accepts an open h5py File boject. Returns string of the top group name. 
-	"""
-	if ('4DSTEM_experiment' in h5_file.keys()) # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
-		return '4DSTEM_experiment/'
-	elif ('4DSTEM_simulation' in h5_file.keys()):
-		return '4DSTEM_simulation/'
-	else:
-		return '4D-STEM_data/'
+    """
+    Accepts an open h5py File boject. Returns string of the top group name. 
+    """
+    if ('4DSTEM_experiment' in h5_file.keys()): # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
+        return '4DSTEM_experiment/'
+    elif ('4DSTEM_simulation' in h5_file.keys()):
+        return '4DSTEM_simulation/'
+    else:
+        return '4D-STEM_data/'
 
 
