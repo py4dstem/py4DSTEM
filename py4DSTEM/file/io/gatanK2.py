@@ -224,7 +224,7 @@ class K2DataArray(Sequence):
         return nbytes // (0x5758 * 32)
     
 # ======= UTILITIES OUTSIDE THE CLASS ======#
-@nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=True,parallel=True)
+@nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=False,parallel=False)
 def _convert_uint12(data_chunk):
   """
   data_chunk is a contigous 1D array of uint8 data)
