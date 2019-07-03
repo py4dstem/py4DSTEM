@@ -197,6 +197,93 @@ class polar_elliptical_transform(object):
         else:
             return
 
+    def fit_params(self, n_iter, step_sizes_init=[0.1,0.1,0,0.01,0.01], step_scale=0.9,
+                                                                        return_ans=False):
+        """
+        Find the polar elliptical transformation parameters x0,y0,A,B,C which best describe the data
+        by minimizing a cost function (theta-integrated RMSD of the polar transform).
+
+        Accepts:
+            n_iter              (int) number of iterations
+            step_sizes_init     (length 2 list of numbers) initial step sizes [dx, dy] by which to
+                                move the polar origin
+            step_scale          (float <= 1) if no step is taken, reduce step size by this fraction
+            return_ans          (bool) if True, return x0, y0, scores, x0_vals, y0_vals, A_vals,
+                                and B_vals
+
+        Returns (if return_ans is True):
+            x0                  (float) x0
+            y0                  (float) y0
+            scores              (array) scores at each iteration
+            x0_vals             (array) x0 values at each iteration
+            y0_vals             (array) y0 values at each iteration
+            A_vals              (array) A values at each iteration
+            B_vals              (array) B values at each iteration
+            C_vals              (array) C values at each iteration
+        """
+        scores, x0_vals, y0_vals, A_vals, B_vals, C_vals = [],[],[],[],[],[]
+
+        # Initial step sizes
+        step_sizes = np.zeros(5)
+        try:
+            step_sizes[0] = step_sizes_init[0]
+            step_sizes[1] = step_sizes_init[1]
+            step_sizes[2] = step_sizes_init[2]
+            step_sizes[3] = step_sizes_init[3]
+            step_sizes[4] = step_sizes_init[4]
+        except TypeError:
+            raise Exception("step_sizes_init should be a length 5 array/list/tuple, giving the initial step sizes of (x0,y0,A,B,C)")
+
+        # Initial polar transform and score
+        self.get_polar_transform()
+        score,_,_ = self.get_polar_score(return_ans=True)
+        scores.append(score)
+        x0_vals.append(self.coefs[0])
+        y0_vals.append(self.coefs[1])
+        A_vals.append(self.coefs[2])
+        B_vals.append(self.coefs[3])
+        C_vals.append(self.coefs[4])
+
+        # Main loop
+        for i in range(n_iter):
+
+            # Loop over x0,y0, testing and accepting/rejecting steps for each
+            # based on polar transform score values
+            n_steps = 0
+            for j in range(5):
+                # Test new coefficient and update
+                self.coefs[j] += step_sizes[j]
+                self.get_polar_transform()
+                test_score,_,_ = self.get_polar_score(return_ans=True)
+
+                if test_score < score:
+                    score = test_score
+                    n_steps += 1
+                else:
+                    self.coefs[j] -= 2*step_sizes[j]
+                    self.get_polar_transform()
+                    test_score,_,_ = self.get_polar_score(return_ans=True)
+                    if test_score < score:
+                        score = test_score
+                        n_steps += 1
+                    else:
+                        self.coefs[j] += step_sizes[j]
+                        self.get_polar_transform()
+
+            # If neither x0 nor y0 was updated, reduce the step size
+            if n_steps == 0:
+                step_sizes = step_sizes*step_scale
+
+            scores.append(score)
+            x0_vals.append(self.coefs[0])
+            y0_vals.append(self.coefs[1])
+            print_progress_bar(i+1, n_iter, prefix='Analyzing:', suffix='Complete', length=50)
+
+        if return_ans:
+            return np.array(scores), np.array(x0_vals), np.array(y0_vals), np.array(A_vals), np.array(B_vals), np.array(C_vals)
+        else:
+            return
+
     def fit_origin(self, n_iter, step_sizes_init=[1,1], step_scale=0.9, return_ans=False):
         """
         Find the origin of polar coordinates which best describe the data
@@ -269,83 +356,7 @@ class polar_elliptical_transform(object):
             print_progress_bar(i+1, n_iter, prefix='Analyzing:', suffix='Complete', length=50)
 
         if return_ans:
-            return self.coefs[0], self.coefs[1], np.array(scores), np.array(x0_vals), np.array(y0_vals)
-        else:
-            return
-
-    def fit_params(self, n_iter, step_sizes_init=[1,1,1,1,0], step_scale=0.9, return_ans=False):
-        """
-        Find the polar elliptical transformation parameters x0,y0,A,B,C which best describe the data
-        by minimizing a cost function (theta-integrated RMSD of the polar transform).
-
-        Accepts:
-            n_iter              (int) number of iterations
-            step_sizes_init     (length 2 list of numbers) initial step sizes [dx, dy] by which to
-                                move the polar origin
-            step_scale          (float <= 1) if no step is taken, reduce step size by this fraction
-            return_ans          (bool) if True, return x0,y0,scores,x0_vals, and y0_vals
-
-        Returns (if return_ans is True):
-            x0                  (float) x0
-            y0                  (float) y0
-            scores              (array) scores at each iteration
-            x0_vals             (array) x0 values at each iteration
-            y0_vals             (array) y0 values at each iteration
-        """
-        scores, x0_vals, y0_vals = [],[],[]
-
-        # Initial step sizes
-        step_sizes = np.zeros(5)
-        try:
-            step_sizes[0] = step_sizes_init[0]
-            step_sizes[1] = step_sizes_init[1]
-        except TypeError:
-            raise Exception("step_sizes_init should be a length 2 array/list/tuple, giving the initial step sizes of x0 and y0, respectively")
-
-        # Initial polar transform and score
-        self.get_polar_transform()
-        score,_,_ = self.get_polar_score(return_ans=True)
-        scores.append(score)
-        x0_vals.append(self.coefs[0])
-        y0_vals.append(self.coefs[1])
-
-        # Main loop
-        for i in range(n_iter):
-
-            # Loop over x0,y0, testing and accepting/rejecting steps for each
-            # based on polar transform score values
-            n_steps = 0
-            for j in range(2):
-                # Test new coefficient and update
-                self.coefs[j] += step_sizes[j]
-                self.get_polar_transform()
-                test_score,_,_ = self.get_polar_score(return_ans=True)
-
-                if test_score < score:
-                    score = test_score
-                    n_steps += 1
-                else:
-                    self.coefs[j] -= 2*step_sizes[j]
-                    self.get_polar_transform()
-                    test_score,_,_ = self.get_polar_score(return_ans=True)
-                    if test_score < score:
-                        score = test_score
-                        n_steps += 1
-                    else:
-                        self.coefs[j] += step_sizes[j]
-                        self.get_polar_transform()
-
-            # If neither x0 nor y0 was updated, reduce the step size
-            if n_steps == 0:
-                step_sizes = step_sizes*step_scale
-
-            scores.append(score)
-            x0_vals.append(self.coefs[0])
-            y0_vals.append(self.coefs[1])
-            print_progress_bar(i+1, n_iter, prefix='Analyzing:', suffix='Complete', length=50)
-
-        if return_ans:
-            return self.coefs[0], self.coefs[1], np.array(scores), np.array(x0_vals), np.array(y0_vals)
+            return np.array(scores), np.array(x0_vals), np.array(y0_vals)
         else:
             return
 
