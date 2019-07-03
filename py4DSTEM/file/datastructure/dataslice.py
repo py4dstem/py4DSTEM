@@ -9,7 +9,7 @@ from .dataobject import DataObject
 
 class DataSlice(DataObject):
 
-    def __init__(self, data, Nx, Ny, Nz=None, slicelabels=None, **kwargs):
+    def __init__(self, data, Nx, Ny, slicelabels=None, **kwargs):
         """
         Instantiate a DataSlice object.  Set the data and dimensions.
         ##TODO: Update this class description.
@@ -24,36 +24,26 @@ class DataSlice(DataObject):
 
         self.Nx = Nx
         self.Ny = Ny
-        self.Nz = Nz
 
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
         if len(shape)==2:
             assert shape==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
             self.depth=1
-            self.data2D = data
+            self.data = data
         else:
             assert shape[:2]==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
             if slicelabels is None:
-                """
-                this implciitly checks if read version is 0.5 or above; from 0.1 to 0.4, slicelabels are passed even for depth == 1
-                to maintain compability without version checking in the class definition, depth object is created for v0.5 when slicelabels
-                are included despite lacking the attribute, and data are still stored into a data2D object
-                On the other hand, if v0.5 or above is implicitly detected, data are instead passed to a data3D object for clarity of use
-                from the user perspective.
-                ##TODO: Determine if this is a stable/safe way to adapt future flexibility and compabitability 
-                """
-                self.data3D = data
-                #self.data2D = []
+                self.depth = shape[2]
+                self.data = data
                 #for i in range(self.depth):
                 #    self.data2D.append(data[:,:,i])
             else:
                 self.depth=shape[2]
                 assert len(slicelabels)==self.depth
-                self.data2D = OrderedDict()
+                self.data = OrderedDict()
                 for i in range(self.depth):
-                    self.data2D[slicelabels[i]]=data[:,:,i]
-
+                    self.data[slicelabels[i]]=data[:,:,i]
 
 
 

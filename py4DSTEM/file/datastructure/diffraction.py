@@ -7,7 +7,7 @@ from .dataslice import DataSlice
 
 class DiffractionSlice(DataSlice):
 
-    def __init__(self, data, Q_Nx=None, Q_Ny=None, Q_Nz=None slicelabels=None, **kwargs):
+    def __init__(self, data, Q_Nx=None, Q_Ny=None, slicelabels=None, **kwargs):
         """
         Instantiate a DiffractionSlice object.  Set the data and dimensions.
 
@@ -28,20 +28,9 @@ class DiffractionSlice(DataSlice):
         else:
             self.Q_Ny = Q_Ny
 
-        if len(data.shape) == 3:
-            if slicelabels is None:
-                if Q_Nz is None:
-                    self.Q_Nz = data.shape[2]
-                else:
-                    self.Q_Nz = Q_Nz
-            else:
-                self.Q_Nz = None #this is probably bad?
-        else:
-            self.Q_Nz = None
-
         # Instantiate as DataSlice, setting up dimensions, depth, and slicelabels
         DataSlice.__init__(self, data=data,
-                           Nx=self.Q_Nx, Ny=self.Q_Ny, Nz=self.Q_nz,
+                           Nx=self.Q_Nx, Ny=self.Q_Ny,
                            slicelabels=slicelabels, **kwargs)
 
 
