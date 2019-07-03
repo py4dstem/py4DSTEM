@@ -233,6 +233,7 @@ class polar_elliptical_transform(object):
             step_sizes[4] = step_sizes_init[4]
         except TypeError:
             raise Exception("step_sizes_init should be a length 5 array/list/tuple, giving the initial step sizes of (x0,y0,A,B,C)")
+        coef_inds = np.nonzero(step_sizes)[0]   # Don't iterate over coefs with step size = 0
 
         # Initial polar transform and score
         self.get_polar_transform()
@@ -250,7 +251,7 @@ class polar_elliptical_transform(object):
             # Loop over x0,y0, testing and accepting/rejecting steps for each
             # based on polar transform score values
             n_steps = 0
-            for j in range(5):
+            for j in coef_inds:
                 # Test new coefficient and update
                 self.coefs[j] += step_sizes[j]
                 self.get_polar_transform()
@@ -303,61 +304,26 @@ class polar_elliptical_transform(object):
             x0_vals             (array) x0 values at each iteration
             y0_vals             (array) y0 values at each iteration
         """
-        scores, x0_vals, y0_vals = [],[],[]
-
         # Initial step sizes
-        step_sizes = np.zeros(5)
+        step_sizes = np.zeros(2)
         try:
             step_sizes[0] = step_sizes_init[0]
             step_sizes[1] = step_sizes_init[1]
         except TypeError:
             raise Exception("step_sizes_init should be a length 2 array/list/tuple, giving the initial step sizes of x0 and y0, respectively")
 
-        # Initial polar transform and score
-        self.get_polar_transform()
-        score,_,_ = self.get_polar_score(return_ans=True)
-        scores.append(score)
-        x0_vals.append(self.coefs[0])
-        y0_vals.append(self.coefs[1])
-
-        # Main loop
-        for i in range(n_iter):
-
-            # Loop over x0,y0, testing and accepting/rejecting steps for each
-            # based on polar transform score values
-            n_steps = 0
-            for j in range(2):
-                # Test new coefficient and update
-                self.coefs[j] += step_sizes[j]
-                self.get_polar_transform()
-                test_score,_,_ = self.get_polar_score(return_ans=True)
-
-                if test_score < score:
-                    score = test_score
-                    n_steps += 1
-                else:
-                    self.coefs[j] -= 2*step_sizes[j]
-                    self.get_polar_transform()
-                    test_score,_,_ = self.get_polar_score(return_ans=True)
-                    if test_score < score:
-                        score = test_score
-                        n_steps += 1
-                    else:
-                        self.coefs[j] += step_sizes[j]
-                        self.get_polar_transform()
-
-            # If neither x0 nor y0 was updated, reduce the step size
-            if n_steps == 0:
-                step_sizes = step_sizes*step_scale
-
-            scores.append(score)
-            x0_vals.append(self.coefs[0])
-            y0_vals.append(self.coefs[1])
-            print_progress_bar(i+1, n_iter, prefix='Analyzing:', suffix='Complete', length=50)
-
+        # Call fit_params
         if return_ans:
-            return np.array(scores), np.array(x0_vals), np.array(y0_vals)
+            scores,x0_vals,y0_vals,_,_,_ = self.fit_params(n_iter=n_iter,
+                                               step_sizes_init=[step_sizes[0],step_sizes[1],0,0,0],
+                                               step_scale=0.9,
+                                               return_ans=True)
+            return scores, x0_vals, y0_vals
         else:
+            self.fit_params(n_iter=n_iter,
+                            step_sizes_init=[step_sizes[0],step_size[1],0,0,0],
+                            step_scale=0.9,
+                            return_ans=False)
             return
 
 
