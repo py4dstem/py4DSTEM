@@ -199,7 +199,7 @@ def save_datacube_group(group, datacube):
         group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    data_datacube = group.create_dataset("datacube", data=datacube.data4D)
+    data_datacube = group.create_dataset("datacube", data=datacube.data)
 
     # Dimensions
     assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
@@ -271,17 +271,17 @@ def save_diffraction_group(group, diffractionslice):
 
     group.attrs.create("depth", diffractionslice.depth)
     if diffractionslice.depth==1:
-        shape = diffractionslice.data2D.shape
-        data_diffractionslice = group.create_dataset("diffractionslice", data=diffractionslice.data2D)
+        shape = diffractionslice.data.shape
+        data_diffractionslice = group.create_dataset("diffractionslice", data=diffractionslice.data)
     else:
-        if type(diffractionslice.data2D)==OrderedDict:
-            shape = diffractionslice.data2D[list(diffractionslice.data2D.keys())[0]].shape
-            for key in diffractionslice.data2D.keys():
-                data_diffractionslice = group.create_dataset(str(key), data=diffractionslice.data2D[key])
+        if type(diffractionslice.data)==OrderedDict:
+            shape = diffractionslice.data[list(diffractionslice.data.keys())[0]].shape
+            for key in diffractionslice.data.keys():
+                data_diffractionslice = group.create_dataset(str(key), data=diffractionslice.data[key])
         else:
-            shape = diffractionslice.data2D[0].shape
+            shape = diffractionslice.data[0].shape
             for i in range(diffractionslice.depth):
-                data_diffractionslice = group.create_dataset("slice_"+str(i), data=diffractionslice.data2D[i])
+                data_diffractionslice = group.create_dataset("slice_"+str(i), data=diffractionslice.data[i])
 
     # Dimensions
     assert len(shape)==2, "Shape of diffractionslice is {}".format(len(shape))
@@ -327,17 +327,17 @@ def save_real_group(group, realslice):
 
     group.attrs.create("depth", realslice.depth)
     if realslice.depth==1:
-        shape = realslice.data2D.shape
-        data_realslice = group.create_dataset("realslice", data=realslice.data2D)
+        shape = realslice.data.shape
+        data_realslice = group.create_dataset("realslice", data=realslice.data)
     else:
-        if type(realslice.data2D)==OrderedDict:
-            shape = realslice.data2D[list(realslice.data2D.keys())[0]].shape
-            for key in realslice.data2D.keys():
-                data_realslice = group.create_dataset(str(key), data=realslice.data2D[key])
+        if type(realslice.data)==OrderedDict:
+            shape = realslice.data[list(realslice.data.keys())[0]].shape
+            for key in realslice.data.keys():
+                data_realslice = group.create_dataset(str(key), data=realslice.data[key])
         else:
-            shape = realslice.data2D[0].shape
+            shape = realslice.data[0].shape
             for i in range(realslice.depth):
-                data_realslice = group.create_dataset("slice_"+str(i), data=realslice.data2D[i])
+                data_realslice = group.create_dataset("slice_"+str(i), data=realslice.data[i])
 
     # Dimensions
     assert len(shape)==2, "Shape of realslice is {}".format(len(shape))

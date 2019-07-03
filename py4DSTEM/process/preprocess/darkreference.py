@@ -19,7 +19,7 @@ def get_bksbtr_DP(datacube, darkref, Rx, Ry):
         bksbtr_DP       (ndarray) the background subtracted diffraction pattern
     """
     assert darkref.shape==(datacube.Q_Nx,datacube.Q_Ny), "background must have shape (datacube.Q_Nx, datacube.Q_Ny)"
-    return datacube.data4D[Rx,Ry,:,:].astype(float) - darkref.astype(float)
+    return datacube.data[Rx,Ry,:,:].astype(float) - darkref.astype(float)
 
 
 #### Get dark reference ####
@@ -121,10 +121,10 @@ def get_background_streaks_x(datacube, width, N_frames, side='start'):
     refstrip = np.zeros((width, datacube.Q_Ny))
     if side=='start':
         for i in range(N_frames):
-            refstrip += datacube.data4D[indices_x[i], indices_y[i], :width, :].astype(float)
+            refstrip += datacube.data[indices_x[i], indices_y[i], :width, :].astype(float)
     else:
         for i in range(N_frames):
-            refstrip += datacube.data4D[indices_x[i], indices_y[i], -width:, :].astype(float)
+            refstrip += datacube.data[indices_x[i], indices_y[i], -width:, :].astype(float)
 
     # Calculate mean and return 1D array of streaks
     bkgrnd_streaks = np.sum(refstrip, axis=0) // width // N_frames
@@ -155,10 +155,10 @@ def get_background_streaks_y(datacube, N_frames, width, side='start'):
     refstrip = np.zeros((datacube.Q_Nx, width))
     if side=='start':
         for i in range(N_frames):
-            refstrip += datacube.data4D[indices_x[i], indices_y[i], :, :width].astype(float)
+            refstrip += datacube.data[indices_x[i], indices_y[i], :, :width].astype(float)
     else:
         for i in range(N_frames):
-            refstrip += datacube.data4D[indices_x[i], indices_y[i], :, -width:].astype(float)
+            refstrip += datacube.data[indices_x[i], indices_y[i], :, -width:].astype(float)
 
     # Calculate mean and return 1D array of streaks
     bkgrnd_streaks = np.sum(refstrip, axis=1) // width // N_frames

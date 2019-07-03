@@ -36,7 +36,7 @@ def get_CoM_images(datacube, mask=None, normalize=True):
     mass = np.zeros((datacube.R_Nx,datacube.R_Ny))
     for Rx in range(datacube.R_Nx):
         for Ry in range(datacube.R_Ny):
-            DP = datacube.data4D[Rx,Ry,:,:]
+            DP = datacube.data[Rx,Ry,:,:]
             mass[Rx,Ry] = np.sum(DP*mask)
             CoMx[Rx,Ry] = np.sum(qx*DP) / mass[Rx,Ry]
             CoMy[Rx,Ry] = np.sum(qy*DP) / mass[Rx,Ry]
