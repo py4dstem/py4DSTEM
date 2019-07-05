@@ -17,7 +17,7 @@
 # thank you! <3, b
 
 import hyperspy.api_nogui as hs
-from .dm import dmReader
+from ncempy.io.dm import dmReader
 from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
