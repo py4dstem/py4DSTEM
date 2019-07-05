@@ -75,7 +75,10 @@ conda install hyperspy -c conda-forge
 conda install h5py
 conda install pyqtgraph
 conda install PyQt5
+pip install ncempy
 ```
+
+Note that as ncempy is installed with pip rather than conda, anaconda users should make sure that pip is pointing to their anaconda installation (rather than some other python version).  You can check by calling `which pip`, and confirming that the output is a path somewhere inside your anaconda directory.
 
 To get the py4DSTEM package, use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
 
