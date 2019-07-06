@@ -83,7 +83,6 @@ class K2DataArray(Sequence):
         self._stripe_dtype = np.dtype([ ('sync','>u4',1), \
             ('header',np.void,24),('coords','>u2',4),('pad',np.void,4),('data','>u1',22320) ])
 
-        #self.metadata = gtg.allTags
                 
         super().__init__()
 
@@ -92,7 +91,6 @@ class K2DataArray(Sequence):
         #detatch from the file handles
         for i in range(8):
             self._bin_files[i].close()
-        super().__del__()
 
     #======== HANDLE SLICING AND len CALLS =========#
     def __getitem__(self,i):
@@ -117,7 +115,7 @@ class K2DataArray(Sequence):
                 scany = Ry[sx,sy]
 
                 frame = np.ravel_multi_index( (scanx,scany), (self.shape[0],self.shape[1]), order='F' )
-                DP = self._grab_frame(frame).astype(np.float32)
+                DP = self._grab_frame(frame).astype(np.int16)
                 if self._hidden_stripe_noise_reduction:
                     self._subtract_readout_noise(DP)
                 elif self._user_noise_reduction:
@@ -168,7 +166,7 @@ class K2DataArray(Sequence):
     @staticmethod
     def _subtract_readout_noise(DP):
         #subtract readout noise using the hidden stripes
-        darkref = np.average(DP[1792:,:],axis=0).astype(np.float32)
+        darkref = np.average(DP[1792:,:],axis=0).astype(np.int16)
         DP -= darkref[np.newaxis,:]
         
     # Handle the user specifying a dark reference (fix the size and make sure auto gets turned off)
@@ -180,7 +178,7 @@ class K2DataArray(Sequence):
     def dark_reference(self,dr):
         assert dr.shape == (1792,1920), "Dark reference must be the size of an active frame"
         #assert dr.dtype == np.uint16, "Dark reference must be 16 bit unsigned"
-        self._user_dark_reference = np.zeros((1860,2048),dtype=np.float32)
+        self._user_dark_reference = np.zeros((1860,2048),dtype=np.int16)
         self._user_dark_reference[:1792,:1920] = dr
         
         #disable auto noise reduction
@@ -222,6 +220,21 @@ class K2DataArray(Sequence):
         import os
         nbytes = os.path.getsize(self._bin_prefix + '1.bin')
         return nbytes // (0x5758 * 32)
+
+    def _write_to_hdf5(self,group):
+        """
+        Write the entire dataset to an HDF5 file.
+        group should be an HDF5 Group object.
+        ( This function is normally called via py4DSTEM.file.io.save() )
+        """
+        dset = group.create_dataset("datacube",(self.shape),'i2')
+
+        for sy in range(self.shape[1]):
+            for sx in range(self.shape[0]):
+                dset[sx,sy,:,:] = self[sx,sy,:,:]
+
+        return dset
+
     
 # ======= UTILITIES OUTSIDE THE CLASS ======#
 @nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=False,parallel=False)
