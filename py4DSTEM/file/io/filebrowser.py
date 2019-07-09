@@ -4,6 +4,9 @@
 # It can retrieve and search through the file data, metadata, and logs.
 # Data can be searched/sorted by DataObject type or by name, their properties can be examined, and
 # they can be loaded individually or in groups.
+#
+# This file concludes with a few utility functions, either which are used by or which use the
+# FileBrowser class.
 
 import h5py
 import numpy as np
@@ -1083,11 +1086,13 @@ def get_py4DSTEM_topgroup(h5_file):
 
 def check_version(current,minimum):
     "Checks if current version is at least greater than required version."
-    test_sum = np.sum((np.subtract(current,minimum)>=0)*np.asarray((2,1)))
-    ref_sum = np.sum((np.asarray(minimum) >= 1)*np.asarray((2,1)))
-    if test_sum >= ref_sum:
-        #check to see if major and minor versions are >= in every category that exists in minimum required version
+    if current[0]>minimum[0]:
         return True
+    elif current[0]==minimum[0]:
+        if current[1]>=minimum[1]:
+            return True
+        else:
+            return False
     else:
         return False
 
@@ -1132,3 +1137,17 @@ def show_log_item(index, log_item):
         else:
             print("\t\t{}\t{}".format(key,value))
     print("Version: \t{}\n".format(version))
+
+
+################## Quick file browsing ################
+
+def show_dataobjects(filepath):
+    """
+    Displays all DataObjects in the py4DSTEM HDF5 file at filepath.
+    """
+    assert is_py4DSTEM_file(filepath), "filepath must point to a py4DSTEM HDF5 file."
+    browser = FileBrowser(filepath)
+    browser.show_dataobjects()
+    browser.close()
+
+
