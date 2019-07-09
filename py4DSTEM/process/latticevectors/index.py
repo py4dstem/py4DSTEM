@@ -58,17 +58,17 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
     Returns a full reciprocal lattice stretching to the limits of the diffraction pattern
     by making linear combinations of the lattice vectors up to (±h_max,±k_max).
 
-    This can be useful when there are false peaks or missing peaks in the braggvectormap, which can cause errors in the 
-    strain finding routines that rely on those peaks for indexing. This allows us to create
-    a reference lattice that has all combinations of the lattice vectors all the way out to the 
-    edges of the frame, and excluding any erroneous intermediate peaks. 
+    This can be useful when there are false peaks or missing peaks in the braggvectormap, which can
+    cause errors in the strain finding routines that rely on those peaks for indexing. This allows
+    us to create a reference lattice that has all combinations of the lattice vectors all the way
+    out to the edges of the frame, and excluding any erroneous intermediate peaks.
 
     Accepts:
         ux, uy, vx, vy          (float) x and y coords of the u,v lattice vectors
         x0, y0                  (float) x,y origin of the lattice
         Q_Nx, Q_Ny              (int) diffraction pattern size (i.e. dc.Q_Nx, dc.Q_Ny)
         h_max, k_max            (int) maximal indices for generating the lattice
-                                    (the lattive is always trimmed to fit inside the 
+                                    (the lattive is always trimmed to fit inside the
                                      pattern so you can overestimate these, or leave
                                      unspecified and they will be automatically found)
 
@@ -184,7 +184,7 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
     return braggpeaks
 
 
-def bragg_vector_intensity_map_by_index(pointlistarray,h,k, symmetric=False):
+def get_braggvectormap_by_index(pointlistarray,h,k, symmetric=False):
     """
     Returns a correlation intensity map for an indexed (h,k) Bragg vector
     Used to obtain a darkfield image corresponding to the (h,k) reflection
