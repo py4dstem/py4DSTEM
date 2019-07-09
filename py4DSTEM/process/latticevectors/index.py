@@ -88,12 +88,12 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
         x -= x0
         h_max = np.max(np.ceil(np.abs((x/ux,y/uy))))
         k_max = np.max(np.ceil(np.abs((x/vx,y/vy))))
-    
+
     (hlist,klist) = np.meshgrid(np.arange(-h_max,h_max+1),np.arange(-k_max,k_max+1))
 
     M_ideal = np.vstack((hlist.ravel(),klist.ravel())).T
     ideal_peaks = np.matmul(M_ideal,beta)
-    
+
     coords = [('qx',float),('qy',float),('h',int),('k',int)]
 
     ideal_data = np.zeros(len(ideal_peaks[:,0]),dtype=coords)
@@ -118,17 +118,21 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
 
     return ideal_lattice
 
-def index_pointlistarray(pointlistarray, lattice, maxPeakSpacing, mask=None):
+def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
     """
-    Indexes the Bragg peaks in a PointListArray based on the indexed points in
-    lattice, which are placed in 'h' and 'k' coordinates in the PointLists in the array.
-    If `mask` is specified, only the locations where mask is True are indexed.
+    Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
+    identify the indices for each peak in the PointListArray braggpeaks.
+    Return a new braggpeaks_indexed PointListArray, containing all data in braggpeaks plus
+    three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak indices
+    with the ints (h,k) and indicating whether the peak was successfully indexed or not with
+    the bool index_mask. If `mask` is specified, only the locations where mask is True are
+    indexed.
 
     Accepts:
-        pointlistarray          (PointListArray) the braggpeaks pointlist to index
-        lattice                 (PointList) a PointList containing with indexed peaks,
-                                    with the four coordinates 'qx', 'qy', 'h', and 'k'
-                                    for the lattice points and corresponding indices
+        braggpeaks              (PointListArray) the braggpeaks to index. Must contain
+                                    the coordinates 'qx', 'qy', and 'intensity'
+        lattice                 (PointList) the positions (qx,qy) of the (h,k) lattice points.
+                                    Must contain the coordinates 'qx', 'qy', 'h', and 'k'
         maxPeakSpacing          (float) Maximum distance from the ideal lattice points
                                     to include a peak for indexing
         mask                    (bool)  Boolean mask, same shape as the pointlistarray,
@@ -137,33 +141,34 @@ def index_pointlistarray(pointlistarray, lattice, maxPeakSpacing, mask=None):
                                     with different lattices
 
     Returns:
-        pointlistarray          The original pointlistarray, with new coordinates 'h' and 'k'
-                                    containing the indices of each indexable peak and 'index_mask'
-                                    containing True for peaks that have been successfully indexed
+        indexed_braggpeaks      (PointListArray) The original braggpeaks pointlistarray, with new
+                                    coordinates 'h', 'k', and 'index_mask', containing the indices
+                                    of each indexable peak and a bool indicating if each peak has
+                                    been successfully indexed
     """
 
-    assert isinstance(pointlistarray,PointListArray)
-    assert np.all([name in pointlistarray.dtype.names for name in ('qx','qy','intensity')])
+    assert isinstance(braggpeaks,PointListArray)
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
     assert isinstance(lattice, PointList)
     assert np.all([name in lattice.dtype.names for name in ('qx','qy','h','k')])
 
     if mask is None:
-        mask = np.ones(pointlistarray.shape,dtype=bool)
+        mask = np.ones(braggpeaks.shape,dtype=bool)
 
-    assert mask.shape == pointlistarray.shape, 'mask must have same shape as pointlistarray'
+    assert mask.shape == braggpeaks.shape, 'mask must have same shape as pointlistarray'
     assert mask.dtype == bool, 'mask must be boolean'
 
     # add the coordinates if they don't exist
-    if not (('h' in pointlistarray.dtype.names) | \
-        ('k' in pointlistarray.dtype.names) | \
-        ('index_mask' in pointlistarray.dtype.names)):
-        pointlistarray = pointlistarray.add_coordinates([('h',int),('k',int),('index_mask',bool)])
+    if not (('h' in braggpeaks.dtype.names) | \
+        ('k' in braggpeaks.dtype.names) | \
+        ('index_mask' in braggpeaks.dtype.names)):
+        braggpeaks = braggpeaks.add_coordinates([('h',int),('k',int),('index_mask',bool)])
 
     # loop over all the scan positions
     for Rx in range(mask.shape[0]):
         for Ry in range(mask.shape[1]):
             if mask[Rx,Ry]:
-                pl = pointlistarray.get_pointlist(Rx,Ry)
+                pl = braggpeaks.get_pointlist(Rx,Ry)
 
                 for i in range(pl.length):
                     r2 = (pl.data['qx'][i]-lattice.data['qx'])**2 + \
@@ -176,7 +181,7 @@ def index_pointlistarray(pointlistarray, lattice, maxPeakSpacing, mask=None):
                     else:
                         pl.data['index_mask'][i] = False # turns out int's can be NaN
 
-    return pointlistarray
+    return braggpeaks
 
 
 def bragg_vector_intensity_map_by_index(pointlistarray,h,k, symmetric=False):
@@ -191,7 +196,7 @@ def bragg_vector_intensity_map_by_index(pointlistarray,h,k, symmetric=False):
         h, k                (int) indices for the reflection to generate an intensity map from 
         symmetric           (bool) if set to true, returns sum of intensity of (h,k), (-h,k),
                                 (h,-k), (-h,-k)
-    
+
     Returns:
         intensity_map       (numpy array) a map of the intensity of the (h,k) Bragg vector
                                 correlation. same shape as the pointlistarray.
@@ -210,7 +215,7 @@ def bragg_vector_intensity_map_by_index(pointlistarray,h,k, symmetric=False):
 
                 # now apply the indexing mask
                 matches = np.logical_and(matches, pl.data['index_mask'])
-                if len(matches)>0: 
+                if len(matches)>0:
                     intensity_map[Rx,Ry] = np.sum(pl.data['intensity'][matches])
 
     return intensity_map
