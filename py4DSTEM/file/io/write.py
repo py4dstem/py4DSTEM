@@ -199,7 +199,11 @@ def save_datacube_group(group, datacube):
         group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    data_datacube = group.create_dataset("datacube", data=datacube.data)
+    if isinstance(datacube.data,np.ndarray):
+        data_datacube = group.create_dataset("datacube", data=datacube.data)
+    else:
+        # handle K2DataArray datacubes
+        data_datacube = datacube.data._write_to_hdf5(group)
 
     # Dimensions
     assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
