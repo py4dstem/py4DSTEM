@@ -201,7 +201,7 @@ def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
                                 correlation. same shape as the pointlistarray.
     """
     assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
+    assert np.all([name in braggpeaks.dtype.names for name in ('h','k','intensity')])
     intensity_map = np.zeros(braggpeaks.shape,dtype=float)
 
     for Rx in range(braggpeaks.shape[0]):
