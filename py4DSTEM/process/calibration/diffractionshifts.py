@@ -154,7 +154,7 @@ def shift_braggpeaks(Braggpeaks, xshifts, yshifts):
         shifted_Braggpeaks  (PointListArray) the shifted Bragg peaks
     """
     assert isinstance(Braggpeaks, PointListArray)
-    shifted_Braggpeaks = Braggpeaks.copy(name=Braggpeaks.name+"_shifted")
+    shifted_Braggpeaks = Braggpeaks.copy(name=Braggpeaks.name+"_shiftcorrected")
 
     for Rx in range(shifted_Braggpeaks.shape[0]):
         for Ry in range(shifted_Braggpeaks.shape[1]):
