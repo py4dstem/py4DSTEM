@@ -17,7 +17,7 @@
 # thank you! <3, b
 
 import hyperspy.api_nogui as hs
-from .dm import dmReader
+from ncempy.io.dm import dmReader
 from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
@@ -54,7 +54,7 @@ def read(filename, load=None):
     load = None
         attempt to load a datacube using hyperspy
     load = 'dmmmap'
-        load a dm file (.d3 or .dm4), memory mapping the datacube, using dm.py
+        load a dm file (.dm3 or .dm4), memory mapping the datacube, using dm.py
     load = 'empad'
         load an EMPAD formatted file, using empad.py
     load = 'relativity'
@@ -66,6 +66,10 @@ def read(filename, load=None):
         relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
         This functionality requires the mrcfile package, which can be installed with
             pip install mrcfile
+    load = 'gatan_bin'
+        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be passed
+        as the argument. The reader searches for the *.gtg file that contains the metadata, then maps the 
+        chunked binary files. 
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
@@ -82,6 +86,9 @@ def read(filename, load=None):
             import mrcfile
             print("Reading an IDES Relativity MRC file...")
             output = mrcfile.mmap(filename,mode='r')
+        elif load == 'gatan_bin':
+            print('Reading Gatan binary files...')
+            output = read_gatan_binary(filename)
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
@@ -183,13 +190,30 @@ def read_empad_file(filename):
 
     return datacube
 
+def read_gatan_binary(filename):
+    """
+    Read a folder with Gatan binary files. The folder must contain a *.gtg file (this is where
+    the metadata for the whole dataset lives) as well as a sequence of 8 *.bin files. DO NOT
+    change the folder structure, as this relies on having only one scan per folder (if you
+    have two scans with different names, this will fail.)
 
+    filename can refer to any of the *.bin files, the *.gtg file, or
+    the directory containing them.
 
+    Requires ncempy: `pip install ncempy` and numba: `conda install numba`
+    """
 
+    #this import is delayed to here so that numba is not a base dependency
+    from . import gatanK2
 
+    data_map = gatanK2.K2DataArray(filename)
+    datacube = DataCube(data = data_map)
 
+    #metadata = Metadata(init='hs',filepath=datacube.data4D._gtg_file)
 
+    #datacube.metadata = metadata
 
+    return datacube
 
 
 
