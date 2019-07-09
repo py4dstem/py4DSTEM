@@ -184,29 +184,29 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
     return braggpeaks
 
 
-def get_braggvectormap_by_index(pointlistarray,h,k, symmetric=False):
+def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
     """
     Returns a correlation intensity map for an indexed (h,k) Bragg vector
     Used to obtain a darkfield image corresponding to the (h,k) reflection
-    or a bightifled image when h=k=0
+    or a bightfield image when h=k=0
 
     Accepts:
-        pointlistarray      (PointListArray) a PointListArray with (at least) the coordinates
-                                'h', 'k', and 'intensity'
-        h, k                (int) indices for the reflection to generate an intensity map from 
+        braggpeaks          (PointListArray) must contain the coordinates 'h','k', and 'intensity'
+        h, k                (ints) indices for the reflection to generate an intensity map from
         symmetric           (bool) if set to true, returns sum of intensity of (h,k), (-h,k),
                                 (h,-k), (-h,-k)
 
     Returns:
-        intensity_map       (numpy array) a map of the intensity of the (h,k) Bragg vector
+        intensitty_map      (numpy array) a map of the intensity of the (h,k) Bragg vector
                                 correlation. same shape as the pointlistarray.
     """
+    assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
+    intensity_map = np.zeros(braggpeaks.shape,dtype=float)
 
-    intensity_map = np.zeros(pointlistarray.shape,dtype=float)
-
-    for Rx in range(pointlistarray.shape[0]):
-        for Ry in range(pointlistarray.shape[1]):
-            pl = pointlistarray.get_pointlist(Rx,Ry)
+    for Rx in range(braggpeaks.shape[0]):
+        for Ry in range(braggpeaks.shape[1]):
+            pl = braggpeaks.get_pointlist(Rx,Ry)
             if pl.length > 0:
                 if symmetric:
                     matches = np.logical_and(np.abs(pl.data['h']) == np.abs(h), np.abs(pl.data['k']) == np.abs(k))
