@@ -22,7 +22,7 @@ def get_ROI_dataslice_rect(datacube, slice_x, slice_y):
     Returns a subset of datacube corresponding to a rectangular ROI in the diffraction plane
     specified by slice_x, slice_y
     """
-    return datacube.data4D[:,:,slice_x,slice_y]
+    return datacube.data[:,:,slice_x,slice_y]
 
 def get_circ_mask(size_x,size_y,R=1):
     """
@@ -50,7 +50,7 @@ def get_virtual_image_rect_integrate(datacube, slice_x, slice_y):
     mode. Also returns a bool indicating success or failure.
     """
     try:
-        return datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3)), 1
+        return datacube.data[:,:,slice_x,slice_y].sum(axis=(2,3)), 1
     except ValueError:
         return 0,0
 
@@ -60,7 +60,7 @@ def get_virtual_image_circ_integrate(datacube, slice_x, slice_y):
     mode. Also returns a bool indicating success or failure.
     """
     try:
-        return np.sum(datacube.data4D[:,:,slice_x,slice_y]*get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start), axis=(2,3)), 1
+        return np.sum(datacube.data[:,:,slice_x,slice_y]*get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start), axis=(2,3)), 1
     except ValueError:
         return 0,0
 
@@ -72,7 +72,7 @@ def get_virtual_image_annular_integrate(datacube, slice_x, slice_y, R):
     """
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
     try:
-        return np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask, axis=(2,3)), 1
+        return np.sum(datacube.data[:,:,slice_x,slice_y]*mask, axis=(2,3)), 1
     except ValueError:
         return 0,0
 
@@ -88,7 +88,7 @@ def get_virtual_image_rect_diffX(datacube, slice_x, slice_y):
         midpoint = slice_x.start + (slice_x.stop-slice_x.start)/2
         slice_left = slice(slice_x.start, int(np.floor(midpoint)))
         slice_right = slice(int(np.ceil(midpoint)), slice_x.stop)
-        img = datacube.data4D[:,:,slice_left,slice_y].sum(axis=(2,3)).astype('int64') - datacube.data4D[:,:,slice_right,slice_y].sum(axis=(2,3)).astype('int64')
+        img = datacube.data[:,:,slice_left,slice_y].sum(axis=(2,3)).astype('int64') - datacube.data[:,:,slice_right,slice_y].sum(axis=(2,3)).astype('int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -102,7 +102,7 @@ def get_virtual_image_rect_diffY(datacube, slice_x, slice_y):
         midpoint = slice_y.start + (slice_y.stop-slice_y.start)/2
         slice_bottom = slice(slice_y.start, int(np.floor(midpoint)))
         slice_top = slice(int(np.ceil(midpoint)), slice_y.stop)
-        img = datacube.data4D[:,:,slice_x,slice_bottom].sum(axis=(2,3)).astype('int64') - datacube.data4D[:,:,slice_x,slice_top].sum(axis=(2,3)).astype('int64')
+        img = datacube.data[:,:,slice_x,slice_bottom].sum(axis=(2,3)).astype('int64') - datacube.data[:,:,slice_x,slice_top].sum(axis=(2,3)).astype('int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -117,7 +117,7 @@ def get_virtual_image_circ_diffX(datacube, slice_x, slice_y):
         midpoint = slice_x.start + (slice_x.stop-slice_x.start)/2
         slice_left = slice(slice_x.start, int(np.floor(midpoint)))
         slice_right = slice(int(np.ceil(midpoint)), slice_x.stop)
-        img = np.ndarray.astype(np.sum(datacube.data4D[:,:,slice_left,slice_y]*mask[:slice_left.stop-slice_left.start,:],axis=(2,3)) - np.sum(datacube.data4D[:,:,slice_right,slice_y]*mask[slice_right.start-slice_right.stop:,:],axis=(2,3)), 'int64')
+        img = np.ndarray.astype(np.sum(datacube.data[:,:,slice_left,slice_y]*mask[:slice_left.stop-slice_left.start,:],axis=(2,3)) - np.sum(datacube.data[:,:,slice_right,slice_y]*mask[slice_right.start-slice_right.stop:,:],axis=(2,3)), 'int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -132,7 +132,7 @@ def get_virtual_image_circ_diffY(datacube, slice_x, slice_y):
         midpoint = slice_y.start + (slice_y.stop-slice_y.start)/2
         slice_bottom = slice(slice_y.start, int(np.floor(midpoint)))
         slice_top = slice(int(np.ceil(midpoint)), slice_y.stop)
-        img = np.ndarray.astype(np.sum(datacube.data4D[:,:,slice_x,slice_bottom]*mask[:,:slice_bottom.stop-slice_bottom.start],axis=(2,3)) - np.sum(datacube.data4D[:,:,slice_x,slice_top]*mask[:,slice_top.start-slice_top.stop:],axis=(2,3)), 'int64')
+        img = np.ndarray.astype(np.sum(datacube.data[:,:,slice_x,slice_bottom]*mask[:,:slice_bottom.stop-slice_bottom.start],axis=(2,3)) - np.sum(datacube.data[:,:,slice_x,slice_top]*mask[:,slice_top.start-slice_top.stop:],axis=(2,3)), 'int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -148,7 +148,7 @@ def get_virtual_image_annular_diffX(datacube, slice_x, slice_y, R):
         midpoint = slice_x.start + (slice_x.stop-slice_x.start)/2
         slice_left = slice(slice_x.start, int(np.floor(midpoint)))
         slice_right = slice(int(np.ceil(midpoint)), slice_x.stop)
-        img = np.ndarray.astype(np.sum(datacube.data4D[:,:,slice_left,slice_y]*mask[:slice_left.stop-slice_left.start,:],axis=(2,3)) - np.sum(datacube.data4D[:,:,slice_right,slice_y]*mask[slice_right.start-slice_right.stop:,:],axis=(2,3)), 'int64')
+        img = np.ndarray.astype(np.sum(datacube.data[:,:,slice_left,slice_y]*mask[:slice_left.stop-slice_left.start,:],axis=(2,3)) - np.sum(datacube.data[:,:,slice_right,slice_y]*mask[slice_right.start-slice_right.stop:,:],axis=(2,3)), 'int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -164,7 +164,7 @@ def get_virtual_image_annular_diffY(datacube, slice_x, slice_y, R):
         midpoint = slice_y.start + (slice_y.stop-slice_y.start)/2
         slice_bottom = slice(slice_y.start, int(np.floor(midpoint)))
         slice_top = slice(int(np.ceil(midpoint)), slice_y.stop)
-        img = np.ndarray.astype(np.sum(datacube.data4D[:,:,slice_x,slice_bottom]*mask[:,:slice_bottom.stop-slice_bottom.start],axis=(2,3)) - np.sum(datacube.data4D[:,:,slice_x,slice_top]*mask[:,slice_top.start-slice_top.stop:],axis=(2,3)), 'int64')
+        img = np.ndarray.astype(np.sum(datacube.data[:,:,slice_x,slice_bottom]*mask[:,:slice_bottom.stop-slice_bottom.start],axis=(2,3)) - np.sum(datacube.data[:,:,slice_x,slice_top]*mask[:,slice_top.start-slice_top.stop:],axis=(2,3)), 'int64')
         return img, 1
     except ValueError:
         return 0,0
@@ -179,7 +179,7 @@ def get_virtual_image_rect_CoMX(datacube, slice_x, slice_y):
     """
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx,axis=(2,3))/datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*rx,axis=(2,3))/datacube.data[:,:,slice_x,slice_y].sum(axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0
@@ -191,7 +191,7 @@ def get_virtual_image_rect_CoMY(datacube, slice_x, slice_y):
     """
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry,axis=(2,3))/datacube.data4D[:,:,slice_x,slice_y].sum(axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*ry,axis=(2,3))/datacube.data[:,:,slice_x,slice_y].sum(axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0
@@ -204,7 +204,7 @@ def get_virtual_image_circ_CoMX(datacube, slice_x, slice_y):
     mask = get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start)
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0
@@ -217,7 +217,7 @@ def get_virtual_image_circ_CoMY(datacube, slice_x, slice_y):
     mask = get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start)
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0
@@ -231,7 +231,7 @@ def get_virtual_image_annular_CoMX(datacube, slice_x, slice_y, R):
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*rx*mask,axis=(2,3)) / np.sum(datacube.data[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0
@@ -245,7 +245,7 @@ def get_virtual_image_annular_CoMY(datacube, slice_x, slice_y, R):
     mask = get_annular_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start, R)
     ry,rx = np.meshgrid(np.arange(slice_y.stop-slice_y.start),np.arange(slice_x.stop-slice_x.start))
     try:
-        img = np.sum(datacube.data4D[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data4D[:,:,slice_x,slice_y]*mask,axis=(2,3))
+        img = np.sum(datacube.data[:,:,slice_x,slice_y]*ry*mask,axis=(2,3)) / np.sum(datacube.data[:,:,slice_x,slice_y]*mask,axis=(2,3))
         return img, 1
     except ValueError:
         return 0,0

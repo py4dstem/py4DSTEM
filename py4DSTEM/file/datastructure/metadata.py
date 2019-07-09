@@ -6,6 +6,7 @@
 import numpy as np
 import hyperspy.api_nogui as hs
 from hyperspy.misc.utils import DictionaryTreeBrowser
+import h5py
 
 class Metadata(object):
 
@@ -141,19 +142,20 @@ class Metadata(object):
         else:
             assert(isinstance(metadata_ind,(int,np.integer)))
 
+            topgroup = get_py4DSTEM_topgroup(filepath)
             # Copy original metadata from .h5 trees to an equivalent tree structure
             self.original_metadata.shortlist = MetadataCollection('shortlist')
             self.original_metadata.all = MetadataCollection('all')
 
-            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/shortlist'.format(metadata_ind)],self.original_metadata.shortlist)
-            self.populate_original_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/original/all'.format(metadata_ind)],self.original_metadata.all)
+            self.populate_original_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/original/shortlist'.format(metadata_ind)],self.original_metadata.shortlist)
+            self.populate_original_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/original/all'.format(metadata_ind)],self.original_metadata.all)
 
             # Copy metadata from .h5 groups to corresponding dictionaries
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/microscope'.format(metadata_ind)],self.microscope)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/sample'.format(metadata_ind)],self.sample)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/user'.format(metadata_ind)],self.user)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/calibration'.format(metadata_ind)],self.calibration)
-            self.populate_metadata_from_h5_group(filepath['4DSTEM_experiment/metadata/metadata_{}/comments'.format(metadata_ind)],self.comments)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/microscope'.format(metadata_ind)],self.microscope)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/sample'.format(metadata_ind)],self.sample)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/user'.format(metadata_ind)],self.user)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/calibration'.format(metadata_ind)],self.calibration)
+            self.populate_metadata_from_h5_group(filepath[topgroup + 'metadata/metadata_{}/comments'.format(metadata_ind)],self.comments)
 
     def setup_metadata_py4DSTEM_file_v0_2_v0_3(self, filepath):
 
@@ -363,9 +365,45 @@ class MetadataCollection(object):
     def __init__(self,name):
         self.__name__ = name
 
-def get_py4DSTEM_version(filepath):
-    version_major = filepath.attrs['version_major']
-    version_minor = filepath.attrs['version_minor']
-    return version_major, version_minor
+def get_py4DSTEM_version(h5_file):
+    """
+    Accepts either a filepath or an open h5py File object. Returns true if the file was written by
+    py4DSTEM.
+    """
+    if isinstance(h5_file, h5py._hl.files.File):
+        if ('version_major' in h5_file.attrs) and('version_minor' in h5_file.attrs):
+            #implicitlty checks if v0.5 or above
+            version_major = h5_file.attrs['version_major']
+            version_minor = h5_file.attrs['version_minor']
+        else:
+            #if not in root directory, will be in one of top groups
+            for key in h5_file.keys():
+                if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
+                    if h5_file[key].attrs['emd_group_type'] == 2:
+                        version_major = h5_file[key].attrs['version_major']
+                        version_minor = h5_file[key].attrs['version_minor']
+                        break
+        return version_major, version_minor
+    else:
+        try:
+            f = h5py.File(h5_file, 'r')
+            result = get_py4DSTEM_version(f)
+            f.close()
+            return result
+        except OSError:
+            print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
+            return (0,0)
+
+##TODO: take this out or make it consistent/generalized
+def get_py4DSTEM_topgroup(h5_file):
+    """
+    Accepts an open h5py File boject. Returns string of the top group name. 
+    """
+    if ('4DSTEM_experiment' in h5_file.keys()): # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
+        return '4DSTEM_experiment/'
+    elif ('4DSTEM_simulation' in h5_file.keys()):
+        return '4DSTEM_simulation/'
+    else:
+        return '4D-STEM_data/'
 
 

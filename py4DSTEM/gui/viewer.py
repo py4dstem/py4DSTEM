@@ -336,7 +336,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Diffraction space
         if self.control_widget.checkBox_Crop_Diffraction.isChecked():
             # Get crop limits from ROI
-            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_qx,slice_qy = slices_q
             crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
@@ -369,7 +369,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Real space
         if self.control_widget.checkBox_Crop_Real.isChecked():
             # Get crop limits from ROI
-            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0], self.real_space_widget.getImageItem())
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data[:,:,0,0], self.real_space_widget.getImageItem())
             slice_rx,slice_ry = slices_r
             crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
@@ -690,7 +690,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Rectangular detector
         if detector_shape == 0:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -704,7 +704,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Circular detector
         elif detector_shape == 1:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -718,9 +718,9 @@ class DataViewer(QtWidgets.QMainWindow):
         # Annular detector
         elif detector_shape == 2:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
-            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
 

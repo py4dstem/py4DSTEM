@@ -142,7 +142,7 @@ def read_with_hyperspy(filename):
 def read_dm_mmap(filename):
     """
     Read a .dm3/.dm4 file, using dm.py to read data to a memory mapped np.memmap object, which
-    is stored in the outpute DataCube.data4D.
+    is stored in the outpute DataCube.data.
 
     Read the metadata with hyperspy.
     """

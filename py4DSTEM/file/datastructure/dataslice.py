@@ -12,13 +12,13 @@ class DataSlice(DataObject):
     def __init__(self, data, Nx, Ny, slicelabels=None, **kwargs):
         """
         Instantiate a DataSlice object.  Set the data and dimensions.
-
-        If data is two dimensional, it is stored as self.data2D, and has shape (Nx, Ny).
-        If data is three dimensional, self.data2D is a list of slices of some depth,
+        ##TODO: Update this class description.
+        If data is two dimensional, it is stored as self.data, and has shape (Nx, Ny).
+        If data is three dimensional, self.data is a list of slices of some depth,
         where self.depth is data.shape[2], i.e. the shape is (Nx, Ny, depth).
-        If slicelabels is unspecified, 2D slices can be accessed as self.data2D[i].
+        If slicelabels is unspecified, 2D slices can be accessed as self.data[i].
         If slicelabels is specified, it should be an n-tuple of strings, where
-        n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
+        n==self.depth, and 2D slices can be accessed as self.data[slicelabels[i]].
         """
         DataObject.__init__(self, **kwargs)
 
@@ -30,20 +30,20 @@ class DataSlice(DataObject):
         if len(shape)==2:
             assert shape==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
             self.depth=1
-            self.data2D = data
+            self.data = data
         else:
             assert shape[:2]==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
-            self.depth=shape[2]
             if slicelabels is None:
-                self.data2D = []
-                for i in range(self.depth):
-                    self.data2D.append(data[:,:,i])
+                self.depth = shape[2]
+                self.data = data
+                #for i in range(self.depth):
+                #    self.data.append(data[:,:,i])
             else:
+                self.depth=shape[2]
                 assert len(slicelabels)==self.depth
-                self.data2D = OrderedDict()
+                self.data = OrderedDict()
                 for i in range(self.depth):
-                    self.data2D[slicelabels[i]]=data[:,:,i]
-
+                    self.data[slicelabels[i]]=data[:,:,i]
 
 
 
