@@ -33,7 +33,7 @@ def get_class_DP(datacube, class_image, xshifts=None, yshifts=None, darkref=None
     for Rx in range(datacube.R_Nx):
         for Ry in range(datacube.R_Ny):
             if class_image[Rx,Ry] != 0:
-                curr_DP = class_image[Rx,Ry]*datacube.data4D[Rx,Ry,:,:]
+                curr_DP = class_image[Rx,Ry]*datacube.data[Rx,Ry,:,:]
                 if xshifts is not None and yshifts is not None:
                     xshift = xshifts[Rx,Ry]
                     yshift = yshifts[Rx,Ry]

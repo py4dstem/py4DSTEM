@@ -38,11 +38,11 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
     """
-    probe = datacube.data4D[0,0,:,:]
+    probe = datacube.data[0,0,:,:]
     for n in range(1,datacube.R_N):
         Rx = int(n/datacube.R_Nx)
         Ry = n%datacube.R_Nx
-        curr_DP = datacube.data4D[Rx,Ry,:,:]
+        curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,datacube.R_N))
 
@@ -84,9 +84,9 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     """
     assert ROI.shape==(datacube.R_Nx,datacube.R_Ny)
     length = ROI.sum()
-    probe = datacube.data4D[ROI,:,:][0]
+    probe = datacube.data[ROI,:,:][0]
     for n in range(1,length):
-        curr_DP = datacube.data4D[ROI,:,:][n]
+        curr_DP = datacube.data[ROI,:,:][n]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,length))
 

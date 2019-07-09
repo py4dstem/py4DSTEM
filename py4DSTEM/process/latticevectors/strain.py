@@ -13,7 +13,7 @@ def get_reference_uv(mask, uv_map):
     Accepts:
         mask        (ndarray of bools) use lattice vectors from uv_map scan positions wherever
                     mask==True
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data2D under
+        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
                     the keys 'ux', 'uy', 'vx', and 'vy'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
 
@@ -24,12 +24,12 @@ def get_reference_uv(mask, uv_map):
         vy          (float) y-coord of the second reference lattice vector
     """
     assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.data2D.keys() for name in ('ux','uy','vx','vy')])
+    assert np.all([name in uv_map.data.keys() for name in ('ux','uy','vx','vy')])
     assert mask.dtype == bool
-    ux = np.median(uv_map.data2D['ux'][mask])
-    uy = np.median(uv_map.data2D['uy'][mask])
-    vx = np.median(uv_map.data2D['vx'][mask])
-    vy = np.median(uv_map.data2D['vy'][mask])
+    ux = np.median(uv_map.data['ux'][mask])
+    uy = np.median(uv_map.data['uy'][mask])
+    vx = np.median(uv_map.data['vx'][mask])
+    vy = np.median(uv_map.data['vy'][mask])
     return ux,uy,vx,vy
 
 def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
@@ -41,17 +41,17 @@ def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
         uy          (float) y-coord of the first reference lattice vector
         vx          (float) x-coord of the second reference lattice vector
         vy          (float) y-coord of the second reference lattice vector
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data2D under
+        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
                     the keys 'ux', 'uy', 'vx', and 'vy'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
 
     Returns:
         strain_map                  (RealSlice) the strain map; contains the elements of the
                                     infinitessimal strain matrix, in the following 4 arrays:
-        strain_map.data2D['e_xx']   change in lattice x-components with respect to x
-        strain_map.data2D['e_yy']   change in lattice y-components with respect to y
-        strain_map.data2D['e_xy']   change in lattice x-components with respect to y
-        strain_map.data2D['theta']  rotation of lattice with respect to reference
+        strain_map.data['e_xx']   change in lattice x-components with respect to x
+        strain_map.data['e_yy']   change in lattice y-components with respect to y
+        strain_map.data['e_xy']   change in lattice x-components with respect to y
+        strain_map.data['theta']  rotation of lattice with respect to reference
                                     Note 1: the strain matrix has been symmetrized, so e_xy and
                                     e_yx are identical
                                     Note 2: x and y are here the coordinate axes of diffraction
@@ -59,10 +59,10 @@ def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
                                     of their rotation with respect to real space may be necessary.
     """
     assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.data2D.keys() for name in ('ux','uy','vx','vy')])
+    assert np.all([name in uv_map.data.keys() for name in ('ux','uy','vx','vy')])
 
     # Get RealSlice for output storage
-    R_Nx,R_Ny = uv_map.data2D['ux'].shape
+    R_Nx,R_Ny = uv_map.data['ux'].shape
     strain_map = RealSlice(data=np.zeros((R_Nx,R_Ny,4)),
                            slicelabels=('e_xx','e_yy','e_xy','theta'),
                            name='strain_map')
@@ -73,16 +73,16 @@ def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
             # Get lattice vectors for DP at Rx,Ry
-            alpha = np.array([[uv_map.data2D['ux'][Rx,Ry],uv_map.data2D['uy'][Rx,Ry]],
-                              [uv_map.data2D['vx'][Rx,Ry],uv_map.data2D['vy'][Rx,Ry]]])
+            alpha = np.array([[uv_map.data['ux'][Rx,Ry],uv_map.data['uy'][Rx,Ry]],
+                              [uv_map.data['vx'][Rx,Ry],uv_map.data['vy'][Rx,Ry]]])
             # Get transformation matrix
             beta = lstsq(M, alpha, rcond=None)[0].T
 
             # Get the infinitesimal strain matrix
-            strain_map.data2D['e_xx'][Rx,Ry] = 1 - beta[0,0]
-            strain_map.data2D['e_yy'][Rx,Ry] = 1 - beta[1,1]
-            strain_map.data2D['e_xy'][Rx,Ry] = -(beta[0,1]+beta[1,0])/2.
-            strain_map.data2D['theta'][Rx,Ry] =  (beta[0,1]-beta[1,0])/2.
+            strain_map.data['e_xx'][Rx,Ry] = 1 - beta[0,0]
+            strain_map.data['e_yy'][Rx,Ry] = 1 - beta[1,1]
+            strain_map.data['e_xy'][Rx,Ry] = -(beta[0,1]+beta[1,0])/2.
+            strain_map.data['theta'][Rx,Ry] =  (beta[0,1]-beta[1,0])/2.
 
     return strain_map
 
@@ -94,17 +94,17 @@ def get_strain_from_reference_region(mask, uv_map):
     Accepts:
         mask        (ndarray of bools) use lattice vectors from uv_map scan positions wherever
                     mask==True
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data2D under
+        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
                     the keys 'ux', 'uy', 'vx', and 'vy'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
 
     Returns:
         strain_map                  (RealSlice) the strain map; contains the elements of the
                                     infinitessimal strain matrix, in the following 4 arrays:
-        strain_map.data2D['e_xx']   change in lattice x-components with respect to x
-        strain_map.data2D['e_yy']   change in lattice y-components with respect to y
-        strain_map.data2D['e_xy']   change in lattice x-components with respect to y
-        strain_map.data2D['theta']  rotation of lattice with respect to reference
+        strain_map.data['e_xx']   change in lattice x-components with respect to x
+        strain_map.data['e_yy']   change in lattice y-components with respect to y
+        strain_map.data['e_xy']   change in lattice x-components with respect to y
+        strain_map.data['theta']  rotation of lattice with respect to reference
                                     Note 1: the strain matrix has been symmetrized, so e_xy and
                                     e_yx are identical
                                     Note 2: x and y are here the coordinate axes of diffraction
@@ -112,7 +112,7 @@ def get_strain_from_reference_region(mask, uv_map):
                                     of their rotation with respect to real space may be necessary.
     """
     assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.data2D.keys() for name in ('ux','uy','vx','vy')])
+    assert np.all([name in uv_map.data.keys() for name in ('ux','uy','vx','vy')])
     assert mask.dtype == bool
 
     ux,uy,vx,vy = get_reference_uv(mask, uv_map)
@@ -131,17 +131,17 @@ def get_rotated_strain_map(unrotated_strain_map, ux, uy):
         uy                      (float) diffraction space y coordinate of u
         unrotated_strain_map    (RealSlice) a RealSlice object containing 2D arrays of the
                                 infinitessimal strain matrix elements, stored at
-                                        unrotated_strain_map.data2D['e_xx']
-                                        unrotated_strain_map.data2D['e_xy']
-                                        unrotated_strain_map.data2D['e_yy']
-                                        unrotated_strain_map.data2D['theta']
+                                        unrotated_strain_map.data['e_xx']
+                                        unrotated_strain_map.data['e_xy']
+                                        unrotated_strain_map.data['e_yy']
+                                        unrotated_strain_map.data['theta']
 
     Returns:
         rotated_strain_map      (RealSlice) the rotated counterpart to unrotated_strain_map, with
-                                the rotated_strain_map.data2D['e_xx'] element oriented along (ux,uy)
+                                the rotated_strain_map.data['e_xx'] element oriented along (ux,uy)
     """
     assert isinstance(unrotated_strain_map, RealSlice)
-    assert np.all([key in ['e_xx','e_xy','e_yy','theta'] for key in unrotated_strain_map.data2D.keys()])
+    assert np.all([key in ['e_xx','e_xy','e_yy','theta'] for key in unrotated_strain_map.data.keys()])
 
     theta = -np.arctan2(uy,ux)
     cost = np.cos(theta)
@@ -149,15 +149,15 @@ def get_rotated_strain_map(unrotated_strain_map, ux, uy):
     cost2 = cost**2
     sint2 = sint**2
 
-    Rx,Ry = unrotated_strain_map.data2D['e_xx'].shape
+    Rx,Ry = unrotated_strain_map.data['e_xx'].shape
     rotated_strain_map = RealSlice(data=np.zeros((Rx,Ry,4)),
                                    slicelabels=['e_xx','e_xy','e_yy','theta'],
                                    name=unrotated_strain_map.name+"_rotated_by_{}".format(np.degrees(theta)))
 
-    rotated_strain_map.data2D['e_xx'] = cost2*unrotated_strain_map.data2D['e_xx'] - 2*cost*sint*unrotated_strain_map.data2D['e_xy'] + sint2*unrotated_strain_map.data2D['e_yy']
-    rotated_strain_map.data2D['e_xy'] = cost*sint*(unrotated_strain_map.data2D['e_xx']-unrotated_strain_map.data2D['e_yy']) + (cost2-sint2)*unrotated_strain_map.data2D['e_xy']
-    rotated_strain_map.data2D['e_yy'] = sint2*unrotated_strain_map.data2D['e_xx'] + 2*cost*sint*unrotated_strain_map.data2D['e_xy'] + cost2*unrotated_strain_map.data2D['e_yy']
-    rotated_strain_map.data2D['theta'] = unrotated_strain_map.data2D['theta']
+    rotated_strain_map.data['e_xx'] = cost2*unrotated_strain_map.data['e_xx'] - 2*cost*sint*unrotated_strain_map.data['e_xy'] + sint2*unrotated_strain_map.data['e_yy']
+    rotated_strain_map.data['e_xy'] = cost*sint*(unrotated_strain_map.data['e_xx']-unrotated_strain_map.data['e_yy']) + (cost2-sint2)*unrotated_strain_map.data['e_xy']
+    rotated_strain_map.data['e_yy'] = sint2*unrotated_strain_map.data['e_xx'] + 2*cost*sint*unrotated_strain_map.data['e_xy'] + cost2*unrotated_strain_map.data['e_yy']
+    rotated_strain_map.data['theta'] = unrotated_strain_map.data['theta']
 
     return rotated_strain_map
 

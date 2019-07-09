@@ -42,7 +42,7 @@ def copy_from_indices(original_filepath, new_filepath, indices):
     print("Opening file {}...".format(original_filepath))
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
     assert max(indices) <= browser.N_dataobjects, "DataObject at index {} was requested, but the original file contains only {} DataObjects.".format(max(indices), browser.N_dataobjects)
 
     #### Get data from existing .h5 file ####
@@ -62,7 +62,7 @@ def copy_datacubes(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_datacubes()
@@ -81,7 +81,7 @@ def copy_diffractionslices(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_diffractionslices()
@@ -100,7 +100,7 @@ def copy_realslices(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_realslices()
@@ -119,7 +119,7 @@ def copy_pointlists(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_pointlists()
@@ -138,7 +138,7 @@ def copy_pointlistarrays(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_pointlistarrays()
@@ -157,7 +157,7 @@ def copy_all(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = browser.get_dataobjects('all')
@@ -176,7 +176,7 @@ def copy_all_except_datacubes(original_filepath, new_filepath):
     #### Open a FileBrowser ####
     assert is_py4DSTEM_file(original_filepath), "filepath paramter must point to an existing py4DSTEM file."
     browser = FileBrowser(original_filepath)
-    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher."
+    assert browser.version == (0,3), "Copying py4DSTEM files only supported in v0.3 and higher." ##TODO: this forces v0.3, not >v0..3
 
     #### Get data ####
     dataobjects = []
