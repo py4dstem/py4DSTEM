@@ -122,7 +122,7 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
     """
     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
     identify the indices for each peak in the PointListArray braggpeaks.
-    Return a new braggpeaks_indexed PointListArray, containing all data in braggpeaks plus
+    Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
     three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak indices
     with the ints (h,k) and indicating whether the peak was successfully indexed or not with
     the bool index_mask. If `mask` is specified, only the locations where mask is True are
@@ -158,17 +158,21 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
     assert mask.shape == braggpeaks.shape, 'mask must have same shape as pointlistarray'
     assert mask.dtype == bool, 'mask must be boolean'
 
+    indexed_braggpeaks = braggpeaks.copy()
+
     # add the coordinates if they don't exist
-    if not (('h' in braggpeaks.dtype.names) | \
-        ('k' in braggpeaks.dtype.names) | \
-        ('index_mask' in braggpeaks.dtype.names)):
-        braggpeaks = braggpeaks.add_coordinates([('h',int),('k',int),('index_mask',bool)])
+    if not ('h' in braggpeaks.dtype.names):
+        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('h',int)])
+    if not ('k' in braggpeaks.dtype.names):
+        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('k',int)])
+    if not ('hindex_mask' in braggpeaks.dtype.names):
+        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('index_mask',bool)])
 
     # loop over all the scan positions
     for Rx in range(mask.shape[0]):
         for Ry in range(mask.shape[1]):
             if mask[Rx,Ry]:
-                pl = braggpeaks.get_pointlist(Rx,Ry)
+                pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
 
                 for i in range(pl.length):
                     r2 = (pl.data['qx'][i]-lattice.data['qx'])**2 + \
@@ -179,9 +183,10 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
                         pl.data['k'][i] = lattice.data['k'][ind]
                         pl.data['index_mask'][i] = True
                     else:
-                        pl.data['index_mask'][i] = False # turns out int's can be NaN
+                        pl.data['index_mask'][i] = False
 
-    return braggpeaks
+    indexed_braggpeaks.name = braggpeaks.name + "_indexed"
+    return indexed_braggpeaks
 
 
 def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
