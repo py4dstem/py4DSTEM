@@ -182,6 +182,7 @@ class polar_elliptical_transform(object):
         # RMS along theta
         self.RMSD = (self.polar_ar - np.tile(self.mean,(self.Nt,1)))**2
         self.RMSD = np.sum(self.RMSD, axis=0)
+        divmask = self.mean > 1e-10
         self.RMSD[divmask] = np.sqrt(self.RMSD[divmask] / self.mean[divmask])
         self.RMSD[divmask==False] = 0
 
