@@ -18,10 +18,11 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   sigma = 2,
                                   edgeBoundary = 20,
                                   minRelativeIntensity = 0.005,
+                                  relativeToPeak = 0,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
                                   subpixel = 'poly',
-                                  upsample_factor = 4,
+                                  upsample_factor = 16,
                                   return_cc = False,
                                   peaks = None):
     """
@@ -57,13 +58,15 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                              the cross correlation
         edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
-                             the intensity of the brightest peak
+                             the intensity of the relativeToPeak'th peak
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
         subpixel             (str)          'none': no subpixel fitting
                                     default 'poly': polynomial interpolation of correlogram peaks
                                                     (fairly fast but not very accurate)
-                                            'multicorr': uses the multicorr algorithm with 
+                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         return_cc            (bool) if True, return the cross correlation
@@ -83,6 +86,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
                                                      edgeBoundary=edgeBoundary,
                                                      minRelativeIntensity=minRelativeIntensity,
+                                                     relativeToPeak=relativeToPeak,
                                                      minSpacing=minPeakSpacing,
                                                      maxNumPeaks=maxNumPeaks,
                                                      subpixel=False)
@@ -92,6 +96,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
                                                      edgeBoundary=edgeBoundary,
                                                      minRelativeIntensity=minRelativeIntensity,
+                                                     relativeToPeak=relativeToPeak,
                                                      minSpacing=minPeakSpacing,
                                                      maxNumPeaks=maxNumPeaks,
                                                      subpixel=True)
@@ -105,6 +110,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
                                                      edgeBoundary=edgeBoundary,
                                                      minRelativeIntensity=minRelativeIntensity,
+                                                     relativeToPeak=relativeToPeak,
                                                      minSpacing=minPeakSpacing,
                                                      maxNumPeaks=maxNumPeaks,
                                                      subpixel=True)
@@ -141,10 +147,11 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                sigma = 2,
                                edgeBoundary = 20,
                                minRelativeIntensity = 0.005,
+                               relativeToPeak = 0,
                                minPeakSpacing = 60,
                                maxNumPeaks = 70,
                                subpixel = 'poly',
-                               upsample_factor = 4,
+                               upsample_factor = 16,
                                return_cc = False):
     """
     Identical to find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
@@ -162,12 +169,14 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
         edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
                              the intensity of the brightest peak
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
         subpixel             (str)          'none': no subpixel fitting
                                     default 'poly': polynomial interpolation of correlogram peaks
                                                     (fairly fast but not very accurate)
-                                            'multicorr': uses the multicorr algorithm with 
+                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         return_cc            (bool) if True, return the cross correlation
@@ -182,6 +191,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          sigma = sigma,
                                          edgeBoundary = edgeBoundary,
                                          minRelativeIntensity = minRelativeIntensity,
+                                         relativeToPeak = relativeToPeak,
                                          minPeakSpacing = minPeakSpacing,
                                          maxNumPeaks = maxNumPeaks,
                                          subpixel = subpixel,
@@ -194,10 +204,11 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               sigma = 2,
                               edgeBoundary = 20,
                               minRelativeIntensity = 0.005,
+                              relativeToPeak = 0,
                               minPeakSpacing = 60,
                               maxNumPeaks = 70,
                               subpixel = 'poly',
-                              upsample_factor = 4):
+                              upsample_factor = 16):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
     cross, hybrid, or phase correlation with probe.
@@ -215,12 +226,14 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
                              the intensity of the brightest peak
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
         subpixel             (str)          'none': no subpixel fitting
                                     default 'poly': polynomial interpolation of correlogram peaks
                                                     (fairly fast but not very accurate)
-                                            'multicorr': uses the multicorr algorithm with 
+                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
 
@@ -243,6 +256,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                                    sigma = sigma,
                                                    edgeBoundary = edgeBoundary,
                                                    minRelativeIntensity = minRelativeIntensity,
+                                                   relativeToPeak = relativeToPeak,
                                                    minPeakSpacing = minPeakSpacing,
                                                    maxNumPeaks = maxNumPeaks,
                                                    subpixel = subpixel,
@@ -259,10 +273,11 @@ def find_Bragg_disks(datacube, probe,
                      sigma = 2,
                      edgeBoundary = 20,
                      minRelativeIntensity = 0.005,
+                     relativeToPeak = 0,
                      minPeakSpacing = 60,
                      maxNumPeaks = 70,
                      subpixel = 'poly',
-                     upsample_factor = 4,
+                     upsample_factor = 16,
                      verbose = False):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
@@ -279,12 +294,14 @@ def find_Bragg_disks(datacube, probe,
         edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
                              the intensity of the brightest peak
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
         subpixel             (str)          'none': no subpixel fitting
                                     default 'poly': polynomial interpolation of correlogram peaks
                                                     (fairly fast but not very accurate)
-                                            'multicorr': uses the multicorr algorithm with 
+                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         verbose              (bool) if True, prints completion updates
@@ -312,6 +329,7 @@ def find_Bragg_disks(datacube, probe,
                                           sigma = sigma,
                                           edgeBoundary = edgeBoundary,
                                           minRelativeIntensity = minRelativeIntensity,
+                                          relativeToPeak = relativeToPeak,
                                           minPeakSpacing = minPeakSpacing,
                                           maxNumPeaks = maxNumPeaks,
                                           subpixel = subpixel,
@@ -324,7 +342,8 @@ def find_Bragg_disks(datacube, probe,
     return peaks
 
 
-def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, minPeakSpacing, maxNumPeaks):
+def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing,
+                                                                               maxNumPeaks):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional thresholding, returning
     the thresholded PointListArray. To skip a threshold, set that parameter to False.
@@ -332,10 +351,12 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, minPeakSpacing, m
     Accepts:
         pointlistarray        (PointListArray) The Bragg peaks.
                               Must have coords=('qx','qy','intensity')
-        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
-        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
         minRelativeIntensity  (float) the minimum allowed peak intensity, relative to the brightest
                               peak in each diffraction pattern
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
+        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
     """
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
     for Rx in range(pointlistarray.shape[0]):
@@ -345,7 +366,7 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, minPeakSpacing, m
 
             # Remove peaks below minRelativeIntensity threshold
             if minRelativeIntensity is not False:
-                deletemask = pointlist.data['intensity']/max(pointlist.data['intensity']) < \
+                deletemask = pointlist.data['intensity']/pointlist.data['intensity'][relativeToPeak] < \
                                                                                minRelativeIntensity
                 pointlist.remove_points(deletemask)
 

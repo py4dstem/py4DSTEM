@@ -101,16 +101,16 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     return probe*mask
 
 
-def get_synthetic_probe(Q_Nx, Q_Ny, radius, width):
+def get_synthetic_probe(radius, width, Q_Nx, Q_Ny):
     """
     Makes a synthetic probe, with the functional form of a disk blurred by a sigmoid (a logistic
     function).
 
     Accepts:
-        Q_Nx, Q_Ny    (int) the diffraction plane dimensions
         radius        (float) the probe radius
         width         (float) the blurring of the probe edge. width represents the full width of the
                       blur, with x=-w/2 to x=+w/2 about the edge spanning values of ~0.12 to 0.88
+        Q_Nx, Q_Ny    (int) the diffraction plane dimensions
 
     Returns:
         probe         (ndarray of shape (Q_Nx,Q_Ny)) the probe
