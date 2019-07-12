@@ -1,4 +1,5 @@
 # py4DSTEM: open source processing and analysis of 4D-STEM data
+[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi.148587083)
 
 The aim of py4DSTEM is to provide a comprehensive suite of tools for interacting with, visualizing, and analyzing 4DSTEM data.
 Intended applications include generating virtual images; classification and segmentation; mapping orientation, crystallinity, and strain fields; and other analytical tools including ptychography and fluctuation electron microscopy.
@@ -120,7 +121,7 @@ import py4DSTEM
 
 ## Versioning
 
-v. 0.3
+v. 0.5
 
 ## License
 
