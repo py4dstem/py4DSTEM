@@ -17,7 +17,7 @@
 # thank you! <3, b
 
 import hyperspy.api_nogui as hs
-from ncempy.io.dm import dmReader
+from ncempy.io.dm import fileDM
 from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
 from ..datastructure import DataCube
@@ -152,7 +152,8 @@ def read_dm_mmap(filename):
     metadata = Metadata(init='hs',filepath=filename)
 
     # Load .dm3/.dm4 files with dm.py
-    data = dmReader(filename,dSetNum=0,verbose=False)['data']
+    with fileDM(filename,verbose=False) as dmfile:
+        data = dmfile.getMemmap(0)
 
     # Get datacube
     datacube = DataCube(data = data)
