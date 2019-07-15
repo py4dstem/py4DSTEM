@@ -117,6 +117,7 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
 
         self.loadRadioAuto = QtWidgets.QRadioButton("Automatic")
+        self.loadRadioAuto.setChecked(True)
         self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
         self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
 
