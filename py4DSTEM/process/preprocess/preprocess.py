@@ -25,6 +25,8 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
     except ValueError:
         print("Can't reshape {} scan positions into a {}x{} array.".format(datacube.R_N, R_Nx, R_Ny))
         return datacube
+    except AttributeError:
+        print(f"Can't reshape {datacube.__class__.__name__} datacube.")
 
 @log
 def swap_RQ(datacube):
