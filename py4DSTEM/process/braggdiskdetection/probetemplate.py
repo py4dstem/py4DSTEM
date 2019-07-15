@@ -40,8 +40,7 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
     """
     probe = datacube.data[0,0,:,:]
     for n in range(1,datacube.R_N):
-        Rx = int(n/datacube.R_Nx)
-        Ry = n%datacube.R_Nx
+        Rx,Ry = np.unravel_index(n,datacube.data.shape[:2])
         curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,datacube.R_N))
