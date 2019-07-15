@@ -322,13 +322,15 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
     if iteration == total:
         print()
 
-def bin2D(array, factor):
+def bin2D(array, factor, dtype=np.float64):
     """
     Bin a 2D ndarray by binfactor.
 
     Accepts:
         array       a 2D numpy array
         factor      (int) the binning factor
+        dtype       (numpy dtype) datatype for binned array.
+                    defalt is numpy default for np.zeros()
 
     Returns:
         binned_ar   the binned array
@@ -338,12 +340,12 @@ def bin2D(array, factor):
     xx,yy = binx*factor,biny*factor
 
     # Make a binned array on the device
-    binned_ar = np.zeros((binx,biny))
+    binned_ar = np.zeros((binx,biny),dtype=dtype)
 
     # Collect pixel sums into new bins
     for ix in range(factor):
         for iy in range(factor):
-            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
+            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor].astype(dtype)
     return binned_ar
 
 def get_voronoi_vertices(voronoi, nx, ny, dist=10):
