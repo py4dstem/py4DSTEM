@@ -106,7 +106,7 @@ class K2DataArray(Sequence):
         assert Qy.max() < self.shape[3], 'index out of range'
 
         # preallocate the output data array
-        outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.float32)
+        outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.int16)
         
         #loop over all the requested frames
         for sy in range(Rx.shape[1]):
