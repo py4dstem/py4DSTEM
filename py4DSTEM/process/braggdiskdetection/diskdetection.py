@@ -21,7 +21,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   relativeToPeak = 0,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
-                                  subpixel = 'poly',
+                                  subpixel = 'multicorr',
                                   upsample_factor = 16,
                                   return_cc = False,
                                   peaks = None):
@@ -150,7 +150,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                relativeToPeak = 0,
                                minPeakSpacing = 60,
                                maxNumPeaks = 70,
-                               subpixel = 'poly',
+                               subpixel = 'multicorr',
                                upsample_factor = 16,
                                return_cc = False):
     """
@@ -207,7 +207,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               relativeToPeak = 0,
                               minPeakSpacing = 60,
                               maxNumPeaks = 70,
-                              subpixel = 'poly',
+                              subpixel = 'multicorr',
                               upsample_factor = 16):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
@@ -276,7 +276,7 @@ def find_Bragg_disks(datacube, probe,
                      relativeToPeak = 0,
                      minPeakSpacing = 60,
                      maxNumPeaks = 70,
-                     subpixel = 'poly',
+                     subpixel = 'multicorr',
                      upsample_factor = 16,
                      verbose = False):
     """
