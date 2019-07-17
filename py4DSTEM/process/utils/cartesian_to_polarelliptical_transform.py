@@ -318,7 +318,7 @@ class polar_elliptical_transform(object):
             return scores, x0_vals, y0_vals
         else:
             self.fit_params(n_iter=n_iter,
-                            step_sizes_init=[step_sizes[0],step_size[1],0,0,0],
+                            step_sizes_init=[step_sizes[0],step_sizes[1],0,0,0],
                             step_scale=0.9,
                             return_ans=False)
             return
