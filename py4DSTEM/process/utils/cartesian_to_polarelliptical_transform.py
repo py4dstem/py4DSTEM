@@ -34,8 +34,8 @@ class polar_elliptical_transform(object):
     calibration image ar -- appropriate data includes a single DP with amorphous rings, a position
     averaged DP over many nanocrystalline grains, etc. with -- by invoking:
 
-        >>> pet.fit_origin()        # Refines x0,y0
-        >>> pet.fit_ellipticity()   # Refines x0,y0,A,B,phi
+        >>> pet.fit_origin(n_iter=100)        # Refines x0,y0
+        >>> pet.fit_ellipticity(n_iter=100)   # Refines x0,y0,A,B,phi
 
     and the polar transform can then be recalculated with
 
