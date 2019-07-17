@@ -58,6 +58,9 @@ class DataViewer(QtWidgets.QMainWindow):
         self.this_dir, self.this_filename = os.path.split(__file__)
 
 
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
+
         # Make settings collection
         self.settings = LQCollection()
 
