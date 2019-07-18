@@ -30,6 +30,7 @@ from .utils import sibling_path, pg_point_roi, LQCollection
 from ..file.io.read import read
 from ..file.io.write import save_dataobject
 from ..file.datastructure.datacube import DataCube
+from .strain import *
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -144,6 +145,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.pushButton_EditDirectoryMetadata.clicked.connect(self.edit_directory_metadata)
         self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
         self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
+        self.control_widget.pushButton_LaunchStrain.clicked.connect(self.launch_strain)
 
         # Virtual detectors
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
@@ -248,6 +250,9 @@ class DataViewer(QtWidgets.QMainWindow):
     # consistent output between processing run through the GUI       #
     # or from the command line.                                      # 
     ##################################################################
+
+    def launch_strain(self):
+        self.strain_window = StrainMappingWindow(main_window=self)
 
     ################ Load ################
 
