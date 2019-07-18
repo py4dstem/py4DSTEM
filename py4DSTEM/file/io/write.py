@@ -258,7 +258,7 @@ def save_diffraction_group(group, diffractionslice):
 
     # Dimension 3
     if len(shape)==3:
-        dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S32"))
+        dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
 
 def save_real_group(group, realslice):
     if realslice.metadata is not None:
@@ -289,7 +289,7 @@ def save_real_group(group, realslice):
 
     # Dimension 3
     if len(shape)==3:
-        dim3 = group.create_dataset("dim3", data=np.array(realslice.slicelabels).astype("S32"))
+        dim3 = group.create_dataset("dim3", data=np.array(realslice.slicelabels).astype("S64"))
 
 def save_pointlist_group(group, pointlist):
     if pointlist.metadata is not None:
