@@ -392,6 +392,21 @@ class BraggVectorClassification(object):
 
         return
 
+    def remove_class(self, i):
+        """
+        Remove class i.
+
+        Accepts:
+            i               (int) index of the class to remove
+        """
+        assert isinstance(i,(int,np.integer))
+
+        self.W_next = np.delete(self.W,i,axis=1)
+        self.H_next = np.delete(self.H,i,axis=0)
+        self.N_c_next = self.W_next.shape[1]
+
+        return
+
     def merge_iterative(self, threshBPs=0.1, threshScanPosition=0.1):
         """
         If any classes contain sufficient overlap in both scan positions and BPs, merge them
