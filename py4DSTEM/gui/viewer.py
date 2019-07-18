@@ -757,7 +757,8 @@ class DataViewer(QtWidgets.QMainWindow):
                 y0 = (y0-1)%(self.datacube.data.shape[1])
             elif e.key() == QtCore.Qt.Key_Down:
                 y0 = (y0+1)%(self.datacube.data.shape[1])
-
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
             roi_state['pos'] = (x0-0.5,y0-0.5)
             self.real_space_point_selector.setState(roi_state)
         elif mode == 1: # we are in qspace mode
@@ -772,7 +773,8 @@ class DataViewer(QtWidgets.QMainWindow):
                 y0 = (y0-1)%(self.datacube.data.shape[3])
             elif e.key() == QtCore.Qt.Key_Down:
                 y0 = (y0+1)%(self.datacube.data.shape[3])
-
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
             roi_state['pos'] = (x0-0.5,y0-0.5)
             self.virtual_detector_roi.setState(roi_state)
 
