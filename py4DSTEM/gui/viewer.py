@@ -155,6 +155,10 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings.virtual_detector_shape.updated_value.connect(self.update_virtual_detector_shape)
         self.settings.virtual_detector_mode.updated_value.connect(self.update_virtual_detector_mode)
 
+        self.settings.New('arrowkey_mode',dtype=int,initial=2)
+        self.settings.arrowkey_mode.connect_bidir_to_widget(self.control_widget.virtualDetectors.widget.buttonGroup_ArrowkeyMode)
+        self.settings.arrowkey_mode.updated_value.connect(self.update_arrowkey_mode)
+
         return self.control_widget
 
     def setup_diffraction_space_widget(self):
@@ -748,7 +752,49 @@ class DataViewer(QtWidgets.QMainWindow):
 
         return
 
+    ######### Handle keypresses to move realspace cursor ##########
+    def keyPressEvent(self,e):
+        mode = self.settings.arrowkey_mode.val
 
+        if mode == 0: # we are in realspace mode
+            roi_state = self.real_space_point_selector.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[1])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[1])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.real_space_point_selector.setState(roi_state)
+        elif mode == 1: # we are in qspace mode
+            roi_state = self.virtual_detector_roi.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[3])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[3])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.virtual_detector_roi.setState(roi_state)
+
+    def update_arrowkey_mode(self):
+        mode = self.settings.arrowkey_mode.val
+        if mode == 2:
+            self.releaseKeyboard()
+        else:
+            self.grabKeyboard()
 
     def exec_(self):
         return self.qtapp.exec_()
