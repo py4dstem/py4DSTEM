@@ -1,4 +1,5 @@
 # py4DSTEM: open source processing and analysis of 4D-STEM data
+[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
 The aim of py4DSTEM is to provide a comprehensive suite of tools for interacting with, visualizing, and analyzing 4DSTEM data.
 Intended applications include generating virtual images; classification and segmentation; mapping orientation, crystallinity, and strain fields; and other analytical tools including ptychography and fluctuation electron microscopy.
@@ -7,7 +8,6 @@ py4DSTEM can be used at three distinct levels of interaction.
 A graphical user interface facilites rapid data exploration, and live testing and tuning of analysis parameters.
 For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
 For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
-
 
 py4DSTEM is open source, copyleft software.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
@@ -76,9 +76,10 @@ conda install hyperspy -c conda-forge
 conda install h5py
 conda install pyqtgraph
 conda install PyQt5
+pip install ncempy
 ```
 
-Note that pyqtgraph and PyQt5 are required for the GUI only.
+Note that as ncempy is installed with pip rather than conda, anaconda users should make sure that pip is pointing to their anaconda installation (rather than some other python version).  You can check by calling `which pip`, and confirming that the output is a path somewhere inside your anaconda directory.
 
 To get the py4DSTEM package, use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
 
@@ -115,12 +116,12 @@ import py4DSTEM
 
 * hyperspy
 * h5py
-* pyqtgraph (GUI only)
-* PyQt5 (GUI only)
+* pyqtgraph
+* PyQt5
 
 ## Versioning
 
-v. 0.1
+v. 0.5
 
 ## License
 
