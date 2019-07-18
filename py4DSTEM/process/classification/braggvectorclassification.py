@@ -70,61 +70,51 @@ class BraggVectorClassification(object):
 
     """
 
-    def __init__(self, braggpeaks, Qx, Qy, thresh=0.3, BP_fraction_thresh=0.1, max_iterations=200,
-                       X_is_boolean=True, n_corr_init=2):
+    def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True):
         """
-        Initializes a BraggVectorClassification instance, by
-        1. Getting integer labels for all of the detected Bragg peaks according to which (Qx,Qy) is
-           closest, then generating a corresponding set of integers for each scan position.
-           See get_braggpeak_labels_by_scan_position() docstring for more info.
-        2. From these sets, get initial classes described by BP sets by determining which labels
-           are most likely to co-occur with each other. See get_initial_classes() docstring for more
-           info.
-        3. Generate the three matrices X, W, and H. See nmf() doscstring for discussion.
+        Initializes a BraggVectorClassification instance.
+
+        This method:
+        1.  Gets integer labels for all of the detected Bragg peaks, according to which
+            (Qx,Qy) is closest, then generating a corresponding set of integers for each scan
+            position.  See get_braggpeak_labels_by_scan_position() docstring for more info.
+        2.  Generates the data matrix X.  See the nmf() method docstring for more info.
+
+        This method should be followed by one of the methods which populates the initial classes -
+        currently, either get_initial_classes_by_cooccurrence() or get_initial_classes_from_images.
+        These methods generate the W and H matrices -- i.e. the decompositions of the X matrix in
+        terms of scan positions and Bragg peaks -- which are necessary for any subsequent
+        processing.
 
         Accepts:
             braggpeaks          (PointListArray) Bragg peaks; must have coords 'qx' and 'qy'
             Qx                  (ndarray of floats) x-coords of the voronoi points
             Qy                  (ndarray of floats) y-coords of the voronoi points
-            thresh              (float in [0,1]) threshold for adding new BPs to a class
-            BP_fraction_thresh  (float in [0,1]) algorithm terminates if fewer than this fraction
-                                of the BPs have not been assigned to a class
-            max_iterations      (int) algorithm terminates after this many iterations
             X_is_boolean        (bool) if True, populate X with bools (BP is or is not present)
                                 if False, populate X with floats (BP c.c. intensities)
-            n_corr_init         (int) seed new classes by finding maxima of the n-point joint
-                                probability function.  Must be 2 or 3.
         """
         assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
         assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
         assert len(Qx)==len(Qy), "Qx and Qy must have same length"
-        assert isinstance(X_is_boolean, bool)
+        self.braggpeaks = braggpeaks
         self.R_Nx = braggpeaks.shape[0]
         self.R_Ny = braggpeaks.shape[1]
         self.Qx = Qx
         self.Qy = Qy
 
         # Get the sets of Bragg peaks present at each scan position
-        braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy)
+        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy)
 
-        # Get sets of integers representing the initial classes
-        BP_sets = get_initial_classes(braggpeak_labels, N=len(Qx), thresh=thresh,
-                                      BP_fraction_thresh=BP_fraction_thresh,
-                                      max_iterations=max_iterations,
-                                      n_corr_init=n_corr_init)
+        # Construct X matrix
+        self.N_feat = len(self.Qx)
+        self.N_meas = self.R_Nx*self.R_Ny
 
-        # Construct X, W, H matrices
-        self.N_c = len(BP_sets)
-        self.N_feat = len(Qx)
-        self.N_meas = np.prod(braggpeaks.shape)
-
-        # X
         self.X = np.zeros((self.N_feat,self.N_meas))
         for Rx in range(self.R_Nx):
             for Ry in range(self.R_Ny):
                 R = Rx*self.R_Ny + Ry
-                s = braggpeak_labels[Rx][Ry]
-                pointlist = braggpeaks.get_pointlist(Rx,Ry)
+                s = self.braggpeak_labels[Rx][Ry]
+                pointlist = self.braggpeaks.get_pointlist(Rx,Ry)
                 for i in s:
                     if X_is_boolean:
                         self.X[i,R] = True
@@ -132,6 +122,42 @@ class BraggVectorClassification(object):
                         ind = np.argmin(np.hypot(pointlist.data['qx']-Qx[i],
                                                  pointlist.data['qy']-Qy[i]))
                         self.X[i,R] = pointlist.data['intensity'][ind]
+
+        return
+
+    def get_initial_classes_by_cooccurrence(self, thresh=0.3, BP_fraction_thresh=0.1,
+                                                              max_iterations=200,
+                                                              X_is_boolean=True,
+                                                              n_corr_init=2):
+        """
+        Populate the initial classes by finding sets of Bragg peaks that tend to co-occur in the
+        same diffraction patterns.
+
+        Beginning from the sets of Bragg peaks labels for each scan position (determined in
+        __init__), this method gets initial classes by determining which labels are most likely
+        to co-occur with each other -- see get_initial_classes() docstring for more info.  Then
+        the matrices W and H are generated -- see nmf() doscstring for discussion.
+
+        Accepts:
+            thresh              (float in [0,1]) threshold for adding new BPs to a class
+            BP_fraction_thresh  (float in [0,1]) algorithm terminates if fewer than this fraction
+                                of the BPs have not been assigned to a class
+            max_iterations      (int) algorithm terminates after this many iterations
+            n_corr_init         (int) seed new classes by finding maxima of the n-point joint
+                                probability function.  Must be 2 or 3.
+        """
+        assert isinstance(X_is_boolean, bool)
+        assert isinstance(max_iterations, (int,np.integer))
+        assert n_corr_init in (2,3)
+
+        # Get sets of integers representing the initial classes
+        BP_sets = get_initial_classes(self.braggpeak_labels, N=len(self.Qx), thresh=thresh,
+                                      BP_fraction_thresh=BP_fraction_thresh,
+                                      max_iterations=max_iterations,
+                                      n_corr_init=n_corr_init)
+
+        # Construct W, H matrices
+        self.N_c = len(BP_sets)
 
         # W
         self.W = np.zeros((self.N_feat,self.N_c))
@@ -143,6 +169,35 @@ class BraggVectorClassification(object):
         # H
         self.H = lstsq(self.W,self.X,rcond=None)[0]
         self.H = np.where(self.H<0,0,self.H)
+
+        self.W_next = None
+        self.H_next = None
+        self.N_c_next = None
+
+        return
+
+    def get_initial_classes_from_images(self, class_images):
+        """
+        Populate the initial classes using a set of user-defined class images.
+
+        Accepts:
+            class_images    (ndarray) must have shape (R_Nx,R_Ny,N_c), where N_c is the number of
+                            classes, and class_images[:,:,i] is the image of class i.
+        """
+        assert class_images.shape[0]==self.R_Nx
+        assert class_images.shape[1]==self.R_Ny
+
+        # Construct W, H matrices
+        self.N_c = class_images.shape[2]
+
+        # H
+        self.H = np.zeros((self.N_c,self.N_meas))
+        for i in range(self.N_c):
+            self.H[i,:] = class_images[:,:,i].ravel()
+
+        # W
+        self.W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
+        self.W = np.where(self.W<0,0,self.W)
 
         self.W_next = None
         self.H_next = None
