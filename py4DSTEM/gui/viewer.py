@@ -257,7 +257,15 @@ class DataViewer(QtWidgets.QMainWindow):
         # Instantiate DataCube object
         self.datacube = None
         gc.collect()
-        self.datacube = read(fname)
+
+        # load based on chosen mode:
+        if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
+            #auto mode
+            self.datacube = read(fname)
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
+            self.datacube = read(fname, load='dmmmap')
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
+            self.datacube = read(fname, load='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
@@ -414,7 +422,10 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi.setPos((xf,yf))
             self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
-            self.datacube.bin_data_diffraction(bin_factor_Q)
+            if isinstance(self.datacube.data,np.ndarray):
+                self.datacube.bin_data_diffraction(bin_factor_Q)
+            else:
+                self.datacube.bin_data_mmap(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
         if bin_factor_R>1:
