@@ -30,7 +30,7 @@ def save_from_dataobject_list(dataobject_list, outputfile):
     f = h5py.File(outputfile,"w")
     ##TODO: Change version numbers, generalize top group name, change attribute location
     f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",4)
+    f.attrs.create("version_minor",6)
     group_toplevel = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
@@ -331,21 +331,23 @@ def save_real_group(group, realslice):
 
     group.attrs.create("depth", realslice.depth)
     if realslice.depth==1:
-        shape = realslice.data.shape
+        R_Nx,R_Ny = realslice.data.shape
         data_realslice = group.create_dataset("realslice", data=realslice.data)
     else:
         if type(realslice.data)==OrderedDict:
-            shape = realslice.data[list(realslice.data.keys())[0]].shape
-            for key in realslice.data.keys():
-                data_realslice = group.create_dataset(str(key), data=realslice.data[key])
+            R_Nx,R_Ny = realslice.data[list(realslice.data.keys())[0]].shape
+            dim3 = []
+            data_ar = np.zeros((R_Nx,R_Ny,realslice.depth))
+            for i,key in enumerate(realslice.data.keys()):
+                data_ar[:,:,i] = realslice.data[key]
+                dim3.append(str(key))
+            data_realslice = group.create_dataset('data', data=realslice.data[key])
         else:
-            shape = realslice.data[0].shape
+            R_Nx,R_Ny = realslice.data[:,:,0].shape
             for i in range(realslice.depth):
                 data_realslice = group.create_dataset("slice_"+str(i), data=realslice.data[i])
 
     # Dimensions
-    assert len(shape)==2, "Shape of realslice is {}".format(len(shape))
-    R_Nx,R_Ny = shape
     data_R_Nx = group.create_dataset("dim1",(R_Nx,))
     data_R_Ny = group.create_dataset("dim2",(R_Ny,))
 
