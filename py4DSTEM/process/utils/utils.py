@@ -341,11 +341,12 @@ def bin2D(array, factor, dtype=np.float64):
 
     # Make a binned array on the device
     binned_ar = np.zeros((binx,biny),dtype=dtype)
+    array = array.astype(dtype)
 
     # Collect pixel sums into new bins
     for ix in range(factor):
         for iy in range(factor):
-            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor].astype(dtype)
+            binned_ar += array[0+ix:xx+ix:factor,0+iy:yy+iy:factor]
     return binned_ar
 
 def get_voronoi_vertices(voronoi, nx, ny, dist=10):
