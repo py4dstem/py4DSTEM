@@ -27,8 +27,8 @@ import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .utils import sibling_path, pg_point_roi, LQCollection
-from ..file.readwrite.read import read
-from ..file.readwrite.write import save_dataobject
+from ..file.io.read import read
+from ..file.io.write import save_dataobject
 from ..file.datastructure.datacube import DataCube
 
 import IPython
@@ -61,15 +61,21 @@ class DataViewer(QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
+
         # Make settings collection
         self.settings = LQCollection()
 
+        self.main_window = QtWidgets.QWidget()
+        self.main_window.setWindowTitle("py4DSTEM")
+
         # Set up sub-windows and arrange into primary py4DSTEM window
-        self.diffraction_space_widget = self.setup_diffraction_space_widget()
-        self.real_space_widget = self.setup_real_space_widget()
-        self.control_widget = self.setup_control_widget()
-        self.console_widget = self.setup_console_widget()
-        self.main_window = self.setup_main_window()
+        self.setup_diffraction_space_widget()
+        self.setup_real_space_widget()
+        self.setup_control_widget()
+        self.setup_console_widget()
+        self.setup_main_window()
 
         # Set up temporary datacube
         self.datacube = DataCube(data=np.zeros((10,10,10,10)))
@@ -82,7 +88,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
 
-        return
 
     ###############################################
     ############ Widget setup methods #############
@@ -212,8 +217,6 @@ class DataViewer(QtWidgets.QMainWindow):
         """
         Setup main window, arranging sub-windows inside
         """
-        self.main_window = QtWidgets.QWidget()
-        self.main_window.setWindowTitle("py4DSTEM")
 
         layout_data = QtWidgets.QHBoxLayout()
         layout_data.addWidget(self.diffraction_space_widget,1)
@@ -350,7 +353,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Diffraction space
         if self.control_widget.checkBox_Crop_Diffraction.isChecked():
             # Get crop limits from ROI
-            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_qx,slice_qy = slices_q
             crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
@@ -383,7 +386,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Real space
         if self.control_widget.checkBox_Crop_Real.isChecked():
             # Get crop limits from ROI
-            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0], self.real_space_widget.getImageItem())
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data[:,:,0,0], self.real_space_widget.getImageItem())
             slice_rx,slice_ry = slices_r
             crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
@@ -692,7 +695,9 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,autoLevels=False,autoRange=False)
+
+            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+                                                   autoLevels=False,autoRange=False)
         else:
             pass
         return
@@ -703,7 +708,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Rectangular detector
         if detector_shape == 0:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -717,7 +722,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Circular detector
         elif detector_shape == 1:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -731,9 +736,9 @@ class DataViewer(QtWidgets.QMainWindow):
         # Annular detector
         elif detector_shape == 2:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
-            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
 

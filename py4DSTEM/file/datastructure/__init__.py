@@ -1,5 +1,5 @@
-from .dataobject import *
 from .metadata import *
+from .dataobject import *
 from .datacube import *
 from .dataslice import *
 from .diffraction import *
