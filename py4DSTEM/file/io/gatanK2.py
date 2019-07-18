@@ -46,7 +46,7 @@ class K2DataArray(Sequence):
         assert len(glob.glob('*.bin')) == 8, "Wrong path, or wrong number of bin files."
         assert len(glob.glob('*.gtg')) == 1, "Wrong path, or wrong number of gtg files."
 
-        gtgpath = os.path.join(os.path.dirname(filepath), glob.glob('*.gtg')[0])
+        gtgpath = os.path.join(filepath, glob.glob('*.gtg')[0])
         binprefix = gtgpath[:-4]
 
         self._gtg_file = gtgpath
