@@ -56,6 +56,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_EditDirectoryMetadata = self.widget_LoadPreprocessSave.widget.pushButton_EditDirectoryMetadata
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
+        self.pushButton_LaunchStrain = self.widget_LoadPreprocessSave.widget.pushButton_LaunchStrain
 
         ########### Preprocessing sub-widget ##########
         self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget())
@@ -121,6 +122,8 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
         self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
 
+        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Launch Strain Tool')
+
 
         self.label_Filename.setFont(normalFont)
         self.lineEdit_LoadFile.setFont(normalFont)
@@ -172,6 +175,7 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
 
         save_widget_layout.addWidget(self.pushButton_SaveDirectory)
         save_widget_layout.addWidget(self.pushButton_SaveFile)
+        save_widget_layout.addWidget(self.pushButton_LaunchStrain)
         save_widget.setLayout(save_widget_layout)
 
         # Layout
