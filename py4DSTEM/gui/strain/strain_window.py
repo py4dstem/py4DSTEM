@@ -44,10 +44,20 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.lattice_vector_tab = LatticeVectorTab(main_window=self.main_window)
 		self.strain_map_tab = StrainMapTab(main_window=self.main_window)
 
-		self.tab_widget.addTab(self.probe_kernel_tab,'Probe Kernel')
+		self.tab_widget.addTab(self.probe_kernel_tab,"Probe Kernel")
 		self.tab_widget.addTab(self.bragg_disk_tab,"Bragg Disk Detection")
 		self.tab_widget.addTab(self.lattice_vector_tab,"Lattice Vectors")
 		self.tab_widget.addTab(self.strain_map_tab,"Strain Maps")
+
+		self.probe_kernel_tab_index = self.tab_widget.indexOf(self.probe_kernel_tab)
+		self.bragg_disk_tab_index = self.tab_widget.indexOf(self.bragg_disk_tab)
+		self.lattice_vector_tab_index = self.tab_widget.indexOf(self.lattice_vector_tab)
+		self.strain_map_tab_index = self.tab_widget.indexOf(self.strain_map_tab)
+
+		# disable all the tabs not yet available (comment out for debugging)
+		#self.tab_widget.setTabEnabled(self.bragg_disk_tab_index, False)
+		#self.tab_widget.setTabEnabled(self.lattice_vector_tab_index, False)
+		#self.tab_widget.setTabEnabled(self.strain_map_tab_index, False)
 
 
 		self.layout.addWidget(self.tab_widget)

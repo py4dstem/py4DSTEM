@@ -8,10 +8,7 @@ class ProbeKernelTab(QtWidgets.QWidget):
 
 		self.main_window = main_window
 
-		
-
-
-
+		# 
 
 
 class BraggDiskTab(QtWidgets.QWidget):
