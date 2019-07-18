@@ -422,10 +422,9 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi.setPos((xf,yf))
             self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
-            if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
+            if isinstance(self.datacube.data,np.ndarray):
                 self.datacube.bin_data_diffraction(bin_factor_Q)
-            elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked() or \
-                self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
+            else:
                 self.datacube.bin_data_mmap(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
