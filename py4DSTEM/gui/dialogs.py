@@ -398,12 +398,37 @@ class VirtualDetectorsWidget(QtWidgets.QWidget):
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMX, 3)
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMY, 4)
 
+        # Arrowkey Control
+        arrowkey_widget = QtWidgets.QWidget()
+        arrowkey_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_ArrowkeyRS = QtWidgets.QRadioButton('Real Space')
+        self.radioButton_ArrowkeyDP = QtWidgets.QRadioButton('Diffraction')
+        self.radioButton_ArrowkeyOff = QtWidgets.QRadioButton('None')
+        self.radioButton_ArrowkeyOff.setChecked(True)
+
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyRS)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyDP)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyOff)
+        arrowkey_widget.setLayout(arrowkey_widget_layout)
+
+        self.buttonGroup_ArrowkeyMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyRS)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyDP)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyOff)
+
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyRS,0)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyDP,1)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyOff,2)
+
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(SectionLabel('Detector Shape'))
         layout.addWidget(detector_shape_widget)
         layout.addWidget(SectionLabel('Detector Mode'))
         layout.addWidget(detector_mode_widget)
+        layout.addWidget(SectionLabel('Arrowkey Control'))
+        layout.addWidget(arrowkey_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
