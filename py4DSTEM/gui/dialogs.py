@@ -116,6 +116,12 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
 
+        self.loadRadioAuto = QtWidgets.QRadioButton("Automatic")
+        self.loadRadioAuto.setChecked(True)
+        self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
+        self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
+
+
         self.label_Filename.setFont(normalFont)
         self.lineEdit_LoadFile.setFont(normalFont)
         self.pushButton_BrowseFiles.setFont(normalFont)
@@ -123,10 +129,16 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         line1 = QtWidgets.QHBoxLayout()
         line1.addWidget(self.label_Filename,stretch=0)
         line1.addWidget(self.lineEdit_LoadFile,stretch=1)
+        optionLine = QtWidgets.QHBoxLayout()
+        optionLine.addWidget(self.loadRadioAuto)
+        optionLine.addWidget(self.loadRadioMMAP)
+        optionLine.addWidget(self.loadRadioGatan)
+
         line2 = QtWidgets.QHBoxLayout()
         line2.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
 
         load_widget_layout.addLayout(line1)
+        load_widget_layout.addLayout(optionLine)
         load_widget_layout.addLayout(line2)
         load_widget_layout.setSpacing(0)
         load_widget_layout.setContentsMargins(0,0,0,0)
@@ -398,12 +410,37 @@ class VirtualDetectorsWidget(QtWidgets.QWidget):
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMX, 3)
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMY, 4)
 
+        # Arrowkey Control
+        arrowkey_widget = QtWidgets.QWidget()
+        arrowkey_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_ArrowkeyRS = QtWidgets.QRadioButton('Real Space')
+        self.radioButton_ArrowkeyDP = QtWidgets.QRadioButton('Diffraction')
+        self.radioButton_ArrowkeyOff = QtWidgets.QRadioButton('None')
+        self.radioButton_ArrowkeyOff.setChecked(True)
+
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyRS)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyDP)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyOff)
+        arrowkey_widget.setLayout(arrowkey_widget_layout)
+
+        self.buttonGroup_ArrowkeyMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyRS)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyDP)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyOff)
+
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyRS,0)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyDP,1)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyOff,2)
+
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(SectionLabel('Detector Shape'))
         layout.addWidget(detector_shape_widget)
         layout.addWidget(SectionLabel('Detector Mode'))
         layout.addWidget(detector_mode_widget)
+        layout.addWidget(SectionLabel('Arrowkey Control'))
+        layout.addWidget(arrowkey_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
