@@ -339,6 +339,10 @@ class BraggDiskPreviewPane(QtWidgets.QGroupBox):
 		self.setLayout(layout)
 
 
+###########################################
+######## LATTICE VECTOR TAB ###############
+###########################################
+
 class LatticeVectorTab(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
 		QtWidgets.QWidget.__init__(self)
