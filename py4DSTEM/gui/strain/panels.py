@@ -394,6 +394,9 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		self.radon_min_rel_int_spinBox.setSingleStep(0.02)
 		radonform.addRow("Minimum Relative Intensity",self.radon_min_rel_int_spinBox)
 
+		self.radon_update_button = QtWidgets.QPushButton("Calculate")
+		radonform.addRow(self.radon_update_button)
+
 		radonbox.setLayout(radonform)
 		layout.addWidget(radonbox)
 

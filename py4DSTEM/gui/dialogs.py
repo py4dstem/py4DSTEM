@@ -122,8 +122,6 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
         self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
 
-        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Launch Strain Tool')
-
 
         self.label_Filename.setFont(normalFont)
         self.lineEdit_LoadFile.setFont(normalFont)
@@ -175,8 +173,14 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
 
         save_widget_layout.addWidget(self.pushButton_SaveDirectory)
         save_widget_layout.addWidget(self.pushButton_SaveFile)
-        save_widget_layout.addWidget(self.pushButton_LaunchStrain)
         save_widget.setLayout(save_widget_layout)
+
+        analysis_widget = QtWidgets.QWidget()
+        analysis_widget_layout = QtWidgets.QHBoxLayout()
+        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Strain')
+        self.pushButton_LaunchStrain.setMaximumWidth(100)
+        analysis_widget_layout.addWidget(self.pushButton_LaunchStrain)
+        analysis_widget.setLayout(analysis_widget_layout)
 
         # Layout
         layout = QtWidgets.QVBoxLayout()
@@ -186,6 +190,8 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         layout.addWidget(preprocess_widget)
         layout.addWidget(SectionLabel('Save'))
         layout.addWidget(save_widget)
+        layout.addWidget(SectionLabel('Analysis'))
+        layout.addWidget(analysis_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
