@@ -14,13 +14,14 @@ from ..log import log, Logger
 logger = Logger()
 
 @log
-def save_from_dataobject_list(dataobject_list, outputfile):
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
     Accepts:
         dataobject_list     a list of DataObjects to save
         outputfile          path to an .h5 file to save
+        topgroup            (str) name for the toplevel group; if None, use "4DSTEM_experiment"
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
@@ -29,9 +30,10 @@ def save_from_dataobject_list(dataobject_list, outputfile):
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
     ##TODO: Change version numbers, generalize top group name, change attribute location
-    f.attrs.create("version_major",0)
-    f.attrs.create("version_minor",6)
     group_toplevel = f.create_group("4DSTEM_experiment")
+    group_toplevel.attrs.create("emd_group_type",2)
+    group_toplevel.attrs.create("version_major",0)
+    group_toplevel.attrs.create("version_minor",6)
 
     ##### Metadata #####
 
