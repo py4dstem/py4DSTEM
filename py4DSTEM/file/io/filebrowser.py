@@ -642,7 +642,9 @@ class FileBrowser(object):
         assert(isinstance(dataobject,(int,np.integer,str))), "dataobject must be int or str"
         if isinstance(dataobject, str):
             dataobject = self.get_dataobject_index_from_name(dataobject)
-        if self.version==(0,5):
+        if self.version==(0,6):
+            return self.get_dataobject_v0_6(dataobject)
+        elif self.version==(0,5):
             return self.get_dataobject_v0_5(dataobject)
         elif self.version==(0,4):
             return self.get_dataobject_v0_4(dataobject)
@@ -651,7 +653,7 @@ class FileBrowser(object):
         elif self.version==(0,2):
             return self.get_dataobject_v0_2(dataobject)
         else:
-            print("Error: unrecognized py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
+            raise Exception("Error: unrecognized py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
 
     def get_dataobject_index_from_name(self, name):
         objects = []
@@ -689,7 +691,6 @@ class FileBrowser(object):
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
-            slices = info['slices']
             shape = info['shape']
             Q_Nx = shape[0]
             Q_Ny = shape[1]
@@ -702,11 +703,10 @@ class FileBrowser(object):
                                               Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
 
         elif objecttype == 'RealSlice':
-            slices = info['slices']
             shape = info['shape']
             R_Nx = shape[0]
             R_Ny = shape[1]
-            data = np.array(self.file[self.topgroup + 'data/realslices'][name][slices[0]])
+            data = np.array(self.file[self.topgroup + 'data/realslices'][name]['data'])
             if(len(shape)==2):
                 dataobject = RealSlice(data=data, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
             else:
@@ -1226,7 +1226,7 @@ def get_py4DSTEM_version(h5_file):
 
 def get_py4DSTEM_topgroup(h5_file):
     """
-    Accepts either a filepath or an open h5py File boject. Returns string of the top group name.
+    Accepts either a filepath or an open h5py File object. Returns string of the top group name.
     Used in v0.5 and above; all other versions are defaulted to "4DSTEM_experiment"
     Currently makes a list of top groups, but it will only return the first valid top group.
     When multiple top groups is supported, all that should change is the return statement from
@@ -1235,9 +1235,11 @@ def get_py4DSTEM_topgroup(h5_file):
     if isinstance(h5_file, h5py._hl.files.File):
         topgroups = []
         for key in h5_file.keys():
-             if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
+            if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
                     if h5_file[key].attrs['emd_group_type'] == 2:
                         topgroups.append(key+'/')
+        if len(topgroups)<1:
+            raise Exception('No toplevel groups with appropriate tags (emd_group_type=2, version_major, version_minor) found.')
         return topgroups[0]
     else:
         f = h5py.File(h5_file, 'r')
