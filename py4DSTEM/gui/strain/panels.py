@@ -288,7 +288,7 @@ class BraggDiskControlBox(QtWidgets.QGroupBox):
 
 		layout = QtWidgets.QHBoxLayout()
 
-		self.start_peakfinding_button = QtWidgets.QPushButton("Find Bragg Disks")
+		self.start_peakfinding_button = QtWidgets.QPushButton("Find All Bragg Disks")
 		self.bragg_peak_progressbar = QtWidgets.QProgressBar()
 
 		layout.addWidget(self.bragg_peak_progressbar)
@@ -507,7 +507,9 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 		layout.addLayout(bottomrow)
 		self.setLayout(layout)
 
-
+#################################################
+################ STRAIN MAP TAB #################
+#################################################
 
 class StrainMapTab(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
