@@ -177,8 +177,8 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
 
         analysis_widget = QtWidgets.QWidget()
         analysis_widget_layout = QtWidgets.QHBoxLayout()
-        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Strain')
-        self.pushButton_LaunchStrain.setMaximumWidth(100)
+        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Single Crystal Strain')
+        self.pushButton_LaunchStrain.setMaximumWidth(200)
         analysis_widget_layout.addWidget(self.pushButton_LaunchStrain)
         analysis_widget.setLayout(analysis_widget_layout)
 
