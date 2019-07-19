@@ -29,8 +29,11 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
-    ##TODO: Change version numbers, generalize top group name, change attribute location
-    group_toplevel = f.create_group("4DSTEM_experiment")
+    if topgroup is None:
+        group_toplevel = f.create_group("4DSTEM_experiment")
+    else:
+        assert isinstance(topgroup, str)
+        group_toplevel = f.create_group(topgroup)
     group_toplevel.attrs.create("emd_group_type",2)
     group_toplevel.attrs.create("version_major",0)
     group_toplevel.attrs.create("version_minor",6)
