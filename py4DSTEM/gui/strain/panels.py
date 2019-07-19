@@ -349,9 +349,229 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 		self.main_window = main_window
 
+		layout = QtWidgets.QHBoxLayout()
+
+		self.settings_pane = LatticeVectorSettingsPane(main_window=self.main_window)
+		self.viz_pane = LatticeVectorVisualizationPane(main_window=self.main_window)
+
+		layout.addWidget(self.settings_pane)
+		layout.addWidget(self.viz_pane)
+
+		self.setLayout(layout)
+
+class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
+	def __init__(self,main_window=None):
+		QtWidgets.QGroupBox.__init__(self, "Lattice Vector Determination")
+
+		layout = QtWidgets.QVBoxLayout()
+
+		radonbox = QtWidgets.QGroupBox("Radon Transform")
+		radonform = QtWidgets.QFormLayout()
+
+		self.radon_N_spinBox = QtWidgets.QSpinBox()
+		self.radon_N_spinBox.setMinimum(1)
+		self.radon_N_spinBox.setMaximum(7200)
+		self.radon_N_spinBox.setValue(360)
+		radonform.addRow("Number angles",self.radon_N_spinBox)
+
+		self.radon_sigma_spinBox = QtWidgets.QSpinBox()
+		self.radon_sigma_spinBox.setMinimum(0)
+		self.radon_sigma_spinBox.setMaximum(500)
+		self.radon_sigma_spinBox.setValue(2)
+		radonform.addRow("Sigma",self.radon_sigma_spinBox)
+
+		self.radon_min_spacing_spinBox = QtWidgets.QSpinBox()
+		self.radon_min_spacing_spinBox.setMinimum(1)
+		self.radon_min_spacing_spinBox.setMaximum(1200)
+		self.radon_min_spacing_spinBox.setValue(2)
+		radonform.addRow("Minimum Spacing",self.radon_min_spacing_spinBox)
+
+		self.radon_min_rel_int_spinBox = QtWidgets.QDoubleSpinBox()
+		self.radon_min_rel_int_spinBox.setMinimum(0)
+		self.radon_min_rel_int_spinBox.setMaximum(1)
+		self.radon_min_rel_int_spinBox.setValue(0.05)
+		self.radon_min_rel_int_spinBox.setDecimals(3)
+		self.radon_min_rel_int_spinBox.setSingleStep(0.02)
+		radonform.addRow("Minimum Relative Intensity",self.radon_min_rel_int_spinBox)
+
+		radonbox.setLayout(radonform)
+		layout.addWidget(radonbox)
+
+		directionbox = QtWidgets.QGroupBox("Lattice Vector Directions")
+		directionform = QtWidgets.QFormLayout()
+
+		self.direction_sigma_spinBox = QtWidgets.QSpinBox()
+		self.direction_sigma_spinBox.setMinimum(0)
+		self.direction_sigma_spinBox.setMaximum(1200)
+		self.direction_sigma_spinBox.setValue(2)
+		directionform.addRow("Sigma",self.direction_sigma_spinBox)
+
+		self.directions_min_spacing_spinBox = QtWidgets.QSpinBox()
+		self.directions_min_spacing_spinBox.setMinimum(1)
+		self.directions_min_spacing_spinBox.setMaximum(1200)
+		self.directions_min_spacing_spinBox.setValue(2)
+		directionform.addRow("Minimum Spacing",self.directions_min_spacing_spinBox)
+
+		self.directions_min_rel_int_spinBox = QtWidgets.QDoubleSpinBox()
+		self.directions_min_rel_int_spinBox.setMinimum(0)
+		self.directions_min_rel_int_spinBox.setMaximum(1)
+		self.directions_min_rel_int_spinBox.setValue(0.05)
+		self.directions_min_rel_int_spinBox.setSingleStep(0.005)
+		self.directions_min_rel_int_spinBox.setDecimals(3)
+		directionform.addRow("Minimum Relative Intensity",self.directions_min_rel_int_spinBox)
+
+		self.directions_index1_spinbox = QtWidgets.QSpinBox()
+		self.directions_index1_spinbox.setMinimum(0)
+		self.directions_index1_spinbox.setMaximum(100)
+		self.directions_index1_spinbox.setValue(0)
+		directionform.addRow("Index 1",self.directions_index1_spinbox)
+
+		self.directions_index2_spinBox = QtWidgets.QSpinBox()
+		self.directions_index2_spinBox.setMinimum(0)
+		self.directions_index2_spinBox.setMaximum(100)
+		self.directions_index2_spinBox.setValue(0)
+		directionform.addRow("Index 2",self.directions_index2_spinBox)
+
+		directionbox.setLayout(directionform)
+		layout.addWidget(directionbox)
+
+		lengthbox = QtWidgets.QGroupBox("Lattice Vector Lengths")
+		lengthform = QtWidgets.QFormLayout()
+
+		self.lengths_spacing_thresh_spinBox = QtWidgets.QDoubleSpinBox()
+		self.lengths_spacing_thresh_spinBox.setMinimum(0)
+		self.lengths_spacing_thresh_spinBox.setMaximum(50)
+		self.lengths_spacing_thresh_spinBox.setValue(1.5)
+		self.lengths_spacing_thresh_spinBox.setSingleStep(0.05)
+		self.lengths_spacing_thresh_spinBox.setDecimals(2)
+		lengthform.addRow("Spacing Threshold",self.lengths_spacing_thresh_spinBox)
+
+		self.lengths_sigma_spinBox = QtWidgets.QSpinBox()
+		self.lengths_sigma_spinBox.setMinimum(0)
+		self.lengths_sigma_spinBox.setMaximum(100)
+		self.lengths_sigma_spinBox.setValue(1)
+		lengthform.addRow("Sigma",self.lengths_sigma_spinBox)
+
+		self.lengths_min_spacing_spinBox = QtWidgets.QSpinBox()
+		self.lengths_min_spacing_spinBox.setMinimum(0)
+		self.lengths_min_spacing_spinBox.setMaximum(100)
+		self.lengths_min_spacing_spinBox.setValue(2)
+		lengthform.addRow("Minimum Spacing",self.lengths_min_spacing_spinBox)
+
+		self.lengths_min_rel_int_spinBox = QtWidgets.QDoubleSpinBox()
+		self.lengths_min_rel_int_spinBox.setMinimum(0)
+		self.lengths_min_rel_int_spinBox.setMaximum(1)
+		self.lengths_min_rel_int_spinBox.setValue(0.1)
+		self.lengths_min_rel_int_spinBox.setDecimals(3)
+		self.lengths_min_rel_int_spinBox.setSingleStep(0.005)
+		lengthform.addRow("Minimum Relative Intensity",self.lengths_min_rel_int_spinBox)
+
+		lengthbox.setLayout(lengthform)
+		layout.addWidget(lengthbox)
+
+		self.setLayout(layout)
+
+class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
+	def __init__(self,main_window=None):
+		QtWidgets.QGroupBox.__init__(self,"Lattice Vectors")
+
+		toprow = QtWidgets.QHBoxLayout()
+		radongroup = QtWidgets.QGroupBox("Radon Transform")
+		self.radon_plot = pg.PlotWidget()
+		toplayout = QtWidgets.QHBoxLayout()
+		toplayout.addWidget(self.radon_plot)
+		radongroup.setLayout(toplayout)
+		toprow.addWidget(radongroup)
+
+		bottomrow = QtWidgets.QHBoxLayout()
+
+		crossinggroup = QtWidgets.QGroupBox("Crossings Plot")
+		crossinglayout = QtWidgets.QHBoxLayout()
+		self.crossings_plot = pg.PlotWidget()
+		crossinglayout.addWidget(self.crossings_plot)
+		crossinggroup.setLayout(crossinglayout)
+		bottomrow.addWidget(crossinggroup)
+
+		lvgroup = QtWidgets.QGroupBox("Bragg Vector Map with Lattice Vectors")
+		lvlayout = QtWidgets.QHBoxLayout()
+		self.lattice_plot = pg.PlotWidget()
+		lvlayout.addWidget(self.lattice_plot)
+		lvgroup.setLayout(lvlayout)
+		bottomrow.addWidget(lvgroup)
+
+		layout = QtWidgets.QVBoxLayout()
+		layout.addLayout(toprow)
+		layout.addLayout(bottomrow)
+		self.setLayout(layout)
+
+
 
 class StrainMapTab(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
 		QtWidgets.QWidget.__init__(self)
 
 		self.main_window = main_window
+
+		layout = QtWidgets.QVBoxLayout()
+
+		# virtual image row
+		vimgrow = QtWidgets.QHBoxLayout()
+
+		vimggroup = QtWidgets.QGroupBox("Virtual Image")
+		vimglayout = QtWidgets.QHBoxLayout()
+
+		self.DP_view = pg.ImageView()
+		self.DP_ROI = pg.RectROI([256,256],[512,512], pen=(3,9))
+		self.DP_view.getView().addItem(self.DP_ROI)
+		vimglayout.addWidget(self.DP_view)
+
+		self.RS_view = pg.ImageView()
+		self.RS_ROI = pg_point_roi(self.RS_view.getView())
+		vimglayout.addWidget(self.RS_view)
+		vimggroup.setLayout(vimglayout)
+		vimgrow.addWidget(vimggroup)
+
+		layout.addLayout(vimgrow)
+
+		# strain Group
+		strainrow = QtWidgets.QHBoxLayout()
+		straingroup = QtWidgets.QGroupBox("Strain Maps")
+		strainlayout = QtWidgets.QVBoxLayout()
+
+		strainTopRow = QtWidgets.QHBoxLayout()
+		self.exx_view = pg.ImageView()
+		strainTopRow.addWidget(self.exx_view)
+		self.eyy_view = pg.ImageView()
+		strainTopRow.addWidget(self.eyy_view)
+		strainlayout.addLayout(strainTopRow)
+
+		strainBottomRow = QtWidgets.QHBoxLayout()
+		self.exy_view = pg.ImageView()
+		strainBottomRow.addWidget(self.exy_view)
+		self.theta_view = pg.ImageView()
+		strainBottomRow.addWidget(self.theta_view)
+		strainlayout.addLayout(strainBottomRow)
+
+		straingroup.setLayout(strainlayout)
+		strainrow.addWidget(straingroup)
+		layout.addLayout(strainrow)
+
+		# export group
+		exportrow = QtWidgets.QHBoxLayout()
+		exportgroup = QtWidgets.QGroupBox("Export")
+		exportlayout = QtWidgets.QHBoxLayout()
+
+		self.export_processing_button = QtWidgets.QPushButton("Export Processing")
+		self.export_all_button = QtWidgets.QPushButton("Export All")
+
+		exportlayout.addWidget(self.export_processing_button)
+		exportlayout.addWidget(self.export_all_button)
+		exportgroup.setLayout(exportlayout)
+		exportrow.addWidget(exportgroup)
+
+		layout.addLayout(exportrow)
+		
+
+		self.setLayout(layout)
+
+
