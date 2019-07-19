@@ -335,17 +335,17 @@ class FileBrowser(object):
             shape = self.file[self.topgroup + 'data/diffractionslices'][name]['data'].shape
             metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
             depth = 1
-            objectinfo = {'name':name, 'depth'=depth, 'shape':shape,
+            objectinfo = {'name':name, 'depth':depth, 'shape':shape,
                           'type':objecttype, 'index':index, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/diffractionslices'][name]['dim3']
-                if('S' in dim3.dtype.str): #Checks if fixed width C string
+                if('S' in dim3.dtype.str): # Checks if dim3 is composed of fixed width C strings
                     with dim3.astype('S64'):
                         bstrings = dim3[:]
                     bstrings = [bstring.decode('UTF-8') for bstring in bstrings]
                     #write key if list is string based IE inhomogenous 3D array
-                    objectinfo['dim3'] = bstrings
+                    objectinfo['dim3'] = np.array(bstrings)
 
         elif objecttype == 'RealSlice':
             name = list(self.file[self.topgroup + 'data/realslices'].keys())[objectindex]
@@ -357,12 +357,12 @@ class FileBrowser(object):
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/realslices'][name]['dim3']
-                if('S' in dim3.dtype.str): #Checks if fixed width C string
+                if('S' in dim3.dtype.str): # Checks if dim3 is composed of fixed width C strings
                     with dim3.astype('S64'):
                         bstrings = dim3[:]
                     bstrings = [bstring.decode('UTF-8') for bstring in bstrings]
                     #write key if list is string based IE inhomogenous 3D array
-                    objectinfo['dim3'] = bstrings
+                    objectinfo['dim3'] = np.array(bstrings)
 
         elif objecttype == 'PointList':
             name = list(self.file[self.topgroup + 'data/pointlists'].keys())[objectindex]
@@ -695,29 +695,24 @@ class FileBrowser(object):
             Q_Ny = shape[1]
             data = np.array(self.file[self.topgroup + 'data/diffractionslices'][name]['data'])
             if(len(shape)==2):
-                dataobject = DiffractionSlice(data=data, Q_Nx=Q_Nx, Q_Ny=Q_Ny ,Q_Nz=None, name=name)
+                dataobject = DiffractionSlice(data=data, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
             else:
-                if('dim3' in info.keys()):
-                    ##TODO: slicelabels requires tuples of strings-> need to read in tuples of strings when dataobject is gotten
-                    dataobject = DiffractionSlice(data=data, slicelabels=info['dim3'], Q_Nx=Q_Nx, Q_Ny=Q_Ny, Q_Nz=None, name=name)
-                else:
-                    dataobject = DiffractionSlice(data=data, slicelabels=None, Q_Nx=Q_Nx, Q_Ny=Q_Ny, Q_Nz=shape[2], name=name)
+                dim3 = info['dim3']
+                dataobject = DiffractionSlice(data=data, slicelabels=dim3,
+                                              Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
 
         elif objecttype == 'RealSlice':
             slices = info['slices']
             shape = info['shape']
-            print(shape)
             R_Nx = shape[0]
             R_Ny = shape[1]
             data = np.array(self.file[self.topgroup + 'data/realslices'][name][slices[0]])
             if(len(shape)==2):
-                dataobject = RealSlice(data=data, slicelabels=slices, R_Nx=R_Nx, R_Ny=R_Ny, R_Nz=None, name=name)
+                dataobject = RealSlice(data=data, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
             else:
-                if('dim3' in info.keys()):
-                    ##TODO: slicelabels requires tuples of strings-> need to read in tuples of strings when dataobject is gotten
-                    dataobject = RealSlice(data=data, slicelabels=info['dim3'], R_Nx=R_Nx, R_Ny=R_Ny, R_Nz=None, name=name)
-                else:
-                    dataobject = RealSlice(data=data, slicelabels=None, R_Nx=R_Nx, R_Ny=R_Ny, R_Nz=shape[2], name=name)
+                dim3 = info['dim3']
+                dataobject = RealSlice(data=data, slicelabels=dim3,
+                                       R_Nx=R_Nx, R_Ny=R_Ny, name=name)
 
         elif objecttype == 'PointList':
             coords = info['coordinates']
