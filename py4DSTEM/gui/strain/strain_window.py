@@ -16,13 +16,12 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		QtWidgets.QMainWindow.__init__(self)
 
 		self.main_window = main_window
+		self.datacube = None
 
 		self.settings = LQCollection()
 
 		self.strain_window = QtWidgets.QWidget()
 		self.strain_window.setWindowTitle('py4DSTEM Strain Mapping')
-
-		self.setup_tabs()
 
 		#move this later:
 		self.strain_window.setGeometry(100,100,1000,800)
@@ -30,6 +29,14 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 
 
 
+	def copy_vac_DC_from_browser(self):
+		try:
+			self.vac_datacube = self.main_window.datacube
+		except:
+			print("Couldn't transfer datacube from Browser...")
+
+		if self.vac_datacube is not None:
+			self.probe_kernel_tab.update_views()
 
 
 

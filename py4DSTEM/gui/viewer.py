@@ -83,6 +83,8 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
 
+        self.strain_window = None
+
 
     ###############################################
     ############ Widget setup methods #############
@@ -253,6 +255,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def launch_strain(self):
         self.strain_window = StrainMappingWindow(main_window=self)
+
+        self.strain_window.setup_tabs()
 
     ################ Load ################
 

@@ -4,6 +4,7 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..utils import pg_point_roi
+from ...process.braggdiskdetection import get_average_probe_from_ROI
 
 
 class ProbeKernelTab(QtWidgets.QWidget):
@@ -27,13 +28,13 @@ class ProbeKernelTab(QtWidgets.QWidget):
 		# make the top right views and ROIs (DP and RS)
 		self.diffraction_widget = pg.ImageView()
 		self.diffraction_widget.setImage(np.zeros((512,512)))
-		self.diffraction_ROI = pg.RectROI([256,256],[512,512], pen=(3,9))
+		self.diffraction_ROI = pg.RectROI([50,50],[20,20], pen=(3,9))
 		self.diffraction_widget.getView().addItem(self.diffraction_ROI)
 		self.diffraction_ROI.sigRegionChangeFinished.connect(self.update_RS)
 
 		self.realspace_widget = pg.ImageView()
 		self.realspace_widget.setImage(np.zeros((25,25)))
-		self.realspace_ROI = pg.RectROI([256,256],[5,5],pen=(3,9))
+		self.realspace_ROI = pg.RectROI([5,5],[3,3],pen=(3,9))
 		self.realspace_widget.getView().addItem(self.realspace_ROI)
 		self.realspace_ROI.sigRegionChangeFinished.connect(self.update_DP)
 
@@ -65,16 +66,45 @@ class ProbeKernelTab(QtWidgets.QWidget):
 
 
 	def update_RS(self):
-		return 0
+		try:
+			dc = self.main_window.strain_window.vac_datacube
+			slices, transforms = self.diffraction_ROI.getArraySlice(dc.data[0,0,:,:], self.diffraction_widget.getImageItem())
+			slice_x,slice_y = slices
+
+			new_real_space_view, success = dc.get_virtual_image_rect_integrate(slice_x,slice_y)
+			if success:
+				self.realspace_widget.setImage(new_real_space_view**0.5,autoLevels=True)
+			else:
+				pass
+		except:
+			print("Couldn't update RS view...")
 
 	def update_DP(self):
-		return 0
+		try:
+			dc = self.main_window.strain_window.vac_datacube
+			slices, transforms = self.realspace_ROI.getArraySlice(dc.data[:,:,0,0], self.realspace_widget.getImageItem())
+			slice_x, slice_y = slices
+
+			try:
+				new_DP_view = np.sum(dc.data[slice_x,slice_y,:,:],axis=(0,1))
+				self.diffraction_widget.setImage(new_DP_view**0.5,autoLevels=True)
+			except:
+				print("Couldn't update view")
+		except:
+			print("Couldn't update DP view...")
+
+
+	def update_views(self):
+		self.update_RS()
+		self.update_DP()
 
 
 
 class VacuumDCTab(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
 		QtWidgets.QWidget.__init__(self)
+
+		self.main_window = main_window
 
 		# Load
 		load_widget = QtWidgets.QWidget()
@@ -123,19 +153,21 @@ class UseMainDCTab(QtWidgets.QWidget):
 		layout.addWidget(self.button_copy_DC)
 		self.setLayout(layout)
 
+		self.button_copy_DC.clicked.connect(main_window.strain_window.copy_vac_DC_from_browser)
+
 
 class ProkeKernelSettings(QtWidgets.QGroupBox):
 	def __init__(self,main_window=None):
 		QtWidgets.QGroupBox.__init__(self,"Probe Kernel Settings")
 
-		#groupbox = QtWidgets.QGroupBox("Probe Kernel Settings")
+		self.main_window = main_window
 		
 		settingsGroup = QtWidgets.QFormLayout()
 		
 		self.mask_threshold_spinBox = QtWidgets.QDoubleSpinBox()
 		self.mask_threshold_spinBox.setMinimum(0.0)
 		self.mask_threshold_spinBox.setMaximum(1.0)
-		self.mask_threshold_spinBox.setSingleStep(0.05)
+		self.mask_threshold_spinBox.setSingleStep(0.01)
 		self.mask_threshold_spinBox.setValue(0.2)
 		self.mask_threshold_spinBox.setDecimals(2)
 		settingsGroup.addRow("Mask Threshold", self.mask_threshold_spinBox)
@@ -152,10 +184,13 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		self.mask_opening_spinBox.setMaximum(500)
 		self.mask_opening_spinBox.setSingleStep(1)
 		self.mask_opening_spinBox.setValue(3)
-		settingsGroup.addRow("Mask Threshold", self.mask_opening_spinBox)
+		settingsGroup.addRow("Mask Opening", self.mask_opening_spinBox)
 
 		self.button_generate_probe = QtWidgets.QPushButton("Generate Probe")
 		self.button_accept_probe = QtWidgets.QPushButton("Accept")
+
+		self.button_generate_probe.clicked.connect(self.generate_probe)
+		self.button_accept_probe.clicked.connect(self.accept_probe)
 
 		button_layout = QtWidgets.QHBoxLayout()
 		button_layout.addWidget(self.button_generate_probe)
@@ -168,15 +203,59 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		self.setLayout(boxlayout)
 
 
+	def generate_probe(self):
+		# pull values from the spinboxes
+		mask_threshold = self.mask_threshold_spinBox.value()
+		mask_expansion = self.mask_expansion_spinBox.value()
+		mask_opening = self.mask_opening_spinBox.value()
+
+		print(mask_threshold,mask_expansion,mask_opening)
+
+		# pull the masks from the ROIs and make the reduced datacube
+		dc = self.main_window.strain_window.vac_datacube
+
+		#realspace cropping:
+		slices, transforms = self.main_window.strain_window.probe_kernel_tab.realspace_ROI.getArraySlice(dc.data[:,:,0,0],\
+		 self.main_window.strain_window.probe_kernel_tab.realspace_widget.getImageItem())
+		slice_x, slice_y = slices
+		RS_mask = np.zeros((dc.R_Nx,dc.R_Ny),dtype=bool)
+		RS_mask[slice_x,slice_y] = True
+		RS_mask = np.reshape(RS_mask,(dc.R_Nx,dc.R_Ny))
+
+		# make the diffraction space mask
+		slices, transforms = self.main_window.strain_window.probe_kernel_tab.diffraction_ROI.getArraySlice(dc.data[0,0,:,:],\
+			self.main_window.strain_window.probe_kernel_tab.diffraction_widget.getImageItem())
+		DP_mask = np.zeros((dc.Q_Nx,dc.Q_Ny))
+		DP_mask[slice_x,slice_y] = 1
+		DP_mask = np.reshape(DP_mask,(dc.Q_Nx,dc.Q_Ny))
+
+		# generate the prpbe kernel and update views
+		self.probe = get_average_probe_from_ROI(dc,RS_mask,mask_threshold=mask_threshold,\
+			mask_expansion=mask_expansion,mask_opening=mask_opening,verbose=True, DP_mask=DP_mask)
+
+		# get an alias to the probe kernel display pane
+		pkdisplay = self.main_window.strain_window.probe_kernel_tab.probe_kernel_display
+
+		pkdisplay.probe_kernel_view.setImage(self.probe**0.25,autoLevels=True)
+		pkdisplay.probe_kernel_view.autoRange()
+		#pkdisplay.probe_kernel_linetrace_plot.setData()
+
+
+	def accept_probe(self):
+		return 0
+
+
 class ProbeKernelDisplay(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
 		QtWidgets.QWidget.__init__(self)
+		self.main_window = main_window
 		layout = QtWidgets.QHBoxLayout()
 
 		self.probe_kernel_view = pg.ImageView()
 		self.probe_kernel_view.setImage(np.zeros((100,100)))
 
 		self.probe_kernel_linetrace = pg.PlotWidget()
+		self.probe_kernel_linetrace_plot = self.probe_kernel_linetrace.plot()
 
 		layout.addWidget(self.probe_kernel_view)
 		layout.addWidget(self.probe_kernel_linetrace)
