@@ -316,11 +316,9 @@ class BraggDiskTab(QtWidgets.QWidget):
 		self.bragg_disk_control_box = BraggDiskControlBox(main_window=self.main_window)
 		leftpane.addWidget(self.bragg_disk_settings_pane)
 		leftpane.addWidget(self.bragg_disk_control_box)
-		layout.addLayout(leftpane)
 
 		#rightpane = QtWidgets.QHBoxLayout()
 		self.bragg_disk_preview_pane = BraggDiskPreviewPane(main_window=self.main_window)
-		layout.addWidget(self.bragg_disk_preview_pane)
 
 		# instantiate scatter plots in the previews
 		self.scatter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
@@ -348,6 +346,23 @@ class BraggDiskTab(QtWidgets.QWidget):
 		# connect the peakfinding button
 		self.bragg_disk_control_box.start_peakfinding_button.clicked.connect(self.find_all_bragg_disks)
 		self.main_window.strain_window.bragg_peak_progressbar = self.bragg_disk_control_box.bragg_peak_progressbar
+
+		# set sizing
+		left_size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,
+			QtWidgets.QSizePolicy.Preferred)
+		right_size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,
+			QtWidgets.QSizePolicy.Preferred)
+
+		left_size_policy.setHorizontalStretch(1)
+		leftwidget = QtWidgets.QWidget()
+		leftwidget.setLayout(leftpane)
+		leftwidget.setSizePolicy(left_size_policy)
+
+		right_size_policy.setHorizontalStretch(5)
+		self.bragg_disk_preview_pane.setSizePolicy(right_size_policy)
+
+		layout.addWidget(leftwidget)
+		layout.addWidget(self.bragg_disk_preview_pane)
 
 		self.setLayout(layout)
 
