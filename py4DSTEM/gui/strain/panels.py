@@ -321,16 +321,22 @@ class BraggDiskTab(QtWidgets.QWidget):
 		layout.addWidget(self.bragg_disk_preview_pane)
 
 		# instantiate scatter plots in the previews
-		pos = np.random.normal(size=(2,n), scale=1e-5)
+		n=20
+		pos = np.random.normal(size=(2,n), scale=10)
 		spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
 
-		self.sactter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-		self.sactter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-		self.sactter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.scatter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.scatter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.scatter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
 
 		self.bragg_disk_preview_pane.bragg_preview_DP_1.addItem(self.scatter1)
 		self.bragg_disk_preview_pane.bragg_preview_DP_2.addItem(self.scatter2)
 		self.bragg_disk_preview_pane.bragg_preview_DP_3.addItem(self.scatter3)
+
+		# connect the ROIs
+		self.bragg_disk_preview_pane.bragg_preview_realspace_1_selector.sigRegionChangeFinished.connect(self.update_views)
+		self.bragg_disk_preview_pane.bragg_preview_realspace_2_selector.sigRegionChangeFinished.connect(self.update_views)
+		self.bragg_disk_preview_pane.bragg_preview_realspace_2_selector.sigRegionChangeFinished.connect(self.update_views)
 
 
 		self.setLayout(layout)
@@ -340,12 +346,24 @@ class BraggDiskTab(QtWidgets.QWidget):
 			braggviews = self.bragg_disk_preview_pane
 
 			#update the RS images
-			image = self.main_window.new_real_space_view
+			image = self.main_window.real_space_view
 			braggviews.bragg_preview_realspace_1.setImage(image**0.5,autoLevels=True)
 			braggviews.bragg_preview_realspace_2.setImage(image**0.5,autoLevels=True)
 			braggviews.bragg_preview_realspace_3.setImage(image**0.5,autoLevels=True)
 
-			newscatter1, newscatter2, newscatter3 = self.find_selected_bragg_disks()
+			#newscatter1, newscatter2, newscatter3 = self.find_selected_bragg_disks()
+			# FOR TESTING
+			n=20
+			pos = np.random.normal(size=(2,n), scale=100)
+			spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
+
+			newscatter1 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+			newscatter1.addPoints(spots)
+			newscatter2 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+			newscatter2.addPoints(spots)
+			newscatter3 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+			newscatter3.addPoints(spots)
+			######
 
 			#first diffraction view:
 			roi_state = braggviews.bragg_preview_realspace_1_selector.saveState()
@@ -354,35 +372,35 @@ class BraggDiskTab(QtWidgets.QWidget):
 			# Set the diffraction space image
 			new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
 			if success:
-			    braggviews.bragg_preview_DP_1.setImage(new_diffraction_space_view,
-			                                           autoLevels=False,autoRange=False)
-			    braggviews.bragg_preview_DP_1.removeItem(self.scatter1)
-			    braggviews.bragg_preview_DP_1.addItem(newscatter1)
-			    self.scatter1 = newscatter1
+				braggviews.bragg_preview_DP_1.setImage(new_diffraction_space_view,
+													   autoLevels=True,autoRange=False)
+				braggviews.bragg_preview_DP_1.getView().removeItem(self.scatter1)
+				braggviews.bragg_preview_DP_1.getView().addItem(newscatter1)
+				self.scatter1 = newscatter1
 
-		    roi_state = braggviews.bragg_preview_realspace_2_selector.saveState()
-		    x0,y0 = roi_state['pos']
-		    xc,yc = int(x0+1),int(y0+1)
-		    # Set the diffraction space image
-		    new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
-		    if success:
-		        braggviews.bragg_preview_DP_2.setImage(new_diffraction_space_view,
-		                                               autoLevels=False,autoRange=False)
-		        braggviews.bragg_preview_DP_2.removeItem(self.scatter2)
-		        braggviews.bragg_preview_DP_2.addItem(newscatter2)
-		        self.scatter2 = newscatter2
+			roi_state = braggviews.bragg_preview_realspace_2_selector.saveState()
+			x0,y0 = roi_state['pos']
+			xc,yc = int(x0+1),int(y0+1)
+			# Set the diffraction space image
+			new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+			if success:
+				braggviews.bragg_preview_DP_2.setImage(new_diffraction_space_view,
+													   autoLevels=True,autoRange=False)
+				braggviews.bragg_preview_DP_2.getView().removeItem(self.scatter2)
+				braggviews.bragg_preview_DP_2.getView().addItem(newscatter2)
+				self.scatter2 = newscatter2
 
-	        roi_state = braggviews.bragg_preview_realspace_3_selector.saveState()
-	        x0,y0 = roi_state['pos']
-	        xc,yc = int(x0+1),int(y0+1)
-	        # Set the diffraction space image
-	        new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
-	        if success:
-	            braggviews.bragg_preview_DP_3.setImage(new_diffraction_space_view,
-	                                                   autoLevels=False,autoRange=False)
-	            braggviews.bragg_preview_DP_3.removeItem(self.scatter3)
-	            braggviews.bragg_preview_DP_3.addItem(newscatter3)
-	            self.scatter3 = newscatter3
+			roi_state = braggviews.bragg_preview_realspace_3_selector.saveState()
+			x0,y0 = roi_state['pos']
+			xc,yc = int(x0+1),int(y0+1)
+			# Set the diffraction space image
+			new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+			if success:
+				braggviews.bragg_preview_DP_3.setImage(new_diffraction_space_view,
+													   autoLevels=True,autoRange=False)
+				braggviews.bragg_preview_DP_3.getView().removeItem(self.scatter3)
+				braggviews.bragg_preview_DP_3.getView().addItem(newscatter3)
+				self.scatter3 = newscatter3
 
 		else:
 			pass
