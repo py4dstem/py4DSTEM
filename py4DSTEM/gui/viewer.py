@@ -62,6 +62,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Make settings collection
         self.settings = LQCollection()
 
+        self.strain_window = None
+
         self.main_window = QtWidgets.QWidget()
         self.main_window.setWindowTitle("py4DSTEM")
 
@@ -82,8 +84,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.update_real_space_view()
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
-
-        self.strain_window = None
 
 
     ###############################################
