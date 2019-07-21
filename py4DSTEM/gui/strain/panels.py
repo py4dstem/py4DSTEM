@@ -477,21 +477,21 @@ class BraggDiskTab(QtWidgets.QWidget):
 
 		try:
 			spots1 = [{'pos': [peaks[0].data['qx'][i],peaks[0].data['qy'][i]], 'data':1} for i in range(peaks[0].length)]
-			newscatter1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
 			newscatter1.addPoints(spots1)
 		except:
 			newscatter1 = None
 
 		try:
 			spots2 = [{'pos': [peaks[1].data['qx'][i],peaks[1].data['qy'][i]], 'data':1} for i in range(peaks[1].length)]
-			newscatter2 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
 			newscatter2.addPoints(spots2)
 		except:
 			newscatter2 = None
 
 		try:
 			spots3 = [{'pos': [peaks[2].data['qx'][i],peaks[2].data['qy'][i]], 'data':1} for i in range(peaks[2].length)]
-			newscatter3 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
 			newscatter3.addPoints(spots3)
 		except:
 			newscatter3 = None
