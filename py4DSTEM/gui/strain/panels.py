@@ -6,6 +6,8 @@ import numpy as np
 from ..utils import pg_point_roi
 from ...process.braggdiskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
 from ...process.braggdiskdetection import find_Bragg_disks_selected, find_Bragg_disks
+from ...process.fit import fit_2D, plane, parabola
+from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
 
 # use for debugging:
 from pdb import set_trace
@@ -421,10 +423,11 @@ class BraggDiskTab(QtWidgets.QWidget):
 				upsample_factor=settings.upsample_factor_spinBox.value(),
 				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
 
-			self.main_window.strain_window.current_braggdisks = self.main_window.strain_window.braggdisks.copy()
+			self.main_window.strain_window.braggdisks_corrected = self.main_window.strain_window.braggdisks.copy()
 			#now enable the next tab!
 			self.main_window.strain_window.bragg_peaks_accepted = True
 			self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.lattice_vector_tab_index, True)
+			self.main_window.strain_window.lattice_vector_tab.update_BVM()
 
 		except Exception as exc:
 			print('Failed to find DPs...')
@@ -695,7 +698,26 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 		self.setLayout(layout)
 
+		self.update_BVM()
+
 		#setup connections
+		self.settings_pane.shifts_use_fits_checkbox.stateChanged.connect(self.update_BVM)
+
+
+	def update_BVM(self):
+		if self.main_window.strain_window.bragg_peaks_accepted:
+			xshifts, yshifts, bvm_center = get_diffraction_shifts(self.main_window.strain_window.braggdisks)
+
+			if self.settings_pane.shifts_use_fits_checkbox.isChecked():
+				#use the fit
+				if self.settings_pane.plane_fit.isChecked():
+					fit = plane
+				else:
+					fit = parabola
+
+		else:
+			pass
+
 
 
 class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
@@ -709,6 +731,7 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		self.shifts_use_fits_checkbox = QtWidgets.QCheckBox()
 		shiftform.addRow("Use Fitted Shifts",self.shifts_use_fits_checkbox)
 		self.plane_fit = QtWidgets.QRadioButton("Plane Fit")
+		self.plane_fit.setChecked(True)
 		self.poly_fit = QtWidgets.QRadioButton("Parabolic Fit")
 		shiftform.addRow(self.plane_fit)
 		shiftform.addRow(self.poly_fit)
