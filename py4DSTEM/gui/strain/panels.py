@@ -421,6 +421,7 @@ class BraggDiskTab(QtWidgets.QWidget):
 				upsample_factor=settings.upsample_factor_spinBox.value(),
 				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
 
+			self.main_window.strain_window.current_braggdisks = self.main_window.strain_window.braggdisks.copy()
 			#now enable the next tab!
 			self.main_window.strain_window.bragg_peaks_accepted = True
 			self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.lattice_vector_tab_index, True)
@@ -694,11 +695,25 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 		self.setLayout(layout)
 
+		#setup connections
+
+
 class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 	def __init__(self,main_window=None):
 		QtWidgets.QGroupBox.__init__(self, "Lattice Vector Determination")
 
 		layout = QtWidgets.QVBoxLayout()
+
+		shiftbox = QtWidgets.QGroupBox("Shift Correction")
+		shiftform = QtWidgets.QFormLayout()
+		self.shifts_use_fits_checkbox = QtWidgets.QCheckBox()
+		shiftform.addRow("Use Fitted Shifts",self.shifts_use_fits_checkbox)
+		self.plane_fit = QtWidgets.QRadioButton("Plane Fit")
+		self.poly_fit = QtWidgets.QRadioButton("Parabolic Fit")
+		shiftform.addRow(self.plane_fit)
+		shiftform.addRow(self.poly_fit)
+		shiftbox.setLayout(shiftform)
+		layout.addWidget(shiftbox)
 
 		radonbox = QtWidgets.QGroupBox("Radon Transform")
 		radonform = QtWidgets.QFormLayout()
