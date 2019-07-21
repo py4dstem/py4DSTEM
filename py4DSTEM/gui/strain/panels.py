@@ -4,7 +4,13 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..utils import pg_point_roi
-from ...process.braggdiskdetection import get_average_probe_from_ROI
+from ...process.braggdiskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
+
+# use for debugging:
+from pdb import set_trace
+#at stopping point:
+#QtCore.pyqtRemoveInputHook()
+#set_trace()
 
 
 class ProbeKernelTab(QtWidgets.QWidget):
@@ -186,6 +192,18 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		self.mask_opening_spinBox.setValue(3)
 		settingsGroup.addRow("Mask Opening", self.mask_opening_spinBox)
 
+		self.gaussian_checkbox = QtWidgets.QCheckBox()
+		self.gaussian_checkbox.setChecked(False)
+		settingsGroup.addRow("Subtract Gaussian",self.gaussian_checkbox)
+
+		self.gaussian_scale = QtWidgets.QDoubleSpinBox()
+		self.gaussian_scale.setMaximum(100)
+		self.gaussian_scale.setMinimum(0)
+		self.gaussian_scale.setSingleStep(0.05)
+		self.gaussian_scale.setDecimals(2)
+		self.gaussian_scale.setValue(4)
+		settingsGroup.addRow("Gaussian Scale",self.gaussian_scale)
+
 		self.button_generate_probe = QtWidgets.QPushButton("Generate Probe")
 		self.button_accept_probe = QtWidgets.QPushButton("Accept")
 
@@ -208,8 +226,8 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		mask_threshold = self.mask_threshold_spinBox.value()
 		mask_expansion = self.mask_expansion_spinBox.value()
 		mask_opening = self.mask_opening_spinBox.value()
-
-		print(mask_threshold,mask_expansion,mask_opening)
+		use_gaussian = self.gaussian_checkbox.isChecked()
+		gaussian_scale = self.gaussian_scale.value()
 
 		# pull the masks from the ROIs and make the reduced datacube
 		dc = self.main_window.strain_window.vac_datacube
@@ -225,6 +243,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		# make the diffraction space mask
 		slices, transforms = self.main_window.strain_window.probe_kernel_tab.diffraction_ROI.getArraySlice(dc.data[0,0,:,:],\
 			self.main_window.strain_window.probe_kernel_tab.diffraction_widget.getImageItem())
+		slice_x, slice_y = slices
 		DP_mask = np.zeros((dc.Q_Nx,dc.Q_Ny))
 		DP_mask[slice_x,slice_y] = 1
 		DP_mask = np.reshape(DP_mask,(dc.Q_Nx,dc.Q_Ny))
@@ -238,11 +257,24 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 
 		pkdisplay.probe_kernel_view.setImage(self.probe**0.25,autoLevels=True)
 		pkdisplay.probe_kernel_view.autoRange()
-		#pkdisplay.probe_kernel_linetrace_plot.setData()
+
+		if use_gaussian:
+			self.probe_kernel = get_probe_kernel_subtrgaussian(self.probe, sigma_probe_scale=gaussian_scale)
+		else:
+			self.probe_kernel = get_probe_kernel(self.probe)
+
+		#hardcode for now
+		linetracewidth = 2
+		linetracelength = 25
+		linetrace_left = np.sum(self.probe_kernel[-linetracelength:,:linetracewidth],axis=(1))
+		linetrace_right = np.sum(self.probe_kernel[:linetracelength,:linetracewidth],axis=(1))
+		linetrace = np.concatenate([linetrace_left,linetrace_right])
+		pkdisplay.probe_kernel_linetrace_plot.setData(np.arange(len(linetrace)),linetrace)
 
 
 	def accept_probe(self):
-		return 0
+		self.main_window.strain_window.probe_kernel_accepted = True
+		self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.bragg_disk_tab_index, True)
 
 
 class ProbeKernelDisplay(QtWidgets.QWidget):
