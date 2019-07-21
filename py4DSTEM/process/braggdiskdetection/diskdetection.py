@@ -278,7 +278,8 @@ def find_Bragg_disks(datacube, probe,
                      maxNumPeaks = 70,
                      subpixel = 'poly',
                      upsample_factor = 16,
-                     verbose = False):
+                     verbose = False,
+                     qt_progress_bar=None):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe.
@@ -323,6 +324,8 @@ def find_Bragg_disks(datacube, probe,
             if verbose:
                 print_progress_bar(Rx*datacube.R_Ny+Ry+1, datacube.R_Nx*datacube.R_Ny,
                                    prefix='Analyzing:', suffix='Complete', length=50)
+            if qt_progress_bar is not None:
+                qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             DP = datacube.data[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                           corrPower = corrPower,

@@ -323,10 +323,6 @@ class BraggDiskTab(QtWidgets.QWidget):
 		layout.addWidget(self.bragg_disk_preview_pane)
 
 		# instantiate scatter plots in the previews
-		n=20
-		pos = np.random.normal(size=(2,n), scale=10)
-		spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
-
 		self.scatter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
 		self.scatter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
 		self.scatter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
@@ -349,7 +345,48 @@ class BraggDiskTab(QtWidgets.QWidget):
 		self.bragg_disk_settings_pane.min_peak_spacing_spinBox.valueChanged.connect(self.update_views)
 		self.bragg_disk_settings_pane.max_num_peaks_spinBox.valueChanged.connect(self.update_views)
 
+		# connect the peakfinding button
+		self.bragg_disk_control_box.start_peakfinding_button.clicked.connect(self.find_all_bragg_disks)
+		self.main_window.strain_window.bragg_peak_progressbar = self.bragg_disk_control_box.bragg_peak_progressbar
+
 		self.setLayout(layout)
+
+	def find_all_bragg_disks(self):
+		settings = self.bragg_disk_settings_pane
+
+		spix = settings.subpixel_chooser.currentText()
+		if spix == 'None': 
+			subpixel = 'none'
+		elif spix == 'Parabolic': 
+			subpixel = 'poly'
+		elif spix == 'Upsample DFT':
+			subpixel = 'multicorr'
+		else:
+			print("didn't recognize subpixel mode, using Parabolic")
+			subpixel = 'poly'
+
+		self.bragg_disk_control_box.bragg_peak_progressbar.setMaximum(self.main_window.datacube.R_N)
+
+		try:
+			self.main_window.strain_window.braggdisks = find_Bragg_disks(self.main_window.datacube,
+				self.main_window.strain_window.probe_kernel,
+				corrPower = settings.corr_power_spinBox.value(),
+				sigma=settings.sigma_spinBox.value(),
+				edgeBoundary=settings.edge_boundary_spinBox.value(),
+				minRelativeIntensity=settings.min_relative_intensity_spinBox.value(),
+				relativeToPeak=settings.relative_to_peak_spinBox.value(),
+				minPeakSpacing=settings.min_peak_spacing_spinBox.value(),
+				maxNumPeaks=settings.max_num_peaks_spinBox.value(),
+				subpixel=subpixel,
+				upsample_factor=settings.upsample_factor_spinBox.value(),
+				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
+
+			#now enable the next tab!
+			self.main_window.strain_window.bragg_peaks_accepted = True
+			self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.lattice_vector_tab, True)
+
+		except:
+			print('Failed to find DPs...')
 
 	def update_views(self):
 		if self.main_window.strain_window.probe_kernel_accepted :
@@ -438,18 +475,27 @@ class BraggDiskTab(QtWidgets.QWidget):
 			maxNumPeaks=settings.max_num_peaks_spinBox.value(),
 			subpixel='none')
 
+		try:
+			spots1 = [{'pos': [peaks[0].data['qx'][i],peaks[0].data['qy'][i]], 'data':1} for i in range(peaks[0].length)]
+			newscatter1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter1.addPoints(spots1)
+		except:
+			newscatter1 = None
 
-		spots1 = [{'pos': [peaks[0].data['qx'][i],peaks[0].data['qy'][i]], 'data':1} for i in range(peaks[0].length)]
-		spots2 = [{'pos': [peaks[1].data['qx'][i],peaks[1].data['qy'][i]], 'data':1} for i in range(peaks[1].length)]
-		spots3 = [{'pos': [peaks[2].data['qx'][i],peaks[2].data['qy'][i]], 'data':1} for i in range(peaks[2].length)]
+		try:
+			spots2 = [{'pos': [peaks[1].data['qx'][i],peaks[1].data['qy'][i]], 'data':1} for i in range(peaks[1].length)]
+			newscatter2 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter2.addPoints(spots2)
+		except:
+			newscatter2 = None
 
+		try:
+			spots3 = [{'pos': [peaks[2].data['qx'][i],peaks[2].data['qy'][i]], 'data':1} for i in range(peaks[2].length)]
+			newscatter3 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter3.addPoints(spots3)
+		except:
+			newscatter3 = None
 
-		newscatter1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
-		newscatter1.addPoints(spots1)
-		newscatter2 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
-		newscatter2.addPoints(spots2)
-		newscatter3 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
-		newscatter3.addPoints(spots3)
 
 		return newscatter1, newscatter2, newscatter3
 
@@ -535,7 +581,9 @@ class BraggDiskControlBox(QtWidgets.QGroupBox):
 		layout = QtWidgets.QHBoxLayout()
 
 		self.start_peakfinding_button = QtWidgets.QPushButton("Find All Bragg Disks")
+
 		self.bragg_peak_progressbar = QtWidgets.QProgressBar()
+		self.bragg_peak_progressbar.setMinimum(0)
 
 		layout.addWidget(self.bragg_peak_progressbar)
 		layout.addWidget(self.start_peakfinding_button)
