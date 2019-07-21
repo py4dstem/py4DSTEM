@@ -5,6 +5,7 @@ from ..dialogs import SectionLabel
 import numpy as np
 from ..utils import pg_point_roi
 from ...process.braggdiskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
+from ...process.braggdiskdetection import find_Bragg_disks_selected, find_Bragg_disks
 
 # use for debugging:
 from pdb import set_trace
@@ -275,6 +276,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 	def accept_probe(self):
 		self.main_window.strain_window.probe_kernel_accepted = True
 		self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.bragg_disk_tab_index, True)
+		self.main_window.strain_window.probe_kernel = self.probe_kernel
 
 		self.main_window.strain_window.bragg_disk_tab.update_views()
 
@@ -336,8 +338,16 @@ class BraggDiskTab(QtWidgets.QWidget):
 		# connect the ROIs
 		self.bragg_disk_preview_pane.bragg_preview_realspace_1_selector.sigRegionChangeFinished.connect(self.update_views)
 		self.bragg_disk_preview_pane.bragg_preview_realspace_2_selector.sigRegionChangeFinished.connect(self.update_views)
-		self.bragg_disk_preview_pane.bragg_preview_realspace_2_selector.sigRegionChangeFinished.connect(self.update_views)
+		self.bragg_disk_preview_pane.bragg_preview_realspace_3_selector.sigRegionChangeFinished.connect(self.update_views)
 
+		# connect the settings buttons to also update the DPs:
+		self.bragg_disk_settings_pane.corr_power_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.sigma_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.edge_boundary_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.min_relative_intensity_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.relative_to_peak_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.min_peak_spacing_spinBox.valueChanged.connect(self.update_views)
+		self.bragg_disk_settings_pane.max_num_peaks_spinBox.valueChanged.connect(self.update_views)
 
 		self.setLayout(layout)
 
@@ -351,19 +361,12 @@ class BraggDiskTab(QtWidgets.QWidget):
 			braggviews.bragg_preview_realspace_2.setImage(image**0.5,autoLevels=True)
 			braggviews.bragg_preview_realspace_3.setImage(image**0.5,autoLevels=True)
 
-			#newscatter1, newscatter2, newscatter3 = self.find_selected_bragg_disks()
-			# FOR TESTING
-			n=20
-			pos = np.random.normal(size=(2,n), scale=100)
-			spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
-
-			newscatter1 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-			newscatter1.addPoints(spots)
-			newscatter2 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-			newscatter2.addPoints(spots)
-			newscatter3 = pg.ScatterPlotItem(size=5, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-			newscatter3.addPoints(spots)
-			######
+			try:
+				newscatter1, newscatter2, newscatter3 = self.find_selected_bragg_disks()
+			except:
+				newscatter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 120))
+				newscatter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 120))
+				newscatter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 120))
 
 			#first diffraction view:
 			roi_state = braggviews.bragg_preview_realspace_1_selector.saveState()
@@ -406,8 +409,49 @@ class BraggDiskTab(QtWidgets.QWidget):
 			pass
 
 	def find_selected_bragg_disks(self):
-		return 0 
+		braggviews = self.bragg_disk_preview_pane
+		roi_state = braggviews.bragg_preview_realspace_1_selector.saveState()
+		x0,y0 = roi_state['pos']
+		xc1,yc1 = int(x0+1),int(y0+1)
 
+		roi_state = braggviews.bragg_preview_realspace_2_selector.saveState()
+		x0,y0 = roi_state['pos']
+		xc2,yc2 = int(x0+1),int(y0+1)
+
+		roi_state = braggviews.bragg_preview_realspace_3_selector.saveState()
+		x0,y0 = roi_state['pos']
+		xc3,yc3 = int(x0+1),int(y0+1)
+
+		xs = (xc1,xc2,xc3)
+		ys = (yc1,yc2,yc3)
+
+		settings = self.bragg_disk_settings_pane
+
+		peaks = find_Bragg_disks_selected(self.main_window.datacube,
+			self.main_window.strain_window.probe_kernel,xs,ys,
+			corrPower = settings.corr_power_spinBox.value(),
+			sigma=settings.sigma_spinBox.value(),
+			edgeBoundary=settings.edge_boundary_spinBox.value(),
+			minRelativeIntensity=settings.min_relative_intensity_spinBox.value(),
+			relativeToPeak=settings.relative_to_peak_spinBox.value(),
+			minPeakSpacing=settings.min_peak_spacing_spinBox.value(),
+			maxNumPeaks=settings.max_num_peaks_spinBox.value(),
+			subpixel='none')
+
+
+		spots1 = [{'pos': [peaks[0].data['qx'][i],peaks[0].data['qy'][i]], 'data':1} for i in range(peaks[0].length)]
+		spots2 = [{'pos': [peaks[1].data['qx'][i],peaks[1].data['qy'][i]], 'data':1} for i in range(peaks[1].length)]
+		spots3 = [{'pos': [peaks[2].data['qx'][i],peaks[2].data['qy'][i]], 'data':1} for i in range(peaks[2].length)]
+
+
+		newscatter1 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+		newscatter1.addPoints(spots1)
+		newscatter2 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+		newscatter2.addPoints(spots2)
+		newscatter3 = pg.ScatterPlotItem(size=7, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+		newscatter3.addPoints(spots3)
+
+		return newscatter1, newscatter2, newscatter3
 
 
 
