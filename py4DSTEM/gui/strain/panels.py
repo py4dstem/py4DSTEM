@@ -8,6 +8,7 @@ from ...process.braggdiskdetection import get_average_probe_from_ROI, get_probe_
 from ...process.braggdiskdetection import find_Bragg_disks_selected, find_Bragg_disks
 from ...process.fit import fit_2D, plane, parabola
 from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
+from ...process.braggdiskdetection import get_bragg_vector_map
 
 # use for debugging:
 from pdb import set_trace
@@ -421,6 +422,7 @@ class BraggDiskTab(QtWidgets.QWidget):
 				maxNumPeaks=settings.max_num_peaks_spinBox.value(),
 				subpixel=subpixel,
 				upsample_factor=settings.upsample_factor_spinBox.value(),
+				verbose=True,
 				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
 
 			self.main_window.strain_window.braggdisks_corrected = self.main_window.strain_window.braggdisks.copy()
@@ -430,7 +432,7 @@ class BraggDiskTab(QtWidgets.QWidget):
 			self.main_window.strain_window.lattice_vector_tab.update_BVM()
 
 		except Exception as exc:
-			print('Failed to find DPs...')
+			print('Failed to find DPs, or initialize BVM...')
 			print(format(exc))
 
 	def update_views(self):
@@ -696,6 +698,10 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		layout.addWidget(self.settings_pane)
 		layout.addWidget(self.viz_pane)
 
+		self.lattice_scatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.viz_pane.lattice_plot.addItem(self.lattice_scatter)
+
+
 		self.setLayout(layout)
 
 		self.update_BVM()
@@ -703,10 +709,15 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		#setup connections
 		self.settings_pane.shifts_use_fits_checkbox.stateChanged.connect(self.update_BVM)
 
+	def update_lattice(self):
+		pass
 
 	def update_BVM(self):
-		if self.main_window.strain_window.bragg_peaks_accepted:
-			xshifts, yshifts, bvm_center = get_diffraction_shifts(self.main_window.strain_window.braggdisks)
+		dc = self.main_window.datacube
+
+		if self.main_window.strain_window.bragg_peaks_accepted :
+			xshifts, yshifts, bvm_center = get_diffraction_shifts(self.main_window.strain_window.braggdisks,
+				dc.Q_Nx,dc.Q_Ny)
 
 			if self.settings_pane.shifts_use_fits_checkbox.isChecked():
 				#use the fit
@@ -714,7 +725,27 @@ class LatticeVectorTab(QtWidgets.QWidget):
 					fit = plane
 				else:
 					fit = parabola
+				# now find the fitted shifts
+				xshifts_fit = np.zeros_like(xshifts)
+				yshifts_fit = np.zeros_like(yshifts)
+				popt_x, pcov_x, xshifts_fit = fit_2D(fit, xshifts)
+				popt_y, pcov_y, yshifts_fit = fit_2D(fit, yshifts)
+			else:
+				xshifts_fit = xshifts
+				yshifts_fit = yshifts
 
+			self.main_window.strain_window.braggdisks_corrected = shift_braggpeaks(self.main_window.strain_window.braggdisks, xshifts_fit, yshifts_fit)
+
+			BVM = get_bragg_vector_map(self.main_window.strain_window.braggdisks_corrected,
+				dc.Q_Nx, dc.Q_Ny)
+
+			self.viz_pane.lattice_plot.setImage(BVM**0.2)
+
+			self.main_window.strain_window.BVM_accepted = True
+			self.main_window.strain_window.BVM = BVM
+
+			if self.main_window.strain_window.sinogram_accepted:
+				self.update_lattice()
 		else:
 			pass
 
@@ -845,6 +876,9 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		lengthbox.setLayout(lengthform)
 		layout.addWidget(lengthbox)
 
+		self.accept_button = QtWidgets.QPushButton("Accept Lattice")
+		layout.addWidget(self.accept_button)
+
 		self.setLayout(layout)
 
 class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
@@ -853,7 +887,7 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 
 		toprow = QtWidgets.QHBoxLayout()
 		radongroup = QtWidgets.QGroupBox("Radon Transform")
-		self.radon_plot = pg.PlotWidget()
+		self.radon_plot = pg.ImageView()
 		toplayout = QtWidgets.QHBoxLayout()
 		toplayout.addWidget(self.radon_plot)
 		radongroup.setLayout(toplayout)
@@ -863,14 +897,15 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 
 		crossinggroup = QtWidgets.QGroupBox("Crossings Plot")
 		crossinglayout = QtWidgets.QHBoxLayout()
-		self.crossings_plot = pg.PlotWidget()
-		crossinglayout.addWidget(self.crossings_plot)
+		self.crossings_plot_widget = pg.PlotWidget()
+		self.crossings_plot = self.crossings_plot_widget.plot()
+		crossinglayout.addWidget(self.crossings_plot_widget)
 		crossinggroup.setLayout(crossinglayout)
 		bottomrow.addWidget(crossinggroup)
 
 		lvgroup = QtWidgets.QGroupBox("Bragg Vector Map with Lattice Vectors")
 		lvlayout = QtWidgets.QHBoxLayout()
-		self.lattice_plot = pg.PlotWidget()
+		self.lattice_plot = pg.ImageView()
 		lvlayout.addWidget(self.lattice_plot)
 		lvgroup.setLayout(lvlayout)
 		bottomrow.addWidget(lvgroup)

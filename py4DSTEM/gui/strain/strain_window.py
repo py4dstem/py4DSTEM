@@ -27,8 +27,12 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.strain_window.setGeometry(100,100,1000,800)
 		self.strain_window.show()
 
+		# These are flags that will be flipped as we proceed,
+		# to tell different draw functions if their data exists
 		self.probe_kernel_accepted = False
 		self.bragg_peaks_accepted = False
+		self.BVM_accepted = False 
+		self.sinogram_accepted = False
 
 
 
