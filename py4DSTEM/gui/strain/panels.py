@@ -383,10 +383,11 @@ class BraggDiskTab(QtWidgets.QWidget):
 
 			#now enable the next tab!
 			self.main_window.strain_window.bragg_peaks_accepted = True
-			self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.lattice_vector_tab, True)
+			self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.lattice_vector_tab_index, True)
 
-		except:
+		except Exception as exc:
 			print('Failed to find DPs...')
+			print(format(exc))
 
 	def update_views(self):
 		if self.main_window.strain_window.probe_kernel_accepted :
