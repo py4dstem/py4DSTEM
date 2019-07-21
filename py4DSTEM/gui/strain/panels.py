@@ -52,8 +52,19 @@ class ProbeKernelTab(QtWidgets.QWidget):
 
 		# make the layout for the top half
 		top_half_layout = QtWidgets.QHBoxLayout()
-		top_half_layout.addLayout(layout_load)
-		top_half_layout.addLayout(layout_DPRS)
+		widget1 = QtWidgets.QWidget()
+		widget1.setLayout(layout_load)
+		widget2 = QtWidgets.QWidget()
+		widget2.setLayout(layout_DPRS)
+
+		leftpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		leftpolicy.setHorizontalStretch(1)
+		rightpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		rightpolicy.setHorizontalStretch(4)
+		widget1.setSizePolicy(leftpolicy)
+		widget2.setSizePolicy(rightpolicy)
+		top_half_layout.addWidget(widget1)
+		top_half_layout.addWidget(widget2)
 
 		## make the settings box
 		self.probe_kernel_settings = ProkeKernelSettings(main_window=self.main_window)
@@ -61,6 +72,12 @@ class ProbeKernelTab(QtWidgets.QWidget):
 
 		# make the layout for the bottom half
 		bottom_half_layout = QtWidgets.QHBoxLayout()
+		leftpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		leftpolicy.setHorizontalStretch(1)
+		rightpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		rightpolicy.setHorizontalStretch(4)
+		self.probe_kernel_settings.setSizePolicy(leftpolicy)
+		self.probe_kernel_display.setSizePolicy(rightpolicy)
 		bottom_half_layout.addWidget(self.probe_kernel_settings)
 		bottom_half_layout.addWidget(self.probe_kernel_display)
 
@@ -287,11 +304,19 @@ class ProbeKernelDisplay(QtWidgets.QWidget):
 		self.main_window = main_window
 		layout = QtWidgets.QHBoxLayout()
 
+		leftpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		leftpolicy.setHorizontalStretch(3)
+		rightpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		rightpolicy.setHorizontalStretch(2)
+
 		self.probe_kernel_view = pg.ImageView()
 		self.probe_kernel_view.setImage(np.zeros((100,100)))
 
 		self.probe_kernel_linetrace = pg.PlotWidget()
 		self.probe_kernel_linetrace_plot = self.probe_kernel_linetrace.plot()
+
+		self.probe_kernel_view.setSizePolicy(leftpolicy)
+		self.probe_kernel_linetrace.setSizePolicy(rightpolicy)
 
 		layout.addWidget(self.probe_kernel_view)
 		layout.addWidget(self.probe_kernel_linetrace)
