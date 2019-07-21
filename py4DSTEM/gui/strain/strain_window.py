@@ -28,6 +28,7 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.strain_window.show()
 
 		self.probe_kernel_accepted = False
+		self.bargg_peaks_accepted = False
 
 
 
