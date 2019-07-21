@@ -759,6 +759,10 @@ class DataViewer(QtWidgets.QMainWindow):
         else:
             print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(detector_shape))
 
+        # propagate to the strain window, if it exists
+        if self.strain_window is not None:
+            self.strain_window.bragg_disk_tab.update_views()
+
         return
 
     ######### Handle keypresses to move realspace cursor ##########

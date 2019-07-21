@@ -276,6 +276,8 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		self.main_window.strain_window.probe_kernel_accepted = True
 		self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.bragg_disk_tab_index, True)
 
+		self.main_window.strain_window.bragg_disk_tab.update_views()
+
 
 class ProbeKernelDisplay(QtWidgets.QWidget):
 	def __init__(self,main_window=None):
@@ -318,7 +320,78 @@ class BraggDiskTab(QtWidgets.QWidget):
 		self.bragg_disk_preview_pane = BraggDiskPreviewPane(main_window=self.main_window)
 		layout.addWidget(self.bragg_disk_preview_pane)
 
+		# instantiate scatter plots in the previews
+		pos = np.random.normal(size=(2,n), scale=1e-5)
+		spots = [{'pos': pos[:,i], 'data': 1} for i in range(n)] + [{'pos': [0,0], 'data': 1}]
+
+		self.sactter1 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.sactter2 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+		self.sactter3 = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
+
+		self.bragg_disk_preview_pane.bragg_preview_DP_1.addItem(self.scatter1)
+		self.bragg_disk_preview_pane.bragg_preview_DP_2.addItem(self.scatter2)
+		self.bragg_disk_preview_pane.bragg_preview_DP_3.addItem(self.scatter3)
+
+
 		self.setLayout(layout)
+
+	def update_views(self):
+		if self.main_window.strain_window.probe_kernel_accepted :
+			braggviews = self.bragg_disk_preview_pane
+
+			#update the RS images
+			image = self.main_window.new_real_space_view
+			braggviews.bragg_preview_realspace_1.setImage(image**0.5,autoLevels=True)
+			braggviews.bragg_preview_realspace_2.setImage(image**0.5,autoLevels=True)
+			braggviews.bragg_preview_realspace_3.setImage(image**0.5,autoLevels=True)
+
+			newscatter1, newscatter2, newscatter3 = self.find_selected_bragg_disks()
+
+			#first diffraction view:
+			roi_state = braggviews.bragg_preview_realspace_1_selector.saveState()
+			x0,y0 = roi_state['pos']
+			xc,yc = int(x0+1),int(y0+1)
+			# Set the diffraction space image
+			new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+			if success:
+			    braggviews.bragg_preview_DP_1.setImage(new_diffraction_space_view,
+			                                           autoLevels=False,autoRange=False)
+			    braggviews.bragg_preview_DP_1.removeItem(self.scatter1)
+			    braggviews.bragg_preview_DP_1.addItem(newscatter1)
+			    self.scatter1 = newscatter1
+
+		    roi_state = braggviews.bragg_preview_realspace_2_selector.saveState()
+		    x0,y0 = roi_state['pos']
+		    xc,yc = int(x0+1),int(y0+1)
+		    # Set the diffraction space image
+		    new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+		    if success:
+		        braggviews.bragg_preview_DP_2.setImage(new_diffraction_space_view,
+		                                               autoLevels=False,autoRange=False)
+		        braggviews.bragg_preview_DP_2.removeItem(self.scatter2)
+		        braggviews.bragg_preview_DP_2.addItem(newscatter2)
+		        self.scatter2 = newscatter2
+
+	        roi_state = braggviews.bragg_preview_realspace_3_selector.saveState()
+	        x0,y0 = roi_state['pos']
+	        xc,yc = int(x0+1),int(y0+1)
+	        # Set the diffraction space image
+	        new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+	        if success:
+	            braggviews.bragg_preview_DP_3.setImage(new_diffraction_space_view,
+	                                                   autoLevels=False,autoRange=False)
+	            braggviews.bragg_preview_DP_3.removeItem(self.scatter3)
+	            braggviews.bragg_preview_DP_3.addItem(newscatter3)
+	            self.scatter3 = newscatter3
+
+		else:
+			pass
+
+	def find_selected_bragg_disks(self):
+		return 0 
+
+
+
 
 
 class BraggDiskSettings(QtWidgets.QGroupBox):
@@ -431,15 +504,15 @@ class BraggDiskPreviewPane(QtWidgets.QGroupBox):
 
 		bottomrow = QtWidgets.QHBoxLayout()
 
-		self.bragg_preview_DP_1 = pg.PlotWidget()
+		self.bragg_preview_DP_1 = pg.ImageView()
 		# setup
 		bottomrow.addWidget(self.bragg_preview_DP_1)
 
-		self.bragg_preview_DP_2 = pg.PlotWidget()
+		self.bragg_preview_DP_2 = pg.ImageView()
 		# setup
 		bottomrow.addWidget(self.bragg_preview_DP_2)
 
-		self.bragg_preview_DP_3 = pg.PlotWidget()
+		self.bragg_preview_DP_3 = pg.ImageView()
 		# setup
 		bottomrow.addWidget(self.bragg_preview_DP_3)
 
