@@ -27,6 +27,8 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.strain_window.setGeometry(100,100,1000,800)
 		self.strain_window.show()
 
+		self.probe_kernel_accepted = False
+
 
 
 	def copy_vac_DC_from_browser(self):
