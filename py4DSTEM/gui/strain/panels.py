@@ -15,6 +15,7 @@ from scipy.ndimage.filters import gaussian_filter
 from ...file.datastructure import PointList 
 from .cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
+from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
 
 # use for debugging:
 from pdb import set_trace
@@ -1031,6 +1032,10 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 	def __init__(self,main_window=None):
 		QtWidgets.QGroupBox.__init__(self,"Lattice Vectors")
 
+		mpl_cmap = get_cmap('jet')
+		pos, rgba_colors = zip(*cmapToColormap(mpl_cmap))
+		pgColormap =  pg.ColorMap(pos, rgba_colors)
+
 		toprow = QtWidgets.QHBoxLayout()
 		radongroup = QtWidgets.QGroupBox("Radon Transform")
 		self.radon_plot = pg.ImageView()
@@ -1046,6 +1051,7 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 		self.lattice_plot = pg.ImageView()
 		self.lattice_plot_ROI = pg.RectROI([64,64],[10,10],pen=(3,9))
 		self.lattice_plot.getView().addItem(self.lattice_plot_ROI)
+		self.lattice_plot.setColorMap(pgColormap)
 		lvlayout.addWidget(self.lattice_plot)
 		lvgroup.setLayout(lvlayout)
 		bottomrow.addWidget(lvgroup)
@@ -1165,7 +1171,26 @@ class StrainMapTab(QtWidgets.QWidget):
 
 	def update_strain(self):
 		if self.main_window.strain_window.lattice_vectors_accepted:
-			pass
+			dc = elf.main_window.datacube
+			mask = np.zeros((dc.R_Nx,dc.R_Ny),dtype=bool)
+
+			slices, transforms = self.RS_refROI.getArraySlice(
+				self.mask.astype(float), 
+				self.RS_view.getImageItem())
+
+			slice_x, slice_y = slices
+			mask[slice_x,slice_y] = True
+
+			self.main_window.strain_window.strain_map = get_strain_from_reference_region(
+				mask, self.main_window.strain_window.uv_map)
+
+			sm = self.main_window.strain_window.strain_map
+
+			self.exx_view.setImage(sm.data['e_xx'],autoLevels=True)
+			self.eyy_view.setImage(sm.data['e_yy'],autoLevels=True)
+			self.exy_view.setImage(sm.data['e_xy'],autoLevels=True)
+			self.theta_view.setImage(sm.data['theta'],autoLevels=True)
+
 
 	def update_DP(self):
 		roi_state = self.RS_pointROI.saveState()
@@ -1190,6 +1215,6 @@ class StrainMapTab(QtWidgets.QWidget):
 			pass
 
 
-			
+
 
 
