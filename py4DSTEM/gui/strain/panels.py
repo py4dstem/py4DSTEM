@@ -13,6 +13,8 @@ from skimage.transform import radon
 from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
 from scipy.ndimage.filters import gaussian_filter
 from ...file.datastructure import PointList 
+from .cmaptopg import cmapToColormap
+from matplotlib.cm import get_cmap
 
 # use for debugging:
 from pdb import set_trace
@@ -740,6 +742,14 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.main_window.strain_window.tab_widget.setTabEnabled(
 			self.main_window.strain_window.strain_map_tab_index,True)
 
+		maxPeaksSpacing = self.settings_pane.map_max_peak_spacing_spinBox.value()
+		minNumberPeaks = self.settings_pane.map_min_num_peaks_spinBox.value()
+
+		# now generate the uv maps
+		self.main_window.strain_window.uv_map = fit_lattice_vectors_all_DPs(
+			self.main_window.strain_window.braggdisks_corrected,
+			lattice_vectors, self.x0, self.y0, maxPeaksSpacing, minNumberPeaks)
+
 		self.main_window.strain_window.strain_map_tab.update_strain()
 
 	def update_lattice(self):
@@ -778,14 +788,14 @@ class LatticeVectorTab(QtWidgets.QWidget):
 			slice_x,slice_y = slices
 			mask[slice_x,slice_y] = True
 
-			x0,y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
+			self.x0,self.y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
 
 			self.ux = np.cos(self.u_theta)*self.u_length
 			self.uy = np.sin(self.u_theta)*self.u_length
 			self.vx = np.cos(self.v_theta)*self.v_length
 			self.vy = np.sin(self.v_theta)*self.v_length
 
-			self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,x0,y0,dc.Q_Nx,dc.Q_Ny)
+			self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,self.x0,self.y0,dc.Q_Nx,dc.Q_Ny)
 
 			spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
 			newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
@@ -993,8 +1003,27 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		lengthbox.setLayout(lengthform)
 		layout.addWidget(lengthbox)
 
+		uvbox = QtWidgets.QGroupBox("Lattice Mapping")
+		latticeform = QtWidgets.QFormLayout()
+
+		self.map_max_peak_spacing_spinBox = QtWidgets.QSpinBox()
+		self.map_max_peak_spacing_spinBox.setMaximum(1000)
+		self.map_max_peak_spacing_spinBox.setMinimum(1)
+		self.map_max_peak_spacing_spinBox.setValue(20)
+		latticeform.addRow("Max Peaks Spacing",self.map_max_peak_spacing_spinBox)
+
+		self.map_min_num_peaks_spinBox = QtWidgets.QSpinBox()
+		self.map_min_num_peaks_spinBox.setMinimum(1)
+		self.map_min_num_peaks_spinBox.setMaximum(500)
+		self.map_min_num_peaks_spinBox.setValue(6)
+		latticeform.addRow("Minimum Number Peaks",self.map_min_num_peaks_spinBox)
+
 		self.accept_button = QtWidgets.QPushButton("Accept Lattice")
-		layout.addWidget(self.accept_button)
+		latticeform.addRow(self.accept_button)
+
+		uvbox.setLayout(latticeform)
+
+		layout.addWidget(uvbox)
 
 		self.setLayout(layout)
 
@@ -1052,6 +1081,11 @@ class StrainMapTab(QtWidgets.QWidget):
 
 		self.main_window = main_window
 
+		# get colormap for pyqtgraph
+		mpl_cmap = get_cmap('jet')
+		pos, rgba_colors = zip(*cmapToColormap(mpl_cmap))
+		pgColormap =  pg.ColorMap(pos, rgba_colors)
+
 		layout = QtWidgets.QVBoxLayout()
 
 		# virtual image row
@@ -1066,8 +1100,10 @@ class StrainMapTab(QtWidgets.QWidget):
 		vimglayout.addWidget(self.DP_view)
 
 		self.RS_view = pg.ImageView()
-		self.RS_ROI = pg_point_roi(self.RS_view.getView())
+		self.RS_pointROI = pg_point_roi(self.RS_view.getView())
 		vimglayout.addWidget(self.RS_view)
+		self.RS_refROI = pg.RectROI([10,10],[5,5],pen=(3,9))
+		self.RS_view.getView().addItem(self.RS_refROI)
 		vimggroup.setLayout(vimglayout)
 		vimgrow.addWidget(vimggroup)
 
@@ -1080,15 +1116,19 @@ class StrainMapTab(QtWidgets.QWidget):
 
 		strainTopRow = QtWidgets.QHBoxLayout()
 		self.exx_view = pg.ImageView()
+		self.exx_view.setColorMap(pgColormap)
 		strainTopRow.addWidget(self.exx_view)
 		self.eyy_view = pg.ImageView()
+		self.eyy_view.setColorMap(pgColormap)
 		strainTopRow.addWidget(self.eyy_view)
 		strainlayout.addLayout(strainTopRow)
 
 		strainBottomRow = QtWidgets.QHBoxLayout()
 		self.exy_view = pg.ImageView()
+		self.exy_view.setColorMap(pgColormap)
 		strainBottomRow.addWidget(self.exy_view)
 		self.theta_view = pg.ImageView()
+		self.theta_view.setColorMap(pgColormap)
 		strainBottomRow.addWidget(self.theta_view)
 		strainlayout.addLayout(strainBottomRow)
 
@@ -1116,6 +1156,7 @@ class StrainMapTab(QtWidgets.QWidget):
 
 
 	def update_strain(self):
-		pass
+		if self.main_window.strain_window.lattice_vectors_accepted:
+			
 
 

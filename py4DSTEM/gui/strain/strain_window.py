@@ -33,6 +33,7 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.bragg_peaks_accepted = False
 		self.BVM_accepted = False 
 		self.sinogram_accepted = False
+		self.lattice_vectors_accepted = False
 
 
 
