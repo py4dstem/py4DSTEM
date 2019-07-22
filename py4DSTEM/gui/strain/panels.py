@@ -19,9 +19,9 @@ from ...process.latticevectors import get_strain_from_reference_region, fit_latt
 from ...file.io import save, append, is_py4DSTEM_file
 from ...file.datastructure import DiffractionSlice, RealSlice
 
-# use for debugging:
-from pdb import set_trace
-#at stopping point:
+### use for debugging:
+#from pdb import set_trace
+### at stopping point:
 #QtCore.pyqtRemoveInputHook()
 #set_trace()
 
