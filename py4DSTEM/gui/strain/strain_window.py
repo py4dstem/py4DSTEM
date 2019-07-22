@@ -69,9 +69,9 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.strain_map_tab_index = self.tab_widget.indexOf(self.strain_map_tab)
 
 		# disable all the tabs not yet available (comment out for debugging)
-		#self.tab_widget.setTabEnabled(self.bragg_disk_tab_index, False)
-		#self.tab_widget.setTabEnabled(self.lattice_vector_tab_index, False)
-		#self.tab_widget.setTabEnabled(self.strain_map_tab_index, False)
+		self.tab_widget.setTabEnabled(self.bragg_disk_tab_index, False)
+		self.tab_widget.setTabEnabled(self.lattice_vector_tab_index, False)
+		self.tab_widget.setTabEnabled(self.strain_map_tab_index, False)
 
 
 		self.layout.addWidget(self.tab_widget)
