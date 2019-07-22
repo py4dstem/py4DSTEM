@@ -1096,13 +1096,16 @@ class StrainMapTab(QtWidgets.QWidget):
 
 		self.DP_view = pg.ImageView()
 		self.DP_ROI = pg.RectROI([256,256],[512,512], pen=(3,9))
+		self.DP_ROI.sigRegionChangeFinished.connect(self.update_RS)
 		self.DP_view.getView().addItem(self.DP_ROI)
 		vimglayout.addWidget(self.DP_view)
 
 		self.RS_view = pg.ImageView()
 		self.RS_pointROI = pg_point_roi(self.RS_view.getView())
+		self.RS_pointROI.sigRegionChanged.connect(self.update_DP)
 		vimglayout.addWidget(self.RS_view)
 		self.RS_refROI = pg.RectROI([10,10],[5,5],pen=(3,9))
+		self.RS_refROI.sigRegionChangeFinished.connect(self.update_strain)
 		self.RS_view.getView().addItem(self.RS_refROI)
 		vimggroup.setLayout(vimglayout)
 		vimgrow.addWidget(vimggroup)
@@ -1117,18 +1120,22 @@ class StrainMapTab(QtWidgets.QWidget):
 		strainTopRow = QtWidgets.QHBoxLayout()
 		self.exx_view = pg.ImageView()
 		self.exx_view.setColorMap(pgColormap)
+		#self.exx_point = pg_point_roi(self.exx_view.getView())
 		strainTopRow.addWidget(self.exx_view)
 		self.eyy_view = pg.ImageView()
 		self.eyy_view.setColorMap(pgColormap)
+		#self.eyy_point = pg_point_roi(self.eyy_view.getView())
 		strainTopRow.addWidget(self.eyy_view)
 		strainlayout.addLayout(strainTopRow)
 
 		strainBottomRow = QtWidgets.QHBoxLayout()
 		self.exy_view = pg.ImageView()
 		self.exy_view.setColorMap(pgColormap)
+		#self.exy_point = pg_point_roi(self.exy_view.getView())
 		strainBottomRow.addWidget(self.exy_view)
 		self.theta_view = pg.ImageView()
 		self.theta_view.setColorMap(pgColormap)
+		#self.theta_point = pg_point_roi(self.theta_view.getView())
 		strainBottomRow.addWidget(self.theta_view)
 		strainlayout.addLayout(strainBottomRow)
 
@@ -1155,8 +1162,34 @@ class StrainMapTab(QtWidgets.QWidget):
 		self.setLayout(layout)
 
 
+
 	def update_strain(self):
 		if self.main_window.strain_window.lattice_vectors_accepted:
+			pass
+
+	def update_DP(self):
+		roi_state = self.RS_pointROI.saveState()
+		x0,y0 = roi_state['pos']
+		xc,yc = int(x0+1),int(y0+1)
+		new_diffraction_space_view, success = self.main_window.datacube.get_diffraction_space_view(xc,yc)
+		if success:
+			self.DP_view.setImage(new_diffraction_space_view**0.5)
+		else:
+			pass
+
+
+	def update_RS(self):
+		dc = self.main_window.datacube
+		slices, transforms = self.DP_ROI.getArraySlice(dc.data[0,0,:,:], self.DP_view.getImageItem())
+		slice_x,slice_y = slices
+
+		new_real_space_view, success = dc.get_virtual_image_rect_integrate(slice_x,slice_y)
+		if success:
+			self.RS_view.setImage(new_real_space_view**0.5,autoLevels=True)
+		else:
+			pass
+
+
 			
 
 
