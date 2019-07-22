@@ -12,7 +12,7 @@ from ...process.braggdiskdetection import get_bragg_vector_map
 from skimage.transform import radon
 from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
 from scipy.ndimage.filters import gaussian_filter
-
+from ...file.datastructure import PointList 
 
 # use for debugging:
 from pdb import set_trace
@@ -706,6 +706,7 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.viz_pane.lattice_plot.getView().addItem(self.lattice_scatter)
 
 		self.settings_pane.radon_update_button.clicked.connect(self.update_sinogram)
+		self.settings_pane.accept_button.clicked.connect(self.accept_lattice)
 
 		self.setLayout(layout)
 
@@ -727,6 +728,19 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.settings_pane.lengths_min_spacing_spinBox.valueChanged.connect(self.update_lattice)
 		self.settings_pane.lengths_min_rel_int_spinBox.valueChanged.connect(self.update_lattice)
 
+
+	def accept_lattice(self):
+		coordinates = [('qx',float),('qy',float)]
+		lattice_vectors = PointList(coordinates, name='lattice_vectors')
+		lattice_vectors.add_point((self.ux,self.uy))
+		lattice_vectors.add_point((self.vx,self.vy))
+
+		self.main_window.strain_window.lattice_vectors = lattice_vectors
+		self.main_window.strain_window.lattice_vectors_accepted = True
+		self.main_window.strain_window.tab_widget.setTabEnabled(
+			self.main_window.strain_window.strain_map_tab_index,True)
+
+		self.main_window.strain_window.strain_map_tab.update_strain()
 
 	def update_lattice(self):
 		if self.main_window.strain_window.sinogram_accepted:
@@ -766,12 +780,12 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 			x0,y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
 
-			ux = np.cos(self.u_theta)*self.u_length
-			uy = np.sin(self.u_theta)*self.u_length
-			vx = np.cos(self.v_theta)*self.v_length
-			vy = np.sin(self.v_theta)*self.v_length
+			self.ux = np.cos(self.u_theta)*self.u_length
+			self.uy = np.sin(self.u_theta)*self.u_length
+			self.vx = np.cos(self.v_theta)*self.v_length
+			self.vy = np.sin(self.v_theta)*self.v_length
 
-			self.ideal_lattice = generate_lattice(ux,uy,vx,vy,x0,y0,dc.Q_Nx,dc.Q_Ny)
+			self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,x0,y0,dc.Q_Nx,dc.Q_Ny)
 
 			spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
 			newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
@@ -1091,5 +1105,9 @@ class StrainMapTab(QtWidgets.QWidget):
 		
 
 		self.setLayout(layout)
+
+
+	def update_strain(self):
+		pass
 
 
