@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from PyQt5 import QtCore, QtWidgets, QtGui
 import pyqtgraph as pg
 from ..dialogs import SectionLabel
@@ -16,6 +16,8 @@ from ...file.datastructure import PointList
 from .cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
 from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
+from ...file.io import save, append, is_py4DSTEM_file
+from ...file.datastructure import DiffractionSlice, RealSlice
 
 # use for debugging:
 from pdb import set_trace
@@ -293,7 +295,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 
 		#hardcode for now
 		linetracewidth = 2
-		linetracelength = 25
+		linetracelength = dc.Q_Nx//4
 		linetrace_left = np.sum(self.probe_kernel[-linetracelength:,:linetracewidth],axis=(1))
 		linetrace_right = np.sum(self.probe_kernel[:linetracelength,:linetracewidth],axis=(1))
 		linetrace = np.concatenate([linetrace_left,linetrace_right])
@@ -304,6 +306,8 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		self.main_window.strain_window.probe_kernel_accepted = True
 		self.main_window.strain_window.tab_widget.setTabEnabled(self.main_window.strain_window.bragg_disk_tab_index, True)
 		self.main_window.strain_window.probe_kernel = self.probe_kernel
+		self.main_window.strain_window.ProbeKernelDS = DiffractionSlice(data=self.probe_kernel)
+		self.main_window.strain_window.ProbeKernelDS.name = 'probe kernel'
 
 		self.main_window.strain_window.bragg_disk_tab.update_views()
 
@@ -431,6 +435,8 @@ class BraggDiskTab(QtWidgets.QWidget):
 				upsample_factor=settings.upsample_factor_spinBox.value(),
 				verbose=True,
 				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
+
+			self.main_window.strain_window.braggdisks.name='braggpeaks_uncorrected'
 
 			self.main_window.strain_window.braggdisks_corrected = self.main_window.strain_window.braggdisks.copy()
 			#now enable the next tab!
@@ -588,7 +594,7 @@ class BraggDiskSettings(QtWidgets.QGroupBox):
 		self.min_relative_intensity_spinBox.setMaximum(1.0)
 		self.min_relative_intensity_spinBox.setSingleStep(0.001)
 		self.min_relative_intensity_spinBox.setValue(0.005)
-		self.min_relative_intensity_spinBox.setDecimals(4)
+		self.min_relative_intensity_spinBox.setDecimals(5)
 		form.addRow("Minimum Relative Intensity", self.min_relative_intensity_spinBox)
 
 		self.relative_to_peak_spinBox = QtWidgets.QSpinBox()
@@ -751,6 +757,9 @@ class LatticeVectorTab(QtWidgets.QWidget):
 			self.main_window.strain_window.braggdisks_corrected,
 			self.ideal_lattice, self.x0, self.y0, maxPeaksSpacing, minNumberPeaks)
 
+		self.main_window.strain_window.BVMDS = DiffractionSlice(data=self.main_window.strain_window.BVM)
+		self.main_window.strain_window.BVMDS.name = 'braggvectormap'
+
 		self.main_window.strain_window.strain_map_tab.update_DP()
 		self.main_window.strain_window.strain_map_tab.update_RS()
 		self.main_window.strain_window.strain_map_tab.update_strain()
@@ -865,6 +874,7 @@ class LatticeVectorTab(QtWidgets.QWidget):
 				yshifts_fit = yshifts
 
 			self.main_window.strain_window.braggdisks_corrected = shift_braggpeaks(self.main_window.strain_window.braggdisks, xshifts_fit, yshifts_fit)
+			self.main_window.strain_window.braggdisks_corrected.name = 'braggpeaks_shiftcorrected'
 
 			BVM = get_bragg_vector_map(self.main_window.strain_window.braggdisks_corrected,
 				dc.Q_Nx, dc.Q_Ny)
@@ -1159,6 +1169,9 @@ class StrainMapTab(QtWidgets.QWidget):
 		self.export_processing_button = QtWidgets.QPushButton("Export Processing")
 		self.export_all_button = QtWidgets.QPushButton("Export All")
 
+		self.export_processing_button.clicked.connect(self.export_processing)
+		self.export_all_button.clicked.connect(self.export_all)
+
 		exportlayout.addWidget(self.export_processing_button)
 		exportlayout.addWidget(self.export_all_button)
 		exportgroup.setLayout(exportlayout)
@@ -1213,6 +1226,44 @@ class StrainMapTab(QtWidgets.QWidget):
 		new_real_space_view, success = dc.get_virtual_image_rect_integrate(slice_x,slice_y)
 		if success:
 			self.RS_view.setImage(new_real_space_view**0.5,autoLevels=True)
+		else:
+			pass
+
+
+	def export_processing(self):
+		sw = self.main_window.strain_window
+		currentpath = os.path.splitext(self.main_window.settings.data_filename.val)[0]
+		f = QtWidgets.QFileDialog.getSaveFileName(self,'Export Processing (do not save DataCube)...',currentpath,
+			"py4DSTEM Files (*.h5)")
+
+		if f[0]:
+			# file was chosen
+			if is_py4DSTEM_file(f[0]):
+				append([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			else:
+				save([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+		else:
+			pass
+
+
+
+
+	def export_all(self):
+		sw = self.main_window.strain_window
+		currentpath = os.path.splitext(self.main_window.settings.data_filename.val)[0]
+		f = QtWidgets.QFileDialog.getSaveFileName(self,'Save file...',currentpath,
+			"py4DSTEM Files (*.h5)")
+
+		if f[0]:
+			# file was chosen
+			if is_py4DSTEM_file(f[0]):
+				append([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			else:
+				save([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
 		else:
 			pass
 
