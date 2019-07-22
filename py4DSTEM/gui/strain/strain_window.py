@@ -18,13 +18,12 @@ class StrainMappingWindow(QtWidgets.QMainWindow):
 		self.main_window = main_window
 		self.datacube = None
 
-		self.settings = LQCollection()
+		#self.settings = LQCollection()
 
 		self.strain_window = QtWidgets.QWidget()
 		self.strain_window.setWindowTitle('py4DSTEM Strain Mapping')
 
-		#move this later:
-		self.strain_window.setGeometry(100,100,1000,800)
+		self.strain_window.setGeometry(100,100,1200,800)
 		self.strain_window.show()
 
 		# These are flags that will be flipped as we proceed,

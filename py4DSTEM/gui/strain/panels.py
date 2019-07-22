@@ -16,7 +16,7 @@ from ...file.datastructure import PointList
 from .cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
 from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
-from ...file.io import save, append, is_py4DSTEM_file
+from ...file.io import save, append, is_py4DSTEM_file, read
 from ...file.datastructure import DiffractionSlice, RealSlice
 
 ### use for debugging:
@@ -144,33 +144,45 @@ class VacuumDCTab(QtWidgets.QWidget):
 
 		# Load
 		load_widget = QtWidgets.QWidget()
-		load_widget_layout = QtWidgets.QVBoxLayout()
+		load_widget_layout = QtWidgets.QFormLayout()
 
-		self.label_Filename = QtWidgets.QLabel("Filename")
 		self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
 		self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
+
+		load_widget_layout.addRow("Filename",self.lineEdit_LoadFile)
 
 		self.loadRadioAuto = QtWidgets.QRadioButton("Automatic")
 		self.loadRadioAuto.setChecked(True)
 		self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
 		self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
 
-		line1 = QtWidgets.QHBoxLayout()
-		line1.addWidget(self.label_Filename,stretch=0)
-		line1.addWidget(self.lineEdit_LoadFile,stretch=1)
 		optionLine = QtWidgets.QHBoxLayout()
 		optionLine.addWidget(self.loadRadioAuto)
 		optionLine.addWidget(self.loadRadioMMAP)
 		optionLine.addWidget(self.loadRadioGatan)
 
-		line2 = QtWidgets.QHBoxLayout()
-		line2.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
+		load_widget_layout.addRow("Mode",optionLine)
 
-		load_widget_layout.addLayout(line1)
-		load_widget_layout.addLayout(optionLine)
-		load_widget_layout.addLayout(line2)
-		load_widget_layout.setSpacing(0)
-		load_widget_layout.setContentsMargins(0,0,0,0)
+		self.binQ_spinBox = QtWidgets.QSpinBox()
+		self.binQ_spinBox.setValue(1)
+		load_widget_layout.addRow("Binning",self.binQ_spinBox)
+
+		load_widget_layout.addRow(" ",self.pushButton_BrowseFiles)
+
+		self.R_Nx_spinBox = QtWidgets.QSpinBox()
+		self.R_Nx_spinBox.setMinimum(1)
+		self.R_Nx_spinBox.setMaximum(10000)
+		self.R_Nx_spinBox.valueChanged.connect(self.update_scan_shape_Nx)
+
+		load_widget_layout.addRow("Scan size x",self.R_Nx_spinBox)
+
+		self.R_Ny_spinBox = QtWidgets.QSpinBox()
+		self.R_Ny_spinBox.setMinimum(1)
+		self.R_Ny_spinBox.setMaximum(10000)
+		self.R_Ny_spinBox.valueChanged.connect(self.update_scan_shape_Ny)
+
+		load_widget_layout.addRow("Scan size y",self.R_Ny_spinBox)
+
 		load_widget.setLayout(load_widget_layout)
 
 		# Layout
@@ -179,6 +191,46 @@ class VacuumDCTab(QtWidgets.QWidget):
 		layout.addWidget(load_widget)
 
 		self.setLayout(layout)
+
+		self.pushButton_BrowseFiles.clicked.connect(self.load_file)
+
+	def load_file(self):
+		# get the file from Qt:
+		currentpath = os.path.splitext(self.main_window.settings.data_filename.val)[0]
+		fpath = QtWidgets.QFileDialog.getOpenFileName(self,"Choose Vacuum DataCube",currentpath)
+
+		if fpath[0]:
+			# check the load mode and load file:
+			if self.loadRadioAuto.isChecked():
+				self.main_window.strain_window.vac_datacube = read(fname)
+			elif self.loadRadioMMAP.isChecked():
+				self.main_window.strain_window.vac_datacube = read(fname, load='dmmmap')
+			elif self.loadRadioGatan.isChecked():
+				self.main_window.strain_window.vac_datacube = read(fname, load='gatan_bin')
+		else:
+			pass
+
+	def update_scan_shape_Nx(self):
+		if self.main_window.strain_window.vac_datacube is not None:
+			dc = self.main_window.strain_window.vac_datacube
+			R_Nx = self.R_Nx_spinBox.value()
+			self.R_Ny_spinBox.setValue(int(dc.R_N/R_Nx))
+			R_Ny = int(dc.R_N/R_Nx)
+
+			dc.set_scan_shape(R_Nx,R_Ny)
+
+			self.main_window.strain_window.probe_kernel_tab.update_views()
+
+	def update_scan_shape_Ny(self):
+		if self.main_window.strain_window.vac_datacube is not None:
+			dc = self.main_window.strain_window.vac_datacube
+			R_Ny = self.R_Nx_spinBox.value()
+			self.R_Ny_spinBox.setValue(int(dc.R_N/R_Ny))
+			R_Nx = int(dc.R_N/R_Ny)
+
+			dc.set_scan_shape(R_Nx,R_Ny)
+
+			self.main_window.strain_window.probe_kernel_tab.update_views()
 
 
 class UseMainDCTab(QtWidgets.QWidget):
