@@ -1012,14 +1012,6 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 
 		bottomrow = QtWidgets.QHBoxLayout()
 
-		crossinggroup = QtWidgets.QGroupBox("Crossings Plot")
-		crossinglayout = QtWidgets.QHBoxLayout()
-		self.crossings_plot_widget = pg.PlotWidget()
-		self.crossings_plot = self.crossings_plot_widget.plot()
-		crossinglayout.addWidget(self.crossings_plot_widget)
-		crossinggroup.setLayout(crossinglayout)
-		bottomrow.addWidget(crossinggroup)
-
 		lvgroup = QtWidgets.QGroupBox("Bragg Vector Map with Lattice Vectors")
 		lvlayout = QtWidgets.QHBoxLayout()
 		self.lattice_plot = pg.ImageView()
@@ -1028,6 +1020,22 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 		lvlayout.addWidget(self.lattice_plot)
 		lvgroup.setLayout(lvlayout)
 		bottomrow.addWidget(lvgroup)
+
+		crossinggroup = QtWidgets.QGroupBox("Crossings Plot")
+		crossinglayout = QtWidgets.QHBoxLayout()
+		self.crossings_plot_widget = pg.PlotWidget()
+		self.crossings_plot = self.crossings_plot_widget.plot()
+		crossinglayout.addWidget(self.crossings_plot_widget)
+		crossinggroup.setLayout(crossinglayout)
+		bottomrow.addWidget(crossinggroup)
+
+		leftpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		leftpolicy.setHorizontalStretch(3)
+		rightpolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+		rightpolicy.setHorizontalStretch(2)
+
+		lvgroup.setSizePolicy(leftpolicy)
+		crossinggroup.setSizePolicy(rightpolicy)
 
 		layout = QtWidgets.QVBoxLayout()
 		layout.addLayout(toprow)
