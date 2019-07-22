@@ -434,7 +434,7 @@ class BraggDiskTab(QtWidgets.QWidget):
 				subpixel=subpixel,
 				upsample_factor=settings.upsample_factor_spinBox.value(),
 				verbose=True,
-				qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
+				_qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
 
 			self.main_window.strain_window.braggdisks.name='braggpeaks_uncorrected'
 

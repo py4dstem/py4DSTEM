@@ -279,7 +279,7 @@ def find_Bragg_disks(datacube, probe,
                      subpixel = 'poly',
                      upsample_factor = 16,
                      verbose = False,
-                     qt_progress_bar=None):
+                     _qt_progress_bar=None):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe.
@@ -306,6 +306,7 @@ def find_Bragg_disks(datacube, probe,
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         verbose              (bool) if True, prints completion updates
+        _qt_progress_bar      (QProgressBar instance) used only by the GUI.
 
     Returns:
         peaks                (PointListArray) the Bragg peak positions and correlation intensities
@@ -317,6 +318,9 @@ def find_Bragg_disks(datacube, probe,
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
 
+    if _qt_progress_bar is not None:
+        from PyQt5.QtWidgets import QApplication
+
     # Loop over all diffraction patterns
     t0 = time()
     for Rx in range(datacube.R_Nx):
@@ -324,8 +328,9 @@ def find_Bragg_disks(datacube, probe,
             if verbose:
                 print_progress_bar(Rx*datacube.R_Ny+Ry+1, datacube.R_Nx*datacube.R_Ny,
                                    prefix='Analyzing:', suffix='Complete', length=50)
-            if qt_progress_bar is not None:
-                qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+            if _qt_progress_bar is not None:
+                _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+                QApplication.processEvents()
             DP = datacube.data[Rx,Ry,:,:]
             find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                           corrPower = corrPower,
