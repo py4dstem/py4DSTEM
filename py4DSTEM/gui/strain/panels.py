@@ -36,8 +36,8 @@ class ProbeKernelTab(QtWidgets.QWidget):
 		self.dc_loader = QtWidgets.QTabWidget()
 		self.load_vac_DC_tab = VacuumDCTab(main_window=self.main_window)
 		self.use_main_DC_tab = UseMainDCTab(main_window=self.main_window)
-		self.dc_loader.addTab(self.load_vac_DC_tab,"Load Vacuum Datacube")
 		self.dc_loader.addTab(self.use_main_DC_tab,"Use Vacuum ROI")
+		self.dc_loader.addTab(self.load_vac_DC_tab,"Load Vacuum Datacube")
 
 		# make the layout for the load selector
 		layout_load = QtWidgets.QHBoxLayout()
@@ -174,14 +174,14 @@ class VacuumDCTab(QtWidgets.QWidget):
 		self.R_Nx_spinBox.setMaximum(10000)
 		self.R_Nx_spinBox.valueChanged.connect(self.update_scan_shape_Nx)
 
-		load_widget_layout.addRow("Scan size x",self.R_Nx_spinBox)
+		load_widget_layout.addRow("Scan shape X",self.R_Nx_spinBox)
 
 		self.R_Ny_spinBox = QtWidgets.QSpinBox()
 		self.R_Ny_spinBox.setMinimum(1)
 		self.R_Ny_spinBox.setMaximum(10000)
 		self.R_Ny_spinBox.valueChanged.connect(self.update_scan_shape_Ny)
 
-		load_widget_layout.addRow("Scan size y",self.R_Ny_spinBox)
+		load_widget_layout.addRow("Scan shape Y",self.R_Ny_spinBox)
 
 		load_widget.setLayout(load_widget_layout)
 
@@ -199,14 +199,30 @@ class VacuumDCTab(QtWidgets.QWidget):
 		currentpath = os.path.splitext(self.main_window.settings.data_filename.val)[0]
 		fpath = QtWidgets.QFileDialog.getOpenFileName(self,"Choose Vacuum DataCube",currentpath)
 
+		binning = self.binQ_spinBox.value()
+
 		if fpath[0]:
+			fname = fpath[0]
+			self.lineEdit_LoadFile.setText(fname)
 			# check the load mode and load file:
 			if self.loadRadioAuto.isChecked():
 				self.main_window.strain_window.vac_datacube = read(fname)
+				if binning > 1:
+					self.main_window.strain_window.datacube.bin_data_diffraction(binning)
 			elif self.loadRadioMMAP.isChecked():
 				self.main_window.strain_window.vac_datacube = read(fname, load='dmmmap')
+				if binning > 1:
+					self.main_window.strain_window.datacube.bin_data_mmap(binning)
 			elif self.loadRadioGatan.isChecked():
 				self.main_window.strain_window.vac_datacube = read(fname, load='gatan_bin')
+				if binning > 1:
+					self.main_window.strain_window.datacube.bin_data_mmap(binning)
+
+			self.main_window.strain_window.probe_kernel_tab.update_views()
+
+			self.R_Nx_spinBox.setValue(self.main_window.strain_window.vac_datacube.R_Nx)
+			self.R_Ny_spinBox.setValue(self.main_window.strain_window.vac_datacube.R_Ny)
+
 		else:
 			pass
 
