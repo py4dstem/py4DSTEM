@@ -749,8 +749,10 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		# now generate the uv maps
 		self.main_window.strain_window.uv_map = fit_lattice_vectors_all_DPs(
 			self.main_window.strain_window.braggdisks_corrected,
-			lattice_vectors, self.x0, self.y0, maxPeaksSpacing, minNumberPeaks)
+			self.ideal_lattice, self.x0, self.y0, maxPeaksSpacing, minNumberPeaks)
 
+		self.main_window.strain_window.strain_map_tab.update_DP()
+		self.main_window.strain_window.strain_map_tab.update_RS()
 		self.main_window.strain_window.strain_map_tab.update_strain()
 
 	def update_lattice(self):
@@ -1171,11 +1173,11 @@ class StrainMapTab(QtWidgets.QWidget):
 
 	def update_strain(self):
 		if self.main_window.strain_window.lattice_vectors_accepted:
-			dc = elf.main_window.datacube
+			dc = self.main_window.datacube
 			mask = np.zeros((dc.R_Nx,dc.R_Ny),dtype=bool)
 
 			slices, transforms = self.RS_refROI.getArraySlice(
-				self.mask.astype(float), 
+				mask.astype(float), 
 				self.RS_view.getImageItem())
 
 			slice_x, slice_y = slices
