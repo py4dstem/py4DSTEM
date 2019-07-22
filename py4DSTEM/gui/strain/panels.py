@@ -10,7 +10,9 @@ from ...process.fit import fit_2D, plane, parabola
 from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
 from ...process.braggdiskdetection import get_bragg_vector_map
 from skimage.transform import radon
-from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths
+from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
+from scipy.ndimage.filters import gaussian_filter
+
 
 # use for debugging:
 from pdb import set_trace
@@ -709,6 +711,9 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 		self.update_BVM()
 
+		self.scatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+		self.viz_pane.lattice_plot.getView().addItem(self.scatter)
+
 		#setup connections
 		self.settings_pane.shifts_use_fits_checkbox.stateChanged.connect(self.update_BVM)
 
@@ -725,7 +730,57 @@ class LatticeVectorTab(QtWidgets.QWidget):
 
 	def update_lattice(self):
 		if self.main_window.strain_window.sinogram_accepted:
-			pass
+			dc = self.main_window.datacube
+
+			sigma = self.settings_pane.direction_sigma_spinBox.value()
+			minSpacing = self.settings_pane.directions_min_spacing_spinBox.value()
+			minRelativeIntensity = self.settings_pane.directions_min_rel_int_spinBox.value()
+			index1 = self.settings_pane.directions_index1_spinbox.value()
+			index2 = self.settings_pane.directions_index2_spinBox.value()
+
+			self.u_theta, self.v_theta = get_lattice_directions_from_scores(
+				self.thetas, self.scores, 
+				sigma, minSpacing, minRelativeIntensity,index1, index2)
+
+			spacing_thresh = self.settings_pane.lengths_spacing_thresh_spinBox.value()
+			sigma = self.settings_pane.lengths_sigma_spinBox.value()
+			minSpacing = self.settings_pane.lengths_min_spacing_spinBox.value()
+			minRelativeIntensity = self.settings_pane.lengths_min_rel_int_spinBox.value()
+
+			self.u_length, self.v_length = get_lattice_vector_lengths(
+				self.u_theta, self.v_theta,
+				self.thetas, self.sinogram,
+				spacing_thresh=spacing_thresh,
+				sigma=sigma,
+				minSpacing=minSpacing,
+				minRelativeIntensity=minRelativeIntensity)
+
+			mask = np.zeros((dc.Q_Nx,dc.Q_Ny),dtype=bool)
+
+			slices, transforms = self.viz_pane.lattice_plot_ROI.getArraySlice(
+				self.main_window.strain_window.BVM,
+				self.viz_pane.lattice_plot.getImageItem())
+
+			slice_x,slice_y = slices
+			mask[slice_x,slice_y] = True
+
+			x0,y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
+
+			ux = np.cos(self.u_theta)*self.u_length
+			uy = np.sin(self.u_theta)*self.u_length
+			vx = np.cos(self.v_theta)*self.v_length
+			vy = np.sin(self.v_theta)*self.v_length
+
+			self.ideal_lattice = generate_lattice(ux,uy,vx,vy,x0,y0,dc.Q_Nx,dc.Q_Ny)
+
+			spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
+			newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+			newscatter.addPoints(spots)
+
+			self.viz_pane.lattice_plot.getView().removeItem(self.scatter)
+			self.viz_pane.lattice_plot.getView().addItem(newscatter)
+			self.scatter = newscatter
+
 
 	def update_sinogram(self):
 		if self.main_window.strain_window.BVM_accepted:
@@ -754,6 +809,7 @@ class LatticeVectorTab(QtWidgets.QWidget):
 				minRelativeIntensity=minRelativeIntensity)
 
 			self.viz_pane.radon_plot.setImage(self.sinogram.T**0.2)
+			self.viz_pane.crossings_plot.setData(self.thetas,self.scores)
 
 			self.main_window.strain_window.sinogram_accepted = True
 
