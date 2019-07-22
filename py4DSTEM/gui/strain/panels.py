@@ -9,6 +9,8 @@ from ...process.braggdiskdetection import find_Bragg_disks_selected, find_Bragg_
 from ...process.fit import fit_2D, plane, parabola
 from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
 from ...process.braggdiskdetection import get_bragg_vector_map
+from skimage.transform import radon
+from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths
 
 # use for debugging:
 from pdb import set_trace
@@ -699,8 +701,9 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		layout.addWidget(self.viz_pane)
 
 		self.lattice_scatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-		self.viz_pane.lattice_plot.addItem(self.lattice_scatter)
+		self.viz_pane.lattice_plot.getView().addItem(self.lattice_scatter)
 
+		self.settings_pane.radon_update_button.clicked.connect(self.update_sinogram)
 
 		self.setLayout(layout)
 
@@ -709,8 +712,52 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		#setup connections
 		self.settings_pane.shifts_use_fits_checkbox.stateChanged.connect(self.update_BVM)
 
+		self.settings_pane.direction_sigma_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.directions_min_spacing_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.directions_min_rel_int_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.directions_index1_spinbox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.directions_index2_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.lengths_spacing_thresh_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.lengths_sigma_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.lengths_min_spacing_spinBox.valueChanged.connect(self.update_lattice)
+		self.settings_pane.lengths_min_rel_int_spinBox.valueChanged.connect(self.update_lattice)
+
+
 	def update_lattice(self):
-		pass
+		if self.main_window.strain_window.sinogram_accepted:
+			pass
+
+	def update_sinogram(self):
+		if self.main_window.strain_window.BVM_accepted:
+			dc = self.main_window.datacube
+			#get mask from ROI on BVM:
+			mask = np.ones((dc.Q_Nx,dc.Q_Ny),dtype=bool)
+
+			slices, transforms = self.viz_pane.lattice_plot_ROI.getArraySlice(
+				self.main_window.strain_window.BVM,
+				self.viz_pane.lattice_plot.getImageItem())
+
+			slice_x,slice_y = slices
+			mask[slice_x,slice_y] = False
+
+			N_angles = self.settings_pane.radon_N_spinBox.value()
+			sigma = self.settings_pane.radon_sigma_spinBox.value()
+			minSpacing = self.settings_pane.radon_min_spacing_spinBox.value()
+			minRelativeIntensity = self.settings_pane.radon_min_rel_int_spinBox.value()
+
+			self.scores, self.thetas, self.sinogram = get_radon_scores(
+				self.main_window.strain_window.BVM,
+				mask=mask,
+				N_angles=N_angles,
+				sigma=sigma,
+				minSpacing=minSpacing,
+				minRelativeIntensity=minRelativeIntensity)
+
+			self.viz_pane.radon_plot.setImage(self.sinogram.T**0.2)
+
+			self.main_window.strain_window.sinogram_accepted = True
+
+			self.update_lattice()
 
 	def update_BVM(self):
 		dc = self.main_window.datacube
@@ -906,6 +953,8 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 		lvgroup = QtWidgets.QGroupBox("Bragg Vector Map with Lattice Vectors")
 		lvlayout = QtWidgets.QHBoxLayout()
 		self.lattice_plot = pg.ImageView()
+		self.lattice_plot_ROI = pg.RectROI([64,64],[10,10],pen=(3,9))
+		self.lattice_plot.getView().addItem(self.lattice_plot_ROI)
 		lvlayout.addWidget(self.lattice_plot)
 		lvgroup.setLayout(lvlayout)
 		bottomrow.addWidget(lvgroup)
