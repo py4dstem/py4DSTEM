@@ -1237,13 +1237,17 @@ class StrainMapTab(QtWidgets.QWidget):
 			"py4DSTEM Files (*.h5)")
 
 		if f[0]:
-			# file was chosen
-			if is_py4DSTEM_file(f[0]):
-				append([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
-					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
-			else:
-				save([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
-					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			try:
+				# file was chosen
+				if is_py4DSTEM_file(f[0]):
+					append([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+						sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+				else:
+					save([sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+						sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			except Exception as exc:
+				print('Failed to save...')
+				print(format(exc))
 		else:
 			pass
 
@@ -1257,13 +1261,17 @@ class StrainMapTab(QtWidgets.QWidget):
 			"py4DSTEM Files (*.h5)")
 
 		if f[0]:
-			# file was chosen
-			if is_py4DSTEM_file(f[0]):
-				append([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
-					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
-			else:
-				save([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
-					sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			try:
+				# file was chosen
+				if is_py4DSTEM_file(f[0]):
+					append([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+						sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+				else:
+					save([self.main_window.datacube,sw.ProbeKernelDS,sw.braggdisks,sw.braggdisks_corrected,
+						sw.BVMDS,sw.lattice_vectors,sw.uv_map, sw.strain_map],f[0])
+			except Exception as exc:
+				print('Failed to save...')
+				print(format(exc))
 		else:
 			pass
 
