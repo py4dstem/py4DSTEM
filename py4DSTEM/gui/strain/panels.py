@@ -1013,7 +1013,7 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		self.map_max_peak_spacing_spinBox.setMaximum(1000)
 		self.map_max_peak_spacing_spinBox.setMinimum(1)
 		self.map_max_peak_spacing_spinBox.setValue(20)
-		latticeform.addRow("Max Peaks Spacing",self.map_max_peak_spacing_spinBox)
+		latticeform.addRow("Max Peak Spacing (px)",self.map_max_peak_spacing_spinBox)
 
 		self.map_min_num_peaks_spinBox = QtWidgets.QSpinBox()
 		self.map_min_num_peaks_spinBox.setMinimum(1)
