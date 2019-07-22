@@ -41,11 +41,11 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
     k = np.zeros(bragg_peaks.length,dtype=int)
     deletemask = np.zeros(bragg_peaks.length,dtype=bool)
     for i in range(bragg_peaks.length):
-        r2 = (bragg_peaks.slices['qx'][i]-bragg_directions.slices['qx'])**2 + \
-             (bragg_peaks.slices['qy'][i]-bragg_directions.slices['qy'])**2
+        r2 = (bragg_peaks.data['qx'][i]-bragg_directions.data['qx'])**2 + \
+             (bragg_peaks.data['qy'][i]-bragg_directions.data['qy'])**2
         ind = np.argmin(r2)
-        h[i] = bragg_directions.slices['h'][ind]
-        k[i] = bragg_directions.slices['k'][ind]
+        h[i] = bragg_directions.data['h'][ind]
+        k[i] = bragg_directions.data['k'][ind]
         if r2[ind] > maxPeakSpacing**2:
             deletemask[i] = True
     bragg_peaks.remove_points(deletemask)
@@ -60,10 +60,10 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
     M = np.vstack((np.ones_like(h,dtype=int),h,k)).T
 
     # Get alpha, the matrix of measured Bragg peak positions
-    alpha = np.vstack((bragg_peaks.slices['qx']-x0, bragg_peaks.slices['qy']-y0)).T
+    alpha = np.vstack((bragg_peaks.data['qx']-x0, bragg_peaks.data['qy']-y0)).T
 
     # Get weighted matrices
-    weights = bragg_peaks.slices['intensity']
+    weights = bragg_peaks.data['intensity']
     weighted_M = M*weights[:,np.newaxis]
     weighted_alpha = alpha*weights[:,np.newaxis]
 
