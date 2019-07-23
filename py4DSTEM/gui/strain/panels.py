@@ -353,7 +353,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		# get an alias to the probe kernel display pane
 		pkdisplay = self.main_window.strain_window.probe_kernel_tab.probe_kernel_display
 
-		pkdisplay.probe_kernel_view.setImage(self.probe**0.25,autoLevels=True)
+		pkdisplay.probe_kernel_view.setImage(self.probe**0.5,autoLevels=True)
 		pkdisplay.probe_kernel_view.autoRange()
 
 		if use_gaussian:
@@ -515,6 +515,8 @@ class BraggDiskTab(QtWidgets.QWidget):
 		except Exception as exc:
 			print('Failed to find DPs, or initialize BVM...')
 			print(format(exc))
+			#QtWidgets.QApplication.alert(self.main_window,0)
+
 
 	def update_views(self):
 		if self.main_window.strain_window.probe_kernel_accepted :
@@ -792,6 +794,8 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.scatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
 		self.viz_pane.lattice_plot.getView().addItem(self.scatter)
 
+		self.viz_pane.lattice_vector_ROI.sigRegionChanged.connect(self.lattice_vectors_moved)
+
 		#setup connections
 		self.settings_pane.shifts_use_fits_checkbox.stateChanged.connect(self.update_BVM)
 
@@ -804,6 +808,8 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.settings_pane.lengths_sigma_spinBox.valueChanged.connect(self.update_lattice)
 		self.settings_pane.lengths_min_spacing_spinBox.valueChanged.connect(self.update_lattice)
 		self.settings_pane.lengths_min_rel_int_spinBox.valueChanged.connect(self.update_lattice)
+
+		self.settings_pane.freeform_enable.stateChanged.connect(self.update_lattice)
 
 
 	def accept_lattice(self):
@@ -833,58 +839,100 @@ class LatticeVectorTab(QtWidgets.QWidget):
 		self.main_window.strain_window.strain_map_tab.update_strain()
 
 	def update_lattice(self):
-		if self.main_window.strain_window.sinogram_accepted:
-			dc = self.main_window.datacube
+		if self.main_window.strain_window.sinogram_accepted & (not self.settings_pane.freeform_enable.isChecked()):
+			try:
+				dc = self.main_window.datacube
 
-			sigma = self.settings_pane.direction_sigma_spinBox.value()
-			minSpacing = self.settings_pane.directions_min_spacing_spinBox.value()
-			minRelativeIntensity = self.settings_pane.directions_min_rel_int_spinBox.value()
-			index1 = self.settings_pane.directions_index1_spinbox.value()
-			index2 = self.settings_pane.directions_index2_spinBox.value()
+				sigma = self.settings_pane.direction_sigma_spinBox.value()
+				minSpacing = self.settings_pane.directions_min_spacing_spinBox.value()
+				minRelativeIntensity = self.settings_pane.directions_min_rel_int_spinBox.value()
+				index1 = self.settings_pane.directions_index1_spinbox.value()
+				index2 = self.settings_pane.directions_index2_spinBox.value()
 
-			self.u_theta, self.v_theta = get_lattice_directions_from_scores(
-				self.thetas, self.scores, 
-				sigma, minSpacing, minRelativeIntensity,index1, index2)
+				self.u_theta, self.v_theta = get_lattice_directions_from_scores(
+					self.thetas, self.scores, 
+					sigma, minSpacing, minRelativeIntensity,index1, index2)
 
-			spacing_thresh = self.settings_pane.lengths_spacing_thresh_spinBox.value()
-			sigma = self.settings_pane.lengths_sigma_spinBox.value()
-			minSpacing = self.settings_pane.lengths_min_spacing_spinBox.value()
-			minRelativeIntensity = self.settings_pane.lengths_min_rel_int_spinBox.value()
+				spacing_thresh = self.settings_pane.lengths_spacing_thresh_spinBox.value()
+				sigma = self.settings_pane.lengths_sigma_spinBox.value()
+				minSpacing = self.settings_pane.lengths_min_spacing_spinBox.value()
+				minRelativeIntensity = self.settings_pane.lengths_min_rel_int_spinBox.value()
 
-			self.u_length, self.v_length = get_lattice_vector_lengths(
-				self.u_theta, self.v_theta,
-				self.thetas, self.sinogram,
-				spacing_thresh=spacing_thresh,
-				sigma=sigma,
-				minSpacing=minSpacing,
-				minRelativeIntensity=minRelativeIntensity)
+				self.u_length, self.v_length = get_lattice_vector_lengths(
+					self.u_theta, self.v_theta,
+					self.thetas, self.sinogram,
+					spacing_thresh=spacing_thresh,
+					sigma=sigma,
+					minSpacing=minSpacing,
+					minRelativeIntensity=minRelativeIntensity)
 
-			mask = np.zeros((dc.Q_Nx,dc.Q_Ny),dtype=bool)
+				mask = np.zeros((dc.Q_Nx,dc.Q_Ny),dtype=bool)
 
-			slices, transforms = self.viz_pane.lattice_plot_ROI.getArraySlice(
-				self.main_window.strain_window.BVM,
-				self.viz_pane.lattice_plot.getImageItem())
+				slices, transforms = self.viz_pane.lattice_plot_ROI.getArraySlice(
+					self.main_window.strain_window.BVM,
+					self.viz_pane.lattice_plot.getImageItem())
 
-			slice_x,slice_y = slices
-			mask[slice_x,slice_y] = True
+				slice_x,slice_y = slices
+				mask[slice_x,slice_y] = True
 
-			self.x0,self.y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
+				self.x0,self.y0 = np.unravel_index(np.argmax(gaussian_filter(self.main_window.strain_window.BVM*mask,sigma=2)),(dc.Q_Nx,dc.Q_Ny))
 
-			self.ux = np.cos(self.u_theta)*self.u_length
-			self.uy = np.sin(self.u_theta)*self.u_length
-			self.vx = np.cos(self.v_theta)*self.v_length
-			self.vy = np.sin(self.v_theta)*self.v_length
+				self.ux = np.cos(self.u_theta)*self.u_length
+				self.uy = np.sin(self.u_theta)*self.u_length
+				self.vx = np.cos(self.v_theta)*self.v_length
+				self.vy = np.sin(self.v_theta)*self.v_length
 
-			self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,self.x0,self.y0,dc.Q_Nx,dc.Q_Ny)
+				self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,self.x0,self.y0,dc.Q_Nx,dc.Q_Ny)
 
-			spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
-			newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
-			newscatter.addPoints(spots)
+				spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
+				newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+				newscatter.addPoints(spots)
 
-			self.viz_pane.lattice_plot.getView().removeItem(self.scatter)
-			self.viz_pane.lattice_plot.getView().addItem(newscatter)
-			self.scatter = newscatter
+				self.viz_pane.lattice_plot.getView().removeItem(self.scatter)
+				self.viz_pane.lattice_plot.getView().addItem(newscatter)
+				self.scatter = newscatter
 
+				#update the line ROI for the vectors:
+				self.viz_pane.lattice_vector_ROI.setPoints(
+					([self.x0+self.ux,self.y0+self.uy],[self.x0,self.y0],[self.x0+self.vx,self.y0+self.vy]))
+
+			except Exception as exc:
+				print('Failed to find sinogram, pr update lattice vectors... Check the direct beam ROI.')
+				print(format(exc))
+
+
+	def lattice_vectors_moved(self):
+		# handles whenever the vectors are moved. If freeform is disabled, ignore it.
+		# if freeform is on, update the lattice
+		if self.settings_pane.freeform_enable.isChecked():
+			try:
+				dc = self.main_window.datacube
+
+				roi = self.viz_pane.lattice_vector_ROI.saveState()
+
+				pts = roi['points']
+
+				self.x0, self.y0 = ( int(pts[1][0]), int(pts[1][1]) )
+				self.ux, self.uy = ( float(pts[0][0])-float(self.x0), float(pts[0][1])-float(self.y0) )
+				self.vx, self.vy = ( float(pts[2][0])-float(self.x0), float(pts[2][1])-float(self.y0) )
+
+				self.ideal_lattice = generate_lattice(self.ux,self.uy,self.vx,self.vy,self.x0,self.y0,dc.Q_Nx,dc.Q_Ny)
+
+				spots = [{'pos': [self.ideal_lattice.data['qx'][i],self.ideal_lattice.data['qy'][i]], 'data':1} for i in range(self.ideal_lattice.length)]
+				newscatter = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(0, 255, 0, 120))
+				newscatter.addPoints(spots)
+
+				self.viz_pane.lattice_plot.getView().removeItem(self.scatter)
+				self.viz_pane.lattice_plot.getView().addItem(newscatter)
+				self.scatter = newscatter
+
+			except Exception as exc:
+				print('Failed to update lattice in freeform mode. ')
+				print(format(exc))
+				#QtCore.pyqtRemoveInputHook()
+				#set_trace()
+		else:
+			pass
 
 	def update_sinogram(self):
 		if self.main_window.strain_window.BVM_accepted:
@@ -1087,6 +1135,10 @@ class LatticeVectorSettingsPane(QtWidgets.QGroupBox):
 		uvbox = QtWidgets.QGroupBox("Lattice Mapping")
 		latticeform = QtWidgets.QFormLayout()
 
+		self.freeform_enable = QtWidgets.QCheckBox()
+		self.freeform_enable.setChecked(False)
+		latticeform.addRow("Freeform Lattice Vectors",self.freeform_enable)
+
 		self.map_max_peak_spacing_spinBox = QtWidgets.QSpinBox()
 		self.map_max_peak_spacing_spinBox.setMaximum(1000)
 		self.map_max_peak_spacing_spinBox.setMinimum(1)
@@ -1132,6 +1184,10 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 		self.lattice_plot_ROI = pg.RectROI([64,64],[10,10],pen=(3,9))
 		self.lattice_plot.getView().addItem(self.lattice_plot_ROI)
 		self.lattice_plot.setColorMap(pgColormap)
+
+		self.lattice_vector_ROI = pg.PolyLineROI(([0,0],[1,1],[2,2]),pen=(3,30))
+		self.lattice_plot.getView().addItem(self.lattice_vector_ROI)
+
 		lvlayout.addWidget(self.lattice_plot)
 		lvgroup.setLayout(lvlayout)
 		bottomrow.addWidget(lvgroup)
