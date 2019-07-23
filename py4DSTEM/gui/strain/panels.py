@@ -1329,15 +1329,28 @@ class StrainMapTab(QtWidgets.QWidget):
 
 			sm = self.main_window.strain_window.strain_map
 
-			self.exx_view.setImage(sm.data['e_xx'],autoLevels=False)
-			self.eyy_view.setImage(sm.data['e_yy'],autoLevels=False)
-			self.exy_view.setImage(sm.data['e_xy'],autoLevels=False)
-			self.theta_view.setImage(sm.data['theta'],autoLevels=False)
+			mask = self.main_window.strain_window.uv_map.data['mask'].astype(bool)
+
+			exx = sm.data['e_xx'].copy()
+			exx[~mask] = np.nan
+
+			eyy = sm.data['e_yy'].copy()
+			eyy[~mask] = np.nan
+
+			exy = sm.data['e_xy'].copy()
+			exy[~mask] = np.nan
+
+			thta = sm.data['theta'].copy()
+			thta[~mask] = np.nan
+
+			self.exx_view.setImage(exx,autoLevels=False)
+			self.eyy_view.setImage(eyy,autoLevels=False)
+			self.exy_view.setImage(exy,autoLevels=False)
+			self.theta_view.setImage(thta,autoLevels=False)
 
 			# to set histogram limits:
 			# self.exx_view.getHistogramWidget().setLevels(min=x,max=y)
 			n_stds=3
-			mask = self.main_window.strain_window.uv_map.data['mask'].astype(bool)
 			e_xx_ave, e_xx_std = np.average(sm.data['e_xx'][mask]),np.std(sm.data['e_xx'][mask])
 			e_yy_ave, e_yy_std = np.average(sm.data['e_yy'][mask]),np.std(sm.data['e_yy'][mask])
 			e_xy_ave, e_xy_std = np.average(sm.data['e_xy'][mask]),np.std(sm.data['e_xy'][mask])
