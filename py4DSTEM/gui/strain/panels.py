@@ -1262,10 +1262,12 @@ class StrainMapTab(QtWidgets.QWidget):
 		strainTopRow = QtWidgets.QHBoxLayout()
 		self.exx_view = pg.ImageView()
 		self.exx_view.setColorMap(pgColormap)
+		self.exx_view.addItem(pg.TextItem('ε_xx',(200,200,200),None,(1,1)))
 		#self.exx_point = pg_point_roi(self.exx_view.getView())
 		strainTopRow.addWidget(self.exx_view)
 		self.eyy_view = pg.ImageView()
 		self.eyy_view.setColorMap(pgColormap)
+		self.eyy_view.addItem(pg.TextItem('ε_yy',(200,200,200),None,(1,1)))
 		#self.eyy_point = pg_point_roi(self.eyy_view.getView())
 		strainTopRow.addWidget(self.eyy_view)
 		strainlayout.addLayout(strainTopRow)
@@ -1273,10 +1275,12 @@ class StrainMapTab(QtWidgets.QWidget):
 		strainBottomRow = QtWidgets.QHBoxLayout()
 		self.exy_view = pg.ImageView()
 		self.exy_view.setColorMap(pgColormap)
+		self.exy_view.addItem(pg.TextItem('ε_xy',(200,200,200),None,(1,1)))
 		#self.exy_point = pg_point_roi(self.exy_view.getView())
 		strainBottomRow.addWidget(self.exy_view)
 		self.theta_view = pg.ImageView()
 		self.theta_view.setColorMap(pgColormap)
+		self.theta_view.addItem(pg.TextItem('θ',(200,200,200),None,(1,1)))
 		#self.theta_point = pg_point_roi(self.theta_view.getView())
 		strainBottomRow.addWidget(self.theta_view)
 		strainlayout.addLayout(strainBottomRow)
@@ -1325,10 +1329,29 @@ class StrainMapTab(QtWidgets.QWidget):
 
 			sm = self.main_window.strain_window.strain_map
 
-			self.exx_view.setImage(sm.data['e_xx'],autoLevels=True)
-			self.eyy_view.setImage(sm.data['e_yy'],autoLevels=True)
-			self.exy_view.setImage(sm.data['e_xy'],autoLevels=True)
-			self.theta_view.setImage(sm.data['theta'],autoLevels=True)
+			self.exx_view.setImage(sm.data['e_xx'],autoLevels=False)
+			self.eyy_view.setImage(sm.data['e_yy'],autoLevels=False)
+			self.exy_view.setImage(sm.data['e_xy'],autoLevels=False)
+			self.theta_view.setImage(sm.data['theta'],autoLevels=False)
+
+			# to set histogram limits:
+			# self.exx_view.getHistogramWidget().setLevels(min=x,max=y)
+			n_stds=3
+			mask = self.main_window.strain_window.uv_map.data['mask'].astype(bool)
+			e_xx_ave, e_xx_std = np.average(sm.data['e_xx'][mask]),np.std(sm.data['e_xx'][mask])
+			e_yy_ave, e_yy_std = np.average(sm.data['e_yy'][mask]),np.std(sm.data['e_yy'][mask])
+			e_xy_ave, e_xy_std = np.average(sm.data['e_xy'][mask]),np.std(sm.data['e_xy'][mask])
+			theta_ave, theta_std = np.average(sm.data['theta'][mask]),np.std(sm.data['theta'][mask])
+
+			e_xx_range = [-n_stds*e_xx_std,n_stds*e_xx_std]
+			e_yy_range = [-n_stds*e_yy_std,n_stds*e_yy_std]
+			e_xy_range = [-n_stds*e_xy_std,n_stds*e_xy_std]
+			theta_range = [-n_stds*theta_std,n_stds*theta_std]
+
+			self.exx_view.getHistogramWidget().setLevels(e_xx_range[0],e_xx_range[1])
+			self.eyy_view.getHistogramWidget().setLevels(e_yy_range[0],e_yy_range[1])
+			self.exy_view.getHistogramWidget().setLevels(e_xy_range[0],e_xy_range[1])
+			self.theta_view.getHistogramWidget().setLevels(theta_range[0],theta_range[1])
 
 
 	def update_DP(self):
