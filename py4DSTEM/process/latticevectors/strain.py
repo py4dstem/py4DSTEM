@@ -123,7 +123,7 @@ def get_rotated_strain_map(unrotated_strain_map, ux, uy):
     """
     Starting from a strain map defined with respect to the xy coordinate system of diffraction space,
     i.e. where exx and eyy are the compression/tension along the Qx and Qy directions, respectively,
-    get a strain map defined with repsect to a right-handed uv coordinate system, with the u-axis
+    get a strain map defined with respect to a right-handed uv coordinate system, with the u-axis
     oriented along u=(ux,uy).
 
     Accepts:
