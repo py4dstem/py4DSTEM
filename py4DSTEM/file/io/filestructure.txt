@@ -1,129 +1,150 @@
 py4DSTEM files are HDF5 files with a specified group/attribute/data structure.
 
 A detailed description is immediately below, followed by an abridged description.
-This file format is current as of py4DSTEM v0.3.
+This file format is current as of py4DSTEM v0.5.
 
 
 ############################## File structure ###############################
 ############################# Detailed version ##############################
 
- /
- |--attr: version_major=0
- |--attr: version_minor=3
- |--grp: 4DSTEM_experiment
-             |
-             |--grp: data
-             |         |
-             |         |--grp: datacubes
-             |         |   |
-             |         |   |--grp: datacube_1
-             |         |   |   |--attr: emd_group_type=1
-             |         |   |   |--data: datacube
-             |         |   |   |--data: dim1
-             |         |   |   |    |--attr: name="R_x"
-             |         |   |   |    |--attr: units="[n_m]"
-             |         |   |   |--data: dim2
-             |         |   |   |    |--attr: name="R_y"
-             |         |   |   |    |--attr: units="[n_m]"
-             |         |   |   |--data: dim3
-             |         |   |   |    |--attr: name="Q_x"
-             |         |   |   |    |--attr: units="[n_m^-1]"
-             |         |   |   |--data: dim4
-             |         |   |        |--attr: name="Q_y"
-             |         |   |        |--attr: units="[n_m^-1]"
-             |         |   |
-             |         |   |--grp: datacube_2
-             |         |   |    |
-             |         |   :    :
-             |         |
-             |         |--grp: diffractionslices
-             |         |   |
-             |         |   |--grp: diffractionslice_1
-             |         |   |    |--attr: emd_group_type=1
-             |         |   |    |--data: diffractionslice
-             |         |   |    |--data: dim1,dim2
-             |         |   |
-             |         |   |--grp: diffractionslice_2
-             |         |   |    |
-             |         |   :    :
-             |         |
-             |         |--grp: realslices
-             |         |   |
-             |         |   |--grp: realslice_1
-             |         |   |    |--attr: emd_group_type=1
-             |         |   |    |--data: realslice
-             |         |   |    |--data: dim1,dim2
-             |         |   |
-             |         |   |--grp: realslice_2
-             |         |   |    |
-             |         |   :    :
-             |         |
-             |         |--grp: pointlists
-             |         |   |
-             |         |   |--grp: pointlist_1
-             |         |   |    |--attr: coordinates='coord_1, coord_2, ...'
-             |         |   |    |--attr: dimensions=val
-             |         |   |    |--attr: length=val
-             |         |   |    |--grp: coord_1
-             |         |   |    |    |--attr: dtype
-             |         |   |    |    |--data
-             |         |   |    |--grp: coord_2
-             |         |   |    :    :
-             |         |   |
-             |         |   |--grp: pointlist_2
-             |         |   |    |
-             |         |   :    :
-             |         |
-             |         |--grp: pointlistarrays
-             |             |
-             |             |--grp: pointlistarray_1
-             |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
-             |             |    |--attr: dimensions=val
-             |             |    |--grp: 0_0 = pointlist at index 0,0
-             |             |    |--grp: 0_1
-             |             |    :
-             |             |
-             |             |--grp: pointlistarray_2
-             |             |    |
-             |             :    :
-             |
-             |--grp: log
-             |         |-grp: log_item_1
-             |         |   |--attr: function="function"
-             |         |   |--grp: inputs
-             |         |   |    |--attr: input1=val1
-             |         |   |    |--attr: input2=val2
-             |         |   |    |--...
-             |         |   |
-             |         |   |--attr: version=0.1
-             |         |   |--attr: time="20181015_16:09:42"
-             |         |
-             |         |-grp: log_item_2
-             |         |-...
-             |
-             |--grp: metadata
-                       |--grp: original
-                       |   |--# Raw metadata from original files
-                       |
-                       |--grp: microscope
-                       |   |--# Acquisition parameters
-                       |   |--# Accelerating voltage, camera length, convergence angle, 
-                       |   |--# C2 aperture, spot size, exposure time, scan rotation angle,
-                       |   |--# scan shape, probe FWHM
-                       |
-                       |--grp: sample
-                       |   |--# Material, preparation
-                       |
-                       |--grp: user
-                       |   |--# Name, instituion, dept, contact email
-                       |
-                       |--grp: calibration
-                       |   |--# R pixel size, Q pixel size, R/Q rotation offset
-                       |   |--# In case of duplicates here and in grp: microscope (e.g. pixel
-                       |   |--# sizes), quantities here are calculated from data rather than
-                       |   |--# being read from the instrument
-                       |
-                       |--grp: comments
+/
+|--grp: 4DSTEM_experiment OR 4DSTEM_simulation
+    |--attr: emd_group_type=2
+    |--attr: version_major=0
+    |--attr: version_minor=5
+    |--grp: data
+    |         |
+    |         |--grp: datacubes
+    |         |    |
+    |         |    |--grp: datacube_1
+    |         |    |    |--attr: emd_group_type=1
+    |         |    |    |--data: datacube
+    |         |    |    |--data: dim1
+    |         |    |    |    |--attr: name="R_x"
+    |         |    |    |    |--attr: units="[n_m]"
+    |         |    |    |--data: dim2
+    |         |    |    |    |--attr: name="R_y"
+    |         |    |    |    |--attr: units="[n_m]"
+    |         |    |    |--data: dim3
+    |         |    |    |    |--attr: name="Q_x"
+    |         |    |    |    |--attr: units="[n_m^-1]"
+    |         |    |    |--data: dim4
+    |         |    |    |    |--attr: name="Q_y"
+    |         |    |    |    |--attr: units="[n_m^-1]"
+    |         |    |
+    |         |    |--grp: datacube_2
+    |         |    |    |
+    |         |   :   :
+    |         |
+    |         |--grp: diffractionslices
+    |         |    |
+    |         |    |--grp: diffractionslice_1
+    |         |    |    |--attr: emd_group_type=1
+    |         |    |    |--data: diffractionslice
+    |         |    |    |--data: dim1
+    |         |    |    |    |--attr: name="Q_x"
+    |         |    |    |    |--attr: units="[n_m^-1]"
+    |         |    |    |--data: dim2
+    |         |    |    |    |--attr: name="Q_y"
+    |         |    |    |    |--attr: units="[n_m^-1]"
+    |         |    |    |--data: dim3 (optional)
+    |         |    |    |    |--attr: name="varies"
+    |         |    |    |    |--attr: units="[varies]"
+    |         |    |
+    |         |    |--grp: diffractionslice_2
+    |         |    |    |
+    |         |   :    :
+    |         |
+    |         |--grp: realslices
+    |         |    |
+    |         |    |--grp: realslice_1
+    |         |    |    |--attr: emd_group_type=1
+    |         |    |    |--data: realslice
+    |         |    |    |--data: dim1
+    |         |    |    |    |--attr: name="R_x"
+    |         |    |    |    |--attr: units="[n_m]"
+    |         |    |    |--data: dim2
+    |         |    |    |    |--attr: name="R_y"
+    |         |    |    |    |--attr: units="[n_m]"
+    |         |    |    |--data: dim3 (optional)
+    |         |    |    |    |--attr: name="varies"
+    |         |    |    |    |--attr: units="[varies]"
+    |         |    |
+    |         |    |--grp: realslice_2
+    |         |    |    |
+    |         |    :    :
+    |         |
+    |         |--grp: pointlists
+    |         |    |
+    |         |    |--grp: pointlist_1
+    |         |    |    |--attr: coordinates='coord_1, coord_2, ...'
+    |         |    |    |--attr: dimensions=val
+    |         |    |    |--attr: length=val
+    |         |    |    |--grp: coord_1
+    |         |    |    |    |--attr: dtype
+    |         |    |    |    |--data
+    |         |    |    |--grp: coord_2
+    |         |    |    :    :
+    |         |    |
+    |         |    |--grp: pointlist_2
+    |         |    |    |
+    |         |    :    :
+    |         |
+    |         |--grp: pointlistarrays
+    |             |
+    |             |--grp: pointlistarray_1
+    |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
+    |             |    |--attr: dimensions=val
+    |             |    |--grp: 0_0 = pointlist at index 0,0
+    |             |    |--grp: 0_1
+    |             |    :
+    |             |
+    |             |--grp: pointlistarray_2
+    |             |    |
+    |             :    :
+    |
+    |--grp: log
+    |         |-grp: log_item_1
+    |         |    |--attr: function="function"
+    |         |    |--grp: inputs
+    |         |    |    |--attr: input1=val1
+    |         |    |    |--attr: input2=val2
+    |         |    |    |--...
+    |         |    |
+    |         |    |--attr: version=0.1
+    |         |    |--attr: time="20181015_16:09:42"
+    |         |
+    |         |-grp: log_item_2
+    |         |-...
+    |
+    |--grp: metadata
+            |--grp: metadata_0
+                    |--grp: original
+                    |    |--# Raw metadata from original files
+                    |
+                    |--grp: microscope
+                    |    |--# Acquisition parameters
+                    |    |--# Accelerating voltage, camera length, convergence angle, 
+                    |    |--# C2 aperture, spot size, exposure time, scan rotation angle,
+                    |    |--# scan shape, probe FWHM
+                    |
+                    |--grp: sample
+                    |    |--# Material, preparation
+                    |
+                    |--grp: user
+                    |    |--# Name, instituion, dept, contact email
+                    |
+                    |--grp: calibration
+                    |    |--# R pixel size, Q pixel size, R/Q rotation offset
+                    |    |--# In case of duplicates here and in grp: microscope (e.g. pixel
+                    |    |--# sizes), quantities here are calculated from data rather than
+                    |    |--# being read from the instrument
+                    |
+                    |--grp: comments
+
+            |--grp: metadata_1
+            |-...
+
 
 
 
@@ -137,45 +158,45 @@ This file format is current as of py4DSTEM v0.3.
              |--grp: data
              |         |
              |         |--grp: datacubes
-             |         |   |
-             |         |   |--grp: datacube_1
-             |         |   |    |--data: datacube
-             |         |   |    |--data: dim1,dim2,dim3,dim4
-             |         |   |
-             |         |   |--grp: datacube_2
-             |         |   |    |
+             |         |    |
+             |         |    |--grp: datacube_1
+             |         |    |    |--data: datacube
+             |         |    |    |--data: dim1,dim2,dim3,dim4
+             |         |    |
+             |         |    |--grp: datacube_2
+             |         |    |    |
              |         |   :    :
              |         |
              |         |--grp: diffraction
-             |         |   |
-             |         |   |--grp: diffraction_slice_1
-             |         |   |    |--data: diffractionslice
-             |         |   |    |--data: dim1,dim2
-             |         |   |
-             |         |   |--grp: diffraction_slice_2
-             |         |   |    |
+             |         |    |
+             |         |    |--grp: diffraction_slice_1
+             |         |    |    |--data: diffractionslice
+             |         |    |    |--data: dim1,dim2
+             |         |    |
+             |         |    |--grp: diffraction_slice_2
+             |         |    |    |
              |         |   :    :
              |         |
              |         |--grp: real
-             |         |   |
-             |         |   |--grp: real_slice_1
-             |         |   |    |--data: realslice
-             |         |   |    |--data: dim1,dim2
-             |         |   |
-             |         |   |--grp: real_slice_2
-             |         |   |    |
+             |         |    |
+             |         |    |--grp: real_slice_1
+             |         |    |    |--data: realslice
+             |         |    |    |--data: dim1,dim2
+             |         |    |
+             |         |    |--grp: real_slice_2
+             |         |    |    |
              |         |   :    :
              |         |
              |         |--grp: pointlists
-             |         |   |
-             |         |   |--grp: pointlist_1
-             |         |   |    |--grp: coord_1
-             |         |   |    |    |--data
-             |         |   |    |--grp: coord_2
-             |         |   |    :    :
-             |         |   |
-             |         |   |--grp: pointlist_2
-             |         |   |    |
+             |         |    |
+             |         |    |--grp: pointlist_1
+             |         |    |    |--grp: coord_1
+             |         |    |    |    |--data
+             |         |    |    |--grp: coord_2
+             |         |    |    :    :
+             |         |    |
+             |         |    |--grp: pointlist_2
+             |         |    |    |
              |         |   :    :
              |         |
              |         |--grp: pointlistarrays
