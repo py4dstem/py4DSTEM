@@ -4,6 +4,12 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 
+try:
+    from IPython.display import clear_output
+except ImportError:
+    def clear_output(wait=True):
+        pass
+
 def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     """
     Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
@@ -318,7 +324,8 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    clear_output(wait=True)
+    print('\r{} |{}| {}% {}\r'.format(prefix, bar, percent, suffix))
     # Print New Line on Complete
     if iteration == total:
         print()
