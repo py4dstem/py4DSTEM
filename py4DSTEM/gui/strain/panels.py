@@ -1165,7 +1165,7 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 	def __init__(self,main_window=None):
 		QtWidgets.QGroupBox.__init__(self,"Lattice Vectors")
 
-		mpl_cmap = get_cmap('RdBu_r')
+		mpl_cmap = get_cmap('jet')
 		pos, rgba_colors = zip(*cmapToColormap(mpl_cmap))
 		pgColormap =  pg.ColorMap(pos, rgba_colors)
 
@@ -1225,7 +1225,7 @@ class StrainMapTab(QtWidgets.QWidget):
 		self.main_window = main_window
 
 		# get colormap for pyqtgraph
-		mpl_cmap = get_cmap('jet')
+		mpl_cmap = get_cmap('RdBu_r')
 		pos, rgba_colors = zip(*cmapToColormap(mpl_cmap))
 		pgColormap =  pg.ColorMap(pos, rgba_colors)
 
@@ -1238,7 +1238,7 @@ class StrainMapTab(QtWidgets.QWidget):
 		vimglayout = QtWidgets.QHBoxLayout()
 
 		self.DP_view = pg.ImageView()
-		self.DP_ROI = pg.RectROI([256,256],[512,512], pen=(3,9))
+		self.DP_ROI = pg.RectROI([50,50],[20,20], pen=(3,9))
 		self.DP_ROI.sigRegionChangeFinished.connect(self.update_RS)
 		self.DP_view.getView().addItem(self.DP_ROI)
 		vimglayout.addWidget(self.DP_view)
@@ -1333,18 +1333,18 @@ class StrainMapTab(QtWidgets.QWidget):
 
 			sm = self.main_window.strain_window.strain_map
 
-			mask = self.main_window.strain_window.uv_map.data['mask'].astype(bool)
+			mask = self.main_window.strain_window.uv_map.slices['mask'].astype(bool)
 
-			exx = sm.data['e_xx'].copy()
+			exx = sm.slices['e_xx'].copy()
 			exx[~mask] = np.nan
 
-			eyy = sm.data['e_yy'].copy()
+			eyy = sm.slices['e_yy'].copy()
 			eyy[~mask] = np.nan
 
-			exy = sm.data['e_xy'].copy()
+			exy = sm.slices['e_xy'].copy()
 			exy[~mask] = np.nan
 
-			thta = sm.data['theta'].copy()
+			thta = sm.slices['theta'].copy()
 			thta[~mask] = np.nan
 
 			alpha = np.zeros_like(mask,dtype=np.uint8)
@@ -1363,10 +1363,10 @@ class StrainMapTab(QtWidgets.QWidget):
 			# to set histogram limits:
 			# self.exx_view.getHistogramWidget().setLevels(min=x,max=y)
 			n_stds=3
-			e_xx_ave, e_xx_std = np.average(sm.data['e_xx'][mask]),np.std(sm.data['e_xx'][mask])
-			e_yy_ave, e_yy_std = np.average(sm.data['e_yy'][mask]),np.std(sm.data['e_yy'][mask])
-			e_xy_ave, e_xy_std = np.average(sm.data['e_xy'][mask]),np.std(sm.data['e_xy'][mask])
-			theta_ave, theta_std = np.average(sm.data['theta'][mask]),np.std(sm.data['theta'][mask])
+			e_xx_ave, e_xx_std = np.average(sm.slices['e_xx'][mask]),np.std(sm.slices['e_xx'][mask])
+			e_yy_ave, e_yy_std = np.average(sm.slices['e_yy'][mask]),np.std(sm.slices['e_yy'][mask])
+			e_xy_ave, e_xy_std = np.average(sm.slices['e_xy'][mask]),np.std(sm.slices['e_xy'][mask])
+			theta_ave, theta_std = np.average(sm.slices['theta'][mask]),np.std(sm.slices['theta'][mask])
 
 			e_xx_range = [-n_stds*e_xx_std,n_stds*e_xx_std]
 			e_yy_range = [-n_stds*e_yy_std,n_stds*e_yy_std]
