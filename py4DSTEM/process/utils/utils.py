@@ -146,43 +146,44 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
     maxima['intensity'] = ar[maxima_x,maxima_y]
     maxima = np.sort(maxima,order='intensity')[::-1]
 
-    # Remove maxima which are too close
-    if minSpacing > 0:
-        deletemask = np.zeros(len(maxima),dtype=bool)
-        for i in range(len(maxima)):
-            if deletemask[i] == False:
-                tooClose = ( (maxima['x']-maxima['x'][i])**2 + \
-                             (maxima['y']-maxima['y'][i])**2 ) < minSpacing**2
-                tooClose[:i+1] = False
-                deletemask[tooClose] = True
-        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+    if len(maxima) > 0:
+        # Remove maxima which are too close
+        if minSpacing > 0:
+            deletemask = np.zeros(len(maxima),dtype=bool)
+            for i in range(len(maxima)):
+                if deletemask[i] == False:
+                    tooClose = ( (maxima['x']-maxima['x'][i])**2 + \
+                                 (maxima['y']-maxima['y'][i])**2 ) < minSpacing**2
+                    tooClose[:i+1] = False
+                    deletemask[tooClose] = True
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
-    # Remove maxima which are too dim
-    if minRelativeIntensity > 0:
-        assert isinstance(relativeToPeak,(int,np.integer))
-        deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
-        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+        # Remove maxima which are too dim
+        if minRelativeIntensity > 0:
+            assert isinstance(relativeToPeak,(int,np.integer))
+            deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
-    # Remove maxima in excess of maxNumPeaks
-    if maxNumPeaks > 0:
-        assert isinstance(maxNumPeaks,(int,np.integer))
-        if len(maxima) > maxNumPeaks:
-            maxima = maxima[:maxNumPeaks]
+        # Remove maxima in excess of maxNumPeaks
+        if maxNumPeaks > 0:
+            assert isinstance(maxNumPeaks,(int,np.integer))
+            if len(maxima) > maxNumPeaks:
+                maxima = maxima[:maxNumPeaks]
 
-    # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
-    if subpixel is True:
-        for i in range(len(maxima)):
-            Ix1_ = ar[int(maxima['x'][i])-1,int(maxima['y'][i])]
-            Ix0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
-            Ix1 = ar[int(maxima['x'][i])+1,int(maxima['y'][i])]
-            Iy1_ = ar[int(maxima['x'][i]),int(maxima['y'][i])-1]
-            Iy0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
-            Iy1 = ar[int(maxima['x'][i]),int(maxima['y'][i])+1]
-            deltax = (Ix1 - Ix1_)/(4*Ix0 - 2*Ix1 - 2*Ix1_)
-            deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
-            maxima['x'][i] += deltax
-            maxima['y'][i] += deltay
-            maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
+        # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
+        if subpixel is True:
+            for i in range(len(maxima)):
+                Ix1_ = ar[int(maxima['x'][i])-1,int(maxima['y'][i])]
+                Ix0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+                Ix1 = ar[int(maxima['x'][i])+1,int(maxima['y'][i])]
+                Iy1_ = ar[int(maxima['x'][i]),int(maxima['y'][i])-1]
+                Iy0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+                Iy1 = ar[int(maxima['x'][i]),int(maxima['y'][i])+1]
+                deltax = (Ix1 - Ix1_)/(4*Ix0 - 2*Ix1 - 2*Ix1_)
+                deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
+                maxima['x'][i] += deltax
+                maxima['y'][i] += deltay
+                maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
 
     return maxima['x'],maxima['y'],maxima['intensity']
 
