@@ -1165,7 +1165,7 @@ class LatticeVectorVisualizationPane(QtWidgets.QGroupBox):
 	def __init__(self,main_window=None):
 		QtWidgets.QGroupBox.__init__(self,"Lattice Vectors")
 
-		mpl_cmap = get_cmap('jet')
+		mpl_cmap = get_cmap('RdBu_r')
 		pos, rgba_colors = zip(*cmapToColormap(mpl_cmap))
 		pgColormap =  pg.ColorMap(pos, rgba_colors)
 
