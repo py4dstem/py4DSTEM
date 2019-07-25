@@ -34,7 +34,7 @@ Press `Generate Probe` to test the settings. Once generated, the probe is displa
 ![bragg disks](imgs/braggdisk.gif)
 
 ### Choose test regions
-The three realspace views each have a point ROI, which is used to select the diffraction patterns for testing the peakfinding parameters. The image is defined by the virtual detector in the main Browser window, and will update if the virtual detector there is changed. Changing any of the parameters in the control panel will auto-update the Bragg disks. If no disks appear on the patterns, then the peakfinding has "failed" on at least one of the patterns. You need to adjust the settings to avoid this, as this error will also crash the main peakfinding routine. Usually `Relative to peak #` needs to be lowered, or the `Minimum Peak Spacing` reduced. 
+The three realspace views each have a point ROI, which is used to select the diffraction patterns for testing the peakfinding parameters. The image is defined by the virtual detector in the main Browser window, and will update if the virtual detector there is changed. Changing any of the parameters in the control panel will auto-update the Bragg disks.
 
 ### Choose parameters
 * `Correlation Power` is the Fourier correlation coefficient, which sets whether the correlogram is found via cross-correlation (1), hybrid correlation (0&lt;p&lt;1), or phase-correlation (0). Normally 0.9-0.95 provides the best results. When using a patterned probe, always use p=1. Adjust this by observing how the Bragg disk markers align with the centers of the disks, maximizing how well centered they are. Adjusting this will change how many peaks are detected: ignore this for now, and correct it later with the thresholds.
@@ -52,6 +52,28 @@ Once the parameters are set, press `Find All Bragg Disks` to begin the peakfindi
 ## Lattice Vector Determination
 ![lattice vectors](imgs/lattice.gif)
 
+First, select the mode for shifting of the diffraction patterns to correct for the descan. By default, the raw shifts are used. If the data has large shifts this may fail. If you want to preserve the DPC-esque signal the comes from the shits, check `Use Fitted Shifts`. Otherwise it is safe to leave this panel alone.
+
+Next, move the rectangular ROI on the Bragg Vector Map so that it encompasses *only* the direct beam. This serves two purposes: the ROI is the mask for the Radon transform automatic lattice vector algorithm, and the pattern center is located as the brightest pixel inside the ROI. Press `Calculate` in the Radon Transform tab. 
+
+The detected lattice vectors will display on the Bragg Vector Map, and the points will indicate all the lattice positions that will be used. If the lattice vectors/points do not match up with the lattice, you have two options: (i) tune the parameters for the auto ID algorithm or (ii) use the freeform mode. Recommendation is to adjust `Index 1` and `Index 2`, as this is often enough to fix the auto ID guess. If that doesn't work, finding good auto ID parameters is hard and it's better to check `Freeform Lattice Vectors`. This will allow you to drag the vectors on the Bragg Vector Map to pick a better lattice. *Note: the green dots are the lattice points that will be used. If you drag the vectors without checking the freeform box, the auto ID'd points will still be used.*
+
+Next, we choose settings for the lattice vector mapping:
+* `Max Peak Spacing` sets the threshold for excluding a detected Bragg disk from the lattice calculation. You can get a good value by observing how wide the blur around the lattice points on the Bragg Vector Map spans.
+* `Minimum Number Peaks` is the minimum number of Bragg disks that fall inside the `Max Peak Spacing` threshold that needs to be present to calculate a lattice. Patterns where this threshold is not met will be blacked-out in the strain map.
+
+Once these parameters are set, press `Accept Lattice`. The strain in each pattern will be found and the maps will become available in the Strain Maps tab.
+
+
 
 ## Strain Mapping
 ![strain maps](imgs/strain.gif)
+
+In the top row of the strain map tab there are three important controls:
+* The ROI on the diffraction pattern sets up the virtual image
+* **The rectangular ROI on the virtual image defines the reference region for zero strain.** The median lattice vectors inside this region are taken as the zero-strain lattice. (Calibration of the strain can only be done later outside the GUI.)
+* The point ROI on the virtual image chooses a diffraction pattern. 
+
+There are two options for exporting the results:
+* `Export Processing` saves only the processing data: the probe kernel, the Bragg disk PointLists, the Bragg Vector Map, the lattice vectors, the lattice vector map, and the strain map. *If you choose an existing py4DSTEM h5 file in the Save menu, this data will be appended, and the datacube and any objects inside will be preserved.* 
+* `Export All` saves all the above processing, in addition to a copy of the DataCube, in py4DSTEM format. (Note, the vacuum datacube is not saved.)
