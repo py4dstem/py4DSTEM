@@ -55,6 +55,12 @@ class DataViewer(QtWidgets.QMainWindow):
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
+
+
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
 
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
@@ -99,9 +105,9 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.setWindowTitle("Control Panel")
 
         ############################ Controls ###############################
-        # For each control:                                                 # 
+        # For each control:                                                 #
         #   -creates items in self.settings                                 #
-        #   -connects UI changes to updates in self.settings                # 
+        #   -connects UI changes to updates in self.settings                #
         #   -connects updates in self.settings items to function calls      #
         #   -connects button clicks to function calls                       #
         #####################################################################
@@ -250,7 +256,7 @@ class DataViewer(QtWidgets.QMainWindow):
     # the process directory.                                         #
     # Additional functionality here should be avoided, to ensure     #
     # consistent output between processing run through the GUI       #
-    # or from the command line.                                      # 
+    # or from the command line.                                      #
     ##################################################################
 
     def launch_strain(self):
@@ -259,12 +265,23 @@ class DataViewer(QtWidgets.QMainWindow):
         self.strain_window.setup_tabs()
 
     ################ Load ################
+    def couldnt_find_file(self,fname):
+        msg = QtWidgets.QMessageBox()
+        msg.setText("Couldn't find filepath {0}".format(fname))
+        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        msg.exec_()
 
     def load_file(self):
         """
         Loads a file by creating and storing a DataCube object.
         """
         fname = self.settings.data_filename.val
+
+        #Check that file exists
+        if not os.path.exists(fname):
+            self.couldnt_find_file(fname)
+            return
+
         print("Loading file",fname)
 
         # Instantiate DataCube object
@@ -702,6 +719,7 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
+
             self.diffraction_space_widget.setImage(self.diffraction_space_view,
                                                    autoLevels=False,autoRange=False)
         else:
@@ -814,8 +832,3 @@ class DataViewer(QtWidgets.QMainWindow):
 
 
 ################################ End of class ##################################
-
-
-
-
-

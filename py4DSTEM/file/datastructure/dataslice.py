@@ -4,6 +4,7 @@
 # Typically users will not define DataSlices, but will instead use the DiffractionSlice and RealSlice
 # classes, which inherit from DataSlice.
 
+import numpy as np
 from collections import OrderedDict
 from .dataobject import DataObject
 
@@ -12,38 +13,40 @@ class DataSlice(DataObject):
     def __init__(self, data, Nx, Ny, slicelabels=None, **kwargs):
         """
         Instantiate a DataSlice object.  Set the data and dimensions.
-        ##TODO: Update this class description.
-        If data is two dimensional, it is stored as self.data, and has shape (Nx, Ny).
-        If data is three dimensional, self.data is a list of slices of some depth,
-        where self.depth is data.shape[2], i.e. the shape is (Nx, Ny, depth).
-        If slicelabels is unspecified, 2D slices can be accessed as self.data[i].
-        If slicelabels is specified, it should be an n-tuple of strings, where
-        n==self.depth, and 2D slices can be accessed as self.data[slicelabels[i]].
+
+        The data is stored in self.data.  If it is 2D it has shape (self.Nx,self.Ny);
+        if it is 3D it has shape (self.Nx,self.Ny,self.depth).  For 3D data, an array
+        self.slicelabels of length self.depth specifies the data found in each slices, i.e.
+        the self.data[:,:,i] is labelled by self.slicelabels[i].  self.slicelabels may be
+        strings or numbers, and is instantiated by passing a list or array with the slicelabels
+        keyword.  If left unspecified, these default to np.arange(self.depth).  Data can be
+        accessed directly from self.data, or may be accessed using the labels in
+        self.slicelabels using the syntax
+            self.slices[key]
+        where key is an element of slicelabels.
         """
         DataObject.__init__(self, **kwargs)
 
         self.Nx = Nx
         self.Ny = Ny
 
+        self.data = data
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
         if len(shape)==2:
             assert shape==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
             self.depth=1
-            self.data = data
         else:
             assert shape[:2]==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
+            self.depth = shape[2]
             if slicelabels is None:
-                self.depth = shape[2]
-                self.data = data
-                #for i in range(self.depth):
-                #    self.data.append(data[:,:,i])
+                self.slicelabels = np.arange(self.depth)
             else:
-                self.depth=shape[2]
                 assert len(slicelabels)==self.depth
-                self.data = OrderedDict()
-                for i in range(self.depth):
-                    self.data[slicelabels[i]]=data[:,:,i]
+                self.slicelabels = slicelabels
+            self.slices = OrderedDict()
+            for i in range(self.depth):
+                self.slices[self.slicelabels[i]]=self.data[:,:,i]
 
 
 
