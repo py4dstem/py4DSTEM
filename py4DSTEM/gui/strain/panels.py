@@ -18,9 +18,10 @@ from matplotlib.cm import get_cmap
 from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
 from ...file.io import save, append, is_py4DSTEM_file, read
 from ...file.datastructure import DiffractionSlice, RealSlice
+from .ImageViewMasked import ImageViewAlpha
 
 ### use for debugging:
-#from pdb import set_trace
+from pdb import set_trace
 ### at stopping point:
 #QtCore.pyqtRemoveInputHook()
 #set_trace()
@@ -1254,18 +1255,21 @@ class StrainMapTab(QtWidgets.QWidget):
 
 		layout.addLayout(vimgrow)
 
+		#QtCore.pyqtRemoveInputHook()
+		#set_trace()
+
 		# strain Group
 		strainrow = QtWidgets.QHBoxLayout()
 		straingroup = QtWidgets.QGroupBox("Strain Maps")
 		strainlayout = QtWidgets.QVBoxLayout()
 
 		strainTopRow = QtWidgets.QHBoxLayout()
-		self.exx_view = pg.ImageView()
+		self.exx_view = pg.ImageView(imageItem=ImageViewAlpha())
 		self.exx_view.setColorMap(pgColormap)
 		self.exx_view.addItem(pg.TextItem('ε_xx',(200,200,200),None,(1,1)))
 		#self.exx_point = pg_point_roi(self.exx_view.getView())
 		strainTopRow.addWidget(self.exx_view)
-		self.eyy_view = pg.ImageView()
+		self.eyy_view = pg.ImageView(imageItem=ImageViewAlpha())
 		self.eyy_view.setColorMap(pgColormap)
 		self.eyy_view.addItem(pg.TextItem('ε_yy',(200,200,200),None,(1,1)))
 		#self.eyy_point = pg_point_roi(self.eyy_view.getView())
@@ -1273,12 +1277,12 @@ class StrainMapTab(QtWidgets.QWidget):
 		strainlayout.addLayout(strainTopRow)
 
 		strainBottomRow = QtWidgets.QHBoxLayout()
-		self.exy_view = pg.ImageView()
+		self.exy_view = pg.ImageView(imageItem=ImageViewAlpha())
 		self.exy_view.setColorMap(pgColormap)
 		self.exy_view.addItem(pg.TextItem('ε_xy',(200,200,200),None,(1,1)))
 		#self.exy_point = pg_point_roi(self.exy_view.getView())
 		strainBottomRow.addWidget(self.exy_view)
-		self.theta_view = pg.ImageView()
+		self.theta_view = pg.ImageView(imageItem=ImageViewAlpha())
 		self.theta_view.setColorMap(pgColormap)
 		self.theta_view.addItem(pg.TextItem('θ',(200,200,200),None,(1,1)))
 		#self.theta_point = pg_point_roi(self.theta_view.getView())
@@ -1342,6 +1346,14 @@ class StrainMapTab(QtWidgets.QWidget):
 
 			thta = sm.data['theta'].copy()
 			thta[~mask] = np.nan
+
+			alpha = np.zeros_like(mask,dtype=np.uint8)
+			alpha[mask] = 255
+
+			self.exx_view.getImageItem().alpha = alpha
+			self.eyy_view.getImageItem().alpha = alpha
+			self.exy_view.getImageItem().alpha = alpha
+			self.theta_view.getImageItem().alpha = alpha
 
 			self.exx_view.setImage(exx,autoLevels=False)
 			self.eyy_view.setImage(eyy,autoLevels=False)
