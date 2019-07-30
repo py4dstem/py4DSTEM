@@ -165,7 +165,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
         # Remove maxima which are too dim
-        if minRelativeIntensity > 0:
+        if (minRelativeIntensity > 0) & (len(maxima)>relativeToPeak):
             assert isinstance(relativeToPeak,(int,np.integer))
             deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
