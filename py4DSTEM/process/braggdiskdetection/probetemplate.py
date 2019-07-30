@@ -59,7 +59,8 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
 def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
                                               mask_expansion=12,
                                               mask_opening=3,
-                                              verbose=False):
+                                              verbose=False,
+                                              DP_mask=1):
     """
     Aligns and averages all diffraction patterns within a specified ROI of a datacube to create an
     average vacuum probe.
@@ -77,6 +78,7 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        DP_mask         (array) array of same shape as diffraction pattern to mask probes
 
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
@@ -85,7 +87,7 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     length = ROI.sum()
     probe = datacube.data[ROI,:,:][0]
     for n in range(1,length):
-        curr_DP = datacube.data[ROI,:,:][n]
+        curr_DP = datacube.data[ROI,:,:][n] * DP_mask
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,length))
 
