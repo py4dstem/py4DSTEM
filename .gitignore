@@ -11,7 +11,7 @@ __pycache__/
 # Data Specific #
 #################
 *.png
-*.gif
+#*.gif
 *.emd
 *.emf
 *.dm3
