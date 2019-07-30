@@ -56,6 +56,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_EditDirectoryMetadata = self.widget_LoadPreprocessSave.widget.pushButton_EditDirectoryMetadata
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
+        self.pushButton_LaunchStrain = self.widget_LoadPreprocessSave.widget.pushButton_LaunchStrain
 
         ########### Preprocessing sub-widget ##########
         self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget())
@@ -174,6 +175,13 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         save_widget_layout.addWidget(self.pushButton_SaveFile)
         save_widget.setLayout(save_widget_layout)
 
+        analysis_widget = QtWidgets.QWidget()
+        analysis_widget_layout = QtWidgets.QHBoxLayout()
+        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Single Crystal Strain')
+        self.pushButton_LaunchStrain.setMaximumWidth(200)
+        analysis_widget_layout.addWidget(self.pushButton_LaunchStrain)
+        analysis_widget.setLayout(analysis_widget_layout)
+
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(SectionLabel('Load'))
@@ -182,6 +190,8 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         layout.addWidget(preprocess_widget)
         layout.addWidget(SectionLabel('Save'))
         layout.addWidget(save_widget)
+        layout.addWidget(SectionLabel('Analysis'))
+        layout.addWidget(analysis_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
