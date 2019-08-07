@@ -47,12 +47,13 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
                 pointlist = Braggpeaks.get_pointlist(Rx,Ry)
-                r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
-                index = np.argmin(r2)
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                            pointlist.data['qx'][index],
-                                                            pointlist.data['qy'][index],
-                                                            pointlist.data['intensity'][index])
+                if pointlist.length > 0:
+                    r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                    index = np.argmin(r2)
+                    braggvectormap = add_to_2D_array_from_floats(braggvectormap,
+                                                                pointlist.data['qx'][index],
+                                                                pointlist.data['qy'][index],
+                                                                pointlist.data['intensity'][index])
         x0,y0 = get_CoM(braggvectormap)
 
     # Get Bragg peak closest to unscattered beam at each scan position
@@ -62,14 +63,15 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
             pointlist = Braggpeaks.get_pointlist(Rx,Ry)
-            r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
-            index = np.argmin(r2)
-            braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                        pointlist.data['qx'][index],
-                                                        pointlist.data['qy'][index],
-                                                        pointlist.data['intensity'][index])
-            xshifts[Rx,Ry] = pointlist.data['qx'][index]
-            yshifts[Rx,Ry] = pointlist.data['qy'][index]
+            if pointlist.length > 0:
+                r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                index = np.argmin(r2)
+                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
+                                                            pointlist.data['qx'][index],
+                                                            pointlist.data['qy'][index],
+                                                            pointlist.data['intensity'][index])
+                xshifts[Rx,Ry] = pointlist.data['qx'][index]
+                yshifts[Rx,Ry] = pointlist.data['qy'][index]
 
     xshifts -= np.average(xshifts)
     yshifts -= np.average(yshifts)
