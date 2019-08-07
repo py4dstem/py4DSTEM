@@ -46,7 +46,7 @@ class K2DataArray(Sequence):
         assert len(glob.glob('*.bin')) == 8, "Wrong path, or wrong number of bin files."
         assert len(glob.glob('*.gtg')) == 1, "Wrong path, or wrong number of gtg files."
 
-        gtgpath = os.path.join(os.path.dirname(filepath), glob.glob('*.gtg')[0])
+        gtgpath = os.path.join(filepath, glob.glob('*.gtg')[0])
         binprefix = gtgpath[:-4]
 
         self._gtg_file = gtgpath
@@ -106,7 +106,7 @@ class K2DataArray(Sequence):
         assert Qy.max() < self.shape[3], 'index out of range'
 
         # preallocate the output data array
-        outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.float32)
+        outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.int16)
         
         #loop over all the requested frames
         for sy in range(Rx.shape[1]):
