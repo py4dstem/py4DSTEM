@@ -161,7 +161,7 @@ class polar_elliptical_transform(object):
         else:
             return
 
-    def get_polar_transform_twoSided_gaussian(self, ar, mask, return_ans):
+    def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False):
         """
         Get the polar transformation of an array ar, or if ar is None, of self.calibration_image.
 
@@ -174,10 +174,17 @@ class polar_elliptical_transform(object):
             polar_ar   (2D array) the polar transformation of ar
             polar_mask (2D array) the polar transformation of mask
         """
-        # if self.polarNorm is None:
+        if ar is None:
+            ar = self.calibration_image
+        if mask is None:
+            mask = self.mask
+
+        ar = ar * mask
+
         coef = self.coef_opt
+
         # Define coordinate system
-        ya,xa = np.meshgrid(np.arange(ar.shape[0]),np.arange(ar.shape[1]))
+        ya,xa = self.yy,self.xx
         xa = xa - coef[6]
         ya = ya - coef[7]
 
@@ -201,28 +208,18 @@ class polar_elliptical_transform(object):
         t_ind = np.mod(np.round((ta / self.dtheta)), self.Nt).astype(dtype=int)
         sub = np.logical_and(r_ind < self.Nr, r_ind >= 1)
         rt_inds = np.transpose(np.stack((t_ind[sub],r_ind[sub])))
-        #self.sub = sub
-        #self.rt_inds = rt_inds
-
-        #TODO: set defaults better
-        r_sigma = 0.1
-        t_sigma = 0.1
 
         #and set up KDE kernels
         sr = r_sigma / self.dr
         vr = np.arange(-np.ceil(4*sr),np.ceil(4*sr)+1,1)
         kr = np.exp(-vr**2/(2*sr**2))
-        # kr = np.array([1])
         kr = np.expand_dims(kr,axis=0)
-        #self.kr = kr
 
         dt = (self.dtheta * 180/np.pi)
         st = t_sigma / dt
         vt = np.arange(-np.ceil(4*st),np.ceil(4*st)+1,1)
         kt = np.exp(-vt**2/(2*st**2))
-        # kt = np.array([1])
         kt = np.expand_dims(kt,axis=1)
-        #self.kt = kt
 
         #convolve by kr
         kNorm = convolve2d(np.ones((self.Nt,self.Nr)),kr,mode='same')
@@ -232,28 +229,27 @@ class polar_elliptical_transform(object):
 
         #normalize
         kNorm = np.divide(1, kNorm,where=kNorm!=0)
-        #self.kNorm = kNorm
 
         #get polar array and convolve with KDE kernels, then normalize
         polarNorm = accumarray(rt_inds,np.ones((np.sum(sub))),(self.Nt,self.Nr))
         polarNorm = convolve2d(polarNorm,kr,mode='same')
         polarNorm = convolve2d(polarNorm,kt,mode='same',boundary='wrap')
         polarNorm = kNorm * polarNorm
-        #self.polarNorm = kNorm * polarNorm
 
         polarMask = accumarray(rt_inds,mask[sub],(self.Nt,self.Nr))
         polarMask = convolve2d(polarMask,kr,mode='same')
         polarMask = convolve2d(polarMask,kt,mode='same',boundary='wrap')
-        #self.polarMask = kNorm * polarMask
+        self.polar_mask = kNorm * polarMask
 
         polarCBED = accumarray(rt_inds,ar[sub],(self.Nt,self.Nr))
         polarCBED = convolve2d(polarCBED,kr,mode='same')
         polarCBED = convolve2d(polarCBED,kt,mode='same',boundary='wrap')
         polarCBED = kNorm * polarCBED
         polar_ar = np.divide(polarCBED, polarNorm, where=polarNorm!=0)
+        self.polar_ar = polar_ar
 
         if return_ans:
-            return polar_ar
+            return self.polar_ar, self.polar_mask
         else:
             return
 
@@ -500,7 +496,7 @@ def accumarray(indices,values,size):
     """
 
     #indices is a NxM array, where N is the number of events and M is the dimensionality of source/dest arrays
-    assert indices.shape[1] == len(size), "ya goofed dimensions"
+    assert indices.shape[1] == len(size), "Size and array mismatch"
 
     #initialiaze destination array
     dest = np.zeros(size)
