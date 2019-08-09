@@ -161,7 +161,7 @@ class polar_elliptical_transform(object):
         else:
             return
 
-    def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False):
+    def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False, coef = None):
         """
         Get the polar transformation of an array ar, or if ar is None, of self.calibration_image.
 
@@ -180,8 +180,8 @@ class polar_elliptical_transform(object):
             mask = self.mask
 
         ar = ar * mask
-
-        coef = self.coef_opt
+        if coef is None:
+            coef = self.coef_opt
 
         # Define coordinate system
         ya,xa = self.yy,self.xx
