@@ -34,8 +34,8 @@ class polar_elliptical_transform(object):
     calibration image ar -- appropriate data includes a single DP with amorphous rings, a position
     averaged DP over many nanocrystalline grains, etc. with -- by invoking:
 
-        >>> pet.fit_origin()        # Refines x0,y0
-        >>> pet.fit_ellipticity()   # Refines x0,y0,A,B,phi
+        >>> pet.fit_origin(n_iter=100)        # Refines x0,y0
+        >>> pet.fit_ellipticity(n_iter=100)   # Refines x0,y0,A,B,phi
 
     and the polar transform can then be recalculated with
 
@@ -182,6 +182,7 @@ class polar_elliptical_transform(object):
         # RMS along theta
         self.RMSD = (self.polar_ar - np.tile(self.mean,(self.Nt,1)))**2
         self.RMSD = np.sum(self.RMSD, axis=0)
+        divmask = self.mean > 1e-10
         self.RMSD[divmask] = np.sqrt(self.RMSD[divmask] / self.mean[divmask])
         self.RMSD[divmask==False] = 0
 
@@ -317,7 +318,7 @@ class polar_elliptical_transform(object):
             return scores, x0_vals, y0_vals
         else:
             self.fit_params(n_iter=n_iter,
-                            step_sizes_init=[step_sizes[0],step_size[1],0,0,0],
+                            step_sizes_init=[step_sizes[0],step_sizes[1],0,0,0],
                             step_scale=0.9,
                             return_ans=False)
             return
