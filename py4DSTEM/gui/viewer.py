@@ -30,6 +30,7 @@ from .utils import sibling_path, pg_point_roi, LQCollection
 from ..file.io.read import read
 from ..file.io.write import save_dataobject
 from ..file.datastructure.datacube import DataCube
+from .strain import *
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -54,12 +55,20 @@ class DataViewer(QtWidgets.QMainWindow):
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
+
+
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
 
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
         # Make settings collection
         self.settings = LQCollection()
+
+        self.strain_window = None
 
         self.main_window = QtWidgets.QWidget()
         self.main_window.setWindowTitle("py4DSTEM")
@@ -96,9 +105,9 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.setWindowTitle("Control Panel")
 
         ############################ Controls ###############################
-        # For each control:                                                 # 
+        # For each control:                                                 #
         #   -creates items in self.settings                                 #
-        #   -connects UI changes to updates in self.settings                # 
+        #   -connects UI changes to updates in self.settings                #
         #   -connects updates in self.settings items to function calls      #
         #   -connects button clicks to function calls                       #
         #####################################################################
@@ -144,6 +153,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.pushButton_EditDirectoryMetadata.clicked.connect(self.edit_directory_metadata)
         self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
         self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
+        self.control_widget.pushButton_LaunchStrain.clicked.connect(self.launch_strain)
 
         # Virtual detectors
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
@@ -154,6 +164,10 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.settings.virtual_detector_shape.updated_value.connect(self.update_virtual_detector_shape)
         self.settings.virtual_detector_mode.updated_value.connect(self.update_virtual_detector_mode)
+
+        self.settings.New('arrowkey_mode',dtype=int,initial=2)
+        self.settings.arrowkey_mode.connect_bidir_to_widget(self.control_widget.virtualDetectors.widget.buttonGroup_ArrowkeyMode)
+        self.settings.arrowkey_mode.updated_value.connect(self.update_arrowkey_mode)
 
         return self.control_widget
 
@@ -242,22 +256,46 @@ class DataViewer(QtWidgets.QMainWindow):
     # the process directory.                                         #
     # Additional functionality here should be avoided, to ensure     #
     # consistent output between processing run through the GUI       #
-    # or from the command line.                                      # 
+    # or from the command line.                                      #
     ##################################################################
 
+    def launch_strain(self):
+        self.strain_window = StrainMappingWindow(main_window=self)
+
+        self.strain_window.setup_tabs()
+
     ################ Load ################
+    def couldnt_find_file(self,fname):
+        msg = QtWidgets.QMessageBox()
+        msg.setText("Couldn't find filepath {0}".format(fname))
+        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        msg.exec_()
 
     def load_file(self):
         """
         Loads a file by creating and storing a DataCube object.
         """
         fname = self.settings.data_filename.val
+
+        #Check that file exists
+        if not os.path.exists(fname):
+            self.couldnt_find_file(fname)
+            return
+
         print("Loading file",fname)
 
         # Instantiate DataCube object
         self.datacube = None
         gc.collect()
-        self.datacube = read(fname)
+
+        # load based on chosen mode:
+        if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
+            #auto mode
+            self.datacube = read(fname)
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
+            self.datacube = read(fname, load='dmmmap')
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
+            self.datacube = read(fname, load='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
@@ -414,7 +452,10 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi.setPos((xf,yf))
             self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
-            self.datacube.bin_data_diffraction(bin_factor_Q)
+            if isinstance(self.datacube.data,np.ndarray):
+                self.datacube.bin_data_diffraction(bin_factor_Q)
+            else:
+                self.datacube.bin_data_mmap(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
         if bin_factor_R>1:
@@ -678,6 +719,7 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
+
             self.diffraction_space_widget.setImage(self.diffraction_space_view,
                                                    autoLevels=False,autoRange=False)
         else:
@@ -735,17 +777,58 @@ class DataViewer(QtWidgets.QMainWindow):
         else:
             print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(detector_shape))
 
+        # propagate to the strain window, if it exists
+        if self.strain_window is not None:
+            self.strain_window.bragg_disk_tab.update_views()
+
         return
 
+    ######### Handle keypresses to move realspace cursor ##########
+    def keyPressEvent(self,e):
+        mode = self.settings.arrowkey_mode.val
 
+        if mode == 0: # we are in realspace mode
+            roi_state = self.real_space_point_selector.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[1])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[1])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.real_space_point_selector.setState(roi_state)
+        elif mode == 1: # we are in qspace mode
+            roi_state = self.virtual_detector_roi.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[3])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[3])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.virtual_detector_roi.setState(roi_state)
+
+    def update_arrowkey_mode(self):
+        mode = self.settings.arrowkey_mode.val
+        if mode == 2:
+            self.releaseKeyboard()
+        else:
+            self.grabKeyboard()
 
     def exec_(self):
         return self.qtapp.exec_()
 
 
 ################################ End of class ##################################
-
-
-
-
-

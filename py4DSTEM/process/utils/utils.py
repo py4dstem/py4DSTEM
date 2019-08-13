@@ -4,6 +4,12 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 
+try:
+    from IPython.display import clear_output
+except ImportError:
+    def clear_output(wait=True):
+        pass
+
 def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     """
     Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
@@ -146,43 +152,44 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
     maxima['intensity'] = ar[maxima_x,maxima_y]
     maxima = np.sort(maxima,order='intensity')[::-1]
 
-    # Remove maxima which are too close
-    if minSpacing > 0:
-        deletemask = np.zeros(len(maxima),dtype=bool)
-        for i in range(len(maxima)):
-            if deletemask[i] == False:
-                tooClose = ( (maxima['x']-maxima['x'][i])**2 + \
-                             (maxima['y']-maxima['y'][i])**2 ) < minSpacing**2
-                tooClose[:i+1] = False
-                deletemask[tooClose] = True
-        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+    if len(maxima) > 0:
+        # Remove maxima which are too close
+        if minSpacing > 0:
+            deletemask = np.zeros(len(maxima),dtype=bool)
+            for i in range(len(maxima)):
+                if deletemask[i] == False:
+                    tooClose = ( (maxima['x']-maxima['x'][i])**2 + \
+                                 (maxima['y']-maxima['y'][i])**2 ) < minSpacing**2
+                    tooClose[:i+1] = False
+                    deletemask[tooClose] = True
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
-    # Remove maxima which are too dim
-    if minRelativeIntensity > 0:
-        assert isinstance(relativeToPeak,(int,np.integer))
-        deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
-        maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+        # Remove maxima which are too dim
+        if (minRelativeIntensity > 0) & (len(maxima)>relativeToPeak):
+            assert isinstance(relativeToPeak,(int,np.integer))
+            deletemask = maxima['intensity']/maxima['intensity'][relativeToPeak] < minRelativeIntensity
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
-    # Remove maxima in excess of maxNumPeaks
-    if maxNumPeaks > 0:
-        assert isinstance(maxNumPeaks,(int,np.integer))
-        if len(maxima) > maxNumPeaks:
-            maxima = maxima[:maxNumPeaks]
+        # Remove maxima in excess of maxNumPeaks
+        if maxNumPeaks > 0:
+            assert isinstance(maxNumPeaks,(int,np.integer))
+            if len(maxima) > maxNumPeaks:
+                maxima = maxima[:maxNumPeaks]
 
-    # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
-    if subpixel is True:
-        for i in range(len(maxima)):
-            Ix1_ = ar[int(maxima['x'][i])-1,int(maxima['y'][i])]
-            Ix0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
-            Ix1 = ar[int(maxima['x'][i])+1,int(maxima['y'][i])]
-            Iy1_ = ar[int(maxima['x'][i]),int(maxima['y'][i])-1]
-            Iy0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
-            Iy1 = ar[int(maxima['x'][i]),int(maxima['y'][i])+1]
-            deltax = (Ix1 - Ix1_)/(4*Ix0 - 2*Ix1 - 2*Ix1_)
-            deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
-            maxima['x'][i] += deltax
-            maxima['y'][i] += deltay
-            maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
+        # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
+        if subpixel is True:
+            for i in range(len(maxima)):
+                Ix1_ = ar[int(maxima['x'][i])-1,int(maxima['y'][i])]
+                Ix0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+                Ix1 = ar[int(maxima['x'][i])+1,int(maxima['y'][i])]
+                Iy1_ = ar[int(maxima['x'][i]),int(maxima['y'][i])-1]
+                Iy0 = ar[int(maxima['x'][i]),int(maxima['y'][i])]
+                Iy1 = ar[int(maxima['x'][i]),int(maxima['y'][i])+1]
+                deltax = (Ix1 - Ix1_)/(4*Ix0 - 2*Ix1 - 2*Ix1_)
+                deltay = (Iy1 - Iy1_)/(4*Iy0 - 2*Iy1 - 2*Iy1_)
+                maxima['x'][i] += deltax
+                maxima['y'][i] += deltay
+                maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
 
     return maxima['x'],maxima['y'],maxima['intensity']
 
@@ -317,18 +324,21 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    clear_output(wait=True)
+    print('\r{} |{}| {}% {}\r'.format(prefix, bar, percent, suffix))
     # Print New Line on Complete
     if iteration == total:
         print()
 
-def bin2D(array, factor):
+def bin2D(array, factor, dtype=np.float64):
     """
     Bin a 2D ndarray by binfactor.
 
     Accepts:
         array       a 2D numpy array
         factor      (int) the binning factor
+        dtype       (numpy dtype) datatype for binned array.
+                    defalt is numpy default for np.zeros()
 
     Returns:
         binned_ar   the binned array
@@ -338,7 +348,8 @@ def bin2D(array, factor):
     xx,yy = binx*factor,biny*factor
 
     # Make a binned array on the device
-    binned_ar = np.zeros((binx,biny))
+    binned_ar = np.zeros((binx,biny),dtype=dtype)
+    array = array.astype(dtype)
 
     # Collect pixel sums into new bins
     for ix in range(factor):
