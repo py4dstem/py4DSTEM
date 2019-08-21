@@ -268,18 +268,18 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     return tuple(peaks)
 
 
-def find_Bragg_disks(datacube, probe,
-                     corrPower = 1,
-                     sigma = 2,
-                     edgeBoundary = 20,
-                     minRelativeIntensity = 0.005,
-                     relativeToPeak = 0,
-                     minPeakSpacing = 60,
-                     maxNumPeaks = 70,
-                     subpixel = 'multicorr',
-                     upsample_factor = 16,
-                     verbose = False,
-                     _qt_progress_bar=None):
+def find_Bragg_disks_serial(datacube, probe,
+                            corrPower = 1,
+                            sigma = 2,
+                            edgeBoundary = 20,
+                            minRelativeIntensity = 0.005,
+                            relativeToPeak = 0,
+                            minPeakSpacing = 60,
+                            maxNumPeaks = 70,
+                            subpixel = 'multicorr',
+                            upsample_factor = 16,
+                            verbose = False,
+                            _qt_progress_bar = None):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe.
@@ -348,6 +348,178 @@ def find_Bragg_disks(datacube, probe,
                                                                    int(t/60), int(t%60)))
 
     return peaks
+
+
+def find_Bragg_disks(datacube, probe,
+                     corrPower = 1,
+                     sigma = 2,
+                     edgeBoundary = 20,
+                     minRelativeIntensity = 0.005,
+                     relativeToPeak = 0,
+                     minPeakSpacing = 60,
+                     maxNumPeaks = 70,
+                     subpixel = 'multicorr',
+                     upsample_factor = 16,
+                     verbose = False,
+                     _qt_progress_bar = None,
+                     distributed = None):
+    """
+    Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
+    correlation with probe.
+
+    Accepts:
+        DP                   (ndarray) a diffraction pattern
+        probe                (ndarray) the vacuum probe template, in real space.
+        corrPower            (float between 0 and 1, inclusive) the cross correlation power. A
+                             value of 1 corresponds to a cross correaltion, and 0 corresponds to a
+                             phase correlation, with intermediate values giving various hybrids.
+        sigma                (float) the standard deviation for the gaussian smoothing applied to
+                             the cross correlation
+        edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
+                             the intensity of the brightest peak
+        relativeToPeak       (int) specifies the peak against which the minimum relative intensity
+                             is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
+        maxNumPeaks          (int) the maximum number of peaks to return
+        subpixel             (str)          'none': no subpixel fitting
+                                    default 'poly': polynomial interpolation of correlogram peaks
+                                                    (fairly fast but not very accurate)
+                                            'multicorr': uses the multicorr algorithm with
+                                                        DFT upsampling
+        upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        verbose              (bool) if True, prints completion updates for serial execution
+        _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
+        distributed          (dict) contains information for parallelprocessing using an IPyParallel
+                             or Dask distributed cluster.  Valid keys are:
+                                 ipyparallel (dict):
+                                     client_file (str): path to client json for connecting to your existing
+                                     IPyParallel cluster
+                                 dask (dict):
+                                     client (object): a dask client that connects to your existing Dask cluster
+                                 data_file (str): the absolute path to your original data file containing the datacube
+                                 cluster_path (str): defaults to "$SCRATCH", the working directory during processing
+
+                             if distributed is None, which is the default, processing will be in serial
+
+    Returns:
+        peaks                (PointListArray) the Bragg peak positions and correlation intensities
+    """
+
+    def _parse_distributed(distributed):
+        import os
+
+        if "ipyparallel" in distributed:
+            if "client_file" in distributed["ipyparallel"]:
+                connect = distributed["ipyparallel"]["client_file"]
+            else:
+                raise KeyError("Within distributed[\"ipyparallel\"], missing key for \"client_file\"")
+
+            try:
+                import ipyparallel as ipp
+                c = ipp.Client(url_file=connect, timeout=30)
+
+                if len(c.ids) == 0:
+                    raise RuntimeError("No IPyParallel engines attached to cluster!")
+            except ImportError:
+                raise ImportError("Unable to import module ipyparallel!")
+        elif "dask" in distributed:
+            if "client" in distributed["dask"]:
+                connect = distributed["dask"]["client"]
+            else:
+                raise KeyError("Within distributed[\"dask\"], missing key for \"client\"")
+        else:
+            raise KeyError(
+                "Within distributed, you must specify 'ipyparallel' or 'dask'!")
+
+        if "data_file" not in distributed:
+            raise KeyError("Missing input data file path to distributed!  Required key 'data_file'")
+
+        data_file = distributed["data_file"]
+
+        if not isinstance(data_file, str):
+            raise TypeError("Expected string for distributed key 'data_file', received {}".format(type(data_file)))
+        if len(data_file.strip()) == 0:
+            raise ValueError("Empty data file path from distributed key 'data_file'")
+        elif not os.path.exists(data_file):
+            raise FileNotFoundError("File not found")
+
+        if "cluster_path" in distributed:
+            cluster_path = distributed["cluster_path"]
+
+            if not isinstance(cluster_path, str):
+                raise TypeError(
+                    "distributed key 'cluster_path' must be of type str, received {}".format(type(cluster_path)))
+
+            if len(cluster_path.strip()) == 0:
+                raise ValueError("distributed key 'cluster_path' cannot be an empty string!")
+            elif not os.path.exists(cluster_path):
+                raise FileNotFoundError("distributed key 'cluster_path' does not exist: {}".format(cluster_path))
+            elif not os.path.isdir(cluster_path):
+                raise NotADirectoryError("distributed key 'cluster_path' is not a directory: {}".format(cluster_path))
+        else:
+            cluster_path = None
+
+        return connect, data_file, cluster_path
+
+    if distributed is None:
+        return find_Bragg_disks_serial(
+            datacube,
+            probe,
+            corrPower=corrPower,
+            sigma=sigma,
+            edgeBoundary=edgeBoundary,
+            minRelativeIntensity=minRelativeIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            maxNumPeaks=maxNumPeaks,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            verbose=verbose,
+            _qt_progress_bar=_qt_progress_bar)
+    elif isinstance(distributed, dict):
+        connect, data_file, cluster_path = _parse_distributed(distributed)
+
+        if "ipyparallel" in distributed:
+            from .diskdetection_parallel import find_Bragg_disks_ipp
+
+            return find_Bragg_disks_ipp(
+                datacube,
+                probe,
+                corrPower=corrPower,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                ipyparallel_client_file=connect,
+                data_file=data_file,
+                cluster_path=cluster_path
+                )
+        elif "dask" in distributed:
+            from .diskdetection_parallel import find_Bragg_disks_dask
+
+            return find_Bragg_disks_dask(
+                datacube,
+                probe,
+                corrPower=corrPower,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                dask_client=connect,
+                data_file=data_file,
+                cluster_path=cluster_path
+                )
+    else:
+        raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
 
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing,
