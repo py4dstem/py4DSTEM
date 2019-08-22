@@ -306,7 +306,7 @@ def find_Bragg_disks_serial(datacube, probe,
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         verbose              (bool) if True, prints completion updates
-        _qt_progress_bar      (QProgressBar instance) used only by the GUI.
+        _qt_progress_bar     (QProgressBar instance) used only by the GUI.
 
     Returns:
         peaks                (PointListArray) the Bragg peak positions and correlation intensities
