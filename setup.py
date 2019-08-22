@@ -19,5 +19,8 @@ setup(name='py4DSTEM',
         'pyqtgraph >= 0.10, < 0.11',
         'qtconsole >= 4.4, < 4.5',
         'ncempy >= 1.4.2'
-    ])
+    ],
+    entry_points= {
+    'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
+    })
 
