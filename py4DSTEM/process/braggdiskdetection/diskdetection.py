@@ -398,7 +398,7 @@ def find_Bragg_disks(datacube, probe,
                                  dask (dict):
                                      client (object): a dask client that connects to your existing Dask cluster
                                  data_file (str): the absolute path to your original data file containing the datacube
-                                 cluster_path (str): defaults to "$SCRATCH", the working directory during processing
+                                 cluster_path (str): defaults to the working directory during processing
 
                              if distributed is None, which is the default, processing will be in serial
 
