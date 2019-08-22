@@ -246,7 +246,7 @@ def find_Bragg_disks_ipp(DP, probe,
         raise RuntimeError("data_file is None, needs path to datacube")
 
     t0 = time()
-    c = ipp.Client(ipyparallel_client_file=ipyparallel_client_file, timeout=30)
+    c = ipp.Client(url_file=ipyparallel_client_file, timeout=30)
 
     inputs_list = [
         probe_kernel_FT,
