@@ -81,8 +81,12 @@ class K2DataArray(Sequence):
         self._attach_to_files()
 
         self._stripe_dtype = np.dtype([ ('sync','>u4',1), \
-            ('header',np.void,24),('coords','>u2',4),('pad',np.void,4),('data','>u1',22320) ])
+            ('pad1',np.void,5),('shutter','>u1',1),('pad2',np.void,18),\
+            ('coords','>u2',4),('pad3',np.void,4),('data','>u1',22320) ])
 
+        self._shutter_offsets = np.zeros((8,),dtype=np.uint8)
+        self._find_offsets()
+        print('Shutter flags are:',self._shutter_offsets)
                 
         super().__init__()
 
@@ -114,7 +118,7 @@ class K2DataArray(Sequence):
                 scanx = Rx[sx,sy]
                 scany = Ry[sx,sy]
 
-                frame = np.ravel_multi_index( (scanx,scany), (self.shape[0],self.shape[1]), order='F' )
+                frame = np.ravel_multi_index( (scanx,scany), (self.shape[0]+1,self.shape[1]), order='C' )
                 DP = self._grab_frame(frame).astype(np.int16)
                 if self._hidden_stripe_noise_reduction:
                     self._subtract_readout_noise(DP)
@@ -138,6 +142,23 @@ class K2DataArray(Sequence):
             binName = self._bin_prefix + str(i+1) + '.bin'
             self._bin_files[i] = open(binName,'rb')
 
+    def _find_offsets(self):
+        # in each file, find the first frame with open shutter
+        for i in range(8):
+            binfile = self._bin_files[i]
+
+            shutter = False
+            frame = 0
+            while shutter == False:
+                xOffset = i*256 #the x location of the sector for each BIN file
+                binfile.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
+                # read a set of stripes:
+                stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+                shutter = stripe[0]['shutter']
+                if shutter == False: frame += 1
+
+            self._shutter_offsets[i] = frame
+
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
         for ii in range(8):
@@ -145,7 +166,7 @@ class K2DataArray(Sequence):
 
             xOffset = ii*256 #the x location of the sector for each BIN file
             syncBytes = 0 #set this to a default value to check for the proper syncBytes value
-            binfile.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
+            binfile.seek((frame + self._shutter_offsets[ii]) * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
 
             # read a set of stripes:
             stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
@@ -155,6 +176,8 @@ class K2DataArray(Sequence):
                 if stripe[jj]['sync'] != 0xffff0055:
                     print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
                     break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
+                if stripe[jj]['shutter'] != 1:
+                    print('Stripe with closed shutter!')
 
                 coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
 
@@ -195,7 +218,7 @@ class K2DataArray(Sequence):
         assert len(i)==2, 'Wrong size input'
         
         if mode == 'real':
-            xMax = self.shape[0] # R_Ny
+            xMax = self.shape[0] # R_Nx
             yMax = self.shape[1] # R_Ny
         elif mode == 'diffraction':
             xMax = self.shape[2] # Q_Nx
@@ -213,7 +236,10 @@ class K2DataArray(Sequence):
         else:
             yInds = i[1]
             
-        x,y = np.meshgrid(xInds,yInds,indexing='ij')
+        if mode == 'diffraction':
+            x,y = np.meshgrid(xInds,yInds,indexing='ij')
+        elif mode == 'real':
+            x,y = np.meshgrid(xInds,yInds,indexing='xy')
         return x,y
 
     def _guess_number_frames(self):
