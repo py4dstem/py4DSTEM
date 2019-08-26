@@ -58,8 +58,8 @@ class K2DataArray(Sequence):
 
         #get the important metadata
         try:
-            R_Ny = gtg.allTags['.SI Image Tags.SI.Acquisition.Spatial Sampling.Height (pixels)']
-            R_Nx = gtg.allTags['.SI Image Tags.SI.Acquisition.Spatial Sampling.Width (pixels)']
+            R_Ny = gtg.allTags['.SI Dimensions.Size Y']
+            R_Nx = gtg.allTags['.SI Dimensions.Size X']
         except ValueError:
             print('Warning: scan shape not detected. Please check/set manually.')
             R_Nx = self._guess_number_frames()
@@ -81,8 +81,15 @@ class K2DataArray(Sequence):
         self._attach_to_files()
 
         self._stripe_dtype = np.dtype([ ('sync','>u4',1), \
-            ('header',np.void,24),('coords','>u2',4),('pad',np.void,4),('data','>u1',22320) ])
+            ('pad1',np.void,5),('shutter','>u1',1),('pad2',np.void,6),\
+            ('block','>u4',1),('pad4',np.void,4),('frame','>u4',1),('coords','>u2',4),\
+            ('pad3',np.void,4),('data','>u1',22320) ])
 
+        self._shutter_offsets = np.zeros((8,),dtype=np.uint32)
+        self._find_offsets()
+        print('Shutter flags are:',self._shutter_offsets)
+
+        self._gtg_meta = gtg.allTags
                 
         super().__init__()
 
@@ -138,6 +145,97 @@ class K2DataArray(Sequence):
             binName = self._bin_prefix + str(i+1) + '.bin'
             self._bin_files[i] = open(binName,'rb')
 
+    def _find_offsets(self):
+        # first, line up the block counts (LiberTEM calls this sync_sectors)
+        first_blocks = np.zeros((8,),dtype=np.uint32)
+        for i in range(8):
+            binfile = self._bin_files[i]
+            binfile.seek(0,0)
+
+            stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
+
+            first_blocks[i] = stripe['block']
+        
+        # find the first frame in each with the starting block
+        block_id = np.max(first_blocks)
+        print('First block syncs to block #',block_id)
+        for i in range(8):
+            binfile = self._bin_files[i]
+            sync = False
+            frame = 0
+            while sync == False:
+                binfile.seek(frame * 0x5758 * 1,0) # frame * BLOCK_SIZE 
+                # read a set of stripes:
+                stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
+                sync = (stripe['block'] == block_id)
+                if sync == False: frame += 1
+            self._shutter_offsets[i] += frame
+        print('Offsets are currently ',self._shutter_offsets)
+
+        first_frame = stripe['frame']
+        # next, check if the frames are complete (the next 32 blocks should have the same block #)
+        print('Checking if first frame is complete...')
+        sync = True
+        for i in range(8):
+            binfile = self._bin_files[i]
+            binfile.seek(self._shutter_offsets[i] * 0x5758,0) # frame * BLOCK_SIZE 
+            # read a set of stripes:
+            stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+            for j in range(32):
+                if stripe[j]['frame'] != first_frame:
+                    sync = False
+                    next_frame = stripe[j]['frame']
+
+        if sync == False:
+            # the first frame is incomplete, so we need to seek the next one
+            print(f'First frame ({first_frame[0]}) incomplete, seeking frame {next_frame}...')
+            for i in range(8):
+                binfile = self._bin_files[i]
+                sync = False
+                frame = 0
+                while sync == False:
+                    binfile.seek((frame+self._shutter_offsets[i]) * 0x5758 * 1,0) # frame * BLOCK_SIZE 
+                    # read a set of stripes:
+                    stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
+                    sync = (stripe['frame'] == next_frame)
+                    if sync == False: frame += 1
+                self._shutter_offsets[i] += frame
+            print('Offsets are now ',self._shutter_offsets)
+
+            # JUST TO BE SAFE, CHECK AGAIN THAT FRAME IS COMPLETE
+            print('Checking if new frame is complete...')
+            first_frame = stripe['frame']
+            # check if the frames are complete (the next 32 blocks should have the same block #)
+            sync = True
+            for i in range(8):
+                binfile = self._bin_files[i]
+                binfile.seek(self._shutter_offsets[i] * 0x5758,0) # frame * BLOCK_SIZE 
+                # read a set of stripes:
+                stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+                for j in range(32):
+                    if stripe[j]['frame'] != first_frame:
+                        sync = False
+            if sync == True:
+                print('New frame is complete!')
+            else:
+                print('Next frame also incomplete!!!! Data may be corrupt?')
+
+        # in each file, find the first frame with open shutter (LiberTEM calls this sync_to_first_frame)
+        print('Synchronizing to shutter open...')
+        for i in range(8):
+            binfile = self._bin_files[i]
+
+            shutter = False
+            frame = 0
+            while shutter == False:
+                binfile.seek((frame*32 +self._shutter_offsets[i]) * 0x5758,0) # frame * BLOCK_SIZE
+                # read a set of stripes:
+                stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
+                shutter = stripe[0]['shutter']
+                if shutter == 0: frame += 1
+
+            self._shutter_offsets[i] += (frame * 32)
+
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
         for ii in range(8):
@@ -145,7 +243,7 @@ class K2DataArray(Sequence):
 
             xOffset = ii*256 #the x location of the sector for each BIN file
             syncBytes = 0 #set this to a default value to check for the proper syncBytes value
-            binfile.seek(frame * 0x5758 * 32,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
+            binfile.seek((frame*32 + self._shutter_offsets[ii]) * 0x5758,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
 
             # read a set of stripes:
             stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
@@ -155,6 +253,8 @@ class K2DataArray(Sequence):
                 if stripe[jj]['sync'] != 0xffff0055:
                     print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
                     break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
+                if stripe[jj]['shutter'] != 1:
+                    print('Stripe with closed shutter!', frame, ii, jj)
 
                 coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
 
@@ -195,7 +295,7 @@ class K2DataArray(Sequence):
         assert len(i)==2, 'Wrong size input'
         
         if mode == 'real':
-            xMax = self.shape[0] # R_Ny
+            xMax = self.shape[0] # R_Nx
             yMax = self.shape[1] # R_Ny
         elif mode == 'diffraction':
             xMax = self.shape[2] # Q_Nx
@@ -213,7 +313,10 @@ class K2DataArray(Sequence):
         else:
             yInds = i[1]
             
-        x,y = np.meshgrid(xInds,yInds,indexing='ij')
+        if mode == 'diffraction':
+            x,y = np.meshgrid(xInds,yInds,indexing='ij')
+        elif mode == 'real':
+            x,y = np.meshgrid(xInds,yInds,indexing='xy')
         return x,y
 
     def _guess_number_frames(self):
