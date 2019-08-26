@@ -11,7 +11,28 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 
 from os.path import join, dirname
 from PyQt5 import QtCore, QtWidgets
+from ..file.io.filebrowser import FileBrowser
 import pyqtgraph as pg
+
+def datacube_selector_dialog(fpath,window):
+    """
+    Loads a FileBrowser from given fpath and presents the user with a dialog to
+    choose one of the datacubes inside the file, if more than one exists.
+    Returns the selected DataCube object.
+    """
+    fb = FileBrowser(fpath)
+
+    if fb.N_datacubes == 1:
+        dc = fb.get_datacubes()
+    elif fb.N_datacubes > 1:
+        # there is more than one object, so we need to present the user with a chooser
+        indices = (self.dataobject_lookup_arr=='DataCube' | 
+            self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
+
+
+    return dc
+
+
 
 
 def sibling_path(fpath, fname):
