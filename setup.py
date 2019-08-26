@@ -19,8 +19,11 @@ setup(name='py4DSTEM',
         'pyqtgraph >= 0.10, < 0.11',
         'qtconsole >= 4.4, < 4.5',
         'ncempy >= 1.4.2'
-    ],
+        ],
+    extras_require={
+        'ipyparallel': ['ipyparallel >= 6.2.4'],
+        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0']
+        },
     entry_points= {
-    'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
+        'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
     })
-
