@@ -28,7 +28,16 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
-    f = h5py.File(outputfile,"w")
+    try:
+        f = h5py.File(outputfile,"w")
+    except OSError as e:
+        print(e)
+        print('The file appears to be open elsewhere...')
+        print('This can occur if your datacube was read from a py4DSTEM h5 file.')
+        print(f'To forse close the file, losing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{outputfile}\')')
+        print('To force close all h5 files run: py4DSTEM.file.io.close_all_h5()')
+        return -1
+
     if topgroup is None:
         group_toplevel = f.create_group("4DSTEM_experiment")
     else:
@@ -445,6 +454,39 @@ def is_metadata_dict(key):
     else:
         return False
 
+def close_all_h5():
+    n = 0
+    import gc
+    for obj in gc.get_objects():
+        try:
+            t = type(obj)
+            if t is h5py.Dataset:
+                try:
+                    obj.file.close()
+                    n += 1
+                except:
+                    pass
+        except:
+            pass
+    print(f'Closed {n} files.')
+
+def close_h5_at_path(fpath):
+    import gc, os
+    n=0
+    for obj in gc.get_objects():
+        try:
+            t = type(obj)
+            if t is h5py.File:
+                try:
+                    pth = obj.filename
+                    if os.path.normpath(pth) == os.path.normpath(fpath):
+                        obj.close()
+                        n += 1
+                        print(pth)
+                except:
+                    pass
+        except:
+            pass
 
 #### Logging functions ####
 
