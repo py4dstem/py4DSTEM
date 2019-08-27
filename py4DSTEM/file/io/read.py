@@ -113,7 +113,6 @@ def read(filename, load=None):
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
-        browser.close()
     return output
 
 def read_with_hyperspy(filename):
