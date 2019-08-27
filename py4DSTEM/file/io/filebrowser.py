@@ -687,7 +687,7 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
+            data = self.file[self.topgroup + 'data/datacubes'][name]['data']
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -775,7 +775,7 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['datacube'])
+            data = self.file[self.topgroup + 'data/datacubes'][name]['datacube']
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -870,7 +870,7 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file['4DSTEM_experiment/data/datacubes'][name]['datacube'])
+            data = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube']
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -952,7 +952,7 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file['4DSTEM_experiment/data/datacubes'][name]['datacube'])
+            data = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube']
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -1034,7 +1034,7 @@ class FileBrowser(object):
         if objecttype == 'RawDataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file['4DSTEM_experiment/rawdatacube/datacube'])
+            data = self.file['4DSTEM_experiment/rawdatacube/datacube']
 
             dataobject = DataCube(data=data, name=name)
 
