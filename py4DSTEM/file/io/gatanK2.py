@@ -91,6 +91,8 @@ class K2DataArray(Sequence):
         print('Shutter flags are:',self._shutter_offsets)
 
         self._gtg_meta = gtg.allTags
+
+        self._verbose = False
                 
         super().__init__()
 
@@ -161,6 +163,28 @@ class K2DataArray(Sequence):
                     avgImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
                     print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
             return avgImg
+
+    def sum(axis=None, dtype=None, out=None, keepdims=False):
+        assert axis in [(0,1), (2,3)], 'Only average DP and average image supported.'
+
+        # handle average DP
+        if axis == (0,1):
+            sumDP = np.zeros((self.shape[2],self.shape[3]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    sumDP += self[Rx,Ry,:,:]
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+
+            return sumDP
+
+        #handle average image
+        if axis == (2,3):
+            sumImg = np.zeros((self.shape[0],self.shape[1]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    sumImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+            return sumImg
     
     
     #====== READING FROM BINARY AND NOISE REDUCTION ======#
