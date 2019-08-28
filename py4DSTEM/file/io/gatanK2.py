@@ -164,8 +164,8 @@ class K2DataArray(Sequence):
                     print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
             return avgImg
 
-    def sum(axis=None, dtype=None, out=None, keepdims=False):
-        assert axis in [(0,1), (2,3)], 'Only average DP and average image supported.'
+    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
+        assert axis in [(0,1), (2,3)], 'Only sum DP and sum image supported.'
 
         # handle average DP
         if axis == (0,1):
@@ -182,10 +182,32 @@ class K2DataArray(Sequence):
             sumImg = np.zeros((self.shape[0],self.shape[1]))
             for Ry in range(self.shape[1]):
                 for Rx in range(self.shape[0]):
-                    sumImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
+                    sumImg[Rx,Ry] = np.sum(self[Rx,Ry,:,:])
                     print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
             return sumImg
-    
+
+
+    def max(self, axis=None, out=None):
+        assert axis in [(0,1), (2,3)], 'Only max DP and max image supported.'
+
+        # handle average DP
+        if axis == (0,1):
+            maxDP = np.zeros((self.shape[2],self.shape[3]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    maxDP = np.maximum(maxDP,self[Rx,Ry,:,:])
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+
+            return maxDP
+
+        #handle average image
+        if axis == (2,3):
+            maxImg = np.zeros((self.shape[0],self.shape[1]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    maxImg[Rx,Ry] = np.max(self[Rx,Ry,:,:])
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+            return maxImg
     
     #====== READING FROM BINARY AND NOISE REDUCTION ======#
     def _attach_to_files(self):
