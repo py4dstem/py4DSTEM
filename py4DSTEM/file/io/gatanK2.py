@@ -404,6 +404,7 @@ class K2DataArray(Sequence):
         for sy in range(self.shape[1]):
             for sx in range(self.shape[0]):
                 dset[sx,sy,:,:] = self[sx,sy,:,:]
+                print_progress_bar(sy*self.shape[0] + sx + 1,self.shape[0]*self.shape[1])
 
         return dset
 
