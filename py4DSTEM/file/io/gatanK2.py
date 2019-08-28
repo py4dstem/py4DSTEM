@@ -91,8 +91,6 @@ class K2DataArray(Sequence):
         print('Shutter flags are:',self._shutter_offsets)
 
         self._gtg_meta = gtg.allTags
-
-        self._verbose = False
                 
         super().__init__()
 
