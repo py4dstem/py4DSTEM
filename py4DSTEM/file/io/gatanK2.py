@@ -5,6 +5,7 @@
 from collections.abc import Sequence
 import numpy as np
 import numba as nb
+from ...process.utils import print_progress_bar
 
 class K2DataArray(Sequence):
     """
@@ -136,6 +137,30 @@ class K2DataArray(Sequence):
         
     def __len__(self):
         return np.prod(self.shape)
+
+    #====== DUCK-TYPED NUMPY FUNCTIONS ======#
+
+    def mean(self, axis=None, dtype=None, out=None, keepdims=False):
+        assert axis in [(0,1), (2,3)], 'Only average DP and average image supported.'
+
+        # handle average DP
+        if axis == (0,1):
+            avgDP = np.zeros((self.shape[2],self.shape[3]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    avgDP += self[Rx,Ry,:,:]
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+
+            return avgDP / (self.shape[0]*self.shape[1])
+
+        #handle average image
+        if axis == (2,3):
+            avgImg = np.zeros((self.shape[0],self.shape[1]))
+            for Ry in range(self.shape[1]):
+                for Rx in range(self.shape[0]):
+                    avgImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
+                    print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+            return avgImg
     
     
     #====== READING FROM BINARY AND NOISE REDUCTION ======#
