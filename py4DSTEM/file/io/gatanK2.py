@@ -259,12 +259,12 @@ class K2DataArray(Sequence):
 
             # JUST TO BE SAFE, CHECK AGAIN THAT FRAME IS COMPLETE
             print('Checking if new frame is complete...')
-            first_frame = stripe['frame']
+            first_frame = np.max(stripe['frame'])
             # check if the frames are complete (the next 32 blocks should have the same block #)
             sync = True
             for i in range(8):
                 stripe = self._bin_files[i][self._shutter_offsets[i]:self._shutter_offsets[i]+32]
-                if np.any(stripe['frame'] != first_frame):
+                if np.any(stripe[:]['frame'] != first_frame):
                     sync = False
             if sync == True:
                 print('New frame is complete!')
