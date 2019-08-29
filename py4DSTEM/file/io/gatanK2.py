@@ -286,6 +286,7 @@ class K2DataArray(Sequence):
 
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
+        temp = np.zeros((22320,),dtype='>u1')
         for ii in range(8):
             xOffset = ii*256 #the x location of the sector for each BIN file
             # read a set of stripes:
@@ -301,10 +302,10 @@ class K2DataArray(Sequence):
                     print('Stripe with closed shutter!', frame, ii, jj)
 
                 coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
-
+                np.copyto(temp,stripe[jj]['data'])
                 #place the data in the image
                 fullImage[coords[1]:coords[3]+1,coords[0]+xOffset:coords[2]+xOffset+1] = \
-                    _convert_uint12(stripe[jj]['data']).reshape([930, 16])
+                    _convert_uint12(temp).reshape([930, 16])
         return fullImage
     
     @staticmethod
@@ -385,7 +386,7 @@ class K2DataArray(Sequence):
 
     
 # ======= UTILITIES OUTSIDE THE CLASS ======#
-@nb.njit(fastmath=False,parallel=False)
+@nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=False,parallel=False)
 def _convert_uint12(data_chunk):
   """
   data_chunk is a contigous 1D array of uint8 data)
