@@ -6,6 +6,7 @@ from collections.abc import Sequence
 import numpy as np
 import numba as nb
 from ...process.utils import print_progress_bar
+from pdb import set_trace
 
 class K2DataArray(Sequence):
     """
@@ -79,12 +80,12 @@ class K2DataArray(Sequence):
         self.shape = (R_Nx, R_Ny, Q_Nx, Q_Ny)
         self._hidden_stripe_noise_reduction = hidden_stripe_noise_reduction
 
-        self._attach_to_files()
-
         self._stripe_dtype = np.dtype([ ('sync','>u4',1), \
             ('pad1',np.void,5),('shutter','>u1',1),('pad2',np.void,6),\
             ('block','>u4',1),('pad4',np.void,4),('frame','>u4',1),('coords','>u2',4),\
             ('pad3',np.void,4),('data','>u1',22320) ])
+
+        self._attach_to_files()
 
         self._shutter_offsets = np.zeros((8,),dtype=np.uint32)
         self._find_offsets()
@@ -98,7 +99,7 @@ class K2DataArray(Sequence):
     def __del__(self):
         #detatch from the file handles
         for i in range(8):
-            self._bin_files[i].close()
+            del(self._bin_files[i])
 
     #======== HANDLE SLICING AND len CALLS =========#
     def __getitem__(self,i):
@@ -212,44 +213,34 @@ class K2DataArray(Sequence):
         self._bin_files = np.empty(8,dtype=object)
         for i in range(8):
             binName = self._bin_prefix + str(i+1) + '.bin'
-            self._bin_files[i] = open(binName,'rb')
+            self._bin_files[i] = np.memmap(binName,dtype=self._stripe_dtype,mode='r',
+                shape=(self._guess_number_frames()*32,))
 
     def _find_offsets(self):
         # first, line up the block counts (LiberTEM calls this sync_sectors)
         first_blocks = np.zeros((8,),dtype=np.uint32)
         for i in range(8):
             binfile = self._bin_files[i]
-            binfile.seek(0,0)
-
-            stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
-
-            first_blocks[i] = stripe['block']
+            first_blocks[i] = binfile[0]['block']
         
         # find the first frame in each with the starting block
         block_id = np.max(first_blocks)
         print('First block syncs to block #',block_id)
         for i in range(8):
-            binfile = self._bin_files[i]
             sync = False
             frame = 0
             while sync == False:
-                binfile.seek(frame * 0x5758 * 1,0) # frame * BLOCK_SIZE 
-                # read a set of stripes:
-                stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
-                sync = (stripe['block'] == block_id)
+                sync = (self._bin_files[i][frame]['block'] == block_id)
                 if sync == False: frame += 1
             self._shutter_offsets[i] += frame
         print('Offsets are currently ',self._shutter_offsets)
 
-        first_frame = stripe['frame']
+        first_frame = self._bin_files[0][self._shutter_offsets[0]]['frame']
         # next, check if the frames are complete (the next 32 blocks should have the same block #)
         print('Checking if first frame is complete...')
         sync = True
         for i in range(8):
-            binfile = self._bin_files[i]
-            binfile.seek(self._shutter_offsets[i] * 0x5758,0) # frame * BLOCK_SIZE 
-            # read a set of stripes:
-            stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+            stripe = self._bin_files[i][self._shutter_offsets[i]:self._shutter_offsets[i]+32]
             for j in range(32):
                 if stripe[j]['frame'] != first_frame:
                     sync = False
@@ -257,16 +248,12 @@ class K2DataArray(Sequence):
 
         if sync == False:
             # the first frame is incomplete, so we need to seek the next one
-            print(f'First frame ({first_frame[0]}) incomplete, seeking frame {next_frame}...')
+            print(f'First frame ({first_frame}) incomplete, seeking frame {next_frame}...')
             for i in range(8):
-                binfile = self._bin_files[i]
                 sync = False
                 frame = 0
                 while sync == False:
-                    binfile.seek((frame+self._shutter_offsets[i]) * 0x5758 * 1,0) # frame * BLOCK_SIZE 
-                    # read a set of stripes:
-                    stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
-                    sync = (stripe['frame'] == next_frame)
+                    sync = (self._bin_files[i][self._shutter_offsets[i]+frame]['frame'] == next_frame)
                     if sync == False: frame += 1
                 self._shutter_offsets[i] += frame
             print('Offsets are now ',self._shutter_offsets)
@@ -277,13 +264,9 @@ class K2DataArray(Sequence):
             # check if the frames are complete (the next 32 blocks should have the same block #)
             sync = True
             for i in range(8):
-                binfile = self._bin_files[i]
-                binfile.seek(self._shutter_offsets[i] * 0x5758,0) # frame * BLOCK_SIZE 
-                # read a set of stripes:
-                stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
-                for j in range(32):
-                    if stripe[j]['frame'] != first_frame:
-                        sync = False
+                stripe = self._bin_files[i][self._shutter_offsets[i]:self._shutter_offsets[i]+32]
+                if np.any(stripe['frame'] != first_frame):
+                    sync = False
             if sync == True:
                 print('New frame is complete!')
             else:
@@ -292,14 +275,11 @@ class K2DataArray(Sequence):
         # in each file, find the first frame with open shutter (LiberTEM calls this sync_to_first_frame)
         print('Synchronizing to shutter open...')
         for i in range(8):
-            binfile = self._bin_files[i]
-
             shutter = False
             frame = 0
             while shutter == False:
-                binfile.seek((frame*32 +self._shutter_offsets[i]) * 0x5758,0) # frame * BLOCK_SIZE
-                # read a set of stripes:
-                stripe = np.fromfile(binfile, count=1, dtype=self._stripe_dtype)
+                offset = self._shutter_offsets[i] + (frame*32)
+                stripe = self._bin_files[i][offset:offset+32]
                 shutter = stripe[0]['shutter']
                 if shutter == 0: frame += 1
 
@@ -308,14 +288,10 @@ class K2DataArray(Sequence):
     def _grab_frame(self,frame):
         fullImage = np.zeros([1860,2048],dtype=np.uint16)
         for ii in range(8):
-            binfile = self._bin_files[ii]
-
             xOffset = ii*256 #the x location of the sector for each BIN file
-            syncBytes = 0 #set this to a default value to check for the proper syncBytes value
-            binfile.seek((frame*32 + self._shutter_offsets[ii]) * 0x5758,0) # frame * BLOCK_SIZE * BLOCKS_PER_SECTOR_PER_FRAME
-
             # read a set of stripes:
-            stripe = np.fromfile(binfile, count=32, dtype=self._stripe_dtype)
+            start = self._shutter_offsets[ii] + (frame*32)
+            stripe = self._bin_files[ii][start:start+32]
 
             # parse the stripes
             for jj in range(0,32):
@@ -410,7 +386,7 @@ class K2DataArray(Sequence):
 
     
 # ======= UTILITIES OUTSIDE THE CLASS ======#
-@nb.njit(nb.uint16[::1](nb.uint8[::1]),fastmath=False,parallel=False)
+@nb.njit(fastmath=False,parallel=False)
 def _convert_uint12(data_chunk):
   """
   data_chunk is a contigous 1D array of uint8 data)
