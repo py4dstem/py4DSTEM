@@ -91,6 +91,8 @@ class K2DataArray(Sequence):
         print('Shutter flags are:',self._shutter_offsets)
 
         self._gtg_meta = gtg.allTags
+
+        self._user_noise_reduction = False
                 
         super().__init__()
 
@@ -293,14 +295,11 @@ class K2DataArray(Sequence):
             start = self._shutter_offsets[ii] + (frame*32)
             stripe = self._bin_files[ii][start:start+32]
 
+            if np.any(stripe[:]['sync'] != 0xffff0055):
+                print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
+                break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
             # parse the stripes
             for jj in range(0,32):
-                if stripe[jj]['sync'] != 0xffff0055:
-                    print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
-                    break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
-                if stripe[jj]['shutter'] != 1:
-                    print('Stripe with closed shutter!', frame, ii, jj)
-
                 coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
                 np.copyto(temp,stripe[jj]['data'])
                 #place the data in the image
@@ -375,7 +374,7 @@ class K2DataArray(Sequence):
         group should be an HDF5 Group object.
         ( This function is normally called via py4DSTEM.file.io.save() )
         """
-        dset = group.create_dataset("datacube",(self.shape),'i2')
+        dset = group.create_dataset("data",(self.shape),'i2')
 
         for sy in range(self.shape[1]):
             for sx in range(self.shape[0]):
