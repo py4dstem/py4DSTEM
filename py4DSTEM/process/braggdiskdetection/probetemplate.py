@@ -85,9 +85,10 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     """
     assert ROI.shape==(datacube.R_Nx,datacube.R_Ny)
     length = ROI.sum()
-    probe = datacube.data[ROI,:,:][0]
+    xy = np.vstack(np.nonzero(ROI))
+    probe = datacube.data[xy[0,0],xy[1,0],:,:]
     for n in range(1,length):
-        curr_DP = datacube.data[ROI,:,:][n] * DP_mask
+        curr_DP = datacube.data[xy[0,n],xy[1,n],:,:] * DP_mask
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,length))
 
