@@ -162,6 +162,8 @@ def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster
     # Always try to memory map the data file, if possible
     if path_to_data.rsplit('.', 1)[-1].startswith('dm'):
         datacube = py4DSTEM.file.io.read(path_to_data, load='dmmmap')
+    elif path_to_data.rsplit('.',1)[-1].startswith('gt'):
+        datacube = py4DSTEM.file.io.read(path_to_data, load='gatan_bin')
     else:
         datacube = py4DSTEM.file.io.read(path_to_data)
 
