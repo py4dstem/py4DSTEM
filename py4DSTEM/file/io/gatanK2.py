@@ -94,7 +94,7 @@ class K2DataArray(Sequence):
 
 		self._user_noise_reduction = False
 
-		self._temp = np.zeros((22320,),dtype='>u1')
+		self._temp = np.zeros((32,),dtype=self._stripe_dtype)
 		self._Qx, self._Qy = self._parse_slices((slice(None),slice(None)),'diffraction')
 				
 		super().__init__()
@@ -303,18 +303,17 @@ class K2DataArray(Sequence):
 			xOffset = ii*256 #the x location of the sector for each BIN file
 			# read a set of stripes:
 			start = self._shutter_offsets[ii] + (frame*32)
-			stripe = self._bin_files[ii][start:start+32]
+			np.copyto(self._temp,self._bin_files[ii][start:start+32])
 
-			if np.any(stripe[:]['sync'] != 0xffff0055):
+			if np.any(self._temp[:]['sync'] != 0xffff0055):
 				print('The binary file is unsynchronized and cannot be read. You must use Digital Micrograph to extract to *.dm4.')
 				break #stop reading if the sync byte is not correct. Ideally, this would read the next byte, etc... until this exact value is found
 			# parse the stripes
 			for jj in range(0,32):
-				coords = stripe[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
-				np.copyto(self._temp,stripe[jj]['data'])
+				coords = self._temp[jj]['coords'] #first x, first y, last x, last y; ref to 0;inclusive;should indicate 16x930 pixels
 				#place the data in the image
 				fullImage[coords[1]:coords[3]+1,coords[0]+xOffset:coords[2]+xOffset+1] = \
-					_convert_uint12(self._temp).reshape([930, 16])
+					_convert_uint12(self._temp[jj]['data']).reshape([930, 16])
 		return fullImage
 	
 	@staticmethod
