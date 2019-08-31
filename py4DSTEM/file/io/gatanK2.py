@@ -96,34 +96,43 @@ class K2DataArray(Sequence):
 		self._user_noise_reduction = False
 
 		self._temp = np.zeros((22320,),dtype='>u1')
+		self._Qx, self._Qy = self._parse_slices((slice(None),slice(None)),'diffraction')
 				
 		super().__init__()
 
-
-	def __del__(self):
-		#detatch from the file handles
-		for i in range(8):
-			del(self._bin_files[i])
 
 	#======== HANDLE SLICING AND len CALLS =========#
 	def __getitem__(self,i):
 		# first check that the slicing is valid:
 		assert len(i) == 4, f"Incorrect number of indices given. {len(i)} given, 4 required."
 		# take the input and parse it into coordinate arrays
-		Rx, Ry = self._parse_slices(i[:2],'real')
-		Qx,Qy = self._parse_slices(i[2:],'diffraction')
+		if isinstance(i[0],slice) | isinstance(i[1],slice):
+			Rx, Ry = self._parse_slices(i[:2],'real')
+			R_Nx = Rx.shape[0]
+			R_Ny = Rx.shape[1]
+			assert Rx.max() < self.shape[0], 'index out of range'
+			assert Ry.max() < self.shape[1], 'index out of range'
+		else: #skip _parse_slices for single input
+			Rx = np.array([i[0]],ndmin=2)
+			Ry = np.array([i[1]],ndmin=2)
+			R_Nx = 1
+			R_Ny = 1
+			assert Rx < self.shape[0], 'index out of range'
+			assert Ry < self.shape[1], 'index out of range'
+		if (i[2] == slice(None)) & (i[3] == slice(None)):
+			Qx, Qy = self._Qx, self._Qy
+		else:
+			Qx,Qy = self._parse_slices(i[2:],'diffraction')
 
-		assert Rx.max() < self.shape[0], 'index out of range'
-		assert Ry.max() < self.shape[1], 'index out of range'
 		assert Qx.max() < self.shape[2], 'index out of range'
 		assert Qy.max() < self.shape[3], 'index out of range'
 
 		# preallocate the output data array
-		outdata = np.zeros((Rx.shape[0],Rx.shape[1],Qx.shape[0],Qx.shape[1]),dtype=np.int16)
+		outdata = np.zeros((R_Nx,R_Ny,Qx.shape[0],Qx.shape[1]),dtype=np.int16)
 		
 		#loop over all the requested frames
-		for sy in range(Rx.shape[1]):
-			for sx in range(Rx.shape[0]):
+		for sy in range(R_Ny):
+			for sx in range(R_Nx):
 				scanx = Rx[sx,sy]
 				scany = Ry[sx,sy]
 
