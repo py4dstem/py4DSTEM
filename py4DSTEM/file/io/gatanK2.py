@@ -63,7 +63,7 @@ class K2DataArray(Sequence):
 			R_Nx = gtg.allTags['.SI Dimensions.Size X']
 		except ValueError:
 			print('Warning: scan shape not detected. Please check/set manually.')
-			R_Nx = self._guess_number_frames()
+			R_Nx = self._guess_number_frames()//32
 			R_Ny = 1
 
 		try:
@@ -226,7 +226,7 @@ class K2DataArray(Sequence):
 		for i in range(8):
 			binName = self._bin_prefix + str(i+1) + '.bin'
 			self._bin_files[i] = np.memmap(binName,dtype=self._stripe_dtype,mode='r',
-				shape=(self._guess_number_frames()*32,))
+				shape=(self._guess_number_frames(),))
 
 	def _find_offsets(self):
 		# first, line up the block counts (LiberTEM calls this sync_sectors)
@@ -374,8 +374,8 @@ class K2DataArray(Sequence):
 
 	def _guess_number_frames(self):
 		import os
-		nbytes = os.path.getsize(self._bin_prefix + '1.bin')
-		return nbytes // (0x5758 * 32)
+		nbytes = np.array([os.path.getsize(self._bin_prefix + f'{n}.bin') for n in range(1,9)])
+		return np.min(nbytes) // 0x5758
 
 	def _write_to_hdf5(self,group):
 		"""
