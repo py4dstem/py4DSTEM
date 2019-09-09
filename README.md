@@ -90,17 +90,23 @@ git clone https://github.com/bsavitzky/py4DSTEM.git
 Finally, navigate to the py4DSTEM root directory and run the setup.py script by calling:
 
 ```
-python setup.py install
+pip install .
 ```
 
 That's it!
 
+To install in "editable" mode, so changes you make to the source code are available without reinstalling, run:
+```python
+pip install -e .
+```
+(You do need to restart your IPython kernel for changes to take effect there.)
+
 ### Running py4DSTEM with the GUI
 
-From the package root directory, launch the GUI with:
+Ensure you are in the conda environment you installed in, and run:
 
 ```
-python runGUI.py
+py4dstem
 ```
 
 ### Running py4DSTEM from an python interpreter
