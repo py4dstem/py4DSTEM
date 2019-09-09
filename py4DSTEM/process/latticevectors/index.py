@@ -84,8 +84,8 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
     # If no max index is specified, (over)estimate based on image size
     if (h_max is None) or (k_max is None):
         (y,x) = np.mgrid[0:Q_Ny,0:Q_Nx]
-        y -= y0
-        x -= x0
+        x = x - x0
+        y = y - y0
         h_max = np.max(np.ceil(np.abs((x/ux,y/uy))))
         k_max = np.max(np.ceil(np.abs((x/vx,y/vy))))
 
