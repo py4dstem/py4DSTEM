@@ -30,15 +30,9 @@ class RQ_axes(object):
                         diffraction space is rotated by this amount in the counterclockwise
                         direction.  In degrees.
             flip        (bool) indicates if there is an axes flip between real and diffraction space.
-                        #TODO: flip = True is not yet supported; flipped data for testing is
-                        required.
         """
-        if flip:
-            raise Exception("R/Q flipped data is not yet supported by the RQ_axes object.  If your data involves an axes flip, *DO NOT* just set flip=True, as you will get wrong answers.  Please let me (bhsavitzky@lbl.gov) know, and we can get this object fixed and your data calibrated.  Feed two birds with one scone, as it were. ;)")
-        else:
-            pass
-
         self.RQ_offset = RQ_offset
+        self.flip = flip
 
     def set_RQ_offset(RQ_offset):
         """
@@ -50,6 +44,7 @@ class RQ_axes(object):
             RQ_offset   (float) the counterclockwise rotation of real space with respect to
                         diffraction space, in degrees.
         """
+        self.RQ_offset = RQ_offset
 
     def set_Q_axes(self, Qux, Quy):
         """
@@ -79,6 +74,10 @@ class RQ_axes(object):
         self.Rvx = Rvectors[0,1]
         self.Rvy = Rvectors[1,1]
 
+        if self.flip:
+            self.Ruy = -self.Ruy
+            self.Rvy = -self.Rvy
+
     def set_R_axes(self, Rux, Ruy):
         """
         Sets the orientation of the u,v internal coordinate system, which can be used for outputs
@@ -107,16 +106,9 @@ class RQ_axes(object):
         self.Qvx = Qvectors[0,1]
         self.Qvy = Qvectors[1,1]
 
-
-
-
-
-
-
-
-
-
-
+        if self.flip:
+            self.Quy = -self.Quy
+            self.Qvy = -self.Qvy
 
 
 
