@@ -97,6 +97,10 @@ class K2DataArray(Sequence):
 
 		self._temp = np.zeros((32,),dtype=self._stripe_dtype)
 		self._Qx, self._Qy = self._parse_slices((slice(None),slice(None)),'diffraction')
+
+		# needed for Dask support:
+		self.ndims = 4
+		self.dtype = np.int16
 				
 		super().__init__()
 
