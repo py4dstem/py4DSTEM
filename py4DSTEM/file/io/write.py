@@ -13,7 +13,7 @@ from ..datastructure import MetadataCollection, Metadata, DataObject
 from ..log import log, Logger
 logger = Logger()
 
-@log
+#@log
 def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
@@ -131,15 +131,15 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Log #####
-    group_log = group_toplevel.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
+    #group_log = group_toplevel.create_group("log")
+    #for index in range(logger.log_index):
+    #    write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Finish and close #####
     print("Done.")
     f.close()
 
-@log
+#@log
 def save_dataobject(dataobject, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataObject instance to outputfile.
@@ -149,7 +149,7 @@ def save_dataobject(dataobject, outputfile, **kwargs):
     # Save
     save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
-@log
+#@log
 def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
     Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
@@ -160,7 +160,7 @@ def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
 
     save_from_dataobject_list(dataobject_list, outputfile, **kwargs)
 
-@log
+#@log
 def save(data, outputfile, **kwargs):
     """
     Saves a .h5 file to outputpath. What is saved depends on the arguement data.
