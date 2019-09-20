@@ -28,7 +28,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
     if exists(outputfile):
         if overwrite is False:
-            raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().')
+            raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(outputfile))
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
