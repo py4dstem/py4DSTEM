@@ -5,6 +5,7 @@
 import h5py
 import numpy as np
 from collections import OrderedDict
+from os.path import exists
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..datastructure import DataCube, DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
@@ -14,7 +15,7 @@ from ..log import log, Logger
 logger = Logger()
 
 #@log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
@@ -25,6 +26,9 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
+    if exists(outputfile):
+        if overwrite is False:
+            raise Exception('{} already exists.  To overwrite, use overwrite=True')
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
