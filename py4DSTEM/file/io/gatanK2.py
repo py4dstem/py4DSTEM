@@ -257,7 +257,7 @@ class K2DataArray(Sequence):
 
         if sync == False:
             # the first frame is incomplete, so we need to seek the next one
-            print(f'First frame ({first_frame[0]}) incomplete, seeking frame {next_frame}...')
+            print('First frame ({first_frame[0]}) incomplete, seeking frame {next_frame}...')
             for i in range(8):
                 binfile = self._bin_files[i]
                 sync = False
