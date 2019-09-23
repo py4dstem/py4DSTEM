@@ -186,7 +186,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
 
     # Unflipped
     for i,theta in enumerate(thetas):
-        phase, error = get_phase_from_CoM(CoMx, CoM,y, theta=theta, flip=False,
+        phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=False,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
                                           n_iter=n_iter)
@@ -196,7 +196,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
 
     # Flipped
     for i,theta in enumerate(thetas):
-        phase, error = get_phase_from_CoM(CoMx, CoM,y, theta=theta, flip=True,
+        phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=True,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
                                           n_iter=n_iter)
