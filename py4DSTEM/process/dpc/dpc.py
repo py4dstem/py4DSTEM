@@ -204,7 +204,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
         if verbose:
             print_progress_bar(N_thetas+i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
 
-    flip = np.max(scores_f)>np.max(scores)
+    flip = np.max(stds_f)>np.max(stds)
     if flip:
         theta = thetas[np.argmax(stds_f)]
     else:
@@ -216,7 +216,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
         return theta, flip
 
 def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100, paddingfactor=2,
-                                                                stepsize=1, n_iter=10):
+                                                stepsize=1, n_iter=10, phase_init=None):
     """
     Calculate the phase of the sample transmittance from the diffraction centers of mass.
     A bare bones description of the approach taken here is below - for detailed discussion of the
@@ -250,6 +250,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
                         1 corresponds to no padding, 2 to doubling the array size, etc.
         stepsize        (float) the stepsize in the iteration step which updates the phase
         n_iter          (int) the number of iterations
+        phase_init      (2D array) initial guess for the phase
 
     Returns:
         phase           (2D array) the phase of the sample transmittance
@@ -293,6 +294,8 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     mask = np.zeros((R_Nx_padded,R_Ny_padded),dtype=bool)
     mask[:R_Nx,:R_Ny] = True
     maskInv = mask==False
+    if phase_init is not None:
+        phase[:R_Nx,:R_Ny] = phase_init
 
     # Iterative reconstruction
     for i in range(n_iter):
