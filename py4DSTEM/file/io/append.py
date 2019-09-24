@@ -41,7 +41,16 @@ def append_from_dataobject_list(dataobject_list, filepath):
     browser.close()
 
     #### Open file for read/write ####
-    f = h5py.File(filepath,"r+")
+    try:
+        f = h5py.File(filepath,"r+")
+    except OSError as e:
+        print(e)
+        print('The file appears to be open elsewhere...')
+        print('This can occur if your datacube was read from a py4DSTEM h5 file.')
+        print(f'To forse close the file, losing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{filepath}\')')
+        print('To force close all h5 files run: py4DSTEM.file.io.close_all_h5()')
+        return -1
+
     topgroup = get_py4DSTEM_topgroup(f)
     # Find data groups
     group_data = f[topgroup]['data']
