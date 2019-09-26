@@ -1,6 +1,6 @@
 import time
 from py4DSTEM.file.datastructure import DataCube
-import cupy as cp
+import sigpy as cp
 import torch as th
 import numpy as np
 from .utils import *
