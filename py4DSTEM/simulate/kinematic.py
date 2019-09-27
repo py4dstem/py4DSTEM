@@ -27,7 +27,7 @@ class Kinematic:
 	"""
 
 	def __init__(self, structure, max_index=6, poles=None, voltage=300_000, tol_zone=0.1, tol_int=10,
-		N=100):
+		thickness=500):
 		'''
 		Create a Kinematic simulation object. 
 		Accepts:
@@ -40,6 +40,7 @@ class Kinematic:
 		tol_zone		cutoff for discarding reciprocal lattice points that
 						do not exactly satisfy Weiss zone law	
 		tol_int			cutoff for excluding very weak structure factors
+		thickness		sample thickness in Å
 		'''
 
 		if isinstance(structure,str):
@@ -63,7 +64,7 @@ class Kinematic:
 		self.tol_int = tol_int
 
 		self.a = self.structure.lattice.abc[0]
-		self.N = N
+		self.N = thicness//self.a
 
 		self.λ = electron_wavelength_angstrom(voltage)
 
