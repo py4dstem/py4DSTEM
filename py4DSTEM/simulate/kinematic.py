@@ -53,7 +53,7 @@ class Kinematic:
 		self.recip_lat = self.structure.lattice.reciprocal_lattice_crystallographic.abc
 
 		print('Conventional Standard Structure used for calculation:')
-		print(self.structure)
+		print(self.structure, flush=True)
 
 		# hold on to a scattering factor calculator object
 		self.scat_fac = single_atom_scatter()
@@ -66,6 +66,9 @@ class Kinematic:
 		self.N = N
 
 		self.λ = electron_wavelength_angstrom(voltage)
+
+		# ------- run computations --------
+		self.compute_structure_factors()
 
 
 	def compute_structure_factors(self):
