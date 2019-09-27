@@ -32,14 +32,22 @@ class Kinematic:
 		Create a Kinematic simulation object. 
 		Accepts:
 		structure		a pymatgen Structure object for the material
-						can also pass string of materials project ID (requires API key)
+						or a string containing the Materials Project ID for the 
+						structure (requires API key in config file, see:
+						https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
+
 		max_index		maximum hkl indices to compute
+
 		poles			numpy array (n,3) containing [h,k,l] indices for the n
 						orientations required in the simulation.
+
 		voltage			electron kinetic energy in Volts
+
 		tol_zone		cutoff for discarding reciprocal lattice points that
 						do not exactly satisfy Weiss zone law	
+
 		tol_int			cutoff for excluding very weak structure factors
+		
 		thickness		sample thickness in Å
 		'''
 
