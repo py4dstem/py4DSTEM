@@ -58,18 +58,18 @@ def read(filename, load=None):
     load = 'empad'
         load an EMPAD formatted file, using empad.py
     load = 'relativity'
-        load an MRC file written from the IDES Relativity subframing system, which generates
-        multiple small, tiled diffraction patterns on each detector frame; each subframe corresponds
-        to a distinct scan position, enabling faster effective frame rates than the camera readout
-        time, at the expense of subframe sampling size.
-        the output is a memory map to the 4D datacube, which must be sliced into subframes using the
-        relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
+        Load an MRC file written from the IDES Relativity subframing system, which generates
+        multiple small, tiled diffraction patterns on each detector frame; each subframe
+        corresponds to a distinct scan position, enabling faster effective frame rates than
+        the camera readout time, at the expense of subframe sampling size.
+        The output is a memory map to the 4D datacube, which must be sliced into subframes using
+        the relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
         This functionality requires the mrcfile package, which can be installed with
             pip install mrcfile
     load = 'gatan_bin'
-        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be passed
-        as the argument. The reader searches for the *.gtg file that contains the metadata, then maps the 
-        chunked binary files. 
+        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be
+        passed as the argument. The reader searches for the *.gtg file that contains the metadata,
+        then maps the chunked binary files.
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))

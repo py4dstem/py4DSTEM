@@ -12,12 +12,18 @@ setup(name='py4DSTEM',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
     install_requires=[
-        'numpy >= 1.15, < 2.0',
-        'scipy >= 1.1, < 1.2',
-        'hyperspy >= 1.4, < 1.5',
+        'numpy >= 1.15',
+        'scipy >= 1.1',
+        'hyperspy >= 1.4',
         'PyQt5 >= 5.9, < 6',
         'pyqtgraph >= 0.10, < 0.11',
         'qtconsole >= 4.4, < 4.5',
         'ncempy >= 1.4.2'
-    ])
-
+        ],
+    extras_require={
+        'ipyparallel': ['ipyparallel >= 6.2.4'],
+        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0']
+        },
+    entry_points= {
+        'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
+    })

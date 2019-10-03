@@ -101,12 +101,12 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
 
     Returns:
         uv_map                  (RealSlice) a RealSlice containing the following 6 arrays:
-        uv_map.data['ux']     x-coord of the first lattice vector
-        uv_map.data['uy']     y-coord of the first lattice vector
-        uv_map.data['vx']     x-coord of the second lattice vector
-        uv_map.data['vy']     y-coord of the second lattice vector
-        uv_map.data['error']  the fit error
-        uv_map.data['mask']   1 for successful fits, 0 for unsuccessful fits
+        uv_map.slices['ux']     x-coord of the first lattice vector
+        uv_map.slices['uy']     y-coord of the first lattice vector
+        uv_map.slices['vx']     x-coord of the second lattice vector
+        uv_map.slices['vy']     y-coord of the second lattice vector
+        uv_map.slices['error']  the fit error
+        uv_map.slices['mask']   1 for successful fits, 0 for unsuccessful fits
     """
     assert isinstance(bragg_peaks, PointListArray)
     assert np.all([name in bragg_peaks.dtype.names for name in ('qx','qy','intensity')])
@@ -126,12 +126,71 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
                                                     maxPeakSpacing, minNumPeaks)
             # Store data
             if ux is not None:
-                uv_map.data['ux'][Rx,Ry] = ux
-                uv_map.data['uy'][Rx,Ry] = uy
-                uv_map.data['vx'][Rx,Ry] = vx
-                uv_map.data['vy'][Rx,Ry] = vy
-                uv_map.data['error'][Rx,Ry] = error
-                uv_map.data['mask'][Rx,Ry] = 1
+                uv_map.slices['ux'][Rx,Ry] = ux
+                uv_map.slices['uy'][Rx,Ry] = uy
+                uv_map.slices['vx'][Rx,Ry] = vx
+                uv_map.slices['vy'][Rx,Ry] = vy
+                uv_map.slices['error'][Rx,Ry] = error
+                uv_map.slices['mask'][Rx,Ry] = 1
+
+    return uv_map
+
+def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, x0, y0, mask, maxPeakSpacing=20,
+                                                                            minNumPeaks=5):
+    """
+    Fits lattice vectors u,v to each diffraction pattern in bragg_peaks corresponding to a scan
+    position for which mask==True.
+
+    Accepts:
+        bragg_peaks         (PointListArray) A 3 coordinate Pointlist containing the data to fit.
+                            Coords 'qx','qy' specify the bragg peak positions, and coord 'intensity'
+                            is used as a weighting factor when fitting
+        bragg_directions    (PointList) A 4 coordinate Poinlist containing the (h,k) indexing of
+                            the bragg peaks. Coords 'qx','qy' specify the positions of the bragg
+                            directions, and coords 'h','k' specify their indexing.
+        x0                  (float) x-coord of the origin
+        y0                  (float) y-coord of the origin
+        mask                (boolean array) real space shaped (R_Nx,R_Ny); fit lattice vectors where
+                            mask is True
+        maxPeakSpacing      (float) When identifying the index of each peak in bragg_peaks, it must
+                            be within maxPeakSpacing of one of the bragg_diretions, or it is ignored
+        minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in bragg_peaks
+                            which can be indexed, return None for all return parameters
+
+    Returns:
+        uv_map                  (RealSlice) a RealSlice containing the following 6 arrays:
+        uv_map.slices['ux']     x-coord of the first lattice vector
+        uv_map.slices['uy']     y-coord of the first lattice vector
+        uv_map.slices['vx']     x-coord of the second lattice vector
+        uv_map.slices['vy']     y-coord of the second lattice vector
+        uv_map.slices['error']  the fit error
+        uv_map.slices['mask']   1 for successful fits, 0 for unsuccessful fits
+    """
+    assert isinstance(bragg_peaks, PointListArray)
+    assert np.all([name in bragg_peaks.dtype.names for name in ('qx','qy','intensity')])
+    assert isinstance(bragg_directions, PointList)
+    assert np.all([name in bragg_directions.dtype.names for name in ('qx','qy','h','k')])
+
+    # Make RealSlice to contain outputs
+    slicelabels = ('ux','uy','vx','vy','error','mask')
+    uv_map = RealSlice(data=np.zeros((bragg_peaks.shape[0],bragg_peaks.shape[1],6)),
+                       slicelabels=slicelabels, name='uv_map')
+
+    # Fit lattice vectors
+    for Rx in range(bragg_peaks.shape[0]):
+        for Ry in range(bragg_peaks.shape[1]):
+            if mask[Rx,Ry]:
+                bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
+                ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
+                                                        maxPeakSpacing, minNumPeaks)
+                # Store data
+                if ux is not None:
+                    uv_map.slices['ux'][Rx,Ry] = ux
+                    uv_map.slices['uy'][Rx,Ry] = uy
+                    uv_map.slices['vx'][Rx,Ry] = vx
+                    uv_map.slices['vy'][Rx,Ry] = vy
+                    uv_map.slices['error'][Rx,Ry] = error
+                    uv_map.slices['mask'][Rx,Ry] = 1
 
     return uv_map
 

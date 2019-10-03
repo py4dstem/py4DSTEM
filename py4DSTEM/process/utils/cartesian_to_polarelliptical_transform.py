@@ -2,7 +2,9 @@
 # a dataset which best aligns it to a diffraction space image.
 
 import numpy as np
+import scipy.optimize as sciopt
 from py4DSTEM.process.utils import print_progress_bar
+from scipy.signal import convolve2d
 
 class polar_elliptical_transform(object):
     """
@@ -34,8 +36,8 @@ class polar_elliptical_transform(object):
     calibration image ar -- appropriate data includes a single DP with amorphous rings, a position
     averaged DP over many nanocrystalline grains, etc. with -- by invoking:
 
-        >>> pet.fit_origin()        # Refines x0,y0
-        >>> pet.fit_ellipticity()   # Refines x0,y0,A,B,phi
+        >>> pet.fit_origin(n_iter=100)        # Refines x0,y0
+        >>> pet.fit_ellipticity(n_iter=100)   # Refines x0,y0,A,B,phi
 
     and the polar transform can then be recalculated with
 
@@ -153,6 +155,98 @@ class polar_elliptical_transform(object):
         self.polar_mask = np.zeros(np.prod(self.rr.shape))
         self.polar_mask[transform_mask] = np.sum(mask[x_inds,y_inds]*weights,axis=0)
         self.polar_mask = np.reshape(self.polar_mask,self.rr.shape)
+
+        if return_ans:
+            return self.polar_ar, self.polar_mask
+        else:
+            return
+
+    def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False, coef = None):
+        """
+        Get the polar transformation of an array ar, or if ar is None, of self.calibration_image.
+
+        Accepts:
+            ar         (2D array or None) the array to transform; if None, use self.calibration_image
+            mask       (2D array or None) mask indicating pixels to ignore; if None, use self.mask
+            return_ans (bool) if True, return ar and mask
+
+        Returns (if return_ars is True):
+            polar_ar   (2D array) the polar transformation of ar
+            polar_mask (2D array) the polar transformation of mask
+        """
+        if ar is None:
+            ar = self.calibration_image
+        if mask is None:
+            mask = self.mask
+
+        ar = ar * mask
+        if coef is None:
+            coef = self.coef_opt
+
+        # Define coordinate system
+        ya,xa = self.yy,self.xx
+        xa = xa - coef[6]
+        ya = ya - coef[7]
+
+        #Convert general ellipse coefficients into canonical form
+        phi = 0
+        if (np.abs(coef[8]) > 0):
+            phi = -1*np.arctan((1-coef[9]+np.sqrt((coef[9]-1)**2+coef[8]**2))/coef[8])
+
+        a0 = np.sqrt(2*(1+coef[9]+np.sqrt((coef[9]-1)**2 + coef[8]**2)) / (4*coef[9]-coef[8]**2))
+        b0 = np.sqrt(2*(1+coef[9]-np.sqrt((coef[9]-1)**2 + coef[8]**2)) / (4*coef[9]-coef[8]**2))
+        ratio = b0/a0
+        m = np.asarray([[ratio*np.cos(phi)**2 + np.sin(phi)**2, (ratio-1)*np.cos(phi)*np.sin(phi)],
+                        [(ratio-1)*np.cos(phi)*np.sin(phi), np.cos(phi)**2 + ratio*np.sin(phi)**2]])
+
+        #arrays of polar elliptical coordinates
+        ta = np.arctan2(m[1,0]*xa + m[1,1]*ya, m[0,0]*xa + m[0,1]*ya)
+        ra = np.sqrt(xa**2 + coef[8]*xa*ya + coef[9]*ya**2) * b0 #normalize by b0 because major axis is retained in projection
+
+        #resample coordinates
+        r_ind = np.round((ra - self.r_range[0]) / self.dr).astype(dtype=int)
+        t_ind = np.mod(np.round((ta / self.dtheta)), self.Nt).astype(dtype=int)
+        sub = np.logical_and(r_ind < self.Nr, r_ind >= 1)
+        rt_inds = np.transpose(np.stack((t_ind[sub],r_ind[sub])))
+
+        #and set up KDE kernels
+        sr = r_sigma / self.dr
+        vr = np.arange(-np.ceil(4*sr),np.ceil(4*sr)+1,1)
+        kr = np.exp(-vr**2/(2*sr**2))
+        kr = np.expand_dims(kr,axis=0)
+
+        dt = (self.dtheta * 180/np.pi)
+        st = t_sigma / dt
+        vt = np.arange(-np.ceil(4*st),np.ceil(4*st)+1,1)
+        kt = np.exp(-vt**2/(2*st**2))
+        kt = np.expand_dims(kt,axis=1)
+
+        #convolve by kr
+        kNorm = convolve2d(np.ones((self.Nt,self.Nr)),kr,mode='same')
+
+        #convolve by kt
+        kNorm = convolve2d(kNorm,kt,mode='same',boundary='wrap')
+
+        #normalize
+        kNorm = np.divide(1, kNorm,where=kNorm!=0)
+
+        #get polar array and convolve with KDE kernels, then normalize
+        polarNorm = accumarray(rt_inds,np.ones((np.sum(sub))),(self.Nt,self.Nr))
+        polarNorm = convolve2d(polarNorm,kr,mode='same')
+        polarNorm = convolve2d(polarNorm,kt,mode='same',boundary='wrap')
+        polarNorm = kNorm * polarNorm
+
+        polarMask = accumarray(rt_inds,mask[sub],(self.Nt,self.Nr))
+        polarMask = convolve2d(polarMask,kr,mode='same')
+        polarMask = convolve2d(polarMask,kt,mode='same',boundary='wrap')
+        self.polar_mask = kNorm * polarMask
+
+        polarCBED = accumarray(rt_inds,ar[sub],(self.Nt,self.Nr))
+        polarCBED = convolve2d(polarCBED,kr,mode='same')
+        polarCBED = convolve2d(polarCBED,kt,mode='same',boundary='wrap')
+        polarCBED = kNorm * polarCBED
+        polar_ar = np.divide(polarCBED, polarNorm, where=polarNorm!=0)
+        self.polar_ar = polar_ar
 
         if return_ans:
             return self.polar_ar, self.polar_mask
@@ -318,11 +412,95 @@ class polar_elliptical_transform(object):
             return scores, x0_vals, y0_vals
         else:
             self.fit_params(n_iter=n_iter,
-                            step_sizes_init=[step_sizes[0],step_size[1],0,0,0],
+                            step_sizes_init=[step_sizes[0],step_sizes[1],0,0,0],
                             step_scale=0.9,
                             return_ans=False)
             return
 
+    def fit_params_twoSided_gaussian(self,init_coef=None):
+        """
+        Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2) 
+                                + I_ring * exp(- (R-r^2) / (2*SD_1) ^2) * U(R-r)
+                                + I_ring * exp(- (R-r^2) / (2*SD_2) ^2) * U(r-R)
+                                + N
+
+        where I(r) is the radial intensity function, I_BG, I_ring are the background and amorphous ring intensities,
+        SD_BG is the background intensity std. dev., SD_1, and SD_2 are fitting parameters, and U(R-r) is the heaviside step function,
+        and N is the bkgd noise level
+
+        For elliptical rings, r is replaced by sqrt(x^2 + B*xy ^2 + C*y^2), to assert the canonical form of the ellipse as follows:
+        R^2 = x^2 + Bxy + Cy^2 where A = 1
 
 
+        Find the polar elliptical transformation parameters x0,y0,A,B,C which best describe the data
+        by minimizing a cost function (theta-integrated RMSD of the polar transform).
 
+        Accepts:
+
+        Returns (if return_ans is True):
+
+        """
+        #TODO: automate the defaults? hwo to choose?
+        if init_coef is None:
+            coef = np.asarray([430, 1000, 26, 700, 40, 14, 288, 267, 0.07, 0.95, 137])
+        else:
+            coef = init_coef
+
+        lb = np.asarray([0, 0, 0, 0, 0, 0, 0, 0, -0.5, 0.5, 0])
+        ub = np.asarray([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, self.Nx, self.Ny, 0.5, 2, np.inf])
+
+        #TODO: pass arguments to set non defualt function optimization
+        xdata = np.asarray([self.xx[self.mask.astype(dtype=bool)],self.yy[self.mask.astype(dtype=bool)]])
+        ydata = self.calibration_image[self.mask.astype(dtype=bool)]
+        coef_opt, _ = sciopt.curve_fit(f=twoSided_gaussian_fun_wrapper,xdata=xdata,ydata=ydata, p0=coef, bounds=(lb,ub))
+        self.coef_opt = coef_opt
+
+        #initializes this to None so that full array transform is perfomed on next grab
+        self.polarNorm = None
+        return
+
+
+####################
+def twoSided_gaussian_fun_wrapper(X,c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10):
+    return twoSided_gaussian_fun(X,[c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10])
+
+def twoSided_gaussian_fun(X, coef):
+    """
+    Cost function for two sided gaussian.
+    X[0] = x coords
+    X[1] = y coords
+    coef[0] = N (linear constant)
+    coef[1] = I_BG
+    coef[2] = SD_BG
+    coef[3] = I_ring
+    coef[4] = SD_1
+    coef[5] = SD_2
+    coef[6] = X_center
+    coef[7] = Y_center
+    coef[8] = B
+    coef[9] = C
+    coef[10] = R
+    """
+    #precalulated little r for readability
+    r = np.sqrt( (X[0] - coef[6])**2 + coef[8]*(X[0] - coef[6])*(X[1] - coef[7]) + coef[9]*(X[1] - coef[7])**2)
+    return (coef[0] 
+        + coef[1] * np.exp( (-1/ (2*coef[2]**2)) * r**2)
+        + coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * np.heaviside((coef[10] - r),0)
+        + coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * np.heaviside((r - coef[10]),0) )
+
+def accumarray(indices,values,size):
+    """
+    Helper function to mimic matlab accum array function
+    values is Nx1
+    dest is M-dimensional, set by Mx1 size input
+    """
+
+    #indices is a NxM array, where N is the number of events and M is the dimensionality of source/dest arrays
+    assert indices.shape[1] == len(size), "Size and array mismatch"
+
+    #initialiaze destination array
+    dest = np.zeros(size)
+
+    np.add.at(dest,(indices[:,0],indices[:,1]),values)
+    
+    return dest

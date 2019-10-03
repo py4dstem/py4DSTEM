@@ -25,6 +25,8 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
     except ValueError:
         print("Can't reshape {} scan positions into a {}x{} array.".format(datacube.R_N, R_Nx, R_Ny))
         return datacube
+    except AttributeError:
+        print("Can't reshape {datacube.data.__class__.__name__} datacube.")
 
 @log
 def swap_RQ(datacube):
@@ -108,10 +110,10 @@ def bin_data_mmap(datacube, bin_factor):
     assert type(bin_factor) is int, "Error: binning factor {} is not an int.".format(bin_factor)
     R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny
 
-    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype='uint32')
+    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype=np.float64)
     for Rx in range(datacube.R_Nx):
         for Ry in range(datacube.R_Ny):
-            data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor)
+            data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=np.float64)
 
     datacube.data = data
     datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
