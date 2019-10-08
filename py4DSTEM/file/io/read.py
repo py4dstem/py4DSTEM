@@ -74,8 +74,12 @@ def read(filename, load=None):
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
         if load is None:
-            print("Reading with hyperspy...")
-            output = read_with_hyperspy(filename)
+            print("Couldn't identify input, attempting to read with hyperspy...")
+            try:
+                output = read_with_hyperspy(filename)
+            except:
+                print("Hyperspy read failed")
+                return "Hyperspy read failed"
         elif load == 'dmmmap':
             print("Memory mapping a dm file...")
             output = read_dm_mmap(filename)

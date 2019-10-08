@@ -213,7 +213,13 @@ class DataViewer(QtWidgets.QMainWindow):
         self.kernel_client = self.kernel_manager.client()
         self.kernel_client.start_channels()
 
-        self.console_widget = RichJupyterWidget()
+        #Avoid setting up multiple consoles
+        alreadysetup = False
+        if hasattr(self,'console_widget'):
+            if (isinstance(self.console_widget,RichJupyterWidget)):
+                alreadysetup = True
+
+        if not alreadysetup: self.console_widget = RichJupyterWidget()
         self.console_widget.setWindowTitle("py4DSTEM IPython Console")
         self.console_widget.kernel_manager = self.kernel_manager
         self.console_widget.kernel_client = self.kernel_client
@@ -271,6 +277,12 @@ class DataViewer(QtWidgets.QMainWindow):
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
         msg.exec_()
 
+    def Unidentified_file(self,fname):
+        msg = QtWidgets.QMessageBox()
+        msg.setText("Couldn't open {0} as it doesn't conform to currently implemented py4DSTEM standards".format(fname))
+        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        msg.exec_()
+
     def load_file(self):
         """
         Loads a file by creating and storing a DataCube object.
@@ -292,6 +304,11 @@ class DataViewer(QtWidgets.QMainWindow):
         if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
             #auto mode
             self.datacube = read(fname)
+            if type(self.datacube) == str : 
+                self.Unidentified_file(fname)
+                #Reset view
+                self.__init__(sys.argv)
+                return
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
             self.datacube = read(fname, load='dmmmap')
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
