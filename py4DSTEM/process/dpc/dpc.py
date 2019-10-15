@@ -74,12 +74,13 @@ def get_rotation_and_flip_zerocurl(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=
                         axis flip, for all gradient descent steps, for diagnostic purposes
 
     Returns:
-        theta           (float) the rotation angle between the real and diffraction space coordinates
+        theta           (float) the rotation angle between the real and diffraction space coordinate,
+                        in radians
         flip            (bool) if True, the real and diffraction space coordinates are flipped
                         relative to one another.  By convention, we take flip=True to correspond to
                         the change CoMy --> -CoMy.
         thetas          (float) returned iff return_costs is True. The theta values at each gradient
-                        descent step for flip=False
+                        descent step for flip=False. In radians.
         costs           (float) returned iff return_costs is True. The cost values at each gradient
                         descent step for flip=False
         thetas_f        (float) returned iff return_costs is True. The theta values for flip=True
@@ -171,11 +172,11 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
 
     Returns:
         theta           (float) the rotation angle between the real and diffraction space
-                        coordinates, in degrees
+                        coordinates, in radians.
         flip            (bool) if True, the real and diffraction space coordinates are flipped
                         relative to one another.  By convention, we take flip=True to correspond to
                         the change CoMy --> -CoMy.
-        thetas          (float) returned iff return_costs is True. The theta values.
+        thetas          (float) returned iff return_costs is True. The theta values. In radians.
         stds           (float) returned iff return_costs is True. The cost values at each gradient
                         descent step for flip=False
         stds_f         (float) returned iff return_costs is True. The cost values for flip=False
