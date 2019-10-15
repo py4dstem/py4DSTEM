@@ -160,7 +160,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     # Transform constraining points coordinate system
     xs -= x
     ys -= y
-    T = np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]])
+    T = np.squeeze(np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]]))
     xs,ys = np.matmul(T,np.array([xs,ys]))
 
     # Get symmetrized constraining point
