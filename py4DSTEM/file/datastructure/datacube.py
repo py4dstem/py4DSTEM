@@ -36,6 +36,7 @@ class DataCube(DataObject):
             self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = data.shape
             self.R_N = self.R_Nx*self.R_Ny
 
+        self.update_slice_parsers()
         # Set shape
         # TODO: look for shape in metadata
         # TODO: AND/OR look for R_Nx... in kwargs
@@ -52,18 +53,21 @@ class DataCube(DataObject):
         Reshape the data given the real space scan shape.
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
+        self.update_slice_parsers()
 
     def swap_RQ(self):
         """
         Swap real and reciprocal space coordinates.
         """
         self = preprocess.swap_RQ(self)
+        self.update_slice_parsers()
 
     def swap_Rxy(self):
         """
         Swap real space x and y coordinates.
         """
         self = preprocess.swap_Rxy(self)
+        self.update_slice_parsers()
 
     def swap_Qxy(self):
         """
@@ -90,15 +94,22 @@ class DataCube(DataObject):
 
     ################ Slice data #################
 
+    def update_slice_parsers(self):
+        # define index-sanitizing functions:
+        self.normX = lambda x: np.maximum(0,np.minimum(self.R_Nx-1,x))
+        self.normY = lambda x: np.maximum(0,np.minimum(self.R_Ny-1,x))
+
     def get_diffraction_space_view(self,Rx=0,Ry=0):
         """
         Returns the image in diffraction space, and a Bool indicating success or failure.
         """
-        self.Rx,self.Ry = Rx,Ry
+        self.Rx,self.Ry = self.normX(Rx),self.normY(Ry)
         try:
-            return self.data[Rx,Ry,:,:], 1
+            return self.data[self.Rx,self.Ry,:,:], 1
         except IndexError:
             return 0, 0
+        except ValueError:
+            return 0,0
 
     # Virtual images -- integrating
 
