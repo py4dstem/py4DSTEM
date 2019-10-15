@@ -101,7 +101,7 @@ def correct_elliptical_distortion(braggpeaks, p):
     s = min(a,b)/max(a,b)
     theta += np.pi/2.*(np.argmin([a,b])==0)
     sint,cost = np.sin(theta),np.cos(theta)
-    T = np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]])
+    T = np.squeeze(np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]]))
 
     # Correct distortions
     braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipticalcorrected")
