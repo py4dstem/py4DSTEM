@@ -233,7 +233,7 @@ def save_datacube_group(group, datacube, use_compression=False):
         group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    if isinstance(datacube.data,np.ndarray):
+    if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
         if use_compression:
             data_datacube = group.create_dataset("data", data=datacube.data,
                 chunks=(1,1,datacube.Q_Nx,datacube.Q_Ny),compression='gzip')
