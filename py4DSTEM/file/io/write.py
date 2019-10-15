@@ -214,7 +214,8 @@ def save_datacube_group(group, datacube):
 
     # TODO: consider defining data chunking here, keeping k-space slices together
     if isinstance(datacube.data,np.ndarray) or (isinstance(datacube.data,h5py.Dataset)):
-        data_datacube = group.create_dataset("data", data=datacube.data)
+        data_datacube = group.create_dataset("data", data=datacube.data,
+            chunks=(2,2,datacube.Q_Nx,datacube.Q_Ny),compression='gzip')
     else:
         # handle K2DataArray datacubes
         data_datacube = datacube.data._write_to_hdf5(group)
