@@ -27,6 +27,7 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
         return datacube
     except AttributeError:
         print(f"Can't reshape {datacube.data.__class__.__name__} datacube.")
+        return datacube
 
 @log
 def swap_RQ(datacube):

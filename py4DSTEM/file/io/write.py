@@ -213,7 +213,7 @@ def save_datacube_group(group, datacube):
         group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    if isinstance(datacube.data,np.ndarray):
+    if isinstance(datacube.data,np.ndarray) or (isinstance(datacube.data,h5py.Dataset)):
         data_datacube = group.create_dataset("data", data=datacube.data)
     else:
         # handle K2DataArray datacubes
