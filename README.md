@@ -125,10 +125,19 @@ import py4DSTEM
 * pyqtgraph
 * PyQt5
 
+
 ## Versioning
 
+
 v. 0.6
+
 
 ## License
 
 GNU GPLv3
+
+
+## Acknowledgements
+
+The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and developement time which made this project possible.
+

@@ -103,10 +103,17 @@ class polar_elliptical_transform(object):
         """
         Get the polar transformation of an array ar, or if ar is None, of self.calibration_image.
 
+        Note that the flag return_ans controls two things: first, if the outputs of the method
+        are returned, and second, if the outputs of the method are stored in self.polar_ar and
+        self.polar_mask.  If return_ans is True, the outputs are returned and self.polar_ar and
+        self.polar_mask are NOT updated.  If return_ans is False, the outputs are not returned
+        and self.polar_ar and self.polar_mask ARE updated.
+
         Accepts:
             ar         (2D array or None) the array to transform; if None, use self.calibration_image
             mask       (2D array or None) mask indicating pixels to ignore; if None, use self.mask
-            return_ans (bool) if True, return ar and mask
+            return_ans (bool) if True, return ar and mask. If False, instead update self.polar_ar
+                       and self.polar_mask.
 
         Returns (if return_ars is True):
             polar_ar   (2D array) the polar transformation of ar
@@ -148,17 +155,18 @@ class polar_elliptical_transform(object):
                              (  dx)*(  dy)))
 
         transform_mask = transform_mask.ravel()
-        self.polar_ar = np.zeros(np.prod(self.rr.shape))        # Bilinear interpolation happens
-        self.polar_ar[transform_mask] = np.sum(ar[x_inds,y_inds]*weights,axis=0) #    <-----here 
-        self.polar_ar = np.reshape(self.polar_ar,self.rr.shape)
+        polar_ar = np.zeros(np.prod(self.rr.shape))        # Bilinear interpolation happens
+        polar_ar[transform_mask] = np.sum(ar[x_inds,y_inds]*weights,axis=0) #    <-----here 
+        polar_ar = np.reshape(polar_ar,self.rr.shape)
 
-        self.polar_mask = np.zeros(np.prod(self.rr.shape))
-        self.polar_mask[transform_mask] = np.sum(mask[x_inds,y_inds]*weights,axis=0)
-        self.polar_mask = np.reshape(self.polar_mask,self.rr.shape)
+        polar_mask = np.zeros(np.prod(self.rr.shape))
+        polar_mask[transform_mask] = np.sum(mask[x_inds,y_inds]*weights,axis=0)
+        polar_mask = np.reshape(polar_mask,self.rr.shape)
 
         if return_ans:
-            return self.polar_ar, self.polar_mask
+            return polar_ar, polar_mask
         else:
+            self.polar_ar, self.polar_mask = polar_ar, polar_mask
             return
 
     def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False, coef = None):
