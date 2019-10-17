@@ -5,7 +5,6 @@
 import h5py
 import numpy as np
 from collections import OrderedDict
-from os.path import exists
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..datastructure import DataCube, DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
@@ -14,56 +13,75 @@ from ..datastructure import MetadataCollection, Metadata, DataObject
 from ..log import log, Logger
 logger = Logger()
 
-#@log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False):
+@log
+def save_from_dataobject_list(dataobject_list, outputfile, save_metadata=True):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
     Accepts:
         dataobject_list     a list of DataObjects to save
         outputfile          path to an .h5 file to save
-        topgroup            (str) name for the toplevel group; if None, use "4DSTEM_experiment"
+        save_metadata       If True, automatically find the appropriate metadata object to save.
+                            If multiple possible metadata objects are found, setting this flag to an
+                            integer index specifies which to use.
+                            Set save_metadata to a Metadata object to use that metadata.
+                            Set save_metadata to False to save no metadata; not recommended.
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
-    if exists(outputfile):
-        if overwrite is False:
-            raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(outputfile))
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
     f = h5py.File(outputfile,"w")
-    if topgroup is None:
-        group_toplevel = f.create_group("4DSTEM_experiment")
-    else:
-        assert isinstance(topgroup, str)
-        group_toplevel = f.create_group(topgroup)
-    group_toplevel.attrs.create("emd_group_type",2)
-    group_toplevel.attrs.create("version_major",0)
-    group_toplevel.attrs.create("version_minor",6)
+    f.attrs.create("version_major",0)
+    f.attrs.create("version_minor",3)
+    group_data = f.create_group("4DSTEM_experiment")
 
     ##### Metadata #####
 
-    # Find and label all metadata objects
-    metadata_list,i = [],0
-    for dataobject in dataobject_list:
-        if dataobject.metadata is not None:
-            assert isinstance(dataobject.metadata,Metadata), "DataObject.metadata must be a Metadata object or None for all DataObjects being saved."
-            if dataobject.metadata not in metadata_list:
-                metadata_list.append(dataobject.metadata)
-                dataobject.metadata._ind = i
-                i += 1
+    # Create metadata groups
+    group_metadata = group_data.create_group("metadata")
+    group_original_metadata = group_metadata.create_group("original")
+    group_microscope_metadata = group_metadata.create_group("microscope")
+    group_sample_metadata = group_metadata.create_group("sample")
+    group_user_metadata = group_metadata.create_group("user")
+    group_calibration_metadata = group_metadata.create_group("calibration")
+    group_comments_metadata = group_metadata.create_group("comments")
+    group_original_metadata_all = group_original_metadata.create_group("all")
+    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
 
-    # Save metadata
-    group_metadata = group_toplevel.create_group("metadata")
-    for metadata in metadata_list:
-        group_metadata_current = group_metadata.create_group("metadata_{}".format(metadata._ind))
-        save_metadata(metadata,group_metadata_current)
+    # If save_metadata isn't False, find metadata and save it
+    if save_metadata is not False:
+        print("Writing metadata...")
+        if isinstance(save_metadata, Metadata):
+            metadata = save_metadata
+        else:
+            metadata = find_metadata(dataobject_list, save_metadata, f)
+
+        # Transfer original metadata trees
+        if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+            transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
+        else:
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
+
+        # Transfer dataobjecttracker.rawdatacube.metadata dictionaries
+        transfer_metadata_dict(metadata.data.microscope,group_microscope_metadata)
+        transfer_metadata_dict(metadata.data.sample,group_sample_metadata)
+        transfer_metadata_dict(metadata.data.user,group_user_metadata)
+        transfer_metadata_dict(metadata.data.calibration,group_calibration_metadata)
+        transfer_metadata_dict(metadata.data.comments,group_comments_metadata)
+
+    ##### Log #####
+    group_log = group_data.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Data #####
 
     # Write data groups
-    group_data = group_toplevel.create_group("data")
+    group_data = group_data.create_group("data")
     group_datacubes = group_data.create_group("datacubes")
     group_diffractionslices = group_data.create_group("diffractionslices")
     group_realslices = group_data.create_group("realslices")
@@ -134,16 +152,11 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
         else:
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
-    ##### Log #####
-    #group_log = group_toplevel.create_group("log")
-    #for index in range(logger.log_index):
-    #    write_log_item(group_log, index, logger.logged_items[index])
-
     ##### Finish and close #####
     print("Done.")
     f.close()
 
-#@log
+@log
 def save_dataobject(dataobject, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataObject instance to outputfile.
@@ -153,7 +166,7 @@ def save_dataobject(dataobject, outputfile, **kwargs):
     # Save
     save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
-#@log
+@log
 def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
     Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
@@ -164,7 +177,7 @@ def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
 
     save_from_dataobject_list(dataobject_list, outputfile, **kwargs)
 
-#@log
+@log
 def save(data, outputfile, **kwargs):
     """
     Saves a .h5 file to outputpath. What is saved depends on the arguement data.
@@ -202,17 +215,9 @@ def save(data, outputfile, **kwargs):
 
 def save_datacube_group(group, datacube):
     group.attrs.create("emd_group_type",1)
-    if datacube.metadata is not None:
-        group.attrs.create("metadata",datacube.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    if isinstance(datacube.data,np.ndarray):
-        data_datacube = group.create_dataset("data", data=datacube.data)
-    else:
-        # handle K2DataArray datacubes
-        data_datacube = datacube.data._write_to_hdf5(group)
+    data_datacube = group.create_dataset("datacube", data=datacube.data4D)
 
     # Dimensions
     assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
@@ -236,75 +241,151 @@ def save_datacube_group(group, datacube):
     data_Q_Ny.attrs.create("name",np.string_("Q_y"))
     data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
-    # TODO: Calibrate axes, if calibrations are present
+    # Calibrate axes, if calibrations are present
+
+    # Calibrate R axes
+    #try:
+    #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
+    #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+    #    # Set R axis units
+    #    try:
+    #        R_units = datacube.metadata.calibration["R_units"]
+    #        data_R_Nx.attrs["units"] = R_units
+    #        data_R_Ny.attrs["units"] = R_units
+    #    except KeyError:
+    #        print("WARNING: Real space calibration found and applied, however, units were",
+    #               "not identified and have been left in pixels.")
+    #except KeyError:
+    #    print("No real space calibration found.")
+    #except TypeError:
+    #    # If R_pix_size is a str, i.e. has not been entered, pass
+    #    pass
+
+    # Calibrate Q axes
+    #try:
+    #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
+    #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
+    #    # Set Q axis units
+    #    try:
+    #        Q_units = datacube.metadata.calibration["Q_units"]
+    #        data_Q_Nx.attrs["units"] = Q_units
+    #        data_Q_Ny.attrs["units"] = Q_units
+    #    except KeyError:
+    #        print("WARNING: Diffraction space calibration found and applied, however, units",
+    #               "were not identified and have been left in pixels.")
+    #except KeyError:
+    #    print("No diffraction space calibration found.")
+    #except TypeError:
+    #    # If Q_pix_size is a str, i.e. has not been entered, pass
+    #    pass
 
 def save_diffraction_group(group, diffractionslice):
-    if diffractionslice.metadata is not None:
-        group.attrs.create("metadata",diffractionslice.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
 
     group.attrs.create("depth", diffractionslice.depth)
-    data_diffractionslice = group.create_dataset("data", data=diffractionslice.data)
+    if diffractionslice.depth==1:
+        shape = diffractionslice.data2D.shape
+        data_diffractionslice = group.create_dataset("diffractionslice", data=diffractionslice.data2D)
+    else:
+        if type(diffractionslice.data2D)==OrderedDict:
+            shape = diffractionslice.data2D[list(diffractionslice.data2D.keys())[0]].shape
+            for key in diffractionslice.data2D.keys():
+                data_diffractionslice = group.create_dataset(str(key), data=diffractionslice.data2D[key])
+        else:
+            shape = diffractionslice.data2D[0].shape
+            for i in range(diffractionslice.depth):
+                data_diffractionslice = group.create_dataset("slice_"+str(i), data=diffractionslice.data2D[i])
 
-    shape = diffractionslice.data.shape
-    assert len(shape)==2 or len(shape)==3
-
-    # Dimensions 1 and 2
-    Q_Nx,Q_Ny = shape[:2]
-    dim1 = group.create_dataset("dim1",(Q_Nx,))
-    dim2 = group.create_dataset("dim2",(Q_Ny,))
+    # Dimensions
+    assert len(shape)==2, "Shape of diffractionslice is {}".format(len(shape))
+    Q_Nx,Q_Ny = shape
+    data_Q_Nx = group.create_dataset("dim1",(Q_Nx,))
+    data_Q_Ny = group.create_dataset("dim2",(Q_Ny,))
 
     # Populate uncalibrated dimensional axes
-    dim1[...] = np.arange(0,Q_Nx)
-    dim1.attrs.create("name",np.string_("Q_x"))
-    dim1.attrs.create("units",np.string_("[pix]"))
-    dim2[...] = np.arange(0,Q_Ny)
-    dim2.attrs.create("name",np.string_("Q_y"))
-    dim2.attrs.create("units",np.string_("[pix]"))
+    data_Q_Nx[...] = np.arange(0,Q_Nx)
+    data_Q_Nx.attrs.create("name",np.string_("Q_x"))
+    data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+    data_Q_Ny[...] = np.arange(0,Q_Ny)
+    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
-    # TODO: Calibrate axes, if calibrations are present
+    # ToDo: axis calibration
+    # Requires pulling metadata from associated RawDataCube
 
-    # Dimension 3
-    if len(shape)==3:
-        dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
+    # Calibrate axes, if calibrations are present
+    #try:
+    #    Q_pix_size = datacube.metadata.calibration["Q_pix_size"]
+    #    data_Q_Nx[...] = np.arange(0,Q_Nx*Q_pix_size,Q_pix_size)
+    #    data_Q_Ny[...] = np.arange(0,Q_Ny*Q_pix_size,Q_pix_size)
+    #    # Set Q axis units
+    #    try:
+    #        Q_units = datacube.metadata.calibration["Q_units"]
+    #        data_Q_Nx.attrs["units"] = Q_units
+    #        data_Q_Ny.attrs["units"] = Q_units
+    #    except KeyError:
+    #        print("WARNING: Diffraction space calibration found and applied, however, units",
+    #               "were not identified and have been left in pixels.")
+    #except KeyError:
+    #    print("No diffraction space calibration found.")
+    #except TypeError:
+    #    # If Q_pix_size is a str, i.e. has not been entered, pass
+    #    pass
 
 def save_real_group(group, realslice):
-    if realslice.metadata is not None:
-        group.attrs.create("metadata",realslice.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
 
     group.attrs.create("depth", realslice.depth)
-    data_realslice = group.create_dataset("data", data=realslice.data)
+    if realslice.depth==1:
+        shape = realslice.data2D.shape
+        data_realslice = group.create_dataset("realslice", data=realslice.data2D)
+    else:
+        if type(realslice.data2D)==OrderedDict:
+            shape = realslice.data2D[list(realslice.data2D.keys())[0]].shape
+            for key in realslice.data2D.keys():
+                data_realslice = group.create_dataset(str(key), data=realslice.data2D[key])
+        else:
+            shape = realslice.data2D[0].shape
+            for i in range(realslice.depth):
+                data_realslice = group.create_dataset("slice_"+str(i), data=realslice.data2D[i])
 
-    shape = realslice.data.shape
-    assert len(shape)==2 or len(shape)==3
-
-    # Dimensions 1 and 2
-    R_Nx,R_Ny = shape[:2]
-    dim1 = group.create_dataset("dim1",(R_Nx,))
-    dim2 = group.create_dataset("dim2",(R_Ny,))
+    # Dimensions
+    assert len(shape)==2, "Shape of realslice is {}".format(len(shape))
+    R_Nx,R_Ny = shape
+    data_R_Nx = group.create_dataset("dim1",(R_Nx,))
+    data_R_Ny = group.create_dataset("dim2",(R_Ny,))
 
     # Populate uncalibrated dimensional axes
-    dim1[...] = np.arange(0,R_Nx)
-    dim1.attrs.create("name",np.string_("R_x"))
-    dim1.attrs.create("units",np.string_("[pix]"))
-    dim2[...] = np.arange(0,R_Ny)
-    dim2.attrs.create("name",np.string_("R_y"))
-    dim2.attrs.create("units",np.string_("[pix]"))
+    data_R_Nx[...] = np.arange(0,R_Nx)
+    data_R_Nx.attrs.create("name",np.string_("R_x"))
+    data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
 
-    # TODO: Calibrate axes, if calibrations are present
+    # ToDo: axis calibration
+    # Requires pulling metadata from associated RawDataCube
 
-    # Dimension 3
-    if len(shape)==3:
-        dim3 = group.create_dataset("dim3", data=np.array(realslice.slicelabels).astype("S64"))
+    # Calibrate axes, if calibrations are present
+    #try:
+    #    R_pix_size = datacube.metadata.calibration["R_pix_size"]
+    #    data_R_Nx[...] = np.arange(0,R_Nx*R_pix_size,R_pix_size)
+    #    data_R_Ny[...] = np.arange(0,R_Ny*R_pix_size,R_pix_size)
+    #    # Set R axis units
+    #    try:
+    #        R_units = datacube.metadata.calibration["R_units"]
+    #        data_R_Nx.attrs["units"] = R_units
+    #        data_R_Ny.attrs["units"] = R_units
+    #    except KeyError:
+    #        print("WARNING: Real space calibration found and applied, however, units",
+    #               "were not identified and have been left in pixels.")
+    #except KeyError:
+    #    print("No real space calibration found.")
+    #except TypeError:
+    #    # If R_pix_size is a str, i.e. has not been entered, pass
+    #    pass
 
 def save_pointlist_group(group, pointlist):
-    if pointlist.metadata is not None:
-        group.attrs.create("metadata",pointlist.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
 
     n_coords = len(pointlist.dtype.names)
     coords = np.string_(str([coord for coord in pointlist.dtype.names]))
@@ -318,10 +399,6 @@ def save_pointlist_group(group, pointlist):
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
 def save_pointlistarray_group(group, pointlistarray):
-    if pointlistarray.metadata is not None:
-        group.attrs.create("metadata",pointlistarray.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
 
     n_coords = len(pointlistarray.dtype.names)
     coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
@@ -337,50 +414,60 @@ def save_pointlistarray_group(group, pointlistarray):
 
 #### Metadata functions ####
 
-def save_metadata(metadata,group):
+def find_metadata(dataobject_list, save_metadata, h5file):
     """
-    Save metadata (Metadata object) into group (HDF5 group).
+    Searches for a metadata object.
+
+    First searches the objects in dataobject_list for linked metadata objects. If exactly one is
+    found, returns it.
+    If none are found, searches for all metadata objects in memory. If exactly one is found, returns
+    it.
+    If none are still found, raises an exception with an error message suggesting saving with no
+    metadata by setting save_metadata to False.
+    If multiple metdata objects are found (either associated with the dataobject_list objects or in
+    memory), checks if save_metadata is an integer.
+    If not, prints a list of the metadata objects and associated indexes, and prompts the user to
+    select one by setting it to the value of the save_metadata flag.
+    If it is, returns the corresponding metadata object from the list of found metadata objects.
     """
-    # Create subgroups
-    group_microscope_metadata = group.create_group("microscope")
-    group_sample_metadata = group.create_group("sample")
-    group_user_metadata = group.create_group("user")
-    group_calibration_metadata = group.create_group("calibration")
-    group_comments_metadata = group.create_group("comments")
-
-    group_original_metadata = group.create_group("original")
-    group_original_metadata_all = group_original_metadata.create_group("all")
-    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
-
-    # Transfer metadata dictionaries
-    transfer_metadata_dict(metadata.microscope,group_microscope_metadata)
-    transfer_metadata_dict(metadata.sample,group_sample_metadata)
-    transfer_metadata_dict(metadata.user,group_user_metadata)
-    transfer_metadata_dict(metadata.calibration,group_calibration_metadata)
-    transfer_metadata_dict(metadata.comments,group_comments_metadata)
-
-    # Transfer original metadata trees
-    if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
-    else:
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
-
-def transfer_metadata_dict(dictionary,group):
-    """
-    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
-    to attrs in a .h5 group.
-
-    Accepts two arguments:
-        dictionary - a dictionary of metadata
-        group - an hdf5 file group, which will become the root node of a copy of tree
-    """
-    for key,val in dictionary.items():
-        if type(val)==str:
-            group.attrs.create(key,np.string_(val))
+    metadata_object_list = []
+    for dataobject in dataobject_list:
+        if dataobject.metadata is not None and dataobject.metadata not in metadata_object_list:
+            metadata_object_list.append(dataobject.metadata)
+    if len(metadata_object_list)==1:
+        return metadata_object_list[0]
+    elif len(metadata_object_list)==0:
+        metadata_object_list = DataObject.get_dataobject_by_type(Metadata)
+        if len(metadata_object_list)==1:
+            return metadata_object_list[0]
+        elif len(metadata_object_list)==0:
+            h5file.close()
+            raise Exception("No metadata found. To overide and save with no metadata (not recommended), use the save_metadata=False flag.")
         else:
-            group.attrs.create(key,val)
+            if save_metadata is True:
+                print("Several metadata objects found.")
+                print("To select one, set the save_metadata flag to the appropriate integer value:")
+                for i in range(len(metadata_object_list)):
+                    print("{}\t{}".format(i, metadata_object_list[i]))
+                print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
+                h5file.close()
+                raise Exception("Multiple metadata objects found. Select one or save without metadata.")
+            else:
+                assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
+                return metadata_object_list[save_metadata]
+    else:
+        if save_metadata is True:
+            print("Several metadata objects found.")
+            print("To select one, set the save_metadata flag to the appropriate integer value:")
+            for i in range(len(metadata_object_list)):
+                print("{}\t{}".format(i, metadata_object_list[i]))
+            print("Otherwise, to save without metadata (not recommended), set the save_metadata flag to False.")
+            h5file.close()
+            raise Exception("Multiple metadata objects found. Select one or save without metadata.")
+        else:
+            assert isinstance(save_metadata,int), "save_metadata should either be a bool or an int."
+            return metadata_object_list[save_metadata]
+
 
 def transfer_metadata_tree_hs(tree,group):
     """
@@ -449,6 +536,21 @@ def is_metadata_dict(key):
     else:
         return False
 
+def transfer_metadata_dict(dictionary,group):
+    """
+    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
+    to attrs in a .h5 group.
+
+    Accepts two arguments:
+        dictionary - a dictionary of metadata
+        group - an hdf5 file group, which will become the root node of a copy of tree
+    """
+    for key,val in dictionary.items():
+        if type(val)==str:
+            group.attrs.create(key,np.string_(val))
+        else:
+            group.attrs.create(key,val)
+
 
 #### Logging functions ####
 
@@ -488,7 +590,6 @@ def write_time_to_log_item(group_logitem, datetime):
     date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
     time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
     group_logitem.attrs.create('time', np.string_(date+'__'+time))
-
 
 
 

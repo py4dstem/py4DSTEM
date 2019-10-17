@@ -1,7 +1,7 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
-from ..utils import make_Fourier_coords2D
+from ..utils import make_Fourier_coords2D, print_progress_bar
 from ...file.datastructure import DataCube
 
 ############################# DPC Functions ################################
@@ -47,10 +47,12 @@ def get_CoM_images(datacube, mask=None, normalize=True):
 
     return CoMx, CoMy
 
-def get_rotation_and_flip(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1, return_costs=False):
+def get_rotation_and_flip_zerocurl(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1,
+                                                                       return_costs=False):
     """
     Find the rotation offset between real space and diffraction space, and whether there exists a
-    relative axis flip their coordinate systems.
+    relative axis flip their coordinate systems, starting from the premise that the CoM changes
+    must have zero curl everywhere.
 
     The idea of the algorithm is to find the rotation which best preserves self-consistency in the
     observed CoM changes.  By 'self-consistency', we refer to the requirement that the CoM changes -
@@ -72,12 +74,13 @@ def get_rotation_and_flip(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1, return
                         axis flip, for all gradient descent steps, for diagnostic purposes
 
     Returns:
-        theta           (float) the rotation angle between the real and diffraction space coordinates
+        theta           (float) the rotation angle between the real and diffraction space coordinate,
+                        in radians
         flip            (bool) if True, the real and diffraction space coordinates are flipped
                         relative to one another.  By convention, we take flip=True to correspond to
                         the change CoMy --> -CoMy.
         thetas          (float) returned iff return_costs is True. The theta values at each gradient
-                        descent step for flip=False
+                        descent step for flip=False. In radians.
         costs           (float) returned iff return_costs is True. The cost values at each gradient
                         descent step for flip=False
         thetas_f        (float) returned iff return_costs is True. The theta values for flip=True
@@ -132,8 +135,89 @@ def get_rotation_and_flip(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1, return
     else:
         return theta, flip
 
+def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, regLowPass=0.5,
+                                      regHighPass=100, stepsize=1, n_iter=1, return_stds=False,
+                                      verbose=True):
+    """
+    Find the rotation offset between real space and diffraction space, and whether there exists a
+    relative axis flip their coordinate systems, starting from the premise that the contrast of the
+    phase reconstruction should be maximized when the RQ rotation is correctly set.
+
+    The idea of the algorithm is to perform a phase reconstruction for various values of the RQ
+    rotation, and with and without an RQ flip, and then calculate the standard deviation of the
+    resulting images.  The rotation and flip which maximize the standard deviation are then returned.
+    Note that answer should be correct up to a 180 degree rotation, corresponding to a complete
+    contrast reversal.  From these two options, the correct rotation can then be selected manually
+    by noting that for the correct rotation, atomic sites should be bright and the absence of atoms
+    dark.  Physically, the presence of two degenerate solutions is related to the electron charge,
+    with the incorrect, contrast reversed solution corresponding to electrons with a charge of +e.
+
+    Accepts:
+        CoMx            (2D array) the x coordinates of the diffraction space centers of mass
+        CoMy            (2D array) the y coordinates of the diffraction space centers of mass
+        N_thetas        (int) the number of theta values to use
+        regLowPass      (float) passed to get_phase_from_CoM; low pass regularization term for the
+                        Fourier integration operators
+        regHighPass     (float) passed to get_phase_from_CoM; high pass regularization term for the
+                        Fourier integration operators
+        paddingfactor   (int) passed to get_phase_from_CoM; padding to add to the CoM arrays for
+                        boundry condition handling. 1 corresponds to no padding, 2 to doubling the
+                        array size, etc.
+        stepsize        (float) passed to get_phase_from_CoM; the stepsize in the iteration step
+                        which updates the phase
+        n_iter          (int) passed to get_phase_from_CoM; the number of iterations
+        return_stds     (bool) if True, returns the theta values and costs, both with and without an
+                        axis flip, for all gradient descent steps, for diagnostic purposes
+        verbose         (bool) if True, display progress bar during calculation
+
+    Returns:
+        theta           (float) the rotation angle between the real and diffraction space
+                        coordinates, in radians.
+        flip            (bool) if True, the real and diffraction space coordinates are flipped
+                        relative to one another.  By convention, we take flip=True to correspond to
+                        the change CoMy --> -CoMy.
+        thetas          (float) returned iff return_costs is True. The theta values. In radians.
+        stds           (float) returned iff return_costs is True. The cost values at each gradient
+                        descent step for flip=False
+        stds_f         (float) returned iff return_costs is True. The cost values for flip=False
+    """
+    thetas = np.linspace(0,2*np.pi,N_thetas)
+    stds = np.zeros(N_thetas)
+    stds_f = np.zeros(N_thetas)
+
+    # Unflipped
+    for i,theta in enumerate(thetas):
+        phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=False,
+                                          regLowPass=regLowPass, regHighPass=regHighPass,
+                                          paddingfactor=paddingfactor, stepsize=stepsize,
+                                          n_iter=n_iter)
+        stds[i] = np.std(phase)
+        if verbose:
+            print_progress_bar(i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
+
+    # Flipped
+    for i,theta in enumerate(thetas):
+        phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=True,
+                                          regLowPass=regLowPass, regHighPass=regHighPass,
+                                          paddingfactor=paddingfactor, stepsize=stepsize,
+                                          n_iter=n_iter)
+        stds_f[i] = np.std(phase)
+        if verbose:
+            print_progress_bar(N_thetas+i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
+
+    flip = np.max(stds_f)>np.max(stds)
+    if flip:
+        theta = thetas[np.argmax(stds_f)]
+    else:
+        theta = thetas[np.argmax(stds)]
+
+    if return_stds:
+        return theta, flip, thetas, stds, stds_f
+    else:
+        return theta, flip
+
 def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100, paddingfactor=2,
-                                                              stepsize=1, n_iter=10):
+                                                stepsize=1, n_iter=10, phase_init=None):
     """
     Calculate the phase of the sample transmittance from the diffraction centers of mass.
     A bare bones description of the approach taken here is below - for detailed discussion of the
@@ -167,6 +251,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
                         1 corresponds to no padding, 2 to doubling the array size, etc.
         stepsize        (float) the stepsize in the iteration step which updates the phase
         n_iter          (int) the number of iterations
+        phase_init      (2D array) initial guess for the phase
 
     Returns:
         phase           (2D array) the phase of the sample transmittance
@@ -210,6 +295,8 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     mask = np.zeros((R_Nx_padded,R_Ny_padded),dtype=bool)
     mask[:R_Nx,:R_Ny] = True
     maskInv = mask==False
+    if phase_init is not None:
+        phase[:R_Nx,:R_Ny] = phase_init
 
     # Iterative reconstruction
     for i in range(n_iter):
