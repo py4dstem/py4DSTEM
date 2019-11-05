@@ -9,7 +9,7 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation
-from ..utils import get_shifted_ar, get_CoM, get_shift
+from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
 
 #### Get the vacuum probe ####
 
@@ -39,7 +39,7 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
     """
     probe = datacube.data[0,0,:,:]
-    for n in range(1,datacube.R_N):
+    for n in tqdmnd(range(1,datacube.R_N)):
         Rx,Ry = np.unravel_index(n,datacube.data.shape[:2])
         curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
@@ -87,10 +87,8 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     length = ROI.sum()
     xy = np.vstack(np.nonzero(ROI))
     probe = datacube.data[xy[0,0],xy[1,0],:,:]
-    for n in range(1,length):
+    for n in tqdmnd(range(1,length)):
         curr_DP = datacube.data[xy[0,n],xy[1,n],:,:] * DP_mask
-        if verbose:
-            print("Shifting and averaging diffraction pattern {} of {}.".format(n,length))
 
         xshift,yshift = get_shift(probe, curr_DP)
         curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)

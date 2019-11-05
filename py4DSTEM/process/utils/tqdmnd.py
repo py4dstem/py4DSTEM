@@ -13,6 +13,7 @@ for x,y in tqdmnd(20,10):
 
 from tqdm import tqdm
 from itertools import product
+from functools import reduce
 
 from operator import mul
 
