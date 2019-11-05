@@ -5,7 +5,7 @@
 from collections.abc import Sequence
 import numpy as np
 import numba as nb
-from ...process.utils import print_progress_bar
+from ...process.utils import print_progress_bar, tqdmnd
 
 class K2DataArray(Sequence):
 	"""
@@ -158,71 +158,59 @@ class K2DataArray(Sequence):
 	#====== DUCK-TYPED NUMPY FUNCTIONS ======#
 
 	def mean(self, axis=None, dtype=None, out=None, keepdims=False):
-		assert axis in [(0,1), (2,3)], 'Only average DP and average image supported.'
+        assert axis in [(0,1), (2,3)], 'Only average DP and average image supported.'
 
-		# handle average DP
-		if axis == (0,1):
-			avgDP = np.zeros((self.shape[2],self.shape[3]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					avgDP += self[Rx,Ry,:,:]
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+        # handle average DP
+        if axis == (0,1):
+            avgDP = np.zeros((self.shape[2],self.shape[3]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                avgDP += self[Rx,Ry,:,:]
 
-			return avgDP / (self.shape[0]*self.shape[1])
+            return avgDP / (self.shape[0]*self.shape[1])
 
-		#handle average image
-		if axis == (2,3):
-			avgImg = np.zeros((self.shape[0],self.shape[1]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					avgImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
-			return avgImg
+        #handle average image
+        if axis == (2,3):
+            avgImg = np.zeros((self.shape[0],self.shape[1]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                avgImg[Rx,Ry] = np.mean(self[Rx,Ry,:,:])
+            return avgImg
 
-	def sum(self, axis=None, dtype=None, out=None, keepdims=False):
-		assert axis in [(0,1), (2,3)], 'Only sum DP and sum image supported.'
+    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
+        assert axis in [(0,1), (2,3)], 'Only sum DP and sum image supported.'
 
-		# handle average DP
-		if axis == (0,1):
-			sumDP = np.zeros((self.shape[2],self.shape[3]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					sumDP += self[Rx,Ry,:,:]
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+        # handle average DP
+        if axis == (0,1):
+            sumDP = np.zeros((self.shape[2],self.shape[3]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                sumDP += self[Rx,Ry,:,:]
 
-			return sumDP
+            return sumDP
 
-		#handle average image
-		if axis == (2,3):
-			sumImg = np.zeros((self.shape[0],self.shape[1]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					sumImg[Rx,Ry] = np.sum(self[Rx,Ry,:,:])
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
-			return sumImg
+        #handle average image
+        if axis == (2,3):
+            sumImg = np.zeros((self.shape[0],self.shape[1]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                sumImg[Rx,Ry] = np.sum(self[Rx,Ry,:,:])
+            return sumImg
 
 
-	def max(self, axis=None, out=None):
-		assert axis in [(0,1), (2,3)], 'Only max DP and max image supported.'
+    def max(self, axis=None, out=None):
+        assert axis in [(0,1), (2,3)], 'Only max DP and max image supported.'
 
-		# handle average DP
-		if axis == (0,1):
-			maxDP = np.zeros((self.shape[2],self.shape[3]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					maxDP = np.maximum(maxDP,self[Rx,Ry,:,:])
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
+        # handle average DP
+        if axis == (0,1):
+            maxDP = np.zeros((self.shape[2],self.shape[3]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                maxDP = np.maximum(maxDP,self[Rx,Ry,:,:])
 
-			return maxDP
+            return maxDP
 
-		#handle average image
-		if axis == (2,3):
-			maxImg = np.zeros((self.shape[0],self.shape[1]))
-			for Ry in range(self.shape[1]):
-				for Rx in range(self.shape[0]):
-					maxImg[Rx,Ry] = np.max(self[Rx,Ry,:,:])
-					print_progress_bar(Ry*self.shape[0] + Rx + 1,self.shape[0]*self.shape[1])
-			return maxImg
+        #handle average image
+        if axis == (2,3):
+            maxImg = np.zeros((self.shape[0],self.shape[1]))
+            for (Ry, Rx) in tqdmnd(self.shape[1],self.shape[0]):
+                maxImg[Rx,Ry] = np.max(self[Rx,Ry,:,:])
+            return maxImg
 	
 	#====== READING FROM BINARY AND NOISE REDUCTION ======#
 	def _attach_to_files(self):
