@@ -376,7 +376,7 @@ class FileBrowser(object):
                           'type':objecttype, 'index':index, 'metadata':metadata}
         elif objecttype == 'PointListArray':
             name = list(self.file[self.topgroup + 'data/pointlistarrays'].keys())[objectindex]
-            coordinates = list(self.file[self.topgroup + 'data/pointlistarrays'][name].keys())
+            coordinates = self.file[self.topgroup + 'data/pointlistarrays'][name]["data"][0,0].dtype
             shape = self.file[self.topgroup + 'data/pointlistarrays'][name]['data'].shape
             metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
@@ -813,6 +813,7 @@ class FileBrowser(object):
             coordinates = dset[0,0].dtype
             dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
             
+            print('Reading PointListArray into RAM:',flush=True)
             for (i,j) in tqdmnd(shape[0],shape[1]):
                 dataobject.get_pointlist(i,j).add_dataarray(dset[i,j])
 
