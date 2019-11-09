@@ -333,9 +333,12 @@ def save_pointlistarray_group(group, pointlistarray):
     else:
         group.attrs.create("metadata",-1)
 
-    n_coords = len(pointlistarray.dtype.names)
-    coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("coordinates", coords)
+    try:
+        n_coords = len(pointlistarray.dtype.names)
+    except:
+        n_coords = 1
+    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
+    group.attrs.create("coordinates", np.string_(str(pointlistarray.dtype)))
     group.attrs.create("dimensions", n_coords)
 
     pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
