@@ -10,6 +10,7 @@ from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..datastructure import DataCube, DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
 from ..datastructure import MetadataCollection, Metadata, DataObject
+from ...process.utils import tqdmnd
 
 from ..log import log, Logger
 logger = Logger()
@@ -49,7 +50,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
         group_toplevel = f.create_group(topgroup)
     group_toplevel.attrs.create("emd_group_type",2)
     group_toplevel.attrs.create("version_major",0)
-    group_toplevel.attrs.create("version_minor",6)
+    group_toplevel.attrs.create("version_minor",7)
 
     ##### Metadata #####
 
@@ -144,12 +145,12 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Log #####
-    #group_log = group_toplevel.create_group("log")
-    #for index in range(logger.log_index):
-    #    write_log_item(group_log, index, logger.logged_items[index])
+    group_log = group_toplevel.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Finish and close #####
-    print("Done.")
+    print("Done.",flush=True)
     f.close()
 
 #@log
@@ -337,10 +338,12 @@ def save_pointlistarray_group(group, pointlistarray):
     group.attrs.create("coordinates", coords)
     group.attrs.create("dimensions", n_coords)
 
-    for i in range(pointlistarray.shape[0]):
-        for j in range(pointlistarray.shape[1]):
-            group_current_arrayposition = group.create_group("{}_{}".format(i,j))
-            save_pointlist_group(group_current_arrayposition, pointlistarray.get_pointlist(i,j))
+    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
+    name = group.name.split('/')[-1]
+    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
+
+    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+        dset[i,j] = pointlistarray.get_pointlist(i,j).data
 
 
 
