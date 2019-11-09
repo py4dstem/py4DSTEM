@@ -377,7 +377,7 @@ class FileBrowser(object):
         elif objecttype == 'PointListArray':
             name = list(self.file[self.topgroup + 'data/pointlistarrays'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlistarrays'][name].keys())
-            shape = self.file[self.topgroup + 'data/pointlistarrays'][name][name].shape
+            shape = self.file[self.topgroup + 'data/pointlistarrays'][name]['data'].shape
             metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
                           'type':objecttype, 'index':index, 'metadata':metadata}
@@ -809,7 +809,7 @@ class FileBrowser(object):
             shape = info['shape']
             coords = info['coordinates']
 
-            dset = self.file[self.topgroup + 'data/pointlistarrays'][name][name]
+            dset = self.file[self.topgroup + 'data/pointlistarrays'][name]["data"]
             coordinates = dset[0,0].dtype
             dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
             

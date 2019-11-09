@@ -161,8 +161,7 @@ Last updated for py4DSTEM v0.6.
         |             |--grp: pointlistarray_1
         |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
         |             |    |--attr: dimensions=val
-        |             |    |--grp: 0_0 = pointlist at index 0,0
-        |             |    |--grp: 0_1
+        |             |    |--data (array of numpy arrays)
         |             |    :
         |             |
         |             |--grp: pointlistarray_2

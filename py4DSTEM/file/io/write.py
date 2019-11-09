@@ -339,7 +339,7 @@ def save_pointlistarray_group(group, pointlistarray):
     group.attrs.create("dimensions", n_coords)
 
     pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
-    name = group.name.split('/')[-1]
+    name = "data"
     dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
 
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
