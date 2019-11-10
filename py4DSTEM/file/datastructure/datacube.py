@@ -3,10 +3,17 @@
 # DataCube objects contain a 4DSTEM dataset, attributes describing its shape, and methods
 # pointing to processing functions - generally defined in other files in the process directory.
 
+from collections.abc import Sequence
+
+import numpy as np
+import dask as da
+import numba as nb
+
 import numpy as np
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage
+from ...process.utils import tqdmnd
 
 class DataCube(DataObject):
 
@@ -211,5 +218,87 @@ class DataCube(DataObject):
 
 ########################## END OF DATACUBE OBJECT ########################
 
+class CountedDataCube(DataObject):
 
+    def __init__(self,electrons,detector_shape,index_keys='ind',
+                    use_dask=False, **kwargs):
+        super().__init__(self,**kwargs)
+
+        self.electrons = electrons
+        self.detector_shape = detector_shape
+
+        if use_dask:
+            sa = Sparse4D(self.electrons,detector_shape,index_keys)
+            self.data = da.from_array(sa,chunks=(1,1,detector_shape[0],detector_shape[1]))
+        else:
+            self.data = Sparse4D(self.electrons,detector_shape,index_keys)
+
+        self.R_Nx = electrons.shape[0]
+        self.R_Ny = electrons.shape[1]
+        self.Q_Nx = detector_shape[0]
+        self.Q_Ny = detector_shape[1]
+
+        self.R_N = self.R_Nx * self.R_Ny
+
+
+class Sparse4D(Sequence):
+    """
+    A wrapper for a PointListArray of electron events that returns
+    a reconstructed diffraction pattern when sliced.
+    NOTE: This class is meant to be constructed by the
+    CountedDataCube object.
+    """
+    def __init__(self,electrons,detector_shape,index_key='ind'):
+        super().__init__()
+
+        self.electrons = electrons
+        self.detector_shape = detector_shape
+        self.index_key = index_key
+
+        # check if 1D or 2D
+        if type(index_key) == str:
+            # use 1D indexing mode
+            self._mode = 1
+        elif len(index_key) == 2:
+            # use 2D indexing mode
+            self._mode = 2
+        else:
+            assert false, "index_key specified incorrectly"
+
+        # Needed for dask:
+        self.shape = (electrons.shape[0], electrons.shape[1],
+            detector_shape[0], detector_shape[1])
+        self.dtype = np.uint8
+        self.ndim = 4
+
+    def __getitem__(self,i):
+        pl = self.electrons.get_pointlist(i[0],i[1])
+
+        if self._mode == 1:
+            return points_to_DP_numba_ravel(pl.data[self.index_key],
+                int(self.detector_shape[0]),int(self.detector_shape[1]))
+        elif self._mode == 2:
+            return points_to_DP_numba_unravel(pl.data[self.index_key[0]],
+                pl.data[self.index_key[1]],int(self.detector_shape[0]),
+                int(self.detector_shape[1]))
+
+    def __len__(self):
+        return np.prod(self.shape)
+
+
+# Numba accelerated conversion of single-index 
+# electron event list to full DP
+@nb.njit
+def points_to_DP_numba_ravel(pl,sz1,sz2):
+    dp = np.zeros((sz1*sz2),dtype=np.uint8)
+    for i in nb.prange(len(pl)):
+        dp[pl[i]] += 1
+    return dp.reshape((sz1,sz2))
+
+@nb.njit
+def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
+    dp = np.zeros((sz1,sz2),dtype=np.uint8)
+    for i in nb.prange(len(pl1)):
+        dp[pl1[i],pl2[i]] += 1
+    return dp
 
