@@ -10,7 +10,7 @@
 
 import h5py
 import numpy as np
-from ..datastructure import DataCube
+from ..datastructure import DataCube, CountedDataCube
 from ..datastructure import DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
 from ..datastructure import Metadata
@@ -54,7 +54,9 @@ class FileBrowser(object):
     ###### Setup methods #####
 
     def set_object_lookup_info(self):
-        if version_is_greater_or_equal(self.version, (0,5)):
+        if self.version == (0,7):
+            self.set_object_lookup_info_v0_7()
+        elif self.version in [ (0,5), (0,6) ]:
             self.set_object_lookup_info_v0_5plus()
         elif self.version == (0,4):
             self.set_object_lookup_info_v0_4()
@@ -64,6 +66,27 @@ class FileBrowser(object):
             self.set_object_lookup_info_v0_2()
         else:
             print("Error: unknown py4DSTEM version {}.{}.".format(self.version[0],self.version[1]))
+
+    def set_object_lookup_info_v0_7(self):
+        self.N_datacubes = len(self.file[self.topgroup + 'data/datacubes'])
+        self.N_counted = len(self.file[self.topgroup + 'data/counted_datacubes'])
+        self.N_diffractionslices = len(self.file[self.topgroup + 'data/diffractionslices'])
+        self.N_realslices = len(self.file[self.topgroup + 'data/realslices'])
+        self.N_pointlists = len(self.file[self.topgroup + 'data/pointlists'])
+        self.N_pointlistarrays = len(self.file[self.topgroup + 'data/pointlistarrays'])
+        self.N_dataobjects = np.sum([self.N_datacubes, self.N_counted, self.N_diffractionslices, self.N_realslices, self.N_pointlists, self.N_pointlistarrays])
+
+        self.dataobject_lookup_arr = []
+        self.dataobject_lookup_arr += ['DataCube' for i in range(self.N_datacubes)]
+        self.dataobject_lookup_arr += ['CountedDataCube' for i in range(self.N_counted)]
+        self.dataobject_lookup_arr += ['DiffractionSlice' for i in range(self.N_diffractionslices)]
+        self.dataobject_lookup_arr += ['RealSlice' for i in range(self.N_realslices)]
+        self.dataobject_lookup_arr += ['PointList' for i in range(self.N_pointlists)]
+        self.dataobject_lookup_arr += ['PointListArray' for i in range(self.N_pointlistarrays)]
+        self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
+
+        self.N_metadataobjects = len(self.file[self.topgroup + 'metadata'].keys())
+        self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
 
     def set_object_lookup_info_v0_5plus(self):
         self.N_datacubes = len(self.file[self.topgroup + 'data/datacubes'])
@@ -199,6 +222,8 @@ class FileBrowser(object):
                 self.show_rawdatacubes()
             elif objecttype == 'DataCube':
                 self.show_datacubes()
+            elif objecttype == 'CountedDataCube':
+                self.show_counted_datacubes()
             elif objecttype == 'DiffractionSlice':
                 self.show_diffractionslices()
             elif objecttype == 'RealSlice':
@@ -238,6 +263,17 @@ class FileBrowser(object):
         else:
             print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
             for index in (self.dataobject_lookup_arr=='DataCube').nonzero()[0]:
+                info = self.get_dataobject_info(index)
+                name = info['name']
+                shape = info['shape']
+                print("{:^8}{:<36}{:^20}".format(index, name, str(shape)))
+
+    def show_counted_datacubes(self):
+        if self.N_counted == 0:
+            print("No CountedDataCubes present.")
+        else:
+            print("{:^8}{:^36}{:^20}".format('Index', 'Name', 'Shape'))
+            for index in (self.dataobject_lookup_arr=='CountedDataCube').nonzero()[0]:
                 info = self.get_dataobject_info(index)
                 name = info['name']
                 shape = info['shape']
@@ -323,7 +359,7 @@ class FileBrowser(object):
     def get_dataobject_info_v0_7(self, index):
         """
         Returns a dictionary containing information about the object at index for files written
-        by py4DSTEM v0.6.
+        by py4DSTEM v0.7.
         """
         objecttype, objectindex = self.get_object_lookup_info(index)
 
@@ -331,6 +367,15 @@ class FileBrowser(object):
             name = list(self.file[self.topgroup + 'data/datacubes'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/datacubes'][name]['data'].shape
             metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
+            objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
+                          'index':index, 'metadata':metadata}
+        if objecttype == 'CountedDataCube':
+            name = list(self.file[self.topgroup + 'data/counted_datacubes'].keys())[objectindex]
+            R_Nx, R_Ny = self.file[self.topgroup + 'data/counted_datacubes'][name]['data'].shape
+            Q_Nx = self.file[self.topgroup + 'data/counted_datacubes'][name]['dim3'].shape[0]
+            Q_Ny = self.file[self.topgroup + 'data/counted_datacubes'][name]['dim4'].shape[0]
+            shape = (R_Nx, R_Ny, Q_Nx, Q_Ny)
+            metadata = self.file[self.topgroup + 'data/counted_datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
                           'index':index, 'metadata':metadata}
         elif objecttype == 'DiffractionSlice':
@@ -762,6 +807,22 @@ class FileBrowser(object):
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
             data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
             dataobject = DataCube(data=data, name=name)
+
+        if objecttype == 'CountedDataCube':
+            shape = info['shape']
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+
+            dset = self.file[self.topgroup + 'data/counted_datacubes'][name]["data"]
+            coordinates = dset[0,0].dtype
+            pla = PointListArray(coordinates=coordinates, shape=shape[:2], name=name)
+            
+            index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
+
+            print('Reading electrons:',flush=True)
+            for (i,j) in tqdmnd(shape[0],shape[1]):
+                pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+
+            dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
 
         elif objecttype == 'DiffractionSlice':
             shape = info['shape']
