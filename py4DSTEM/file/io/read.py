@@ -244,7 +244,7 @@ def read_kitware_counted(filename):
 
     pla = PointListArray([('ind','u4')],(R_Nx,R_Ny))
 
-    print('Creating PointListArray:',flush=True)
+    print('Importing Electron Events:',flush=True)
 
     for (i,j) in tqdmnd(int(R_Nx),int(R_Ny)):
         ind = np.ravel_multi_index((i,j),(R_Nx,R_Ny))

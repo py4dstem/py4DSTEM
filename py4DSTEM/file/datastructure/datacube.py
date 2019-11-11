@@ -253,17 +253,20 @@ class Sparse4D(Sequence):
 
         self.electrons = electrons
         self.detector_shape = detector_shape
-        self.index_key = index_key
+        self.index_key = np.array([index_key])
 
         # check if 1D or 2D
-        if type(index_key) == str:
+        if np.count_nonzero(self.index_key) == 1:
             # use 1D indexing mode
             self._mode = 1
-        elif len(index_key) == 2:
+            self._key1 = self.index_key.ravel()[0]
+        elif np.count_nonzero(self.index_key) == 2:
             # use 2D indexing mode
             self._mode = 2
+            self._key1 = self.index_key.ravel()[0]
+            self._key2 = self.index_key.ravel()[1]
         else:
-            assert false, "index_key specified incorrectly"
+            assert False, "index_key specified incorrectly"
 
         # Needed for dask:
         self.shape = (electrons.shape[0], electrons.shape[1],
@@ -275,11 +278,11 @@ class Sparse4D(Sequence):
         pl = self.electrons.get_pointlist(i[0],i[1])
 
         if self._mode == 1:
-            return points_to_DP_numba_ravel(pl.data[self.index_key],
+            return points_to_DP_numba_ravel(pl.data[self._key1],
                 int(self.detector_shape[0]),int(self.detector_shape[1]))
         elif self._mode == 2:
-            return points_to_DP_numba_unravel(pl.data[self.index_key[0]],
-                pl.data[self.index_key[1]],int(self.detector_shape[0]),
+            return points_to_DP_numba_unravel(pl.data[self._key1],
+                pl.data[self._key2],int(self.detector_shape[0]),
                 int(self.detector_shape[1]))
 
     def __len__(self):
