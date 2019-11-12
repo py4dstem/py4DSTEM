@@ -12,9 +12,9 @@ for x,y in tqdmnd(20,10):
 """
 
 from tqdm import tqdm
+
 from itertools import product
 from functools import reduce
-
 from operator import mul
 
 from collections.abc import Iterator
@@ -30,6 +30,6 @@ class nditer(Iterator):
     def __len__(self):
         return self._l
       
-def tqdmnd(*args):
+def tqdmnd(*args,**kwargs):
     r = [range(i) if isinstance(i,int) else i for i in args]
-    return tqdm(nditer(*r))
+    return tqdm(nditer(*r),**kwargs)
