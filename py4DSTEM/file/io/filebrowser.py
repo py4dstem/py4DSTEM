@@ -818,8 +818,7 @@ class FileBrowser(object):
             
             index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
 
-            print('Reading electrons:',flush=True)
-            for (i,j) in tqdmnd(shape[0],shape[1]):
+            for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
                 pla.get_pointlist(i,j).add_dataarray(dset[i,j])
 
             dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
@@ -874,8 +873,7 @@ class FileBrowser(object):
             coordinates = dset[0,0].dtype
             dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
             
-            print('Reading PointListArray into RAM:',flush=True)
-            for (i,j) in tqdmnd(shape[0],shape[1]):
+            for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit='PointList'):
                 dataobject.get_pointlist(i,j).add_dataarray(dset[i,j])
 
         else:
