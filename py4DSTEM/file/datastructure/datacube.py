@@ -240,6 +240,21 @@ class CountedDataCube(DataObject):
 
         self.R_N = self.R_Nx * self.R_Ny
 
+    def bin_data_diffraction(self, bin_factor):
+        pass
+
+    def bin_data_real(self, bin_factor):
+        pass
+
+    def densify(self,bin_R=1, bin_Q=1, memmap=False):
+        """
+        Convert to a fully dense DataCube object, with 
+        optional binning in real and reciprocal space.
+        If memmap=True, the dense DC will be stored on disk
+        in a temporary file (using numpy).
+        """
+        pass
+
 
 class Sparse4D(Sequence):
     """
@@ -278,19 +293,21 @@ class Sparse4D(Sequence):
         pl = self.electrons.get_pointlist(i[0],i[1])
 
         if self._mode == 1:
-            return points_to_DP_numba_ravel(pl.data[self._key1],
+            dp = points_to_DP_numba_ravel(pl.data[self._key1],
                 int(self.detector_shape[0]),int(self.detector_shape[1]))
         elif self._mode == 2:
-            return points_to_DP_numba_unravel(pl.data[self._key1],
+            dp = points_to_DP_numba_unravel(pl.data[self._key1],
                 pl.data[self._key2],int(self.detector_shape[0]),
                 int(self.detector_shape[1]))
+
+        return dp[i[2],i[3]]
 
     def __len__(self):
         return np.prod(self.shape)
 
 
-# Numba accelerated conversion of single-index 
-# electron event list to full DP
+# Numba accelerated conversion of electron event lists
+# to full diffraction patterns
 @nb.njit
 def points_to_DP_numba_ravel(pl,sz1,sz2):
     dp = np.zeros((sz1*sz2),dtype=np.uint8)
