@@ -233,10 +233,10 @@ class CountedDataCube(DataObject):
         else:
             self.data = Sparse4D(self.electrons,detector_shape,index_keys)
 
-        self.R_Nx = electrons.shape[0]
-        self.R_Ny = electrons.shape[1]
-        self.Q_Nx = detector_shape[0]
-        self.Q_Ny = detector_shape[1]
+        self.R_Nx = int(electrons.shape[0])
+        self.R_Ny = int(electrons.shape[1])
+        self.Q_Nx = int(detector_shape[0])
+        self.Q_Ny = int(detector_shape[1])
 
         self.R_N = self.R_Nx * self.R_Ny
 
@@ -261,7 +261,7 @@ class Sparse4D(Sequence):
     A wrapper for a PointListArray of electron events that returns
     a reconstructed diffraction pattern when sliced.
     NOTE: This class is meant to be constructed by the
-    CountedDataCube object.
+    CountedDataCube object, and should not be invoked directly
     """
     def __init__(self,electrons,detector_shape,index_key='ind'):
         super().__init__()
