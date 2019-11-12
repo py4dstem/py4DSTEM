@@ -236,11 +236,11 @@ def read_kitware_counted(filename):
     """
     hfile = h5py.File(filename,'r')
 
-    R_Nx = hfile['electron_events']['scan_positions'].attrs['Nx']
-    R_Ny = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
 
-    Q_Nx = hfile['electron_events']['frames'].attrs['Nx']
-    Q_Ny = hfile['electron_events']['frames'].attrs['Ny']
+    Q_Nx = hfile['electron_events']['frames'].attrs['Ny']
+    Q_Ny = hfile['electron_events']['frames'].attrs['Nx']
 
     pla = PointListArray([('ind','u4')],(R_Nx,R_Ny))
 
