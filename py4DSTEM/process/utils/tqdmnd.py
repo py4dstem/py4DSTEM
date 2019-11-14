@@ -21,7 +21,10 @@ from collections.abc import Iterator
 
 class nditer(Iterator):
     def __init__(self,*args):
-        self._it = product(*args)
+        if len(args) > 1:
+            self._it = product(*args)
+        else:
+            self._it = args[0]
         self._l = reduce(mul,[a.__len__() for a in args])
     def __iter__(self):
         return self._it.__iter__()
