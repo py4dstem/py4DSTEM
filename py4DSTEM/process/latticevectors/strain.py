@@ -156,12 +156,12 @@ def get_rotated_strain_map(unrotated_strain_map, ux, uy):
                                    slicelabels=['e_xx','e_xy','e_yy','theta','mask'],
                                    name=unrotated_strain_map.name+"_rotated".format(np.degrees(theta)))
 
-    rotated_strain_map.slices['e_xx'] = cost2*unrotated_strain_map.slices['e_xx'] - 2*cost*sint*unrotated_strain_map.slices['e_xy'] + sint2*unrotated_strain_map.slices['e_yy']
-    rotated_strain_map.slices['e_xy'] = cost*sint*(unrotated_strain_map.slices['e_xx']-unrotated_strain_map.slices['e_yy']) + (cost2-sint2)*unrotated_strain_map.slices['e_xy']
-    rotated_strain_map.slices['e_yy'] = sint2*unrotated_strain_map.slices['e_xx'] + 2*cost*sint*unrotated_strain_map.slices['e_xy'] + cost2*unrotated_strain_map.slices['e_yy']
-    rotated_strain_map.slices['theta'] = unrotated_strain_map.slices['theta']
+    rotated_strain_map.data[:,:,0] = cost2*unrotated_strain_map.slices['e_xx'] - 2*cost*sint*unrotated_strain_map.slices['e_xy'] + sint2*unrotated_strain_map.slices['e_yy']
+    rotated_strain_map.data[:,:,1] = cost*sint*(unrotated_strain_map.slices['e_xx']-unrotated_strain_map.slices['e_yy']) + (cost2-sint2)*unrotated_strain_map.slices['e_xy']
+    rotated_strain_map.data[:,:,2] = sint2*unrotated_strain_map.slices['e_xx'] + 2*cost*sint*unrotated_strain_map.slices['e_xy'] + cost2*unrotated_strain_map.slices['e_yy']
+    rotated_strain_map.data[:,:,3] = unrotated_strain_map.slices['theta']
 
-    rotated_strain_map.slices['mask'] = unrotated_strain_map.slices['mask']
+    rotated_strain_map.data[:,:,4] = unrotated_strain_map.slices['mask']
     return rotated_strain_map
 
 
