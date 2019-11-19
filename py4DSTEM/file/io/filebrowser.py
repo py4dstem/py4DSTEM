@@ -822,7 +822,7 @@ class FileBrowser(object):
             coordinates = dset[0,0].dtype
 
             if coordinates.fields is None:
-                index_coords = None
+                index_coords = [None]
             else:
                 index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
 
