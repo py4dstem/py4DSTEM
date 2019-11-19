@@ -279,9 +279,6 @@ class Sparse4D(Sequence):
     that returns a reconstructed diffraction pattern when sliced.
     NOTE: This class is meant to be constructed by the
     CountedDataCube object, and should not be invoked directly.
-    The electrons object should be considered "private": its type is not
-    guaranteed and attempting to alter it may change the state of this object
-    and cause unexpected behavior. 
     """
     def __init__(self,electrons,detector_shape,index_key='ind'):
         super().__init__()

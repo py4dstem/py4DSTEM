@@ -262,6 +262,11 @@ def save_datacube_group(group, datacube):
 
 
 def save_counted_datacube_group(group,datacube):
+    if datacube.data._mmap:
+        # memory mapped CDC's aren't supported yet
+        print('Data not written. Memory mapped CountedDataCube not yet supported.')
+        return
+
     group.attrs.create("emd_group_type",1)
     if datacube.metadata is not None:
         group.attrs.create("metadata",datacube.metadata._ind)
