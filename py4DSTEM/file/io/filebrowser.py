@@ -820,12 +820,21 @@ class FileBrowser(object):
 
             dset = self.file[self.topgroup + 'data/counted_datacubes'][name]["data"]
             coordinates = dset[0,0].dtype
-            pla = PointListArray(coordinates=coordinates, shape=shape[:2], name=name)
-            
-            index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
 
-            for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
-                pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+            if coordinates.fields is None:
+                index_coords = None
+            else:
+                index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
+
+            if mmap:
+                # run in HDF5 memory mapping mode
+                dataobject = CountedDataCube(dset,[Q_Nx,Q_Ny],index_coords[:])
+            else:
+                # run in PointListArray mode
+                pla = PointListArray(coordinates=coordinates, shape=shape[:2], name=name)
+            
+                for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
+                    pla.get_pointlist(i,j).add_dataarray(dset[i,j])
 
             dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
 

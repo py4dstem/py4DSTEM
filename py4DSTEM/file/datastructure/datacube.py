@@ -268,15 +268,27 @@ class Sparse4D(Sequence):
 
         self.electrons = electrons
         self.detector_shape = detector_shape
-        self.index_key = np.array([index_key])
+
+        # choose PointListArray mode or HDF5 mode
+        if isinstance(electrons,DataObject):
+            # running in PLA mode
+            self._mmap = False
+        elif isinstance(electrons,h5py.Dataset):
+            self._mmap = True
 
         # check if 1D or 2D
-        if np.count_nonzero(self.index_key) == 1:
+        if index_key is None:
+            # using an unstructured 1D indexing scheme
+            self._mode = 0
+            self.index_key = None
+        elif np.count_nonzero(index_key) == 1:
             # use 1D indexing mode
+            self.index_key = np.array([index_key])
             self._mode = 1
             self._key1 = self.index_key.ravel()[0]
-        elif np.count_nonzero(self.index_key) == 2:
+        elif np.count_nonzero(index_key) == 2:
             # use 2D indexing mode
+            self.index_key = np.array([index_key])
             self._mode = 2
             self._key1 = self.index_key.ravel()[0]
             self._key2 = self.index_key.ravel()[1]
@@ -290,15 +302,37 @@ class Sparse4D(Sequence):
         self.ndim = 4
 
     def __getitem__(self,i):
-        pl = self.electrons.get_pointlist(i[0],i[1])
 
-        if self._mode == 1:
-            dp = points_to_DP_numba_ravel(pl.data[self._key1],
-                int(self.detector_shape[0]),int(self.detector_shape[1]))
-        elif self._mode == 2:
-            dp = points_to_DP_numba_unravel(pl.data[self._key1],
-                pl.data[self._key2],int(self.detector_shape[0]),
-                int(self.detector_shape[1]))
+        if self._mmap = False:
+            # PLA mode
+            pl = self.electrons.get_pointlist(i[0],i[1])
+
+            if self._mode == 0:
+                dp = points_to_DP_numba_ravel(pl.data,
+                    int(self.detector_shape[0]),int(self.detector_shape[1]))
+            elif self._mode == 1:
+                dp = points_to_DP_numba_ravel(pl.data[self._key1],
+                    int(self.detector_shape[0]),int(self.detector_shape[1]))
+            elif self._mode == 2:
+                dp = points_to_DP_numba_unravel(pl.data[self._key1],
+                    pl.data[self._key2],int(self.detector_shape[0]),
+                    int(self.detector_shape[1]))
+
+        else:
+            # HDF5 mode
+            data = self.electrons[i[0],i[1]]
+
+            if self._mode == 0:
+                dp = points_to_DP_numba_ravel(data,
+                    int(self.detector_shape[0]),int(self.detector_shape[1]))
+            elif self._mode == 1:
+                dp = points_to_DP_numba_ravel(data[self._key1],
+                    int(self.detector_shape[0]),int(self.detector_shape[1]))
+            elif self._mode == 2:
+                dp = points_to_DP_numba_unravel(data[self._key1],
+                    data[self._key2],int(self.detector_shape[0]),
+                    int(self.detector_shape[1]))
+
 
         return dp[i[2],i[3]]
 
