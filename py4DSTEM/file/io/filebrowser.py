@@ -747,7 +747,7 @@ class FileBrowser(object):
 
         return objecttype, objectindex
 
-    def get_dataobject(self, dataobject):
+    def get_dataobject(self, dataobject, **kwargs):
         """
         Finds a single DataObject in the file, and returns it.
 
@@ -759,7 +759,7 @@ class FileBrowser(object):
         if isinstance(dataobject, str):
             dataobject = self.get_dataobject_index_from_name(dataobject)
         if self.version==(0,7):
-            return self.get_dataobject_v0_7(dataobject)
+            return self.get_dataobject_v0_7(dataobject, **kwargs)
         if self.version==(0,6):
             return self.get_dataobject_v0_6(dataobject)
         elif self.version==(0,5):
@@ -786,7 +786,7 @@ class FileBrowser(object):
         else:
             raise Exception("No dataobject found with name {}.".format(name))
 
-    def get_dataobject_v0_7(self, index):
+    def get_dataobject_v0_7(self, index, **kwargs):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
@@ -794,6 +794,8 @@ class FileBrowser(object):
         info = self.get_dataobject_info(index)
         name = info['name']
         metadata_index = info['metadata']
+
+        mmap = kwargs.get('memory_map',False)
 
         if metadata_index == -1:
             metadata = None
@@ -805,7 +807,11 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
+            if mmap:
+                data = self.file[self.topgroup + 'data/datacubes'][name]['data']
+            else:
+                # TODO: preallocate array and copy into it for better RAM usage
+                data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
             dataobject = DataCube(data=data, name=name)
 
         if objecttype == 'CountedDataCube':

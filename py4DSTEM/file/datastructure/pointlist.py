@@ -291,6 +291,3 @@ class PointListArray(DataObject):
         return new_pointlistarray
 
 
-
-
-

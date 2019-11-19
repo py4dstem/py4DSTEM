@@ -324,7 +324,7 @@ def find_Bragg_disks_serial(datacube, probe,
 
     # Loop over all diffraction patterns
     t0 = time()
-    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
         if _qt_progress_bar is not None:
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
