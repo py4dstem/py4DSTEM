@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import dask as da
 import numba as nb
+import h5py
 
 import numpy as np
 from .dataobject import DataObject
@@ -219,6 +220,22 @@ class DataCube(DataObject):
 ########################## END OF DATACUBE OBJECT ########################
 
 class CountedDataCube(DataObject):
+    """
+    A 4D-STEM dataset using an electron event list as the data source. 
+
+    Accepts:
+        electrons:      (PointListArray or h5py.Dataset) array of lists of 
+                        electron strike events. *DO NOT MODIFY THIS AFTER CREATION*
+        detector_shape: (list of ints) size Q_Nx and Q_Ny of detector
+        index_keys:     (list) if the data arrays in electrons are structured, specify
+                        the keys that correspond to the electron data. If electrons
+                        is unstructured, pass [None] (as a list!)
+        use_dask:       (bool) by default, the CountedDataCube.data object DOES NOT
+                        SUPPORT slicing along the realspace axes (i.e. you can ONLY
+                        pass single scan positions). By setting use_dask = True, 
+                        a Dask array will be created that enables all slicing modes
+                        supported by Dask. This can add substantial overhead, however.
+    """
 
     def __init__(self,electrons,detector_shape,index_keys='ind',
                     use_dask=False, **kwargs):
@@ -258,10 +275,13 @@ class CountedDataCube(DataObject):
 
 class Sparse4D(Sequence):
     """
-    A wrapper for a PointListArray of electron events that returns
-    a reconstructed diffraction pattern when sliced.
+    A wrapper for a PointListArray or HDF5 dataset of electron events 
+    that returns a reconstructed diffraction pattern when sliced.
     NOTE: This class is meant to be constructed by the
-    CountedDataCube object, and should not be invoked directly
+    CountedDataCube object, and should not be invoked directly.
+    The electrons object should be considered "private": its type is not
+    guaranteed and attempting to alter it may change the state of this object
+    and cause unexpected behavior. 
     """
     def __init__(self,electrons,detector_shape,index_key='ind'):
         super().__init__()
@@ -277,7 +297,7 @@ class Sparse4D(Sequence):
             self._mmap = True
 
         # check if 1D or 2D
-        if index_key is None:
+        if index_key[0] is None:
             # using an unstructured 1D indexing scheme
             self._mode = 0
             self.index_key = None
