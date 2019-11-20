@@ -294,7 +294,7 @@ class Sparse4D(Sequence):
         else:
             self._1Didx = False
             self.R_Nx = electrons.shape[0]
-            self.R_Ny = electron.shape[1]
+            self.R_Ny = electrons.shape[1]
 
         # choose PointListArray mode or HDF5 mode
         if isinstance(electrons,DataObject):
