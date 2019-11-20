@@ -255,18 +255,19 @@ def read_kitware_counted(filename):
 
     return CountedDataCube(pla,[Q_Nx,Q_Ny],'ind',use_dask=False)
 
-    def read_kitware_counted_mmap(filename):
-        """
-        Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
-        (Not for py4DSTEM formatted files, which may be suported by 
-        Kitware in the future.)
-        """
-        hfile = h5py.File(filename,'r')
+def read_kitware_counted_mmap(filename):
+    """
+    Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
+    (Not for py4DSTEM formatted files, which may be suported by 
+    Kitware in the future.)
+    """
+    hfile = h5py.File(filename,'r')
 
-        R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
-        R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
+    R_Nx = hfile['electron_events']['scan_positions'].attrs['Nx']
+    R_Ny = hfile['electron_events']['scan_positions'].attrs['Ny']
 
-        Q_Nx = hfile['electron_events']['frames'].attrs['Ny']
-        Q_Ny = hfile['electron_events']['frames'].attrs['Nx']
+    Q_Nx = hfile['electron_events']['frames'].attrs['Nx']
+    Q_Ny = hfile['electron_events']['frames'].attrs['Ny']
 
-        return CountedDataCube(hfile['electron_events']['frames'],[Q_Nx,Q_Ny],[None],use_dask=False)
+    return CountedDataCube(hfile['electron_events']['frames'],[Q_Nx,Q_Ny],[None],
+        use_dask=False,R_Nx=R_Nx,R_Ny=R_Ny)

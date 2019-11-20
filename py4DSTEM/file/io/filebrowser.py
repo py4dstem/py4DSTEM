@@ -836,7 +836,7 @@ class FileBrowser(object):
                 for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
                     pla.get_pointlist(i,j).add_dataarray(dset[i,j])
 
-            dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
+                dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
 
         elif objecttype == 'DiffractionSlice':
             shape = info['shape']

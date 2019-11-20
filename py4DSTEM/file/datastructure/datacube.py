@@ -245,15 +245,15 @@ class CountedDataCube(DataObject):
         self.detector_shape = detector_shape
 
         if use_dask:
-            sa = Sparse4D(self.electrons,detector_shape,index_keys)
+            sa = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
             self.data = da.from_array(sa,chunks=(1,1,detector_shape[0],detector_shape[1]))
         else:
-            self.data = Sparse4D(self.electrons,detector_shape,index_keys)
+            self.data = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
 
-        self.R_Nx = int(electrons.shape[0])
-        self.R_Ny = int(electrons.shape[1])
-        self.Q_Nx = int(detector_shape[0])
-        self.Q_Ny = int(detector_shape[1])
+        self.R_Nx = int(self.data.shape[0])
+        self.R_Ny = int(self.data.shape[1])
+        self.Q_Nx = int(self.data.shape[2])
+        self.Q_Ny = int(self.data.shape[3])
 
         self.R_N = self.R_Nx * self.R_Ny
 
@@ -280,11 +280,21 @@ class Sparse4D(Sequence):
     NOTE: This class is meant to be constructed by the
     CountedDataCube object, and should not be invoked directly.
     """
-    def __init__(self,electrons,detector_shape,index_key='ind'):
+    def __init__(self,electrons,detector_shape,index_key='ind',**kwargs):
         super().__init__()
 
         self.electrons = electrons
         self.detector_shape = detector_shape
+
+        # check if using the Kitware 1D scheme
+        if len(electrons.shape) == 1:
+            self._1Didx = True
+            self.R_Nx = kwargs.get('R_Ny')
+            self.R_Ny = kwargs.get('R_Nx')
+        else:
+            self._1Didx = False
+            self.R_Nx = electrons.shape[0]
+            self.R_Ny = electron.shape[1]
 
         # choose PointListArray mode or HDF5 mode
         if isinstance(electrons,DataObject):
@@ -293,7 +303,7 @@ class Sparse4D(Sequence):
         elif isinstance(electrons,h5py.Dataset):
             self._mmap = True
 
-        # check if 1D or 2D
+        # check if 1D or 2D event coordinates
         if index_key[0] is None:
             # using an unstructured 1D indexing scheme
             self._mode = 0
@@ -313,14 +323,14 @@ class Sparse4D(Sequence):
             assert False, "index_key specified incorrectly"
 
         # Needed for dask:
-        self.shape = (electrons.shape[0], electrons.shape[1],
+        self.shape = (self.R_Nx, self.R_Ny,
             detector_shape[0], detector_shape[1])
         self.dtype = np.uint8
         self.ndim = 4
 
     def __getitem__(self,i):
 
-        if self._mmap = False:
+        if self._mmap == False:
             # PLA mode
             pl = self.electrons.get_pointlist(i[0],i[1])
 
@@ -337,7 +347,11 @@ class Sparse4D(Sequence):
 
         else:
             # HDF5 mode
-            data = self.electrons[i[0],i[1]]
+            if self._1Didx:
+                idx = np.ravel_multi_index(i[:2],(self.R_Nx,self.R_Ny))
+                data = self.electrons[idx]
+            else:
+                data = self.electrons[i[0],i[1]]
 
             if self._mode == 0:
                 dp = points_to_DP_numba_ravel(data,
