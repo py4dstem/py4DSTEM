@@ -15,8 +15,8 @@ from ...process.utils import tqdmnd
 from ..log import log, Logger
 logger = Logger()
 
-#@log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False):
+@log
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, **kwargs):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
@@ -30,6 +30,9 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
     if exists(outputfile):
         if overwrite is False:
             raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(outputfile))
+
+    # Handle keyword arguments
+    use_compression = kwargs.get('compression',False)
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
@@ -95,7 +98,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
                 N = sum([name in string for string in list(group_datacubes.keys())])
                 name = name+"_"+str(N)
                 group_new_datacube = group_datacubes.create_group(name)
-            save_datacube_group(group_new_datacube, dataobject)
+            save_datacube_group(group_new_datacube, dataobject, use_compression)
         elif isinstance(dataobject,CountedDataCube):
             if name == '':
                 name = 'counted_datacube_'+str(ind_dcs)
@@ -222,7 +225,7 @@ def save(data, outputfile, **kwargs):
 
 #### Functions for writing dataobjects to .h5 ####
 
-def save_datacube_group(group, datacube):
+def save_datacube_group(group, datacube, use_compression=False):
     group.attrs.create("emd_group_type",1)
     if datacube.metadata is not None:
         group.attrs.create("metadata",datacube.metadata._ind)
@@ -231,7 +234,11 @@ def save_datacube_group(group, datacube):
 
     # TODO: consider defining data chunking here, keeping k-space slices together
     if isinstance(datacube.data,np.ndarray):
-        data_datacube = group.create_dataset("data", data=datacube.data)
+        if use_compression:
+            data_datacube = group.create_dataset("data", data=datacube.data,
+                chunks=(1,1,datacube.Q_Nx,datacube.Q_Ny),compression='gzip')
+        else:
+            data_datacube = group.create_dataset("data", data=datacube.data)
     else:
         # handle K2DataArray datacubes
         data_datacube = datacube.data._write_to_hdf5(group)
