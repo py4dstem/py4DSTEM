@@ -250,7 +250,7 @@ class CountedDataCube(DataObject):
 
     def __init__(self,electrons,detector_shape,index_keys='ind',
                     use_dask=False, **kwargs):
-        super().__init__(self,**kwargs)
+        DataObject.__init__(self,**kwargs)
 
         self.electrons = electrons
         self.detector_shape = detector_shape
@@ -269,9 +269,11 @@ class CountedDataCube(DataObject):
         self.R_N = self.R_Nx * self.R_Ny
 
     def bin_data_diffraction(self, bin_factor):
+        # bin the underlying data (keeping in sparse storage)
         pass
 
     def bin_data_real(self, bin_factor):
+        # bin the underlying data (keeping sparse storage)
         pass
 
     def densify(self,bin_R=1, bin_Q=1, memmap=False):
