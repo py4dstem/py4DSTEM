@@ -7,9 +7,9 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..datastructure import DataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray, CountedDataCube
-from ..datastructure import MetadataCollection, Metadata, DataObject
+from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
+from ..datastructure import MetadataCollection, Metadata, DataObject, PointList
+from ..datastructure import PointListArray
 from ...process.utils import tqdmnd
 
 from ..log import log, Logger
