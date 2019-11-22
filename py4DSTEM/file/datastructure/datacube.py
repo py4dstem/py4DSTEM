@@ -14,7 +14,7 @@ import numpy as np
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage
-from ...process.utils import tqdmnd
+from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
 
@@ -276,14 +276,31 @@ class CountedDataCube(DataObject):
         # bin the underlying data (keeping sparse storage)
         pass
 
-    def densify(self,bin_R=1, bin_Q=1, memmap=False):
+    def densify(self,bin_R=1, bin_Q=1, memmap=False, dtype=np.uint16):
         """
         Convert to a fully dense DataCube object, with 
         optional binning in real and reciprocal space.
         If memmap=True, the dense DC will be stored on disk
         in a temporary file (using numpy).
         """
-        pass
+        newRx = int(np.ceil(self.R_Nx / bin_R))
+        newRy = int(np.ceil(self.R_Ny / bin_R))
+        newQx = int(np.ceil(self.Q_Nx / bin_Q))
+        newQy = int(np.ceil(self.Q_Ny / bin_Q))
+
+        if memmap:
+            #make temp file
+            assert False, "Not implemented"
+        else:
+            data4D = np.zeros((newRx,newRy,newQx,newQy),dtype=dtype)
+
+        for (Rx, Ry) in tqdmnd(self.R_Nx, self.R_Ny, desc="Constructing DPs"):
+            rx = Rx // bin_R
+            ry = Ry // bin_R
+
+            data4D[rx,ry,:,:] += bin2D(self.data[Rx,Ry,:,:],bin_Q,dtype=dtype)
+
+        return DataCube(data4D,name=self.name)
 
 
 class Sparse4D(Sequence):
