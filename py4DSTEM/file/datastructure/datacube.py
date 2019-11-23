@@ -4,6 +4,7 @@
 # pointing to processing functions - generally defined in other files in the process directory.
 
 from collections.abc import Sequence
+from tempfile import TemporaryFile
 
 import numpy as np
 import dask as da
@@ -290,11 +291,12 @@ class CountedDataCube(DataObject):
 
         if memmap:
             #make temp file
-            assert False, "Not implemented"
+            tf = TemporaryFile()
+            data4D = np.memmap(tf,dtype,'r+',shape=(newRx,newRy,newQx,newQy))
         else:
             data4D = np.zeros((newRx,newRy,newQx,newQy),dtype=dtype)
 
-        for (Rx, Ry) in tqdmnd(self.R_Nx, self.R_Ny, desc="Constructing DPs"):
+        for (Rx, Ry) in tqdmnd(self.R_Nx, self.R_Ny, desc="Creating dense DC"):
             rx = Rx // bin_R
             ry = Ry // bin_R
 
