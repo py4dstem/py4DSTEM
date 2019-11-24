@@ -263,8 +263,8 @@ def read_kitware_counted_mmap(filename):
     """
     hfile = h5py.File(filename,'r')
 
-    R_Nx = hfile['electron_events']['scan_positions'].attrs['Nx']
-    R_Ny = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
 
     Q_Nx = hfile['electron_events']['frames'].attrs['Nx']
     Q_Ny = hfile['electron_events']['frames'].attrs['Ny']

@@ -321,8 +321,8 @@ class Sparse4D(Sequence):
         # check if using the Kitware 1D scheme
         if len(electrons.shape) == 1:
             self._1Didx = True
-            self.R_Nx = kwargs.get('R_Ny')
-            self.R_Ny = kwargs.get('R_Nx')
+            self.R_Nx = kwargs.get('R_Nx')
+            self.R_Ny = kwargs.get('R_Ny')
         else:
             self._1Didx = False
             self.R_Nx = electrons.shape[0]
