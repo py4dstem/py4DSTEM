@@ -144,6 +144,7 @@ Last updated for py4DSTEM v0.6.
         |         |   |        |--attr: name="Q_y"
         |         |   |        |--attr: units="[n_m^-1]"
         |         |   |   |--data: index_coords (string array)
+        |         |   |             (used only if data is numpy structured |         |   |              array, to indicate fields for data)
         |         |   |
         |         |--grp: diffractionslices
         |         |   |
@@ -277,7 +278,7 @@ Last updated for py4DSTEM v0.6.
     array MUST have the same coordinates. For counted datacubes there
     is an additional dataset that stores a list of strings corresponding
     to the structured array fields that store the electron counts (typically
-    "ind" for 1D and "qx"/"qy" for 2D indexing).
+    "ind" for 1D and "qx"/"qy" for 2D indexing). If the data type of the array is a base dtype (i.e. not a "structured" array with named fields) then this is ignored and the reader assumes the indexing is 1D (this is the Kitware format–numpy structured arrays seem to be specific to h5py). 
 
 
 

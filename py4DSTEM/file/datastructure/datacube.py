@@ -246,7 +246,7 @@ class CountedDataCube(DataObject):
                         SUPPORT slicing along the realspace axes (i.e. you can ONLY
                         pass single scan positions). By setting use_dask = True, 
                         a Dask array will be created that enables all slicing modes
-                        supported by Dask. This can add substantial overhead, however.
+                        supported by Dask. This can add substantial overhead.
     """
 
     def __init__(self,electrons,detector_shape,index_keys='ind',
