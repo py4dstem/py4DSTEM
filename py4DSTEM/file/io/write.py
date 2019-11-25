@@ -5,6 +5,7 @@
 import h5py
 import numpy as np
 from collections import OrderedDict
+from os.path import exists
 from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..datastructure import DataCube, DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
@@ -13,8 +14,8 @@ from ..datastructure import MetadataCollection, Metadata, DataObject
 from ..log import log, Logger
 logger = Logger()
 
-@log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
+#@log
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
@@ -25,6 +26,9 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
+    if exists(outputfile):
+        if overwrite is False:
+            raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(outputfile))
 
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
@@ -131,15 +135,15 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None):
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Log #####
-    group_log = group_toplevel.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
+    #group_log = group_toplevel.create_group("log")
+    #for index in range(logger.log_index):
+    #    write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Finish and close #####
     print("Done.")
     f.close()
 
-@log
+#@log
 def save_dataobject(dataobject, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataObject instance to outputfile.
@@ -149,7 +153,7 @@ def save_dataobject(dataobject, outputfile, **kwargs):
     # Save
     save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
-@log
+#@log
 def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
     Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
@@ -160,7 +164,7 @@ def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
 
     save_from_dataobject_list(dataobject_list, outputfile, **kwargs)
 
-@log
+#@log
 def save(data, outputfile, **kwargs):
     """
     Saves a .h5 file to outputpath. What is saved depends on the arguement data.
