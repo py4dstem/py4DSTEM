@@ -28,8 +28,6 @@ class PointList(DataObject):
                    points being specified additional data can be added later with the
                    add_point() method
             dtype - optional, used if coordinates don't explicitly specify dtypes.
-
-            tags - optional keyword argument, attach a descriptive object to the pointlist
         """
         DataObject.__init__(self, **kwargs)
 
@@ -58,12 +56,6 @@ class PointList(DataObject):
                 self.add_tuple_of_nparrays(data)
             else:
                 self.add_pointarray(data) # Otherwise, add one by one
-
-        # attach a single descriptor to pointlist
-        if 'tags' in kwargs.keys():
-            self.tags = kwargs['tags']
-        else:
-            self.tags = None
 
     def add_point(self, point):
         point = tuple(point)
