@@ -754,6 +754,8 @@ class FileBrowser(object):
         If dataobject is an int, finds the DataObject corresponding to the .h5 data pointed to
         by this index.
         If dataobject is a string, finds the DataObject with a matching name in the .h5 file.
+        If the file is EMD v0.7 or greater, you can specify memory_map=True to
+        return a memory map for DataCube and CountedDataCube objects.
         """
         assert(isinstance(dataobject,(int,np.integer,str))), "dataobject must be int or str"
         if isinstance(dataobject, str):
