@@ -369,7 +369,7 @@ class FileBrowser(object):
             metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
                           'index':index, 'metadata':metadata}
-        if objecttype == 'CountedDataCube':
+        elif objecttype == 'CountedDataCube':
             name = list(self.file[self.topgroup + 'data/counted_datacubes'].keys())[objectindex]
             R_Nx, R_Ny = self.file[self.topgroup + 'data/counted_datacubes'][name]['data'].shape
             Q_Nx = self.file[self.topgroup + 'data/counted_datacubes'][name]['dim3'].shape[0]
@@ -814,7 +814,7 @@ class FileBrowser(object):
                 data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
             dataobject = DataCube(data=data, name=name)
 
-        if objecttype == 'CountedDataCube':
+        elif objecttype == 'CountedDataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
 
