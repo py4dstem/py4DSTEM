@@ -2,6 +2,7 @@
 # a dataset which best aligns it to a diffraction space image.
 
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy.optimize as sciopt
 from py4DSTEM.process.utils import print_progress_bar
 from scipy.signal import convolve2d
@@ -169,7 +170,7 @@ class polar_elliptical_transform(object):
             self.polar_ar, self.polar_mask = polar_ar, polar_mask
             return
 
-    def get_polar_transform_twoSided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False, coef = None):
+    def get_polar_transform_two_sided_gaussian(self, ar=None, mask=None, r_sigma=0.1, t_sigma=0.1, return_ans=False, coef = None):
         """
         Get the polar transformation of an array ar, or if ar is None, of self.calibration_image.
 
@@ -296,8 +297,7 @@ class polar_elliptical_transform(object):
         else:
             return
 
-    def fit_params(self, n_iter, step_sizes_init=[0.1,0.1,0.1,0.01,0.01], step_scale=0.9,
-                                                                        return_ans=False):
+    def fit_params(self, n_iter, step_sizes_init=[0.1,0.1,0.1,0.01,0.01], step_scale=0.9, return_ans=False):
         """
         Find the polar elliptical transformation parameters x0,y0,A,B,C which best describe the data
         by minimizing a cost function (theta-integrated RMSD of the polar transform).
@@ -425,7 +425,7 @@ class polar_elliptical_transform(object):
                             return_ans=False)
             return
 
-    def fit_params_twoSided_gaussian(self,init_coef=None):
+    def fit_params_two_sided_gaussian(self,init_coef=None):
         """
         Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2) 
                                 + I_ring * exp(- (R-r^2) / (2*SD_1) ^2) * U(R-r)
@@ -439,40 +439,70 @@ class polar_elliptical_transform(object):
         For elliptical rings, r is replaced by sqrt(x^2 + B*xy ^2 + C*y^2), to assert the canonical form of the ellipse as follows:
         R^2 = x^2 + Bxy + Cy^2 where A = 1
 
-
-        Find the polar elliptical transformation parameters x0,y0,A,B,C which best describe the data
-        by minimizing a cost function (theta-integrated RMSD of the polar transform).
-
         Accepts:
-
+            init_coef - initial coefficients to start from.
         Returns (if return_ans is True):
 
         """
-        #TODO: automate the defaults? hwo to choose?
         if init_coef is None:
-            coef = np.asarray([430, 1000, 26, 700, 40, 14, 288, 267, 0.07, 0.95, 137])
+            if hasattr(self, 'coef_opt'):
+                init_coef = self.coef_opt
+            else:
+                raise Exception("You must initialize coefficients if first time.")
         else:
             coef = init_coef
 
         lb = np.asarray([0, 0, 0, 0, 0, 0, 0, 0, -0.5, 0.5, 0])
         ub = np.asarray([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, self.Nx, self.Ny, 0.5, 2, np.inf])
 
-        #TODO: pass arguments to set non defualt function optimization
+        #TODO: pass arguments to set non default function optimization
         xdata = np.asarray([self.xx[self.mask.astype(dtype=bool)],self.yy[self.mask.astype(dtype=bool)]])
         ydata = self.calibration_image[self.mask.astype(dtype=bool)]
-        coef_opt, _ = sciopt.curve_fit(f=twoSided_gaussian_fun_wrapper,xdata=xdata,ydata=ydata, p0=coef, bounds=(lb,ub))
+        coef_opt, _ = sciopt.curve_fit(f=two_sided_gaussian_fun_wrapper,xdata=xdata,ydata=ydata, p0=coef, bounds=(lb,ub))
         self.coef_opt = coef_opt
 
         #initializes this to None so that full array transform is perfomed on next grab
         self.polarNorm = None
         return
 
+    def compare_coefs_two_sided_gaussian(self, coef_opt=None):
+        """
+        This function will only take in itself, and compare the data to the fit. You can also put in coef_opt yourself to test out parameters
+        
+        Accepts:
+            coef_opt - a vector of 11 elements, corresponding to two_sided_gaussian_fun
+        Returns:
+            nothing
+        """
+        if coef_opt is None and hasattr(self, 'coef_opt'):
+            coef_opt = self.coef_opt
+        elif coef_opt is None:
+            raise Exception("you must put in coefficients!")
+
+
+        im = self.calibration_image
+        
+
+        xdata = np.asarray([self.xx[self.mask.astype(dtype=bool)],self.yy[self.mask.astype(dtype=bool)]])
+        im_fit = two_sided_gaussian_fun(xdata, coef_opt)
+
+        theta = np.arctan2(xdata[1]-coef_opt[7], xdata[0]-coef_opt[6])
+        theta_mask = np.cos(theta*8) > 0
+        theta_mask = np.reshape(theta_mask, (self.calibration_image.shape))
+        im_fit = np.reshape(im_fit, self.calibration_image.shape)
+        im_combined = im*theta_mask + im_fit*(1-theta_mask)
+
+        plt.figure(12)
+        plt.clf()
+        plt.imshow(im_combined)
+        
+        return
 
 ####################
-def twoSided_gaussian_fun_wrapper(X,c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10):
-    return twoSided_gaussian_fun(X,[c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10])
+def two_sided_gaussian_fun_wrapper(X,c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10):
+    return two_sided_gaussian_fun(X,[c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10])
 
-def twoSided_gaussian_fun(X, coef):
+def two_sided_gaussian_fun(X, coef):
     """
     Cost function for two sided gaussian.
     X[0] = x coords
@@ -493,8 +523,8 @@ def twoSided_gaussian_fun(X, coef):
     r = np.sqrt( (X[0] - coef[6])**2 + coef[8]*(X[0] - coef[6])*(X[1] - coef[7]) + coef[9]*(X[1] - coef[7])**2)
     return (coef[0] 
         + coef[1] * np.exp( (-1/ (2*coef[2]**2)) * r**2)
-        + coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * np.heaviside((coef[10] - r),0)
-        + coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * np.heaviside((r - coef[10]),0) )
+        + coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * np.heaviside((coef[10] - r),0.5)
+        + coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * np.heaviside((r - coef[10]),0.5) )
 
 def accumarray(indices,values,size):
     """
