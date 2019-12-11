@@ -1,4 +1,4 @@
-#%%
+# %%
 import numpy as np
 import matplotlib.pyplot as plt
 import py4DSTEM
@@ -64,4 +64,68 @@ fp = "/media/tom/Data/test_data/Stack1_20170214_12x12_ss20nm_2s_spot9_alpha=0p51
 datacube = py4DSTEM.file.io.read(fp)
 datacube.set_scan_shape(12, 12)
 mean_dp = np.mean(datacube.data, axis=(0, 1))
-dp_mask = spim.median_filter(mean_dp < 100, 5)  # filter out the beam stop
+dp_beam_stop_mask = spim.median_filter(mean_dp > 100, 5)  # filter out the beam stop
+
+rad_min = 120
+center_guess = [datacube.Q_Nx / 2, datacube.Q_Ny / 2]
+yy, xx = np.meshgrid(
+    np.arange(datacube.Q_Nx) - center_guess[0],
+    np.arange(datacube.Q_Ny) - center_guess[1],
+)
+
+rr = (xx ** 2 + yy ** 2) ** 0.5
+
+dp_center_mask = rr > rad_min
+dp_mask = np.logical_and(dp_beam_stop_mask, dp_center_mask)
+
+# %%
+# plot some images
+fig, (ax1, ax2) = plt.subplots(1, 2, num=4)
+ax1.imshow(mean_dp)
+ax2.imshow(dp_mask)
+# %%
+# find initial good parameters
+mean_fit = polar_elliptical_transform(mean_dp, mask=dp_mask)
+init_coefs = [1, 1, 1, 900, 20, 20, 270, 270, 0, 1, 210]
+
+# check init_coefs to make sure it is ballpark
+mean_fit.compare_coefs_two_sided_gaussian(init_coefs)
+mean_fit.fit_params_two_sided_gaussian(init_coef=init_coefs)
+
+# check the fit
+mean_fit.compare_coefs_two_sided_gaussian(power=0.2)
+
+# %%
+# now that we have a starting point, let's run it on the stack
+coef_cube = amorph.fit_stack(datacube, mean_fit.coef_opt)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, num=5)
+ax1.imshow(coef_cube[:, :, 6], cmap="RdBu")  # x shifts
+ax2.imshow(coef_cube[:, :, 7], cmap="RdBu")  # y shifts
+
+# %%
+# here, we notice from the previous plot that our data is somehow shifted incorrectly (set shift to 0), when we plot the central beam motion. TODO correct for shift?
+
+shift = -12
+fig, (ax1, ax2) = plt.subplots(1, 2, num=6)
+ax1.imshow(
+    np.reshape(
+        np.roll(np.ravel(coef_cube[:, :, 6], order="f"), shift), (12, 12), order="c"
+    ),
+    cmap="RdBu",
+)
+ax2.imshow(
+    np.reshape(
+        np.roll(np.ravel(coef_cube[:, :, 7], order="f"), shift), (12, 12), order="c"
+    ),
+    cmap="RdBu",
+)
+
+# however, in this dataset, after it is shifted, we do not see any real outliers! So we will not fit a plane/parabola to the dataset, and just use the positions that we found.
+
+# %%
+exx, eyy, exy = amorph.calculate_coef_strain(coef_cube)
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+ax1.imshow(exx, cmap="RdBu")
+ax2.imshow(eyy, cmap="RdBu")
+ax3.imshow(exy, cmap="RdBu")
