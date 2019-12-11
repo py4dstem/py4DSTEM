@@ -474,27 +474,44 @@ def twoSided_gaussian_fun_wrapper(X,c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10):
 
 def twoSided_gaussian_fun(X, coef):
     """
-    Cost function for two sided gaussian.
-    X[0] = x coords
-    X[1] = y coords
-    coef[0] = N (linear constant)
-    coef[1] = I_BG
-    coef[2] = SD_BG
-    coef[3] = I_ring
-    coef[4] = SD_1
-    coef[5] = SD_2
-    coef[6] = X_center
-    coef[7] = Y_center
-    coef[8] = B
-    coef[9] = C
-    coef[10] = R
+    This function accepts a set of x,y coordinates X=(x,y) and a set of 11 parameters coef, and
+    returns the value at x,y of a function constructed of three Gaussians, as follows:
+
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,R,offset,x0,y0,B,C) =
+            Norm(r; I0,sigma0,0) +
+            Norm(r; I1,sigma1,R)*Theta(r-R)
+            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
+
+    where Norm(I,sigma,R) is a gaussian with max amplitude I, standard deviation sigma, and
+    center R; where Theta(x) is a Heavyside function; and where r is the radial coordinate of a
+    polar elliptical coordinate system.  In particular, Norm() and r are given by
+
+        Norm(r; I,sigma,R) = I*exp(-(r-R)^2/(2*sigma^2))
+        r^2 = (x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2
+
+    The input parameters are summarized below:
+        X[0] = x-coordinates
+        X[1] = y-coordinates
+        coef[0] = offset
+        coef[1] = I0
+        coef[2] = sigma0
+        coef[3] = I1
+        coef[4] = sigma1
+        coef[5] = sigma2
+        coef[6] = x0
+        coef[7] = y0
+        coef[8] = B
+        coef[9] = C
+        coef[10] = R
     """
-    #precalulated little r for readability
-    r = np.sqrt( (X[0] - coef[6])**2 + coef[8]*(X[0] - coef[6])*(X[1] - coef[7]) + coef[9]*(X[1] - coef[7])**2)
-    return (coef[0] 
-        + coef[1] * np.exp( (-1/ (2*coef[2]**2)) * r**2)
-        + coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * np.heaviside((coef[10] - r),0)
-        + coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * np.heaviside((r - coef[10]),0) )
+    r = np.sqrt( (X[0] - coef[6])**2 + coef[8]*(X[0] - coef[6])*(X[1] - coef[7]) + \
+                                                        coef[9]*(X[1] - coef[7])**2 )
+    return coef[1] * np.exp( (-1/ (2*coef[2]**2)) * r**2) + \
+           coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * \
+           np.heaviside((coef[10] - r),0) + \
+           coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * \
+           np.heaviside((r - coef[10]),0) + \
+           coef[0]
 
 def accumarray(indices,values,size):
     """
