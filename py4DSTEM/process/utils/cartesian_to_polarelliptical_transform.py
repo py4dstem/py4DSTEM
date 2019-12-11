@@ -452,8 +452,8 @@ class polar_elliptical_transform(object):
         else:
             coef = init_coef
 
-        lb = np.asarray([0, 0, 0, 0, 0, 0, 0, 0, -0.5, 0.5, 0])
-        ub = np.asarray([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, self.Nx, self.Ny, 0.5, 2, np.inf])
+        lb = np.asarray([0, 0, 0, 0, 0, 0, 0, 0, -10, -10, 0])
+        ub = np.asarray([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, self.Nx, self.Ny, 10, 10, np.inf])
 
         #TODO: pass arguments to set non default function optimization
         xdata = np.asarray([self.xx[self.mask.astype(dtype=bool)],self.yy[self.mask.astype(dtype=bool)]])
