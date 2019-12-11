@@ -515,17 +515,19 @@ def twoSided_gaussian_fun(X, coef):
 
 def accumarray(indices,values,size):
     """
-    Helper function to mimic matlab accum array function
-    values is Nx1
-    dest is M-dimensional, set by Mx1 size input
-    """
+    Helper function to mimic matlab accum array function.
 
-    #indices is a NxM array, where N is the number of events and M is the dimensionality of source/dest arrays
+    Accepts:
+        indices     shape (N,M) array, where N is the number of values and M is the dimentionality
+                    of the source/destination arrays
+        values      shape (N,1) array
+        size        int, must be equal to M
+
+    Returns
+        output      shape (M,1) array.
+    """
     assert indices.shape[1] == len(size), "Size and array mismatch"
 
-    #initialiaze destination array
-    dest = np.zeros(size)
-
-    np.add.at(dest,(indices[:,0],indices[:,1]),values)
-    
+    output = np.zeros(size)
+    np.add.at(output,(indices[:,0],indices[:,1]),values)
     return dest
