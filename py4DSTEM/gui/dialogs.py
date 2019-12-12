@@ -71,6 +71,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.radioButton_CoMX = self.virtualDetectors.widget.radioButton_CoMX
         self.radioButton_CoMY = self.virtualDetectors.widget.radioButton_CoMY
         self.buttonGroup_DetectorMode = self.virtualDetectors.widget.buttonGroup_DetectorMode
+        self.buttonGroup_DiffractionMode = self.virtualDetectors.widget.buttonGroup_DiffractionMode
 
         ####################################################
         ############## Create and set layout ###############
@@ -420,6 +421,32 @@ class VirtualDetectorsWidget(QtWidgets.QWidget):
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMX, 3)
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMY, 4)
 
+        # Diffraction Scaling Control
+        diffraction_mode_widget = QtWidgets.QWidget()
+        diffraction_mode_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_DP_Raw = QtWidgets.QRadioButton('Raw')
+        self.radioButton_DP_Sqrt = QtWidgets.QRadioButton('Square Root')
+        self.radioButton_DP_Log = QtWidgets.QRadioButton('Logartihm')
+        self.radioButton_DP_EWPC = QtWidgets.QRadioButton('EWPC')
+
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Raw)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Sqrt)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Log)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_EWPC)
+        diffraction_mode_widget.setLayout(diffraction_mode_widget_layout)
+
+        self.buttonGroup_DiffractionMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Raw)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Sqrt)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Log)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_EWPC)
+
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Raw, 0)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Sqrt, 1)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Log, 2)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_EWPC, 3)
+
         # Arrowkey Control
         arrowkey_widget = QtWidgets.QWidget()
         arrowkey_widget_layout = QtWidgets.QVBoxLayout()
@@ -449,6 +476,8 @@ class VirtualDetectorsWidget(QtWidgets.QWidget):
         layout.addWidget(detector_shape_widget)
         layout.addWidget(SectionLabel('Detector Mode'))
         layout.addWidget(detector_mode_widget)
+        layout.addWidget(SectionLabel('Diffraction Pattern Scaling'))
+        layout.addWidget(diffraction_mode_widget)
         layout.addWidget(SectionLabel('Arrowkey Control'))
         layout.addWidget(arrowkey_widget)
         layout.setSpacing(0)

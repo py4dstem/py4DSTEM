@@ -159,6 +159,11 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
         self.settings.New('virtual_detector_mode', dtype=int, initial=0)
 
+        ## DP Scaling mode
+        self.settings.New('diffraction_scaling_mode',dtype=int,initial=0)
+        self.settings.diffraction_scaling_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DiffractionMode)
+        self.settings.diffraction_scaling_mode.updated_value.connect(self.diffraction_scaling_changed)
+
         self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
         self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
 
@@ -727,6 +732,10 @@ class DataViewer(QtWidgets.QMainWindow):
 
     ################## Get virtual images ##################
 
+    def diffraction_scaling_changed(self):
+        self.update_diffraction_space_view()
+        self.diffraction_space_widget.autoLevels()
+
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
         x0,y0 = roi_state['pos']
@@ -736,6 +745,20 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
+
+            # rescale DP as selected (0 means raw, does no scaling)
+            if self.settings.diffraction_scaling_mode.val == 1:
+                # sqrt mode
+                self.diffraction_space_view = np.sqrt(self.diffraction_space_view)
+            elif self.settings.diffraction_scaling_mode.val == 2:
+                # log mode
+                self.diffraction_space_view = np.log(
+                    self.diffraction_space_view - np.min(self.diffraction_space_view) + 1)
+            elif self.settings.diffraction_scaling_mode.val == 3:
+                # EWPC mode
+                h = np.hanning(self.datacube.Q_Nx)[:,np.newaxis] @ np.hanning(self.datacube.Q_Ny)[np.newaxis,:]
+                self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
+                    (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
             self.diffraction_space_widget.setImage(self.diffraction_space_view,
                                                    autoLevels=False,autoRange=False)
