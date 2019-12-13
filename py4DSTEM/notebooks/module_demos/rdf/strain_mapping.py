@@ -97,7 +97,12 @@ mean_fit.compare_coefs_two_sided_gaussian(power=0.2)
 
 # %%
 # now that we have a starting point, let's run it on the stack
-coef_cube = amorph.fit_stack(datacube, mean_fit.coef_opt)
+# coef_cube = amorph.fit_stack(datacube, mean_fit.coef_opt)
+
+coef_fp = "/media/tom/Data/test_data/Stack1_coefs.npy"
+coef_cube = np.load(coef_fp)
+# we should save this data as it takes some time to run
+np.save(coef_fp, coef_cube)
 
 fig, (ax1, ax2) = plt.subplots(1, 2, num=5)
 ax1.imshow(coef_cube[:, :, 6], cmap="RdBu")  # x shifts
@@ -110,22 +115,20 @@ shift = -12
 fig, (ax1, ax2) = plt.subplots(1, 2, num=6)
 ax1.imshow(
     np.reshape(
-        np.roll(np.ravel(coef_cube[:, :, 6], order="f"), shift), (12, 12), order="c"
+        np.roll(np.ravel(coef_cube[:, :, 6], order="f"), shift), (12, 12), order="f"
     ),
     cmap="RdBu",
 )
+ax1.set_title("x shifts")
 ax2.imshow(
     np.reshape(
-        np.roll(np.ravel(coef_cube[:, :, 7], order="f"), shift), (12, 12), order="c"
+        np.roll(np.ravel(coef_cube[:, :, 7], order="f"), shift), (12, 12), order="f"
     ),
     cmap="RdBu",
 )
-
+ax2.set_title("y shifts")
 # however, in this dataset, after it is shifted, we do not see any real outliers! So we will not fit a plane/parabola to the dataset, and just use the positions that we found.
 
 # %%
-exx, eyy, exy = amorph.calculate_coef_strain(coef_cube)
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-ax1.imshow(exx, cmap="RdBu")
-ax2.imshow(eyy, cmap="RdBu")
-ax3.imshow(exy, cmap="RdBu")
+eaa, ecc, eb = amorph.calculate_coef_strain(coef_cube)
+amorph.plot_strains((eaa,ecc,eb))  # strains are in the fit ellipse directions.
