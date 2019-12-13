@@ -173,3 +173,31 @@ def convert_stack_polar(datacube, coef_cube):
     """
 
     return datacube_polar
+
+
+def compute_polar_stack_symmetries(datacube_polar):
+    """
+    This function will take in a datacube of polar-transformed diffraction patterns, and do the autocorrelation, before taking the fourier transform along the theta direction, such that symmetries can be measured. They will be plotted by a different function
+
+    Accepts:
+        datacube_polar  - diffraction pattern cube that has been polar transformed
+
+    Returns:
+        datacube_symmetries - the normalized fft along the theta direction of the autocorrelated patterns in datacube_polar
+    """
+
+    return datacube_symmetries
+
+
+def plot_symmetries(datacube_symmetries, sym_order):
+    """
+    This function will take in a datacube from compute_polar_stack_symmetries and plot a specific symmetry order. 
+
+    Accepts:
+        datacube_symmetries - result of compute_polar_stack_symmetries, the stack of fft'd autocorrelated diffraction patterns
+        sym_order           - symmetry order desired to plot
+    Returns:
+        None
+    """
+
+    return None
