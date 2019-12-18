@@ -1,27 +1,14 @@
-# This file defines the coordinate systems used thoughout py4DSTEM, and routines for converting
-# between various coordinate systems.  
-#
-# This includes both
-#   - transformation of the coordinates, e.g. getting the location of some point (r,theta) in
-#     polar coordinates from some point (x,y) in cartesian coordinates, and
-#   - transformation of data arrays, e.g. getting some (Nr,Nt)-shaped array in the (r,theta) polar
-#     coordinate system from some (Nx,Ny)-shaped array in the (x,y) cartesian coordinate system
-#
-# In general, the coordinate systems described here should be thought of as paramatrizations of
-# diffraction space, as it is the diffraction patterns which most often require this level of
-# description.  In some cases, it will be valuable to define coordinate systems with distinct values
-# of the parameters at each scan position - e.g. moving the origin to account for diffraction shifts.
-# In these cases the parameters of the coordinate system will be (R_Nx,R_Ny)-shaped arrays.
-#
-# All angular quantities are in radians.
+# Performs the coordinate transformation:
 #
 #       x = x0 + A*r*cos(theta)*cos(phi) + B*r*sin(theta)*sin(phi)
 #       y = y0 + B*r*sin(theta)*sin(phi) - A*r*cos(theta)*cos(phi)
+#
+# All angular quantities are in radians.
 
 import numpy as np
 
 def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
-                                             dr=1, dtheta=np.radians(2), r_range=None,
+                                             dr=1, dtheta=np.radians(2), r_range=512,
                                              mask=None, maskThresh=0.99):
     """
     Transforms an array of data in cartesian coordinates into a data array in polar elliptical
@@ -177,6 +164,41 @@ def dataArA_to_dataArB(dataArA, paramsB, samplingParams):
         dataArB         data array in the final coord system
     """
     pass
+
+
+
+
+
+
+
+def coordsA_to_coordsB(coordsA, paramsB, samplingParams):
+    """
+    Converts a single pointsin coordinate system A into points in coordinate system B.
+
+    Accepts:
+        coordsA         a point in the initial coordinate system, e.g. (qx,qy)
+        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
+        samplingParams  the binning / sampling parameters to discretize the final coords
+
+    Returns:
+        coordsB         equivalent point to coordsA in the final coord system
+    """
+    pass
+
+def dataArA_to_dataArB(dataArA, paramsB, samplingParams):
+    """
+    Converts a data array in coordinate system A into a data array in coordinate system B.
+
+    Accepts:
+        dataArA         data array in the initial coordinate system, e.g. a DP
+        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
+        samplingParams  the binning / sampling parameters to discretize the final coords
+
+    Returns:
+        dataArB         data array in the final coord system
+    """
+    pass
+
 
 
 
