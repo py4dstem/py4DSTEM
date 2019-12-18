@@ -72,8 +72,6 @@ def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
     qx0,qy0,A,B,phi = params
 
     # Define the r/theta coords
-    print(r_min)
-    print(r_max)
     r_bins = np.arange(r_min+dr/2., r_max+dr/2., dr)                # values are bin centers
     t_bins = np.arange(-np.pi+dtheta/2., np.pi+dtheta/2., dtheta)
     rr,tt = np.meshgrid(r_bins, t_bins)
@@ -221,10 +219,10 @@ def correct_braggpeak_elliptical_distortions(braggpeaks, p):
     # Get the transformation matrix
     x0,y0,A,B,phi = p
     s = min(A,B)/max(A,B)   # scale the larger semiaxis down to the size of the smaller semiaxis
-    phi += np.pi/2.*(np.argmin([a,b])==0)   # if A was smaller, rotated phi by pi/2 to make A->B
+    phi += np.pi/2.*(np.argmin([A,B])==0)   # if A was smaller, rotated phi by pi/2 to make A->B
     sinp,cosp = np.sin(phi),np.cos(phi)
     T = np.squeeze(np.array([[sinp**2 + s*cosp**2, sinp*cosp*(s-1)],
-                             [sinp*cosp*(s-1), s*sinp**2 + cosp**2]])
+                             [sinp*cosp*(s-1), s*sinp**2 + cosp**2]]))
 
     # Correct distortions
     braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipsecorrected")
@@ -239,44 +237,6 @@ def correct_braggpeak_elliptical_distortions(braggpeaks, p):
     return braggpeaks_corrected
 
 
-
-
-
-
-
-
-
-
-
-
-
-def coordsA_to_coordsB(coordsA, paramsB, samplingParams):
-    """
-    Converts a single pointsin coordinate system A into points in coordinate system B.
-
-    Accepts:
-        coordsA         a point in the initial coordinate system, e.g. (qx,qy)
-        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
-        samplingParams  the binning / sampling parameters to discretize the final coords
-
-    Returns:
-        coordsB         equivalent point to coordsA in the final coord system
-    """
-    pass
-
-def dataArA_to_dataArB(dataArA, paramsB, samplingParams):
-    """
-    Converts a data array in coordinate system A into a data array in coordinate system B.
-
-    Accepts:
-        dataArA         data array in the initial coordinate system, e.g. a DP
-        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
-        samplingParams  the binning / sampling parameters to discretize the final coords
-
-    Returns:
-        dataArB         data array in the final coord system
-    """
-    pass
 
 
 
