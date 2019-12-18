@@ -20,35 +20,6 @@
 
 import numpy as np
 
-def coordsA_to_coordsB(coordsA, paramsB, samplingParams):
-    """
-    Converts a single pointsin coordinate system A into points in coordinate system B.
-
-    Accepts:
-        coordsA         a point in the initial coordinate system, e.g. (qx,qy)
-        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
-        samplingParams  the binning / sampling parameters to discretize the final coords
-
-    Returns:
-        coordsB         equivalent point to coordsA in the final coord system
-    """
-    pass
-
-def dataArA_to_dataArB(dataArA, paramsB, samplingParams):
-    """
-    Converts a data array in coordinate system A into a data array in coordinate system B.
-
-    Accepts:
-        dataArA         data array in the initial coordinate system, e.g. a DP
-        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
-        samplingParams  the binning / sampling parameters to discretize the final coords
-
-    Returns:
-        dataArB         data array in the final coord system
-    """
-    pass
-
-
 def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
                                              dr=1, dtheta=np.radians(2), r_range=None,
                                              mask=None, maskThresh=0.99):
@@ -105,6 +76,8 @@ def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
     qx0,qy0,A,B,phi = params
 
     # Define the r/theta coords
+    print(r_min)
+    print(r_max)
     r_bins = np.arange(r_min+dr/2., r_max+dr/2., dr)                # values are bin centers
     t_bins = np.arange(-np.pi+dtheta/2., np.pi+dtheta/2., dtheta)
     rr,tt = np.meshgrid(r_bins, t_bins)
@@ -147,6 +120,63 @@ def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
     polarEllipticalData = np.ma.array(data = polarEllipticalData,
                                       mask = polarEllipticalMask < maskThresh)
     return polarEllipticalData, rr, tt
+
+def convert_ellipse_params(A0,B0,C0):
+    """
+    Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
+
+    Accepts:
+        A0,B0,C0    (floats) parameters of an ellipse in canonical form, i.e.:
+                                A0*x^2 + B0*x*y + C0*y^2 = 1
+
+    Returns:
+        a,b         (floats) the semi-axis lengths
+        phi         (float) the tilt of the ellipse semi-axes, in radians
+    """
+    if A0==C0:
+        x = B0
+        phi = np.pi/4.*np.sign(B0)
+    else:
+        x = (A0-C0)*np.sqrt(1+(B0/(A0-C0))**2)
+        phi = 0.5*np.arctan(B0/(A0-C0))
+    a = np.sqrt(2/(A0+C0+x))
+    b = np.sqrt(2/(A0+C0-x))
+    return a,b,phi
+
+
+
+
+
+
+
+
+def coordsA_to_coordsB(coordsA, paramsB, samplingParams):
+    """
+    Converts a single pointsin coordinate system A into points in coordinate system B.
+
+    Accepts:
+        coordsA         a point in the initial coordinate system, e.g. (qx,qy)
+        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
+        samplingParams  the binning / sampling parameters to discretize the final coords
+
+    Returns:
+        coordsB         equivalent point to coordsA in the final coord system
+    """
+    pass
+
+def dataArA_to_dataArB(dataArA, paramsB, samplingParams):
+    """
+    Converts a data array in coordinate system A into a data array in coordinate system B.
+
+    Accepts:
+        dataArA         data array in the initial coordinate system, e.g. a DP
+        paramsB         the parameters defining the final coord systsm, e.g. (x0,y0,A,B,phi)
+        samplingParams  the binning / sampling parameters to discretize the final coords
+
+    Returns:
+        dataArB         data array in the final coord system
+    """
+    pass
 
 
 
