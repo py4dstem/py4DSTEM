@@ -427,7 +427,7 @@ class polar_elliptical_transform(object):
 
     def fit_params_twoSided_gaussian(self,init_coef=None):
         """
-        Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2) 
+        Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2)
                                 + I_ring * exp(- (R-r^2) / (2*SD_1) ^2) * U(R-r)
                                 + I_ring * exp(- (R-r^2) / (2*SD_2) ^2) * U(r-R)
                                 + N
