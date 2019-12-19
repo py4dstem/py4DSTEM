@@ -183,6 +183,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.diffraction_space_widget = pg.ImageView()
         self.diffraction_space_widget.setImage(np.zeros((512,512)))
+        self.diffraction_space_view_text = pg.TextItem('Slice',(200,200,200),None,(0,1))
+        self.diffraction_space_widget.addItem(self.diffraction_space_view_text)
 
         # Create virtual detector ROI selector
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
@@ -780,6 +782,10 @@ class DataViewer(QtWidgets.QMainWindow):
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+
+                #update the label:
+                self.diffraction_space_view_text.setText(
+                    f"[{slice_x.start}:{slice_x.stop},{slice_y.start}:{slice_y.stop}]")
             else:
                 pass
 
