@@ -3,8 +3,8 @@
 # This includes
 #   - measuring / fitting elliptical distortions
 #   - transforming data from cartesian to polar-elliptical coordinates
-#   - converting between ellipse representations
 #   - correcting Bragg peak positions for elliptical distortions
+#   - converting between ellipse representations
 #
 # We define the transformation from cartesian to polar-elliptical coordinates by:
 #
@@ -235,6 +235,99 @@ def correct_braggpeak_elliptical_distortions(braggpeaks, p):
             pointlist.data['qx'] = xyar_f[0,:]+x0
             pointlist.data['qy'] = xyar_f[1,:]+y0
     return braggpeaks_corrected
+
+def fit_double_sided_gaussian(data, p0, mask=None):
+    """
+    Fits a double sided gaussian to the data.
+
+    The fit function is
+
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgrd,R,x0,y0,A,B,C) =
+            Norm(r; I0,sigma0,0) +
+            Norm(r; I1,sigma1,R)*Theta(r-R)
+            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
+
+    where (x,y) are coordinates and
+    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C) are parameters.
+
+    The function contains a pair of gaussian-shaped peaks along the radial direction of
+    a polar-elliptical parametrization of a 2D plane.
+    The first gaussian is centered at the origin.
+    The second gaussian is centered about some finite R, and is 'two-faced': it's comprised of
+    two half-gaussians of different widths, stitched together at R.
+    The Janus-gaussian thus comprises an elliptical ring with different inner and
+    outer widths.
+
+    These should be empirically useful fit functions for amorphous diffraction data.
+    A recommended proceedure, for starts:
+    mask the central disk, and everything beyond some max q.  See if you can grab just the
+    smooth plasmonic background as well as a single |q| ring.
+
+    The parameters in p are
+
+        I0          the intensity of the first gaussian function
+        I1          the intensity of the Janus gaussian
+        sigma0      std of first gaussian
+        sigma1      inner std of Janus gaussian
+        sigma2      outer std of Janus gaussian
+        c_bkgd      a constant offset
+        R           center of the Janus gaussian
+        x0,y0       the origin
+        A,B,C       Ax^2 + Bxy + Cy^2 = 1
+
+    Accepts:
+        data        (2d array)
+        p0          (12-tuple of floats) initial guess at parameters
+        mask        ignore datapoints data[mask==False]
+
+    Returns:
+        p           (12-tuple of floats) the best fit parameters
+    """
+    if mask is None:
+        mask = np.ones_like(data).astype(bool)
+    assert data.shape == mask.shape, 'data and mask must have same shapes.'
+    assert len(p0)==12, 'Initial guess needs 12 parameters.'
+
+    # Make coordinates, get data values
+    yy,xx = np.meshgrid(np.arange(data.shape[0]),np.arange(data.shape[1]))
+    x_inds,y_inds = np.nonzero(mask)
+    vals = data[mask]
+
+    # Fit
+    p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds,y_inds,vals))[0]
+    return p
+
+def double_sided_gaussian_fiterr(p, x, y, val):
+    """
+    Returns the fit error associated with a point (x,y) with value val, given parameters p.
+    """
+    return double_sided_gaussian(p, x, y) - val
+
+def double_sided_gaussian(p, x, y):
+    """
+    Returne the value of the double-sided gaussian function at point (x,y) given parameters p.
+    """
+    # Unpack parameters
+    I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C = p
+    r2 = A*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
+    r = np.sqrt(r2)
+
+    return I0*np.exp(-r2/(2*sigma0**2)) + \
+           I1*np.exp(-(r-R)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
+           I1*np.exp(-(r-R)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd
+
+#def double_sided_gaussian_fiterr(p, x, y, val):
+#    """
+#    Returns the fit error associated with a point (x,y) with value val, given parameters p.
+#    """
+#    # Unpack parameters
+#    I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C = p
+#    r2 = A*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
+#    r = np.sqrt(r2)
+
+#    return I0*np.exp(-r2/(2*sigma0**2)) + \
+#           I1*np.exp(-(r-R)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
+#           I1*np.exp(-(r-R)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd - val
 
 
 
