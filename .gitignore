@@ -5,6 +5,7 @@
 *.ipynb_checkpoints*
 
 # Folders #
+.idea/
 __pycache__/
 *.egg-info/
 
