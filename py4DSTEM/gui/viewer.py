@@ -202,6 +202,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.real_space_widget = pg.ImageView()
         self.real_space_widget.setImage(np.zeros((512,512)))
+        self.real_space_view_text = pg.TextItem('Scan pos.',(200,200,200),None,(0,1))
+        self.real_space_widget.addItem(self.real_space_view_text)
 
         # Add point selector connected to displayed diffraction pattern
         self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
@@ -747,6 +749,8 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
+
+            self.real_space_view_text.setText(f"[{xc},{yc}]")
 
             # rescale DP as selected (0 means raw, does no scaling)
             if self.settings.diffraction_scaling_mode.val == 1:
