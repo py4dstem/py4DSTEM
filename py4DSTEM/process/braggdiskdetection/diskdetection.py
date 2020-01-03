@@ -228,7 +228,11 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               maxNumPeaks = 70,
                               subpixel = 'multicorr',
                               upsample_factor = 16,
-                              filter_function = None):
+                              filter_function = None,
+                              show = True,
+                              show_image = None,
+                              show_scale = 200,
+                              show_power = 0.25):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
     cross, hybrid, or phase correlation with probe.
@@ -262,6 +266,10 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
                              of the probe kernel.
+        show                 (bool) If True, show a plot of the resulting Bragg disk positions
+        show_image           (ndarray) Image to show the scan positions on
+        show_scale           (int) Scaling factor for the Bragg disk markers
+        show_power           (float) Scaling power for showing the DPs
 
     Returns:
         peaks                (n-tuple of PointLists, n=len(Rx)) the Bragg peak positions and
@@ -293,6 +301,39 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
                                                                    int((t%3600)/60), int(t%60)))
+
+    # Visualization:
+    if show:
+        import matplotlib.pyplot as plt
+        from cycler import cycler
+        gridsize = int(np.ceil(np.sqrt(len(Rx)+1)))
+        fig,ax = plt.subplots(int(np.ceil((len(Rx)+1)/gridsize)), gridsize,figsize=(12,12))
+
+        ax[0,0].matshow(show_image if show_image is not None else np.zeros((datacube.R_Nx,datacube.R_Ny)))
+
+        colors = cycler('color',['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
+              '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
+              '#bcbd22', '#17becf'])
+
+        _ = filter_function or (lambda x:x)
+
+        for i,clr in zip(range(len(Rx)),colors):
+            c = clr['color']
+            ax[0,0].scatter(Ry[i],Rx[i],color=c)
+
+            ax.ravel()[i+1].matshow(_(datacube.data[Rx[i],Ry[i]])**show_power)
+
+            if show_scale == 0:
+                ax.ravel()[i+1].scatter(peaks[i].data['qy'],peaks[i].data['qx'],color=c)
+            else:
+                ax.ravel()[i+1].scatter(peaks[i].data['qy'],peaks[i].data['qx'],color=c,
+                    s=show_scale*peaks[i].data['intensity']/np.max(peaks[i].data['intensity']))
+
+        for a in ax.ravel():
+            a.axis('off')
+
+        plt.show()
+
 
     return tuple(peaks)
 
