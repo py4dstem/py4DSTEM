@@ -40,7 +40,8 @@ def read(filename, load=None):
 
     For .h5 file conforming to the py4DSTEM format, behavior is as follows:
     load = None
-        load the first DataObject found; useful for files containing only a single DataObject
+        load the first DataObject found; useful for files containing only a single DataObject.
+        For EMD v0.7 and greater, the DataCube is memory mapped.
     load = 'all':
         load all DataObjects found in the file
     load = 'name':
@@ -111,7 +112,7 @@ def read(filename, load=None):
         browser = FileBrowser(filename)
         print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
         if load is None:
-            output = browser.get_dataobject(0)
+            output = browser.get_dataobject(0,memory_map=True)
         elif load == 'all':
             output = browser.get_dataobjects('all')
         elif type(load) == str:
