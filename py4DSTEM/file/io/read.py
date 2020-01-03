@@ -164,11 +164,21 @@ def read_dm_mmap(filename):
     assert (filename.endswith('.dm3') or filename.endswith('.dm4')), 'File must be a .dm3 or .dm4'
 
     # Get metadata
-    metadata = Metadata(init='hs',filepath=filename)
+    try:
+        metadata = Metadata(init='hs',filepath=filename)
+    except:
+        metadata = None
 
     # Load .dm3/.dm4 files with dm.py
     with fileDM(filename,verbose=False) as dmfile:
-        data = dmfile.getMemmap(0)
+        # loop through the datasets until a >2D one is found:
+        i = 0
+        valid_data = False
+        while not valid_data:
+            data = dmfile.getMemmap(i)
+            if len(np.squeeze(data).shape) > 2 :
+                valid_data = True
+            i += 1
 
     # Get datacube
     datacube = DataCube(data = data)
@@ -181,7 +191,7 @@ def read_dm_mmap(filename):
         R_Nx = int(metadata.get_metadata_item('scan_size_Nx'))
         R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
         datacube.set_scan_shape(R_Nx, R_Ny)
-    except ValueError:
+    except (ValueError, AttributeError):
         print("Warning: scan shape not detected in metadata; please check / set manually.")
 
     return datacube
