@@ -55,13 +55,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
-        QtWidgets.QMainWindow.__init__(self)
-        self.this_dir, self.this_filename = os.path.split(__file__)
-
-
-        QtWidgets.QMainWindow.__init__(self)
-        self.this_dir, self.this_filename = os.path.split(__file__)
-
+            
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
