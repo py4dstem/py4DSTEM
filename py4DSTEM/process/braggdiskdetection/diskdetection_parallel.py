@@ -278,7 +278,7 @@ def find_Bragg_disks_ipp(DP, probe,
     # write out static inputs
     path_to_inputs = os.path.join(tmpdir.name, "inputs")
     with open(path_to_inputs, 'wb') as inputs_file:
-        dill.dump(inputs_list, inputs_file)
+        dill.dump(inputs_list, inputs_file,recurse=True)
     t_inputs_save = time() - t_00
     print("Serialize input values : {}".format(t_inputs_save))
 
