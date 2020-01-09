@@ -1,6 +1,6 @@
-#Module for extracting radial distribution functions g(r) from a series of diffraction image a la FEM
-#Process follows closely to procedure covered in:
-#Cockayne, D.H.,Annu. Rev. Mater. Res. 37:15987 (2007).
+# Module for extracting radial distribution functions g(r) from a series of diffraction images
+# Process follows closely to procedure covered in:
+# Cockayne, D.H.,Annu. Rev. Mater. Res. 37:15987 (2007).
 
 import numpy as np
 from scipy.special import erf
@@ -9,7 +9,7 @@ from ..utils import single_atom_scatter
 
 def get_radial_intensity(polar_img, polar_mask):
     """
-    Takes in a radial transformed image and the raidal mask (if any) applied to that image.
+    Takes in a radial transformed image and the radial mask (if any) applied to that image.
     Designed to be compatible with polar-elliptical transforms from utils
     """
     yMean = np.mean(polar_img,axis=0)
