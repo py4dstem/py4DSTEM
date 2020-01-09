@@ -9,7 +9,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
     -connection to widgets: they support a single interface for connecting to GUI widgets
 """
 
-from os.path import join, dirname
+from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
 from ..file.io.filebrowser import FileBrowser
 import pyqtgraph as pg
@@ -216,7 +216,12 @@ class FileLQ(LoggedQuantity):
         pushButton.clicked.connect(self.file_browser)
 
     def file_browser(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None)
+        
+        # Platform agnotistic method of getting home directory
+        home = expanduser("~")
+
+        #Start open filename in home directory
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None,directory=home)
         print(repr(fname))
         if fname:
             self.update_value(fname)
