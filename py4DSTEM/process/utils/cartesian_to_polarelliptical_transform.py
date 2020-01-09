@@ -498,7 +498,7 @@ class polar_elliptical_transform(object):
 
     def fit_params_two_sided_gaussian(self, init_coef=None):
         """
-        Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2) 
+        Instead fit the form I(r) = I_BG * exp(- r^2 / (2 * SD_BG) ^2)
                                 + I_ring * exp(- (R-r^2) / (2*SD_1) ^2) * U(R-r)
                                 + I_ring * exp(- (R-r^2) / (2*SD_2) ^2) * U(r-R)
                                 + N
@@ -599,52 +599,60 @@ def two_sided_gaussian_fun_wrapper(X, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c1
 
 def two_sided_gaussian_fun(X, coef):
     """
-    Cost function for two sided gaussian.
-    X[0] = x coords
-    X[1] = y coords
-    coef[0] = N (linear constant)
-    coef[1] = I_BG
-    coef[2] = SD_BG
-    coef[3] = I_ring
-    coef[4] = SD_1
-    coef[5] = SD_2
-    coef[6] = X_center
-    coef[7] = Y_center
-    coef[8] = B
-    coef[9] = C
-    coef[10] = R
-    """
-    # precalulated little r for readability
-    r = np.sqrt(
-        (X[0] - coef[6]) ** 2
-        + coef[8] * (X[0] - coef[6]) * (X[1] - coef[7])
-        + coef[9] * (X[1] - coef[7]) ** 2
-    )
-    return (
-        coef[0]
-        + coef[1] * np.exp((-1 / (2 * coef[2] ** 2)) * r ** 2)
-        + coef[3]
-        * np.exp((-1 / (2 * coef[4] ** 2)) * (coef[10] - r) ** 2)
-        * np.heaviside((coef[10] - r), 0.5)
-        + coef[3]
-        * np.exp((-1 / (2 * coef[5] ** 2)) * (coef[10] - r) ** 2)
-        * np.heaviside((r - coef[10]), 0.5)
-    )
+    This function accepts a set of x,y coordinates X=(x,y) and a set of 11 parameters coef, and
+    returns the value at x,y of a function constructed of three Gaussians, as follows:
 
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,R,offset,x0,y0,B,C) =
+            Norm(r; I0,sigma0,0) +
+            Norm(r; I1,sigma1,R)*Theta(r-R)
+            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
 
-def accumarray(indices, values, size):
-    """
-    Helper function to mimic matlab accum array function
-    values is Nx1
-    dest is M-dimensional, set by Mx1 size input
-    """
+    where Norm(I,sigma,R) is a gaussian with max amplitude I, standard deviation sigma, and
+    center R; where Theta(x) is a Heavyside function; and where r is the radial coordinate of a
+    polar elliptical coordinate system.  In particular, Norm() and r are given by
 
-    # indices is a NxM array, where N is the number of events and M is the dimensionality of source/dest arrays
+        Norm(r; I,sigma,R) = I*exp(-(r-R)^2/(2*sigma^2))
+        r^2 = (x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2
+
+    The input parameters are summarized below:
+        X[0] = x-coordinates
+        X[1] = y-coordinates
+        coef[0] = offset
+        coef[1] = I0
+        coef[2] = sigma0
+        coef[3] = I1
+        coef[4] = sigma1
+        coef[5] = sigma2
+        coef[6] = x0
+        coef[7] = y0
+        coef[8] = B
+        coef[9] = C
+        coef[10] = R
+    """
+    r = np.sqrt( (X[0] - coef[6])**2 + coef[8]*(X[0] - coef[6])*(X[1] - coef[7]) + \
+                                                        coef[9]*(X[1] - coef[7])**2 )
+    return coef[1] * np.exp( (-1/ (2*coef[2]**2)) * r**2) + \
+           coef[3] * np.exp( (-1/ (2*coef[4]**2)) * (coef[10] - r)**2) * \
+           np.heaviside((coef[10] - r),0) + \
+           coef[3] * np.exp( (-1/ (2*coef[5]**2)) * (coef[10] - r)**2) * \
+           np.heaviside((r - coef[10]),0) + \
+           coef[0]
+
+def accumarray(indices,values,size):
+    """
+    Helper function to mimic matlab accum array function.
+
+    Accepts:
+        indices     shape (N,M) array, where N is the number of values and M is the dimentionality
+                    of the source/destination arrays
+        values      shape (N,1) array
+        size        int, must be equal to M
+
+    Returns
+        output      shape (M,1) array.
+    """
     assert indices.shape[1] == len(size), "Size and array mismatch"
 
-    # initialiaze destination array
-    dest = np.zeros(size)
-
-    np.add.at(dest, (indices[:, 0], indices[:, 1]), values)
-
+    output = np.zeros(size)
+    np.add.at(output,(indices[:,0],indices[:,1]),values)
     return dest
