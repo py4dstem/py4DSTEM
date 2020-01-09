@@ -205,7 +205,8 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
 def calculate_thresholds(datacube, darkreference,
                                    Nsamples=20,
                                    thresh_bkgrnd_Nsigma=4,
-                                   thresh_xray_Nsigma=10):
+                                   thresh_xray_Nsigma=10,
+                                   return_params=False):
     """
     Calculate the upper and lower thresholds for thresholding what to register as
     an electron count.
@@ -228,10 +229,16 @@ def calculate_thresholds(datacube, darkreference,
                                     mean(hist) + (this #)*std(hist)
                                where hist is the histogram of all pixel values in the
                                Nsamples random frames
+        return_params          bool, if True return n,hist of the histogram and popt of the
+                               gaussian fit
 
     Returns:
         thresh_bkgrnd          the background threshold
         thresh_xray            the X-ray threshold
+        n                      returned iff return_params==True. The histogram values
+        hist                   returned iff return_params==True. The histogram bin edges
+        popt                   returned iff return_params==True. The fit gaussian parameters,
+                               (A, mu, sigma).
     """
     R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.shape
 
@@ -275,7 +282,10 @@ def calculate_thresholds(datacube, darkreference,
     # Set lower threshhold for electron counts to count
     thresh_bkgrnd = p1[1]+p1[2]*thresh_bkgrnd_Nsigma
 
-    return thresh_bkgrnd, thresh_xray
+    if return_params:
+        return thresh_bkgrnd, thresh_xray, n, bins, p1
+    else:
+        return thresh_bkgrnd, thresh_xray
 
 
 def torch_bin(array,device,factor=2):
