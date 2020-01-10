@@ -15,6 +15,7 @@
 
 import numpy as np
 from scipy.optimize import leastsq
+import matplotlib.pyplot as plt
 
 def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
                                              dr=1, dtheta=np.radians(2), r_range=512,
@@ -289,13 +290,32 @@ def fit_double_sided_gaussian(data, p0, mask=None):
     assert len(p0)==12, 'Initial guess needs 12 parameters.'
 
     # Make coordinates, get data values
-    yy,xx = np.meshgrid(np.arange(data.shape[0]),np.arange(data.shape[1]))
     x_inds,y_inds = np.nonzero(mask)
     vals = data[mask]
 
     # Fit
     p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds,y_inds,vals))[0]
     return p
+
+def compare_double_sided_gaussian(data, p, power=1, mask=None):
+    """
+    Plots a comparison between a diffraction pattern and a fit, given p. 
+    """
+    if mask is None:
+        mask = np.ones_like(data)
+
+    yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
+    data_fit = double_sided_gaussian(p, xx, yy)
+
+    theta = np.arctan2(xx - p[7], yy - p[8])
+    theta_mask = np.cos(theta * 8) > 0
+    data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
+    data_combined = mask * data_combined
+    plt.figure(12)
+    plt.clf()
+    plt.imshow(data_combined)
+
+    return
 
 def double_sided_gaussian_fiterr(p, x, y, val):
     """
@@ -307,14 +327,16 @@ def double_sided_gaussian(p, x, y):
     """
     Returne the value of the double-sided gaussian function at point (x,y) given parameters p.
     """
+    #TODO This is an overdetermined way of defining an ellipse, and causes problems in testing. With A, B, C and R free, you cannot perfectly fit a previous set of parameters... I am unsure what the best way to fix this is, or if it needs to be fixed, but we used to set R free and fix A to 1, and then deal with that in post-processing. We should test which is best. But I'm afraid that it might use different combinations of R, A, B, and C to fit different patterns, which might make it very difficult to then measure strain. Maybe we do just fix it to be 1. Or in post processing we normalize everything by R_pattern/R_mean?
+    
     # Unpack parameters
     I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C = p
     r2 = A*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
     r = np.sqrt(r2)
-
+    
     return I0*np.exp(-r2/(2*sigma0**2)) + \
-           I1*np.exp(-(r-R)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
-           I1*np.exp(-(r-R)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd
+           I1*np.exp(-(R-r)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
+           I1*np.exp(-(R-r)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd
 
 #def double_sided_gaussian_fiterr(p, x, y, val):
 #    """
