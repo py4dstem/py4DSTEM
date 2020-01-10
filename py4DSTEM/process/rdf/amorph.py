@@ -8,7 +8,8 @@ from py4DSTEM.process.utils.ellipticalCoords import *
 import matplotlib
 from tqdm import tqdm
 
-matplotlib.rcParams["figure.dpi"] = 100
+# this fixes figure sizes on HiDPI screens
+matplotlib.rcParams["figure.dpi"] = 200
 plt.ion()
 
 
@@ -31,7 +32,7 @@ def fit_stack(datacube, init_coefs, mask=None):
             elif len(mask.shape==4):
                 mask_current = mask[i,j,:,:]
 
-            coefs = fit_double_sided_gaussian(datacube[i,j,:,:], init_coefs, mask=mask_current)
+            coefs = fit_double_sided_gaussian(datacube.data[i,j,:,:], init_coefs, mask=mask_current)
             coefs_array[i, j] = coefs
 
     return coefs_array
@@ -69,9 +70,9 @@ def calculate_coef_strain(coef_cube, A_ref=None, B_ref=None, C_ref=None):
         C_ref = 1
     if B_ref is None:
         B_ref = 0
-    A = coef_cube[:, :, 10]
-    B = coef_cube[:, :, 11]
-    C = coef_cube[:, :, 12]
+    A = coef_cube[:, :, 9]
+    B = coef_cube[:, :, 10]
+    C = coef_cube[:, :, 11]
 
     exx = 1 / 2 * (A - A_ref)
     eyy = 1 / 2 * (C - C_ref)  # TODO - make sure this is ok to do
@@ -152,8 +153,10 @@ def compare_coef_cube(dp, coefs, mask=None, power=0.3):
     Returns:
         None
     """
-    dp = polar_elliptical_transform(dp, mask=mask)
-    dp.compare_coefs_two_sided_gaussian(coefs, power=power)
+    # dp = polar_elliptical_transform(dp, mask=mask)
+    # dp.compare_coefs_two_sided_gaussian(coefs, power=power)
+    
+    
     return
 
 
