@@ -7,9 +7,8 @@ class single_atom_scatter(object):
     The parameterization is based upon Lobato, Acta Cryst. (2014). A70, 636–649.
 
     Elements is an 1D array of atomic numbers.
-    Composition is a 1D array, same length as elements, describing the average atomic composition of the sample.
-    If the 
-    Q_coords is a 1D array of Fourier coordinates, given in inverse Angstros.
+    Composition is a 1D array, same length as elements, describing the average atomic composition
+    of the sample. If the Q_coords is a 1D array of Fourier coordinates, given in inverse Angstroms.
     Units is a string of 'VA' or 'A', which returns the scattering factor in volt angtroms or in angstroms.
     """
     def __init__(self,elements=None,composition=None,q_coords=None,units=None):
@@ -53,7 +52,7 @@ class single_atom_scatter(object):
         if elements is None:
             assert(not self.elements is None), "Must pass a list of atomic numbers in either class initialization or in call to get_scattering_factor()"
             elements = self.elements
-        
+
         if composition is None:
             assert(not self.elements is None), "Must pass composition fractions in either class initialization or in call to get_scattering_factor()"
             composition = self.composition
@@ -67,13 +66,13 @@ class single_atom_scatter(object):
             if(self.units is None):
                 print("Setting output units to Angstroms")
                 units = 'A'
-        
+
         assert(len(elements)==len(composition)), "Each element must have an associated composition."
 
         if np.sum(composition) > 1:
             #normalize composition if passed as stoichiometry instead of atomic fractions
             composition /= np.sum(composition)
-        
+
         fe = np.zeros_like(q_coords)
         for i in range(len(elements)):
             fe += composition[i]*self.electron_scattering_factor(elements[i],np.square(q_coords),units)
