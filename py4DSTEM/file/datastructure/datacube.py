@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import dask.array as da
 import numba as nb
 import h5py
 
@@ -257,6 +256,7 @@ class CountedDataCube(DataObject):
         self.detector_shape = detector_shape
 
         if use_dask:
+            import dask.array as da
             sa = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
             self.data = da.from_array(sa,chunks=(1,1,detector_shape[0],detector_shape[1]))
         else:
