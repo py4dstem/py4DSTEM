@@ -47,8 +47,8 @@ def append_from_dataobject_list(dataobject_list, filepath):
     except OSError as e:
         print(e)
         print('The file appears to be open elsewhere...')
-        print('This can occur if your datacube was read from a py4DSTEM h5 file.')
-        print(f'To forse close the file, losing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{filepath}\')')
+        print('This can occur if your datacube is memory-mapped from a py4DSTEM h5 file.')
+        print(f'To force close the file, closing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{filepath}\')')
         print('To force close all h5 files run: py4DSTEM.file.io.close_all_h5()')
         return -1
 
