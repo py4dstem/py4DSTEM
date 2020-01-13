@@ -159,6 +159,11 @@ class DataViewer(QtWidgets.QMainWindow):
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
         self.settings.New('virtual_detector_mode', dtype=int, initial=0)
 
+        ## DP Scaling mode
+        self.settings.New('diffraction_scaling_mode',dtype=int,initial=0)
+        self.settings.diffraction_scaling_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DiffractionMode)
+        self.settings.diffraction_scaling_mode.updated_value.connect(self.diffraction_scaling_changed)
+
         self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
         self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
 
@@ -178,6 +183,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.diffraction_space_widget = pg.ImageView()
         self.diffraction_space_widget.setImage(np.zeros((512,512)))
+        self.diffraction_space_view_text = pg.TextItem('Slice',(200,200,200),None,(0,1))
+        self.diffraction_space_widget.addItem(self.diffraction_space_view_text)
 
         # Create virtual detector ROI selector
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
@@ -195,6 +202,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.real_space_widget = pg.ImageView()
         self.real_space_widget.setImage(np.zeros((512,512)))
+        self.real_space_view_text = pg.TextItem('Scan pos.',(200,200,200),None,(0,1))
+        self.real_space_widget.addItem(self.real_space_view_text)
 
         # Add point selector connected to displayed diffraction pattern
         self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
@@ -244,12 +253,12 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.main_window.setLayout(layout_data_and_control)
 
-        self.main_window.setGeometry(0,0,3600,1600)
-        self.console_widget.setGeometry(0,1800,1600,250)
+        #self.main_window.setGeometry(0,0,3600,1600)
+        #self.console_widget.setGeometry(0,1800,1600,250)
         self.main_window.show()
         self.main_window.raise_()
-        self.console_widget.show()
-        self.console_widget.raise_()
+        #self.console_widget.show()
+        #self.console_widget.raise_()
         return self.main_window
 
     ##################################################################
@@ -727,6 +736,10 @@ class DataViewer(QtWidgets.QMainWindow):
 
     ################## Get virtual images ##################
 
+    def diffraction_scaling_changed(self):
+        self.update_diffraction_space_view()
+        self.diffraction_space_widget.autoLevels()
+
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
         x0,y0 = roi_state['pos']
@@ -736,6 +749,22 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
+
+            self.real_space_view_text.setText(f"[{xc},{yc}]")
+
+            # rescale DP as selected (0 means raw, does no scaling)
+            if self.settings.diffraction_scaling_mode.val == 1:
+                # sqrt mode
+                self.diffraction_space_view = np.sqrt(self.diffraction_space_view)
+            elif self.settings.diffraction_scaling_mode.val == 2:
+                # log mode
+                self.diffraction_space_view = np.log(
+                    self.diffraction_space_view - np.min(self.diffraction_space_view) + 1)
+            elif self.settings.diffraction_scaling_mode.val == 3:
+                # EWPC mode
+                h = np.hanning(self.datacube.Q_Nx)[:,np.newaxis] @ np.hanning(self.datacube.Q_Ny)[np.newaxis,:]
+                self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
+                    (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
             self.diffraction_space_widget.setImage(self.diffraction_space_view,
                                                    autoLevels=False,autoRange=False)
@@ -757,6 +786,10 @@ class DataViewer(QtWidgets.QMainWindow):
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+
+                #update the label:
+                self.diffraction_space_view_text.setText(
+                    f"[{slice_x.start}:{slice_x.stop},{slice_y.start}:{slice_y.stop}]")
             else:
                 pass
 

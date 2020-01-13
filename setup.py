@@ -18,7 +18,10 @@ setup(name='py4DSTEM',
         'PyQt5 >= 5.9, < 6',
         'pyqtgraph >= 0.10, < 0.11',
         'qtconsole >= 4.4, < 4.5',
-        'ncempy >= 1.4.2'
+        'ncempy >= 1.4.2',
+        'tqdm',
+        'ipywidgets',
+        'scikit-learn'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],
