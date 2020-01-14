@@ -14,7 +14,7 @@
 # All angular quantities are in radians.
 
 import numpy as np
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq, least_squares
 import matplotlib.pyplot as plt
 
 def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
@@ -293,6 +293,9 @@ def fit_double_sided_gaussian(data, p0, mask=None):
     x_inds,y_inds = np.nonzero(mask)
     vals = data[mask]
 
+    # make bounds - speed things up
+    # upper_bounds = [np.inf, np.inf, 1000, 1000, 1000, np.inf, np.max(data.shape), np.max(data.shape), np.max(data.shape), np.inf, np.inf, np.inf]
+    # lower_bounds = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     # Fit
     p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds,y_inds,vals))[0]
     return p
@@ -323,6 +326,7 @@ def double_sided_gaussian_fiterr(p, x, y, val):
     """
     return double_sided_gaussian(p, x, y) - val
 
+@np.errstate(invalid='ignore')
 def double_sided_gaussian(p, x, y):
     """
     Returne the value of the double-sided gaussian function at point (x,y) given parameters p.
