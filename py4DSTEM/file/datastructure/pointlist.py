@@ -36,7 +36,9 @@ class PointList(DataObject):
         self.length = 0
 
         # Define the data type for the PointList structured array
-        if type(coordinates[0])==str:
+        if type(coordinates) in (type, np.dtype):
+            self.dtype = coordinates
+        elif type(coordinates[0])==str:
             self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
             self.dtype = np.dtype(coordinates)
@@ -215,7 +217,9 @@ class PointListArray(DataObject):
         self.shape = shape
 
         # Define the data type for the structured arrays in the PointLists
-        if type(coordinates[0])==str:
+        if type(coordinates) in (type, np.dtype):
+            self.dtype = coordinates
+        elif type(coordinates[0])==str:
             self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
             self.dtype = np.dtype(coordinates)
@@ -277,8 +281,5 @@ class PointListArray(DataObject):
                 curr_pointlist_new.add_dataarray(data)
 
         return new_pointlistarray
-
-
-
 
 

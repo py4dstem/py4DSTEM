@@ -6,9 +6,9 @@ import h5py
 import numpy as np
 from .filebrowser import is_py4DSTEM_file, FileBrowser
 from .write import save_datacube_group, save_diffraction_group, save_real_group
-from .write import save_pointlist_group, save_pointlistarray_group
+from .write import save_pointlist_group, save_pointlistarray_group, save_counted_datacube_group
 from ..datastructure import DataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray
+from ..datastructure import PointList, PointListArray, CountedDataCube
 from ..datastructure import DataObject, Metadata
 
 from ..log import log, Logger
@@ -34,6 +34,7 @@ def append_from_dataobject_list(dataobject_list, filepath):
         assert browser.version[1] >= 3, "appending to py4DSTEM files only supported in v0.3 and higher."
     N_dataobjects = browser.N_dataobjects
     N_datacubes = browser.N_datacubes
+    N_counted = browser.N_counted
     N_diffractionslices = browser.N_diffractionslices
     N_realslices = browser.N_realslices
     N_pointlists = browser.N_pointlists
@@ -41,11 +42,21 @@ def append_from_dataobject_list(dataobject_list, filepath):
     browser.close()
 
     #### Open file for read/write ####
-    f = h5py.File(filepath,"r+")
+    try:
+        f = h5py.File(filepath,"r+")
+    except OSError as e:
+        print(e)
+        print('The file appears to be open elsewhere...')
+        print('This can occur if your datacube is memory-mapped from a py4DSTEM h5 file.')
+        print(f'To force close the file, closing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{filepath}\')')
+        print('To force close all h5 files run: py4DSTEM.file.io.close_all_h5()')
+        return -1
+
     topgroup = get_py4DSTEM_topgroup(f)
     # Find data groups
     group_data = f[topgroup]['data']
     group_datacubes = f[topgroup]['data']['datacubes']
+    group_counted = f[topgroup]['data']['counted_datacubes']
     group_diffractionslices = f[topgroup]['data']['diffractionslices']
     group_realslices = f[topgroup]['data']['realslices']
     group_pointlists = f[topgroup]['data']['pointlists']
@@ -65,6 +76,17 @@ def append_from_dataobject_list(dataobject_list, filepath):
                 name = name+"_"+str(N)
                 group_new_datacube = group_datacubes.create_group(name)
             save_datacube_group(group_new_datacube, dataobject)
+        elif isinstance(dataobject,CountedDataCube):
+            if name == '':
+                name = 'counted_datacube_'+str(N_counted)
+                ind_cdcs += 1
+            try:
+                group_new_counted = group_counted.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_counted.keys())])
+                name = name+"_"+str(N)
+                group_new_counted = group_counted.create_group(name)
+            save_counted_datacube_group(group_new_counted, dataobject)
         elif isinstance(dataobject, DiffractionSlice):
             if name == '':
                 name = 'diffractionslice_'+str(N_diffractionslices)
