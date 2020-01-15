@@ -16,8 +16,8 @@ class single_atom_scatter(object):
         self.composition = composition
         self.q_coords = q_coords
         self.units = units
-        path = os.path.dirname(__file__)
-        self.e_scattering_factors = np.loadtxt(path+'/scatteringFactors.txt',dtype=np.float)
+        path = os.path.join(os.path.dirname(__file__),'scatteringFactors.txt')
+        self.e_scattering_factors = np.loadtxt(path,dtype=np.float)
 
         return
 
