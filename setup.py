@@ -29,4 +29,5 @@ setup(name='py4DSTEM',
         },
     entry_points= {
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
-    })
+    },
+    package_data = {'py4DSTEM':['process/utils/scatteringFactors.txt']})
