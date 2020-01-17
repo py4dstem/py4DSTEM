@@ -160,8 +160,9 @@ if analyze_data:
     mask_strain = np.logical_or(np.abs(strains[0]) > 0.1, np.abs(strains[1]) > 0.1)
     mask_strain = binary_closing(mask_strain, iterations=3, border_value=1)
 
+    normalized_strains = [medfilt2d(i) - np.median(medfilt2d(i)[135:, :]) for i in strains]
     amorph.plot_strains(
-        [medfilt2d(i) - np.median(medfilt2d(i)[135:, :]) for i in strains],
+        normalized_strains,
         vmax=0.05,
         vmin=-0.05,
         mask=mask_strain,
