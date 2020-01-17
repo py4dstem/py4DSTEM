@@ -25,7 +25,17 @@ Last updated for py4DSTEM v0.6.
         |         |   |--grp: datacube_2
         |         |   |    |
         |         |   :    :
-        |         |
+        |         |   |
+        |         |   |
+        |         |--grp: counted_datacubes
+        |         |   |
+        |         |   |--grp: datacube_1
+        |         |   |    |--data: data
+        |         |   |    |--data: dim1,dim2,dim3,dim4,index_coords (***)
+        |         |   |
+        |         |   |--grp: datacube_2
+        |         |   |    |
+        |         |   :    :        |         |
         |         |--grp: diffraction
         |         |   |
         |         |   |--grp: diffractionslice_1 (**)
@@ -116,6 +126,26 @@ Last updated for py4DSTEM v0.6.
         |         |   |    |
         |         |   :    :
         |         |
+        |         |--grp: counted_datacubes
+        |         |   |
+        |         |   |-- grp: counted_data_1 (**)
+        |         |   |   |--attr: emd_group_type=1
+        |         |   |   |--data: data (stored as v0.7 PointListArray)
+        |         |   |   |--data: dim1 (***)
+        |         |   |   |    |--attr: name="R_x"
+        |         |   |   |    |--attr: units="[n_m]"
+        |         |   |   |--data: dim2
+        |         |   |   |    |--attr: name="R_y"
+        |         |   |   |    |--attr: units="[n_m]"
+        |         |   |   |--data: dim3
+        |         |   |   |    |--attr: name="Q_x"
+        |         |   |   |    |--attr: units="[n_m^-1]"
+        |         |   |   |--data: dim4
+        |         |   |        |--attr: name="Q_y"
+        |         |   |        |--attr: units="[n_m^-1]"
+        |         |   |   |--data: index_coords (string array)
+        |         |   |             (used only if data is numpy structured |         |   |              array, to indicate fields for data)
+        |         |   |
         |         |--grp: diffractionslices
         |         |   |
         |         |   |--grp: diffractionslice_1 (**)
@@ -161,8 +191,7 @@ Last updated for py4DSTEM v0.6.
         |             |--grp: pointlistarray_1
         |             |    |--attr: coordinates='Qx, Qy, Rx, Ry, Int, ...'
         |             |    |--attr: dimensions=val
-        |             |    |--grp: 0_0 = pointlist at index 0,0
-        |             |    |--grp: 0_1
+        |             |    |--data (array of numpy arrays)
         |             |    :
         |             |
         |             |--grp: pointlistarray_2
@@ -244,11 +273,12 @@ Last updated for py4DSTEM v0.6.
     names cooresponding to the coordinates ('qx',...), and each containing an h5 dataset of length N
     and an attribute speficifying the data type.
 
-(******) Pointlistarrays are 2D arrays of pointlists. Under the .h5 group for a given pointlistarray,
-    the i,j'th pointlist is stored in an .h5 group called 'i_j', which is itself just a regular
-    pointlist .h5 group.
-
-
+(******) Pointlistarrays are 2D arrays of structured data arrays with
+    H5 special variable length (vlen) datatype. All PointLists in the
+    array MUST have the same coordinates. For counted datacubes there
+    is an additional dataset that stores a list of strings corresponding
+    to the structured array fields that store the electron counts (typically
+    "ind" for 1D and "qx"/"qy" for 2D indexing). If the data type of the array is a base dtype (i.e. not a "structured" array with named fields) then this is ignored and the reader assumes the indexing is 1D (this is the Kitware format–numpy structured arrays seem to be specific to h5py). 
 
 
 

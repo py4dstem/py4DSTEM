@@ -18,12 +18,15 @@
 
 import hyperspy.api_nogui as hs
 from ncempy.io.dm import fileDM
+import h5py
+import numpy as np
+
 from .empad import read_empad
 from .filebrowser import FileBrowser, is_py4DSTEM_file
-from ..datastructure import DataCube
-from ..datastructure import Metadata
+from ..datastructure import DataCube, PointListArray
+from ..datastructure import Metadata, CountedDataCube
 from ..log import log
-from ...process.utils import bin2D
+from ...process.utils import bin2D, tqdmnd
 
 ###################### BEGIN read FUNCTIONS ########################
 
@@ -57,6 +60,12 @@ def read(filename, load=None):
         load a dm file (.dm3 or .dm4), memory mapping the datacube, using dm.py
     load = 'empad'
         load an EMPAD formatted file, using empad.py
+    load = 'gatan_bin'
+        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be
+        passed as the argument. The reader searches for the *.gtg file that contains the metadata,
+        then maps the chunked binary files.
+    load = 'kitware_counted'
+        load a *.h5 file in the Kitware format. (Returns a CountedDataCube)
     load = 'relativity'
         Load an MRC file written from the IDES Relativity subframing system, which generates
         multiple small, tiled diffraction patterns on each detector frame; each subframe
@@ -66,16 +75,16 @@ def read(filename, load=None):
         the relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
         This functionality requires the mrcfile package, which can be installed with
             pip install mrcfile
-    load = 'gatan_bin'
-        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be
-        passed as the argument. The reader searches for the *.gtg file that contains the metadata,
-        then maps the chunked binary files.
     """
     if not is_py4DSTEM_file(filename):
         print("{} is not a py4DSTEM file.".format(filename))
         if load is None:
-            print("Reading with hyperspy...")
-            output = read_with_hyperspy(filename)
+            print("Couldn't identify input, attempting to read with hyperspy...")
+            try:
+                output = read_with_hyperspy(filename)
+            except:
+                print("Hyperspy read failed")
+                return "Hyperspy read failed"
         elif load == 'dmmmap':
             print("Memory mapping a dm file...")
             output = read_dm_mmap(filename)
@@ -89,6 +98,12 @@ def read(filename, load=None):
         elif load == 'gatan_bin':
             print('Reading Gatan binary files...')
             output = read_gatan_binary(filename)
+        elif load == 'kitware_counted':
+            print('Reading a Kitware electron counted dataset.')
+            output = read_kitware_counted(filename)
+        elif load == 'kitware_counted_mmap':
+            print('Memory-mapping a Kitware electron counted dataset.')
+            output = read_kitware_counted_mmap(filename)
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
@@ -109,7 +124,6 @@ def read(filename, load=None):
         else:
             raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
 
-        browser.close()
     return output
 
 def read_with_hyperspy(filename):
@@ -217,6 +231,43 @@ def read_gatan_binary(filename):
     return datacube
 
 
+def read_kitware_counted(filename):
+    """
+    Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
+    (Not for py4DSTEM formatted files, which may be suported by 
+    Kitware in the future.)
+    """
+    hfile = h5py.File(filename,'r')
 
+    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
 
+    Q_Nx = hfile['electron_events']['frames'].attrs['Ny']
+    Q_Ny = hfile['electron_events']['frames'].attrs['Nx']
 
+    pla = PointListArray([('ind','u4')],(R_Nx,R_Ny))
+
+    print('Importing Electron Events:',flush=True)
+
+    for (i,j) in tqdmnd(int(R_Nx),int(R_Ny)):
+        ind = np.ravel_multi_index((i,j),(R_Nx,R_Ny))
+        pla.get_pointlist(i,j).add_dataarray(hfile['electron_events']['frames'][ind].astype([('ind','u4')]))
+
+    return CountedDataCube(pla,[Q_Nx,Q_Ny],'ind',use_dask=False)
+
+def read_kitware_counted_mmap(filename):
+    """
+    Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
+    (Not for py4DSTEM formatted files, which may be suported by 
+    Kitware in the future.)
+    """
+    hfile = h5py.File(filename,'r')
+
+    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
+    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
+
+    Q_Nx = hfile['electron_events']['frames'].attrs['Nx']
+    Q_Ny = hfile['electron_events']['frames'].attrs['Ny']
+
+    return CountedDataCube(hfile['electron_events']['frames'],[Q_Nx,Q_Ny],[None],
+        use_dask=False,R_Nx=R_Nx,R_Ny=R_Ny)

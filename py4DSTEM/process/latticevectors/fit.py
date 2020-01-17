@@ -4,6 +4,7 @@ import numpy as np
 from numpy.linalg import lstsq
 
 from ...file.datastructure import PointList, PointListArray, RealSlice
+from ..utils import tqdmnd
 
 def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20, minNumPeaks=5):
     """
@@ -119,19 +120,18 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
                        slicelabels=slicelabels, name='uv_map')
 
     # Fit lattice vectors
-    for Rx in range(bragg_peaks.shape[0]):
-        for Ry in range(bragg_peaks.shape[1]):
-            bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
-            ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
-                                                    maxPeakSpacing, minNumPeaks)
-            # Store data
-            if ux is not None:
-                uv_map.slices['ux'][Rx,Ry] = ux
-                uv_map.slices['uy'][Rx,Ry] = uy
-                uv_map.slices['vx'][Rx,Ry] = vx
-                uv_map.slices['vy'][Rx,Ry] = vy
-                uv_map.slices['error'][Rx,Ry] = error
-                uv_map.slices['mask'][Rx,Ry] = 1
+    for (Rx, Ry) in tqdmnd(bragg_peaks.shape[0],bragg_peaks.shape[1]):
+        bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
+        ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
+                                                maxPeakSpacing, minNumPeaks)
+        # Store data
+        if ux is not None:
+            uv_map.slices['ux'][Rx,Ry] = ux
+            uv_map.slices['uy'][Rx,Ry] = uy
+            uv_map.slices['vx'][Rx,Ry] = vx
+            uv_map.slices['vy'][Rx,Ry] = vy
+            uv_map.slices['error'][Rx,Ry] = error
+            uv_map.slices['mask'][Rx,Ry] = 1
 
     return uv_map
 
@@ -177,20 +177,19 @@ def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, x0, y0, mask, maxP
                        slicelabels=slicelabels, name='uv_map')
 
     # Fit lattice vectors
-    for Rx in range(bragg_peaks.shape[0]):
-        for Ry in range(bragg_peaks.shape[1]):
-            if mask[Rx,Ry]:
-                bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
-                ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
-                                                        maxPeakSpacing, minNumPeaks)
-                # Store data
-                if ux is not None:
-                    uv_map.slices['ux'][Rx,Ry] = ux
-                    uv_map.slices['uy'][Rx,Ry] = uy
-                    uv_map.slices['vx'][Rx,Ry] = vx
-                    uv_map.slices['vy'][Rx,Ry] = vy
-                    uv_map.slices['error'][Rx,Ry] = error
-                    uv_map.slices['mask'][Rx,Ry] = 1
+    for (Rx, Ry) in tqdmnd(bragg_peaks.shape[0],bragg_peaks.shape[1]):
+        if mask[Rx,Ry]:
+            bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
+            ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
+                                                    maxPeakSpacing, minNumPeaks)
+            # Store data
+            if ux is not None:
+                uv_map.slices['ux'][Rx,Ry] = ux
+                uv_map.slices['uy'][Rx,Ry] = uy
+                uv_map.slices['vx'][Rx,Ry] = vx
+                uv_map.slices['vy'][Rx,Ry] = vy
+                uv_map.slices['error'][Rx,Ry] = error
+                uv_map.slices['mask'][Rx,Ry] = 1
 
     return uv_map
 
