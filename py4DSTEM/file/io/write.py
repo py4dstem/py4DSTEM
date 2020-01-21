@@ -16,7 +16,7 @@ from ..log import log, Logger
 logger = Logger()
 
 @log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, **kwargs):
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
