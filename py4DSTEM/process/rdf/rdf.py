@@ -24,8 +24,7 @@ def fit_scattering_factor(scale, elements, composition, q_arr,units):
     Scale is linear factor
     Elements is an 1D array of atomic numbers.
     Composition is a 1D array, same length as elements, describing the average atomic composition of the sample.
-    If the 
-    Q_coords is a 1D array of Fourier coordinates, given in inverse Angstros.
+    If the Q_coords is a 1D array of Fourier coordinates, given in inverse Angstroms.
     Units is a string of 'VA' or 'A', which returns the scattering factor in volt angtroms or in angstroms.
     """
 
