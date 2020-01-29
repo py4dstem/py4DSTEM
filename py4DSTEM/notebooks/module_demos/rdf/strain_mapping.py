@@ -1,16 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import py4DSTEM
-import scipy.io as sio
-import scipy.ndimage as spim
-from py4DSTEM.process.utils import print_progress_bar
-from py4DSTEM.process.utils import polar_elliptical_transform
 from py4DSTEM.process.rdf import amorph
 import matplotlib
 from py4DSTEM.process.utils.ellipticalCoords import *
 from tqdm import tqdm
 from scipy.signal import medfilt2d
-from scipy.ndimage.morphology import binary_erosion, binary_dilation, binary_closing
+from scipy.ndimage.morphology import binary_closing
 
 matplotlib.rcParams["figure.dpi"] = 100
 plt.ion()
@@ -160,10 +156,7 @@ if analyze_data:
     mask_strain = np.logical_or(np.abs(strains[0]) > 0.1, np.abs(strains[1]) > 0.1)
     mask_strain = binary_closing(mask_strain, iterations=3, border_value=1)
 
-    normalized_strains = [medfilt2d(i) - np.median(medfilt2d(i)[135:, :]) for i in strains]
-    amorph.plot_strains(
-        normalized_strains,
-        vmax=0.05,
-        vmin=-0.05,
-        mask=mask_strain,
-    )
+    normalized_strains = [
+        medfilt2d(i) - np.median(medfilt2d(i)[135:, :]) for i in strains
+    ]
+    amorph.plot_strains(normalized_strains, vmax=0.05, vmin=-0.05, mask=mask_strain)
