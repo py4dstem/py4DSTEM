@@ -326,7 +326,7 @@ def double_sided_gaussian_fiterr(p, x, y, val):
     """
     return double_sided_gaussian(p, x, y) - val
 
-@np.errstate(invalid='ignore')
+# @np.errstate(invalid='ignore') # activate if supressing warnings
 def double_sided_gaussian(p, x, y):
     """
     Returne the value of the double-sided gaussian function at point (x,y) given parameters p.

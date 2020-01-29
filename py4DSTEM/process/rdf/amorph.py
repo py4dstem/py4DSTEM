@@ -58,9 +58,9 @@ def calculate_coef_strain(coef_cube, r_ref, A_ref=None, B_ref=None, C_ref=None):
     Accepts:
         coef_cube   - output from fit_stack
         r_ref       - a reference 0 strain radius - needed because we fit r as well as A, B, and C
-        A_ref       - reference radius ~0 strain (coef[10]). Default is none, and then will use median value
-        B_ref       - reference B value (coef[8]), from perhaps mean image
-        C_ref       - reference C value (coef[9]), from perhaps mean image
+        A_ref       - reference radius ~0 strain (coef[10]). Default is none, and then will use 1
+        B_ref       - reference B value (coef[8]), default is 0
+        C_ref       - reference C value (coef[9]), default is 1
     Returns:
         exx         - strain in the major axis direction
         eyy         - strain in the minor axis direction
@@ -89,8 +89,8 @@ def calculate_coef_strain(coef_cube, r_ref, A_ref=None, B_ref=None, C_ref=None):
     C = coef_cube[:, :, 11] / r_ratio
 
     exx = 1 / 2 * (A - (A_ref))
-    eyy = 1 / 2 * (C - (C_ref))  # TODO - make sure this is ok to do
-    exy = 1 / 2 * (B - (B_ref))  # TODO - make sure this is ok to do
+    eyy = 1 / 2 * (C - (C_ref))
+    exy = 1 / 2 * (B - (B_ref))
 
     return exx, eyy, exy
 
@@ -165,23 +165,6 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
 
     cbar_ax = f.add_axes([0.125, 0.25, 0.775, 0.05])
     f.colorbar(im, cax=cbar_ax, orientation="horizontal")
-
-    return
-
-
-def compare_coef_cube(dp, coefs, mask=None, power=0.3):
-    """
-    This function will compare the fit to individual diffraction patterns. It is essentially a helper function to quickly build the right object.
-
-    Accepts:
-        dp      - a 2D diffraction pattern
-        coefs   - coefs from coef_cube, corresponding to the diffraction pattern
-        power   - the power to which the comparison is taken
-    Returns:
-        None
-    """
-    # dp = polar_elliptical_transform(dp, mask=mask)
-    # dp.compare_coefs_two_sided_gaussian(coefs, power=power)
 
     return
 
