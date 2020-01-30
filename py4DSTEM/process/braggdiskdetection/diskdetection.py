@@ -12,6 +12,7 @@ from time import time
 
 from ...file.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
+from ..utils import tqdmnd
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -323,26 +324,22 @@ def find_Bragg_disks_serial(datacube, probe,
 
     # Loop over all diffraction patterns
     t0 = time()
-    for Rx in range(datacube.R_Nx):
-        for Ry in range(datacube.R_Ny):
-            if verbose:
-                print_progress_bar(Rx*datacube.R_Ny+Ry+1, datacube.R_Nx*datacube.R_Ny,
-                                   prefix='Analyzing:', suffix='Complete', length=50)
-            if _qt_progress_bar is not None:
-                _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
-                QApplication.processEvents()
-            DP = datacube.data[Rx,Ry,:,:]
-            find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                          corrPower = corrPower,
-                                          sigma = sigma,
-                                          edgeBoundary = edgeBoundary,
-                                          minRelativeIntensity = minRelativeIntensity,
-                                          relativeToPeak = relativeToPeak,
-                                          minPeakSpacing = minPeakSpacing,
-                                          maxNumPeaks = maxNumPeaks,
-                                          subpixel = subpixel,
-                                          upsample_factor = upsample_factor,
-                                          peaks = peaks.get_pointlist(Rx,Ry))
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+        if _qt_progress_bar is not None:
+            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+            QApplication.processEvents()
+        DP = datacube.data[Rx,Ry,:,:]
+        find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+                                      corrPower = corrPower,
+                                      sigma = sigma,
+                                      edgeBoundary = edgeBoundary,
+                                      minRelativeIntensity = minRelativeIntensity,
+                                      relativeToPeak = relativeToPeak,
+                                      minPeakSpacing = minPeakSpacing,
+                                      maxNumPeaks = maxNumPeaks,
+                                      subpixel = subpixel,
+                                      upsample_factor = upsample_factor,
+                                      peaks = peaks.get_pointlist(Rx,Ry))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
                                                                    int(t/60), int(t%60)))
@@ -539,35 +536,34 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
         maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
     """
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
-    for Rx in range(pointlistarray.shape[0]):
-        for Ry in range(pointlistarray.shape[1]):
-            pointlist = pointlistarray.get_pointlist(Rx,Ry)
-            pointlist.sort(coordinate='intensity', order='descending')
+    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+        pointlist = pointlistarray.get_pointlist(Rx,Ry)
+        pointlist.sort(coordinate='intensity', order='descending')
 
-            # Remove peaks below minRelativeIntensity threshold
-            if minRelativeIntensity is not False:
-                deletemask = pointlist.data['intensity']/pointlist.data['intensity'][relativeToPeak] < \
-                                                                               minRelativeIntensity
-                pointlist.remove_points(deletemask)
+        # Remove peaks below minRelativeIntensity threshold
+        if minRelativeIntensity is not False:
+            deletemask = pointlist.data['intensity']/pointlist.data['intensity'][relativeToPeak] < \
+                                                                           minRelativeIntensity
+            pointlist.remove_points(deletemask)
 
-            # Remove peaks that are too close together
-            if maxNumPeaks is not False:
-                r2 = minPeakSpacing**2
+        # Remove peaks that are too close together
+        if maxNumPeaks is not False:
+            r2 = minPeakSpacing**2
+            deletemask = np.zeros(pointlist.length, dtype=bool)
+            for i in range(pointlist.length):
+                if deletemask[i] == False:
+                    tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
+                                 (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
+                    tooClose[:i+1] = False
+                    deletemask[tooClose] = True
+            pointlist.remove_points(deletemask)
+
+        # Keep only up to maxNumPeaks
+        if maxNumPeaks is not False:
+            if maxNumPeaks < pointlist.length:
                 deletemask = np.zeros(pointlist.length, dtype=bool)
-                for i in range(pointlist.length):
-                    if deletemask[i] == False:
-                        tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
-                                     (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
-                        tooClose[:i+1] = False
-                        deletemask[tooClose] = True
+                deletemask[maxNumPeaks:] = True
                 pointlist.remove_points(deletemask)
-
-            # Keep only up to maxNumPeaks
-            if maxNumPeaks is not False:
-                if maxNumPeaks < pointlist.length:
-                    deletemask = np.zeros(pointlist.length, dtype=bool)
-                    deletemask[maxNumPeaks:] = True
-                    pointlist.remove_points(deletemask)
 
     return pointlistarray
 

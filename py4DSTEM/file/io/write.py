@@ -7,15 +7,16 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists
 from hyperspy.misc.utils import DictionaryTreeBrowser
-from ..datastructure import DataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray
-from ..datastructure import MetadataCollection, Metadata, DataObject
+from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
+from ..datastructure import MetadataCollection, Metadata, DataObject, PointList
+from ..datastructure import PointListArray
+from ...process.utils import tqdmnd
 
 from ..log import log, Logger
 logger = Logger()
 
-#@log
-def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False):
+@log
+def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
 
@@ -30,9 +31,21 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
         if overwrite is False:
             raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(outputfile))
 
+    # Handle keyword arguments
+    use_compression = kwargs.get('compression',False)
+
     ##### Make .h5 file #####
     print("Creating file {}...".format(outputfile))
-    f = h5py.File(outputfile,"w")
+    try:
+        f = h5py.File(outputfile,"w")
+    except OSError as e:
+        print(e)
+        print('The file appears to be open elsewhere...')
+        print('This can occur if your datacube was read from a py4DSTEM h5 file.')
+        print(f'To forse close the file, losing any dataobjects open from it, run: py4DSTEM.file.io.close_h5_at_path(\'{outputfile}\')')
+        print('To force close all h5 files run: py4DSTEM.file.io.close_all_h5()')
+        return -1
+
     if topgroup is None:
         group_toplevel = f.create_group("4DSTEM_experiment")
     else:
@@ -40,7 +53,7 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
         group_toplevel = f.create_group(topgroup)
     group_toplevel.attrs.create("emd_group_type",2)
     group_toplevel.attrs.create("version_major",0)
-    group_toplevel.attrs.create("version_minor",6)
+    group_toplevel.attrs.create("version_minor",7)
 
     ##### Metadata #####
 
@@ -65,11 +78,12 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
     # Write data groups
     group_data = group_toplevel.create_group("data")
     group_datacubes = group_data.create_group("datacubes")
+    group_counted = group_data.create_group("counted_datacubes")
     group_diffractionslices = group_data.create_group("diffractionslices")
     group_realslices = group_data.create_group("realslices")
     group_pointlists = group_data.create_group("pointlists")
     group_pointlistarrays = group_data.create_group("pointlistarrays")
-    ind_dcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0
+    ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
 
     # Loop through and save all objects in the dataobjectlist
     for dataobject in dataobject_list:
@@ -84,7 +98,18 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
                 N = sum([name in string for string in list(group_datacubes.keys())])
                 name = name+"_"+str(N)
                 group_new_datacube = group_datacubes.create_group(name)
-            save_datacube_group(group_new_datacube, dataobject)
+            save_datacube_group(group_new_datacube, dataobject, use_compression)
+        elif isinstance(dataobject,CountedDataCube):
+            if name == '':
+                name = 'counted_datacube_'+str(ind_dcs)
+                ind_cdcs += 1
+            try:
+                group_new_counted = group_counted.create_group(name)
+            except ValueError:
+                N = sum([name in string for string in list(group_counted.keys())])
+                name = name+"_"+str(N)
+                group_new_counted = group_counted.create_group(name)
+            save_counted_datacube_group(group_new_counted, dataobject)
         elif isinstance(dataobject, DiffractionSlice):
             if name == '':
                 name = 'diffractionslice_'+str(ind_dfs)
@@ -135,12 +160,12 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Log #####
-    #group_log = group_toplevel.create_group("log")
-    #for index in range(logger.log_index):
-    #    write_log_item(group_log, index, logger.logged_items[index])
+    group_log = group_toplevel.create_group("log")
+    for index in range(logger.log_index):
+        write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Finish and close #####
-    print("Done.")
+    print("Done.",flush=True)
     f.close()
 
 #@log
@@ -200,7 +225,7 @@ def save(data, outputfile, **kwargs):
 
 #### Functions for writing dataobjects to .h5 ####
 
-def save_datacube_group(group, datacube):
+def save_datacube_group(group, datacube, use_compression=False):
     group.attrs.create("emd_group_type",1)
     if datacube.metadata is not None:
         group.attrs.create("metadata",datacube.metadata._ind)
@@ -208,8 +233,12 @@ def save_datacube_group(group, datacube):
         group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
-    if isinstance(datacube.data,np.ndarray):
-        data_datacube = group.create_dataset("data", data=datacube.data)
+    if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
+        if use_compression:
+            data_datacube = group.create_dataset("data", data=datacube.data,
+                chunks=(1,1,datacube.Q_Nx,datacube.Q_Ny),compression='gzip')
+        else:
+            data_datacube = group.create_dataset("data", data=datacube.data)
     else:
         # handle K2DataArray datacubes
         data_datacube = datacube.data._write_to_hdf5(group)
@@ -237,6 +266,67 @@ def save_datacube_group(group, datacube):
     data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
     # TODO: Calibrate axes, if calibrations are present
+
+
+def save_counted_datacube_group(group,datacube):
+    if datacube.data._mmap:
+        # memory mapped CDC's aren't supported yet
+        print('Data not written. Memory mapped CountedDataCube not yet supported.')
+        return
+
+    group.attrs.create("emd_group_type",1)
+    if datacube.metadata is not None:
+        group.attrs.create("metadata",datacube.metadata._ind)
+    else:
+        group.attrs.create("metadata",-1)
+
+    pointlistarray = datacube.electrons
+    try:
+        n_coords = len(pointlistarray.dtype.names)
+    except:
+        n_coords = 1
+    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
+    group.attrs.create("coordinates", np.string_(str(pointlistarray.dtype)))
+    group.attrs.create("dimensions", n_coords)
+
+    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
+    name = "data"
+    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
+
+    print('Writing CountedDataCube:',flush=True)
+
+    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+        dset[i,j] = pointlistarray.get_pointlist(i,j).data
+
+    # indexing coordinates:
+    dt = h5py.special_dtype(vlen=str)
+    data_coords = group.create_dataset('index_coords',shape=(datacube.data._mode,),dtype=dt)
+    if datacube.data._mode == 1:
+        data_coords[0] = datacube.data.index_key
+    else:
+        data_coords[0] = datacube.data.index_key.ravel()[0]
+        data_coords[1] = datacube.data.index_key.ravel()[1]
+
+    # Dimensions
+    R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.data.shape
+    data_R_Nx = group.create_dataset("dim1",(R_Nx,))
+    data_R_Ny = group.create_dataset("dim2",(R_Ny,))
+    data_Q_Nx = group.create_dataset("dim3",(Q_Nx,))
+    data_Q_Ny = group.create_dataset("dim4",(Q_Ny,))
+
+    # Populate uncalibrated dimensional axes
+    data_R_Nx[...] = np.arange(0,R_Nx)
+    data_R_Nx.attrs.create("name",np.string_("R_x"))
+    data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
+    data_Q_Nx[...] = np.arange(0,Q_Nx)
+    data_Q_Nx.attrs.create("name",np.string_("Q_x"))
+    data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+    data_Q_Ny[...] = np.arange(0,Q_Ny)
+    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
 def save_diffraction_group(group, diffractionslice):
     if diffractionslice.metadata is not None:
@@ -323,15 +413,20 @@ def save_pointlistarray_group(group, pointlistarray):
     else:
         group.attrs.create("metadata",-1)
 
-    n_coords = len(pointlistarray.dtype.names)
-    coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("coordinates", coords)
+    try:
+        n_coords = len(pointlistarray.dtype.names)
+    except:
+        n_coords = 1
+    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
+    group.attrs.create("coordinates", np.string_(str(pointlistarray.dtype)))
     group.attrs.create("dimensions", n_coords)
 
-    for i in range(pointlistarray.shape[0]):
-        for j in range(pointlistarray.shape[1]):
-            group_current_arrayposition = group.create_group("{}_{}".format(i,j))
-            save_pointlist_group(group_current_arrayposition, pointlistarray.get_pointlist(i,j))
+    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
+    name = "data"
+    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
+
+    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+        dset[i,j] = pointlistarray.get_pointlist(i,j).data
 
 
 
@@ -449,6 +544,39 @@ def is_metadata_dict(key):
     else:
         return False
 
+def close_all_h5():
+    n = 0
+    import gc
+    for obj in gc.get_objects():
+        try:
+            t = type(obj)
+            if t is h5py.Dataset:
+                try:
+                    obj.file.close()
+                    n += 1
+                except:
+                    pass
+        except:
+            pass
+    print(f'Closed {n} files.')
+
+def close_h5_at_path(fpath):
+    import gc, os
+    n=0
+    for obj in gc.get_objects():
+        try:
+            t = type(obj)
+            if t is h5py.File:
+                try:
+                    pth = obj.filename
+                    if os.path.normpath(pth) == os.path.normpath(fpath):
+                        obj.close()
+                        n += 1
+                        print(pth)
+                except:
+                    pass
+        except:
+            pass
 
 #### Logging functions ####
 
