@@ -357,6 +357,58 @@ def double_sided_gaussian(p, x, y):
 
 
 
+def radial_integral(ar,x0,y0,dr):
+    """
+    Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
+
+    Accepts:
+        ar              (2d array) the data
+        x0,y0           (floats) the origin
+
+    Returns:
+        radial_integral (1d array) the radial integral
+        rbin_centers    (1d array) the bins centers of the radial integral
+    """
+    rmax = int(max((np.hypot(x0,y0),
+                    np.hypot(x0,ar.shape[1]-y0),
+                    np.hypot(ar.shape[0]-x0,y0),
+                    np.hypot(ar.shape[0]-x0,ar.shape[1]-y0))))
+    polarAr,rr,tt = cartesianDataAr_to_polarEllipticalDataAr(ar,
+                                                             params=(x0,y0,1,1,0),
+                                                             dr=dr,
+                                                             dtheta=np.radians(2),
+                                                             r_range=rmax)
+    radial_integral = np.sum(polarAr,axis=0)
+    rbin_centers = rr[0,:]
+    return radial_integral, rbin_centers
+
+def radial_elliptical_integral(ar,dr,ellipse_params):
+    """
+    Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
+
+    Accepts:
+        ar              (2d array) the data
+        dr              (number) the r sampling
+        ellipse_params  (5-tuple) the parameters (x0,y0,A,B,phi) for the ellipse
+
+    Returns:
+        radial_integral (1d array) the radial integral
+        rbin_centers    (1d array) the bins centers of the radial integral
+    """
+    x0,y0 = ellipse_params[0],ellipse_params[1]
+    rmax = int(max((np.hypot(x0,y0),
+                    np.hypot(x0,ar.shape[1]-y0),
+                    np.hypot(ar.shape[0]-x0,y0),
+                    np.hypot(ar.shape[0]-x0,ar.shape[1]-y0))))
+    polarAr,rr,tt = cartesianDataAr_to_polarEllipticalDataAr(ar,
+                                                             params=ellipse_params,
+                                                             dr=dr,
+                                                             dtheta=np.radians(2),
+                                                             r_range=rmax)
+    radial_integral = np.sum(polarAr,axis=0)
+    rbin_centers = rr[0,:]
+    return radial_integral, rbin_centers
+
 
 
 
