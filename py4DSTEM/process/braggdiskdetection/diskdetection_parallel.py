@@ -71,6 +71,15 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
+                             to each diffraction pattern before peakfinding. must be a function of only
+                             one argument (the diffraction pattern).
+                             This is useful for doing noise reduction or binning on the fly for memory mapped
+                             datasets or for parallel operation. The shape of the returned DP must match the shape
+                             of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -226,6 +235,15 @@ def find_Bragg_disks_ipp(DP, probe,
                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor           (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
+                             to each diffraction pattern before peakfinding. must be a function of only
+                             one argument (the diffraction pattern).
+                             This is useful for doing noise reduction or binning on the fly for memory mapped
+                             datasets or for parallel operation. The shape of the returned DP must match the shape
+                             of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         ipyparallel_client_file   (str) absolute path to ipyparallel client JSON file for connecting to a cluster
         data_file                 (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path              (str) working directory for cluster processing, defaults to current directory
@@ -386,6 +404,15 @@ def find_Bragg_disks_dask(DP, probe,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
+                             to each diffraction pattern before peakfinding. must be a function of only
+                             one argument (the diffraction pattern).
+                             This is useful for doing noise reduction or binning on the fly for memory mapped
+                             datasets or for parallel operation. The shape of the returned DP must match the shape
+                             of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         dask_client          (obj) dask client for connecting to a cluster
         data_file             (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path         (str) working directory for cluster processing, defaults to current directory
@@ -426,7 +453,7 @@ def find_Bragg_disks_dask(DP, probe,
         subpixel,
         upsample_factor,
         filter_function
-        ]
+    ]
 
     if cluster_path is None:
         cluster_path = os.getcwd()
