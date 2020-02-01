@@ -1,11 +1,11 @@
 # Defines utility functions used by other functions in the /process/ directory.
-from numpy.fft import fftfreq, fftshift
+
 import numpy as np
+from numpy.fft import fftfreq, fftshift
 from scipy.ndimage.filters import gaussian_filter
 from scipy.spatial import Voronoi
 import math as ma
 import matplotlib.pyplot as plt
-import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
@@ -388,36 +388,6 @@ def add_to_2D_array_from_floats(ar, x, y, I):
         ar[x1, y0] += dx * (1 - dy) * I
         ar[x1, y1] += dx * dy * I
     return ar
-
-
-def radial_integral(ar, x0, y0):
-    """
-    Computes the radial integral of array ar from center x0,y0.
-
-    Based on efficient radial profile code found at www.astrobetter.com/wiki/python_radial_profiles,
-    with credit to Jessica R. Lu, Adam Ginsburg, and Ian J. Crossfield.
-    """
-    y, x = np.meshgrid(np.arange(ar.shape[1]), np.arange(ar.shape[0]))
-    r = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
-
-    # Get sorted radii and ar values
-    ind = np.argsort(r.flat)
-    r_sorted = r.flat[ind]
-    vals_sorted = ar.flat[ind]
-
-    # Cast to int (i.e. set binsize = 1)
-    r_int = r_sorted.astype(int)
-
-    # Find all pixels within each radial bin
-    delta_r = r_int[1:] - r_int[:-1]
-    rind = np.where(delta_r)[0]  # Gives nonzero elements of delta_r, i.e. where radius changes
-    nr = rind[1:] - rind[:-1]  # Number of pixels represented in each bin
-
-    # Cumulative sum in each radius bin
-    cs_vals = np.cumsum(vals_sorted, dtype=float)
-    bin_sum = cs_vals[rind[1:]] - cs_vals[rind[:-1]]
-
-    return bin_sum / nr, bin_sum, nr, rind
 
 
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1,

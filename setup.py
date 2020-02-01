@@ -19,6 +19,7 @@ setup(name='py4DSTEM',
         'pyqtgraph >= 0.10, < 0.11',
         'qtconsole >= 4.4, < 4.5',
         'ncempy >= 1.4.2',
+        'tqdm',
         'ipywidgets',
         'scikit-learn'
         ],
@@ -28,4 +29,5 @@ setup(name='py4DSTEM',
         },
     entry_points= {
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
-    })
+    },
+    package_data = {'py4DSTEM':['process/utils/scatteringFactors.txt']})
