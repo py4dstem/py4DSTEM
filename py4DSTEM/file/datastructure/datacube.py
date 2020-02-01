@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import dask as da
 import numba as nb
 import h5py
 
@@ -257,6 +256,7 @@ class CountedDataCube(DataObject):
         self.detector_shape = detector_shape
 
         if use_dask:
+            import dask.array as da
             sa = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
             self.data = da.from_array(sa,chunks=(1,1,detector_shape[0],detector_shape[1]))
         else:
@@ -271,11 +271,11 @@ class CountedDataCube(DataObject):
 
     def bin_data_diffraction(self, bin_factor):
         # bin the underlying data (keeping in sparse storage)
-        pass
+        raise NotImplementedError("Binning only supported by densify().")
 
     def bin_data_real(self, bin_factor):
         # bin the underlying data (keeping sparse storage)
-        pass
+        raise NotImplementedError("Binning only supported by densify().")
 
     def densify(self,bin_R=1, bin_Q=1, memmap=False, dtype=np.uint16):
         """
@@ -300,7 +300,8 @@ class CountedDataCube(DataObject):
             rx = Rx // bin_R
             ry = Ry // bin_R
 
-            data4D[rx,ry,:,:] += bin2D(self.data[Rx,Ry,:,:],bin_Q,dtype=dtype)
+            DP = self.data[Rx,Ry,:,:]
+            data4D[rx,ry,:,:] += DP if bin_Q == 1 else bin2D(DP,bin_Q,dtype=dtype)
 
         return DataCube(data4D,name=self.name)
 

@@ -754,7 +754,7 @@ class FileBrowser(object):
         If dataobject is an int, finds the DataObject corresponding to the .h5 data pointed to
         by this index.
         If dataobject is a string, finds the DataObject with a matching name in the .h5 file.
-        If the file is EMD v0.7 or greater, you can specify memory_map=True to
+        If the file is EMD v0.4 or greater, you can specify memory_map=True to
         return a memory map for DataCube and CountedDataCube objects.
         """
         assert(isinstance(dataobject,(int,np.integer,str))), "dataobject must be int or str"
@@ -763,11 +763,11 @@ class FileBrowser(object):
         if self.version==(0,7):
             return self.get_dataobject_v0_7(dataobject, **kwargs)
         if self.version==(0,6):
-            return self.get_dataobject_v0_6(dataobject)
+            return self.get_dataobject_v0_6(dataobject, **kwargs)
         elif self.version==(0,5):
-            return self.get_dataobject_v0_5(dataobject)
+            return self.get_dataobject_v0_5(dataobject, **kwargs)
         elif self.version==(0,4):
-            return self.get_dataobject_v0_4(dataobject)
+            return self.get_dataobject_v0_4(dataobject, **kwargs)
         elif self.version==(0,3):
             return self.get_dataobject_v0_3(dataobject)
         elif self.version==(0,2):
@@ -797,7 +797,7 @@ class FileBrowser(object):
         name = info['name']
         metadata_index = info['metadata']
 
-        mmap = kwargs.get('memory_map',False)
+        mmap = kwargs.get('memory_map', False)
 
         if metadata_index == -1:
             metadata = None
@@ -899,7 +899,7 @@ class FileBrowser(object):
         dataobject.metadata = metadata
         return dataobject
 
-    def get_dataobject_v0_6(self, index):
+    def get_dataobject_v0_6(self, index, **kwargs):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
@@ -907,6 +907,8 @@ class FileBrowser(object):
         info = self.get_dataobject_info(index)
         name = info['name']
         metadata_index = info['metadata']
+
+        mmap = kwargs.get('memory_map', False)
 
         if metadata_index == -1:
             metadata = None
@@ -918,7 +920,11 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = self.file[self.topgroup + 'data/datacubes'][name]['data']
+            if mmap:
+                data = self.file[self.topgroup + 'data/datacubes'][name]['data']
+            else:
+                # TODO: preallocate array and copy into it for better RAM usage
+                data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -987,7 +993,7 @@ class FileBrowser(object):
         dataobject.metadata = metadata
         return dataobject
 
-    def get_dataobject_v0_5(self, index):
+    def get_dataobject_v0_5(self, index, **kwargs):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
@@ -995,6 +1001,8 @@ class FileBrowser(object):
         info = self.get_dataobject_info(index)
         name = info['name']
         metadata_index = info['metadata']
+
+        mmap = kwargs.get('memory_map', False)
 
         if metadata_index == -1:
             metadata = None
@@ -1006,7 +1014,11 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = self.file[self.topgroup + 'data/datacubes'][name]['datacube']
+            if mmap:
+                data = self.file[self.topgroup + 'data/datacubes'][name]['datacube']
+            else:
+                # TODO: preallocate array and copy into it for better RAM usage
+                data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['datacube'])
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -1082,7 +1094,7 @@ class FileBrowser(object):
         dataobject.metadata = metadata
         return dataobject
 
-    def get_dataobject_v0_4(self, index):
+    def get_dataobject_v0_4(self, index, **kwargs):
         """
         Instantiates a DataObject corresponding to the .h5 data pointed to by index.
         """
@@ -1090,6 +1102,8 @@ class FileBrowser(object):
         info = self.get_dataobject_info(index)
         name = info['name']
         metadata_index = info['metadata']
+
+        mmap = kwargs.get('memory_map', False)
 
         if metadata_index == -1:
             metadata = None
@@ -1101,7 +1115,11 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube']
+            if mmap:
+                data = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube']
+            else:
+                # TODO: preallocate array and copy into it for better RAM usage
+                data = np.array(self.file['4DSTEM_experiment/data/datacubes'][name]['datacube'])
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -1183,7 +1201,7 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube']
+            data = np.array(self.file['4DSTEM_experiment/data/datacubes'][name]['datacube'])
             dataobject = DataCube(data=data, name=name)
 
         elif objecttype == 'DiffractionSlice':
@@ -1265,7 +1283,7 @@ class FileBrowser(object):
         if objecttype == 'RawDataCube':
             shape = info['shape']
             R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            data = self.file['4DSTEM_experiment/rawdatacube/datacube']
+            data = np.array(self.file['4DSTEM_experiment/rawdatacube/datacube'])
 
             dataobject = DataCube(data=data, name=name)
 

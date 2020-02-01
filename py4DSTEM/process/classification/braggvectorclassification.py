@@ -25,6 +25,8 @@ class BraggVectorClassification(object):
             Determine the initial classes. The approach here involves first segmenting diffraction
             space, using maxima of a Bragg vector map.
 
+        get_initial_classes_by_cooccurrence:
+
     Class refinement methods:
     Each of these methods creates a new set of candidate classes, *but does not yet overwrite the
     old classes*. This enables the new classes to be viewed and compared to the old classes before
