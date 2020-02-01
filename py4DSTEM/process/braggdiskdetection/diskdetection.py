@@ -73,10 +73,13 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         filter_function      (callable: lambda or partial function of one argument) filtering function to apply
                              to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
+                             one argument (the diffraction pattern).
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
                              of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -192,10 +195,13 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         filter_function      (callable: lambda or partial function of one argument) filtering function to apply
                              to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
+                             one argument (the diffraction pattern).
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
                              of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         return_cc            (bool) if True, return the cross correlation
 
     Returns:
@@ -262,10 +268,13 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         filter_function      (callable: lambda or partial function of one argument) filtering function to apply
                              to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
+                             one argument (the diffraction pattern).
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
                              of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         show                 (bool) If True, show a plot of the resulting Bragg disk positions
         show_image           (ndarray) Image to show the scan positions on
         show_scale           (int) Scaling factor for the Bragg disk markers
@@ -379,10 +388,13 @@ def find_Bragg_disks_serial(datacube, probe,
         verbose              (bool) if True, prints completion updates
         filter_function      (callable: lambda or partial function of one argument) filtering function to apply
                              to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
+                             one argument (the diffraction pattern).
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
                              of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
 
     Returns:
@@ -395,7 +407,7 @@ def find_Bragg_disks_serial(datacube, probe,
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
-    assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
+    assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match (filtered) DP shape'
 
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
@@ -469,13 +481,15 @@ def find_Bragg_disks(datacube, probe,
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         verbose              (bool) if True, prints completion updates for serial execution
-        filter_function      (callable: lambda or function of one argument) filtering function to apply
+        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
                              to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
+                             one argument (the diffraction pattern).
                              This is useful for doing noise reduction or binning on the fly for memory mapped
                              datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel. When using distributed mode, the function must contain
-                             all its own imports.
+                             of the probe kernel.
+                             When using Dask or IPyParallel, the function is pickled using dill, with recurse on.
+                             It is a good idea to test the pickling works correctly by either running a local
+                             cluster or dumping to a string and loading in a separate Python interpreter.
         _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
         distributed          (dict) contains information for parallelprocessing using an IPyParallel
                              or Dask distributed cluster.  Valid keys are:
