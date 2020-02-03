@@ -276,8 +276,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                              It is a good idea to test the pickling works correctly by either running a local
                              cluster or dumping to a string and loading in a separate Python interpreter.
         show                 (bool) If True, show a plot of the resulting Bragg disk positions
-        show_image           (ndarray) Image to show the scan positions on
-        show_scale           (int) Scaling factor for the Bragg disk markers
+        show_image           (ndarray) real-space image to show the scan positions on
+        show_scale           (int) Scaling factor for the Bragg disk markers. Set to zero for equal-size markers
         show_power           (float) Scaling power for showing the DPs
 
     Returns:
