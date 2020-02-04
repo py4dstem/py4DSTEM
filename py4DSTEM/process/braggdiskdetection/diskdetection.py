@@ -12,7 +12,7 @@ from time import time
 
 from ...file.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
-from ..utils import tqdmnd
+from ..utils import tqdmnd, plot_bragg_disks
 
 def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -313,36 +313,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
 
     # Visualization:
     if show:
-        import matplotlib.pyplot as plt
-        from cycler import cycler
-        gridsize = int(np.ceil(np.sqrt(len(Rx)+1)))
-        fig,ax = plt.subplots(int(np.ceil((len(Rx)+1)/gridsize)), gridsize,figsize=(12,12))
-
-        ax[0,0].matshow(show_image if show_image is not None else np.zeros((datacube.R_Nx,datacube.R_Ny)))
-
-        colors = cycler('color',['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
-              '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
-              '#bcbd22', '#17becf'])
-
-        _ = filter_function or (lambda x:x)
-
-        for i,clr in zip(range(len(Rx)),colors):
-            c = clr['color']
-            ax[0,0].scatter(Ry[i],Rx[i],color=c)
-
-            ax.ravel()[i+1].matshow(_(datacube.data[Rx[i],Ry[i]])**show_power)
-
-            if show_scale == 0:
-                ax.ravel()[i+1].scatter(peaks[i].data['qy'],peaks[i].data['qx'],color=c)
-            else:
-                ax.ravel()[i+1].scatter(peaks[i].data['qy'],peaks[i].data['qx'],color=c,
-                    s=show_scale*peaks[i].data['intensity']/np.max(peaks[i].data['intensity']))
-
-        for a in ax.ravel():
-            a.axis('off')
-
-        plt.show()
-
+        plot_bragg_disks(peaks, datacube, Rx, Ry, show_image, show_scale, show_power, filter_function)
 
     return tuple(peaks)
 

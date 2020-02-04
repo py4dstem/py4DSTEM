@@ -6,3 +6,4 @@ from .parameters import *
 from .aberrations import *
 from .tqdmnd import *
 from .ellipticalCoords import *
+from .visualization import *
