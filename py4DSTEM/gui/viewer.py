@@ -85,6 +85,14 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
 
+        if len(argv) > 1:
+            path = os.path.abspath(argv[1])
+            try:
+                self.settings.data_filename.val = path
+                self.load_file()
+            except Exception:
+                print("Tried to set file to {path} but something went wrong...")
+
 
     ###############################################
     ############ Widget setup methods #############
@@ -334,6 +342,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Set scan size maxima
         self.control_widget.spinBox_Nx.setMaximum(self.datacube.R_N)
         self.control_widget.spinBox_Ny.setMaximum(self.datacube.R_N)
+
+        self.main_window.setWindowTitle(fname)
 
         return
 
