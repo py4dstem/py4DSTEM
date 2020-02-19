@@ -38,8 +38,9 @@ def append_from_dataobject_list(dataobject_list, filepath):
     N_realslices = browser.N_realslices
     N_pointlists = browser.N_pointlists
     N_pointlistarrays = browser.N_pointlistarrays
-    if browser.version[1] >= 7:
-        N_counted = browser.N_counted
+    if browser.version[0] == 0:
+        if browser.version[1] >= 7:
+            N_counted = browser.N_counted
     browser.close()
 
     #### Open file for read/write ####
