@@ -34,11 +34,13 @@ def append_from_dataobject_list(dataobject_list, filepath):
         assert browser.version[1] >= 3, "appending to py4DSTEM files only supported in v0.3 and higher."
     N_dataobjects = browser.N_dataobjects
     N_datacubes = browser.N_datacubes
-    N_counted = browser.N_counted
     N_diffractionslices = browser.N_diffractionslices
     N_realslices = browser.N_realslices
     N_pointlists = browser.N_pointlists
     N_pointlistarrays = browser.N_pointlistarrays
+    if browser.version[0] == 0:
+        if browser.version[1] >= 7:
+            N_counted = browser.N_counted
     browser.close()
 
     #### Open file for read/write ####
@@ -56,11 +58,14 @@ def append_from_dataobject_list(dataobject_list, filepath):
     # Find data groups
     group_data = f[topgroup]['data']
     group_datacubes = f[topgroup]['data']['datacubes']
-    group_counted = f[topgroup]['data']['counted_datacubes']
     group_diffractionslices = f[topgroup]['data']['diffractionslices']
     group_realslices = f[topgroup]['data']['realslices']
     group_pointlists = f[topgroup]['data']['pointlists']
     group_pointlistarrays = f[topgroup]['data']['pointlistarrays']
+    try:
+        group_counted = f[topgroup]['data']['counted_datacubes']
+    except KeyError:
+        pass
 
     # Loop through and save all objects in the dataobjectlist
     for dataobject in dataobject_list:
