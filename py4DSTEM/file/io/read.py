@@ -112,7 +112,7 @@ def read(filename, load=None):
         browser = FileBrowser(filename)
         print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
         if load is None:
-            output = browser.get_dataobject(0,memory_map=True)
+            output = browser.get_dataobject(0, memory_map=False)
         elif load == 'all':
             output = browser.get_dataobjects('all')
         elif type(load) == str:

@@ -91,7 +91,7 @@ class DataViewer(QtWidgets.QMainWindow):
                 self.settings.data_filename.val = path
                 self.load_file()
             except Exception:
-                print("Tried to set file to {path} but something went wrong...")
+                print(f"Tried to set file to {path} but something went wrong...")
 
 
     ###############################################
