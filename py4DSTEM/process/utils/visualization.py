@@ -48,7 +48,7 @@ def plot_bragg_disks(peaks, datacube, Rx, Ry, image=None, scale=200, power=0.25,
         c = clr["color"]
         ax[0, 0].scatter(Ry[i], Rx[i], color=c)
 
-        ax.ravel()[i + 1].matshow(_(datacube.data[Rx[i], Ry[i]])**power)
+        ax.ravel()[i + 1].matshow(np.maximum(_(datacube.data[Rx[i], Ry[i]]),0) ** power)
 
         if scale == 0:
             ax.ravel()[i + 1].scatter(peaks[i].data['qy'], peaks[i].data['qx'], color=c)
