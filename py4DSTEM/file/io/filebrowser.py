@@ -24,7 +24,9 @@ class FileBrowser(object):
 
     def __init__(self, filepath, **kwargs):
         self.filepath = filepath
-        assert(is_py4DSTEM_file(self.filepath)), "FileBrowser can't read {}, because it isn't recognized as a py4DSTEM file."
+        assert is_py4DSTEM_file(
+            self.filepath
+        ), f"FileBrowser can't read {filepath}, because it isn't recognized as a py4DSTEM file."
         self.version = get_py4DSTEM_version(self.filepath)
         if version_is_greater_or_equal(self.version,(0,5)):
             # v0.5 is the first version to allow variable top level group names
