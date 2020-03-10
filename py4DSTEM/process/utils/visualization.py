@@ -44,8 +44,8 @@ def plot_bragg_disks(peaks, datacube, Rx, Ry, image=None, scale=200, power=0.25,
 
     _ = filter_function or (lambda x: x)
 
-    for i, clr in zip(range(len(Rx)), colors):
-        c = clr['color']
+    for i, clr in zip(range(len(Rx)), colors()):
+        c = clr["color"]
         ax[0, 0].scatter(Ry[i], Rx[i], color=c)
 
         ax.ravel()[i + 1].matshow(_(datacube.data[Rx[i], Ry[i]])**power)
@@ -53,8 +53,15 @@ def plot_bragg_disks(peaks, datacube, Rx, Ry, image=None, scale=200, power=0.25,
         if scale == 0:
             ax.ravel()[i + 1].scatter(peaks[i].data['qy'], peaks[i].data['qx'], color=c)
         else:
-            ax.ravel()[i + 1].scatter(peaks[i].data['qy'], peaks[i].data['qx'], color=c,
-                s=scale * peaks[i].data['intensity'] / np.max(peaks[i].data['intensity']))
+            ax.ravel()[i + 1].scatter(
+                peaks[i].data["qy"],
+                peaks[i].data["qx"],
+                facecolors='none',
+                edgecolors=c,
+                s=scale
+                * peaks[i].data["intensity"]
+                / np.max(peaks[i].data["intensity"]),
+            )
 
     for a in ax.ravel():
         a.axis('off')
