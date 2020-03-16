@@ -12,9 +12,9 @@ matplotlib.rcParams["figure.dpi"] = 100
 plt.ion()
 
 # flags to control which part of the script to run
-run_test = False
+run_test = True
 run_data = False
-analyze_data = True
+analyze_data = False
 # make ellipse
 """
 The parameters in p are
@@ -32,30 +32,45 @@ The parameters in p are
 """
 if run_test:
     yy, xx = np.meshgrid(np.arange(256), np.arange(256))
-    coef = [250, 200, 1, 2, 2, 5, 60, 127, 125, 1.0, 0, 1.0]
-
-    ring = double_sided_gaussian(coef, xx, yy)
-    plt.figure(1)
-    plt.clf()
-    plt.imshow(ring)
+    coef = [250, 200, 5, 4, 4, 5, 60, 127, 125, 1.1, 0, 1.0]
     I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, A, B, C = coef
     r2 = A * (xx - x0) ** 2 + B * (xx - x0) * (yy - y0) + C * (yy - y0) ** 2
 
-    mask = r2 ** 0.5 > 40
+    mask = np.logical_and(r2 ** 0.5 > 40, r2 ** 0.5 < 80)
+    # mask = np.ones_like(mask, dtype=bool)
 
-    coef_fit = [25, 200, 1, 0.2, 0.2, 2, 60, 128, 128, 1, 0, 1]
-    fit = fit_double_sided_gaussian(ring, coef_fit, mask=mask)
-    plt.figure(12)
+    ring = double_sided_gaussian(coef, xx, yy)
+
+    coef_fit = [250, 200, 1, 3, 3, 2, 60, 128, 128, 1.19, 0, 1]
+    # fit = fit_double_sided_gaussian(ring, coef_fit, mask=mask)
+
+    plt.figure(1)
     plt.clf()
+    plt.imshow(ring * mask)
+
+    plt.figure(12, clear=True)
     ring_fit = double_sided_gaussian(fit, xx, yy)
-    plt.imshow(ring_fit)
-    r_ratio = fit[6] ** 2 / coef[6] ** 2
-    print(
-        f"fitted parameters:\nI_center = {fit[0]:.2f}\nI_ring = {fit[1]:.2f}\nSTD_center = {fit[2]:.2f}\nSTD_inner = {fit[3]:.2f}\nSTD_outer = {fit[4]:.2f}\nBackground = {fit[5]:.2f}\nRadius = {fit[6]/r_ratio**.5:.2f}\nCenter = {fit[7]:.2f}, {fit[8]:.2f}\nA,B,C = {fit[9]/r_ratio:.2f}, {fit[10]/r_ratio:.2f}, {fit[11]/r_ratio:.2f}\n"
-    )
-    print(
-        f"input parameters:\nI_center = {coef[0]:.2f}\nI_ring = {coef[1]:.2f}\nSTD_center = {coef[2]:.2f}\nSTD_inner = {coef[3]:.2f}\nSTD_outer = {coef[4]:.2f}\nBackground = {coef[5]:.2f}\nRadius = {coef[6]:.2f}\nCenter = {coef[7]:.2f}, {coef[8]:.2f}\nA,B,C = {coef[9]:.2f}, {coef[10]:.2f}, {coef[11]:.2f}"
-    )
+    plt.imshow(ring_fit * mask)
+
+    # THIS RATIO IS REQUIRED TO MAKE A,B,C AND R LOOK EQUIVALENT TO THE INPUT
+    r_ratio = (fit[6] ** 2 / coef[6] ** 2)
+
+    ellipse_matrix = np.array([[fit[9], fit[10]/2], [fit[10]/2, fit[11]]])
+
+    print(f'\nold A,B,C = {coef[9]:.2f}, {coef[10]:.2f}, {coef[11]:.2f}')
+    print(f'fit A,B,C = {fit[9]/r_ratio:.2f}, {fit[10]/r_ratio:.2f}, {fit[11]/r_ratio:.2f}')
+
+    print(ellipse_matrix/r_ratio)
+    print('\n')
+    print(np.linalg.eig(ellipse_matrix/r_ratio))
+    
+
+    # print(
+    #     f"fitted parameters:\nI_center = {fit[0]:.2f}\nI_ring = {fit[1]:.2f}\nSTD_center = {fit[2]:.2f}\nSTD_inner = {fit[3]:.2f}\nSTD_outer = {fit[4]:.2f}\nBackground = {fit[5]:.2f}\nRadius = {fit[6]/r_ratio**.5:.2f}\nCenter = {fit[7]:.2f}, {fit[8]:.2f}\nA,B,C = {fit[9]/r_ratio:.2f}, {fit[10]/r_ratio:.2f}, {fit[11]/r_ratio:.2f}\n"
+    # )
+    # print(
+    #     f"input parameters:\nI_center = {coef[0]:.2f}\nI_ring = {coef[1]:.2f}\nSTD_center = {coef[2]:.2f}\nSTD_inner = {coef[3]:.2f}\nSTD_outer = {coef[4]:.2f}\nBackground = {coef[5]:.2f}\nRadius = {coef[6]:.2f}\nCenter = {coef[7]:.2f}, {coef[8]:.2f}\nA,B,C = {coef[9]:.2f}, {coef[10]:.2f}, {coef[11]:.2f}"
+    # )
 
 # Read the note in ellipticalCoords.py - the fit currently has a dependent variable, messing things up.
 # the data is binned by 4 and is now [162,285,112,120]
