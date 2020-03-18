@@ -17,9 +17,16 @@ import numpy as np
 from scipy.optimize import leastsq, least_squares
 import matplotlib.pyplot as plt
 
-def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
-                                             dr=1, dtheta=np.radians(2), r_range=512,
-                                             mask=None, maskThresh=0.99):
+
+def cartesianDataAr_to_polarEllipticalDataAr(
+    cartesianData,
+    params,
+    dr=1,
+    dtheta=np.radians(2),
+    r_range=512,
+    mask=None,
+    maskThresh=0.99,
+):
     """
     Transforms an array of data in cartesian coordinates into a data array in polar elliptical
     coordinates.
@@ -61,62 +68,67 @@ def cartesianDataAr_to_polarEllipticalDataAr(cartesianData, params,
     """
     if mask is None:
         mask = np.ones_like(cartesianData, dtype=bool)
-    assert cartesianData.shape == mask.shape, "Mask and cartesian data array shapes must match."
+    assert (
+        cartesianData.shape == mask.shape
+    ), "Mask and cartesian data array shapes must match."
     assert len(params) == 5, "params must have length 5"
     try:
-        r_min,r_max = r_range[0],r_range[1]
+        r_min, r_max = r_range[0], r_range[1]
     except TypeError:
-        r_min,r_max = 0,r_range
-    Nx,Ny = cartesianData.shape
+        r_min, r_max = 0, r_range
+    Nx, Ny = cartesianData.shape
 
     # Get params
-    qx0,qy0,A,B,phi = params
+    qx0, qy0, A, B, phi = params
 
     # Define the r/theta coords
-    r_bins = np.arange(r_min+dr/2., r_max+dr/2., dr)                # values are bin centers
-    t_bins = np.arange(-np.pi+dtheta/2., np.pi+dtheta/2., dtheta)
-    rr,tt = np.meshgrid(r_bins, t_bins)
-    Nr,Nt = rr.shape
+    r_bins = np.arange(r_min + dr / 2.0, r_max + dr / 2.0, dr)  # values are bin centers
+    t_bins = np.arange(-np.pi + dtheta / 2.0, np.pi + dtheta / 2.0, dtheta)
+    rr, tt = np.meshgrid(r_bins, t_bins)
+    Nr, Nt = rr.shape
 
     # Get (qx,qy) corresponding to each (r,theta) in the newly defined coords
     xr = rr * np.cos(tt)
     yr = rr * np.sin(tt)
-    qx = qx0 + xr*A*np.cos(phi) - yr*B*np.sin(phi)
-    qy = qy0 + xr*A*np.sin(phi) + yr*B*np.cos(phi)
+    qx = qx0 + xr * A * np.cos(phi) - yr * B * np.sin(phi)
+    qy = qy0 + xr * A * np.sin(phi) + yr * B * np.cos(phi)
 
     # qx,qy are now shape (Nr,Ntheta) arrays, such that (qx[r,theta],qy[r,theta]) is the point
     # in cartesian space corresponding to r,theta.  We now get the values for the final
     # polarEllipticalData array by interpolating values at these coords from the original
     # cartesianData array.
 
-    transform_mask = (qx>0)*(qy>0)*(qx<Nx-1)*(qy<Ny-1)
+    transform_mask = (qx > 0) * (qy > 0) * (qx < Nx - 1) * (qy < Ny - 1)
 
     # Bilinear interpolation
     xF = np.floor(qx[transform_mask])
     yF = np.floor(qy[transform_mask])
     dx = qx[transform_mask] - xF
     dy = qy[transform_mask] - yF
-    x_inds = np.vstack((xF,xF+1,xF  ,xF+1)).astype(int)
-    y_inds = np.vstack((yF,yF  ,yF+1,yF+1)).astype(int)
-    weights = np.vstack(((1-dx)*(1-dy),
-                         (  dx)*(1-dy),
-                         (1-dx)*(  dy),
-                         (  dx)*(  dy)))
+    x_inds = np.vstack((xF, xF + 1, xF, xF + 1)).astype(int)
+    y_inds = np.vstack((yF, yF, yF + 1, yF + 1)).astype(int)
+    weights = np.vstack(
+        ((1 - dx) * (1 - dy), (dx) * (1 - dy), (1 - dx) * (dy), (dx) * (dy))
+    )
     transform_mask = transform_mask.ravel()
-    polarEllipticalData = np.zeros(Nr*Nt)
-    polarEllipticalData[transform_mask] = np.sum(cartesianData[x_inds,y_inds]*weights,axis=0)
-    polarEllipticalData = np.reshape(polarEllipticalData, (Nr,Nt))
+    polarEllipticalData = np.zeros(Nr * Nt)
+    polarEllipticalData[transform_mask] = np.sum(
+        cartesianData[x_inds, y_inds] * weights, axis=0
+    )
+    polarEllipticalData = np.reshape(polarEllipticalData, (Nr, Nt))
 
     # Transform mask
-    polarEllipticalMask = np.zeros(Nr*Nt)
-    polarEllipticalMask[transform_mask] = np.sum(mask[x_inds,y_inds]*weights,axis=0)
-    polarEllipticalMask = np.reshape(polarEllipticalMask, (Nr,Nt))
+    polarEllipticalMask = np.zeros(Nr * Nt)
+    polarEllipticalMask[transform_mask] = np.sum(mask[x_inds, y_inds] * weights, axis=0)
+    polarEllipticalMask = np.reshape(polarEllipticalMask, (Nr, Nt))
 
-    polarEllipticalData = np.ma.array(data = polarEllipticalData,
-                                      mask = polarEllipticalMask < maskThresh)
+    polarEllipticalData = np.ma.array(
+        data=polarEllipticalData, mask=polarEllipticalMask < maskThresh
+    )
     return polarEllipticalData, rr, tt
 
-def convert_ellipse_params(A0,B0,C0):
+
+def convert_ellipse_params(A0, B0, C0):
     """
     Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
 
@@ -128,17 +140,20 @@ def convert_ellipse_params(A0,B0,C0):
         A,B         (floats) the semi-axis lengths
         phi         (float) the tilt of the ellipse semi-axes, in radians
     """
-    if A0==C0:
+    if A0 == C0:
         x = B0
-        phi = np.pi/4.*np.sign(B0)
+        phi = np.pi / 4.0 * np.sign(B0)
     else:
-        x = (A0-C0)*np.sqrt(1+(B0/(A0-C0))**2)
-        phi = 0.5*np.arctan(B0/(A0-C0))
-    A = np.sqrt(2/(A0+C0+x))
-    B = np.sqrt(2/(A0+C0-x))
-    return A,B,phi
+        x = (A0 - C0) * np.sqrt(1 + (B0 / (A0 - C0)) ** 2)
+        phi = 0.5 * np.arctan(B0 / (A0 - C0))
+    A = np.sqrt(2 / (A0 + C0 + x))
+    B = np.sqrt(2 / (A0 + C0 - x))
+    return A, B, phi
 
-def fit_ellipse_inside_annulus(ar, x0, y0, r_inner, r_outer, datamask=None, output=None):
+
+def fit_ellipse_inside_annulus(
+    ar, x0, y0, r_inner, r_outer, datamask=None, output=None
+):
     """
     Fits an ellipse to the data in an annular region of array ar, centered at (x0,y0) and with inner
     and outer radii of r_inner, r_outer, respectively.  Returns the ellipse parameters.
@@ -164,36 +179,37 @@ def fit_ellipse_inside_annulus(ar, x0, y0, r_inner, r_outer, datamask=None, outp
                         returns both of the parametrizations above, in the order written.
     """
     # Get the datapoints to fit
-    yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
-    rr = np.hypot(xx-x0,yy-y0)
-    mask = (rr>r_inner) * (rr<=r_outer)
+    yy, xx = np.meshgrid(np.arange(ar.shape[1]), np.arange(ar.shape[0]))
+    rr = np.hypot(xx - x0, yy - y0)
+    mask = (rr > r_inner) * (rr <= r_outer)
     if datamask is not None:
         mask *= datamask
-    xs,ys = np.nonzero(mask)
+    xs, ys = np.nonzero(mask)
     vals = ar[mask]
 
     # Get initial parameters guess
     p0_0 = x0
     p0_1 = y0
-    p0_2 = (2/(r_inner+r_outer))**2
+    p0_2 = (2 / (r_inner + r_outer)) ** 2
     p0_3 = 0
-    p0_4 = (2/(r_inner+r_outer))**2
-    p0 = (p0_0,p0_1,p0_2,p0_3,p0_4)
+    p0_4 = (2 / (r_inner + r_outer)) ** 2
+    p0 = (p0_0, p0_1, p0_2, p0_3, p0_4)
 
     # Fit
-    p2 = leastsq(ellipse_err, p0, args=(xs,ys,vals))[0]
+    p2 = leastsq(ellipse_err, p0, args=(xs, ys, vals))[0]
 
     # Convert between parametrizations
-    x,y,A0,B0,C0 = p2
-    A,B,phi = convert_ellipse_params(A0,B0,C0)
-    p1 = (x,y,A,B,phi)
+    x, y, A0, B0, C0 = p2
+    A, B, phi = convert_ellipse_params(A0, B0, C0)
+    p1 = (x, y, A, B, phi)
 
-    if output=='canonical':
+    if output == "canonical":
         return p2
-    elif output=='both':
-        return p1,p2
+    elif output == "both":
+        return p1, p2
     else:
         return p1
+
 
 def ellipse_err(p, x, y, val):
     """
@@ -201,8 +217,9 @@ def ellipse_err(p, x, y, val):
     given by parameters p.  p is a 5-tuple of the form (x,y,A0,B0,C0) specifying the ellipse
         A0*(x-x0)^2 + B0*(x-x0)*(y-y0) + C0*(y-y0)^2 = 1
     """
-    x,y = x-p[0],y-p[1]
-    return (p[2]*x**2 + p[3]*x*y + p[4]*y**2 - 1)*val
+    x, y = x - p[0], y - p[1]
+    return (p[2] * x ** 2 + p[3] * x * y + p[4] * y ** 2 - 1) * val
+
 
 def correct_braggpeak_elliptical_distortions(braggpeaks, p):
     """
@@ -218,24 +235,35 @@ def correct_braggpeak_elliptical_distortions(braggpeaks, p):
         braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
     """
     # Get the transformation matrix
-    x0,y0,A,B,phi = p
-    s = min(A,B)/max(A,B)   # scale the larger semiaxis down to the size of the smaller semiaxis
-    phi += np.pi/2.*(np.argmin([A,B])==0)   # if A was smaller, rotated phi by pi/2 to make A->B
-    sinp,cosp = np.sin(phi),np.cos(phi)
-    T = np.squeeze(np.array([[sinp**2 + s*cosp**2, sinp*cosp*(s-1)],
-                             [sinp*cosp*(s-1), s*sinp**2 + cosp**2]]))
+    x0, y0, A, B, phi = p
+    s = min(A, B) / max(
+        A, B
+    )  # scale the larger semiaxis down to the size of the smaller semiaxis
+    phi += (
+        np.pi / 2.0 * (np.argmin([A, B]) == 0)
+    )  # if A was smaller, rotated phi by pi/2 to make A->B
+    sinp, cosp = np.sin(phi), np.cos(phi)
+    T = np.squeeze(
+        np.array(
+            [
+                [sinp ** 2 + s * cosp ** 2, sinp * cosp * (s - 1)],
+                [sinp * cosp * (s - 1), s * sinp ** 2 + cosp ** 2],
+            ]
+        )
+    )
 
     # Correct distortions
-    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipsecorrected")
+    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name + "_ellipsecorrected")
     for Rx in range(braggpeaks_corrected.shape[0]):
         for Ry in range(braggpeaks_corrected.shape[1]):
-            pointlist = braggpeaks_corrected.get_pointlist(Rx,Ry)
-            x,y = pointlist.data['qx']-x0, pointlist.data['qy']-y0
-            xyar_i = np.vstack([x,y])
-            xyar_f = np.matmul(T,xyar_i)
-            pointlist.data['qx'] = xyar_f[0,:]+x0
-            pointlist.data['qy'] = xyar_f[1,:]+y0
+            pointlist = braggpeaks_corrected.get_pointlist(Rx, Ry)
+            x, y = pointlist.data["qx"] - x0, pointlist.data["qy"] - y0
+            xyar_i = np.vstack([x, y])
+            xyar_f = np.matmul(T, xyar_i)
+            pointlist.data["qx"] = xyar_f[0, :] + x0
+            pointlist.data["qy"] = xyar_f[1, :] + y0
     return braggpeaks_corrected
+
 
 def fit_double_sided_gaussian(data, p0, mask=None):
     """
@@ -286,19 +314,20 @@ def fit_double_sided_gaussian(data, p0, mask=None):
     """
     if mask is None:
         mask = np.ones_like(data).astype(bool)
-    assert data.shape == mask.shape, 'data and mask must have same shapes.'
-    assert len(p0)==11, 'Initial guess needs 11 parameters.'
+    assert data.shape == mask.shape, "data and mask must have same shapes."
+    assert len(p0) == 11, "Initial guess needs 11 parameters."
 
     # Make coordinates, get data values
-    x_inds,y_inds = np.nonzero(mask)
+    x_inds, y_inds = np.nonzero(mask)
     vals = data[mask]
 
     # make bounds - speed things up
     # upper_bounds = [np.inf, np.inf, 1000, 1000, 1000, np.inf, np.max(data.shape), np.max(data.shape), np.max(data.shape), np.inf, np.inf, np.inf]
     # lower_bounds = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     # Fit
-    p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds,y_inds,vals))[0]
+    p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds, y_inds, vals))[0]
     return p
+
 
 def compare_double_sided_gaussian(data, p, power=1, mask=None):
     """
@@ -307,17 +336,18 @@ def compare_double_sided_gaussian(data, p, power=1, mask=None):
     if mask is None:
         mask = np.ones_like(data)
 
-    yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
+    yy, xx = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
     data_fit = double_sided_gaussian(p, xx, yy)
 
     theta = np.arctan2(xx - p[7], yy - p[8])
     theta_mask = np.cos(theta * 8) > 0
     data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
     data_combined = mask * data_combined
-    plt.figure(12,clear=True)
+    plt.figure(12, clear=True)
     plt.imshow(data_combined)
 
     return
+
 
 def double_sided_gaussian_fiterr(p, x, y, val):
     """
@@ -325,25 +355,27 @@ def double_sided_gaussian_fiterr(p, x, y, val):
     """
     return double_sided_gaussian(p, x, y) - val
 
+
 # @np.errstate(invalid='ignore') # activate if supressing warnings
 def double_sided_gaussian(p, x, y):
     """
     Return the value of the double-sided gaussian function at point (x,y) given parameters p.
     """
-   
+
     # Unpack parameters
     I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
-    r2 =  1*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
+    r2 = 1 * (x - x0) ** 2 + B * (x - x0) * (y - y0) + C * (y - y0) ** 2
     r = np.sqrt(r2) - R
-    
-    return I0*np.exp(-r2/(2*sigma0**2)) + \
-           I1*np.exp(-r**2/(2*sigma1**2))*np.heaviside(-r,0.5) + \
-           I1*np.exp(-r**2/(2*sigma2**2))*np.heaviside(r,0.5) + c_bkgd
+
+    return (
+        I0 * np.exp(-r2 / (2 * sigma0 ** 2))
+        + I1 * np.exp(-r ** 2 / (2 * sigma1 ** 2)) * np.heaviside(-r, 0.5)
+        + I1 * np.exp(-r ** 2 / (2 * sigma2 ** 2)) * np.heaviside(r, 0.5)
+        + c_bkgd
+    )
 
 
-
-
-def radial_integral(ar,x0,y0,dr):
+def radial_integral(ar, x0, y0, dr):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
@@ -355,20 +387,25 @@ def radial_integral(ar,x0,y0,dr):
         radial_integral (1d array) the radial integral
         rbin_centers    (1d array) the bins centers of the radial integral
     """
-    rmax = int(max((np.hypot(x0,y0),
-                    np.hypot(x0,ar.shape[1]-y0),
-                    np.hypot(ar.shape[0]-x0,y0),
-                    np.hypot(ar.shape[0]-x0,ar.shape[1]-y0))))
-    polarAr,rr,tt = cartesianDataAr_to_polarEllipticalDataAr(ar,
-                                                             params=(x0,y0,1,1,0),
-                                                             dr=dr,
-                                                             dtheta=np.radians(2),
-                                                             r_range=rmax)
-    radial_integral = np.sum(polarAr,axis=0)
-    rbin_centers = rr[0,:]
+    rmax = int(
+        max(
+            (
+                np.hypot(x0, y0),
+                np.hypot(x0, ar.shape[1] - y0),
+                np.hypot(ar.shape[0] - x0, y0),
+                np.hypot(ar.shape[0] - x0, ar.shape[1] - y0),
+            )
+        )
+    )
+    polarAr, rr, tt = cartesianDataAr_to_polarEllipticalDataAr(
+        ar, params=(x0, y0, 1, 1, 0), dr=dr, dtheta=np.radians(2), r_range=rmax
+    )
+    radial_integral = np.sum(polarAr, axis=0)
+    rbin_centers = rr[0, :]
     return radial_integral, rbin_centers
 
-def radial_elliptical_integral(ar,dr,ellipse_params):
+
+def radial_elliptical_integral(ar, dr, ellipse_params):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
@@ -381,20 +418,20 @@ def radial_elliptical_integral(ar,dr,ellipse_params):
         radial_integral (1d array) the radial integral
         rbin_centers    (1d array) the bins centers of the radial integral
     """
-    x0,y0 = ellipse_params[0],ellipse_params[1]
-    rmax = int(max((np.hypot(x0,y0),
-                    np.hypot(x0,ar.shape[1]-y0),
-                    np.hypot(ar.shape[0]-x0,y0),
-                    np.hypot(ar.shape[0]-x0,ar.shape[1]-y0))))
-    polarAr,rr,tt = cartesianDataAr_to_polarEllipticalDataAr(ar,
-                                                             params=ellipse_params,
-                                                             dr=dr,
-                                                             dtheta=np.radians(2),
-                                                             r_range=rmax)
-    radial_integral = np.sum(polarAr,axis=0)
-    rbin_centers = rr[0,:]
+    x0, y0 = ellipse_params[0], ellipse_params[1]
+    rmax = int(
+        max(
+            (
+                np.hypot(x0, y0),
+                np.hypot(x0, ar.shape[1] - y0),
+                np.hypot(ar.shape[0] - x0, y0),
+                np.hypot(ar.shape[0] - x0, ar.shape[1] - y0),
+            )
+        )
+    )
+    polarAr, rr, tt = cartesianDataAr_to_polarEllipticalDataAr(
+        ar, params=ellipse_params, dr=dr, dtheta=np.radians(2), r_range=rmax
+    )
+    radial_integral = np.sum(polarAr, axis=0)
+    rbin_centers = rr[0, :]
     return radial_integral, rbin_centers
-
-
-
-
