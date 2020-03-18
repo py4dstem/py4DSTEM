@@ -40,7 +40,7 @@ def fit_stack(datacube, init_coefs, mask=None):
     return coefs_array
 
 
-def calculate_coef_strain(coef_cube, r_ref, A_ref=None, B_ref=None, C_ref=None):
+def calculate_coef_strain(coef_cube, r_ref):
     """
     This function will calculate the strains from a 3D matrix output by fit_stack
 
@@ -53,44 +53,42 @@ def calculate_coef_strain(coef_cube, r_ref, A_ref=None, B_ref=None, C_ref=None):
         c_bkgd      a constant offset
         R           center of the Janus gaussian
         x0,y0       the origin
-        A,B,C       Ax^2 + Bxy + Cy^2 = 1
+        B,C         1x^2 + Bxy + Cy^2 = 1
 
     Accepts:
         coef_cube   - output from fit_stack
-        r_ref       - a reference 0 strain radius - needed because we fit r as well as A, B, and C
-        A_ref       - reference radius ~0 strain (coef[10]). Default is none, and then will use 1
-        B_ref       - reference B value (coef[8]), default is 0
-        C_ref       - reference C value (coef[9]), default is 1
+        r_ref       - a reference 0 strain radius - needed because we fit r as well as B and C
     Returns:
-        exx         - strain in the major axis direction
-        eyy         - strain in the minor axis direction
+        exx         - strain in the x axis direction in image coordinates
+        eyy         - strain in the y axis direction in image coordinates
         exy         - shear
 
     """
     R = coef_cube[:, :, 6]
     r_ratio = (
-        R ** 2 / r_ref ** 2
+        R / r_ref
     )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
-    if A_ref is None:
-        A_ref = 1
-    else:
-        A_ref = A_ref / r_ratio
-    if C_ref is None:
-        C_ref = 1
-    else:
-        C_ref = C_ref / r_ratio
-    if B_ref is None:
-        B_ref = 0
-    else:
-        B_ref = B_ref / r_ratio
 
-    A = coef_cube[:, :, 9] / r_ratio
-    B = coef_cube[:, :, 10] / r_ratio
-    C = coef_cube[:, :, 11] / r_ratio
+    A = 1 / r_ratio ** 2
+    B = coef_cube[:, :, 9] / r_ratio ** 2
+    C = coef_cube[:, :, 10] / r_ratio ** 2
 
-    exx = 1 / 2 * (A - (A_ref))
-    eyy = 1 / 2 * (C - (C_ref))
-    exy = 1 / 2 * (B - (B_ref))
+    exx, eyy, exy = np.empty_like(A), np.empty_like(C), np.empty_like(B)
+
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            m_ellipse = np.asarray([[A[i, j], B[i, j] / 2], [B[i, j] / 2, C[i, j]]])
+            e_vals, e_vecs = np.linalg.eig(m_ellipse)
+            ang = np.arctan2(e_vecs[1, 0], e_vecs[0, 0])
+            rot_matrix = np.asarray(
+                [[np.cos(ang), -np.sin(ang)], [np.sin(ang), np.cos(ang)]]
+            )
+            transformation_matrix = np.diag(np.sqrt(e_vals))
+            transformation_matrix = rot_matrix @ transformation_matrix @ rot_matrix.T
+
+            exx[i, j] = transformation_matrix[0, 0] - 1
+            eyy[i, j] = transformation_matrix[1, 1] - 1
+            exy[i, j] = transformation_matrix[0, 1] + transformation_matrix[1, 0]
 
     return exx, eyy, exy
 
@@ -121,8 +119,7 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
     for i in strains:
         i[mask] = np.nan
 
-    plt.figure(88, figsize=(9, 5.8))
-    plt.clf()
+    plt.figure(88, figsize=(9, 5.8), clear=True)
     f, (ax1, ax2, ax3) = plt.subplots(1, 3, num=88)
     ax1.imshow(strains[0], cmap=cmap, vmin=vmin, vmax=vmax)
     ax1.tick_params(
@@ -135,7 +132,7 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
         labelbottom=False,
         labelleft=False,
     )
-    ax1.set_title(r"$\epsilon_{AA}$")
+    ax1.set_title(r"$\epsilon_{xx}$")
 
     ax2.imshow(strains[1], cmap=cmap, vmin=vmin, vmax=vmax)
     ax2.tick_params(
@@ -148,7 +145,7 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
         labelbottom=False,
         labelleft=False,
     )
-    ax2.set_title(r"$\epsilon_{CC}$")
+    ax2.set_title(r"$\epsilon_{yy}$")
 
     im = ax3.imshow(strains[2], cmap=cmap, vmin=vmin, vmax=vmax)
     ax3.tick_params(
@@ -161,7 +158,7 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
         labelbottom=False,
         labelleft=False,
     )
-    ax3.set_title(r"$\epsilon_{B}$")
+    ax3.set_title(r"$\epsilon_{xy}$")
 
     cbar_ax = f.add_axes([0.125, 0.25, 0.775, 0.05])
     f.colorbar(im, cax=cbar_ax, orientation="horizontal")

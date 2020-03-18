@@ -243,13 +243,13 @@ def fit_double_sided_gaussian(data, p0, mask=None):
 
     The fit function is
 
-        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgrd,R,x0,y0,A,B,C) =
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgrd,R,x0,y0,B,C) =
             Norm(r; I0,sigma0,0) +
             Norm(r; I1,sigma1,R)*Theta(r-R)
             Norm(r; I1,sigma2,R)*Theta(R-r) + offset
 
     where (x,y) are coordinates and
-    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C) are parameters.
+    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters.
 
     The function contains a pair of gaussian-shaped peaks along the radial direction of
     a polar-elliptical parametrization of a 2D plane.
@@ -274,7 +274,7 @@ def fit_double_sided_gaussian(data, p0, mask=None):
         c_bkgd      a constant offset
         R           center of the Janus gaussian
         x0,y0       the origin
-        A,B,C       Ax^2 + Bxy + Cy^2 = 1
+        B,C         1x^2 + Bxy + Cy^2 = 1
 
     Accepts:
         data        (2d array)
@@ -287,7 +287,7 @@ def fit_double_sided_gaussian(data, p0, mask=None):
     if mask is None:
         mask = np.ones_like(data).astype(bool)
     assert data.shape == mask.shape, 'data and mask must have same shapes.'
-    assert len(p0)==12, 'Initial guess needs 12 parameters.'
+    assert len(p0)==11, 'Initial guess needs 11 parameters.'
 
     # Make coordinates, get data values
     x_inds,y_inds = np.nonzero(mask)
@@ -314,8 +314,7 @@ def compare_double_sided_gaussian(data, p, power=1, mask=None):
     theta_mask = np.cos(theta * 8) > 0
     data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
     data_combined = mask * data_combined
-    plt.figure(12)
-    plt.clf()
+    plt.figure(12,clear=True)
     plt.imshow(data_combined)
 
     return
@@ -329,31 +328,18 @@ def double_sided_gaussian_fiterr(p, x, y, val):
 # @np.errstate(invalid='ignore') # activate if supressing warnings
 def double_sided_gaussian(p, x, y):
     """
-    Returne the value of the double-sided gaussian function at point (x,y) given parameters p.
+    Return the value of the double-sided gaussian function at point (x,y) given parameters p.
     """
-    #TODO This is an overdetermined way of defining an ellipse, and causes problems in testing. With A, B, C and R free, you cannot perfectly fit a previous set of parameters... I am unsure what the best way to fix this is, or if it needs to be fixed, but we used to set R free and fix A to 1, and then deal with that in post-processing. We should test which is best. But I'm afraid that it might use different combinations of R, A, B, and C to fit different patterns, which might make it very difficult to then measure strain. Maybe we do just fix it to be 1. Or in post processing we normalize everything by R_pattern/R_mean?
-    
+   
     # Unpack parameters
-    I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C = p
-    r2 = A*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
-    r = np.sqrt(r2)
+    I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
+    r2 =  1*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
+    r = np.sqrt(r2) - R
     
     return I0*np.exp(-r2/(2*sigma0**2)) + \
-           I1*np.exp(-(R-r)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
-           I1*np.exp(-(R-r)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd
+           I1*np.exp(-r**2/(2*sigma1**2))*np.heaviside(-r,0.5) + \
+           I1*np.exp(-r**2/(2*sigma2**2))*np.heaviside(r,0.5) + c_bkgd
 
-#def double_sided_gaussian_fiterr(p, x, y, val):
-#    """
-#    Returns the fit error associated with a point (x,y) with value val, given parameters p.
-#    """
-#    # Unpack parameters
-#    I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,A,B,C = p
-#    r2 = A*(x-x0)**2 + B*(x-x0)*(y-y0) + C*(y-y0)**2
-#    r = np.sqrt(r2)
-
-#    return I0*np.exp(-r2/(2*sigma0**2)) + \
-#           I1*np.exp(-(r-R)**2/(2*sigma1**2))*np.heaviside(R-r,0.5) + \
-#           I1*np.exp(-(r-R)**2/(2*sigma2**2))*np.heaviside(r-R,0.5) + c_bkgd - val
 
 
 
