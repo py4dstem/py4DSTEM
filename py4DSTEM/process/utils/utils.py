@@ -380,7 +380,7 @@ def add_to_2D_array_from_floats(ar, x, y, I):
     Nx, Ny = ar.shape
     x0, x1 = (np.floor(x)).astype(int), (np.ceil(x)).astype(int)
     y0, y1 = (np.floor(y)).astype(int), (np.ceil(y)).astype(int)
-    mask = np.logical_or(np.logical_or(np.logical_or((x0>=0),(y0>=0)),(x1<=Nx)),(y1<=Ny))
+    mask = np.logical_and(np.logical_and(np.logical_and((x0>=0),(y0>=0)),(x1<Nx)),(y1<Ny))
     dx = x - x0
     dy = y - y0
     ar[x0[mask], y0[mask]] += (1 - dx[mask]) * (1 - dy[mask]) * I[mask]
