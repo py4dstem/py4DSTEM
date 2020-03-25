@@ -88,7 +88,9 @@ def calculate_coef_strain(coef_cube, r_ref):
 
             exx[i, j] = transformation_matrix[0, 0] - 1
             eyy[i, j] = transformation_matrix[1, 1] - 1
-            exy[i, j] = transformation_matrix[0, 1] + transformation_matrix[1, 0]
+            exy[i, j] = 0.5 * (
+                transformation_matrix[0, 1] + transformation_matrix[1, 0]
+            )
 
     return exx, eyy, exy
 
