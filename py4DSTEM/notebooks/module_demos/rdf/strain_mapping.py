@@ -19,12 +19,12 @@ plt.ion()
 linux = False
 mac = True
 # flags to control which part of the script to run
-run_test = False
-run_test2 = False
+run_test = True
+run_test2 = True
 make_data = False
 load_data = False
 run_data = False
-analyze_data = True
+analyze_data = False
 # make ellipse
 """
 The parameters in p are
@@ -75,14 +75,14 @@ if run_test2:
     r_ref = 65
     e11 = 0 / 100
     e22 = 20 / 100
-    e12 = 3 / 100
+    e12 = 15 / 100
 
     num_points = 360
     t = np.linspace(0, 2 * np.pi, num_points)
     x = np.cos(t) * r_ref
     y = np.sin(t) * r_ref
 
-    m = np.array([[1 + e11, e12 / 2], [e12 / 2, 1 + e22]])
+    m = np.array([[1 + e11, e12], [e12, 1 + e22]])
     m_inv = np.linalg.inv(m)
 
     xy0 = np.stack((x, y))
@@ -135,7 +135,7 @@ if run_test2:
 
     e11_fit = transformation_matrix[0, 0] - 1
     e22_fit = transformation_matrix[1, 1] - 1
-    e12_fit = transformation_matrix[0, 1] + transformation_matrix[1, 0]
+    e12_fit = 0.5 * (transformation_matrix[0, 1] + transformation_matrix[1, 0])
 
     print("\nThe fit will not be exact as we are fitting the image, not points:")
     print(f"e11 = {e11:.3f}, e11_fit = {e11_fit:.3f}")
