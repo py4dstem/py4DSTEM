@@ -488,7 +488,7 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
         # Loop over all vertices
         for i in range(len(vertex_indices)):
             index_current = vertex_indices[i]
-            if index_current is not -1:
+            if index_current != -1:
                 # For known vertices, just add to a running list
                 vertices = np.vstack((vertices, voronoi.vertices[index_current]))
             else:
