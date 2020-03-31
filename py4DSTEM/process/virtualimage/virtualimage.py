@@ -1,18 +1,55 @@
 # Functions for generating virtual images
-#
-# The general form of these functions is:
-#       virtual_image = function(datacube, slice_x, slice_y, *args)
-# where virtual_image is an ndarray of shape (R_Nx, R_Ny), datacube is a DataCube instance, and 
-# slice_x and slice_y are python slice objects which refer to a rectangular ROI within the 
-# diffraction plane. For non-rectangular detectors, additional input parameters specify the
-# subset of this ROI used in generating virtual images.
-#
-# Most of these functions are also included as DataCube class methods.  Thus
-#       virtual_image = function(datacube, slice_x, slice_y, *args)
-# will be identical to
-#       virtual_image = datacube.function(slice_x, slice_y, *args)
 
 import numpy as np
+from ...file.datastructure import DataCube
+
+
+def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
+    """
+    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax) in the diffraction plane.
+    Floating point limits will be rounded and cast to ints.
+
+    Accepts:
+        datacube        (DataCube)
+        xmin,xmax       (ints) x limits of the detector
+        ymin,ymax       (ints) y limits of the detector
+
+    Returns:
+        virtual_image   (2D array)
+    """
+    assert isinstance(datacube, DataCube)
+    xmin,xmax = int(np.round(xmin)),int(np.round(xmax))
+    ymin,ymax = int(np.round(ymin)),int(np.round(ymax))
+    if xmin<0:
+        xmin=0
+    if ymin<0:
+        ymin=0
+    if xmax>=datacube.Q_Nx:
+        xmax=datacube.Q_Nx-1
+    if ymax>=datacube.Q_Ny:
+        ymax=datacube.Q_Ny-1
+
+    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax], axis=(2,3))
+    return virtual_image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Utility functions
