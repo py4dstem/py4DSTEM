@@ -18,23 +18,86 @@ def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
         virtual_image   (2D array)
     """
     assert isinstance(datacube, DataCube)
-    xmin,xmax = int(np.round(xmin)),int(np.round(xmax))
-    ymin,ymax = int(np.round(ymin)),int(np.round(ymax))
-    if xmin<0:
-        xmin=0
-    if ymin<0:
-        ymin=0
-    if xmax>=datacube.Q_Nx:
-        xmax=datacube.Q_Nx-1
-    if ymax>=datacube.Q_Ny:
-        ymax=datacube.Q_Ny-1
+    xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
+    ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
     virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax], axis=(2,3))
+    return virtual_image
+
+def get_virtualimage_circ(datacube, x0, y0, R):
+    """
+    Get a virtual image using a circular detector centered at (x0,y0) and with radius R in the diffraction plane.
+
+    Accepts:
+        datacube        (DataCube)
+        x0,y0           (numbers) center of detector
+        R               (number) radius of detector
+
+    Returns:
+        virtual_image   (2D array)
+    """
+    assert isinstance(datacube, DataCube)
+    xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
+    ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
+
+    xsize,ysize = xmax-xmin,ymax-ymin
+    x0_s,y0_s = x0-xmin,y0-ymin
+    mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
+
+    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax]*mask, axis=(2,3))
+    return virtual_image
+
+def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
+    """
+    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer radii of Ri/Ro.
+
+    Accepts:
+        datacube        (DataCube)
+        x0,y0           (numbers) center of detector
+        Ri,Ro           (numbers) inner/outer detector radii
+
+    Returns:
+        virtual_image   (2D array)
+    """
+    assert isinstance(datacube, DataCube)
+    assert Ro>Ri, "Inner radius must be smaller than outer radius"
+    xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
+    ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
+
+    xsize,ysize = xmax-xmin,ymax-ymin
+    x0_s,y0_s = x0-xmin,y0-ymin
+    mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
+    mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
+    mask = np.logical_xor(mask_o,mask_i)
+
+    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax]*mask, axis=(2,3))
     return virtual_image
 
 
 
 
+
+def get_circ_mask(size_x,size_y,R=1):
+    """
+    Returns a mask of shape (size_x,size_y) which is True inside an ellipse with major/minor
+    diameters of R*size_x, R*size_y.  Thus if R=1 and size_x=size_y, returns a ciruclar mask which
+    is inscribed inside a square array.
+    Note that an ellipse, rather than a circle, is used to prevent failure when the slice objects
+    returned when calling getArraySlice on a pyqtgraph circular ROI are off-by-one in length.
+    """
+    return np.fromfunction(lambda x,y: ( ((x+0.5)/(size_x/2.)-1)**2 + ((y+0.5)/(size_y/2.)-1)**2 ) < R**2, (size_x,size_y))
+
+
+
+def get_virtual_image_circ_integrate(datacube, slice_x, slice_y):
+    """
+    Returns a virtual image as an ndarray, generated from a circular detector in integration
+    mode. Also returns a bool indicating success or failure.
+    """
+    try:
+        return np.sum(datacube.data[:,:,slice_x,slice_y]*get_circ_mask(slice_x.stop-slice_x.start, slice_y.stop-slice_y.start), axis=(2,3)), 1
+    except ValueError:
+        return 0,0
 
 
 
