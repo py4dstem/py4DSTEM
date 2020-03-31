@@ -549,4 +549,7 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
     return vertex_list
 
 
+def foo():
+    """Test func."""
+    print('pass')
 
