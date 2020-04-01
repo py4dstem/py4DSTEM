@@ -3,7 +3,7 @@
 
 py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
 
-At present modules exist for 
+Its modules include
 - preprocessing
 - virtual imaging
 - bragg disk detection
