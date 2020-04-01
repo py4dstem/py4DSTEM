@@ -21,15 +21,16 @@ setup(
     install_requires=[
         'numpy >= 1.15',
         'scipy >= 1.1',
-        'hyperspy >= 1.4',
         'h5py >= 2.10.0',
+        'scikit-image'
+        'scikit-learn'
+        'tqdm',
+        'ncempy >= 1.4.2',
+        'hyperspy >= 1.4',
         'PyQt5 >= 5.9, < 6',
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
-        'ncempy >= 1.4.2',
-        'tqdm',
         'ipywidgets',
-        'scikit-learn'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],
