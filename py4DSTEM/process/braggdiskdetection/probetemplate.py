@@ -9,7 +9,7 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation
-from ..utils import get_shifted_ar, get_CoM, get_shift
+from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
 
 #### Get the vacuum probe ####
 
@@ -38,11 +38,10 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
     """
-    probe = datacube.data4D[0,0,:,:]
-    for n in range(1,datacube.R_N):
-        Rx = int(n/datacube.R_Nx)
-        Ry = n%datacube.R_Nx
-        curr_DP = datacube.data4D[Rx,Ry,:,:]
+    probe = datacube.data[0,0,:,:]
+    for n in tqdmnd(range(1,datacube.R_N)):
+        Rx,Ry = np.unravel_index(n,datacube.data.shape[:2])
+        curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,datacube.R_N))
 
@@ -57,10 +56,44 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
     return probe*mask
 
 
+def get_average_probe_from_vacuum_stack(data, mask_threshold=0.2,
+                                              mask_expansion=12,
+                                              mask_opening=3):
+    """
+    Averages all diffraction patterns in a 3D stack of diffraction patterns, assumed to be taken
+    over vacuum, to create and average vacuum probe. No alignment is performed - i.e. it is assumed
+    that the beam was stationary during acquisition of the stack.
+
+    Values outisde the average probe are zeroed, using a binary mask determined by the optional
+    parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
+    using a threshold of less than mask_threshold times the maximal probe value. A morphological
+    opening of mask_opening pixels is performed to eliminate stray pixels (e.g. from x-rays),
+    followed by a dilation of mask_expansion pixels to ensure the entire probe is captured.
+
+    Accepts:
+        data            (array) a 3D stack of vacuum diffraction patterns, shape (Q_Nx,Q_Ny,N)
+        mask_threshold  (float) threshold determining mask which zeros values outside of probe
+        mask_expansion  (int) number of pixels by which the zeroing mask is expanded to capture
+                        the full probe
+        mask_opening    (int) size of binary opening used to eliminate stray bright pixels
+
+    Returns:
+        probe           (array of shape (Q_Nx,Q_Ny)) the average probe
+    """
+    probe = np.average(data,axis=2)
+
+    mask = probe > np.max(probe)*mask_threshold
+    mask = binary_opening(mask, iterations=mask_opening)
+    mask = binary_dilation(mask, iterations=mask_expansion)
+
+    return probe*mask
+
+
 def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
                                               mask_expansion=12,
                                               mask_opening=3,
-                                              verbose=False):
+                                              verbose=False,
+                                              DP_mask=1):
     """
     Aligns and averages all diffraction patterns within a specified ROI of a datacube to create an
     average vacuum probe.
@@ -78,17 +111,17 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        DP_mask         (array) array of same shape as diffraction pattern to mask probes
 
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
     """
     assert ROI.shape==(datacube.R_Nx,datacube.R_Ny)
     length = ROI.sum()
-    probe = datacube.data4D[ROI,:,:][0]
-    for n in range(1,length):
-        curr_DP = datacube.data4D[ROI,:,:][n]
-        if verbose:
-            print("Shifting and averaging diffraction pattern {} of {}.".format(n,length))
+    xy = np.vstack(np.nonzero(ROI))
+    probe = datacube.data[xy[0,0],xy[1,0],:,:]
+    for n in tqdmnd(range(1,length)):
+        curr_DP = datacube.data[xy[0,n],xy[1,n],:,:] * DP_mask
 
         xshift,yshift = get_shift(probe, curr_DP)
         curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)
@@ -101,16 +134,16 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     return probe*mask
 
 
-def get_synthetic_probe(Q_Nx, Q_Ny, radius, width):
+def get_synthetic_probe(radius, width, Q_Nx, Q_Ny):
     """
     Makes a synthetic probe, with the functional form of a disk blurred by a sigmoid (a logistic
     function).
 
     Accepts:
-        Q_Nx, Q_Ny    (int) the diffraction plane dimensions
         radius        (float) the probe radius
         width         (float) the blurring of the probe edge. width represents the full width of the
                       blur, with x=-w/2 to x=+w/2 about the edge spanning values of ~0.12 to 0.88
+        Q_Nx, Q_Ny    (int) the diffraction plane dimensions
 
     Returns:
         probe         (ndarray of shape (Q_Nx,Q_Ny)) the probe
