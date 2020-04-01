@@ -2,20 +2,8 @@
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
 py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
+It is open source software distributed under a GPLv3 license. It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
-Its modules include
-- preprocessing
-- virtual imaging
-- bragg disk detection
-- strain mapping
-- fluctuation electron microscopy
-- radial distribution function analysis
-- differential phase contrast imaging
-- ptychography, data calibration
-- classification
-
-py4DSTEM is open source software distributed under a GPLv3 license.
-It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
 ## What is 4D-STEM?
@@ -36,15 +24,17 @@ Structure in the diffracted halos of amorphous systems can be used to describe t
 For more information, see [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
 
 
+
 ## Using py4DSTEM
 
 This sections describes:
 - Installation
 - Running the GUI
 - Running from a python interpretter
-- Accessing and running sample jupter notebooks
-- Accessing and running sample scripts
+- Sample jupter notebooks
+- Sample scripts
 - For developers
+
 
 
 ### Installation
@@ -88,12 +78,12 @@ From any python interpreter inside the `py4dstem` conda environment, py4DSTEM ca
 import py4DSTEM
 ```
 
-### Accessing and running sample jupter notebooks
+### Sample jupter notebooks
 
 TODO
 
 
-### Accessing and running sample scripts
+### Sample scripts
 
 TODO
 
