@@ -72,6 +72,8 @@ class WholePatternFit:
 
         opt = least_squares(self._pattern, self.x0)
 
+        self.mean_CBED_fit = opt
+
         return opt
 
     def _pattern(self, x):
