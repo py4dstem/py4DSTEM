@@ -144,7 +144,12 @@ class SyntheticDiskLattice(WPFModelPrototype):
         vx = args[4]
         vy = args[5]
 
-        disk_radius = args[-2] if self.refine_radius else self.disk_radius
+        if self.refine_radius & self.refine_width:
+            disk_radius = args[-2]
+        elif self.refine_radius:
+            disk_radius = args[-1]
+        else:
+            disk_radius = self.disk_radius
         disk_width = args[-1] if self.refine_width else self.disk_width
 
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
