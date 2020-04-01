@@ -5,13 +5,16 @@
 *.ipynb_checkpoints*
 
 # Folders #
+.idea/
 __pycache__/
 *.egg-info/
+build/
+dist/
 
 # Data Specific #
 #################
 *.png
-*.gif
+#*.gif
 *.emd
 *.emf
 *.dm3

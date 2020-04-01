@@ -2,8 +2,8 @@
 #
 # The purpose of the DataObject class is to create a single, uniform interface for all of the types 
 # of data py4DSTEM creates. It enables:
-#       -searching and retrieving/listing dataobjects in memory, by name, by child class type
 #       -naming dataobjects
+#       -searching, listing, and retrieving dataobjects in memory, by name or by child class type
 #       -linking to metadata
 #
 # All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, RealSlice, and PointLists
@@ -14,6 +14,7 @@
 
 import weakref
 from functools import wraps
+from .metadata import Metadata
 
 # Decorator which enables more human-readable display of tracked dataobjects
 def show_object_list(method):
@@ -30,7 +31,7 @@ def show_object_list(method):
     return wrapper
 
 
-################## BEGIN DataObject Class ###################
+################## BEGIN DataObject CLASS ###################
 
 class DataObject(object):
     """
@@ -53,22 +54,44 @@ class DataObject(object):
                       if metadata is a dataobject, self.metadata will point to DataObject.metadata.
         """
         self.name = name
-        if isinstance(metadata, DataObject):
+        if isinstance(metadata, Metadata):
+            self.metadata = metadata
+        elif isinstance(metadata, DataObject):
             self.metadata = metadata.metadata
         else:
             self.metadata = None
         if searchable==True:
             self._instances.append(weakref.ref(self))
 
-        # TODO: add logging of instantiation
+    ############ Metadata methods ############
 
-    def link_metadata(self, dataobject):
+    def new_metadata(self, metadata=None):
         """
-        Sets self.metadata to point to dataobject.metadata.
-        If dataobject is a Metadata object, sets self.metadata to point to dataobject.
+        Replace the old self.metadata object with a new Metadata object, which is a *copy* of the
+        Metadata instance pointed to by metadata. The important distinction here is that, rather
+        than simply having self.metadata point to some other metadata instance which may also be
+        associated with some other objects, this method ensures that self.metadata is a fresh
+        Metadata instance, which no other DataObjects point to.  Thus if metadata should be altered
+        for this object only, but not other DataObjects (e.g. because a datacube is cropped or
+        binned), this method should be called first.
+
+        Accepts:
+            metadata        (Metadata, DataObject, or None)
+                            if Metadata, copies this metadata object and assigns it to self.metadata
+                            if DataObject, copies that objects metadata, and assigns it to
+                            self.metadata
+                            if None, copies its own metadata and assigns it to self.metadata
         """
-        assert isinstance(dataobject, DataObject)
-        self.metadata = dataobject.metadata
+        assert metadata is None or isinstance(metadata,(Metadata,DataObject))
+
+        if metadata is None:
+            metadata = self.metadata
+        elif isinstance(metadata,DataObject):
+            assert isinstance(metadata.metadata,Metadata), "The DataObject selected does not have an associated Metadata instance."
+            metadata = metadata.metadata
+
+        self.metadata = metadata.copy()
+
 
     ############ Searching methods ############
 
@@ -153,6 +176,8 @@ class DataObject(object):
     def get_dataobject_by_type(objecttype):
         dataobject_list = DataObject.get_dataobject_list()
         return [item[3] for item in dataobject_list if isinstance(item[3], objecttype)]
+
+
 
 
 

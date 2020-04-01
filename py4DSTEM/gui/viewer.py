@@ -27,9 +27,10 @@ import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .utils import sibling_path, pg_point_roi, LQCollection
-from ..file.readwrite.read import read
-from ..file.readwrite.write import save_dataobject
+from ..file.io.read import read
+from ..file.io.write import save_dataobject
 from ..file.datastructure.datacube import DataCube
+from .strain import *
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -58,15 +59,23 @@ class DataViewer(QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
+        QtWidgets.QMainWindow.__init__(self)
+        self.this_dir, self.this_filename = os.path.split(__file__)
+
         # Make settings collection
         self.settings = LQCollection()
 
+        self.strain_window = None
+
+        self.main_window = QtWidgets.QWidget()
+        self.main_window.setWindowTitle("py4DSTEM")
+
         # Set up sub-windows and arrange into primary py4DSTEM window
-        self.diffraction_space_widget = self.setup_diffraction_space_widget()
-        self.real_space_widget = self.setup_real_space_widget()
-        self.control_widget = self.setup_control_widget()
-        self.console_widget = self.setup_console_widget()
-        self.main_window = self.setup_main_window()
+        self.setup_diffraction_space_widget()
+        self.setup_real_space_widget()
+        self.setup_control_widget()
+        self.setup_console_widget()
+        self.setup_main_window()
 
         # Set up temporary datacube
         self.datacube = DataCube(data=np.zeros((10,10,10,10)))
@@ -79,7 +88,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.ui.normDivideRadio.setChecked(True)
         self.diffraction_space_widget.normRadioChanged()
 
-        return
 
     ###############################################
     ############ Widget setup methods #############
@@ -142,16 +150,26 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.pushButton_EditDirectoryMetadata.clicked.connect(self.edit_directory_metadata)
         self.control_widget.pushButton_SaveFile.clicked.connect(self.save_file)
         self.control_widget.pushButton_SaveDirectory.clicked.connect(self.save_directory)
+        self.control_widget.pushButton_LaunchStrain.clicked.connect(self.launch_strain)
 
         # Virtual detectors
         self.settings.New('virtual_detector_shape', dtype=int, initial=0)
         self.settings.New('virtual_detector_mode', dtype=int, initial=0)
+
+        ## DP Scaling mode
+        self.settings.New('diffraction_scaling_mode',dtype=int,initial=0)
+        self.settings.diffraction_scaling_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DiffractionMode)
+        self.settings.diffraction_scaling_mode.updated_value.connect(self.diffraction_scaling_changed)
 
         self.settings.virtual_detector_shape.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorShape)
         self.settings.virtual_detector_mode.connect_bidir_to_widget(self.control_widget.buttonGroup_DetectorMode)
 
         self.settings.virtual_detector_shape.updated_value.connect(self.update_virtual_detector_shape)
         self.settings.virtual_detector_mode.updated_value.connect(self.update_virtual_detector_mode)
+
+        self.settings.New('arrowkey_mode',dtype=int,initial=2)
+        self.settings.arrowkey_mode.connect_bidir_to_widget(self.control_widget.virtualDetectors.widget.buttonGroup_ArrowkeyMode)
+        self.settings.arrowkey_mode.updated_value.connect(self.update_arrowkey_mode)
 
         return self.control_widget
 
@@ -162,6 +180,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.diffraction_space_widget = pg.ImageView()
         self.diffraction_space_widget.setImage(np.zeros((512,512)))
+        self.diffraction_space_view_text = pg.TextItem('Slice',(200,200,200),None,(0,1))
+        self.diffraction_space_widget.addItem(self.diffraction_space_view_text)
 
         # Create virtual detector ROI selector
         self.virtual_detector_roi = pg.RectROI([256, 256], [50,50], pen=(3,9))
@@ -179,6 +199,8 @@ class DataViewer(QtWidgets.QMainWindow):
         # Create pyqtgraph ImageView object
         self.real_space_widget = pg.ImageView()
         self.real_space_widget.setImage(np.zeros((512,512)))
+        self.real_space_view_text = pg.TextItem('Scan pos.',(200,200,200),None,(0,1))
+        self.real_space_widget.addItem(self.real_space_view_text)
 
         # Add point selector connected to displayed diffraction pattern
         self.real_space_point_selector = pg_point_roi(self.real_space_widget.getView())
@@ -197,7 +219,13 @@ class DataViewer(QtWidgets.QMainWindow):
         self.kernel_client = self.kernel_manager.client()
         self.kernel_client.start_channels()
 
-        self.console_widget = RichJupyterWidget()
+        #Avoid setting up multiple consoles
+        alreadysetup = False
+        if hasattr(self,'console_widget'):
+            if (isinstance(self.console_widget,RichJupyterWidget)):
+                alreadysetup = True
+
+        if not alreadysetup: self.console_widget = RichJupyterWidget()
         self.console_widget.setWindowTitle("py4DSTEM IPython Console")
         self.console_widget.kernel_manager = self.kernel_manager
         self.console_widget.kernel_client = self.kernel_client
@@ -209,8 +237,6 @@ class DataViewer(QtWidgets.QMainWindow):
         """
         Setup main window, arranging sub-windows inside
         """
-        self.main_window = QtWidgets.QWidget()
-        self.main_window.setWindowTitle("py4DSTEM")
 
         layout_data = QtWidgets.QHBoxLayout()
         layout_data.addWidget(self.diffraction_space_widget,1)
@@ -224,12 +250,12 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.main_window.setLayout(layout_data_and_control)
 
-        self.main_window.setGeometry(0,0,3600,1600)
-        self.console_widget.setGeometry(0,1800,1600,250)
+        #self.main_window.setGeometry(0,0,3600,1600)
+        #self.console_widget.setGeometry(0,1800,1600,250)
         self.main_window.show()
         self.main_window.raise_()
-        self.console_widget.show()
-        self.console_widget.raise_()
+        #self.console_widget.show()
+        #self.console_widget.raise_()
         return self.main_window
 
     ##################################################################
@@ -245,7 +271,18 @@ class DataViewer(QtWidgets.QMainWindow):
     # or from the command line.                                      # 
     ##################################################################
 
+    def launch_strain(self):
+        self.strain_window = StrainMappingWindow(main_window=self)
+
+        self.strain_window.setup_tabs()
+
     ################ Load ################
+
+    def Unidentified_file(self,fname):
+        msg = QtWidgets.QMessageBox()
+        msg.setText("Couldn't open {0} as it doesn't conform to currently implemented py4DSTEM standards".format(fname))
+        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        msg.exec_()
 
     def load_file(self):
         """
@@ -257,7 +294,20 @@ class DataViewer(QtWidgets.QMainWindow):
         # Instantiate DataCube object
         self.datacube = None
         gc.collect()
-        self.datacube = read(fname)
+
+        # load based on chosen mode:
+        if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
+            #auto mode
+            self.datacube = read(fname)
+            if type(self.datacube) == str : 
+                self.Unidentified_file(fname)
+                #Reset view
+                self.__init__(sys.argv)
+                return
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
+            self.datacube = read(fname, load='dmmmap')
+        elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
+            self.datacube = read(fname, load='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
@@ -336,7 +386,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Diffraction space
         if self.control_widget.checkBox_Crop_Diffraction.isChecked():
             # Get crop limits from ROI
-            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_q, transforms_q = self.crop_roi_diffraction.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_qx,slice_qy = slices_q
             crop_Qx_min, crop_Qx_max = slice_qx.start, slice_qx.stop-1
             crop_Qy_min, crop_Qy_max = slice_qy.start, slice_qy.stop-1
@@ -369,7 +419,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Real space
         if self.control_widget.checkBox_Crop_Real.isChecked():
             # Get crop limits from ROI
-            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data4D[:,:,0,0], self.real_space_widget.getImageItem())
+            slices_r, transforms_r = self.crop_roi_real.getArraySlice(self.datacube.data[:,:,0,0], self.real_space_widget.getImageItem())
             slice_rx,slice_ry = slices_r
             crop_Rx_min, crop_Rx_max = slice_rx.start, slice_rx.stop-1
             crop_Ry_min, crop_Ry_max = slice_ry.start, slice_ry.stop-1
@@ -414,7 +464,10 @@ class DataViewer(QtWidgets.QMainWindow):
             self.virtual_detector_roi.setPos((xf,yf))
             self.virtual_detector_roi.setSize((xf_len,yf_len))
             # Bin data
-            self.datacube.bin_data_diffraction(bin_factor_Q)
+            if isinstance(self.datacube.data,np.ndarray):
+                self.datacube.bin_data_diffraction(bin_factor_Q)
+            else:
+                self.datacube.bin_data_mmap(bin_factor_Q)
             # Update display
             self.update_diffraction_space_view()
         if bin_factor_R>1:
@@ -669,6 +722,10 @@ class DataViewer(QtWidgets.QMainWindow):
 
     ################## Get virtual images ##################
 
+    def diffraction_scaling_changed(self):
+        self.update_diffraction_space_view()
+        self.diffraction_space_widget.autoLevels()
+
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
         x0,y0 = roi_state['pos']
@@ -678,8 +735,22 @@ class DataViewer(QtWidgets.QMainWindow):
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,
-                                                   autoLevels=False,autoRange=False)
+            self.real_space_view_text.setText(f"[{xc},{yc}]")
+
+            # rescale DP as selected (0 means raw, does no scaling)
+            if self.settings.diffraction_scaling_mode.val == 1:
+                # sqrt mode
+                self.diffraction_space_view = np.sqrt(self.diffraction_space_view)
+            elif self.settings.diffraction_scaling_mode.val == 2:
+                # log mode
+                self.diffraction_space_view = np.log(
+                    self.diffraction_space_view - np.min(self.diffraction_space_view) + 1)
+            elif self.settings.diffraction_scaling_mode.val == 3:
+                # EWPC mode
+                h = np.hanning(self.datacube.Q_Nx)[:,np.newaxis] @ np.hanning(self.datacube.Q_Ny)[np.newaxis,:]
+                self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
+                    (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
+
         else:
             pass
         return
@@ -690,7 +761,7 @@ class DataViewer(QtWidgets.QMainWindow):
         # Rectangular detector
         if detector_shape == 0:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -698,13 +769,17 @@ class DataViewer(QtWidgets.QMainWindow):
             if success:
                 self.real_space_view = new_real_space_view
                 self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+
+                #update the label:
+                self.diffraction_space_view_text.setText(
+                    f"[{slice_x.start}:{slice_x.stop},{slice_y.start}:{slice_y.stop}]")
             else:
                 pass
 
         # Circular detector
         elif detector_shape == 1:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
 
             # Get the virtual image and set the real space view
@@ -718,9 +793,9 @@ class DataViewer(QtWidgets.QMainWindow):
         # Annular detector
         elif detector_shape == 2:
             # Get slices corresponding to ROI
-            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_x,slice_y = slices
-            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data4D[0,0,:,:], self.diffraction_space_widget.getImageItem())
+            slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
 
@@ -735,9 +810,55 @@ class DataViewer(QtWidgets.QMainWindow):
         else:
             print("Error: unknown detector shape value {}.  Must be 0, 1, or 2.".format(detector_shape))
 
+        # propagate to the strain window, if it exists
+        if self.strain_window is not None:
+            self.strain_window.bragg_disk_tab.update_views()
+
         return
 
+    ######### Handle keypresses to move realspace cursor ##########
+    def keyPressEvent(self,e):
+        mode = self.settings.arrowkey_mode.val
 
+        if mode == 0: # we are in realspace mode
+            roi_state = self.real_space_point_selector.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[0])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[1])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[1])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.real_space_point_selector.setState(roi_state)
+        elif mode == 1: # we are in qspace mode
+            roi_state = self.virtual_detector_roi.saveState()
+            x0,y0 = roi_state['pos']
+            x0,y0 = np.ceil(x0), np.ceil(y0)
+            if e.key() == QtCore.Qt.Key_Left:
+                x0 = (x0-1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Right:
+                x0 = (x0+1)%(self.datacube.data.shape[2])
+            elif e.key() == QtCore.Qt.Key_Up:
+                y0 = (y0-1)%(self.datacube.data.shape[3])
+            elif e.key() == QtCore.Qt.Key_Down:
+                y0 = (y0+1)%(self.datacube.data.shape[3])
+            else:
+                self.settings.arrowkey_mode.update_value(2) # relase keyboard control if you press anything else
+            roi_state['pos'] = (x0-0.5,y0-0.5)
+            self.virtual_detector_roi.setState(roi_state)
+
+    def update_arrowkey_mode(self):
+        mode = self.settings.arrowkey_mode.val
+        if mode == 2:
+            self.releaseKeyboard()
+        else:
+            self.grabKeyboard()
 
     def exec_(self):
         return self.qtapp.exec_()

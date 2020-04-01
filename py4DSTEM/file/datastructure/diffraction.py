@@ -11,12 +11,16 @@ class DiffractionSlice(DataSlice):
         """
         Instantiate a DiffractionSlice object.  Set the data and dimensions.
 
-        If data is two dimensional, it is stored as self.data2D, and has shape (Q_Nx, Q_Ny).
-        If data is three dimensional, self.data2D is a list of slices of some depth,
-        where self.depth is data.shape[2], i.e. the shape is (Q_Nx, Q_Ny, depth).
-        If slicelabels is unspecified, 2D slices can be accessed as self.data2D[i].
-        If slicelabels is specified, it should be an n-tuple of strings, where
-        n==self.depth, and 2D slices can be accessed as self.data2D[slicelabels[i]].
+        The data is stored in self.data.  If it is 2D it has shape (self.Nx,self.Ny);
+        if it is 3D it has shape (self.Nx,self.Ny,self.depth).  For 3D data, an array
+        self.slicelabels of length self.depth specifies the data found in each slices, i.e.
+        the self.data[:,:,i] is labelled by self.slicelabels[i].  self.slicelabels may be
+        strings or numbers, and is instantiated by passing a list or array with the slicelabels
+        keyword.  If left unspecified, these default to np.arange(self.depth).  Data can be
+        accessed directly from self.data, or may be accessed using the labels in
+        self.slicelabels using the syntax
+            self.slices[key]
+        where key is an element of slicelabels.
         """
         # Get shape
         if Q_Nx is None:

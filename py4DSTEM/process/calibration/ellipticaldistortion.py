@@ -36,7 +36,7 @@ def measure_elliptical_distortion(ar, x0, y0, r_inner, r_outer, datamask=None):
                         p1 = (x,y,A,B,C)
     """
     # Get the datapoints to fit
-    yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[1]))
+    yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
     rr = np.sqrt((xx-x0)**2 + (yy-y0)**2)
     mask = (rr>r_inner) * (rr<=r_outer)
     if datamask is not None:
@@ -101,7 +101,7 @@ def correct_elliptical_distortion(braggpeaks, p):
     s = min(a,b)/max(a,b)
     theta += np.pi/2.*(np.argmin([a,b])==0)
     sint,cost = np.sin(theta),np.cos(theta)
-    T = np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]])
+    T = np.squeeze(np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]]))
 
     # Correct distortions
     braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipticalcorrected")
@@ -128,7 +128,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     phi_known should be the smaller of these two angles.
 
     Accepts:
-        data        (ndarray) the data to fit, typically an average deconvolution
+        data        (ndarray) the data to fit, typically a Bragg vector map
         x           (float) the initial ellipse center, x
         y           (float) the initial ellipse center, y
         a           (float) the initial ellipse first semiaxis
@@ -160,7 +160,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     # Transform constraining points coordinate system
     xs -= x
     ys -= y
-    T = np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]])
+    T = np.squeeze(np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]]))
     xs,ys = np.matmul(T,np.array([xs,ys]))
 
     # Get symmetrized constraining point

@@ -9,9 +9,30 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
     -connection to widgets: they support a single interface for connecting to GUI widgets
 """
 
-from os.path import join, dirname
+from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
+from ..file.io.filebrowser import FileBrowser
 import pyqtgraph as pg
+
+def datacube_selector_dialog(fpath,window):
+    """
+    Loads a FileBrowser from given fpath and presents the user with a dialog to
+    choose one of the datacubes inside the file, if more than one exists.
+    Returns the selected DataCube object.
+    """
+    fb = FileBrowser(fpath)
+
+    if fb.N_datacubes == 1:
+        dc = fb.get_datacubes()
+    elif fb.N_datacubes > 1:
+        # there is more than one object, so we need to present the user with a chooser
+        indices = (self.dataobject_lookup_arr=='DataCube' | 
+            self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
+
+
+    return dc
+
+
 
 
 def sibling_path(fpath, fname):
@@ -195,7 +216,12 @@ class FileLQ(LoggedQuantity):
         pushButton.clicked.connect(self.file_browser)
 
     def file_browser(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None)
+        
+        # Platform agnotistic method of getting home directory
+        home = expanduser("~")
+
+        #Start open filename in home directory
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(None,directory=home)
         print(repr(fname))
         if fname:
             self.update_value(fname)

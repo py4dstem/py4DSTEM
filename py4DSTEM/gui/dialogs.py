@@ -56,6 +56,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.pushButton_EditDirectoryMetadata = self.widget_LoadPreprocessSave.widget.pushButton_EditDirectoryMetadata
         self.pushButton_SaveFile = self.widget_LoadPreprocessSave.widget.pushButton_SaveFile
         self.pushButton_SaveDirectory = self.widget_LoadPreprocessSave.widget.pushButton_SaveDirectory
+        self.pushButton_LaunchStrain = self.widget_LoadPreprocessSave.widget.pushButton_LaunchStrain
 
         ########### Preprocessing sub-widget ##########
         self.virtualDetectors = HideableWidget('Virtual Detectors',VirtualDetectorsWidget())
@@ -70,6 +71,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.radioButton_CoMX = self.virtualDetectors.widget.radioButton_CoMX
         self.radioButton_CoMY = self.virtualDetectors.widget.radioButton_CoMY
         self.buttonGroup_DetectorMode = self.virtualDetectors.widget.buttonGroup_DetectorMode
+        self.buttonGroup_DiffractionMode = self.virtualDetectors.widget.buttonGroup_DiffractionMode
 
         ####################################################
         ############## Create and set layout ###############
@@ -116,6 +118,12 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         self.lineEdit_LoadFile = QtWidgets.QLineEdit("")
         self.pushButton_BrowseFiles = QtWidgets.QPushButton("Browse")
 
+        self.loadRadioAuto = QtWidgets.QRadioButton("Automatic")
+        self.loadRadioAuto.setChecked(True)
+        self.loadRadioMMAP = QtWidgets.QRadioButton("DM Memory Map")
+        self.loadRadioGatan = QtWidgets.QRadioButton("Gatan K2 Binary")
+
+
         self.label_Filename.setFont(normalFont)
         self.lineEdit_LoadFile.setFont(normalFont)
         self.pushButton_BrowseFiles.setFont(normalFont)
@@ -123,10 +131,16 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         line1 = QtWidgets.QHBoxLayout()
         line1.addWidget(self.label_Filename,stretch=0)
         line1.addWidget(self.lineEdit_LoadFile,stretch=1)
+        optionLine = QtWidgets.QHBoxLayout()
+        optionLine.addWidget(self.loadRadioAuto)
+        optionLine.addWidget(self.loadRadioMMAP)
+        optionLine.addWidget(self.loadRadioGatan)
+
         line2 = QtWidgets.QHBoxLayout()
         line2.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
 
         load_widget_layout.addLayout(line1)
+        load_widget_layout.addLayout(optionLine)
         load_widget_layout.addLayout(line2)
         load_widget_layout.setSpacing(0)
         load_widget_layout.setContentsMargins(0,0,0,0)
@@ -162,6 +176,13 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         save_widget_layout.addWidget(self.pushButton_SaveFile)
         save_widget.setLayout(save_widget_layout)
 
+        analysis_widget = QtWidgets.QWidget()
+        analysis_widget_layout = QtWidgets.QHBoxLayout()
+        self.pushButton_LaunchStrain = QtWidgets.QPushButton('Single Crystal Strain')
+        self.pushButton_LaunchStrain.setMaximumWidth(200)
+        analysis_widget_layout.addWidget(self.pushButton_LaunchStrain)
+        analysis_widget.setLayout(analysis_widget_layout)
+
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(SectionLabel('Load'))
@@ -170,6 +191,8 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         layout.addWidget(preprocess_widget)
         layout.addWidget(SectionLabel('Save'))
         layout.addWidget(save_widget)
+        layout.addWidget(SectionLabel('Analysis'))
+        layout.addWidget(analysis_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
@@ -398,12 +421,65 @@ class VirtualDetectorsWidget(QtWidgets.QWidget):
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMX, 3)
         self.buttonGroup_DetectorMode.setId(self.radioButton_CoMY, 4)
 
+        # Diffraction Scaling Control
+        diffraction_mode_widget = QtWidgets.QWidget()
+        diffraction_mode_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_DP_Raw = QtWidgets.QRadioButton('Raw')
+        self.radioButton_DP_Sqrt = QtWidgets.QRadioButton('Square Root')
+        self.radioButton_DP_Log = QtWidgets.QRadioButton('Logartihm')
+        self.radioButton_DP_EWPC = QtWidgets.QRadioButton('EWPC')
+
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Raw)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Sqrt)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_Log)
+        diffraction_mode_widget_layout.addWidget(self.radioButton_DP_EWPC)
+        diffraction_mode_widget.setLayout(diffraction_mode_widget_layout)
+
+        self.buttonGroup_DiffractionMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Raw)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Sqrt)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_Log)
+        self.buttonGroup_DiffractionMode.addButton(self.radioButton_DP_EWPC)
+
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Raw, 0)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Sqrt, 1)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_Log, 2)
+        self.buttonGroup_DiffractionMode.setId(self.radioButton_DP_EWPC, 3)
+
+        # Arrowkey Control
+        arrowkey_widget = QtWidgets.QWidget()
+        arrowkey_widget_layout = QtWidgets.QVBoxLayout()
+
+        self.radioButton_ArrowkeyRS = QtWidgets.QRadioButton('Real Space')
+        self.radioButton_ArrowkeyDP = QtWidgets.QRadioButton('Diffraction')
+        self.radioButton_ArrowkeyOff = QtWidgets.QRadioButton('None')
+        self.radioButton_ArrowkeyOff.setChecked(True)
+
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyRS)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyDP)
+        arrowkey_widget_layout.addWidget(self.radioButton_ArrowkeyOff)
+        arrowkey_widget.setLayout(arrowkey_widget_layout)
+
+        self.buttonGroup_ArrowkeyMode = QtWidgets.QButtonGroup()
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyRS)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyDP)
+        self.buttonGroup_ArrowkeyMode.addButton(self.radioButton_ArrowkeyOff)
+
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyRS,0)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyDP,1)
+        self.buttonGroup_ArrowkeyMode.setId(self.radioButton_ArrowkeyOff,2)
+
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(SectionLabel('Detector Shape'))
         layout.addWidget(detector_shape_widget)
         layout.addWidget(SectionLabel('Detector Mode'))
         layout.addWidget(detector_mode_widget)
+        layout.addWidget(SectionLabel('Diffraction Pattern Scaling'))
+        layout.addWidget(diffraction_mode_widget)
+        layout.addWidget(SectionLabel('Arrowkey Control'))
+        layout.addWidget(arrowkey_widget)
         layout.setSpacing(0)
         layout.setContentsMargins(0,0,0,0)
         self.setLayout(layout)
