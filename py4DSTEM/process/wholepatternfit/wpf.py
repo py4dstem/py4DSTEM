@@ -56,7 +56,7 @@ class WholePatternFit:
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
         for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i]
+            ind = self.model_param_inds[i] + 2
             m.func(DP, *self.x0[ind : ind + m.nParams].tolist(), **self.global_args)
 
         return DP * self.mask
@@ -66,6 +66,10 @@ class WholePatternFit:
         # first make sure we have the latest parameters
         self._scrape_model_params()
 
+        # set the current active pattern to the mean CBED:
+        self.current_pattern = self.meanCBED
+        self.current_glob = self.global_args.copy()
+
         opt = least_squares(self._pattern, self.x0)
 
         return opt
@@ -74,20 +78,27 @@ class WholePatternFit:
 
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i]
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.global_args)
+        self.current_glob["global_x0"] = x[0]
+        self.current_glob["global_y0"] = x[1]
 
-        DP *= self.mask
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i] + 2
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+
+        DP = (DP - self.current_pattern) * self.mask
 
         return DP.ravel()
 
     def _scrape_model_params(self):
 
-        self.x0 = np.zeros((self.nParams,))
+        self.x0 = np.zeros((self.nParams + 2,))
+
+        self.x0[0:2] = np.array(
+            [self.global_args["global_x0"], self.global_args["global_y0"]]
+        )
 
         for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i]
+            ind = self.model_param_inds[i] + 2
             self.x0[ind : ind + m.nParams] = np.fromiter(
                 m.params.values(), dtype=np.float32
             )
