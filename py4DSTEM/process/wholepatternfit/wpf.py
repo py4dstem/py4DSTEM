@@ -4,50 +4,90 @@ from . import WPFModelPrototype
 from typing import Optional
 import numpy as np
 
+from scipy.optimize import least_squares
+
 
 class WholePatternFit:
+    def __init__(
+        self,
+        datacube: DataCube,
+        x0: Optional[float] = None,
+        y0: Optional[float] = None,
+        mask: Optional[np.ndarray] = None,
+    ):
+        self.datacube = datacube
+        self.meanCBED = np.mean(datacube.data, axis=(0, 1))
 
-	def __init__(self, data: DataCube, x0:Optional[float]=None, y0:Optional[float]=None):
-		self.data = data
+        self.mask = mask if mask else np.ones_like(self.meanCBED)
 
-		self.model = []
-		self.model_param_inds = []
+        self.model = []
+        self.model_param_inds = []
 
-		self.nParams = 0
+        self.nParams = 0
 
-		# set up the global arguments
-		self.global_args = {}
+        # set up the global arguments
+        self.global_args = {}
 
-		self.global_args["global_x0"] = x0 if x0 else data.Q_Nx / 2.
-		self.global_args["global_y0"] = y0 if y0 else data.Q_Ny / 2.
+        self.global_args["global_x0"] = x0 if x0 else datacube.Q_Nx / 2.0
+        self.global_args["global_y0"] = y0 if y0 else datacube.Q_Ny / 2.0
 
-		xArray, yArray = np.mgrid[0:data.Q_Nx,0:data.Q_Ny]
-		self.global_args["xArray"] = xArray
-		self.global_args["yArray"] = yArray
+        xArray, yArray = np.mgrid[0 : datacube.Q_Nx, 0 : datacube.Q_Ny]
+        self.global_args["xArray"] = xArray
+        self.global_args["yArray"] = yArray
 
+    def add_model(self, model: WPFModelPrototype):
+        self.model.append(model)
 
-	def add_model(self, model: WPFModelPrototype):
-		self.model.append(model)
+        # keep track of where each model's parameter list begins
+        self.model_param_inds.append(self.nParams)
+        self.nParams += len(model.params.keys())
 
-		# keep track of where each model's parameter list begins
-		self.model_param_inds.append(self.nParams)
-		self.nParams += len(model.params.keys())
+        self._scrape_model_params()
 
-		self._scrape_model_params()
+    def add_model_list(self, model_list):
+        for m in model_list:
+            self.add_model(m)
 
-	def generate_initial_pattern(self):
-		DP = np.zeros((self.data.Q_Nx,self.data.Q_Ny))
+    def generate_initial_pattern(self):
 
-		for i,m in enumerate(self.model):
-			ind = self.model_param_inds[i]
-			m.func(DP, *self.x[ind:ind+m.nParams].tolist(), **self.global_args)
+        # update parameters:
+        self._scrape_model_params()
 
-		return DP
+        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
-	def _scrape_model_params(self):
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i]
+            m.func(DP, *self.x0[ind : ind + m.nParams].tolist(), **self.global_args)
 
-		self.x = np.zeros((self.nParams,))
+        return DP * self.mask
 
-		for i,m in enumerate(self.model):
-			ind = self.model_param_inds[i]
-			self.x[ind:ind+m.nParams] = np.fromiter(m.params.values(),dtype=np.float32)
+    def fit_to_mean_CBED(self):
+
+        # first make sure we have the latest parameters
+        self._scrape_model_params()
+
+        opt = least_squares(self._pattern, self.x0)
+
+        return opt
+
+    def _pattern(self, x):
+
+        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
+
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i]
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.global_args)
+
+        DP *= self.mask
+
+        return DP.ravel()
+
+    def _scrape_model_params(self):
+
+        self.x0 = np.zeros((self.nParams,))
+
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i]
+            self.x0[ind : ind + m.nParams] = np.fromiter(
+                m.params.values(), dtype=np.float32
+            )
