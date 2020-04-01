@@ -22,8 +22,8 @@ setup(
         'numpy >= 1.15',
         'scipy >= 1.1',
         'h5py >= 2.10.0',
-        'scikit-image'
-        'scikit-learn'
+        'scikit-image >= 0.16.2',
+        'scikit-learn >= 0.22.1',
         'tqdm',
         'ncempy >= 1.4.2',
         'hyperspy >= 1.4',
