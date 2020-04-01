@@ -33,6 +33,9 @@ Redundant information in overlapping Bragg disks can be leveraged to calculate t
 Structure in the diffracted halos of amorphous systems can be used to describe the short and medium range order.
 
 
+For more information, see [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
+
+
 ## Using py4DSTEM
 
 This sections describes:
