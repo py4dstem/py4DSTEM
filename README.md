@@ -82,7 +82,7 @@ py4dstem
 
 ### Running from a python interpreter
 
-From a python interpreter, py4DSTEM can be imported in the usual way:
+From any python interpreter inside the `py4dstem` conda environment, py4DSTEM can be imported in the usual way:
 
 ```
 import py4DSTEM
