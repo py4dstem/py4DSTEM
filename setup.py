@@ -22,6 +22,7 @@ setup(
         'numpy >= 1.15',
         'scipy >= 1.1',
         'hyperspy >= 1.4',
+        'h5py >= 2.10.0',
         'PyQt5 >= 5.9, < 6',
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
