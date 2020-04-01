@@ -80,18 +80,20 @@ class GaussianBackground(WPFModelPrototype):
 class SyntheticDiskLattice(WPFModelPrototype):
     def __init__(
         self,
-        ux,
-        uy,
-        vx,
-        vy,
-        disk_radius,
-        disk_width,
-        u_max,
-        v_max,
-        intensity_0,
-        global_center=True,
-        x0=0.0,
-        y0=0.0,
+        ux: float,
+        uy: float,
+        vx: float,
+        vy: float,
+        disk_radius: float,
+        disk_width: float,
+        u_max: int,
+        v_max: int,
+        intensity_0: float,
+        refine_radius: bool = False,
+        refine_width: bool = False,
+        global_center: bool = True,
+        x0: float = 0.0,
+        y0: float = 0.0,
     ):
         self.disk_radius = disk_radius
         self.disk_width = disk_width
@@ -111,12 +113,19 @@ class SyntheticDiskLattice(WPFModelPrototype):
         params["vx"] = vx
         params["vy"] = vy
 
-        u_inds, v_inds = np.mgrid[-u_max:u_max+1, -v_max:v_max+1]
+        u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
         self.u_inds = u_inds.ravel()
         self.v_inds = v_inds.ravel()
 
         for u, v in zip(u_inds.ravel(), v_inds.ravel()):
             params[f"[{u},{v}] Intensity"] = intensity_0
+
+        self.refine_radius = refine_radius
+        self.refine_width = refine_width
+        if refine_radius:
+            params["disk radius"] = disk_radius
+        if refine_width:
+            params["edge width"] = disk_width
 
         super().__init__(name, params)
 
@@ -135,19 +144,22 @@ class SyntheticDiskLattice(WPFModelPrototype):
         vx = args[4]
         vy = args[5]
 
+        disk_radius = args[-2] if self.refine_radius else self.disk_radius
+        disk_width = args[-1] if self.refine_width else self.disk_width
+
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
             x = x0 + (u * ux) + (v * vx)
             y = y0 + (u * uy) + (v * vy)
             DP += args[i + 6] / (
-                1.
+                1.0
                 + np.exp(
                     4
                     * (
                         np.sqrt(
                             (kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2
                         )
-                        - self.disk_radius
+                        - disk_radius
                     )
-                    / self.disk_width
+                    / disk_width
                 )
             )
