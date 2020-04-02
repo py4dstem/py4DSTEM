@@ -27,7 +27,7 @@ setup(
         'tqdm',
         'ncempy >= 1.4.2',
         'hyperspy >= 1.4',
-        'PyQt5 >= 5.9, < 6',
+        'PyQt5 >= 5.9',
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
         'ipywidgets',
