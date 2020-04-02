@@ -7,7 +7,7 @@ exec(open('py4DSTEM/version.py').read()) # Reads the current __version__
 
 setup(
     name='py4DSTEM',
-    version=__version__,
+    version='0.8.0',
     packages=find_packages(),
     description='An open source python package for processing and analysis of 4D STEM data.',
     long_description=long_description,
