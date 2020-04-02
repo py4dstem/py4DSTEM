@@ -3,8 +3,6 @@ from setuptools import setup, find_packages
 with open("README.md","r") as f:
     long_description = f.read()
 
-exec(open('py4DSTEM/version.py').read()) # Reads the current __version__
-
 setup(
     name='py4DSTEM',
     version='0.8.0',
