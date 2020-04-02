@@ -374,19 +374,19 @@ def linear_interpolation_2D(ar, x, y):
 
 def add_to_2D_array_from_floats(ar, x, y, I):
     """
-    Adds the value I to array ar, distributing the value between the four pixels nearest (x,y) using
-    linear interpolation.
+    Adds the values I to array ar, distributing the value between the four pixels nearest (x,y) using
+    linear interpolation.  Inputs (x,y,I) may be floats or arrays of floats.
     """
     Nx, Ny = ar.shape
-    x0, x1 = int(np.floor(x)), int(np.ceil(x))
-    y0, y1 = int(np.floor(y)), int(np.ceil(y))
-    if (x0 >= 0) and (y0 >= 0) and (x1 < Nx) and (y1 < Ny):
-        dx = x - x0
-        dy = y - y0
-        ar[x0, y0] += (1 - dx) * (1 - dy) * I
-        ar[x0, y1] += (1 - dx) * dy * I
-        ar[x1, y0] += dx * (1 - dy) * I
-        ar[x1, y1] += dx * dy * I
+    x0, x1 = (np.floor(x)).astype(int), (np.ceil(x)).astype(int)
+    y0, y1 = (np.floor(y)).astype(int), (np.ceil(y)).astype(int)
+    mask = np.logical_and(np.logical_and(np.logical_and((x0>=0),(y0>=0)),(x1<Nx)),(y1<Ny))
+    dx = x - x0
+    dy = y - y0
+    ar[x0[mask], y0[mask]] += (1 - dx[mask]) * (1 - dy[mask]) * I[mask]
+    ar[x0[mask], y1[mask]] += (1 - dx[mask]) * (    dy[mask]) * I[mask]
+    ar[x1[mask], y0[mask]] += (    dx[mask]) * (1 - dy[mask]) * I[mask]
+    ar[x1[mask], y1[mask]] += (    dx[mask]) * (    dy[mask]) * I[mask]
     return ar
 
 
@@ -488,7 +488,7 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
         # Loop over all vertices
         for i in range(len(vertex_indices)):
             index_current = vertex_indices[i]
-            if index_current is not -1:
+            if index_current != -1:
                 # For known vertices, just add to a running list
                 vertices = np.vstack((vertices, voronoi.vertices[index_current]))
             else:
@@ -549,4 +549,7 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
     return vertex_list
 
 
+def foo():
+    """Test func."""
+    print('pass')
 
