@@ -91,6 +91,21 @@ class WholePatternFit:
 
         return DP.ravel()
 
+    def _jacobian(self, x):
+
+        J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams + 2))
+
+        self.current_glob["global_x0"] = x[0]
+        self.current_glob["global_y0"] = x[1]
+
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i] + 2
+            m.jacobian(
+                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **self.current_glob
+            )
+
+        return J * self.mask.ravel()[:, np.newaxis]
+
     def _scrape_model_params(self):
 
         self.x0 = np.zeros((self.nParams + 2,))
