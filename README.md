@@ -80,12 +80,12 @@ import py4DSTEM
 
 ### Sample jupter notebooks
 
-TODO
+TODO -- apologies, we are under construction ;)
 
 
 ### Sample scripts
 
-TODO
+TODO -- lolcats
 
 
 
@@ -117,8 +117,6 @@ To merge back in to the main repository, submit a pull request to the dev branch
 
 
 
-
-
 ## More information
 
 ### Dependencies
@@ -140,7 +138,7 @@ To merge back in to the main repository, submit a pull request to the dev branch
 
 ### Versioning
 
-v. 0.7
+v. 0.8.0
 
 
 
