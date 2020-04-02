@@ -55,10 +55,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
-
-        QtWidgets.QMainWindow.__init__(self)
-        self.this_dir, self.this_filename = os.path.split(__file__)
-
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
@@ -751,6 +747,8 @@ class DataViewer(QtWidgets.QMainWindow):
                 self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
                     (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
+            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+                                                   autoLevels=False,autoRange=False)
         else:
             pass
         return
