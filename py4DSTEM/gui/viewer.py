@@ -74,7 +74,7 @@ class DataViewer(QtWidgets.QMainWindow):
         self.setup_diffraction_space_widget()
         self.setup_real_space_widget()
         self.setup_control_widget()
-        self.setup_console_widget()
+        #self.setup_console_widget()
         self.setup_main_window()
 
         # Set up temporary datacube
