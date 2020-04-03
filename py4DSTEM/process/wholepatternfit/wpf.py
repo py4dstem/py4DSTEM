@@ -68,7 +68,7 @@ class WholePatternFit:
 
         return DP * self.mask
 
-    def fit_to_mean_CBED(self):
+    def fit_to_mean_CBED(self, **fit_opts):
 
         # first make sure we have the latest parameters
         self._scrape_model_params()
@@ -78,13 +78,25 @@ class WholePatternFit:
         self.current_glob = self.global_args.copy()
 
         if self.hasJacobian & self.use_jacobian:
-            opt = least_squares(self._pattern, self.x0, jac=self._jacobian)
+            opt = least_squares(self._pattern, self.x0, jac=self._jacobian, **fit_opts)
         else:
-            opt = least_squares(self._pattern, self.x0)
+            opt = least_squares(self._pattern, self.x0, **fit_opts)
 
         self.mean_CBED_fit = opt
 
         return opt
+
+    def accept_mean_CBED_fit(self):
+        x = self.mean_CBED_fit.x
+        self.global_args["global_x0"] = x[0]
+        self.global_args["global_y0"] = x[1]
+
+        self.global_args["global_r"] = np.hypot((self.global_args["xArray"]- x[0]),(self.global_args["yArray"]-x[1]))
+
+        for i,m in enumerate(self.model):
+            ind = self.model_param_inds[i] + 2
+            for j,k in enumerate(m.params.keys()):
+                m.params[k] = x[ind+j]
 
     def _pattern(self, x):
 
