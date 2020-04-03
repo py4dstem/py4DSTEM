@@ -14,6 +14,7 @@ class WholePatternFit:
         x0: Optional[float] = None,
         y0: Optional[float] = None,
         mask: Optional[np.ndarray] = None,
+        use_jacobian: bool = True,
     ):
         self.datacube = datacube
         self.meanCBED = np.mean(datacube.data, axis=(0, 1))
@@ -24,6 +25,7 @@ class WholePatternFit:
         self.model_param_inds = []
 
         self.nParams = 0
+        self.use_jacobian = use_jacobian
 
         # set up the global arguments
         self.global_args = {}
@@ -34,6 +36,11 @@ class WholePatternFit:
         xArray, yArray = np.mgrid[0 : datacube.Q_Nx, 0 : datacube.Q_Ny]
         self.global_args["xArray"] = xArray
         self.global_args["yArray"] = yArray
+
+        self.global_args["global_r"] = np.hypot((xArray - x0) ** 2, (yArray - y0) ** 2)
+
+        self.global_args["Q_Nx"] = datacube.Q_Nx
+        self.global_args["Q_Ny"] = datacube.Q_Ny
 
     def add_model(self, model: WPFModelPrototype):
         self.model.append(model)
@@ -70,7 +77,10 @@ class WholePatternFit:
         self.current_pattern = self.meanCBED
         self.current_glob = self.global_args.copy()
 
-        opt = least_squares(self._pattern, self.x0)
+        if self.hasJacobian & self.use_jacobian:
+            opt = least_squares(self._pattern, self.x0, jac=self._jacobian)
+        else:
+            opt = least_squares(self._pattern, self.x0)
 
         self.mean_CBED_fit = opt
 
@@ -82,6 +92,9 @@ class WholePatternFit:
 
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
+        self.current_glob["global_r"] = np.hypot(
+            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+        )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
@@ -97,6 +110,9 @@ class WholePatternFit:
 
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
+        self.current_glob["global_r"] = np.hypot(
+            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+        )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
@@ -119,3 +135,5 @@ class WholePatternFit:
             self.x0[ind : ind + m.nParams] = np.fromiter(
                 m.params.values(), dtype=np.float32
             )
+
+        self.hasJacobian = all([m.hasJacobian for m in self.model])
