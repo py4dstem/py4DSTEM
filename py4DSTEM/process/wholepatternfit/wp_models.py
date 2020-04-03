@@ -123,9 +123,7 @@ class GaussianBackground(WPFModelPrototype):
     ) -> None:
 
         # dF/s(sigma)
-        J[:, offset] = (
-            -1
-            * level
+        J[:, offset] = (level
             * ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -141,9 +139,7 @@ class GaussianBackground(WPFModelPrototype):
         ).ravel()
 
         # dF/d(x0)
-        J[:, offset + 2] = (
-            -1
-            * level
+        J[:, offset + 2] = (level
             * (kwargs["xArray"] - x0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -153,9 +149,7 @@ class GaussianBackground(WPFModelPrototype):
         ).ravel()
 
         # dF/d(y0)
-        J[:, offset + 3] = (
-            -1
-            * level
+        J[:, offset + 3] = (level
             * (kwargs["yArray"] - y0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -318,7 +312,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     )
                 ).ravel()
 
-                # because... reasons?, sometimes we get NaN
+                # because... reasons, sometimes we get NaN
                 # very far from the disk center. let's zero those:
                 dx[np.isnan(dx)] = 0.0
                 dy[np.isnan(dy)] = 0.0
