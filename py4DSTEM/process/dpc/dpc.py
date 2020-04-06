@@ -265,8 +265,10 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     # Coordinates
     R_Nx,R_Ny = CoMx.shape
     R_Nx_padded,R_Ny_padded = R_Nx*paddingfactor,R_Ny*paddingfactor
-    qx,qy = make_Fourier_coords2D(R_Nx_padded,R_Ny_padded,pixelSize=1)
-    qr2 = qx**2 + qy**2
+
+    qx = np.fft.rfftfreq(R_Nx_padded)
+    qy = np.fft.rfftfreq(R_Ny_padded)
+    qr2 = qx[:,None]**2 + qy[None,:]**2
 
     # Invese operators
     denominator = qr2 + regHighPass + qr2**2*regLowPass
@@ -275,8 +277,8 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     denominator[0,0] = 0
     _ = np.seterr(divide='warn')
     f = 1j * 0.25 * stepsize
-    qxOperator = f*qx*denominator
-    qyOperator = f*qy*denominator
+    qxOperator = f*qx[:,None]*denominator
+    qyOperator = f*qy[None,:]*denominator
 
     # Perform rotation and flipping
     if not flip:
@@ -308,7 +310,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         dy[maskInv] = 0
 
         # Calculate reconstruction update
-        update = np.real(np.fft.ifft2( np.fft.fft2(dx)*qxOperator + np.fft.fft2(dy)*qyOperator))
+        update = np.fft.irfft2( np.fft.rfft2(dx)*qxOperator + np.fft.rfft2(dy)*qyOperator)
 
         # Apply update
         phase += stepsize*update
@@ -321,6 +323,11 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         xDiff = dx[mask] - CoMx_rot.ravel()
         yDiff = dy[mask] - CoMy_rot.ravel()
         error[i] = np.sqrt(np.mean((xDiff-np.mean(xDiff))**2 + (yDiff-np.mean(yDiff))**2))
+
+        # Halve step size if error is increasing
+        if i>0:
+            if error[i] > error[i-1]:
+                stepsize /= 2
 
     phase = phase[:R_Nx,:R_Ny]
 
