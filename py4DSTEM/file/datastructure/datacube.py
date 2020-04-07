@@ -13,7 +13,7 @@ import h5py
 import numpy as np
 from .dataobject import DataObject
 from ...process import preprocess
-from ...process import virtualimage
+from ...process import virtualimage_viewer as virtualimage
 from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
