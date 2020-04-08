@@ -33,6 +33,18 @@ class WholePatternFit:
         self.global_args["global_x0"] = x0 if x0 else datacube.Q_Nx / 2.0
         self.global_args["global_y0"] = y0 if y0 else datacube.Q_Ny / 2.0
 
+        if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
+            # the initial position was specified with bounds
+            try:
+                self.global_xy0_lb = np.array([x0[1], y0[1]])
+                self.global_xy0_ub = np.array([x0[2], y0[2]])
+            except:
+                self.global_xy0_lb = np.array([0.0, 0.0])
+                self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+        else:
+            self.global_xy0_lb = np.array([0.0, 0.0])
+            self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+
         xArray, yArray = np.mgrid[0 : datacube.Q_Nx, 0 : datacube.Q_Ny]
         self.global_args["xArray"] = xArray
         self.global_args["yArray"] = yArray
@@ -41,6 +53,10 @@ class WholePatternFit:
 
         self.global_args["Q_Nx"] = datacube.Q_Nx
         self.global_args["Q_Ny"] = datacube.Q_Ny
+
+        # for debugging: tracks all function evals
+        self._track = True
+        self._fevals = []
 
     def add_model(self, model: WPFModelPrototype):
         self.model.append(model)
@@ -77,10 +93,23 @@ class WholePatternFit:
         self.current_pattern = self.meanCBED
         self.current_glob = self.global_args.copy()
 
+        self._fevals = []
+
         if self.hasJacobian & self.use_jacobian:
-            opt = least_squares(self._pattern, self.x0, jac=self._jacobian, **fit_opts)
+            opt = least_squares(
+                self._pattern,
+                self.x0,
+                jac=self._jacobian,
+                bounds=(self.lower_bound, self.upper_bound),
+                **fit_opts
+            )
         else:
-            opt = least_squares(self._pattern, self.x0, **fit_opts)
+            opt = least_squares(
+                self._pattern,
+                self.x0,
+                bounds=(self.lower_bound, self.upper_bound),
+                **fit_opts
+            )
 
         self.mean_CBED_fit = opt
 
@@ -91,12 +120,14 @@ class WholePatternFit:
         self.global_args["global_x0"] = x[0]
         self.global_args["global_y0"] = x[1]
 
-        self.global_args["global_r"] = np.hypot((self.global_args["xArray"]- x[0]),(self.global_args["yArray"]-x[1]))
+        self.global_args["global_r"] = np.hypot(
+            (self.global_args["xArray"] - x[0]), (self.global_args["yArray"] - x[1])
+        )
 
-        for i,m in enumerate(self.model):
+        for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
-            for j,k in enumerate(m.params.keys()):
-                m.params[k] = x[ind+j]
+            for j, k in enumerate(m.params.keys()):
+                m.params[k] = x[ind + j]
 
     def _pattern(self, x):
 
@@ -113,6 +144,9 @@ class WholePatternFit:
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
         DP = (DP - self.current_pattern) * self.mask
+
+        if self._track:
+            self._fevals.append(DP)
 
         return DP.ravel()
 
@@ -137,15 +171,21 @@ class WholePatternFit:
     def _scrape_model_params(self):
 
         self.x0 = np.zeros((self.nParams + 2,))
+        self.upper_bound = np.zeros_like(self.x0)
+        self.lower_bound = np.zeros_like(self.x0)
 
         self.x0[0:2] = np.array(
             [self.global_args["global_x0"], self.global_args["global_y0"]]
         )
+        self.upper_bound[0:2] = self.global_xy0_ub
+        self.lower_bound[0:2] = self.global_xy0_lb
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
-            self.x0[ind : ind + m.nParams] = np.fromiter(
-                m.params.values(), dtype=np.float32
-            )
+
+            for j, v in enumerate(m.params.values()):
+                self.x0[ind + j] = v.initial_value
+                self.upper_bound[ind + j] = v.upper_bound
+                self.lower_bound[ind + j] = v.lower_bound
 
         self.hasJacobian = all([m.hasJacobian for m in self.model])

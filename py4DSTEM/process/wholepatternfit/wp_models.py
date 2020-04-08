@@ -1,5 +1,5 @@
 from inspect import signature
-
+from typing import Optional
 import numpy as np
 
 from pdb import set_trace
@@ -53,9 +53,28 @@ class WPFModelPrototype:
     #     raise NotImplementedError()
 
 
+class Parameter:
+    def __init__(
+        self,
+        initial_value,
+        lower_bound: Optional[float] = None,
+        upper_bound: Optional[float] = None,
+    ):
+
+        if hasattr(initial_value, "__iter__"):
+            self.set_params(*initial_value)
+        else:
+            self.set_params(initial_value, lower_bound, upper_bound)
+
+    def set_params(self, initial_value, lower_bound, upper_bound):
+        self.initial_value = initial_value
+        self.lower_bound = lower_bound if lower_bound is not None else -np.inf
+        self.upper_bound = upper_bound if upper_bound is not None else np.inf
+
+
 class DCBackground(WPFModelPrototype):
     def __init__(self, background_value=0.0, name="DC Background"):
-        params = {"DC Level": background_value}
+        params = {"DC Level": Parameter(background_value)}
 
         super().__init__(name, params)
 
@@ -69,13 +88,13 @@ class DCBackground(WPFModelPrototype):
 class GaussianBackground(WPFModelPrototype):
     def __init__(self, sigma, intensity, global_center=True, x0=0.0, y0=0.0):
         name = "Gaussian Background"
-        params = {"sigma": sigma, "intensity": intensity}
+        params = {"sigma": Parameter(sigma), "intensity": Parameter(intensity)}
         if global_center:
             self.func = self.global_center_func
             self.jacobian = self.global_center_jacobian
         else:
-            params["x center"] = x0
-            params["y center"] = y0
+            params["x center"] = Parameter(x0)
+            params["y center"] = Parameter(y0)
             self.func = self.local_center_func
             self.jacobian = self.local_center_jacobian
 
@@ -123,7 +142,8 @@ class GaussianBackground(WPFModelPrototype):
     ) -> None:
 
         # dF/s(sigma)
-        J[:, offset] = (level
+        J[:, offset] = (
+            level
             * ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -139,7 +159,8 @@ class GaussianBackground(WPFModelPrototype):
         ).ravel()
 
         # dF/d(x0)
-        J[:, offset + 2] = (level
+        J[:, offset + 2] = (
+            level
             * (kwargs["xArray"] - x0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -149,7 +170,8 @@ class GaussianBackground(WPFModelPrototype):
         ).ravel()
 
         # dF/d(y0)
-        J[:, offset + 3] = (level
+        J[:, offset + 3] = (
+            level
             * (kwargs["yArray"] - y0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
@@ -187,28 +209,28 @@ class SyntheticDiskLattice(WPFModelPrototype):
             self.func = self.global_center_func
             self.jacobian = self.global_center_jacobian
         else:
-            params["x center"] = x0
-            params["y center"] = y0
+            params["x center"] = Parameter(x0)
+            params["y center"] = Parameter(y0)
             self.func = self.local_center_func
 
-        params["ux"] = ux
-        params["uy"] = uy
-        params["vx"] = vx
-        params["vy"] = vy
+        params["ux"] = Parameter(ux)
+        params["uy"] = Parameter(uy)
+        params["vx"] = Parameter(vx)
+        params["vy"] = Parameter(vy)
 
         u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
         self.u_inds = u_inds.ravel()
         self.v_inds = v_inds.ravel()
 
         for u, v in zip(u_inds.ravel(), v_inds.ravel()):
-            params[f"[{u},{v}] Intensity"] = intensity_0
+            params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
 
         self.refine_radius = refine_radius
         self.refine_width = refine_width
         if refine_radius:
-            params["disk radius"] = disk_radius
+            params["disk radius"] = Parameter(disk_radius)
         if refine_width:
-            params["edge width"] = disk_width
+            params["edge width"] = Parameter(disk_width)
 
         super().__init__(name, params)
 
@@ -286,17 +308,19 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     np.sqrt((kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2),
                 )
 
+                mask = r_disk < (2 * disk_radius)
+
+                top_exp = mask * np.exp(
+                    4 * ((mask * r_disk) - disk_radius) / disk_width
+                )
+
                 # dF/d(global_x0)
                 dx = (
                     4
                     * args[i + 4]
                     * (kwargs["xArray"] - x)
-                    * np.exp(4 * (r_disk - disk_radius) / disk_width)
-                    / (
-                        (1.0 + np.exp(4 * (r_disk - disk_radius) / disk_width)) ** 2
-                        * disk_width
-                        * r
-                    )
+                    * top_exp
+                    / ((1.0 + top_exp) ** 2 * disk_width * r)
                 ).ravel()
 
                 # dF/d(global_y0)
@@ -304,35 +328,28 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     4
                     * args[i + 4]
                     * (kwargs["yArray"] - y)
-                    * np.exp(4 * (r_disk - disk_radius) / disk_width)
-                    / (
-                        (1.0 + np.exp(4 * (r_disk - disk_radius) / disk_width)) ** 2
-                        * disk_width
-                        * r
-                    )
+                    * top_exp
+                    / ((1.0 + top_exp) ** 2 * disk_width * r)
                 ).ravel()
 
                 # because... reasons, sometimes we get NaN
                 # very far from the disk center. let's zero those:
-                dx[np.isnan(dx)] = 0.0
-                dy[np.isnan(dy)] = 0.0
+                # dx[np.isnan(dx)] = 0.0
+                # dy[np.isnan(dy)] = 0.0
 
                 # insert global positional derivatives
                 J[:, 0] += dx
                 J[:, 1] += dy
 
                 # insert lattice vector derivatives
-                J[:, offset] += u * dx
-                J[:, offset + 1] += u * dy
-                J[:, offset + 2] += v * dx
-                J[:, offset + 3] += v * dy
+                J[:, offset] = u * dx
+                J[:, offset + 1] = u * dy
+                J[:, offset + 2] = v * dx
+                J[:, offset + 3] = v * dy
 
                 # insert intensity derivative
-                dI = (
-                    1.0
-                    / (1.0 + np.exp(4 * (r_disk - disk_radius) / disk_width))
-                ).ravel()
-                dI[np.isnan(dI)] = 0.0
+                dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
+                # dI[np.isnan(dI)] = 0.0
                 J[:, offset + i + 4] = dI
 
                 # insert disk radius derivative
@@ -340,29 +357,21 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     dR = (
                         4.0
                         * args[i + 4]
-                        * np.exp(4 * (r_disk - disk_radius) / disk_width)
-                        / (
-                            disk_width
-                            * (1.0 + np.exp(4 * (r_disk - disk_radius) / disk_width))
-                            ** 2
-                        )
+                        * top_exp
+                        / (disk_width * (1.0 + top_exp) ** 2)
                     ).ravel()
-                    dR[np.isnan(dR)] = 0.0
+                    # dR[np.isnan(dR)] = 0.0
                     J[:, offset + len(args) + radius_ind] += dR
 
                 if self.refine_width:
                     dW = (
                         4.0
                         * args[i + 4]
-                        * np.exp(4 * (r_disk - disk_radius) / disk_width)
+                        * top_exp
                         * (r_disk - disk_radius)
-                        / (
-                            disk_width ** 2
-                            * (1.0 + np.exp(4 * (r_disk - disk_radius) / disk_width))
-                            ** 2
-                        )
+                        / (disk_width ** 2 * (1.0 + top_exp) ** 2)
                     ).ravel()
-                    dW[np.isnan(dW)] = 0.0
+                    # dW[np.isnan(dW)] = 0.0
                     J[:, offset + len(args) - 1] += dW
 
                 # set_trace()
