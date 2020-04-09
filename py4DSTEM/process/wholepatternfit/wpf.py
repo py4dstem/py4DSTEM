@@ -15,9 +15,12 @@ class WholePatternFit:
         y0: Optional[float] = None,
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
+        meanCBED: np.ndarray = None,
     ):
         self.datacube = datacube
-        self.meanCBED = np.mean(datacube.data, axis=(0, 1))
+        self.meanCBED = (
+            meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
+        )
 
         self.mask = mask if mask else np.ones_like(self.meanCBED)
 
@@ -76,13 +79,11 @@ class WholePatternFit:
         # update parameters:
         self._scrape_model_params()
 
-        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
+        # set the current active pattern to the mean CBED:
+        self.current_pattern = self.meanCBED
+        self.current_glob = self.global_args.copy()
 
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.func(DP, *self.x0[ind : ind + m.nParams].tolist(), **self.global_args)
-
-        return DP * self.mask
+        return self._pattern(self.x0).reshape(self.meanCBED.shape) + self.meanCBED
 
     def fit_to_mean_CBED(self, **fit_opts):
 
