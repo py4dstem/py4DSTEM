@@ -107,11 +107,13 @@ class GaussianBackground(WPFModelPrototype):
         self, J: np.ndarray, sigma, level, offset: int, **kwargs
     ) -> None:
 
+        exp_expr = np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+
         # dF/d(global_x0)
         J[:, 0] += (
             level
             * (kwargs["xArray"] - kwargs["global_x0"])
-            * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+            * exp_expr
             / sigma ** 2
         ).ravel()
 
@@ -119,7 +121,7 @@ class GaussianBackground(WPFModelPrototype):
         J[:, 1] += (
             level
             * (kwargs["yArray"] - kwargs["global_y0"])
-            * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+            * exp_expr
             / sigma ** 2
         ).ravel()
 
@@ -127,12 +129,12 @@ class GaussianBackground(WPFModelPrototype):
         J[:, offset] = (
             level
             * kwargs["global_r"] ** 2
-            * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+            * exp_expr
             / sigma ** 3
         ).ravel()
 
         # dF/d(level)
-        J[:, offset + 1] = np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2)).ravel()
+        J[:, offset + 1] = exp_expr.ravel()
 
     def local_center_func(self, DP: np.ndarray, sigma, level, x0, y0, **kwargs) -> None:
         DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
@@ -362,10 +364,10 @@ class SyntheticDiskLattice(WPFModelPrototype):
             J[:, 1] += dy
 
             # insert lattice vector derivatives
-            J[:, offset] = u * dx
-            J[:, offset + 1] = u * dy
-            J[:, offset + 2] = v * dx
-            J[:, offset + 3] = v * dy
+            J[:, offset] += u * dx
+            J[:, offset + 1] += u * dy
+            J[:, offset + 2] += v * dx
+            J[:, offset + 3] += v * dy
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()

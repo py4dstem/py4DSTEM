@@ -30,12 +30,6 @@ class WholePatternFit:
         self.nParams = 0
         self.use_jacobian = use_jacobian
 
-        # set up the global arguments
-        self.global_args = {}
-
-        self.global_args["global_x0"] = x0 if x0 else datacube.Q_Nx / 2.0
-        self.global_args["global_y0"] = y0 if y0 else datacube.Q_Ny / 2.0
-
         if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
             # the initial position was specified with bounds
             try:
@@ -44,9 +38,17 @@ class WholePatternFit:
             except:
                 self.global_xy0_lb = np.array([0.0, 0.0])
                 self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+            x0 = x0[0]
+            y0 = y0[0]
         else:
             self.global_xy0_lb = np.array([0.0, 0.0])
             self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+
+        # set up the global arguments
+        self.global_args = {}
+
+        self.global_args["global_x0"] = x0 if x0 else datacube.Q_Nx / 2.0
+        self.global_args["global_y0"] = y0 if y0 else datacube.Q_Ny / 2.0
 
         xArray, yArray = np.mgrid[0 : datacube.Q_Nx, 0 : datacube.Q_Ny]
         self.global_args["xArray"] = xArray
@@ -60,6 +62,7 @@ class WholePatternFit:
         # for debugging: tracks all function evals
         self._track = True
         self._fevals = []
+        self._xevals = []
 
     def add_model(self, model: WPFModelPrototype):
         self.model.append(model)
@@ -148,6 +151,7 @@ class WholePatternFit:
 
         if self._track:
             self._fevals.append(DP)
+            self._xevals.append(x)
 
         return DP.ravel()
 
