@@ -221,7 +221,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     """
     Calculate the phase of the sample transmittance from the diffraction centers of mass.
     A bare bones description of the approach taken here is below - for detailed discussion of the
-    relevnt theory, see, e.g.:
+    relevant theory, see, e.g.:
         Ishizuka et al, Microscopy (2017) 397-405
         Close et al, Ultramicroscopy 159 (2015) 124-137
         Wadell and Chapman, Optik 54 (1979) No. 2, 83-96
@@ -266,7 +266,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     R_Nx,R_Ny = CoMx.shape
     R_Nx_padded,R_Ny_padded = R_Nx*paddingfactor,R_Ny*paddingfactor
 
-    qx = np.fft.rfftfreq(R_Nx_padded)
+    qx = np.fft.fftfreq(R_Nx_padded)
     qy = np.fft.rfftfreq(R_Ny_padded)
     qr2 = qx[:,None]**2 + qy[None,:]**2
 
@@ -276,7 +276,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     denominator = 1./denominator
     denominator[0,0] = 0
     _ = np.seterr(divide='warn')
-    f = 1j * 0.25 * stepsize
+    f = 1j * 0.25*stepsize
     qxOperator = f*qx[:,None]*denominator
     qyOperator = f*qy[None,:]*denominator
 
