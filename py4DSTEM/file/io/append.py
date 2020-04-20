@@ -14,7 +14,7 @@ from ..datastructure import DataObject, Metadata
 from ..log import log, Logger
 logger = Logger()
 
-@log
+#@log
 def append_from_dataobject_list(dataobject_list, filepath):
     """
     Appends new dataobjects to an existing py4DSTEM h5 file.
@@ -145,7 +145,7 @@ def append_from_dataobject_list(dataobject_list, filepath):
     print("Done.")
     f.close()
 
-@log
+#@log
 def append_dataobject(dataobject, filepath, **kwargs):
     """
     Appends dataobject to existing .h5 file at filepath.
@@ -155,7 +155,7 @@ def append_dataobject(dataobject, filepath, **kwargs):
     # append
     append_from_dataobject_list([dataobject], filepath, **kwargs)
 
-@log
+#@log
 def append_dataobjects_by_indices(index_list, filepath, **kwargs):
     """
     Appends the DataObjects found at the indices in index_list in DataObject.get_dataobjects to
@@ -166,7 +166,7 @@ def append_dataobjects_by_indices(index_list, filepath, **kwargs):
 
     append_from_dataobject_list(dataobject_list, filepath, **kwargs)
 
-@log
+#@log
 def append(data, filepath, **kwargs):
     """
     Appends data to an existing py4DSTEM .h5 file at filepath. What is saved depends on the
