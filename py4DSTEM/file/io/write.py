@@ -474,7 +474,7 @@ def transfer_metadata_dict(dictionary,group):
     """
     for key,val in dictionary.items():
         if type(val)==str:
-            group.attrs.create(key,np.unicode_(val))
+            group.attrs.create(key,str(val))
         else:
             group.attrs.create(key,val)
 
@@ -493,7 +493,7 @@ def transfer_metadata_tree_hs(tree,group):
             transfer_metadata_tree_hs(tree[key],subgroup)
         else:
             if type(tree[key])==str:
-                group.attrs.create(key,np.unicode_(tree[key]))
+                group.attrs.create(key,str(tree[key]))
             else:
                 group.attrs.create(key,tree[key])
 
@@ -587,7 +587,7 @@ def write_log_item(group_log, index, logged_item):
     group_inputs = group_logitem.create_group('inputs')
     for key,value in logged_item.inputs.items():
         if type(value)==str:
-            group_inputs.attrs.create(key, np.unicode_(value))
+            group_inputs.attrs.create(key, str(value))
         elif isinstance(value,DataObject):
             if value.name == '':
                 if isinstance(value,DataCube):
