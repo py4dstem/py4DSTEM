@@ -9,7 +9,7 @@ from .filebrowser import is_py4DSTEM_file, FileBrowser
 from ..log import log, Logger
 logger = Logger()
 
-@log
+#@log
 def remove_from_index_list(indices, filepath):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
@@ -59,7 +59,7 @@ def remove_from_index_list(indices, filepath):
     print("Done.")
     f.close()
 
-@log
+#@log
 def remove(dataobjects, filepath):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
