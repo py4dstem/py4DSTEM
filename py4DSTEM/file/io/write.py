@@ -455,12 +455,13 @@ def save_metadata(metadata,group):
     transfer_metadata_dict(metadata.comments,group_comments_metadata)
 
     # Transfer original metadata trees
-    if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
-    else:
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
+    if metadata.original_metadata.shortlist is not None:
+        if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+            transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
+        else:
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
 
 def transfer_metadata_dict(dictionary,group):
     """
