@@ -30,7 +30,7 @@ from ...process.utils import bin2D, tqdmnd
 
 ###################### BEGIN read FUNCTIONS ########################
 
-@log
+#@log
 def read(filename, load=None):
     """
     General read function.  Takes a filename as input, and outputs some py4DSTEM dataobjects.

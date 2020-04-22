@@ -61,6 +61,8 @@ class Metadata(object):
 
         # Original metadata - whatever is initially found at read time
         self.original_metadata = MetadataCollection('original_metadata')
+        self.original_metadata.shortlist = None
+        self.original_metadata.all = None
 
         # Search dictionaries
         self._search_dicts = MetadataCollection('search_dicts')
