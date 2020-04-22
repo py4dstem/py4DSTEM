@@ -15,7 +15,7 @@ from ...process.utils import tqdmnd
 from ..log import log, Logger
 logger = Logger()
 
-@log
+#@log
 def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
@@ -455,12 +455,13 @@ def save_metadata(metadata,group):
     transfer_metadata_dict(metadata.comments,group_comments_metadata)
 
     # Transfer original metadata trees
-    if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
-    else:
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
+    if metadata.original_metadata.shortlist is not None:
+        if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+            transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
+        else:
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+            transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
 
 def transfer_metadata_dict(dictionary,group):
     """
@@ -473,7 +474,7 @@ def transfer_metadata_dict(dictionary,group):
     """
     for key,val in dictionary.items():
         if type(val)==str:
-            group.attrs.create(key,np.string_(val))
+            group.attrs.create(key,str(val))
         else:
             group.attrs.create(key,val)
 
@@ -492,7 +493,7 @@ def transfer_metadata_tree_hs(tree,group):
             transfer_metadata_tree_hs(tree[key],subgroup)
         else:
             if type(tree[key])==str:
-                group.attrs.create(key,np.string_(tree[key]))
+                group.attrs.create(key,str(tree[key]))
             else:
                 group.attrs.create(key,tree[key])
 
@@ -586,7 +587,7 @@ def write_log_item(group_log, index, logged_item):
     group_inputs = group_logitem.create_group('inputs')
     for key,value in logged_item.inputs.items():
         if type(value)==str:
-            group_inputs.attrs.create(key, np.string_(value))
+            group_inputs.attrs.create(key, str(value))
         elif isinstance(value,DataObject):
             if value.name == '':
                 if isinstance(value,DataCube):
@@ -609,8 +610,8 @@ def write_log_item(group_log, index, logged_item):
                 group_inputs.attrs.create(key, value)
             except TypeError:
                 group_inputs.attrs.create(key, np.string_(str(value)))
-    group_logitem.attrs.create('version', logged_item.version)
-    write_time_to_log_item(group_logitem, logged_item.datetime)
+    group_logitem.attrs.create('version', np.string_(logged_item.version))
+    write_time_to_log_item(group_logitem, np.string_(logged_item.datetime))
 
 def write_time_to_log_item(group_logitem, datetime):
     date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
