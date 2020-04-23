@@ -12,6 +12,8 @@ build/
 dist/
 py4DSTEM/sample_code/
 py4DSTEM/test/testdata/
+.vscode/
+
 
 # Data Specific #
 #################
