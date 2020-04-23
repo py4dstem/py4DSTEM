@@ -71,6 +71,12 @@ class Parameter:
         self.lower_bound = lower_bound if lower_bound is not None else -np.inf
         self.upper_bound = upper_bound if upper_bound is not None else np.inf
 
+    def __str__(self):
+        return f"Value: {self.initial_value} (Range: {self.lower_bound},{self.upper_bound})"
+
+    def __repr__(self):
+        return f"Value: {self.initial_value} (Range: {self.lower_bound},{self.upper_bound})"
+
 
 class DCBackground(WPFModelPrototype):
     def __init__(self, background_value=0.0, name="DC Background"):
@@ -111,27 +117,16 @@ class GaussianBackground(WPFModelPrototype):
 
         # dF/d(global_x0)
         J[:, 0] += (
-            level
-            * (kwargs["xArray"] - kwargs["global_x0"])
-            * exp_expr
-            / sigma ** 2
+            level * (kwargs["xArray"] - kwargs["global_x0"]) * exp_expr / sigma ** 2
         ).ravel()
 
         # dF/d(global_y0)
         J[:, 1] += (
-            level
-            * (kwargs["yArray"] - kwargs["global_y0"])
-            * exp_expr
-            / sigma ** 2
+            level * (kwargs["yArray"] - kwargs["global_y0"]) * exp_expr / sigma ** 2
         ).ravel()
 
         # dF/s(sigma)
-        J[:, offset] = (
-            level
-            * kwargs["global_r"] ** 2
-            * exp_expr
-            / sigma ** 3
-        ).ravel()
+        J[:, offset] = (level * kwargs["global_r"] ** 2 * exp_expr / sigma ** 3).ravel()
 
         # dF/d(level)
         J[:, offset + 1] = exp_expr.ravel()
@@ -282,15 +277,14 @@ class SyntheticDiskLattice(WPFModelPrototype):
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
             x = x0 + (u * ux) + (v * vx)
             y = y0 + (u * uy) + (v * vy)
-            #if (x > 0) & (x < kwargs["Q_Nx"]) & (y > 0) & (y < kwargs["Q_Nx"]):
+            # if (x > 0) & (x < kwargs["Q_Nx"]) & (y > 0) & (y < kwargs["Q_Nx"]):
             DP += args[i + 6] / (
                 1.0
                 + np.exp(
                     4
                     * (
                         np.sqrt(
-                            (kwargs["xArray"] - x) ** 2
-                            + (kwargs["yArray"] - y) ** 2
+                            (kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2
                         )
                         - disk_radius
                     )
@@ -332,9 +326,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
             mask = r_disk < (2 * disk_radius)
 
-            top_exp = mask * np.exp(
-                4 * ((mask * r_disk) - disk_radius) / disk_width
-            )
+            top_exp = mask * np.exp(4 * ((mask * r_disk) - disk_radius) / disk_width)
 
             # dF/d(global_x0)
             dx = (
@@ -377,10 +369,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
             # insert disk radius derivative
             if self.refine_radius:
                 dR = (
-                    4.0
-                    * args[i + 4]
-                    * top_exp
-                    / (disk_width * (1.0 + top_exp) ** 2)
+                    4.0 * args[i + 4] * top_exp / (disk_width * (1.0 + top_exp) ** 2)
                 ).ravel()
                 # dR[np.isnan(dR)] = 0.0
                 J[:, offset + len(args) + radius_ind] += dR
@@ -397,3 +386,112 @@ class SyntheticDiskLattice(WPFModelPrototype):
                 J[:, offset + len(args) - 1] += dW
 
             # set_trace()
+
+
+class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
+    def __init__(
+        self,
+        WPF,
+        probe_kernel: np.ndarray,
+        ux: float,
+        uy: float,
+        vx: float,
+        vy: float,
+        u_max: int,
+        v_max: int,
+        intensity_0: float,
+        exclude_indices: list = [],
+    ):
+
+        name = "Complex Overlapped Disk Lattice"
+        params = {}
+
+        # if global_center:
+        #     self.func = self.global_center_func
+        #     self.jacobian = self.global_center_jacobian
+
+        #     x0 = WPF.global_args["global_x0"]
+        #     y0 = WPF.global_args["global_y0"]
+        # else:
+        #     params["x center"] = Parameter(x0)
+        #     params["y center"] = Parameter(y0)
+        #     self.func = self.local_center_func
+
+        self.probe_kernelFT = np.fft.fft2(probe_kernel)
+
+        params["ux"] = Parameter(ux)
+        params["uy"] = Parameter(uy)
+        params["vx"] = Parameter(vx)
+        params["vy"] = Parameter(vy)
+
+        u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
+        self.u_inds = u_inds.ravel()
+        self.v_inds = v_inds.ravel()
+
+        delete_mask = np.zeros_like(self.u_inds, dtype=bool)
+        Q_Nx = WPF.global_args["Q_Nx"]
+        Q_Ny = WPF.global_args["Q_Ny"]
+
+        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis,:],(Q_Nx,1))
+        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:,np.newaxis],(1,Q_Ny))
+
+        for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
+            x = (
+                WPF.global_args["global_x0"]
+                + (u * params["ux"].initial_value)
+                + (v * params["vx"].initial_value)
+            )
+            y = (
+                WPF.global_args["global_y0"]
+                + (u * params["uy"].initial_value)
+                + (v * params["vy"].initial_value)
+            )
+            if [u, v] in exclude_indices:
+                delete_mask[i] = True
+            elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
+                delete_mask[i] = True
+                print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+            else:
+                params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
+                params[f"[{u}, {v}] Phase"] = Parameter(0.01, -np.pi, np.pi)
+
+        self.u_inds = self.u_inds[~delete_mask]
+        self.v_inds = self.v_inds[~delete_mask]
+
+        self.func = self.global_center_func
+
+        super().__init__(name, params)
+
+    def global_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
+        # copy the global centers in the right place for the local center generator
+        self.local_center_func(
+            DP, kwargs["global_x0"], kwargs["global_y0"], *args, **kwargs
+        )
+
+    def local_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
+
+        x0 = args[0]
+        y0 = args[1]
+        ux = args[2]
+        uy = args[3]
+        vx = args[4]
+        vy = args[5]
+
+        localDP = np.zeros_like(DP, dtype=np.complex64)
+
+        for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
+            x = x0 + (u * ux) + (v * vx)
+            y = y0 + (u * uy) + (v * vy)
+
+            localDP += (
+                args[2 * i + 6]
+                * np.exp(1j * args[2 * i + 7])
+                * np.abs(
+                    np.fft.ifft2(
+                        self.probe_kernelFT
+                        * np.exp(-2j * np.pi * (self.xqArray * x + self.yqArray * y))
+                    )
+                )
+            )
+
+        DP += np.abs(localDP) ** 2
