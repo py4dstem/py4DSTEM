@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import h5py
 import py4DSTEM
 from py4DSTEM.process.rdf import amorph
-from py4DSTEM.process.preprocess import bin_data_mmap
 import matplotlib
 from py4DSTEM.process.utils.ellipticalCoords import *
+from py4DSTEM.process.utils.utils import bin2D
 from tqdm import tqdm
 from scipy.signal import medfilt2d
 from scipy.ndimage.morphology import binary_closing
@@ -185,7 +185,7 @@ if make_data:
     data = np.empty((162, 285, 112, 120))
     for i in tqdm(range(162)):
         for j in range(285):
-            data[i, j, :, :] = bin_image(
+            data[i, j, :, :] = bin2D(
                 f["4DSTEM_experiment"]["data"]["datacubes"]["GTO_datacube_bksbtr"][
                     "data"
                 ][i, j, :, :],
