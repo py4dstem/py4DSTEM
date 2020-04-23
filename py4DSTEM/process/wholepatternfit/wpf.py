@@ -15,7 +15,7 @@ class WholePatternFit:
         y0: Optional[float] = None,
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
-        meanCBED: np.ndarray = None,
+        meanCBED: Optional[np.ndarray] = None,
     ):
         self.datacube = datacube
         self.meanCBED = (
@@ -131,7 +131,7 @@ class WholePatternFit:
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
             for j, k in enumerate(m.params.keys()):
-                m.params[k] = x[ind + j]
+                m.params[k].initial_value = x[ind + j]
 
     def _pattern(self, x):
 
