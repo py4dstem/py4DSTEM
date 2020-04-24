@@ -495,3 +495,107 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
             )
 
         DP += np.abs(localDP) ** 2
+
+
+class KernelDiskLattice(WPFModelPrototype):
+    def __init__(
+        self,
+        WPF,
+        probe_kernel: np.ndarray,
+        ux: float,
+        uy: float,
+        vx: float,
+        vy: float,
+        u_max: int,
+        v_max: int,
+        intensity_0: float,
+        exclude_indices: list = [],
+    ):
+
+        name = "Complex Overlapped Disk Lattice"
+        params = {}
+
+        # if global_center:
+        #     self.func = self.global_center_func
+        #     self.jacobian = self.global_center_jacobian
+
+        #     x0 = WPF.global_args["global_x0"]
+        #     y0 = WPF.global_args["global_y0"]
+        # else:
+        #     params["x center"] = Parameter(x0)
+        #     params["y center"] = Parameter(y0)
+        #     self.func = self.local_center_func
+
+        self.probe_kernelFT = np.fft.fft2(probe_kernel)
+
+        params["ux"] = Parameter(ux)
+        params["uy"] = Parameter(uy)
+        params["vx"] = Parameter(vx)
+        params["vy"] = Parameter(vy)
+
+        u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
+        self.u_inds = u_inds.ravel()
+        self.v_inds = v_inds.ravel()
+
+        delete_mask = np.zeros_like(self.u_inds, dtype=bool)
+        Q_Nx = WPF.global_args["Q_Nx"]
+        Q_Ny = WPF.global_args["Q_Ny"]
+
+        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis,:],(Q_Nx,1))
+        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:,np.newaxis],(1,Q_Ny))
+
+        for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
+            x = (
+                WPF.global_args["global_x0"]
+                + (u * params["ux"].initial_value)
+                + (v * params["vx"].initial_value)
+            )
+            y = (
+                WPF.global_args["global_y0"]
+                + (u * params["uy"].initial_value)
+                + (v * params["vy"].initial_value)
+            )
+            if [u, v] in exclude_indices:
+                delete_mask[i] = True
+            elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
+                delete_mask[i] = True
+                print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+            else:
+                params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
+
+        self.u_inds = self.u_inds[~delete_mask]
+        self.v_inds = self.v_inds[~delete_mask]
+
+        self.func = self.global_center_func
+
+        super().__init__(name, params)
+
+    def global_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
+        # copy the global centers in the right place for the local center generator
+        self.local_center_func(
+            DP, kwargs["global_x0"], kwargs["global_y0"], *args, **kwargs
+        )
+
+    def local_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
+
+        x0 = args[0]
+        y0 = args[1]
+        ux = args[2]
+        uy = args[3]
+        vx = args[4]
+        vy = args[5]
+
+        for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
+            x = x0 + (u * ux) + (v * vx)
+            y = y0 + (u * uy) + (v * vy)
+
+            DP += (
+                args[i + 6]
+                * np.abs(
+                    np.fft.ifft2(
+                        self.probe_kernelFT
+                        * np.exp(-2j * np.pi * (self.xqArray * x + self.yqArray * y))
+                    )
+                )
+            )**2
+

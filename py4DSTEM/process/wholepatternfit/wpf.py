@@ -16,6 +16,7 @@ class WholePatternFit:
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
         meanCBED: Optional[np.ndarray] = None,
+        fit_power:float = 1,
     ):
         self.datacube = datacube
         self.meanCBED = (
@@ -59,6 +60,8 @@ class WholePatternFit:
         self.global_args["Q_Nx"] = datacube.Q_Nx
         self.global_args["Q_Ny"] = datacube.Q_Ny
 
+        self.fit_power = fit_power
+
         # for debugging: tracks all function evals
         self._track = True
         self._fevals = []
@@ -86,7 +89,7 @@ class WholePatternFit:
         self.current_pattern = self.meanCBED
         self.current_glob = self.global_args.copy()
 
-        return self._pattern(self.x0).reshape(self.meanCBED.shape) + self.meanCBED
+        return self._pattern(self.x0)
 
     def fit_to_mean_CBED(self, **fit_opts):
 
@@ -101,7 +104,7 @@ class WholePatternFit:
 
         if self.hasJacobian & self.use_jacobian:
             opt = least_squares(
-                self._pattern,
+                self._pattern_error,
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
@@ -109,7 +112,7 @@ class WholePatternFit:
             )
         else:
             opt = least_squares(
-                self._pattern,
+                self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
                 **fit_opts
@@ -133,6 +136,28 @@ class WholePatternFit:
             for j, k in enumerate(m.params.keys()):
                 m.params[k].initial_value = x[ind + j]
 
+    def _pattern_error(self, x):
+
+        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
+
+        self.current_glob["global_x0"] = x[0]
+        self.current_glob["global_y0"] = x[1]
+        self.current_glob["global_r"] = np.hypot(
+            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+        )
+
+        for i, m in enumerate(self.model):
+            ind = self.model_param_inds[i] + 2
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+
+        DP = (DP**self.fit_power - self.current_pattern**self.fit_power) * self.mask
+
+        if self._track:
+            self._fevals.append(DP)
+            self._xevals.append(x)
+
+        return DP.ravel()
+
     def _pattern(self, x):
 
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
@@ -147,13 +172,7 @@ class WholePatternFit:
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-        DP = (DP - self.current_pattern) * self.mask
-
-        if self._track:
-            self._fevals.append(DP)
-            self._xevals.append(x)
-
-        return DP.ravel()
+        return (DP**self.fit_power) * self.mask
 
     def _jacobian(self, x):
 
