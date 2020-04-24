@@ -23,7 +23,7 @@ def cartesianDataAr_to_polarEllipticalDataAr(
     params,
     dr=1,
     dtheta=np.radians(2),
-    r_range=512,
+    r_range=128,
     mask=None,
     maskThresh=0.99,
 ):
@@ -79,19 +79,27 @@ def cartesianDataAr_to_polarEllipticalDataAr(
     Nx, Ny = cartesianData.shape
 
     # Get params
-    qx0, qy0, A, B, phi = params
+    qx0, qy0, A, B, C = params
+
+    m_ellipse = np.asarray([[A, B / 2], [B / 2, C]])
+    e_vals, e_vecs = np.linalg.eig(np.linalg.inv(m_ellipse))
 
     # Define the r/theta coords
     r_bins = np.arange(r_min + dr / 2.0, r_max + dr / 2.0, dr)  # values are bin centers
     t_bins = np.arange(-np.pi + dtheta / 2.0, np.pi + dtheta / 2.0, dtheta)
     rr, tt = np.meshgrid(r_bins, t_bins)
     Nr, Nt = rr.shape
-
     # Get (qx,qy) corresponding to each (r,theta) in the newly defined coords
     xr = rr * np.cos(tt)
     yr = rr * np.sin(tt)
-    qx = qx0 + xr * A * np.cos(phi) - yr * B * np.sin(phi)
-    qy = qy0 + xr * A * np.sin(phi) + yr * B * np.cos(phi)
+
+    xy_r = np.stack((np.ravel(xr), np.ravel(yr)), axis=1)
+    xy_r = xy_r @ e_vecs
+    xy_r = xy_r @ np.diag(np.sqrt(e_vals))
+    xy_r = xy_r @ e_vecs.T
+
+    qx = np.reshape(xy_r[:, 0], rr.shape) + qx0
+    qy = np.reshape(xy_r[:, 1], rr.shape) + qy0
 
     # qx,qy are now shape (Nr,Ntheta) arrays, such that (qx[r,theta],qy[r,theta]) is the point
     # in cartesian space corresponding to r,theta.  We now get the values for the final
