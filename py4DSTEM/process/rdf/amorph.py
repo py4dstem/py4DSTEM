@@ -191,6 +191,26 @@ def convert_stack_polar(datacube, coef_cube):
     return datacube_polar
 
 
+def compute_polar_symmetries(dp):
+    """
+    This function will take in a polar transformed diffraction pattern (2D), compute the autocorrelation, and then the symmetries as well. 
+
+    This function is to be used by the function which does this for the whole stack. 
+
+    dp has theta along axis 0, and r along axis 1
+
+    the normalized fourier coeffiecent for a certain symmetry order, a measure of symmetry, is then found by taking the average of the result in the radial bins desired. For example, two fold symmetry over the first five radial bins is equivalent to np.mean(dp_fft_normalized[2, 0:5])
+    """
+    dp_autocorrelated = np.fft.ifft(
+        np.abs(np.fft.fft(dp, axis=0)) ** 2, axis=0
+    )  # this emphasizes signal, but destroys any angular info
+    dp_fft = np.abs(np.fft.fft(dp_autocorrelated, axis=0))
+    # removes the effect of changing pattern intensity
+    dp_fft_normalized = dp_fft / dp_fft[0, :]
+
+    return dp_fft_normalized
+
+
 def compute_polar_stack_symmetries(datacube_polar):
     """
     This function will take in a datacube of polar-transformed diffraction patterns, and
@@ -205,6 +225,13 @@ def compute_polar_stack_symmetries(datacube_polar):
         the normalized fft along the theta direction of the autocorrelated patterns in
         datacube_polar
     """
+    datacube_symmetries = np.empty_like(datacube_polar.data)
+
+    for i in tqdm(range(datacube_polar.R_Nx)):
+        for j in range(datacube_polar.R_Ny):
+            datacube_symmetries[i, j, :, :] = compute_polar_symmetries(
+                datacube_polar.data[i, j, :, :]
+            )
 
     return datacube_symmetries
 
