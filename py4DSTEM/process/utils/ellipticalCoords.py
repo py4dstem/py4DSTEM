@@ -43,7 +43,7 @@ def cartesianDataAr_to_polarEllipticalDataAr(
 
     Accepts:
         cartesianData   (2D float array) the data in cartesian coordinates
-        params          (5-tuple) specifies (qx0,qy0,A,B,phi), the parameters for the transformation
+        params          (5-tuple) specifies (qx0,qy0,A,B,C), the parameters for the transformation
         dr              (float) sampling of the (r,theta) coords: the width of the bins in r
         dtheta          (float) sampling of the (r,theta) coords: the width of the bins in theta,
                         in radians
