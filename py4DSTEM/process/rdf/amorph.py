@@ -236,7 +236,82 @@ def compute_polar_stack_symmetries(datacube_polar):
     return datacube_symmetries
 
 
-def plot_symmetries(datacube_symmetries, sym_order):
+def corr2d(im1, im2, mask=None):
+    """
+    This is the python version of matlab's corr2
+    """
+
+    if mask is not None:
+        im1 = im1[mask]
+        im2 = im2[mask]
+
+    corr_val = np.sum((im1 - im1.mean()) * (im2 - im2.mean())) / np.sqrt(
+        np.sum((im1 - im1.mean()) ** 2) * np.sum((im2 - im2.mean()) ** 2)
+    )
+
+    return corr_val
+
+
+def compute_nn_corr(datacube, mask=None):
+    """        
+    the datacube is just a numpy array, and mask as well
+
+    we will ignore the outer boundary where nearer neighbors aren't computed
+    """
+    corr_result = np.empty(datacube.shape[0:2])
+    corr_result = corr_result[1:-1, 1:-1]
+
+    for i in tqdm(range(corr_result.shape[0])):
+        for j in range(corr_result.shape[1]):
+            corr_result[i, j] = np.mean(
+                [
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :], 
+                        datacube[i, j, :, :], 
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i, j + 1, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i, j + 2, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i + 1, j, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i + 2, j + 2, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i + 2, j, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i + 2, j + 1, :, :],
+                        mask=mask,
+                    ),
+                    corr2d(
+                        datacube[i + 1, j + 1, :, :],
+                        datacube[i + 2, j + 2, :, :],
+                        mask=mask,
+                    ),
+                ]
+            )
+
+    return corr_result
+
+
+def plot_symmetries(datacube_symmetries, sym_order, r_range):
     """
     This function will take in a datacube from compute_polar_stack_symmetries and plot a
     specific symmetry order.
@@ -249,5 +324,30 @@ def plot_symmetries(datacube_symmetries, sym_order):
     Returns:
         None
     """
+    plt.figure(f"Symmetry order {sym_order}", clear=True)
+    plt.imshow(
+        np.mean(datacube_symmetries[:, :, sym_order, r_range[0] : r_range[1]], axis=2)
+    )
+
+    return None
+
+
+def plot_nn(datacube, i, j, mask=None):
+    """
+    this will just plot a 3x3 grid of patterns
+    datacube is a numpy array
+    i is row,
+    j is column
+    mask is a numpy array
+    """
+    if mask is None:
+        mask = np.ones(datacube.shape[2:4]).astype(bool)
+
+    p = plt.figure(f"Nearest Neighbors of {i}, {j}", clear=True)
+    tiled_image = np.concatenate(
+        np.concatenate(datacube[i - 1 : i + 2, j - 1 : j + 2, :, :] * mask, axis=-2),
+        axis=-1,
+    )
+    plt.imshow(tiled_image)
 
     return None
