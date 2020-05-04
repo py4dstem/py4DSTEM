@@ -13,6 +13,41 @@ matplotlib.rcParams["figure.dpi"] = 200
 plt.ion()
 
 
+def make_mask_array(
+    peak_pos_array, data_shape, peak_radius, bin_factor=1, universal_mask=None
+):
+    """
+    This function needs a real home, I don't know where to put it yet. But this function will take in a peakListArray with all of the peaks in the diffraction pattern, and make a 4d array of masks such that they can be quickly applied to the diffraction patterns before fitting. 
+
+    Accepts:
+    peak_pos_array  - a peakListArray corresponding to all of the diffraction patterns in the dataset
+    data_shape      - the 4-tuple shape of the data, essentially data.data.shape (qx, qy, x, y)
+    peak_radius     - the peak radius
+    bin_factor      - if the peak positions were measured at a different binning factor than the data, this will effectivly divide their location by bin_factor
+    
+    Returns:
+    mask_array      - a 4D array of masks the same shape as the data
+    """
+    if universal_mask is None:
+        universal_mask = np.ones(data_shape[2:])
+    mask_array = np.ones(data_shape)
+    yy, xx = np.meshgrid(np.arange(data_shape[3]), np.arange(data_shape[2]))
+
+    for i in tqdm(np.arange(data_shape[0])):
+        for j in np.arange(data_shape[1]):
+            mask_array[i, j, :, :] = universal_mask
+            for spot in peak_pos_array.get_pointlist(i, j).data:
+                temp_inds = (
+                    (xx - spot[0] / bin_factor) ** 2 + (yy - spot[1] / bin_factor) ** 2
+                ) ** 0.5
+                temp_inds = temp_inds < peak_radius
+                mask_array[i, j, temp_inds] = 0
+                # plt.figure(100,clear=True)
+                # plt.imshow(temp_inds)
+                # plt.pause(0.2)
+    return mask_array.astype(bool)
+
+
 def fit_stack(datacube, init_coefs, mask=None):
     """
     This will fit an ellipse using the polar elliptical transform code to all the
@@ -111,17 +146,18 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
         cmap, vmin, vmax: imshow parameters
         mask: real space mask of values not to show (black)
     """
+    strains = copy.deepcopy(strains)
     cmap = matplotlib.cm.get_cmap(cmap)
     if vmin is None:
         vmin = np.min(strains)
     if vmax is None:
         vmax = np.max(strains)
     if mask is None:
-        mask = np.ones_like(strains[0])
-    else:
-        cmap.set_under("black")
-        cmap.set_over("black")
-        cmap.set_bad("black")
+        mask = np.zeros_like(strains[0])
+
+    cmap.set_under("black")
+    cmap.set_over("black")
+    cmap.set_bad("black")
 
     mask = mask.astype(bool)
 
@@ -266,9 +302,7 @@ def compute_nn_corr(datacube, mask=None):
             corr_result[i, j] = np.mean(
                 [
                     corr2d(
-                        datacube[i + 1, j + 1, :, :], 
-                        datacube[i, j, :, :], 
-                        mask=mask,
+                        datacube[i + 1, j + 1, :, :], datacube[i, j, :, :], mask=mask
                     ),
                     corr2d(
                         datacube[i + 1, j + 1, :, :],
@@ -351,3 +385,78 @@ def plot_nn(datacube, i, j, mask=None):
     plt.imshow(tiled_image)
 
     return None
+
+
+def nn_sum(data, rx, ry, weighting="gaussian", order=2, testing=False):
+    """
+    This function will take in a py4DSTEM datacube 'data', indices in real space, rx, ry, a weighting and an order, and return a single image, dp_sum. This image will be the nearest neighbor sum with either flat or gaussian weighting. 
+
+    data        - py4DSTEM datacube
+    rx, ry      - real space indices corresponding to row, column in the image
+    weighting   - 'gaussian' or 'flat', corresponding to how patterns are summed
+    order       - number, corresponding to how many nn orders for flat, or the gaussian width for gaussian weighting.
+    """
+    if rx >= data.R_Nx or rx < 0 or ry >= data.R_Ny or ry < 0:
+        raise AssertionError(
+            "invalid indices, rx and ry cannot be larger than their respective sizes - 1."
+        )
+
+    if weighting == "flat":
+        inds_x = np.arange(rx - order, rx + order + 1, dtype=int)
+        inds_y = np.arange(ry - order, ry + order + 1, dtype=int)
+        inds_x, inds_y = np.meshgrid(inds_x, inds_y, indexing="ij")
+        weights = np.ones_like(inds_x)
+    elif weighting == "gaussian":
+        inds_x = np.arange(rx - 2 * order, rx + 2 * order + 1, dtype=int)
+        inds_y = np.arange(ry - 2 * order, ry + 2 * order + 1, dtype=int)
+        inds_x, inds_y = np.meshgrid(inds_x, inds_y, indexing="ij")
+        dist = np.sqrt((inds_x - rx) ** 2 + (inds_y - ry) ** 2)
+        weights = np.exp(-(dist) ** 2 / (2 * order ** 2))
+    else:
+        raise AssertionError(
+            "Weighting is not understood, must be either 'gaussian' or 'flat'"
+        )
+
+    # make inds/weights respect boundaries - decided I don't want to double count edges
+    # inds_x[inds_x<0] = 0
+    # inds_x[inds_x>data.R_Nx] = data.R_Nx
+    # inds_y[inds_y<0] = 0
+    # inds_y[inds_y>data.R_Ny] = data.R_Ny
+    weights[inds_x < 0] = 0
+    weights[inds_y < 0] = 0
+    weights[inds_x > (data.R_Nx - 1)] = 0
+    weights[inds_y > (data.R_Ny - 1)] = 0
+    inds_x = inds_x % data.R_Nx
+    inds_y = inds_y % data.R_Ny
+
+    dp_sum = np.mean(
+        data.data[inds_x, inds_y, :, :] * weights[:, :, None, None], axis=(0, 1)
+    )
+
+    if testing:
+        mask = np.zeros(data.data.shape[0:2])
+        mask[inds_x, inds_y] = 1
+        plt.figure(1, clear=True)
+        plt.imshow(mask)
+        plt.title("Active indices")
+
+        m_weights = np.zeros(data.data.shape[0:2])
+        m_weights[inds_x, inds_y] = weights
+        plt.figure(2, clear=True)
+        plt.imshow(m_weights)
+        plt.title("Active indices and weights")
+        plt.figure(3, clear=True)
+        plt.imshow(dist)
+        plt.title("Distance in pixels")
+        plt.figure(4, clear=True)
+        plt.imshow(weights)
+        plt.title("Weights used")
+
+        plt.figure(5, clear=True)
+        plt.imshow(dp_sum ** 0.25, cmap="inferno")
+        plt.title("Summed diffraction pattern")
+        plt.figure(6, clear=True)
+        plt.imshow(data.data[rx, ry, :, :] ** 0.25, cmap="inferno")
+        plt.title("Center diffraction pattern")
+
+    return dp_sum

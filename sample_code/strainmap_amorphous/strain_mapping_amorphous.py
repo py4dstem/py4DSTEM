@@ -142,39 +142,6 @@ if run_test2:
     print(f"e12 = {e12:.3f}, e12_fit = {e12_fit:.3f}")
 
 
-def make_mask_array(
-    peak_pos_array, data_shape, peak_radius, bin_factor=1, universal_mask=None
-):
-    """
-    This function needs a real home, I don't know where to put it yet. But this function will take in a peakListArray with all of the peaks in the diffraction pattern, and make a 4d array of masks such that they can be quickly applied to the diffraction patterns before fitting. 
-
-    Accepts:
-    peak_pos_array  - a peakListArray corresponding to all of the diffraction patterns in the dataset
-    data_shape      - the 4-tuple shape of the data, essentially data.data.shape (qx, qy, x, y)
-    peak_radius     - the peak radius
-    bin_factor      - if the peak positions were measured at a different binning factor than the data, this will effectivly divide their location by bin_factor
-    
-    Returns:
-    mask_array      - a 4D array of masks the same shape as the data
-    """
-    if universal_mask is None:
-        universal_mask = np.ones(data_shape[2:])
-    mask_array = np.ones(data_shape)
-    yy, xx = np.meshgrid(np.arange(data_shape[3]), np.arange(data_shape[2]))
-
-    for i in tqdm(range(data_shape[0])):
-        for j in range(data_shape[1]):
-            mask_array[i, j, :, :] = universal_mask
-            for spot in peak_pos_array.get_pointlist(i, j).data:
-                temp_inds = (
-                    (xx - spot[1] / bin_factor) ** 2 + (yy - spot[2] / bin_factor) ** 2
-                ) ** 0.5
-                temp_inds = temp_inds < peak_radius
-                mask_array[i, j, temp_inds] = 0
-
-    return mask_array.astype(bool)
-
-
 if make_data:
     f = h5py.File(
         "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/Dataset38_bksbtr_20190918.h5",
@@ -240,7 +207,7 @@ if run_data:
     test_fit = fit_double_sided_gaussian(test_im, p_init, mask=mask_r)
     # compare_double_sided_gaussian(test_im, p_init, mask=mask_r)
 
-    # mask_array = make_mask_array(peaks, data.data.shape, peak_radius=4.3, bin_factor=4, universal_mask=mask_r)
+    # mask_array = amorph.make_mask_array(peaks, data.data.shape, peak_radius=4.3, bin_factor=4, universal_mask=mask_r)
     # mask_array = py4DSTEM.file.datastructure.DataCube(mask_array)
     np.seterr(all="ignore")
     print("running whole fit")
