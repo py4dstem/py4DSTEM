@@ -337,7 +337,7 @@ def fit_double_sided_gaussian(data, p0, mask=None):
     return p
 
 
-def compare_double_sided_gaussian(data, p, power=1, mask=None):
+def compare_double_sided_gaussian(data, p, power=1, mask=None, fig_num=12):
     """
     Plots a comparison between a diffraction pattern and a fit, given p. 
     """
@@ -351,7 +351,7 @@ def compare_double_sided_gaussian(data, p, power=1, mask=None):
     theta_mask = np.cos(theta * 8) > 0
     data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
     data_combined = mask * data_combined
-    plt.figure(12, clear=True)
+    plt.figure(fig_num, clear=True)
     plt.imshow(data_combined)
 
     return

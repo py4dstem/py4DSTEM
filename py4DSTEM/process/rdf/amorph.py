@@ -460,3 +460,50 @@ def nn_sum(data, rx, ry, weighting="gaussian", order=2, testing=False):
         plt.title("Center diffraction pattern")
 
     return dp_sum
+
+
+def compute_FEM(data, method, mask=None):
+    """
+    implementing the four variance measurements from http://dx.doi.org/10.1016/j.ultramic.2010.05.010 Nanobeam diffraction fluctuation electron microscopy technique for structural characterization of disordered materials-Application to Al88-xY7Fe5Tix metallic glasses. Adapted from my Matlab code, but to only run on one dataset at a time.
+
+    Inputs:
+    data    - polar-transformed stacks (py4DSTEM dataobject). the shape is (R_Nx, R_Ny, theta, r)
+    method  - integer, 0-3 corresponding to the four methods of computing FEM variance. Description will be added later for which corresponds to which
+    mask    - real space mask that says which patterns to include
+    """
+
+    if mask is None:
+        mask = np.ones(data.data.shape[0:2], dtype=bool)
+
+    data = data.data[mask, :, :]  # this turns the data from 4D to 3D
+
+    if method is 0:
+        "this is variance of the annular mean"
+        ann_mean = np.mean(data, axis=1)
+        ann_mean_var = (
+            np.mean(ann_mean ** 2, axis=0) / np.mean(ann_mean, axis=0) ** 2 - 1
+        )
+        fem_result = ann_mean_var
+
+    elif method is 1:
+        "this is the mean of the ring variances"
+        ring_var = np.mean(data ** 2, axis=1) / np.mean(data, axis=1) ** 2 - 1
+        fem_result = np.mean(ring_var, axis=0)
+
+    elif method is 2:
+        "this is the ring ensemble variance"
+        ring_ensemble_var = np.zeros(data.shape[2])
+        for i in range(data.shape[2]):
+            ring = np.ravel(data[:, :, i])
+            ring_ensemble_var[i] = np.mean(ring ** 2) / np.mean(ring) ** 2 - 1
+        fem_result = ring_ensemble_var
+
+    elif method is 3:
+        "this is the annular mean of the variance image"
+        var_im = np.mean(data ** 2, axis=0) / np.mean(data, axis=0) ** 2 - 1
+        ann_mean_var_im = np.mean(var_im, axis=0)
+        fem_result = ann_mean_var_im
+    else:
+        raise ValueError("Incorrect method input, must be int between 0 and 3.")
+
+    return fem_result
