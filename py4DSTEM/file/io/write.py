@@ -192,7 +192,7 @@ def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
 #@log
 def save(data, outputfile, **kwargs):
     """
-    Saves a .h5 file to outputpath. What is saved depends on the arguement data.
+    Saves a .h5 file to outputpath. What is saved depends on the argument data.
 
     If data is a DataObject, saves a .h5 file containing just this object.
     If data is a list of DataObjects, saves a .h5 file containing all these objects.
