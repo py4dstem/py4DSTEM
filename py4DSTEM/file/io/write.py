@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from os.path import exists
-from hyperspy.misc.utils import DictionaryTreeBrowser
 from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
 from ..datastructure import MetadataCollection, Metadata, DataObject, PointList
 from ..datastructure import PointListArray
@@ -431,118 +430,118 @@ def save_pointlistarray_group(group, pointlistarray):
 
 
 #### Metadata functions ####
-
-def save_metadata(metadata,group):
-    """
-    Save metadata (Metadata object) into group (HDF5 group).
-    """
-    # Create subgroups
-    group_microscope_metadata = group.create_group("microscope")
-    group_sample_metadata = group.create_group("sample")
-    group_user_metadata = group.create_group("user")
-    group_calibration_metadata = group.create_group("calibration")
-    group_comments_metadata = group.create_group("comments")
-
-    group_original_metadata = group.create_group("original")
-    group_original_metadata_all = group_original_metadata.create_group("all")
-    group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
-
-    # Transfer metadata dictionaries
-    transfer_metadata_dict(metadata.microscope,group_microscope_metadata)
-    transfer_metadata_dict(metadata.sample,group_sample_metadata)
-    transfer_metadata_dict(metadata.user,group_user_metadata)
-    transfer_metadata_dict(metadata.calibration,group_calibration_metadata)
-    transfer_metadata_dict(metadata.comments,group_comments_metadata)
-
-    # Transfer original metadata trees
-    if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
-        transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
-    else:
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
-        transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
-
-def transfer_metadata_dict(dictionary,group):
-    """
-    Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
-    to attrs in a .h5 group.
-
-    Accepts two arguments:
-        dictionary - a dictionary of metadata
-        group - an hdf5 file group, which will become the root node of a copy of tree
-    """
-    for key,val in dictionary.items():
-        if type(val)==str:
-            group.attrs.create(key,np.string_(val))
-        else:
-            group.attrs.create(key,val)
-
-def transfer_metadata_tree_hs(tree,group):
-    """
-    Transfers metadata from hyperspy.misc.utils.DictionaryTreeBrowser objects to a tree of .h5
-    groups (non-terminal nodes) and attrs (terminal nodes).
-
-    Accepts two arguments:
-        tree - a hyperspy.misc.utils.DictionaryTreeBrowser object, containing metadata
-        group - an hdf5 file group, which will become the root node of a copy of tree
-    """
-    for key in tree.keys():
-        if istree_hs(tree[key]):
-            subgroup = group.create_group(key)
-            transfer_metadata_tree_hs(tree[key],subgroup)
-        else:
-            if type(tree[key])==str:
-                group.attrs.create(key,np.string_(tree[key]))
-            else:
-                group.attrs.create(key,tree[key])
-
-def istree_hs(node):
-    """
-    Determines if a node in a hyperspy metadata structure is a parent or terminal leaf.
-    """
-    if type(node)==DictionaryTreeBrowser:
-        return True
-    else:
-        return False
-
-def transfer_metadata_tree_py4DSTEM(tree,group):
-    """
-    Transfers metadata from MetadataCollection objects to a tree of .h5
-    groups (non-terminal nodes) and attrs (terminal nodes).
-
-    Accepts two arguments:
-        tree - a MetadataCollection object, containing metadata
-        group - an hdf5 file group, which will become the root node of a copy of tree
-    """
-    for key in tree.__dict__.keys():
-        if istree_py4DSTEM(tree.__dict__[key]):
-            subgroup = group.create_group(key)
-            transfer_metadata_tree_py4DSTEM(tree.__dict__[key],subgroup)
-        elif is_metadata_dict(key):
-            metadata_dict = tree.__dict__[key]
-            for md_key in metadata_dict.keys():
-                if type(metadata_dict[md_key])==str:
-                    group.attrs.create(md_key,np.string_(metadata_dict[md_key]))
-                else:
-                    group.attrs.create(md_key,metadata_dict[md_key])
-
-def istree_py4DSTEM(node):
-    """
-    Determines if a node in a py4DSTEM metadata structure is a parent or terminal leaf.
-    """
-    if type(node)==MetadataCollection:
-        return True
-    else:
-        return False
-
-def is_metadata_dict(key):
-    """
-    Determines if a node in a py4DSTEM metadata structure is a metadata dictionary.
-    """
-    if key=='metadata_items':
-        return True
-    else:
-        return False
+# 
+# def save_metadata(metadata,group):
+#     """
+#     Save metadata (Metadata object) into group (HDF5 group).
+#     """
+#     # Create subgroups
+#     group_microscope_metadata = group.create_group("microscope")
+#     group_sample_metadata = group.create_group("sample")
+#     group_user_metadata = group.create_group("user")
+#     group_calibration_metadata = group.create_group("calibration")
+#     group_comments_metadata = group.create_group("comments")
+# 
+#     group_original_metadata = group.create_group("original")
+#     group_original_metadata_all = group_original_metadata.create_group("all")
+#     group_original_metadata_shortlist = group_original_metadata.create_group("shortlist")
+# 
+#     # Transfer metadata dictionaries
+#     transfer_metadata_dict(metadata.microscope,group_microscope_metadata)
+#     transfer_metadata_dict(metadata.sample,group_sample_metadata)
+#     transfer_metadata_dict(metadata.user,group_user_metadata)
+#     transfer_metadata_dict(metadata.calibration,group_calibration_metadata)
+#     transfer_metadata_dict(metadata.comments,group_comments_metadata)
+# 
+#     # Transfer original metadata trees
+#     if type(metadata.original_metadata.shortlist)==DictionaryTreeBrowser:
+#         transfer_metadata_tree_hs(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+#         transfer_metadata_tree_hs(metadata.original_metadata.all,group_original_metadata_all)
+#     else:
+#         transfer_metadata_tree_py4DSTEM(metadata.original_metadata.shortlist,group_original_metadata_shortlist)
+#         transfer_metadata_tree_py4DSTEM(metadata.original_metadata.all,group_original_metadata_all)
+# 
+# def transfer_metadata_dict(dictionary,group):
+#     """
+#     Transfers metadata from datacube metadata dictionaries (standard python dictionary objects)
+#     to attrs in a .h5 group.
+# 
+#     Accepts two arguments:
+#         dictionary - a dictionary of metadata
+#         group - an hdf5 file group, which will become the root node of a copy of tree
+#     """
+#     for key,val in dictionary.items():
+#         if type(val)==str:
+#             group.attrs.create(key,np.string_(val))
+#         else:
+#             group.attrs.create(key,val)
+# 
+# def transfer_metadata_tree_hs(tree,group):
+#     """
+#     Transfers metadata from hyperspy.misc.utils.DictionaryTreeBrowser objects to a tree of .h5
+#     groups (non-terminal nodes) and attrs (terminal nodes).
+# 
+#     Accepts two arguments:
+#         tree - a hyperspy.misc.utils.DictionaryTreeBrowser object, containing metadata
+#         group - an hdf5 file group, which will become the root node of a copy of tree
+#     """
+#     for key in tree.keys():
+#         if istree_hs(tree[key]):
+#             subgroup = group.create_group(key)
+#             transfer_metadata_tree_hs(tree[key],subgroup)
+#         else:
+#             if type(tree[key])==str:
+#                 group.attrs.create(key,np.string_(tree[key]))
+#             else:
+#                 group.attrs.create(key,tree[key])
+# 
+# def istree_hs(node):
+#     """
+#     Determines if a node in a hyperspy metadata structure is a parent or terminal leaf.
+#     """
+#     if type(node)==DictionaryTreeBrowser:
+#         return True
+#     else:
+#         return False
+# 
+# def transfer_metadata_tree_py4DSTEM(tree,group):
+#     """
+#     Transfers metadata from MetadataCollection objects to a tree of .h5
+#     groups (non-terminal nodes) and attrs (terminal nodes).
+# 
+#     Accepts two arguments:
+#         tree - a MetadataCollection object, containing metadata
+#         group - an hdf5 file group, which will become the root node of a copy of tree
+#     """
+#     for key in tree.__dict__.keys():
+#         if istree_py4DSTEM(tree.__dict__[key]):
+#             subgroup = group.create_group(key)
+#             transfer_metadata_tree_py4DSTEM(tree.__dict__[key],subgroup)
+#         elif is_metadata_dict(key):
+#             metadata_dict = tree.__dict__[key]
+#             for md_key in metadata_dict.keys():
+#                 if type(metadata_dict[md_key])==str:
+#                     group.attrs.create(md_key,np.string_(metadata_dict[md_key]))
+#                 else:
+#                     group.attrs.create(md_key,metadata_dict[md_key])
+# 
+# def istree_py4DSTEM(node):
+#     """
+#     Determines if a node in a py4DSTEM metadata structure is a parent or terminal leaf.
+#     """
+#     if type(node)==MetadataCollection:
+#         return True
+#     else:
+#         return False
+# 
+# def is_metadata_dict(key):
+#     """
+#     Determines if a node in a py4DSTEM metadata structure is a metadata dictionary.
+#     """
+#     if key=='metadata_items':
+#         return True
+#     else:
+#         return False
 
 def close_all_h5():
     n = 0
