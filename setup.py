@@ -27,6 +27,7 @@ setup(
         'PyQt5 >= 5.9',
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
+        'pymatgen',
         'ipywidgets',
         'tqdm',
         ],

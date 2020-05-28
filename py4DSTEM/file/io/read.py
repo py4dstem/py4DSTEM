@@ -4,7 +4,7 @@ from .native import read_py4DSTEM_4D
 #from .nonnative import read_boink
 from ..datastructure import DataCube
 
-def read_4D(fp, mem="RAM", bin_Q=1, order="RQ")
+def read_4D(fp, mem="RAM", bin_Q=1, order="RQ"):
     """
     General read function for 4D-STEM datasets.
 
