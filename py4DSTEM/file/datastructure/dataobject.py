@@ -14,7 +14,6 @@
 
 import weakref
 from functools import wraps
-from .metadata import Metadata
 
 # Decorator which enables more human-readable display of tracked dataobjects
 def show_object_list(method):
@@ -36,7 +35,6 @@ def show_object_list(method):
 class DataObject(object):
     """
     A DataObject:
-        -stores a name and a pointer to metadata
         -enables searching/listing all py4DSTEM dataobject instances in a session
 
     If the searchable keyword is set to False, a dataobject will not be tracked by the DataObject
@@ -44,53 +42,45 @@ class DataObject(object):
     """
     _instances = []
 
-    def __init__(self, name='', metadata=None, searchable=True, **kwargs):
+    def __init__(self, name='', searchable=True, **kwargs):
         """
         Instantiate a DataObject instance.
 
         Inputs:
             name      a string which will be used to identify the object in .h5 files and logs
-            metadata  if specified, should point to a Metadata object, or to a DataObject.
-                      if metadata is a dataobject, self.metadata will point to DataObject.metadata.
         """
         self.name = name
-        if isinstance(metadata, Metadata):
-            self.metadata = metadata
-        elif isinstance(metadata, DataObject):
-            self.metadata = metadata.metadata
-        else:
-            self.metadata = None
         if searchable==True:
             self._instances.append(weakref.ref(self))
 
     ############ Metadata methods ############
 
-    def new_metadata(self, metadata=None):
-        """
-        Replace the old self.metadata object with a new Metadata object, which is a *copy* of the
-        Metadata instance pointed to by metadata. The important distinction here is that, rather
-        than simply having self.metadata point to some other metadata instance which may also be
-        associated with some other objects, this method ensures that self.metadata is a fresh
-        Metadata instance, which no other DataObjects point to.  Thus if metadata should be altered
-        for this object only, but not other DataObjects (e.g. because a datacube is cropped or
-        binned), this method should be called first.
-
-        Accepts:
-            metadata        (Metadata, DataObject, or None)
-                            if Metadata, copies this metadata object and assigns it to self.metadata
-                            if DataObject, copies that objects metadata, and assigns it to
-                            self.metadata
-                            if None, copies its own metadata and assigns it to self.metadata
-        """
-        assert metadata is None or isinstance(metadata,(Metadata,DataObject))
-
-        if metadata is None:
-            metadata = self.metadata
-        elif isinstance(metadata,DataObject):
-            assert isinstance(metadata.metadata,Metadata), "The DataObject selected does not have an associated Metadata instance."
-            metadata = metadata.metadata
-
-        self.metadata = metadata.copy()
+#     def new_metadata(self, metadata=None):
+#         """
+#         Replace the old self.metadata object with a new Metadata object, which is a *copy* of the
+#         Metadata instance pointed to by metadata. The important distinction here is that, rather
+#         than simply having self.metadata point to some other metadata instance which may also be
+#         associated with some other objects, this method ensures that self.metadata is a fresh
+#         Metadata instance, which no other DataObjects point to.  Thus if metadata should be altered
+#         for this object only, but not other DataObjects (e.g. because a datacube is cropped or
+#         binned), this method should be called first.
+# 
+#         Accepts:
+#             metadata        (Metadata, DataObject, or None)
+#                             if Metadata, copies this metadata object and assigns it to self.metadata
+#                             if DataObject, copies that objects metadata, and assigns it to
+#                             self.metadata
+#                             if None, copies its own metadata and assigns it to self.metadata
+#         """
+#         assert metadata is None or isinstance(metadata,(Metadata,DataObject))
+# 
+#         if metadata is None:
+#             metadata = self.metadata
+#         elif isinstance(metadata,DataObject):
+#             assert isinstance(metadata.metadata,Metadata), "The DataObject selected does not have an associated Metadata instance."
+#             metadata = metadata.metadata
+# 
+#         self.metadata = metadata.copy()
 
 
     ############ Searching methods ############
