@@ -17,7 +17,7 @@ h5options = dict(
 
 
 def sdebug(f):
-    """ 
+    """
     debugging decorator for _store functions
     """
 
@@ -34,7 +34,7 @@ def _h5write(filename, mode, *args, **kwargs):
     _h5write(filename, mode, {'var1'=..., 'var2'=..., ...})
     _h5write(filename, mode, var1=..., var2=..., ...)
     _h5write(filename, mode, dict, var1=..., var2=...)
-    
+
     Writes variables var1, var2, ... to file filename. The file mode
     can be chosen according to the h5py documentation. The key-value
     arguments have precedence on the provided dictionnary.
@@ -48,8 +48,8 @@ def _h5write(filename, mode, *args, **kwargs):
 
     (if the option UNSUPPORTED is equal to 'pickle', any other type
     is pickled and saved. UNSUPPORTED = 'ignore' silently eliminates
-    unsupported types. Default is 'fail', which raises an error.) 
-    
+    unsupported types. Default is 'fail', which raises an error.)
+
     The file mode can be chosen according to the h5py documentation.
     It defaults to overwriting an existing file.
     """
@@ -217,7 +217,7 @@ def h5write(filename, *args, **kwargs):
     h5write(filename, {'var1'=..., 'var2'=..., ...})
     h5write(filename, var1=..., var2=..., ...)
     h5write(filename, dict, var1=..., var2=...)
-    
+
     Writes variables var1, var2, ... to file filename. The key-value
     arguments have precedence on the provided dictionnary.
 
@@ -230,8 +230,8 @@ def h5write(filename, *args, **kwargs):
 
     (if the option UNSUPPORTED is equal to 'pickle', any other type
     is pickled and saved. UNSUPPORTED = 'ignore' silently eliminates
-    unsupported types. Default is 'fail', which raises an error.) 
-    
+    unsupported types. Default is 'fail', which raises an error.)
+
     The file mode can be chosen according to the h5py documentation.
     It defaults to overwriting an existing file.
     """
@@ -245,8 +245,8 @@ def h5append(filename, *args, **kwargs):
     h5append(filename, {'var1'=..., 'var2'=..., ...})
     h5append(filename, var1=..., var2=..., ...)
     h5append(filename, dict, var1=..., var2=...)
-    
-    Appends variables var1, var2, ... to file filename. The 
+
+    Appends variables var1, var2, ... to file filename. The
     key-value arguments have precedence on the provided dictionnary.
 
     supported variable types are:
@@ -258,8 +258,8 @@ def h5append(filename, *args, **kwargs):
 
     (if the option UNSUPPORTED is equal to 'pickle', any other type
     is pickled and saved. UNSUPPORTED = 'ignore' silently eliminates
-    unsupported types. Default is 'fail', which raises an error.) 
-    
+    unsupported types. Default is 'fail', which raises an error.)
+
     The file mode can be chosen according to the h5py documentation.
     It defaults to overwriting an existing file.
     """
@@ -273,22 +273,22 @@ def h5read(filename, *args, **kwargs):
     h5read(filename)
     h5read(filename, s1, s2, ...)
     h5read(filename, (s1,s2, ...))
-    
-    Read variables from a hdf5 file created with h5write and returns them as 
+
+    Read variables from a hdf5 file created with h5write and returns them as
     a dictionary.
-    
+
     If specified, only variable named s1, s2, ... are loaded.
-    
-    Variable names support slicing and group access. For instance, provided 
-    that the file contains the appropriate objects, the following syntax is 
+
+    Variable names support slicing and group access. For instance, provided
+    that the file contains the appropriate objects, the following syntax is
     valid:
-        
+
     a = h5read('file.h5', 'myarray[2:4]')
     a = h5read('file.h5', 'adict.thekeyIwant')
-    
+
     h5read(filename_with_wildcard, ... , doglob=True)
-    Reads sequentially all globbed filenames. 
- 
+    Reads sequentially all globbed filenames.
+
     """
     doglob = kwargs.get('doglob', None)
 
@@ -468,10 +468,10 @@ def h5info(filename, output=None):
     h5info(filename)
 
     Prints out a tree structure of given h5 file.
-    
+
     [17/01/2012 guillaume potdevin]
     added optional argument output:
-    	if output is set to 1, then the printed string is returned
+	if output is set to 1, then the printed string is returned
     """
 
     indent = 4
