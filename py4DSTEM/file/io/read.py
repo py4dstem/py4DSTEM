@@ -5,7 +5,7 @@ from os.path import splitext
 from .native import read_py4DSTEM
 from .nonnative import read_dm, read_empad, read_mrc_relativity, read_gatan_bin, read_kitware_counted
 
-def read(fp, mem="RAM", binfactor=1, **kwargs):
+def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
     """
     General read function for 4D-STEM datasets.
 
@@ -13,7 +13,7 @@ def read(fp, mem="RAM", binfactor=1, **kwargs):
     for that filetype.
 
     Accepts:
-        fp          str         Path to the file
+        fp          str or Path Path to the file
         mem         str         (opt) Specifies how the data should be stored; must be "RAM" or "MEMMAP".
                                 "RAM" loads the entire dataset into memory. "MEMMAP" is useful for large datasets;
                                 it does not load the data into memory, but instead creates a map describing where
