@@ -27,7 +27,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                                 Default is 1.
         ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
                                 than trying to determine this automatically. Must be None or a str from 'dm',
-                                'empad', 'mrc', 'gatan_bin', 'kitware_counted'.  Default is None.
+                                'empad', 'mrc_relativity', 'gatan_bin', 'kitware_counted'.  Default is None.
         **kwargs                (opt) When reading the native h5 file format, additional keyword arguments are
                                 used to indicate loading behavior in the case where the source file contains
                                 multiple data objects.
@@ -47,7 +47,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
-    assert(ft in [None,'dm','empad','mrc','gatan_bin','kitware_counted']), "Error: ft argument not recognized"
+    assert(ft in [None,'dm','empad','mrc_relativity','gatan_bin','kitware_counted']), "Error: ft argument not recognized"
 
     if ft is None:
         ft = parse_filetype(fp)
@@ -58,7 +58,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         data,md = read_dm(fp, mem, binfactor, **kwargs)
     elif ft == "empad":
         data,md = read_empad(fp, mem, binfactor, **kwargs)
-    elif ft == 'mrc':
+    elif ft == 'mrc_relativity':
         data,md = read_mrc_relativity(fp, mem, binfactor, **kwargs)
     elif ft == "gatan_bin":
         data,md = read_gatan_bin(fp, mem, binfactor, **kwargs)
@@ -83,6 +83,7 @@ def parse_filetype(fp):
         return 'empad'
     elif fext in ['mrc']:
         # TK TODO
+        return 'mrc_relativity'
     elif fext in ['gatan_bin']:
         # TK TODO
         return 'gatan_bin'
