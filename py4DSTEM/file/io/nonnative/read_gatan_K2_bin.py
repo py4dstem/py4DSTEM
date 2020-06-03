@@ -1,6 +1,6 @@
 # Reads a Gatan K2 binary 4D-STEM file.
 
-def read_gatan_bin(fp, mem="RAM", binfactor=1, **kwargs):
+def read_gatan_K2_bin(fp, mem="RAM", binfactor=1, **kwargs):
     """
     Read a Gatan K2 4D-STEM file.
 
