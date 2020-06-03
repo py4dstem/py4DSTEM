@@ -1,1 +1,1 @@
-from .h5rw import *
+from .read import *

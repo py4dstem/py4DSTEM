@@ -3,3 +3,4 @@ from .copy import *
 from .remove import *
 from .write import *
 from .filebrowser import *
+from .h5rw import *
