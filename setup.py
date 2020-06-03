@@ -23,7 +23,6 @@ setup(
         'scikit-image >= 0.16.2',
         'scikit-learn >= 0.22.1',
         'ncempy >= 1.4.2',
-        'hyperspy >= 1.4',
         'PyQt5 >= 5.9',
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
