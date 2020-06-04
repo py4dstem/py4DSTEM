@@ -6,15 +6,11 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from os.path import exists
-from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
-from ..datastructure import MetadataCollection, Metadata, DataObject, PointList
-from ..datastructure import PointListArray
+from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
+from ...datastructure import MetadataCollection, Metadata, DataObject, PointList
+from ...datastructure import PointListArray
 from ...process.utils import tqdmnd
 
-from ..log import log, Logger
-logger = Logger()
-
-@log
 def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
     Saves an h5 file from a list of DataObjects and an output filepath.
@@ -159,15 +155,14 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
             print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
     ##### Log #####
-    group_log = group_toplevel.create_group("log")
-    for index in range(logger.log_index):
-        write_log_item(group_log, index, logger.logged_items[index])
+    #group_log = group_toplevel.create_group("log")
+    #for index in range(logger.log_index):
+    #    write_log_item(group_log, index, logger.logged_items[index])
 
     ##### Finish and close #####
     print("Done.",flush=True)
     f.close()
 
-#@log
 def save_dataobject(dataobject, outputfile, **kwargs):
     """
     Saves a .h5 file containing only a single DataObject instance to outputfile.
@@ -177,7 +172,6 @@ def save_dataobject(dataobject, outputfile, **kwargs):
     # Save
     save_from_dataobject_list([dataobject], outputfile, **kwargs)
 
-#@log
 def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
     """
     Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
@@ -188,7 +182,6 @@ def save_dataobjects_by_indices(index_list, outputfile, **kwargs):
 
     save_from_dataobject_list(dataobject_list, outputfile, **kwargs)
 
-#@log
 def save(data, outputfile, **kwargs):
     """
     Saves a .h5 file to outputpath. What is saved depends on the arguement data.
@@ -579,42 +572,42 @@ def close_h5_at_path(fpath):
 
 #### Logging functions ####
 
-def write_log_item(group_log, index, logged_item):
-    group_logitem = group_log.create_group('log_item_'+str(index))
-    group_logitem.attrs.create('function', np.string_(logged_item.function))
-    group_inputs = group_logitem.create_group('inputs')
-    for key,value in logged_item.inputs.items():
-        if type(value)==str:
-            group_inputs.attrs.create(key, np.string_(value))
-        elif isinstance(value,DataObject):
-            if value.name == '':
-                if isinstance(value,DataCube):
-                    name = np.string_("DataCube_id"+str(id(value)))
-                elif isinstance(value,DiffractionSlice):
-                    name = np.string_("DiffractionSlice_id"+str(id(value)))
-                elif isinstance(value,RealSlice):
-                    name = np.string_("RealSlice_id"+str(id(value)))
-                elif isinstance(value,PointList):
-                    name = np.string_("PointList_id"+str(id(value)))
-                elif isinstance(value,PointListArray):
-                    name = np.string_("PointListArray_id"+str(id(value)))
-                else:
-                    name = np.string_("DataObject_id"+str(id(value)))
-            else:
-                name = np.string_(value.name)
-            group_inputs.attrs.create(key, name)
-        else:
-            try:
-                group_inputs.attrs.create(key, value)
-            except TypeError:
-                group_inputs.attrs.create(key, np.string_(str(value)))
-    group_logitem.attrs.create('version', logged_item.version)
-    write_time_to_log_item(group_logitem, logged_item.datetime)
-
-def write_time_to_log_item(group_logitem, datetime):
-    date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
-    time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
-    group_logitem.attrs.create('time', np.string_(date+'__'+time))
+# def write_log_item(group_log, index, logged_item):
+#     group_logitem = group_log.create_group('log_item_'+str(index))
+#     group_logitem.attrs.create('function', np.string_(logged_item.function))
+#     group_inputs = group_logitem.create_group('inputs')
+#     for key,value in logged_item.inputs.items():
+#         if type(value)==str:
+#             group_inputs.attrs.create(key, np.string_(value))
+#         elif isinstance(value,DataObject):
+#             if value.name == '':
+#                 if isinstance(value,DataCube):
+#                     name = np.string_("DataCube_id"+str(id(value)))
+#                 elif isinstance(value,DiffractionSlice):
+#                     name = np.string_("DiffractionSlice_id"+str(id(value)))
+#                 elif isinstance(value,RealSlice):
+#                     name = np.string_("RealSlice_id"+str(id(value)))
+#                 elif isinstance(value,PointList):
+#                     name = np.string_("PointList_id"+str(id(value)))
+#                 elif isinstance(value,PointListArray):
+#                     name = np.string_("PointListArray_id"+str(id(value)))
+#                 else:
+#                     name = np.string_("DataObject_id"+str(id(value)))
+#             else:
+#                 name = np.string_(value.name)
+#             group_inputs.attrs.create(key, name)
+#         else:
+#             try:
+#                 group_inputs.attrs.create(key, value)
+#             except TypeError:
+#                 group_inputs.attrs.create(key, np.string_(str(value)))
+#     group_logitem.attrs.create('version', logged_item.version)
+#     write_time_to_log_item(group_logitem, logged_item.datetime)
+# 
+# def write_time_to_log_item(group_logitem, datetime):
+#     date = str(datetime.tm_year)+str(datetime.tm_mon)+str(datetime.tm_mday)
+#     time = str(datetime.tm_hour)+':'+str(datetime.tm_min)+':'+str(datetime.tm_sec)
+#     group_logitem.attrs.create('time', np.string_(date+'__'+time))
 
 
 
