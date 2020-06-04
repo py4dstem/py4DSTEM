@@ -7,7 +7,7 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists
 from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
-from ...datastructure import MetadataCollection, Metadata, DataObject, PointList
+from ...datastructure import Metadata, DataObject, PointList
 from ...datastructure import PointListArray
 from ....process.utils import tqdmnd
 
