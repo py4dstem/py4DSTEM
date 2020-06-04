@@ -1,8 +1,10 @@
 # Reads a digital micrograph 4D-STEM dataset
 
+import numpy as np
 from pathlib import Path
 from ncempy.io import dm
 from ...datastructure import DataCube
+from ....process.utils import bin2D
 
 def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
     """
@@ -14,7 +16,11 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
                                 docstring for py4DSTEM.file.io.read. Default is "RAM".
         binfactor   int         (opt) Bin the data, in diffraction space, as it's loaded. See docstring for
                                 py4DSTEM.file.io.read.  Default is 1.
-        **kwargs
+        **kwargs                Accepted keywords:
+                                    dtype       dtype       Used when binning data, ignored otherwise.
+                                                            By defaults to whatever the type of the raw data
+                                                            is, to avoid enlarging data size. May be useful
+                                                            to avoid'wraparound' errors.
 
     Returns:
         dc          DataCube    The 4D-STEM data.
@@ -31,11 +37,25 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
             dc = DataCube(data=dataSet['data'])
             md = None # TODO
     elif (mem,binfactor)==("MEMMAP",1):
-        # TODO
-        pass
+        with dm.fileDM(fp, on_memory=False) as dmFile:
+            memmap = dmFile.getMemmap(0)
+            dc = DataCube(data=memmap)
+            md = None # TODO
     elif (mem)==("RAM"):
-        # TODO
-        pass
+        with dm.fileDM(fp, on_memory=False) as dmFile:
+            memmap = dmFile.getMemmap(0)
+            md = None # TODO
+        if 'dtype' in kwargs.keys():
+            dtype = kwargs['dtype']
+        else:
+            dtype = memmap.dtype
+        R_Nx,R_Ny,Q_Nx,Q_Ny = memmap.shape
+        Q_Nx, Q_Ny = Q_Nx//binfactor, Q_Ny//binfactor
+        data = np.empty((R_Nx,R_Ny,Q_Nx,Q_Ny),dtype=dtype)
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                data[Rx,Ry,:,:] = bin2D(memmap[Rx,Ry,:,:,],binfactor,dtype=dtype)
+        dc = DataCube(data=data)
     else:
         # TODO
         pass
