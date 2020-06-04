@@ -14,7 +14,7 @@ from ...datastructure import DataCube, CountedDataCube
 from ...datastructure import DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ...datastructure import Metadata
-from ...process.utils import tqdmnd
+from ....process.utils import tqdmnd
 
 
 ################### BEGIN FileBrowser CLASS ##################

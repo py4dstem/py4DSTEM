@@ -9,7 +9,7 @@ from os.path import exists
 from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
 from ...datastructure import MetadataCollection, Metadata, DataObject, PointList
 from ...datastructure import PointListArray
-from ...process.utils import tqdmnd
+from ....process.utils import tqdmnd
 
 def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
