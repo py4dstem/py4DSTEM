@@ -7,6 +7,68 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     """
     Read a py4DSTEM formatted (EMD type 2) 4D-STEM file.
 
+    This function supports simply reading a single 4D datacube; or, for more complicated files containing many
+    different dataobjects, returning a list of the data in the file, returning some subset of the objects, or
+    returning all of the contained objects.  This behavior is controlled by the optional keyword arguments.
+
+    Behavior is as follows: TODO TODO TODO TKTKTKTKTKTK ***************
+
+    Accepts:
+        fp          str or Path Path to the file
+        mem         str         (opt) Specifies how the data should be stored; must be "RAM" or "MEMMAP". See
+                                docstring for py4DSTEM.file.io.read. Default is "RAM".
+        binfactor   int         (opt) Bin the data, in diffraction space, as it's loaded. See docstring for
+                                py4DSTEM.file.io.read.  Default is 1.
+        **kwargs                (opt) When reading the native h5 file format, additional keyword arguments are
+                                used to indicate loading behavior in the case where the source file contains
+                                multiple data objects.
+
+                                Recognized keywords are:
+
+                                    TKTKkwarg1       int         descrption TKTKTK
+
+    Returns:
+        dc          DataCube    The 4D-STEM data.
+        md          MetaData    The metadata.
+    """
+    assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
+    assert(binfactor>=1), "Error: binfactor must be >= 1"
+
+    if (mem,binfactor)==("RAM",1):
+        # TODO
+        pass
+    elif (mem,binfactor)==("MEMMAP",1):
+        # TODO
+        pass
+    elif (mem)==("RAM"):
+        # TODO
+        pass
+    else:
+        # TODO
+        pass
+
+    # TK TODO load the data
+    # TK TODO load the metadata
+
+    return data, md
+
+
+
+
+
+
+
+
+
+
+
+
+def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
+    """
+    Read a py4DSTEM formatted (EMD type 2) 4D-STEM file.
+
     Accepts:
         fp          str or Path Path to the file
         mem         str         (opt) Specifies how the data should be stored; must be "RAM" or "MEMMAP". See
