@@ -30,11 +30,8 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                                 'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
         **kwargs                (opt) When reading the native h5 file format, additional keyword arguments are
                                 used to indicate loading behavior in the case where the source file contains
-                                multiple data objects.
-
-                                Recognized keywords are:
-
-                                    TKTKkwarg1       int         descrption TKTKTK
+                                multiple data objects.  See the docstring for py4DSTEM.file.io.native.read_py4DSTEM
+                                for more information.
 
     Returns:
         data        *           The data. The output type is contingent.
