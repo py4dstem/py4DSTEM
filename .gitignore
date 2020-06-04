@@ -3,6 +3,7 @@
 .pydevproject
 *.swp
 *.ipynb_checkpoints*
+.vscode/
 
 # Folders #
 .idea/
