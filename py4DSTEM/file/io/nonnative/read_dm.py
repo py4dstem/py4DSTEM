@@ -28,7 +28,7 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
     if (mem,binfactor)==("RAM",1):
         with dm.fileDM(fp) as dmFile:
             dataSet = dmFile.getDataset(0)
-            dc = DataCube(data=dataSet['data']
+            dc = DataCube(data=dataSet['data'])
             md = None # TODO
     elif (mem,binfactor)==("MEMMAP",1):
         # TODO
