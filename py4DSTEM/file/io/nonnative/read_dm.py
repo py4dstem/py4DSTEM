@@ -1,5 +1,9 @@
 # Reads a digital micrograph 4D-STEM dataset
 
+from pathlib import Path
+from ncempy.io import dm
+from ...datastructure import DataCube
+
 def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
     """
     Read a digital micrograph 4D-STEM file.
@@ -16,14 +20,16 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
         dc          DataCube    The 4D-STEM data.
         md          MetaData    The metadata.
     """
-    assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"
 
     if (mem,binfactor)==("RAM",1):
-        # TODO
-        pass
+        with dm.fileDM(fp) as dmFile:
+            dataSet = dmFile.getDataset(0)
+            dc = DataCube(data=dataSet['data']
+            md = None # TODO
     elif (mem,binfactor)==("MEMMAP",1):
         # TODO
         pass
