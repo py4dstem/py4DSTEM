@@ -432,8 +432,8 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         Q_Nx = WPF.global_args["Q_Nx"]
         Q_Ny = WPF.global_args["Q_Ny"]
 
-        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis,:],(Q_Nx,1))
-        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:,np.newaxis],(1,Q_Ny))
+        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis, :], (Q_Nx, 1))
+        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:, np.newaxis], (1, Q_Ny))
 
         for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
             x = (
@@ -541,8 +541,8 @@ class KernelDiskLattice(WPFModelPrototype):
         Q_Nx = WPF.global_args["Q_Nx"]
         Q_Ny = WPF.global_args["Q_Ny"]
 
-        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis,:],(Q_Nx,1))
-        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:,np.newaxis],(1,Q_Ny))
+        self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis, :], (Q_Nx, 1))
+        self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:, np.newaxis], (1, Q_Ny))
 
         for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
             x = (
@@ -597,5 +597,5 @@ class KernelDiskLattice(WPFModelPrototype):
                         * np.exp(-2j * np.pi * (self.xqArray * x + self.yqArray * y))
                     )
                 )
-            )**2
+            ) ** 2
 

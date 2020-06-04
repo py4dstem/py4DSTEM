@@ -16,14 +16,14 @@ class WholePatternFit:
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
         meanCBED: Optional[np.ndarray] = None,
-        fit_power:float = 1,
+        fit_power: float = 1,
     ):
         self.datacube = datacube
         self.meanCBED = (
             meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
         )
 
-        self.mask = mask if mask else np.ones_like(self.meanCBED)
+        self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
 
         self.model = []
         self.model_param_inds = []
@@ -150,7 +150,7 @@ class WholePatternFit:
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-        DP = (DP**self.fit_power - self.current_pattern**self.fit_power) * self.mask
+        DP = (DP ** self.fit_power - self.current_pattern ** self.fit_power) * self.mask
 
         if self._track:
             self._fevals.append(DP)
@@ -172,7 +172,7 @@ class WholePatternFit:
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-        return (DP**self.fit_power) * self.mask
+        return (DP ** self.fit_power) * self.mask
 
     def _jacobian(self, x):
 
