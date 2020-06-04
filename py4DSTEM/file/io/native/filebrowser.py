@@ -10,11 +10,10 @@
 
 import h5py
 import numpy as np
-from ..datastructure import DataCube, CountedDataCube
-from ..datastructure import DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray
-from ..datastructure import Metadata
-from ..log import log
+from ...datastructure import DataCube, CountedDataCube
+from ...datastructure import DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray
+from ...datastructure import Metadata
 from ...process.utils import tqdmnd
 
 
@@ -1511,44 +1510,44 @@ def version_is_greater_or_equal(current,minimum):
 
 ################# Log functions ################
 
-def show_log(filename):
-    """
-    Takes a filename as input, determines if it was written by py4DSTEM, and if it was prints
-    the file's log.
-    """
-    print("Reading log for file {}...\n".format(filename))
-    # Check if file was written by py4DSTEM
-    try:
-        h5_file = h5py.File(filename,'r')
-        if is_py4DSTEM_file(h5_file):
-            try:
-                log_group = h5_file['log']
-                for i in range(len(log_group.keys())):
-                    key = 'log_item_'+str(i)
-                    show_log_item(i, log_group[key])
-                h5_file.close()
-            except KeyError:
-                print("Log cannot be read - HDF5 file has no log group.")
-                h5_file.close()
-        else:
-            h5_file.close()
-    except IOError:
-        print("Log cannot be read - file is not an HDF5 file.")
-
-def show_log_item(index, log_item):
-    time = log_item.attrs['time'].decode('utf-8')
-    function = log_item.attrs['function'].decode('utf-8')
-    version = log_item.attrs['version']
-
-    print("*** Log index {}, at time {} ***".format(index, time))
-    print("Function: \t{}".format(function))
-    print("Inputs:")
-    for key,value in log_item['inputs'].attrs.items():
-        if type(value)==np.bytes_:
-            print("\t\t{}\t{}".format(key,value.decode('utf-8')))
-        else:
-            print("\t\t{}\t{}".format(key,value))
-    print("Version: \t{}\n".format(version))
+# def show_log(filename):
+#     """
+#     Takes a filename as input, determines if it was written by py4DSTEM, and if it was prints
+#     the file's log.
+#     """
+#     print("Reading log for file {}...\n".format(filename))
+#     # Check if file was written by py4DSTEM
+#     try:
+#         h5_file = h5py.File(filename,'r')
+#         if is_py4DSTEM_file(h5_file):
+#             try:
+#                 log_group = h5_file['log']
+#                 for i in range(len(log_group.keys())):
+#                     key = 'log_item_'+str(i)
+#                     show_log_item(i, log_group[key])
+#                 h5_file.close()
+#             except KeyError:
+#                 print("Log cannot be read - HDF5 file has no log group.")
+#                 h5_file.close()
+#         else:
+#             h5_file.close()
+#     except IOError:
+#         print("Log cannot be read - file is not an HDF5 file.")
+# 
+# def show_log_item(index, log_item):
+#     time = log_item.attrs['time'].decode('utf-8')
+#     function = log_item.attrs['function'].decode('utf-8')
+#     version = log_item.attrs['version']
+# 
+#     print("*** Log index {}, at time {} ***".format(index, time))
+#     print("Function: \t{}".format(function))
+#     print("Inputs:")
+#     for key,value in log_item['inputs'].attrs.items():
+#         if type(value)==np.bytes_:
+#             print("\t\t{}\t{}".format(key,value.decode('utf-8')))
+#         else:
+#             print("\t\t{}\t{}".format(key,value))
+#     print("Version: \t{}\n".format(version))
 
 
 ################## Quick file browsing ################
