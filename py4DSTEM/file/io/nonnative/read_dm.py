@@ -16,11 +16,6 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
                                 docstring for py4DSTEM.file.io.read. Default is "RAM".
         binfactor   int         (opt) Bin the data, in diffraction space, as it's loaded. See docstring for
                                 py4DSTEM.file.io.read.  Default is 1.
-        **kwargs                Accepted keywords:
-                                    dtype       dtype       Used when binning data, ignored otherwise.
-                                                            By defaults to whatever the type of the raw data
-                                                            is, to avoid enlarging data size. May be useful
-                                                            to avoid'wraparound' errors.
 
     Returns:
         dc          DataCube    The 4D-STEM data.
@@ -57,11 +52,8 @@ def read_dm(fp, mem="RAM", binfactor=1, **kwargs):
                 data[Rx,Ry,:,:] = bin2D(memmap[Rx,Ry,:,:,],binfactor,dtype=dtype)
         dc = DataCube(data=data)
     else:
-        # TODO
-        pass
-
-    # TK TODO load the data
-    # TK TODO load the metadata
+        raise Exception("Memory mapping and on-load binning together is not supported.  Either set binfactor=1 or mem='RAM'.")
+        return
 
     return dc, md
 
