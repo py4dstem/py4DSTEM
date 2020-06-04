@@ -76,19 +76,21 @@ def parse_filetype(fp):
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
 
     _,fext = splitext(fp)
-    if fext in ['dm','dm3','dm4','DM','DM3','DM4']:
-        return 'dm'
-    elif fext in ['empad']:
+    if fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
+        ft = 'dm'
+    elif fext in ['.empad']:
         # TK TODO
-        return 'empad'
-    elif fext in ['mrc']:
+        ft = 'empad'
+    elif fext in ['.mrc']:
         # TK TODO
-        return 'mrc_relativity'
-    elif fext in ['gatan_K2_bin']:
+        ft = 'mrc_relativity'
+    elif fext in ['.gatan_K2_bin']:
         # TK TODO
-        return 'gatan_K2_bin'
-    elif fext in ['kitware_counted']:
+        ft = 'gatan_K2_bin'
+    elif fext in ['.kitware_counted']:
         # TK TODO
-        return 'kitware_counted'
+        ft = 'kitware_counted'
+    else:
+        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
     return ft
 
