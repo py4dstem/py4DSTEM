@@ -56,7 +56,7 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     if 'load' not in kwargs.keys():
         print("Native py4DSTEM (EMD type 2) file detected.  This file contains the following data objects:")
         print("")
-        print("") # TODO
+        browser.show_dataobjects()
         print("")
         print("To load one or more objects, call this function again, this time passing the keyword 'load'.")
         print("For one object, use 'load = x' where x is either the object's index (integer) or name (string).")
