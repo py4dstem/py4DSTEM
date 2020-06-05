@@ -2,7 +2,7 @@
 
 import pathlib
 from os.path import splitext
-from .native import read_py4DSTEM
+from .native import read_py4DSTEM, is_py4DSTEM_file, get_py4DSTEM_version, version_is_greater_or_equal
 from .nonnative import *
 
 def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
@@ -62,6 +62,8 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
 
     if ft == "py4DSTEM":
         data,md = read_py4DSTEM(fp, mem, binfactor, **kwargs)
+    elif ft = "py4DSTEM_v<0.9.0"
+        data,md = read_py4DSTEM_v0(fp, mem, binfactor, **kwargs)
     elif ft == "dm":
         data,md = read_dm(fp, mem, binfactor, **kwargs)
     elif ft == "empad":
@@ -84,7 +86,13 @@ def parse_filetype(fp):
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
 
     _,fext = splitext(fp)
-    if fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
+    if fext in ['.h5','.H5','hdf5','HDF5','.py4dstem','.py4DSTEM','.PY4DSTEM','.emd','.EMD']:
+        if is_py4DSTEM_file(fp):
+            if version_is_greater_or_equal(get_py4DSTEM_version(fp),(0.9.0))
+                ft = 'py4DSTEM'
+            else:
+                ft = 'py4DSTEM_v<0.9.0'
+    elif fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
         ft = 'dm'
     elif fext in ['.empad']:
         # TK TODO
@@ -101,4 +109,7 @@ def parse_filetype(fp):
     else:
         raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
     return ft
+
+
+
 
