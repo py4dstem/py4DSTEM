@@ -25,13 +25,21 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                                 filesize by N^2, so for instance, on a system with only 16 GB of RAM, its possible
                                 to load datasets of up to 64, 144, or 256 GB using binfactors of 2, 3, or 4.
                                 Default is 1.
+                                *Note 1: binning is only supported with mem='RAM'.
+                                **Note 2: binning may cause 'wraparound' errors (e.g. if the datatype is uint16
+                                and the summed pixels in a bin exceed 65536, the count 'wraps back around' to 0).
+                                This can be avoided by explicitly casting the datatype by passing the keyword
+                                argument 'dtype', however, casting will also affect the size of the data.
         ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
                                 than trying to determine this automatically. Must be None or a str from 'dm',
                                 'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
-        **kwargs                (opt) When reading the native h5 file format, additional keyword arguments are
-                                used to indicate loading behavior in the case where the source file contains
-                                multiple data objects.  See the docstring for py4DSTEM.file.io.native.read_py4DSTEM
-                                for more information.
+        **kwargs                Additional keywords are used to control load behavior for native files with
+                                many different dataobject, to cast the datatype when binning, etc.
+                                Accepted keywords:
+                                    dtype (dtype)       Used when binning data, ignored otherwise.
+                                                        By defaults to whatever the type of the raw data
+                                                        is, to avoid enlarging data size. May be useful
+                                                        to avoid 'wraparound' errors.
 
     Returns:
         data        *           The data. The output type is contingent.
@@ -44,6 +52,9 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
+    assert(binfactor>=1), "Error: binfactor must be >= 1"
+    if binfactor > 1:
+        assert(mem!='MEMMAP'), "Error: binning is not supported for memory mapping.  Either set binfactor=1 or set mem='RAM'"
     assert(ft in [None,'dm','empad','mrc_relativity','gatan_K2_bin','kitware_counted']), "Error: ft argument not recognized"
 
     if ft is None:
