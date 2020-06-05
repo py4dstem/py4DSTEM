@@ -10,6 +10,7 @@ from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataC
 from ...datastructure import Metadata, DataObject, PointList
 from ...datastructure import PointListArray
 from ....process.utils import tqdmnd
+from ....version import __version__
 
 def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwrite=False, **kwargs):
     """
@@ -47,8 +48,10 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
         assert isinstance(topgroup, str)
         group_toplevel = f.create_group(topgroup)
     group_toplevel.attrs.create("emd_group_type",2)
-    group_toplevel.attrs.create("version_major",0)
-    group_toplevel.attrs.create("version_minor",7)
+    group_toplevel.attrs.create("version_major",__version__.split('.')[0])
+    group_toplevel.attrs.create("version_minor",__version__.split('.')[1])
+    group_toplevel.attrs.create("version_release",__version__.split('.')[2])
+
 
     ##### Metadata #####
 
