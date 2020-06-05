@@ -4,7 +4,8 @@
 
 import h5py
 import numpy as np
-from .filebrowser import is_py4DSTEM_file, FileBrowser
+from .filebrowser import FileBrowser
+from .filebrowser import _is_py4DSTEM_file as is_py4DSTEM_file
 
 def remove_from_index_list(indices, filepath):
     """

@@ -110,7 +110,7 @@ def is_py4DSTEM_file(fp):
     """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
     py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release','UUID']
-    with f as h5py.File(fp,'r'):
+    with h5py.File(fp,'r') as f:
         if '4DSTEM_experiment' in f.keys():
             if np.all([attr in f['py4DSTEM_experiment'] for attr in py4DSTEM_attrs]):
                 return True
@@ -120,7 +120,7 @@ def get_py4DSTEM_version(fp):
     """ Returns the version (major,minor,release) of a py4DSTEM file.
     """
     assert(is_py4DSTEM_file(fp)), "Error: not a py4DSTEM file of version >= 0.9.0"
-    with f as h5py.File(fp,'r'):
+    with h5py.File(fp,'r') as f:
         version_major = f['py4DSTEM_experiment'].attrs['version_major']
         version_minor = f['py4DSTEM_experiment'].attrs['version_minor']
         version_release = f['py4DSTEM_experiment'].attrs['version_release']

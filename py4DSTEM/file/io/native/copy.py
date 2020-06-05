@@ -7,7 +7,8 @@
 
 import h5py
 import numpy as np
-from .filebrowser import is_py4DSTEM_file, FileBrowser
+from .filebrowser import FileBrowser
+from .filebrowser import _is_py4DSTEM_file as is_py4DSTEM_file
 from .write import save
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
