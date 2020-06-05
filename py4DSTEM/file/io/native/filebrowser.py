@@ -1472,6 +1472,18 @@ def get_py4DSTEM_version(h5_file):
             print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
             return (0,0)
 
+def version_is_greater_or_equal(current,minimum):
+    "Returns True iff current version is greater than or equal to minimum."
+    if current[0]>minimum[0]:
+        return True
+    elif current[0]==minimum[0]:
+        if current[1]>=minimum[1]:
+            return True
+        else:
+            return False
+    else:
+        return False
+
 def get_py4DSTEM_topgroup(h5_file):
     """
     Accepts either a filepath or an open h5py File object. Returns string of the top group name.
@@ -1495,17 +1507,8 @@ def get_py4DSTEM_topgroup(h5_file):
         f.close()
         return result
 
-def version_is_greater_or_equal(current,minimum):
-    "Returns True iff current version is greater than or equal to minimum."
-    if current[0]>minimum[0]:
-        return True
-    elif current[0]==minimum[0]:
-        if current[1]>=minimum[1]:
-            return True
-        else:
-            return False
-    else:
-        return False
+
+
 
 
 ################# Log functions ################
