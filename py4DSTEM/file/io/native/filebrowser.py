@@ -23,13 +23,20 @@ class FileBrowser(object):
 
     def __init__(self, filepath, **kwargs):
         self.filepath = filepath
-        assert(_is_py4DSTEM_file(self.filepath)), "FileBrowser can't read {}, because it isn't recognized as a py4DSTEM file."
-        self.version = _get_py4DSTEM_version(self.filepath)
-        if version_is_greater_or_equal(self.version,(0,5)):
-            # v0.5 is the first version to allow variable top level group names
-            self.topgroup = get_py4DSTEM_topgroup(self.filepath)
-        else:
+        assert(_is_py4DSTEM_file(filepath)), "FileBrowser can't read {}, because it isn't recognized as a py4DSTEM file."
+        self.version = _get_py4DSTEM_version(filepath)
+        if (self.version[0]==0 and self.version[1]<5):
             self.topgroup = '4DSTEM_experiment/'
+        else:
+            self.topgroup = get_py4DSTEM_topgroup(self.filepath)
+        #if is_py4DSTEM_new(filepath):
+        #else:
+        #    self.version = _get_py4DSTEM_version(self.filepath)
+        #    if _version_is_greater_or_equal(self.version,(0,5)):
+        #        # v0.5 is the first version to allow variable top level group names
+        #        self.topgroup = get_py4DSTEM_topgroup(self.filepath)
+        #    else:
+        #        self.topgroup = '4DSTEM_experiment/'
         self.file = h5py.File(filepath, 'r')
         self.set_object_lookup_info()
         #self.N_logentries = self.get_N_logentries()
@@ -53,7 +60,7 @@ class FileBrowser(object):
     ###### Setup methods #####
 
     def set_object_lookup_info(self):
-        if self.version == (0,7):
+        if _version_is_greater_or_equal(self.filepath,self.version,(0,7,0)):
             self.set_object_lookup_info_v0_7()
         elif self.version in [ (0,5), (0,6) ]:
             self.set_object_lookup_info_v0_5plus()
@@ -84,8 +91,8 @@ class FileBrowser(object):
         self.dataobject_lookup_arr += ['PointListArray' for i in range(self.N_pointlistarrays)]
         self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
 
-        self.N_metadataobjects = len(self.file[self.topgroup + 'metadata'].keys())
-        self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
+        #self.N_metadataobjects = len(self.file[self.topgroup + 'metadata'].keys())
+        #self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
 
     def set_object_lookup_info_v0_5plus(self):
         self.N_datacubes = len(self.file[self.topgroup + 'data/datacubes'])
@@ -103,8 +110,8 @@ class FileBrowser(object):
         self.dataobject_lookup_arr += ['PointListArray' for i in range(self.N_pointlistarrays)]
         self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
 
-        self.N_metadataobjects = len(self.file[self.topgroup + 'metadata'].keys())
-        self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
+        #self.N_metadataobjects = len(self.file[self.topgroup + 'metadata'].keys())
+        #self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
 
     def set_object_lookup_info_v0_4(self):
         self.N_datacubes = len(self.file['4DSTEM_experiment/data/datacubes'])
@@ -122,8 +129,8 @@ class FileBrowser(object):
         self.dataobject_lookup_arr += ['PointListArray' for i in range(self.N_pointlistarrays)]
         self.dataobject_lookup_arr = np.array(self.dataobject_lookup_arr)
 
-        self.N_metadataobjects = len(self.file['4DSTEM_experiment/metadata'].keys())
-        self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
+        #self.N_metadataobjects = len(self.file['4DSTEM_experiment/metadata'].keys())
+        #self.metadataobjects_in_memory = [None for i in range(self.N_metadataobjects)]
 
     def set_object_lookup_info_v0_3(self):
         self.N_datacubes = len(self.file['4DSTEM_experiment/data/datacubes'])
@@ -365,25 +372,25 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             name = list(self.file[self.topgroup + 'data/datacubes'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/datacubes'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
-                          'index':index, 'metadata':metadata}
+                          'index':index} #, 'metadata':metadata}
         elif objecttype == 'CountedDataCube':
             name = list(self.file[self.topgroup + 'data/counted_datacubes'].keys())[objectindex]
             R_Nx, R_Ny = self.file[self.topgroup + 'data/counted_datacubes'][name]['data'].shape
             Q_Nx = self.file[self.topgroup + 'data/counted_datacubes'][name]['dim3'].shape[0]
             Q_Ny = self.file[self.topgroup + 'data/counted_datacubes'][name]['dim4'].shape[0]
             shape = (R_Nx, R_Ny, Q_Nx, Q_Ny)
-            metadata = self.file[self.topgroup + 'data/counted_datacubes'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/counted_datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
-                          'index':index, 'metadata':metadata}
+                          'index':index} #, 'metadata':metadata}
         elif objecttype == 'DiffractionSlice':
             name = list(self.file[self.topgroup + 'data/diffractionslices'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/diffractionslices'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'depth':depth, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/diffractionslices'][name]['dim3']
@@ -397,10 +404,10 @@ class FileBrowser(object):
         elif objecttype == 'RealSlice':
             name = list(self.file[self.topgroup + 'data/realslices'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/realslices'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'depth':depth, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/realslices'][name]['dim3']
@@ -415,20 +422,19 @@ class FileBrowser(object):
             name = list(self.file[self.topgroup + 'data/pointlists'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlists'][name].keys())
             length = self.file[self.topgroup + 'data/pointlists'][name][coordinates[0]]['data'].shape[0]
-            metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'length':length,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'PointListArray':
             name = list(self.file[self.topgroup + 'data/pointlistarrays'].keys())[objectindex]
             coordinates = self.file[self.topgroup + 'data/pointlistarrays'][name]["data"][0,0].dtype
             shape = self.file[self.topgroup + 'data/pointlistarrays'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
-            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index,
-                          'metadata':'unsupported'}
+            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index} #, 'metadata':'unsupported'}
         return objectinfo
 
 
@@ -442,16 +448,16 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             name = list(self.file[self.topgroup + 'data/datacubes'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/datacubes'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
-                          'index':index, 'metadata':metadata}
+                          'index':index} #, 'metadata':metadata}
         elif objecttype == 'DiffractionSlice':
             name = list(self.file[self.topgroup + 'data/diffractionslices'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/diffractionslices'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'depth':depth, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/diffractionslices'][name]['dim3']
@@ -465,10 +471,10 @@ class FileBrowser(object):
         elif objecttype == 'RealSlice':
             name = list(self.file[self.topgroup + 'data/realslices'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/realslices'][name]['data'].shape
-            metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'depth':depth, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/realslices'][name]['dim3']
@@ -483,9 +489,9 @@ class FileBrowser(object):
             name = list(self.file[self.topgroup + 'data/pointlists'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlists'][name].keys())
             length = self.file[self.topgroup + 'data/pointlists'][name][coordinates[0]]['data'].shape[0]
-            metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'length':length,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'PointListArray':
             name = list(self.file[self.topgroup + 'data/pointlistarrays'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlistarrays'][name]['0_0'].keys())
@@ -494,13 +500,12 @@ class FileBrowser(object):
                 i0,j0 = int(key.split('_')[0]),int(key.split('_')[1])
                 i,j = max(i0,i),max(j0,j)
             shape = (i+1,j+1)
-            metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
-            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index,
-                          'metadata':'unsupported'}
+            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index} #, 'metadata':'unsupported'}
         return objectinfo
 
     def get_dataobject_info_v0_5(self, index):
@@ -513,9 +518,9 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             name = list(self.file[self.topgroup + 'data/datacubes'].keys())[objectindex]
             shape = self.file[self.topgroup + 'data/datacubes'][name]['datacube'].shape
-            metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
-                          'index':index, 'metadata':metadata}
+                          'index':index} #, 'metadata':metadata}
         elif objecttype == 'DiffractionSlice':
             name = list(self.file[self.topgroup + 'data/diffractionslices'].keys())[objectindex]
             slices = list(self.file[self.topgroup + 'data/diffractionslices'][name].keys())
@@ -524,10 +529,10 @@ class FileBrowser(object):
             if('dim3' in slices):
                 slices.remove('dim3')
             shape = self.file[self.topgroup + 'data/diffractionslices'][name][slices[0]].shape
-            metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/diffractionslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'slices':slices, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/diffractionslices'][name]['dim3']
@@ -546,10 +551,10 @@ class FileBrowser(object):
             if('dim3' in slices):
                 slices.remove('dim3')
             shape = self.file[self.topgroup + 'data/realslices'][name][slices[0]].shape
-            metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/realslices'][name].attrs['metadata']
             depth = 1
             objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
             if(len(shape) == 3):
                 objectinfo['depth'] = shape[2]
                 dim3 = self.file[self.topgroup+'data/realslices'][name]['dim3']
@@ -564,9 +569,9 @@ class FileBrowser(object):
             name = list(self.file[self.topgroup + 'data/pointlists'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlists'][name].keys())
             length = self.file[self.topgroup + 'data/pointlists'][name][coordinates[0]]['data'].shape[0]
-            metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlists'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'length':length,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'PointListArray':
             name = list(self.file[self.topgroup + 'data/pointlistarrays'].keys())[objectindex]
             coordinates = list(self.file[self.topgroup + 'data/pointlistarrays'][name]['0_0'].keys())
@@ -575,13 +580,12 @@ class FileBrowser(object):
                 i0,j0 = int(key.split('_')[0]),int(key.split('_')[1])
                 i,j = max(i0,i),max(j0,j)
             shape = (i+1,j+1)
-            metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
+            #metadata = self.file[self.topgroup + 'data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
-            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index,
-                          'metadata':'unsupported'}
+            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index} #, 'metadata':'unsupported'}
         return objectinfo
 
     def get_dataobject_info_v0_4(self, index):
@@ -594,9 +598,9 @@ class FileBrowser(object):
         if objecttype == 'DataCube':
             name = list(self.file['4DSTEM_experiment/data/datacubes'].keys())[objectindex]
             shape = self.file['4DSTEM_experiment/data/datacubes'][name]['datacube'].shape
-            metadata = self.file['4DSTEM_experiment/data/datacubes'][name].attrs['metadata']
+            #metadata = self.file['4DSTEM_experiment/data/datacubes'][name].attrs['metadata']
             objectinfo = {'name':name, 'shape':shape, 'type':objecttype,
-                          'index':index, 'metadata':metadata}
+                          'index':index} #, 'metadata':metadata}
         elif objecttype == 'DiffractionSlice':
             name = list(self.file['4DSTEM_experiment/data/diffractionslices'].keys())[objectindex]
             depth = self.file['4DSTEM_experiment/data/diffractionslices'][name].attrs['depth']
@@ -604,9 +608,9 @@ class FileBrowser(object):
             slices.remove('dim1')
             slices.remove('dim2')
             shape = self.file['4DSTEM_experiment/data/diffractionslices'][name][slices[0]].shape
-            metadata = self.file['4DSTEM_experiment/data/diffractionslices'][name].attrs['metadata']
+            #metadata = self.file['4DSTEM_experiment/data/diffractionslices'][name].attrs['metadata']
             objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'RealSlice':
             name = list(self.file['4DSTEM_experiment/data/realslices'].keys())[objectindex]
             depth = self.file['4DSTEM_experiment/data/realslices'][name].attrs['depth']
@@ -614,16 +618,16 @@ class FileBrowser(object):
             slices.remove('dim1')
             slices.remove('dim2')
             shape = self.file['4DSTEM_experiment/data/realslices'][name][slices[0]].shape
-            metadata = self.file['4DSTEM_experiment/data/realslices'][name].attrs['metadata']
+            #metadata = self.file['4DSTEM_experiment/data/realslices'][name].attrs['metadata']
             objectinfo = {'name':name, 'depth':depth, 'slices':slices, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'PointList':
             name = list(self.file['4DSTEM_experiment/data/pointlists'].keys())[objectindex]
             coordinates = list(self.file['4DSTEM_experiment/data/pointlists'][name].keys())
             length = self.file['4DSTEM_experiment/data/pointlists'][name][coordinates[0]]['data'].shape[0]
-            metadata = self.file['4DSTEM_experiment/data/pointlists'][name].attrs['metadata']
+            #metadata = self.file['4DSTEM_experiment/data/pointlists'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'length':length,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         elif objecttype == 'PointListArray':
             name = list(self.file['4DSTEM_experiment/data/pointlistarrays'].keys())[objectindex]
             coordinates = list(self.file['4DSTEM_experiment/data/pointlistarrays'][name]['0_0'].keys())
@@ -632,13 +636,12 @@ class FileBrowser(object):
                 i0,j0 = int(key.split('_')[0]),int(key.split('_')[1])
                 i,j = max(i0,i),max(j0,j)
             shape = (i+1,j+1)
-            metadata = self.file['4DSTEM_experiment/data/pointlistarrays'][name].attrs['metadata']
+            #metadata = self.file['4DSTEM_experiment/data/pointlistarrays'][name].attrs['metadata']
             objectinfo = {'name':name, 'coordinates':coordinates, 'shape':shape,
-                          'type':objecttype, 'index':index, 'metadata':metadata}
+                          'type':objecttype, 'index':index} #, 'metadata':metadata}
         else:
             print("Error: unknown dataobject type {}.".format(objecttype))
-            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index,
-                          'metadata':'unsupported'}
+            objectinfo = {'name':'unsupported', 'type':'unsupported', 'index':index} #, 'metadata':'unsupported'}
         return objectinfo
 
     def get_dataobject_info_v0_3(self, index):
@@ -794,16 +797,16 @@ class FileBrowser(object):
         objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
-        metadata_index = info['metadata']
+        #metadata_index = info['metadata']
 
         mmap = kwargs.get('memory_map', False)
 
-        if metadata_index == -1:
-            metadata = None
-        else:
-            if self.metadataobjects_in_memory[metadata_index] is None:
-                self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
-            metadata = self.metadataobjects_in_memory[metadata_index]
+        #if metadata_index == -1:
+        #    metadata = None
+        #else:
+        #    if self.metadataobjects_in_memory[metadata_index] is None:
+        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+        #    metadata = self.metadataobjects_in_memory[metadata_index]
 
         if objecttype == 'DataCube':
             shape = info['shape']
@@ -895,7 +898,7 @@ class FileBrowser(object):
         else:
             raise Exception("Unknown object type {}. Returning None.".format(objecttype))
 
-        dataobject.metadata = metadata
+        #dataobject.metadata = metadata
         return dataobject
 
     def get_dataobject_v0_6(self, index, **kwargs):
@@ -905,16 +908,16 @@ class FileBrowser(object):
         objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
-        metadata_index = info['metadata']
+        #metadata_index = info['metadata']
 
         mmap = kwargs.get('memory_map', False)
 
-        if metadata_index == -1:
-            metadata = None
-        else:
-            if self.metadataobjects_in_memory[metadata_index] is None:
-                self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
-            metadata = self.metadataobjects_in_memory[metadata_index]
+        #if metadata_index == -1:
+        #    metadata = None
+        #else:
+        #    if self.metadataobjects_in_memory[metadata_index] is None:
+        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+        #    metadata = self.metadataobjects_in_memory[metadata_index]
 
         if objecttype == 'DataCube':
             shape = info['shape']
@@ -989,7 +992,7 @@ class FileBrowser(object):
         else:
             raise Exception("Unknown object type {}. Returning None.".format(objecttype))
 
-        dataobject.metadata = metadata
+        #dataobject.metadata = metadata
         return dataobject
 
     def get_dataobject_v0_5(self, index, **kwargs):
@@ -999,16 +1002,16 @@ class FileBrowser(object):
         objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
-        metadata_index = info['metadata']
+        #metadata_index = info['metadata']
 
         mmap = kwargs.get('memory_map', False)
 
-        if metadata_index == -1:
-            metadata = None
-        else:
-            if self.metadataobjects_in_memory[metadata_index] is None:
-                self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
-            metadata = self.metadataobjects_in_memory[metadata_index]
+        #if metadata_index == -1:
+        #    metadata = None
+        #else:
+        #    if self.metadataobjects_in_memory[metadata_index] is None:
+        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+        #    metadata = self.metadataobjects_in_memory[metadata_index]
 
         if objecttype == 'DataCube':
             shape = info['shape']
@@ -1090,7 +1093,7 @@ class FileBrowser(object):
         else:
             raise Exception("Unknown object type {}. Returning None.".format(objecttype))
 
-        dataobject.metadata = metadata
+        #dataobject.metadata = metadata
         return dataobject
 
     def get_dataobject_v0_4(self, index, **kwargs):
@@ -1100,16 +1103,16 @@ class FileBrowser(object):
         objecttype, objectindex = self.get_object_lookup_info(index)
         info = self.get_dataobject_info(index)
         name = info['name']
-        metadata_index = info['metadata']
+        #metadata_index = info['metadata']
 
         mmap = kwargs.get('memory_map', False)
 
-        if metadata_index == -1:
-            metadata = None
-        else:
-            if self.metadataobjects_in_memory[metadata_index] is None:
-                self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
-            metadata = self.metadataobjects_in_memory[metadata_index]
+        #if metadata_index == -1:
+        #    metadata = None
+        #else:
+        #    if self.metadataobjects_in_memory[metadata_index] is None:
+        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+        #    metadata = self.metadataobjects_in_memory[metadata_index]
 
         if objecttype == 'DataCube':
             shape = info['shape']
@@ -1186,7 +1189,7 @@ class FileBrowser(object):
         else:
             raise Exception("Unknown object type {}. Returning None.".format(objecttype))
 
-        dataobject.metadata = metadata
+        #dataobject.metadata = metadata
         return dataobject
 
     def get_dataobject_v0_3(self, index):
@@ -1402,9 +1405,9 @@ class FileBrowser(object):
 
     ############# Metadata #############
 
-    def get_metadataobject(self, index):
-        metadata_group = self.file[self.topgroup + 'metadata/metadata_{}'.format(index)]
-        return Metadata(init='py4DSTEM', filepath=self.file, metadata_ind=index)
+    #def get_metadataobject(self, index):
+    #    metadata_group = self.file[self.topgroup + 'metadata/metadata_{}'.format(index)]
+    #    return Metadata(init='py4DSTEM', filepath=self.file, metadata_ind=index)
 
 
     ###### Log display and querry ######
@@ -1419,7 +1422,31 @@ class FileBrowser(object):
 
 ################# Utility functions ################
 
-def _is_py4DSTEM_file(h5_file):
+def _is_py4DSTEM_file(fp):
+    """ Checks if a file is either a new (>= v0.9.0) or old py4DSTEM file
+    """
+    return (is_py4DSTEM_file_OLD(fp) or is_py4DSTEM_file_NEW(fp))
+
+def _get_py4DSTEM_version(fp):
+    if is_py4DSTEM_file_NEW(fp):
+        return get_py4DSTEM_version_NEW(fp)
+    elif is_py4DSTEM_file_OLD(fp):
+        return get_py4DSTEM_version_OLD(fp)
+    else:
+        raise Exception("{} is not a py4DSTEM file.".format(fp))
+
+def _version_is_greater_or_equal(fp,current,minimum):
+    if is_py4DSTEM_file_NEW(fp):
+        version = get_py4DSTEM_version_NEW(fp)
+        return version_is_greater_or_equal_NEW(version,minimum)
+    elif is_py4DSTEM_file_OLD(fp):
+        version = get_py4DSTEM_versionOLD(fp)
+        return version_is_greater_or_equal_OLD(version,minimum[:2])
+    else:
+        raise Exception("{} is not a py4DSTEM file.".format(fp))
+
+
+def is_py4DSTEM_file_OLD(h5_file):
     """
     Accepts either a filepath or an open h5py File object. Returns true if the file was written by
     py4DSTEM.
@@ -1437,13 +1464,13 @@ def _is_py4DSTEM_file(h5_file):
     else:
         try:
             f = h5py.File(h5_file, 'r')
-            result = _is_py4DSTEM_file(f)
+            result = is_py4DSTEM_file_OLD(f)
             f.close()
             return result
         except OSError:
             return False
 
-def _get_py4DSTEM_version(h5_file):
+def get_py4DSTEM_version_OLD(h5_file):
     """
     Accepts either a filepath or an open h5py File object. Returns true if the file was written by
     py4DSTEM.
@@ -1472,7 +1499,7 @@ def _get_py4DSTEM_version(h5_file):
             print("Error: file cannot be opened with h5py, and may not be in HDF5 format.")
             return (0,0)
 
-def version_is_greater_or_equal(current,minimum):
+def version_is_greater_or_equal_OLD(current,minimum):
     "Returns True iff current version is greater than or equal to minimum."
     if current[0]>minimum[0]:
         return True
@@ -1483,6 +1510,48 @@ def version_is_greater_or_equal(current,minimum):
             return False
     else:
         return False
+
+def is_py4DSTEM_file_NEW(fp):
+    """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
+    """
+    py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release']
+    with h5py.File(fp,'r') as f:
+        if '4DSTEM_experiment' in f.keys():
+            if all([attr in f['4DSTEM_experiment'].attrs for attr in py4DSTEM_attrs]):
+                return True
+    return False
+
+def get_py4DSTEM_version_NEW(fp):
+    """ Returns the version (major,minor,release) of a py4DSTEM file.
+    """
+    assert(_is_py4DSTEM_file(fp)), "Error: not a py4DSTEM file of version >= 0.9.0"
+    with h5py.File(fp,'r') as f:
+        version_major = int(f['4DSTEM_experiment'].attrs['version_major'])
+        version_minor = int(f['4DSTEM_experiment'].attrs['version_minor'])
+        version_release = int(f['4DSTEM_experiment'].attrs['version_release'])
+    return version_major, version_minor, version_release
+
+def version_is_greater_or_equal_NEW(current,minimum):
+    """ Returns True iff current version (major,minor,release) is greater than or equal to minimum."
+    """
+    if current[0]>minimum[0]:
+        return True
+    elif current[0]==minimum[0]:
+        if current[1]>minimum[1]:
+            return True
+        elif current[1]==minimum[1]:
+            if current[2]>=minimum[2]:
+                return True
+        else:
+            return False
+    else:
+        return False
+
+
+
+
+
+
 
 def get_py4DSTEM_topgroup(h5_file):
     """
@@ -1522,7 +1591,7 @@ def get_py4DSTEM_topgroup(h5_file):
 #     # Check if file was written by py4DSTEM
 #     try:
 #         h5_file = h5py.File(filename,'r')
-#         if _is_py4DSTEM_file(h5_file):
+#         if is_py4DSTEM_file_OLD(h5_file):
 #             try:
 #                 log_group = h5_file['log']
 #                 for i in range(len(log_group.keys())):

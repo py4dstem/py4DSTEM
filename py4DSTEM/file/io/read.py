@@ -75,7 +75,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
     elif ft == "kitware_counted":
         data,md = read_kitware_counted(fp, mem, binfactor, **kwargs)
     else:
-        raise Exception("Unknown filetype, {}".format(ft))
+        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
 
     return data, md
 
@@ -89,27 +89,27 @@ def parse_filetype(fp):
     if fext in ['.h5','.H5','hdf5','HDF5','.py4dstem','.py4DSTEM','.PY4DSTEM','.emd','.EMD']:
         if is_py4DSTEM_file(fp):
             if version_is_greater_or_equal(get_py4DSTEM_version(fp),(0,9,0)):
-                ft = 'py4DSTEM'
+                return 'py4DSTEM'
             else:
-                ft = 'py4DSTEM_v0'
+                return 'py4DSTEM_v0'
+        else:
+            raise Exception("Non-py4DSTEM formatted .h5 files are not presently supported.")
     elif fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
-        ft = 'dm'
+        return 'dm'
     elif fext in ['.empad']:
         # TK TODO
-        ft = 'empad'
+        return 'empad'
     elif fext in ['.mrc']:
         # TK TODO
-        ft = 'mrc_relativity'
+        return 'mrc_relativity'
     elif fext in ['.gatan_K2_bin']:
         # TK TODO
-        ft = 'gatan_K2_bin'
+        return 'gatan_K2_bin'
     elif fext in ['.kitware_counted']:
         # TK TODO
-        ft = 'kitware_counted'
+        return 'kitware_counted'
     else:
         raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
-    return ft
-
 
 
 
