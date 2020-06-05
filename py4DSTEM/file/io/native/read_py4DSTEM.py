@@ -1,7 +1,8 @@
 # Reads a py4DSTEM formatted (EMD type 2) 4D-STEM dataset
 
+import h5py
 from pathlib import Path
-from .filebrowser import FileBrowser, is_py4DSTEM_file
+from .filebrowser import FileBrowser
 from ...datastructure import DataCube
 
 def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
@@ -53,7 +54,7 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     browser = FileBrowser(fp)
 
     if 'load' not in kwargs.keys():
-        print("Native py4DSTEM (EMD type 2) file detected.  This file contains the following data objects:"
+        print("Native py4DSTEM (EMD type 2) file detected.  This file contains the following data objects:")
         print("")
         print("") # TODO
         print("")
@@ -105,56 +106,43 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
 
 
 
-
-
-
-
-
-
-
-def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
+def is_py4DSTEM_file(fp):
+    """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
-    Read a py4DSTEM formatted (EMD type 2) 4D-STEM file.
+    py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release','UUID']
+    with f as h5py.File(fp,'r'):
+        if '4DSTEM_experiment' in f.keys():
+            if np.all([attr in f['py4DSTEM_experiment'] for attr in py4DSTEM_attrs]):
+                return True
+    return False
 
-    Accepts:
-        fp          str or Path Path to the file
-        mem         str         (opt) Specifies how the data should be stored; must be "RAM" or "MEMMAP". See
-                                docstring for py4DSTEM.file.io.read. Default is "RAM".
-        binfactor   int         (opt) Bin the data, in diffraction space, as it's loaded. See docstring for
-                                py4DSTEM.file.io.read.  Default is 1.
-        **kwargs                (opt) When reading the native h5 file format, additional keyword arguments are
-                                used to indicate loading behavior in the case where the source file contains
-                                multiple data objects.
-
-                                Recognized keywords are:
-
-                                    TKTKkwarg1       int         descrption TKTKTK
-
-    Returns:
-        dc          DataCube    The 4D-STEM data.
-        md          MetaData    The metadata.
+def get_py4DSTEM_version(fp):
+    """ Returns the version (major,minor,release) of a py4DSTEM file.
     """
-    assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
-    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
-    assert(binfactor>=1), "Error: binfactor must be >= 1"
+    assert(is_py4DSTEM_file(fp)), "Error: not a py4DSTEM file of version >= 0.9.0"
+    with f as h5py.File(fp,'r'):
+        version_major = f['py4DSTEM_experiment'].attrs['version_major']
+        version_minor = f['py4DSTEM_experiment'].attrs['version_minor']
+        version_release = f['py4DSTEM_experiment'].attrs['version_release']
+    return version_major, version_minor, version_release
 
-    if (mem,binfactor)==("RAM",1):
-        # TODO
-        pass
-    elif (mem,binfactor)==("MEMMAP",1):
-        # TODO
-        pass
-    elif (mem)==("RAM"):
-        # TODO
-        pass
+def version_is_greater_or_equal(current,minimum):
+    """ Returns True iff current version (major,minor,release) is greater than or equal to minimum."
+    """
+    if current[0]>minimum[0]:
+        return True
+    elif current[0]==minimum[0]:
+        if current[1]>minimum[1]:
+            return True
+        elif current[1]==minimum[1]:
+            if current[2]>=minimum[2]:
+                return True
+        else:
+            return False
     else:
-        # TODO
-        pass
+        return False
 
-    # TK TODO load the data
-    # TK TODO load the metadata
 
-    return data, md
+
 
 
