@@ -53,20 +53,20 @@ def save_from_dataobject_list(dataobject_list, outputfile, topgroup=None, overwr
     ##### Metadata #####
 
     # Find and label all metadata objects
-    metadata_list,i = [],0
-    for dataobject in dataobject_list:
-        if dataobject.metadata is not None:
-            assert isinstance(dataobject.metadata,Metadata), "DataObject.metadata must be a Metadata object or None for all DataObjects being saved."
-            if dataobject.metadata not in metadata_list:
-                metadata_list.append(dataobject.metadata)
-                dataobject.metadata._ind = i
-                i += 1
-
-    # Save metadata
-    group_metadata = group_toplevel.create_group("metadata")
-    for metadata in metadata_list:
-        group_metadata_current = group_metadata.create_group("metadata_{}".format(metadata._ind))
-        save_metadata(metadata,group_metadata_current)
+#     metadata_list,i = [],0
+#     for dataobject in dataobject_list:
+#         if dataobject.metadata is not None:
+#             assert isinstance(dataobject.metadata,Metadata), "DataObject.metadata must be a Metadata object or None for all DataObjects being saved."
+#             if dataobject.metadata not in metadata_list:
+#                 metadata_list.append(dataobject.metadata)
+#                 dataobject.metadata._ind = i
+#                 i += 1
+# 
+#     # Save metadata
+#     group_metadata = group_toplevel.create_group("metadata")
+#     for metadata in metadata_list:
+#         group_metadata_current = group_metadata.create_group("metadata_{}".format(metadata._ind))
+#         save_metadata(metadata,group_metadata_current)
 
     ##### Data #####
 
@@ -219,10 +219,10 @@ def save(data, outputfile, **kwargs):
 
 def save_datacube_group(group, datacube, use_compression=False):
     group.attrs.create("emd_group_type",1)
-    if datacube.metadata is not None:
-        group.attrs.create("metadata",datacube.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    # if datacube.metadata is not None:
+    #     group.attrs.create("metadata",datacube.metadata._ind)
+    # else:
+    #     group.attrs.create("metadata",-1)
 
     # TODO: consider defining data chunking here, keeping k-space slices together
     if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
@@ -267,10 +267,10 @@ def save_counted_datacube_group(group,datacube):
         return
 
     group.attrs.create("emd_group_type",1)
-    if datacube.metadata is not None:
-        group.attrs.create("metadata",datacube.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    # if datacube.metadata is not None:
+    #     group.attrs.create("metadata",datacube.metadata._ind)
+    # else:
+    #     group.attrs.create("metadata",-1)
 
     pointlistarray = datacube.electrons
     try:
@@ -321,10 +321,10 @@ def save_counted_datacube_group(group,datacube):
     data_Q_Ny.attrs.create("units",np.string_("[pix]"))
 
 def save_diffraction_group(group, diffractionslice):
-    if diffractionslice.metadata is not None:
-        group.attrs.create("metadata",diffractionslice.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    # if diffractionslice.metadata is not None:
+    #     group.attrs.create("metadata",diffractionslice.metadata._ind)
+    # else:
+    #     group.attrs.create("metadata",-1)
 
     group.attrs.create("depth", diffractionslice.depth)
     data_diffractionslice = group.create_dataset("data", data=diffractionslice.data)
@@ -352,10 +352,10 @@ def save_diffraction_group(group, diffractionslice):
         dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
 
 def save_real_group(group, realslice):
-    if realslice.metadata is not None:
-        group.attrs.create("metadata",realslice.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    # if realslice.metadata is not None:
+    #     group.attrs.create("metadata",realslice.metadata._ind)
+    # else:
+    #     group.attrs.create("metadata",-1)
 
     group.attrs.create("depth", realslice.depth)
     data_realslice = group.create_dataset("data", data=realslice.data)
@@ -383,10 +383,10 @@ def save_real_group(group, realslice):
         dim3 = group.create_dataset("dim3", data=np.array(realslice.slicelabels).astype("S64"))
 
 def save_pointlist_group(group, pointlist):
-    if pointlist.metadata is not None:
-        group.attrs.create("metadata",pointlist.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    #if pointlist.metadata is not None:
+    #    group.attrs.create("metadata",pointlist.metadata._ind)
+    #else:
+    #    group.attrs.create("metadata",-1)
 
     n_coords = len(pointlist.dtype.names)
     coords = np.string_(str([coord for coord in pointlist.dtype.names]))
@@ -400,10 +400,10 @@ def save_pointlist_group(group, pointlist):
         group_current_coord.create_dataset("data", data=pointlist.data[name])
 
 def save_pointlistarray_group(group, pointlistarray):
-    if pointlistarray.metadata is not None:
-        group.attrs.create("metadata",pointlistarray.metadata._ind)
-    else:
-        group.attrs.create("metadata",-1)
+    #if pointlistarray.metadata is not None:
+    #    group.attrs.create("metadata",pointlistarray.metadata._ind)
+    #else:
+    #    group.attrs.create("metadata",-1)
 
     try:
         n_coords = len(pointlistarray.dtype.names)
