@@ -61,7 +61,7 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
         print("To load one or more objects, call this function again, this time passing the keyword 'load'.")
         print("For one object, use 'load = x' where x is either the object's index (integer) or name (string).")
         print("For several objects, use 'load = [x1,x2,x3,...]' where xi are all indices, or all names.")
-        return
+        return None,None
 
     else:
         # Get data
@@ -109,10 +109,10 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
 def is_py4DSTEM_file(fp):
     """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
-    py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release','UUID']
+    py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release']
     with h5py.File(fp,'r') as f:
         if '4DSTEM_experiment' in f.keys():
-            if np.all([attr in f['py4DSTEM_experiment'] for attr in py4DSTEM_attrs]):
+            if all([attr in f['4DSTEM_experiment'].attrs for attr in py4DSTEM_attrs]):
                 return True
     return False
 
@@ -121,9 +121,9 @@ def get_py4DSTEM_version(fp):
     """
     assert(is_py4DSTEM_file(fp)), "Error: not a py4DSTEM file of version >= 0.9.0"
     with h5py.File(fp,'r') as f:
-        version_major = f['py4DSTEM_experiment'].attrs['version_major']
-        version_minor = f['py4DSTEM_experiment'].attrs['version_minor']
-        version_release = f['py4DSTEM_experiment'].attrs['version_release']
+        version_major = int(f['4DSTEM_experiment'].attrs['version_major'])
+        version_minor = int(f['4DSTEM_experiment'].attrs['version_minor'])
+        version_release = int(f['4DSTEM_experiment'].attrs['version_release'])
     return version_major, version_minor, version_release
 
 def version_is_greater_or_equal(current,minimum):
