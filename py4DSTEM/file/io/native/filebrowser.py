@@ -23,8 +23,8 @@ class FileBrowser(object):
 
     def __init__(self, filepath, **kwargs):
         self.filepath = filepath
-        assert(is_py4DSTEM_file(self.filepath)), "FileBrowser can't read {}, because it isn't recognized as a py4DSTEM file."
-        self.version = get_py4DSTEM_version(self.filepath)
+        assert(_is_py4DSTEM_file(self.filepath)), "FileBrowser can't read {}, because it isn't recognized as a py4DSTEM file."
+        self.version = _get_py4DSTEM_version(self.filepath)
         if version_is_greater_or_equal(self.version,(0,5)):
             # v0.5 is the first version to allow variable top level group names
             self.topgroup = get_py4DSTEM_topgroup(self.filepath)
@@ -1419,7 +1419,7 @@ class FileBrowser(object):
 
 ################# Utility functions ################
 
-def is_py4DSTEM_file(h5_file):
+def _is_py4DSTEM_file(h5_file):
     """
     Accepts either a filepath or an open h5py File object. Returns true if the file was written by
     py4DSTEM.
@@ -1437,13 +1437,13 @@ def is_py4DSTEM_file(h5_file):
     else:
         try:
             f = h5py.File(h5_file, 'r')
-            result = is_py4DSTEM_file(f)
+            result = _is_py4DSTEM_file(f)
             f.close()
             return result
         except OSError:
             return False
 
-def get_py4DSTEM_version(h5_file):
+def _get_py4DSTEM_version(h5_file):
     """
     Accepts either a filepath or an open h5py File object. Returns true if the file was written by
     py4DSTEM.
@@ -1465,7 +1465,7 @@ def get_py4DSTEM_version(h5_file):
     else:
         try:
             f = h5py.File(h5_file, 'r')
-            result = get_py4DSTEM_version(f)
+            result = _get_py4DSTEM_version(f)
             f.close()
             return result
         except OSError:
@@ -1522,7 +1522,7 @@ def get_py4DSTEM_topgroup(h5_file):
 #     # Check if file was written by py4DSTEM
 #     try:
 #         h5_file = h5py.File(filename,'r')
-#         if is_py4DSTEM_file(h5_file):
+#         if _is_py4DSTEM_file(h5_file):
 #             try:
 #                 log_group = h5_file['log']
 #                 for i in range(len(log_group.keys())):
@@ -1559,7 +1559,7 @@ def show_dataobjects(filepath):
     """
     Displays all DataObjects in the py4DSTEM HDF5 file at filepath.
     """
-    assert is_py4DSTEM_file(filepath), "filepath must point to a py4DSTEM HDF5 file."
+    assert _is_py4DSTEM_file(filepath), "filepath must point to a py4DSTEM HDF5 file."
     browser = FileBrowser(filepath)
     browser.show_dataobjects()
     browser.close()
