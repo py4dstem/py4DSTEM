@@ -2,8 +2,7 @@
 
 import h5py
 from pathlib import Path
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
-from .read_utils import version_is_geq, version_is_geq_majorminor
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
 from .filebrowser import FileBrowser
 from ...datastructure import DataCube
 
@@ -75,15 +74,11 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
 
     # Get version info, and open the appropriate version FileBrowser
     version = get_py4DSTEM_version(fp,tg)
-    if len(version)==2:
-        print("py4DSTEM (EMD type 2) v{}.{} file detected".format(version[0],version[1]))
-        browser = FileBrowser_v0(fp,tg)
+    print("py4DSTEM (EMD type 2) v{}.{}.{} file detected".format(version[0],version[1],version[2]))
+    if version_is_geq(version,(0,9,0)):
+        browser = FileBrowser(fp,tg)
     else:
-        print("py4DSTEM (EMD type 2) v{}.{}.{} file detected".format(version[0],version[1],version[2]))
-        if version_is_geq(version,(0,9,0)):
-            browser = FileBrowser(fp,tg)
-        else:
-            browser = Filebrowser_v0(fp,tg)
+        browser = FileBrowser_v0(fp,tg)
 
     # If 
     if 'load' not in kwargs.keys():
