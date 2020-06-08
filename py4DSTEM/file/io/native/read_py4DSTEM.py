@@ -3,6 +3,7 @@
 import h5py
 from pathlib import Path
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
+from .read_utils import version_is_geq, version_is_geq_majorminor
 from .filebrowser import FileBrowser
 from ...datastructure import DataCube
 
@@ -56,25 +57,40 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     assert(is_py4DSTEM_file(fp)), "Error: {} is not recognized as a native py4DSTEM file.".format(fp)
 
+    # Identify toplevel H5 group containing the py4DSTEM tree of interest
     topgroups = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
-        topgroup = kwargs.keys['topgroup']
-        assert(topgroup in topgroups), "Error: specified topgroup, {}, not found.".format(topgroup)
+        tg = kwargs.keys['topgroup']
+        assert(tg in topgroups), "Error: specified topgroup, {}, not found.".format(tg)
     else:
         if len(topgroups)==1:
-            topgroup = topgroups[0]
+            tg = topgroups[0]
         else:
             print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
             print("")
             print("Topgroups found:")
             for tg in topgroups:
                 print(tg)
-    browser = FileBrowser(fp,topgroup)
+            return None,None
 
+    # Get version info, and open the appropriate version FileBrowser
+    version = get_py4DSTEM_version(fp,tg)
+    if len(version)==2:
+        print("py4DSTEM (EMD type 2) v{}.{} file detected".format(version[0],version[1]))
+        browser = FileBrowser_v0(fp,tg)
+    else:
+        print("py4DSTEM (EMD type 2) v{}.{}.{} file detected".format(version[0],version[1],version[2]))
+        if version_is_geq(version,(0,9,0)):
+            browser = FileBrowser(fp,tg)
+        else:
+            browser = Filebrowser_v0(fp,tg)
+
+    # If 
     if 'load' not in kwargs.keys():
-        print("Native py4DSTEM (EMD type 2) file detected.  This file contains the following data objects:")
+        print("This file contains the following data objects:")
         print("")
         browser.show_dataobjects()
+        browser.close()
         print("")
         print("To load data, call this function again, this time passing the keyword 'load'.")
         print("To load one object, use 'load = x' where x is either the object's index (integer) or name (string).")
