@@ -1553,30 +1553,6 @@ def version_is_greater_or_equal_NEW(current,minimum):
 
 
 
-def get_py4DSTEM_topgroup(h5_file):
-    """
-    Accepts either a filepath or an open h5py File object. Returns string of the top group name.
-    Used in v0.5 and above; all other versions are defaulted to "4DSTEM_experiment"
-    Currently makes a list of top groups, but it will only return the first valid top group.
-    When multiple top groups is supported, all that should change is the return statement from
-    return topgroups[0] -> return topgroups
-    """
-    if isinstance(h5_file, h5py._hl.files.File):
-        topgroups = []
-        for key in h5_file.keys():
-            if ('version_major' in h5_file[key].attrs) and ('version_minor' in h5_file[key].attrs) and ('emd_group_type' in h5_file[key].attrs):
-                    if h5_file[key].attrs['emd_group_type'] == 2:
-                        topgroups.append(key+'/')
-        if len(topgroups)<1:
-            raise Exception('No toplevel groups with appropriate tags (emd_group_type=2, version_major, version_minor) found.')
-        return topgroups[0]
-    else:
-        f = h5py.File(h5_file, 'r')
-        result = get_py4DSTEM_topgroup(f)
-        f.close()
-        return result
-
-
 
 
 

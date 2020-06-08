@@ -2,6 +2,7 @@
 
 import h5py
 from pathlib import Path
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_version, version_is_greater_or_equal
 from .filebrowser import FileBrowser
 from ...datastructure import DataCube
 
@@ -116,43 +117,6 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
 
 
 
-
-
-def is_py4DSTEM_file(fp):
-    """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
-    """
-    py4DSTEM_attrs = ['emd_group_type','version_major','version_minor','version_release']
-    with h5py.File(fp,'r') as f:
-        if '4DSTEM_experiment' in f.keys():
-            if all([attr in f['4DSTEM_experiment'].attrs for attr in py4DSTEM_attrs]):
-                return True
-    return False
-
-def get_py4DSTEM_version(fp):
-    """ Returns the version (major,minor,release) of a py4DSTEM file.
-    """
-    assert(is_py4DSTEM_file(fp)), "Error: not a py4DSTEM file of version >= 0.9.0"
-    with h5py.File(fp,'r') as f:
-        version_major = int(f['4DSTEM_experiment'].attrs['version_major'])
-        version_minor = int(f['4DSTEM_experiment'].attrs['version_minor'])
-        version_release = int(f['4DSTEM_experiment'].attrs['version_release'])
-    return version_major, version_minor, version_release
-
-def version_is_greater_or_equal(current,minimum):
-    """ Returns True iff current version (major,minor,release) is greater than or equal to minimum."
-    """
-    if current[0]>minimum[0]:
-        return True
-    elif current[0]==minimum[0]:
-        if current[1]>minimum[1]:
-            return True
-        elif current[1]==minimum[1]:
-            if current[2]>=minimum[2]:
-                return True
-        else:
-            return False
-    else:
-        return False
 
 
 
