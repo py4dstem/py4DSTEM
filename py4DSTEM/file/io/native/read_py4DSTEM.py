@@ -40,6 +40,13 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
                                                             By defaults to whatever the type of the raw data
                                                             is, to avoid enlarging data size. May be useful
                                                             to avoid'wraparound' errors.
+                                    topgroup (str)          Used to specify a toplevel group for a py4DSTEM
+                                                            formatted data tree within an HDF5 file. By
+                                                            default this written as and read from a group
+                                                            named '4DSTEM_experiment', however other
+                                                            topgroup names can be specified, and may be
+                                                            used for HDF5 files containing multiple
+                                                            py4DSTEM data trees.
 
     Returns:
         dc          DataCube    The 4D-STEM data.
@@ -51,7 +58,12 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     assert(is_py4DSTEM_file(fp)), "Error: {} is not recognized as a native py4DSTEM file.".format(fp)
 
-    browser = FileBrowser(fp)
+    if 'topgroup' not in kwargs.keys():
+        topgroup = '4DSTEM_experiment'
+    else:
+        topgroup = kwargs['topgroup']
+
+    browser = FileBrowser(fp,topgroup)
 
     if 'load' not in kwargs.keys():
         print("Native py4DSTEM (EMD type 2) file detected.  This file contains the following data objects:")

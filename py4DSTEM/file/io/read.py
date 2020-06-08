@@ -40,6 +40,11 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                                                         By defaults to whatever the type of the raw data
                                                         is, to avoid enlarging data size. May be useful
                                                         to avoid 'wraparound' errors.
+                                    load (int,str,list) Specifies load behavior for native py4DSTEM files -
+                                                        see py4DSTEM.file.io.native.read_py4DSTEM docstring.
+                                    topgroup (str)      Specifies the toplevel group of an HDF5 file where
+                                                        a native py4DSTEM file's data tree lives -
+                                                        see py4DSTEM.file.io.native.read_py4DSTEM docstring.
 
     Returns:
         data        *           The data. The output type is contingent.
