@@ -2,7 +2,7 @@
 
 import h5py
 from pathlib import Path
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_version, version_is_greater_or_equal
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
 from .filebrowser import FileBrowser
 from ...datastructure import DataCube
 
@@ -41,13 +41,10 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
                                                             By defaults to whatever the type of the raw data
                                                             is, to avoid enlarging data size. May be useful
                                                             to avoid'wraparound' errors.
-                                    topgroup (str)          Used to specify a toplevel group for a py4DSTEM
-                                                            formatted data tree within an HDF5 file. By
-                                                            default this written as and read from a group
-                                                            named '4DSTEM_experiment', however other
-                                                            topgroup names can be specified, and may be
-                                                            used for HDF5 files containing multiple
-                                                            py4DSTEM data trees.
+                                    topgroup (str)          Used with HDF5 files containing multiple py4DSTEM
+                                                            formatted file trees, to specify which tree/subfile
+                                                            to open. In most instances there will be only one,
+                                                            and this argument need not be passed.
 
     Returns:
         dc          DataCube    The 4D-STEM data.
@@ -59,11 +56,19 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     assert(is_py4DSTEM_file(fp)), "Error: {} is not recognized as a native py4DSTEM file.".format(fp)
 
-    if 'topgroup' not in kwargs.keys():
-        topgroup = '4DSTEM_experiment'
+    topgroups = get_py4DSTEM_topgroups(fp)
+    if 'topgroup' in kwargs.keys():
+        topgroup = kwargs.keys['topgroup']
+        assert(topgroup in topgroups), "Error: specified topgroup, {}, not found.".format(topgroup)
     else:
-        topgroup = kwargs['topgroup']
-
+        if len(topgroups)==1:
+            topgroup = topgroups[0]
+        else:
+            print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
+            print("")
+            print("Topgroups found:")
+            for tg in topgroups:
+                print(tg)
     browser = FileBrowser(fp,topgroup)
 
     if 'load' not in kwargs.keys():
@@ -71,13 +76,13 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
         print("")
         browser.show_dataobjects()
         print("")
-        print("To load one or more objects, call this function again, this time passing the keyword 'load'.")
-        print("For one object, use 'load = x' where x is either the object's index (integer) or name (string).")
-        print("For several objects, use 'load = [x1,x2,x3,...]' where xi are all indices, or all names.")
+        print("To load data, call this function again, this time passing the keyword 'load'.")
+        print("To load one object, use 'load = x' where x is either the object's index (integer) or name (string).")
+        print("To load several objects, use 'load = [x1,x2,x3,...]' where xi are all indices, or all names.")
         return None,None
 
+    # Get data
     else:
-        # Get data
         load = kwargs['load']
         if type(load) == int:
             # Check if its a DataCube - if so, pass below to memmap stuff
