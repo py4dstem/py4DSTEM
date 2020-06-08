@@ -1,5 +1,7 @@
 # Utility functions
 
+import h5py
+
 def is_py4DSTEM_file(fp, topgroup='4DSTEM_experiment'):
     """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
@@ -53,11 +55,29 @@ def version_is_geq_majorminor(current,minimum):
 def get_UUID(fp, topgroup='4DSTEM_experiment'):
     """ Returns the UUID of a py4DSTEM file, or if unavailable returns -1.
     """
+    assert(is_py4DSTEM_file(fp)), "Error: not recognized as a py4DSTEM file"
     with h5py.File(fp,'r') as f:
         if topgroup in f.keys():
             if 'UUID' in f[topgroup].attrs:
                 return f[topgroup].attrs['UUID']
     return -1
+
+def get_py4DSTEM_topgroups(fp):
+    """ Returns a list of toplevel groups in an HDF5 file which are valid py4DSTEM file trees.
+    """
+    assert(is_py4DSTEM_file(fp)), "Error: not recognized as a py4DSTEM file"
+    topgroups = []
+    with h5py.File(fp,'r') as f:
+        for key in f.keys():
+            if 'emd_group_type' in f[key].attrs:
+                if f[key].attrs['emd_group_type']==2:
+                    topgroups.append(key)
+    return topgroups
+
+
+
+
+
 
 
 
