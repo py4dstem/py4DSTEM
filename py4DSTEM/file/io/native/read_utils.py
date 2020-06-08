@@ -34,7 +34,7 @@ def get_py4DSTEM_version(fp, topgroup='4DSTEM_experiment'):
             version_release = int(f[topgroup].attrs['version_release'])
             return version_major, version_minor, version_release
         else:
-            return version_major, version_minor
+            return version_major, version_minor, 0
 
 def get_UUID(fp, topgroup='4DSTEM_experiment'):
     """ Returns the UUID of a py4DSTEM file, or if unavailable returns -1.
@@ -61,22 +61,6 @@ def version_is_geq(current,minimum):
             return False
     else:
         return False
-
-def version_is_geq_majorminor(current,minimum):
-    """ Returns True iff current version (major,minor) is greater than or equal to minimum."
-    """
-    if current[0]>minimum[0]:
-        return True
-    elif current[0]==minimum[0]:
-        if current[1]>=minimum[1]:
-            return True
-        else:
-            return False
-    else:
-        return False
-
-
-
 
 
 
