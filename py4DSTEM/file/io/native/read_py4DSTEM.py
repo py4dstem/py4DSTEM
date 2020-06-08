@@ -76,9 +76,9 @@ def read_py4DSTEM(fp, mem="RAM", binfactor=1, **kwargs):
     version = get_py4DSTEM_version(fp,tg)
     print("py4DSTEM (EMD type 2) v{}.{}.{} file detected".format(version[0],version[1],version[2]))
     if version_is_geq(version,(0,9,0)):
-        browser = FileBrowser(fp,tg)
+        browser = FileBrowser(fp,topgroup=tg)
     else:
-        browser = FileBrowser_v0(fp,tg)
+        browser = FileBrowser_v0(fp,topgroup=tg)
 
     # If 
     if 'load' not in kwargs.keys():

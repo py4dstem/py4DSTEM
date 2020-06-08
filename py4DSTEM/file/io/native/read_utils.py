@@ -13,7 +13,6 @@ def get_py4DSTEM_topgroups(fp):
                     topgroups.append(key)
     return topgroups
 
-
 def is_py4DSTEM_file(fp):
     """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
@@ -32,9 +31,9 @@ def get_py4DSTEM_version(fp, topgroup='4DSTEM_experiment'):
         version_minor = int(f[topgroup].attrs['version_minor'])
         if 'version_release' in f[topgroup].attrs.keys():
             version_release = int(f[topgroup].attrs['version_release'])
-            return version_major, version_minor, version_release
         else:
-            return version_major, version_minor, 0
+            version_release = 0
+        return version_major, version_minor, version_release
 
 def get_UUID(fp, topgroup='4DSTEM_experiment'):
     """ Returns the UUID of a py4DSTEM file, or if unavailable returns -1.
