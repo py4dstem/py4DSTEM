@@ -2,7 +2,7 @@
 
 import pathlib
 from os.path import splitext
-from .native import read_py4DSTEM, is_py4DSTEM_file, get_py4DSTEM_version, version_is_greater_or_equal
+from .native import read_py4DSTEM, is_py4DSTEM_file
 from .nonnative import *
 
 def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
@@ -33,7 +33,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
                                 than trying to determine this automatically. Must be None or a str from 'dm',
                                 'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
-        dtype       dtype       Used when binning data, ignored otherwise. By defaults to whatever the type of the
+        dtype       dtype       Used when binning data, ignored otherwise. Defaults to whatever the type of the
                                 raw data is, to avoid enlarging data size. May be useful to avoid 'wraparound'
                                 errors.
 
@@ -59,8 +59,6 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
 
     if ft == "py4DSTEM":
         data,md = read_py4DSTEM(fp, mem, binfactor, **kwargs)
-    elif ft == "py4DSTEM_v0":
-        data,md = read_py4DSTEM_v0(fp, mem, binfactor, **kwargs)
     elif ft == "dm":
         data,md = read_dm(fp, mem, binfactor, **kwargs)
     elif ft == "empad":
@@ -85,10 +83,7 @@ def parse_filetype(fp):
     _,fext = splitext(fp)
     if fext in ['.h5','.H5','hdf5','HDF5','.py4dstem','.py4DSTEM','.PY4DSTEM','.emd','.EMD']:
         if is_py4DSTEM_file(fp):
-            if version_is_greater_or_equal(get_py4DSTEM_version(fp),(0,9,0)):
-                return 'py4DSTEM'
-            else:
-                return 'py4DSTEM_v0'
+            return 'py4DSTEM'
         else:
             raise Exception("Non-py4DSTEM formatted .h5 files are not presently supported.")
     elif fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
