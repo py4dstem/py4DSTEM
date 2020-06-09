@@ -43,11 +43,12 @@ def read_py4DSTEM(fp, **kwargs):
                                     useful to avoid 'wraparound' errors.
 
     Returns:
-        Variable - see above.       If multiple arguments which have return values are specified,
-                                    they're returned in the order of the arguments above - i.e.
-                                    load=[0,1,2],metadata=True will return a length two tuple, the
-                                    first element being a list of 3 DataObject instances and the
-                                    second a MetaData instance.
+        data,md                     The function always returns a length 2 tuple corresponding
+                                    to data and md.  If no input arguments with return values (i.e.
+                                    data, metadata), these will return None.  Otherwise, their return
+                                    values are as described above. E.f. passing data=[0,1,2],metadata=True
+                                    will return a length two tuple, the first element being a list of 3
+                                    DataObject instances and the second a MetaData instance.
     """
     assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
     version = get_py4DSTEM_version(fp)
@@ -68,7 +69,7 @@ def read_py4DSTEM(fp, **kwargs):
             print("Topgroups found:")
             for tg in topgroups:
                 print(tg)
-            return
+            return None,None
 
     # Triage - determine what needs doing
     _data = 'data' in kwargs.keys()
@@ -91,7 +92,7 @@ def read_py4DSTEM(fp, **kwargs):
     # Perform requested operations
     if not (_data or _metadata or _log):
         print_py4DSTEM_file(fp,tg)
-        return
+        return None,None
     if _data:
         loaded_data = get_data(fp,tg,data,**kwargs)
     if _metadata:
@@ -103,11 +104,11 @@ def read_py4DSTEM(fp, **kwargs):
     if (_data and _metadata):
         return data,metadata
     elif _data:
-        return loaded_data
+        return loaded_data,None
     elif _metadata:
-        return md
+        return None,md
     else:
-        return
+        return None,None
 
 
 ############ Helper functions ############
@@ -167,7 +168,7 @@ def print_py4DSTEM_file(fp,tg):
     print("{:^8}{:^18}{:^18}{:^54}".format('Index', 'Type', 'Shape', 'Name'))
     print("{:^8}{:^18}{:^18}{:^54}".format('-----', '----', '-----', '----'))
     for d in l_md:
-        print("{:^8}{:^18}{:^18}{:^54}".format(d['index'],d['type'],d['shape'],d['name']))
+        print("{:^8}{:^18}{:^18}{:^54}".format(str(d['index']),str(d['type']),str(d['shape']),str(d['name'])))
 
     return
 
