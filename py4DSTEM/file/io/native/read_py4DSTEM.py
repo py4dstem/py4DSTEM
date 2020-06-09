@@ -144,7 +144,7 @@ def print_py4DSTEM_file(fp,tg):
             l_md.append(d)
             i += 1
         for name in sorted(grp_rs.keys()):
-            shape = grp_dc[name+'/data/'].shape
+            shape = grp_rs[name+'/data/'].shape
             dtype = 'RealSlice'
             d = {'index':i,'type':dtype,'shape':shape,'name':name}
             l_md.append(d)
