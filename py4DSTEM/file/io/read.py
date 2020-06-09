@@ -58,7 +58,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         ft = parse_filetype(fp)
 
     if ft == "py4DSTEM":
-        data,md = read_py4DSTEM(fp, mem, binfactor, **kwargs)
+        data,md = read_py4DSTEM(fp, mem=mem, binfactor=binfactor, **kwargs)
     elif ft == "dm":
         data,md = read_dm(fp, mem, binfactor, **kwargs)
     elif ft == "empad":
