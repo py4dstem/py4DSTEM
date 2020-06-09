@@ -55,7 +55,7 @@ def read_py4DSTEM(fp, **kwargs):
     if not version_is_geq(version,(0,9,0)):
         return read_py4DSTEM_legacy(fp, **kwargs)
 
-    # In cases of H5 files containing multiple valid EMD type 2 files, disambiguate desired data
+    # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
         tg = kwargs.keys['topgroup']
@@ -126,50 +126,237 @@ def print_py4DSTEM_file(fp,tg):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlists/']
-        for name in grp_dc.keys():
+        for name in sorted(grp_dc.keys()):
             shape = grp_dc[name+'/data/'].shape
             dtype = 'DataCube'
             d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
             i += 1
-        for name in grp_cdc.keys():
+        for name in sorted(grp_cdc.keys()):
             # TODO
             shape = grp_cdc[name+'/data/'].shape
             dtype = 'CountedDataCube'
             d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
             i += 1
-        for name in grp_ds.keys():
+        for name in sorted(grp_ds.keys()):
             shape = grp_ds[name+'/data/'].shape
             dtype = 'DiffractionSlice'
             d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
             i += 1
-        for name in grp_rs.keys():
+        for name in sorted(grp_rs.keys()):
             shape = grp_dc[name+'/data/'].shape
             dtype = 'RealSlice'
             d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
             i += 1
-        for name in grp_pl.keys():
-            # TODO - PL
-            pass
-        for name in grp_pla.keys():
-            # TODO - PLA
-            pass
+        for name in sorted(grp_pl.keys()):
+            coordinates = list(grp_pl[name].keys())
+            length = grp_pl[name+'/'+coordinates[0]+'data'].shape[0]
+            shape = (len(coordinates),length)
+            dtype = 'PointList'
+            d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
+            i += 1
+        for name in sorted(grp_pla.keys()):
+            shape = grp_pla[name+'/data'].shape
+            dtype = 'PointListArray'
+            d = {'index':i,'type':dtype,'shape':shape,'name':name}
+            l_md.append(d)
+            i += 1
+
+    print("{:^8}{:^18}{:^18}{:^54}".format('Index', 'Type', 'Shape', 'Name'))
+    for i,d in enumerate(l_md):
+        print("{:^8}{:^18}{:^18}{:^54}".format(i,d['type'],d['shape'],d['name']))
 
     return
 
 def get_data(fp,tg,data_id):
     """ Accepts a fp to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
     """
-    return
+    if isinstance(data_id,int):
+        return get_data_from_int(fp,tg,data_id)
+    elif isinstance(data_id,str):
+        return get_data_from_str(fp,tg,data_id)
+    else:
+        return get_data_from_list(fp,tg,data_id)
+
+def get_data_from_int(fp,tg,data_id):
+    """ Accepts a fp to a valid py4DSTEM file and an integer specifying data, and returns the data.
+    """
+    assert(isinstance(data_id,int))
+    with h5py.File(fp) as f:
+        grp_dc = f[tg+'/data/datacubes/']
+        grp_cdc = f[tg+'/data/counteddatacubes/']
+        grp_ds = f[tg+'/data/diffractionslices/']
+        grp_rs = f[tg+'/data/realslices/']
+        grp_pl = f[tg+'/data/pointlists/']
+        grp_pla = f[tg+'/data/pointlists/']
+
+        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
+        Ns = np.cumsum([len(grp.keys()) for grp in grps])
+
+        i = np.nonzero(data_id<Ns)[0][0]
+        grp = grps[i]
+        N = data_id-Ns[i]
+
+        name = sorted(grp.keys())[N]
+
+
+
+
+
+
+    def get_dataobject_index_from_name(self, name):
+        objects = []
+        for i in range(self.N_dataobjects):
+            objectname = self.get_dataobject_info(i)['name']
+            if name == objectname:
+                objects.append(i)
+        if len(objects) > 1:
+            raise Exception("Multiple dataobjects found with name {}, at indices {}.".format(name, objects))
+        elif len(objects) == 1:
+            return objects[0]
+        else:
+            raise Exception("No dataobject found with name {}.".format(name))
+
+    def get_dataobject_v0_7(self, index, **kwargs):
+        """
+        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+        """
+        objecttype, objectindex = self.get_object_lookup_info(index)
+        info = self.get_dataobject_info(index)
+        name = info['name']
+        #metadata_index = info['metadata']
+
+        mmap = kwargs.get('memory_map', False)
+
+        #if metadata_index == -1:
+        #    metadata = None
+        #else:
+        #    if self.metadataobjects_in_memory[metadata_index] is None:
+        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+        #    metadata = self.metadataobjects_in_memory[metadata_index]
+
+        if objecttype == 'DataCube':
+            shape = info['shape']
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+            if mmap:
+                data = self.file[self.topgroup + 'data/datacubes'][name]['data']
+            else:
+                # TODO: preallocate array and copy into it for better RAM usage
+                data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
+            dataobject = DataCube(data=data, name=name)
+
+        elif objecttype == 'CountedDataCube':
+            shape = info['shape']
+            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+
+            dset = self.file[self.topgroup + 'data/counted_datacubes'][name]["data"]
+            coordinates = dset[0,0].dtype
+
+            if coordinates.fields is None:
+                index_coords = [None]
+            else:
+                index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
+
+            if mmap:
+                # run in HDF5 memory mapping mode
+                dataobject = CountedDataCube(dset,[Q_Nx,Q_Ny],index_coords[:])
+            else:
+                # run in PointListArray mode
+                pla = PointListArray(coordinates=coordinates, shape=shape[:2], name=name)
+            
+                for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
+                    pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+
+                dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
+
+        elif objecttype == 'DiffractionSlice':
+            shape = info['shape']
+            Q_Nx = shape[0]
+            Q_Ny = shape[1]
+            data = np.array(self.file[self.topgroup + 'data/diffractionslices'][name]['data'])
+            if(len(shape)==2):
+                dataobject = DiffractionSlice(data=data, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+            else:
+                dim3 = info['dim3']
+                dataobject = DiffractionSlice(data=data, slicelabels=dim3,
+                                              Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+
+        elif objecttype == 'RealSlice':
+            shape = info['shape']
+            R_Nx = shape[0]
+            R_Ny = shape[1]
+            data = np.array(self.file[self.topgroup + 'data/realslices'][name]['data'])
+            if(len(shape)==2):
+                dataobject = RealSlice(data=data, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+            else:
+                dim3 = info['dim3']
+                dataobject = RealSlice(data=data, slicelabels=dim3,
+                                       R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+
+        elif objecttype == 'PointList':
+            coords = info['coordinates']
+            length = info['length']
+            coordinates = []
+            data_dict = {}
+            for coord in coords:
+                try:
+                    dtype = type(self.file[self.topgroup + 'data/pointlists'][name][coord]['data'][0])
+                except ValueError:
+                    print("dtype can't be retrieved. PointList may be empty.")
+                    dtype = None
+                coordinates.append((coord, dtype))
+                data_dict[coord] = np.array(self.file[self.topgroup + 'data/pointlists'][name][coord]['data'])
+            dataobject = PointList(coordinates=coordinates, name=name)
+            for i in range(length):
+                new_point = tuple([data_dict[coord][i] for coord in coords])
+                dataobject.add_point(new_point)
+
+        elif objecttype == 'PointListArray':
+            shape = info['shape']
+            coords = info['coordinates']
+
+            dset = self.file[self.topgroup + 'data/pointlistarrays'][name]["data"]
+            coordinates = dset[0,0].dtype
+            dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
+            
+            for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit='PointList'):
+                dataobject.get_pointlist(i,j).add_dataarray(dset[i,j])
+
+        else:
+            raise Exception("Unknown object type {}. Returning None.".format(objecttype))
+
+        #dataobject.metadata = metadata
+        return dataobject
+
+ 
+
+
+def get_data_from_str(fp,tg,data_id):
+    """ Accepts a fp to a valid py4DSTEM file and a string specifying data, and returns the data.
+    """
+    assert(isinstance(data_id,str))
+    return #TODO
+
+def get_data_from_list(fp,tg,data_id):
+    """ Accepts a fp to a valid py4DSTEM file and a list or tuple specifying data, and returns the data.
+    """
+    assert(isinstance(data_id,(list,tuple)))
+    return #TODO
+
 
 def get_metadata(fp,tg):
     """ Accepts a fp to a valid py4DSTEM file, and return a dictionary with its metadata.
     """
-    return
+    return #TODO
 
 def write_log(fp,tg):
     """ Accepts a fp to a valid py4DSTEM file, then prints its processing log to splitext(fp)[0]+'.log'.
     """
-    return
+    return #TODO
 
 
 
