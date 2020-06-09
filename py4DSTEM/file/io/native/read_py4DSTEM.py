@@ -17,7 +17,7 @@ def read_py4DSTEM(fp, **kwargs):
     Accepts:
         filepath    str or Path     When passed a filepath only, this function checks if the path
                                     points to a valid py4DSTEM file, then prints its contents to screen.
-        data        int/str/list    Specifies which data to load. Use integers to specify the
+        data_id     int/str/list    Specifies which data to load. Use integers to specify the
                                     data index, or strings to specify data names. A list or
                                     tuple returns a list of DataObjects. Returns the specified data.
         topgroup     str            Stricty, a py4DSTEM file is considered to be
@@ -72,16 +72,16 @@ def read_py4DSTEM(fp, **kwargs):
             return None,None
 
     # Triage - determine what needs doing
-    _data = 'data' in kwargs.keys()
+    _data_id = 'data_id' in kwargs.keys()
     _metadata = 'metadata' in kwargs.keys()
     _log = 'log' in kwargs.keys()
 
     # Validate inputs
-    if _data:
-        data = kwargs['data']
-        assert(isinstance(data,(int,str,list,tuple))), "Error: data must be specified with strings or integers only."
-        if not isinstance(data,(int,str)):
-            assert(all([isinstance(d,(int,str)) for d in data])), "Error: data must be specified with strings or integers only."
+    if _data_id:
+        data_id = kwargs['data_id']
+        assert(isinstance(data_id,(int,str,list,tuple))), "Error: data must be specified with strings or integers only."
+        if not isinstance(data_id,(int,str)):
+            assert(all([isinstance(d,(int,str)) for d in data_id])), "Error: data must be specified with strings or integers only."
     if _metadata:
         assert(isinstance(kwargs.keys['metdata'],bool))
         _metadata = kwargs.keys['metadata']
@@ -89,21 +89,38 @@ def read_py4DSTEM(fp, **kwargs):
         assert(isinstance(kwargs.keys['metdata'],bool))
         _log = kwargs.keys['log']
 
+    # Parse optional arguments
+    if 'mem' in kwargs.keys():
+        mem = kwargs['mem']
+        assert(mem in ('RAM','MEMMAP'))
+    else:
+        mem='RAM'
+    if 'binfactor' in kwargs.keys():
+        binfactor = kwargs['binfactor']
+        assert(isinstance(binfactor,int))
+    else:
+        binfactor=1
+    if 'dtype' in kwargs.keys():
+        bindtype = kwargs['dtype']
+        assert(isinstance(bindtype,type))
+    else:
+        bindtype = None
+
     # Perform requested operations
-    if not (_data or _metadata or _log):
+    if not (_data_id or _metadata or _log):
         print_py4DSTEM_file(fp,tg)
         return None,None
-    if _data:
-        loaded_data = get_data(fp,tg,data,**kwargs)
+    if _data_id:
+        loaded_data = get_data(fp,tg,data_id,mem,binfactor,bindtype)
     if _metadata:
         md = get_metadata(fp,tg)
     if _log:
         write_log(fp,tg)
 
     # Return
-    if (_data and _metadata):
-        return data,metadata
-    elif _data:
+    if (_data_id and _metadata):
+        return loaded_data,md
+    elif _data_id:
         return loaded_data,None
     elif _metadata:
         return None,md
@@ -172,17 +189,17 @@ def print_py4DSTEM_file(fp,tg):
 
     return
 
-def get_data(fp,tg,data_id):
+def get_data(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a fp to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
     """
     if isinstance(data_id,int):
-        return get_data_from_int(fp,tg,data_id)
+        return get_data_from_int(fp,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
     elif isinstance(data_id,str):
-        return get_data_from_str(fp,tg,data_id)
+        return get_data_from_str(fp,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
     else:
         return get_data_from_list(fp,tg,data_id)
 
-def get_data_from_int(fp,tg,data_id):
+def get_data_from_int(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a fp to a valid py4DSTEM file and an integer specifying data, and returns the data.
     """
     assert(isinstance(data_id,int))
@@ -202,11 +219,11 @@ def get_data_from_int(fp,tg,data_id):
         name = sorted(grp.keys())[N]
 
         grp_data = f[grp.name+'/'+name]
-        data = get_data_from_grp(grp_data)
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
 
-def get_data_from_str(fp,tg,data_id):
+def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a fp to a valid py4DSTEM file and a string specifying data, and returns the data.
     """
     assert(isinstance(data_id,str))
@@ -237,7 +254,7 @@ def get_data_from_str(fp,tg,data_id):
         grp = grps[i_grp]
 
         grp_data = f[grp.name+'/'+data_id]
-        data = get_data_from_grp(grp_data)
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
 
@@ -256,13 +273,13 @@ def get_data_from_list(fp,tg,data_id):
             raise Exception("Data must be specified with strings or integers only.")
     return data
 
-def get_data_from_grp(g):
+def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single dataobject in an open, correctly formatted H5 file,
         and returns a py4DSTEM DataObject.
     """
     dtype = g.name.split('/')[-2]
     if dtype == 'datacubes':
-        return get_datacube_from_grp(g)
+        return get_datacube_from_grp(g,mem,binfactor,bindtype)
     elif dtype == 'counted_datacubes':
         return get_counted_datacube_from_grp(g)
     elif dtype == 'diffractionslices':
@@ -276,11 +293,13 @@ def get_data_from_grp(g):
     else:
         raise Exception('Unrecognized data object type {}'.format(dtype))
 
-def get_datacube_from_grp(g):
+def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
         and returns a DataCube.
     """
-    return #TODO
+    data = np.array(g['data'])
+    name = g.name.split('/')[-1]
+    return DataCube(data=data,name=name)
 
 def get_counted_datacube_from_grp(g):
     """ Accepts an h5py Group corresponding to a counted datacube in an open, correctly formatted H5 file,
@@ -324,3 +343,122 @@ def write_log(fp,tg):
     return #TODO
 
 
+
+
+
+#
+#
+#
+#    def get_dataobject_v0_7(self, index, **kwargs):
+#        """
+#        Instantiates a DataObject corresponding to the .h5 data pointed to by index.
+#        """
+#        objecttype, objectindex = self.get_object_lookup_info(index)
+#        info = self.get_dataobject_info(index)
+#        name = info['name']
+#        #metadata_index = info['metadata']
+#
+#        mmap = kwargs.get('memory_map', False)
+#
+#        #if metadata_index == -1:
+#        #    metadata = None
+#        #else:
+#        #    if self.metadataobjects_in_memory[metadata_index] is None:
+#        #        self.metadataobjects_in_memory[metadata_index] = self.get_metadataobject(metadata_index)
+#        #    metadata = self.metadataobjects_in_memory[metadata_index]
+#
+#        if objecttype == 'DataCube':
+#            shape = info['shape']
+#            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+#            if mmap:
+#                data = self.file[self.topgroup + 'data/datacubes'][name]['data']
+#            else:
+#                # TODO: preallocate array and copy into it for better RAM usage
+#                data = np.array(self.file[self.topgroup + 'data/datacubes'][name]['data'])
+#            dataobject = DataCube(data=data, name=name)
+#
+#        elif objecttype == 'CountedDataCube':
+#            shape = info['shape']
+#            R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+#
+#            dset = self.file[self.topgroup + 'data/counted_datacubes'][name]["data"]
+#            coordinates = dset[0,0].dtype
+#
+#            if coordinates.fields is None:
+#                index_coords = [None]
+#            else:
+#                index_coords = self.file[self.topgroup + 'data/counted_datacubes'][name]["index_coords"]
+#
+#            if mmap:
+#                # run in HDF5 memory mapping mode
+#                dataobject = CountedDataCube(dset,[Q_Nx,Q_Ny],index_coords[:])
+#            else:
+#                # run in PointListArray mode
+#                pla = PointListArray(coordinates=coordinates, shape=shape[:2], name=name)
+#            
+#                for (i,j) in tqdmnd(shape[0],shape[1],desc='Reading electrons',unit='DP'):
+#                    pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+#
+#                dataobject = CountedDataCube(pla,[Q_Nx,Q_Ny],index_coords[:])
+#
+#        elif objecttype == 'DiffractionSlice':
+#            shape = info['shape']
+#            Q_Nx = shape[0]
+#            Q_Ny = shape[1]
+#            data = np.array(self.file[self.topgroup + 'data/diffractionslices'][name]['data'])
+#            if(len(shape)==2):
+#                dataobject = DiffractionSlice(data=data, Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+#            else:
+#                dim3 = info['dim3']
+#                dataobject = DiffractionSlice(data=data, slicelabels=dim3,
+#                                              Q_Nx=Q_Nx, Q_Ny=Q_Ny, name=name)
+#
+#        elif objecttype == 'RealSlice':
+#            shape = info['shape']
+#            R_Nx = shape[0]
+#            R_Ny = shape[1]
+#            data = np.array(self.file[self.topgroup + 'data/realslices'][name]['data'])
+#            if(len(shape)==2):
+#                dataobject = RealSlice(data=data, R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+#            else:
+#                dim3 = info['dim3']
+#                dataobject = RealSlice(data=data, slicelabels=dim3,
+#                                       R_Nx=R_Nx, R_Ny=R_Ny, name=name)
+#
+#        elif objecttype == 'PointList':
+#            coords = info['coordinates']
+#            length = info['length']
+#            coordinates = []
+#            data_dict = {}
+#            for coord in coords:
+#                try:
+#                    dtype = type(self.file[self.topgroup + 'data/pointlists'][name][coord]['data'][0])
+#                except ValueError:
+#                    print("dtype can't be retrieved. PointList may be empty.")
+#                    dtype = None
+#                coordinates.append((coord, dtype))
+#                data_dict[coord] = np.array(self.file[self.topgroup + 'data/pointlists'][name][coord]['data'])
+#            dataobject = PointList(coordinates=coordinates, name=name)
+#            for i in range(length):
+#                new_point = tuple([data_dict[coord][i] for coord in coords])
+#                dataobject.add_point(new_point)
+#
+#        elif objecttype == 'PointListArray':
+#            shape = info['shape']
+#            coords = info['coordinates']
+#
+#            dset = self.file[self.topgroup + 'data/pointlistarrays'][name]["data"]
+#            coordinates = dset[0,0].dtype
+#            dataobject = PointListArray(coordinates=coordinates, shape=shape, name=name)
+#            
+#            for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit='PointList'):
+#                dataobject.get_pointlist(i,j).add_dataarray(dset[i,j])
+#
+#        else:
+#            raise Exception("Unknown object type {}. Returning None.".format(objecttype))
+#
+#        #dataobject.metadata = metadata
+#        return dataobject
+#
+#
+#
