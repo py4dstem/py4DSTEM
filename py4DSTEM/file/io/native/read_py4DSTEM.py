@@ -119,7 +119,7 @@ def print_py4DSTEM_file(fp,tg):
     l_md = []
     with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
-        grp_cdc = f[tg+'/data/counteddatacubes/']
+        grp_cdc = f[tg+'/data/counted_datacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
@@ -187,7 +187,7 @@ def get_data_from_int(fp,tg,data_id):
     assert(isinstance(data_id,int))
     with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
-        grp_cdc = f[tg+'/data/counteddatacubes/']
+        grp_cdc = f[tg+'/data/counted_datacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
@@ -211,7 +211,7 @@ def get_data_from_str(fp,tg,data_id):
     assert(isinstance(data_id,str))
     with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
-        grp_cdc = f[tg+'/data/counteddatacubes/']
+        grp_cdc = f[tg+'/data/counted_datacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
