@@ -165,10 +165,10 @@ def print_py4DSTEM_file(fp,tg):
             l_md.append(d)
             i += 1
 
-    print("{:^8}{:^18}{:^18}{:^54}".format('Index', 'Type', 'Shape', 'Name'))
-    print("{:^8}{:^18}{:^18}{:^54}".format('-----', '----', '-----', '----'))
+    print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
+    print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
     for d in l_md:
-        print("{:^8}{:^18}{:^18}{:^54}".format(str(d['index']),str(d['type']),str(d['shape']),str(d['name'])))
+        print("  {:8}{:18}{:24}{:54}".format(str(d['index']),str(d['type']),str(d['shape']),str(d['name'])))
 
     return
 
