@@ -33,25 +33,17 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
                                 than trying to determine this automatically. Must be None or a str from 'dm',
                                 'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
-        **kwargs                Additional keywords are used to control load behavior for native files with
-                                many different dataobject, to cast the datatype when binning, etc.
-                                Accepted keywords:
-                                    dtype (dtype)       Used when binning data, ignored otherwise.
-                                                        By defaults to whatever the type of the raw data
-                                                        is, to avoid enlarging data size. May be useful
-                                                        to avoid 'wraparound' errors.
-                                    load (int,str,list) Specifies load behavior for native py4DSTEM files -
-                                                        see py4DSTEM.file.io.native.read_py4DSTEM docstring.
-                                    topgroup (str)      Specifies the toplevel group of an HDF5 file where
-                                                        a native py4DSTEM file's data tree lives -
-                                                        see py4DSTEM.file.io.native.read_py4DSTEM docstring.
+        dtype       dtype       Used when binning data, ignored otherwise. By defaults to whatever the type of the
+                                raw data is, to avoid enlarging data size. May be useful to avoid 'wraparound'
+                                errors.
+
+    Inputs for native py4DSTEM files:
 
     Returns:
-        data        *           The data. The output type is contingent.
-                                When loading non-native filetypes, the output type is a DataCube.
-                                When loading from a native .h5 file, if a single DataObject is loaded, the output
-                                type is that of the DataObject.  If multiple objects are loaded, the output is
-                                a list of DataObjects.
+        data        variable    The data. When loading non-native filetypes, the output type is a DataCube.
+                                When loading from a native .h5 file, loading one data block (i.e. 'load' is
+                                passed a string or integer) returns a single DataObject instance, while loading
+                                several data blocks returns a list of instances.
         md          MetaData    The metadata.
     """
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
