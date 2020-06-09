@@ -117,7 +117,7 @@ def print_py4DSTEM_file(fp,tg):
     """
     i = 0
     l_md = []
-    with h5py.File(fp) as f:
+    with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
         grp_cdc = f[tg+'/data/counteddatacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
@@ -185,7 +185,7 @@ def get_data_from_int(fp,tg,data_id):
     """ Accepts a fp to a valid py4DSTEM file and an integer specifying data, and returns the data.
     """
     assert(isinstance(data_id,int))
-    with h5py.File(fp) as f:
+    with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
         grp_cdc = f[tg+'/data/counteddatacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
@@ -209,7 +209,7 @@ def get_data_from_str(fp,tg,data_id):
     """ Accepts a fp to a valid py4DSTEM file and a string specifying data, and returns the data.
     """
     assert(isinstance(data_id,str))
-    with h5py.File(fp) as f:
+    with h5py.File(fp,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
         grp_cdc = f[tg+'/data/counteddatacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
