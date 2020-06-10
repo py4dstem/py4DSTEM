@@ -36,8 +36,18 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         dtype       dtype       Used when binning data, ignored otherwise. Defaults to whatever the type of the
                                 raw data is, to avoid enlarging data size. May be useful to avoid 'wraparound'
                                 errors.
-
-    Inputs for native py4DSTEM files:
+        data_id    int/str/list For py4DSTEM files only.  Specifies which data to load. Use integers to specify
+                                the data index, or strings to specify data names. A list or tuple returns a list
+                                of DataObjects. Returns the specified data.
+        topgroup     str        For py4DSTEM files only.  Stricty, a py4DSTEM file is considered to be
+                                everything inside a toplevel subdirectory within the HDF5 file, so that if
+                                desired one can place many py4DSTEM files inside a single H5.  In this case,
+                                when loading data, the topgroup argument is passed to indicate which
+                                py4DSTEM file to load. If an H5 containing multiple py4DSTEM files is passed
+                                without a topgroup specified, the topgroup names are printed to screen.
+        metadata    bool        For py4DTEM files only.  If True, returns a dictionary with the file metadata.
+        log         bool        For py4DSTEM files only.  If True, writes the processing log to a plaintext file
+                                called splitext(fp)[0]+'.log'.
 
     Returns:
         data        variable    The data. When loading non-native filetypes, the output type is a DataCube.
