@@ -153,5 +153,5 @@ GNU GPLv3
 
 ### Acknowledgements
 
-The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and developement time which made this project possible.
+The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 

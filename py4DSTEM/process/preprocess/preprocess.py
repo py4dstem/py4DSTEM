@@ -34,8 +34,9 @@ def swap_RQ(datacube):
     Then
         swap_RQ(datacube).data.shape = (Qx,Qy,Rx,Ry)
     """
-    datacube.data = np.moveaxis(np.moveaxis(datacube.data,2,0),3,1)
-    datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.Q_Nx,datacube.Q_Ny,datacube.R_Nx,datacube.R_Ny
+    datacube.data = np.transpose(datacube.data, axes=(2, 3, 0, 1))
+    datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Nx, datacube.Q_Ny, datacube.R_Nx, datacube.R_Ny
+    return datacube
 
 def swap_Rxy(datacube):
     """
@@ -44,8 +45,9 @@ def swap_Rxy(datacube):
     Then
         swap_Rxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
     """
-    datacube.data = np.moveaxis(datacube.data,1,0)
-    datacube.R_Nx,datacube.R_Ny = datacube.R_Ny,datacube.R_Nx
+    datacube.data = np.moveaxis(datacube.data, 1, 0)
+    datacube.R_Nx, datacube.R_Ny = datacube.R_Ny, datacube.R_Nx
+    return datacube
 
 def swap_Qxy(datacube):
     """
@@ -54,8 +56,9 @@ def swap_Qxy(datacube):
     Then
         swap_Qxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
     """
-    datacube.data = np.moveaxis(datacube.data,3,2)
-    datacube.Q_Nx,datacube.Q_Ny = datacube.Q_Ny,datacube.Q_Nx
+    datacube.data = np.moveaxis(datacube.data, 3, 2)
+    datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Ny, datacube.Q_Nx
+    return datacube
 
 
 ### Cropping and binning ###
