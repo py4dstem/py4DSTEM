@@ -1,11 +1,9 @@
 # Functions for background fitting and subtraction.
 
 import numpy as np
-from ...file import log
 
 #### Subtrack darkreference from datacube frame at (Rx,Ry) ####
 
-@log
 def get_bksbtr_DP(datacube, darkref, Rx, Ry):
     """
     Returns a background subtracted diffraction pattern.
@@ -24,7 +22,6 @@ def get_bksbtr_DP(datacube, darkref, Rx, Ry):
 
 #### Get dark reference ####
 
-@log
 def get_darkreference(datacube, N_frames, width_x=0, width_y=0, side_x='end', side_y='end'):
     """
     Gets a dark reference image.
@@ -70,7 +67,6 @@ def get_darkreference(datacube, N_frames, width_x=0, width_y=0, side_x='end', si
                                         np.mean(darkref_y)*width_y)/(width_x+width_y)
                                         # Mean has been added twice; subtract one off
 
-@log
 def get_background_streaks(datacube, N_frames, width, side='end', direction='x'):
     """
     Gets background streaking in either the x- or y-direction, by finding the average of a strip of
@@ -100,7 +96,6 @@ def get_background_streaks(datacube, N_frames, width, side='end', direction='x')
     else:
         return get_background_streaks_y(datacube=datacube, N_frames=N_frames, width=width, side=side)
 
-@log
 def get_background_streaks_x(datacube, width, N_frames, side='start'):
     """
     Gets background streaking, by finding the average of a strip of pixels along the y-edge of the
@@ -134,7 +129,6 @@ def get_background_streaks_x(datacube, width, N_frames, side='start'):
     darkref += bkgrnd_streaks[np.newaxis,:]
     return darkref
 
-@log
 def get_background_streaks_y(datacube, N_frames, width, side='start'):
     """
     Gets background streaking, by finding the average of a strip of pixels along the x-edge of the

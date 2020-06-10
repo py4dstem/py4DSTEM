@@ -4,12 +4,9 @@
 
 import h5py
 import numpy as np
-from .filebrowser import is_py4DSTEM_file, FileBrowser
+from .filebrowser import FileBrowser
+from .filebrowser import is_py4DSTEM_file_OLD as is_py4DSTEM_file
 
-from ..log import log, Logger
-logger = Logger()
-
-@log
 def remove_from_index_list(indices, filepath):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
@@ -59,7 +56,6 @@ def remove_from_index_list(indices, filepath):
     print("Done.")
     f.close()
 
-@log
 def remove(dataobjects, filepath):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
