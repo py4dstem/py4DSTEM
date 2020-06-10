@@ -4,17 +4,14 @@
 
 import h5py
 import numpy as np
-from .filebrowser import is_py4DSTEM_file, FileBrowser
+from .filebrowser import FileBrowser
+from .filebrowser import is_py4DSTEM_file_OLD as is_py4DSTEM_file
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group, save_counted_datacube_group
-from ..datastructure import DataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray, CountedDataCube
-from ..datastructure import DataObject, Metadata
+from ...datastructure import DataCube, DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray, CountedDataCube
+from ...datastructure import DataObject, Metadata
 
-from ..log import log, Logger
-logger = Logger()
-
-@log
 def append_from_dataobject_list(dataobject_list, filepath):
     """
     Appends new dataobjects to an existing py4DSTEM h5 file.
@@ -145,7 +142,6 @@ def append_from_dataobject_list(dataobject_list, filepath):
     print("Done.")
     f.close()
 
-@log
 def append_dataobject(dataobject, filepath, **kwargs):
     """
     Appends dataobject to existing .h5 file at filepath.
@@ -155,7 +151,6 @@ def append_dataobject(dataobject, filepath, **kwargs):
     # append
     append_from_dataobject_list([dataobject], filepath, **kwargs)
 
-@log
 def append_dataobjects_by_indices(index_list, filepath, **kwargs):
     """
     Appends the DataObjects found at the indices in index_list in DataObject.get_dataobjects to
@@ -166,7 +161,6 @@ def append_dataobjects_by_indices(index_list, filepath, **kwargs):
 
     append_from_dataobject_list(dataobject_list, filepath, **kwargs)
 
-@log
 def append(data, filepath, **kwargs):
     """
     Appends data to an existing py4DSTEM .h5 file at filepath. What is saved depends on the
@@ -197,7 +191,7 @@ def append(data, filepath, **kwargs):
 ################### END OF APPEND FUNCTIONS #####################
 def get_py4DSTEM_topgroup(h5_file):
     """
-    Accepts an open h5py File boject. Returns string of the top group name. 
+    Accepts an open h5py File boject. Returns string of the top group name.
     """
     if ('4DSTEM_experiment' in h5_file.keys()): # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
         return '4DSTEM_experiment/'

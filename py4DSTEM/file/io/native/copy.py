@@ -7,18 +7,15 @@
 
 import h5py
 import numpy as np
-from .filebrowser import is_py4DSTEM_file, FileBrowser
+from .filebrowser import FileBrowser
+from .filebrowser import is_py4DSTEM_file_OLD as is_py4DSTEM_file
 from .write import save
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
-from ..datastructure import DataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray
-from ..datastructure import DataObject, Metadata
+from ...datastructure import DataCube, DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray
+from ...datastructure import DataObject, Metadata
 
-from ..log import log, Logger
-logger = Logger()
-
-@log
 def copy_from_indices(original_filepath, new_filepath, indices):
     """
     Copies DataObjects specified by indices from the py4DSTEM .h5 file at original_filepath to a
@@ -54,7 +51,6 @@ def copy_from_indices(original_filepath, new_filepath, indices):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_datacubes(original_filepath, new_filepath):
     """
     Copies only the DataCubes from original filepath to new_filepath.
@@ -73,7 +69,6 @@ def copy_datacubes(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_diffractionslices(original_filepath, new_filepath):
     """
     Copies only the DiffractionSlices from original filepath to new_filepath.
@@ -92,7 +87,6 @@ def copy_diffractionslices(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_realslices(original_filepath, new_filepath):
     """
     Copies only the RealSlices from original filepath to new_filepath.
@@ -111,7 +105,6 @@ def copy_realslices(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_pointlists(original_filepath, new_filepath):
     """
     Copies only the PointLists from original filepath to new_filepath.
@@ -130,7 +123,6 @@ def copy_pointlists(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_pointlistarrays(original_filepath, new_filepath):
     """
     Copies only the pointlistarrays from original filepath to new_filepath.
@@ -149,7 +141,6 @@ def copy_pointlistarrays(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_all(original_filepath, new_filepath):
     """
     Copies all DataObjects from original filepath to new_filepath.
@@ -168,7 +159,6 @@ def copy_all(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy_all_except_datacubes(original_filepath, new_filepath):
     """
     Copies all DataObjects from original filepath to new_filepath.
@@ -191,7 +181,6 @@ def copy_all_except_datacubes(original_filepath, new_filepath):
     ##### Finish and close #####
     browser.close()
 
-@log
 def copy(original_filepath, new_filepath, save='all'):
     """
     Copies DataObjects specified by indices from the py4DSTEM .h5 file at original_filepath to a

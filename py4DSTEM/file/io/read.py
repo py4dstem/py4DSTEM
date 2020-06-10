@@ -1,273 +1,117 @@
-# Read 4DSTEM data
-#
-# File Formats
-# .h5 files conforming to the py4DSTEM format are, of course, supported. The complete py4DSTEM file
-# format is found in filestructure.txt.
-# For the vast wilderness of additional electron microscopy file formats, hyperspy
-# (www.hyperspy.org) is used to load data and scrape metadata. Most formats that hyperspy can read,
-# py4DSTEM will likely be able to handle, however, not all formats have been tested at this stage.
-#
-# Tested formats which py4DSTEM should read correctly include:
-#   .dm3
-#   .dm4
-#
-# An aside: the authors gratefully thank the developers of hyperspy for all their efforts - their
-# work has been a shining beacon of light amidst the dark and antiscientific morass of closed and
-# proprietary formats that plague the world of electron scattering. Friends: a thousand times,
-# thank you! <3, b
+# General reader for 4D-STEM datasets.
 
-import hyperspy.api_nogui as hs
-from ncempy.io.dm import fileDM
-import h5py
-import numpy as np
+import pathlib
+from os.path import splitext
+from .native import read_py4DSTEM, is_py4DSTEM_file
+from .nonnative import *
 
-from .empad import read_empad
-from .filebrowser import FileBrowser, is_py4DSTEM_file
-from ..datastructure import DataCube, PointListArray
-from ..datastructure import Metadata, CountedDataCube
-from ..log import log
-from ...process.utils import bin2D, tqdmnd
-
-###################### BEGIN read FUNCTIONS ########################
-
-@log
-def read(filename, load=None):
+def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
     """
-    General read function.  Takes a filename as input, and outputs some py4DSTEM dataobjects.
+    General read function for 4D-STEM datasets.
 
-    First checks to see if filename is a .h5 file conforming to the py4DSTEM format.
-    In either case, the precise behavior then depends on the kwarg load.
+    Takes a filename as input, parses the filetype, and calls the appropriate read function
+    for that filetype.
 
-    For .h5 file conforming to the py4DSTEM format, behavior is as follows:
-    load = None
-        load the first DataObject found; useful for files containing only a single DataObject
-    load = 'all':
-        load all DataObjects found in the file
-    load = 'name':
-        load the DataObject(s) named 'name'. There is no catch for objects named 'all' - don't name
-        DataObjects 'all'! ;)
-    load = 5:
-        If load behavoir is an int, loads the object found at that index in a FileBrowser
-        instantiated from filename.
-    load = [0,1,5,8,...]:
-        If load behavoir is a list of ints, loads the set of objects found at those indices in
-        a FileBrowser instantiated from filename.
+    Accepts:
+        fp          str or Path Path to the file
+        mem         str         (opt) Specifies how the data should be stored; must be "RAM" or "MEMMAP".
+                                "RAM" loads the entire dataset into memory. "MEMMAP" is useful for large datasets;
+                                it does not load the data into memory, but instead creates a map describing where
+                                each diffraction pattern lives in storage, and only loads data into memory as
+                                needed.
+        binfactor   int         (opt) Bin the data, in diffraction space, as it's loaded. On-load binning enables
+                                datasets which, in storage, are larger than the system RAM to still be loaded into
+                                RAM, provided the amount of binning is sufficient.  Binning by N reduces the
+                                filesize by N^2, so for instance, on a system with only 16 GB of RAM, its possible
+                                to load datasets of up to 64, 144, or 256 GB using binfactors of 2, 3, or 4.
+                                Default is 1.
+                                *Note 1: binning is only supported with mem='RAM'.
+                                **Note 2: binning may cause 'wraparound' errors (e.g. if the datatype is uint16
+                                and the summed pixels in a bin exceed 65536, the count 'wraps back around' to 0).
+                                This can be avoided by explicitly casting the datatype by passing the keyword
+                                argument 'dtype', however, casting will also affect the size of the data.
+        ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
+                                than trying to determine this automatically. Must be None or a str from 'dm',
+                                'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
+        dtype       dtype       Used when binning data, ignored otherwise. Defaults to whatever the type of the
+                                raw data is, to avoid enlarging data size. May be useful to avoid 'wraparound'
+                                errors.
+        data_id    int/str/list For py4DSTEM files only.  Specifies which data to load. Use integers to specify
+                                the data index, or strings to specify data names. A list or tuple returns a list
+                                of DataObjects. Returns the specified data.
+        topgroup     str        For py4DSTEM files only.  Stricty, a py4DSTEM file is considered to be
+                                everything inside a toplevel subdirectory within the HDF5 file, so that if
+                                desired one can place many py4DSTEM files inside a single H5.  In this case,
+                                when loading data, the topgroup argument is passed to indicate which
+                                py4DSTEM file to load. If an H5 containing multiple py4DSTEM files is passed
+                                without a topgroup specified, the topgroup names are printed to screen.
+        metadata    bool        For py4DTEM files only.  If True, returns a dictionary with the file metadata.
+        log         bool        For py4DSTEM files only.  If True, writes the processing log to a plaintext file
+                                called splitext(fp)[0]+'.log'.
 
-    For non-py4DSTEM files, the output is a DataCube, and load behavior is as follows:
-    load = None
-        attempt to load a datacube using hyperspy
-    load = 'dmmmap'
-        load a dm file (.dm3 or .dm4), memory mapping the datacube, using dm.py
-    load = 'empad'
-        load an EMPAD formatted file, using empad.py
-    load = 'gatan_bin'
-        load a sequence of *.bin files output by a Gatan K2 camera. Any file in the folder can be
-        passed as the argument. The reader searches for the *.gtg file that contains the metadata,
-        then maps the chunked binary files.
-    load = 'kitware_counted'
-        load a *.h5 file in the Kitware format. (Returns a CountedDataCube)
-    load = 'relativity'
-        Load an MRC file written from the IDES Relativity subframing system, which generates
-        multiple small, tiled diffraction patterns on each detector frame; each subframe
-        corresponds to a distinct scan position, enabling faster effective frame rates than
-        the camera readout time, at the expense of subframe sampling size.
-        The output is a memory map to the 4D datacube, which must be sliced into subframes using
-        the relativity module in py4DTEM.process.preprocess.relativity; see there for more info.
-        This functionality requires the mrcfile package, which can be installed with
-            pip install mrcfile
+    Returns:
+        data        variable    The data. When loading non-native filetypes, the output type is a DataCube.
+                                When loading from a native .h5 file, loading one data block (i.e. 'load' is
+                                passed a string or integer) returns a single DataObject instance, while loading
+                                several data blocks returns a list of instances.
+        md          MetaData    The metadata.
     """
-    if not is_py4DSTEM_file(filename):
-        print("{} is not a py4DSTEM file.".format(filename))
-        if load is None:
-            print("Couldn't identify input, attempting to read with hyperspy...")
-            try:
-                output = read_with_hyperspy(filename)
-            except:
-                print("Hyperspy read failed")
-                return "Hyperspy read failed"
-        elif load == 'dmmmap':
-            print("Memory mapping a dm file...")
-            output = read_dm_mmap(filename)
-        elif load == 'empad':
-            print("Reading an EMPAD file...")
-            output = read_empad_file(filename)
-        elif load == 'relativity':
-            import mrcfile
-            print("Reading an IDES Relativity MRC file...")
-            output = mrcfile.mmap(filename,mode='r')
-        elif load == 'gatan_bin':
-            print('Reading Gatan binary files...')
-            output = read_gatan_binary(filename)
-        elif load == 'kitware_counted':
-            print('Reading a Kitware electron counted dataset.')
-            output = read_kitware_counted(filename)
-        elif load == 'kitware_counted_mmap':
-            print('Memory-mapping a Kitware electron counted dataset.')
-            output = read_kitware_counted_mmap(filename)
-        else:
-            raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
+    assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
+    assert(binfactor>=1), "Error: binfactor must be >= 1"
+    if binfactor > 1:
+        assert(mem!='MEMMAP'), "Error: binning is not supported for memory mapping.  Either set binfactor=1 or set mem='RAM'"
+    assert(ft in [None,'dm','empad','mrc_relativity','gatan_K2_bin','kitware_counted']), "Error: ft argument not recognized"
 
+    if ft is None:
+        ft = parse_filetype(fp)
+
+    if ft == "py4DSTEM":
+        data,md = read_py4DSTEM(fp, mem=mem, binfactor=binfactor, **kwargs)
+    elif ft == "dm":
+        data,md = read_dm(fp, mem, binfactor, **kwargs)
+    elif ft == "empad":
+        data,md = read_empad(fp, mem, binfactor, **kwargs)
+    elif ft == 'mrc_relativity':
+        data,md = read_mrc_relativity(fp, mem, binfactor, **kwargs)
+    elif ft == "gatan_K2_bin":
+        data,md = read_gatan_K2_bin(fp, mem, binfactor, **kwargs)
+    elif ft == "kitware_counted":
+        data,md = read_kitware_counted(fp, mem, binfactor, **kwargs)
     else:
-        browser = FileBrowser(filename)
-        print("{} is a py4DSTEM file, v{}.{}. Reading...".format(filename, browser.version[0], browser.version[1]))
-        if load is None:
-            output = browser.get_dataobject(0)
-        elif load == 'all':
-            output = browser.get_dataobjects('all')
-        elif type(load) == str:
-            output = browser.get_dataobject_by_name(name=load)
-        elif type(load) == int:
-            output = browser.get_dataobject(load)
-        elif type(load) == list:
-            assert all([isinstance(item,int) for item in load]), "If load is a list, it must be a list of ints specifying DataObject indices in the files associated FileBrowser."
-            output = browser.get_dataobjects(load)
+        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
+
+    return data, md
+
+
+def parse_filetype(fp):
+    """ Accepts a path to a 4D-STEM dataset, and returns the file type.
+    """
+    assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+
+    _,fext = splitext(fp)
+    if fext in ['.h5','.H5','hdf5','HDF5','.py4dstem','.py4DSTEM','.PY4DSTEM','.emd','.EMD']:
+        if is_py4DSTEM_file(fp):
+            return 'py4DSTEM'
         else:
-            raise ValueError("Unknown value for parameter 'load' = {}. See the read docstring for more info.".format(load))
-
-    return output
-
-def read_with_hyperspy(filename):
-    """
-    Read a non-py4DSTEM file using hyperspy.
-    """
-    # Get metadata
-    metadata = Metadata(init='hs',filepath=filename)
-
-    # Get data
-    hyperspy_file = hs.load(filename)
-    data = hyperspy_file.data
-
-    # Get datacube
-    datacube = DataCube(data = data)
-
-    # Link metadata and data
-    datacube.metadata = metadata
-
-    # Set scan shape, if in metadata
-    try:
-        R_Nx = int(metadata.get_metadata_item('scan_size_Nx'))
-        R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
-        datacube.set_scan_shape(R_Nx, R_Ny)
-    except ValueError:
-        print("Warning: scan shape not detected in metadata; please check / set manually.")
-
-    return datacube
-
-def read_dm_mmap(filename):
-    """
-    Read a .dm3/.dm4 file, using dm.py to read data to a memory mapped np.memmap object, which
-    is stored in the outpute DataCube.data.
-
-    Read the metadata with hyperspy.
-    """
-    assert (filename.endswith('.dm3') or filename.endswith('.dm4')), 'File must be a .dm3 or .dm4'
-
-    # Get metadata
-    metadata = Metadata(init='hs',filepath=filename)
-
-    # Load .dm3/.dm4 files with dm.py
-    with fileDM(filename,verbose=False) as dmfile:
-        data = dmfile.getMemmap(0)
-
-    # Get datacube
-    datacube = DataCube(data = data)
-
-    # Link metadata and data
-    datacube.metadata = metadata
-
-    # Set scan shape, if in metadata
-    try:
-        R_Nx = int(metadata.get_metadata_item('scan_size_Nx'))
-        R_Ny = int(metadata.get_metadata_item('scan_size_Ny'))
-        datacube.set_scan_shape(R_Nx, R_Ny)
-    except ValueError:
-        print("Warning: scan shape not detected in metadata; please check / set manually.")
-
-    return datacube
-
-def read_empad_file(filename):
-    """
-    Read an empad file, using empad.py to read the data.
-
-    Additionally reads and attaches metadata. # TODO
-    """
-    # Get data
-    data = read_empad(filename)
-    data = data[:,:,:128,:]
-
-    # Get metadata
-    metadata = None
-    #metadata = Metadata(init='empad',filepath=filename)  # TODO: add setup_metadata_empad method
-                                                          # to Metadata object
-
-    datacube = DataCube(data = data)
-    # datacube.metadata = metadata
-
-    return datacube
-
-def read_gatan_binary(filename):
-    """
-    Read a folder with Gatan binary files. The folder must contain a *.gtg file (this is where
-    the metadata for the whole dataset lives) as well as a sequence of 8 *.bin files. DO NOT
-    change the folder structure, as this relies on having only one scan per folder (if you
-    have two scans with different names, this will fail.)
-
-    filename can refer to any of the *.bin files, the *.gtg file, or
-    the directory containing them.
-
-    Requires ncempy: `pip install ncempy` and numba: `conda install numba`
-    """
-
-    #this import is delayed to here so that numba is not a base dependency
-    from . import gatanK2
-
-    data_map = gatanK2.K2DataArray(filename)
-    datacube = DataCube(data = data_map)
-
-    #metadata = Metadata(init='hs',filepath=datacube.data4D._gtg_file)
-
-    #datacube.metadata = metadata
-
-    return datacube
+            raise Exception("Non-py4DSTEM formatted .h5 files are not presently supported.")
+    elif fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
+        return 'dm'
+    elif fext in ['.empad']:
+        # TK TODO
+        return 'empad'
+    elif fext in ['.mrc']:
+        # TK TODO
+        return 'mrc_relativity'
+    elif fext in ['.gatan_K2_bin']:
+        # TK TODO
+        return 'gatan_K2_bin'
+    elif fext in ['.kitware_counted']:
+        # TK TODO
+        return 'kitware_counted'
+    else:
+        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
 
 
-def read_kitware_counted(filename):
-    """
-    Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
-    (Not for py4DSTEM formatted files, which may be suported by 
-    Kitware in the future.)
-    """
-    hfile = h5py.File(filename,'r')
 
-    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
-    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
-
-    Q_Nx = hfile['electron_events']['frames'].attrs['Ny']
-    Q_Ny = hfile['electron_events']['frames'].attrs['Nx']
-
-    pla = PointListArray([('ind','u4')],(R_Nx,R_Ny))
-
-    print('Importing Electron Events:',flush=True)
-
-    for (i,j) in tqdmnd(int(R_Nx),int(R_Ny)):
-        ind = np.ravel_multi_index((i,j),(R_Nx,R_Ny))
-        pla.get_pointlist(i,j).add_dataarray(hfile['electron_events']['frames'][ind].astype([('ind','u4')]))
-
-    return CountedDataCube(pla,[Q_Nx,Q_Ny],'ind',use_dask=False)
-
-def read_kitware_counted_mmap(filename):
-    """
-    Read a Kitware counted dataset (i.e. from the NCEM 4D camera)
-    (Not for py4DSTEM formatted files, which may be suported by 
-    Kitware in the future.)
-    """
-    hfile = h5py.File(filename,'r')
-
-    R_Nx = hfile['electron_events']['scan_positions'].attrs['Ny']
-    R_Ny = hfile['electron_events']['scan_positions'].attrs['Nx']
-
-    Q_Nx = hfile['electron_events']['frames'].attrs['Nx']
-    Q_Ny = hfile['electron_events']['frames'].attrs['Ny']
-
-    return CountedDataCube(hfile['electron_events']['frames'],[Q_Nx,Q_Ny],[None],
-        use_dask=False,R_Nx=R_Nx,R_Ny=R_Ny)
