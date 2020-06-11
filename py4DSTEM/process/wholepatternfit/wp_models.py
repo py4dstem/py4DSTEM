@@ -453,7 +453,10 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
                 print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
             else:
                 params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
-                params[f"[{u}, {v}] Phase"] = Parameter(0.01, -np.pi, np.pi)
+                if u == 0 and v == 0:
+                    params[f"[{u}, {v}] Phase"] = Parameter(0., 0., 0.)  # direct beam clamped at zero phase
+                else:
+                    params[f"[{u}, {v}] Phase"] = Parameter(0.01, -np.pi, np.pi)
 
         self.u_inds = self.u_inds[~delete_mask]
         self.v_inds = self.v_inds[~delete_mask]
