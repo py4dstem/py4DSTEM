@@ -1,6 +1,7 @@
 # Utility functions
 
 import h5py
+import numpy as np
 
 def get_py4DSTEM_topgroups(fp):
     """ Returns a list of toplevel groups in an HDF5 file which are valid py4DSTEM file trees.
@@ -87,12 +88,12 @@ def get_py4DSTEM_dataobject_info(fp, topgroup='4DSTEM_experiment'):
     i = 0
     l_md = []
     with h5py.File(fp,'r') as f:
-        grp_dc = f[tg+'/data/datacubes/']
-        grp_cdc = f[tg+'/data/counted_datacubes/']
-        grp_ds = f[tg+'/data/diffractionslices/']
-        grp_rs = f[tg+'/data/realslices/']
-        grp_pl = f[tg+'/data/pointlists/']
-        grp_pla = f[tg+'/data/pointlistarrays/']
+        grp_dc = f[topgroup+'/data/datacubes/']
+        grp_cdc = f[topgroup+'/data/counted_datacubes/']
+        grp_ds = f[topgroup+'/data/diffractionslices/']
+        grp_rs = f[topgroup+'/data/realslices/']
+        grp_pl = f[topgroup+'/data/pointlists/']
+        grp_pla = f[topgroup+'/data/pointlistarrays/']
         N = len(grp_dc)+len(grp_cdc)+len(grp_ds)+len(grp_rs)+len(grp_pl)+len(grp_pla)
         info = np.zeros(N,dtype=[('index',int),('type','U16'),('shape',tuple),('name',str)])
         for name in sorted(grp_dc.keys()):
