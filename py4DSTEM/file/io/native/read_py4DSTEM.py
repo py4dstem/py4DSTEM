@@ -135,11 +135,11 @@ def read_py4DSTEM(fp, **kwargs):
 def print_py4DSTEM_file(fp,tg):
     """ Accepts a fp to a valid py4DSTEM file and prints to screen the file contents.
     """
-    l_md = get_py4DSTEM_dataobject_info(fp,tg)
+    info = get_py4DSTEM_dataobject_info(fp,tg)
     print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
     print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
-    for d in l_md:
-        print("  {:8}{:18}{:24}{:54}".format(str(d['index']),str(d['type']),str(d['shape']),str(d['name'])))
+    for el in info:
+        print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
     return
 
 def get_data(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
