@@ -4,87 +4,61 @@
 
 import h5py
 import numpy as np
-from .filebrowser import FileBrowser
-from .filebrowser import is_py4DSTEM_file_OLD as is_py4DSTEM_file
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_dataobject_info
 
-def remove_from_index_list(indices, filepath):
+def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
 
     Accepts:
+        fp            path to the py4DSTEM .h5 file
         indices             (list of ints) the indices of the DataObjects to remove, in a FileBrowser
-                            associated with filepath
-        filepath            path to the py4DSTEM .h5 file
+                            associated with fp
     """
-    assert all([isinstance(item,(int,np.integer)) for item in indices]), "Error: indices must be ints."
+    assert(all([isinstance(item,(int,np.integer)) for item in indices])), "Error: indices must be ints."
+    assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
+    tgs = get_py4DSTEM_topgroups(fp)
+    assert(topgroup in tgs), "Error: topgroup '{}' not found.".format(topgroup)
 
-    #### Get info about .h5 file and objects to delete ####
-    print("Opening file {}...".format(filepath))
-    assert is_py4DSTEM_file(filepath), "filepath parameter must point to an existing py4DSTEM file."
-    browser = FileBrowser(filepath)
-    if browser.version[0] == 0:
-        assert browser.version[1] >= 3, "removing DataObjects from py4DSTEM files is supported in v0.3 and higher."
-    names,types = [],[]
-    for i in range(len(indices)):
-        info = browser.get_dataobject_info(indices[i])
-        names.append(info['name'])
-        types.append(info['type'])
-    browser.close()
-
-    #### Open file for read/write ####
-    f = h5py.File(filepath,"a")
-    topgroup = get_py4DSTEM_topgroup(f)
-
-    # Delete objects
-    for i in range(len(indices)):
-        name,objtype = names[i],types[i]
-        if objtype == "DataCube":
-            group = f[topgroup + 'data/datacubes']
-        elif objtype == "RealSlice":
-            group = f[topgroup + 'data/realslices']
-        elif objtype == "DiffractionSlice":
-            group = f[topgroup + 'data/diffractionslices']
-        elif objtype == "PointList":
-            group = f[topgroup + 'data/pointlists']
-        elif objtype == "PointListArray":
-            group = f[topgroup + 'data/pointlistarrays']
-        else:
-            raise ValueError("Unknown DataObject type {}".format(objtype))
-        del group[name]
+    obj_info = get_py4DSTEM_dataobject_info(fp,topgroup)
+    with h5py.File(fp,'a') as f:
+        for i in indices:
+            name = info[i]['name']
+            objtype = info[i]['type']
+            if objtype == "DataCube":
+                group = f[topgroup + 'data/datacubes']
+            elif objtype == "RealSlice":
+                group = f[topgroup + 'data/realslices']
+            elif objtype == "DiffractionSlice":
+                group = f[topgroup + 'data/diffractionslices']
+            elif objtype == "PointList":
+                group = f[topgroup + 'data/pointlists']
+            elif objtype == "PointListArray":
+                group = f[topgroup + 'data/pointlistarrays']
+            else:
+                raise ValueError("Unknown DataObject type {}".format(objtype))
+            print('Removing {} object {}'.format(objtype,name))
+            del group[name]
 
     ##### Finish and close #####
     print("Done.")
     f.close()
 
-def remove(dataobjects, filepath):
+def remove(fp, dataobjects):
     """
     Remove existing dataobjects from a py4DSTEM h5 file.
 
     Accepts:
         dataobjects     (int or list of ints) the index or indices or name of the DataObjects to
                         remove. If an int or list of ints, indices are those of a FileBrowser
-                        associated with filepath
-        filepath        path to the py4DSTEM .h5 file
+                        associated with fp
+        fp        path to the py4DSTEM .h5 file
     """
-    assert is_py4DSTEM_file(filepath), "filepath parameter must point to an existing py4DSTEM file."
+    assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
 
     if isinstance(dataobjects, (int,np.integer)):
-        remove_from_index_list([dataobjects], filepath)
+        remove_from_index_list(fp, [dataobjects])
     else:
-        remove_from_index_list(dataobjects, filepath)
-
-
-################### END OF REMOVE FUNCTIONS #####################
-def get_py4DSTEM_topgroup(h5_file):
-    """
-    Accepts an open h5py File boject. Returns string of the top group name. 
-    """
-    if ('4DSTEM_experiment' in h5_file.keys()): # or ('4D-STEM_data' in h5_file.keys()) or ('4DSTEM_simulation' in h5_file.keys())):
-        return '4DSTEM_experiment/'
-    elif ('4DSTEM_simulation' in h5_file.keys()):
-        return '4DSTEM_simulation/'
-    else:
-        return '4D-STEM_data/'
-
+        remove_from_index_list(fp, dataobjects)
 
 
