@@ -60,7 +60,7 @@ def read_py4DSTEM(fp, **kwargs):
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
         tg = kwargs.keys['topgroup']
-        assert(self.topgroup in topgroups), "Error: specified topgroup, {}, not found.".format(self.topgroup)
+        assert(tg in topgroups), "Error: specified topgroup, {}, not found.".format(self.topgroup)
     else:
         if len(tgs)==1:
             tg = tgs[0]
