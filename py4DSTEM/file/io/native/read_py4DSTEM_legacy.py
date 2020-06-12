@@ -61,7 +61,7 @@ def read_py4DSTEM_legacy(fp, **kwargs):
     # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
-        tg = kwargs.keys['topgroup']
+        tg = kwargs['topgroup']
         assert(self.topgroup in topgroups), "Error: specified topgroup, {}, not found.".format(self.topgroup)
     else:
         if len(tgs)==1:
