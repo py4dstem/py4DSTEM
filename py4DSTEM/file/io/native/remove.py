@@ -20,21 +20,23 @@ def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
     tgs = get_py4DSTEM_topgroups(fp)
     assert(topgroup in tgs), "Error: topgroup '{}' not found.".format(topgroup)
 
-    obj_info = get_py4DSTEM_dataobject_info(fp,topgroup)
+    info = get_py4DSTEM_dataobject_info(fp,topgroup)
     with h5py.File(fp,'a') as f:
         for i in indices:
             name = info[i]['name']
             objtype = info[i]['type']
             if objtype == "DataCube":
-                group = f[topgroup + 'data/datacubes']
-            elif objtype == "RealSlice":
-                group = f[topgroup + 'data/realslices']
+                group = f[topgroup + '/data/datacubes']
+            elif objtype == "CountedDataCube":
+                group = f[topgroup + '/data/counted_datacubes']
             elif objtype == "DiffractionSlice":
-                group = f[topgroup + 'data/diffractionslices']
+                group = f[topgroup + '/data/diffractionslices']
+            elif objtype == "RealSlice":
+                group = f[topgroup + '/data/realslices']
             elif objtype == "PointList":
-                group = f[topgroup + 'data/pointlists']
+                group = f[topgroup + '/data/pointlists']
             elif objtype == "PointListArray":
-                group = f[topgroup + 'data/pointlistarrays']
+                group = f[topgroup + '/data/pointlistarrays']
             else:
                 raise ValueError("Unknown DataObject type {}".format(objtype))
             print('Removing {} object {}'.format(objtype,name))
