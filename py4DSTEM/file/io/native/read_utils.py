@@ -78,8 +78,8 @@ def get_N_dataobjects(fp, topgroup='4DSTEM_experiment'):
         return N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do
 
 def get_py4DSTEM_dataobject_info(fp, topgroup='4DSTEM_experiment'):
-    """ Returns a list of dictionaries with basic metadata for all contained dataobjects.
-        Keys for each dictionary are: 'index','type','shape','name'.
+    """ Returns a numpy structured array with basic metadata for all contained dataobjects.
+        Keys for the info array are: 'index','type','shape','name'.
     """
     assert(is_py4DSTEM_file(fp)), "Error: not recognized as a py4DSTEM file"
     with h5py.File(fp,'r') as f:
@@ -93,49 +93,45 @@ def get_py4DSTEM_dataobject_info(fp, topgroup='4DSTEM_experiment'):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlistarrays/']
+        N = len(grp_dc)+len(grp_cdc)+len(grp_ds)+len(grp_rs)+len(grp_pl)+len(grp_pla)
+        info = np.zeros(N,dtype=[('index',int),('type','U16'),('shape',tuple),('name',str)])
         for name in sorted(grp_dc.keys()):
             shape = grp_dc[name+'/data/'].shape
             dtype = 'DataCube'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
         for name in sorted(grp_cdc.keys()):
             # TODO
             shape = grp_cdc[name+'/data/'].shape
             dtype = 'CountedDataCube'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
         for name in sorted(grp_ds.keys()):
             shape = grp_ds[name+'/data/'].shape
             dtype = 'DiffractionSlice'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
         for name in sorted(grp_rs.keys()):
             shape = grp_rs[name+'/data/'].shape
             dtype = 'RealSlice'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
         for name in sorted(grp_pl.keys()):
             coordinates = list(grp_pl[name].keys())
             length = grp_pl[name+'/'+coordinates[0]+'/data'].shape[0]
             shape = (len(coordinates),length)
             dtype = 'PointList'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
         for name in sorted(grp_pla.keys()):
             ar_shape = grp_pla[name+'/data'].shape
             N_coords = len(grp_pla[name+'/data'][0,0].dtype)
             shape = (ar_shape[0],ar_shape[1],N_coords,-1)
             dtype = 'PointListArray'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
+            info[i] = i,dtype,shape,name
             i += 1
 
-    return l_md
+    return info
 
 
 
