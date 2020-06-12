@@ -8,11 +8,10 @@
 import h5py
 import numpy as np
 from os.path import exists
-from .read_utils import is_py4DSTEM_file, get_N_dataobjects, get_py4DSTEM_dataobject_info
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_N_dataobjects, get_py4DSTEM_dataobject_info
+from .read_py4DSTEM import read_py4DSTEM
 from .write import save
-from .write import save_datacube_group, save_diffraction_group, save_real_group
-from .write import save_pointlist_group, save_pointlistarray_group
-from ..read import read
+from .append import append
 from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ...datastructure import DataObject, Metadata
@@ -39,21 +38,21 @@ def copy(fp_orig, fp_new, topgroup='4DSTEM_experiment', **kwargs):
     indices = kwargs.get('indices')
     if indices is None:
         _,_,_,_,_,_,N = get_N_dataobjects(fp_orig,topgroup)
-        indices = np.arange(N)
+        indices = list(np.arange(N))
     else:
         if isinstance(indices, int):
             indices = [indices]
         assert(all([isinstance(item,(int,np.integer)) for item in indices])), "Error: indices must be ints."
-        info = get_py4DSTEM_dataobject_info(fp,topgroup)
 
+    info = get_py4DSTEM_dataobject_info(fp_orig,topgroup)
     for i in indices:
-        data,_ = read(fp_orig,ft='py4DSTEM',topgroup=topgroup,data_id=i)
+        data,_ = read_py4DSTEM(fp_orig,ft='py4DSTEM',topgroup=topgroup,data_id=i)
         if not exists(fp_new):
             print("Creating new file...")
-            print("Copying {} object '{}'".format(info['type'],info['name']))
+            print("Copying {} object '{}'".format(info[i]['type'],info[i]['name']))
             save(fp_new,data=data,topgroup=topgroup)
         else:
-            print("Copying {} object '{}'".format(info['type'],info['name']))
+            print("Copying {} object '{}'".format(info[i]['type'],info[i]['name']))
             append(fp_new,data=data,topgroup=topgroup)
 
     return
