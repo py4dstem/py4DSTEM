@@ -31,8 +31,9 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                                 This can be avoided by explicitly casting the datatype by passing the keyword
                                 argument 'dtype', however, casting will also affect the size of the data.
         ft          str         (opt) Force py4DSTEM to attempt to read the file as a specified filetype, rather
-                                than trying to determine this automatically. Must be None or a str from 'dm',
-                                'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.  Default is None.
+                                than trying to determine this automatically. Must be None or a str from
+                                'py4DSTEM', 'dm', 'empad', 'mrc_relativity', 'gatan_K2_bin', 'kitware_counted'.
+                                Default is None.
         dtype       dtype       Used when binning data, ignored otherwise. Defaults to whatever the type of the
                                 raw data is, to avoid enlarging data size. May be useful to avoid 'wraparound'
                                 errors.
