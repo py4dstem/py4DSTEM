@@ -23,7 +23,7 @@ def append_from_dataobject_list(fp, dataobject_list, topgroup='4DSTEM_experiment
     """
 
     assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
-    assert(is_py4DSTEM_file(fp), "Error: file is not recognized as a py4DSTEM file."
+    assert(is_py4DSTEM_file(fp)), "Error: file is not recognized as a py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(fp)
     assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
 
