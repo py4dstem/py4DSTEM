@@ -199,7 +199,7 @@ def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         l_pla = list(grp_pla.keys())
         names = l_dc+l_cdc+l_ds+l_rs+l_pl+l_pla
 
-        inds = [i for i,name in enumerate(name) if name==data_id]
+        inds = [i for i,name in enumerate(names) if name==data_id]
         assert(len(inds)!=0), "Error: no data named {} found.".format(data_id)
         assert(len(inds)<2), "Error: multiple data blocks named {} found.".format(data_id)
         ind = inds[0]
