@@ -215,7 +215,7 @@ def get_data_from_list(fp,tg,data_id):
     """ Accepts a fp to a valid py4DSTEM file and a list or tuple specifying data, and returns the data.
     """
     assert(isinstance(data_id,(list,tuple)))
-    assert(all([isinstance(d,(int,str)) for d in data]))
+    assert(all([isinstance(d,(int,str)) for d in data_id]))
     data = []
     for el in data_id:
         if isinstance(el,int):

@@ -69,12 +69,12 @@ def get_N_dataobjects(fp, topgroup='4DSTEM_experiment'):
     assert(is_py4DSTEM_file(fp)), "Error: not recognized as a py4DSTEM file"
     with h5py.File(fp,'r') as f:
         assert(topgroup in f.keys()), "Error: unrecognized topgroup"
-        N_dc = (f[topgroup]['data/datacubes'].keys())
-        N_cdc = (f[topgroup]['data/counted_datacubes'].keys())
-        N_ds = (f[topgroup]['data/diffractionslices'].keys())
-        N_rs = (f[topgroup]['data/realslices'].keys())
-        N_pl = (f[topgroup]['data/pointlists'].keys())
-        N_pla = (f[topgroup]['data/pointlistarrays'].keys())
+        N_dc = len(f[topgroup]['data/datacubes'].keys())
+        N_cdc = len(f[topgroup]['data/counted_datacubes'].keys())
+        N_ds = len(f[topgroup]['data/diffractionslices'].keys())
+        N_rs = len(f[topgroup]['data/realslices'].keys())
+        N_pl = len(f[topgroup]['data/pointlists'].keys())
+        N_pla = len(f[topgroup]['data/pointlistarrays'].keys())
         N_do = N_dc+N_cdc+N_ds+N_rs+N_pl+N_pla
         return N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do
 
