@@ -3,7 +3,8 @@
 import h5py
 import numpy as np
 from os.path import splitext
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
+from .read_utils import version_is_geq, get_py4DSTEM_dataobject_info
 from .read_py4DSTEM_legacy import read_py4DSTEM_legacy
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
@@ -134,62 +135,11 @@ def read_py4DSTEM(fp, **kwargs):
 def print_py4DSTEM_file(fp,tg):
     """ Accepts a fp to a valid py4DSTEM file and prints to screen the file contents.
     """
-    i = 0
-    l_md = []
-    with h5py.File(fp,'r') as f:
-        grp_dc = f[tg+'/data/datacubes/']
-        grp_cdc = f[tg+'/data/counted_datacubes/']
-        grp_ds = f[tg+'/data/diffractionslices/']
-        grp_rs = f[tg+'/data/realslices/']
-        grp_pl = f[tg+'/data/pointlists/']
-        grp_pla = f[tg+'/data/pointlistarrays/']
-        for name in sorted(grp_dc.keys()):
-            shape = grp_dc[name+'/data/'].shape
-            dtype = 'DataCube'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-        for name in sorted(grp_cdc.keys()):
-            # TODO
-            shape = grp_cdc[name+'/data/'].shape
-            dtype = 'CountedDataCube'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-        for name in sorted(grp_ds.keys()):
-            shape = grp_ds[name+'/data/'].shape
-            dtype = 'DiffractionSlice'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-        for name in sorted(grp_rs.keys()):
-            shape = grp_rs[name+'/data/'].shape
-            dtype = 'RealSlice'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-        for name in sorted(grp_pl.keys()):
-            coordinates = list(grp_pl[name].keys())
-            length = grp_pl[name+'/'+coordinates[0]+'/data'].shape[0]
-            shape = (len(coordinates),length)
-            dtype = 'PointList'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-        for name in sorted(grp_pla.keys()):
-            ar_shape = grp_pla[name+'/data'].shape
-            N_coords = len(grp_pla[name+'/data'][0,0].dtype)
-            shape = (ar_shape[0],ar_shape[1],N_coords,-1)
-            dtype = 'PointListArray'
-            d = {'index':i,'type':dtype,'shape':shape,'name':name}
-            l_md.append(d)
-            i += 1
-
+    l_md = get_py4DSTEM_dataobject_info(fp,tg)
     print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
     print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
     for d in l_md:
         print("  {:8}{:18}{:24}{:54}".format(str(d['index']),str(d['type']),str(d['shape']),str(d['name'])))
-
     return
 
 def get_data(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
