@@ -95,7 +95,7 @@ def get_py4DSTEM_dataobject_info(fp, topgroup='4DSTEM_experiment'):
         grp_pl = f[topgroup+'/data/pointlists/']
         grp_pla = f[topgroup+'/data/pointlistarrays/']
         N = len(grp_dc)+len(grp_cdc)+len(grp_ds)+len(grp_rs)+len(grp_pl)+len(grp_pla)
-        info = np.zeros(N,dtype=[('index',int),('type','U16'),('shape',tuple),('name',str)])
+        info = np.zeros(N,dtype=[('index',int),('type','U16'),('shape',tuple),('name','U64')])
         for name in sorted(grp_dc.keys()):
             shape = grp_dc[name+'/data/'].shape
             dtype = 'DataCube'
