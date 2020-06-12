@@ -39,7 +39,7 @@ def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
                 group = f[topgroup + '/data/pointlistarrays']
             else:
                 raise ValueError("Unknown DataObject type {}".format(objtype))
-            print('Removing {} object {}'.format(objtype,name))
+            print("Removing {} object '{}'".format(objtype,name))
             del group[name]
 
     ##### Finish and close #####
