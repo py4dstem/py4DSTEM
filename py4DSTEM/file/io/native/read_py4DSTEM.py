@@ -211,7 +211,7 @@ def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
 
     return data
 
-def get_data_from_list(fp,tg,data_id):
+def get_data_from_list(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a fp to a valid py4DSTEM file and a list or tuple specifying data, and returns the data.
     """
     assert(isinstance(data_id,(list,tuple)))
@@ -219,9 +219,9 @@ def get_data_from_list(fp,tg,data_id):
     data = []
     for el in data_id:
         if isinstance(el,int):
-            data.append(get_data_from_int)
+            data.append(get_data_from_int(fp,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
         elif isinstance(el,str):
-            data.append(get_data_from_str)
+            data.append(get_data_from_str(fp,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
         else:
             raise Exception("Data must be specified with strings or integers only.")
     return data
