@@ -11,8 +11,38 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
-from ..file.io.native import get_N_dataobjects, read_py4DSTEM
+from numpy import nonzero
+from ..file.io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
 import pyqtgraph as pg
+
+def datacube_selector(fp, data_id=0):
+    """
+    For a py4DSTEM formatted file at fp:
+        - if there is a single datacube, return it
+        - if there are multiple datacubes, return the one at index = data_id
+        - if data_id=-1, return the names and indices of all the datacubes
+    """
+    info = get_py4DSTEM_dataobject_info(fp)
+    inds = nonzero(info['type']=='DataCube')[0]
+    N_dc = len(inds)
+
+    if data_id==-1:
+        names,indices = [],[]
+        for i in inds:
+            names.append(info[i]['name'])
+            indices.appen(info[i]['index'])
+            return names,indices
+    if N_dc == 1:
+        i = inds[0]
+        dc,_ = read_py4DSTEM(fp, data_id=i)
+        return dc
+    elif N_dc > 1:
+        assert(data_id in inds), "No datacube found at index {}.".format(data_id)
+        dc,_ = read_py4DSTEM(fp, data_id=data_id)
+        return dc
+    else:
+        print("No datacubes found in this file.")
+
 
 def datacube_selector_dialog(fpath,window):
     """
