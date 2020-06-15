@@ -16,7 +16,7 @@ from ...file.datastructure import PointList
 from .cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
 from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
-from ...fil.io import read
+from ...file.io import read
 from ...file.io.native import save, append, is_py4DSTEM_file
 from ...file.datastructure import DiffractionSlice, RealSlice
 from .ImageViewMasked import ImageViewAlpha
