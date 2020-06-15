@@ -21,7 +21,7 @@ def datacube_selector(fp, data_id=0):
         - if there are multiple datacubes, return the one at index = data_id
         - if data_id=-1, return the names and indices of all the datacubes
     """
-    info = get_py4DSTEM_dataobject_info(fpath)
+    info = get_py4DSTEM_dataobject_info(fp)
     inds = np.nonzero(info['type']=='DataCube')[0]
     N_dc = len(inds)
 
@@ -33,11 +33,11 @@ def datacube_selector(fp, data_id=0):
             return names,indices
     if N_dc == 1:
         i = inds[0]
-        dc,_ = read_py4DSTEM(fpath, data_id=i)
+        dc,_ = read_py4DSTEM(fp, data_id=i)
         return dc
     elif N_dc > 1:
         assert(data_id in inds), "No datacube found at index {}.".format(data_id)
-        dc,_ = read_py4DSTEM(fpath, data_id=data_id)
+        dc,_ = read_py4DSTEM(fp, data_id=data_id)
         return dc
     else:
         print("No datacubes found in this file.")
