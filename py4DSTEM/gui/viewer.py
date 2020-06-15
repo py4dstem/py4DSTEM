@@ -294,16 +294,16 @@ class DataViewer(QtWidgets.QMainWindow):
         # load based on chosen mode:
         if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
             #auto mode
-            self.datacube = read(fname)
+            self.datacube,_ = read(fname)
             if type(self.datacube) == str : 
                 self.Unidentified_file(fname)
                 #Reset view
                 self.__init__(sys.argv)
                 return
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
-            self.datacube = read(fname, load='dmmmap')
+            self.datacube,_ = read(fname, load='dmmmap')
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
-            self.datacube = read(fname, load='gatan_bin')
+            self.datacube,_ = read(fname, load='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
