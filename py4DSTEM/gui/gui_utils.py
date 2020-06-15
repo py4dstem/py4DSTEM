@@ -11,6 +11,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
+from numpy import nonzero
 from ..file.io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
 import pyqtgraph as pg
 
@@ -22,7 +23,7 @@ def datacube_selector(fp, data_id=0):
         - if data_id=-1, return the names and indices of all the datacubes
     """
     info = get_py4DSTEM_dataobject_info(fp)
-    inds = np.nonzero(info['type']=='DataCube')[0]
+    inds = nonzero(info['type']=='DataCube')[0]
     N_dc = len(inds)
 
     if data_id==-1:
