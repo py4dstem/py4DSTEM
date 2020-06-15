@@ -26,9 +26,9 @@ import pyqtgraph as pg
 import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
-from .utils import sibling_path, pg_point_roi, LQCollection
+from .gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
 from ..file.io.read import read
-from ..file.io.native import save
+from ..file.io.native import save, is_py4DSTEM_file
 from ..file.datastructure.datacube import DataCube
 from .strain import *
 
@@ -294,16 +294,22 @@ class DataViewer(QtWidgets.QMainWindow):
         # load based on chosen mode:
         if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
             #auto mode
-            self.datacube,_ = read(fname)
-            if type(self.datacube) == str : 
+            if is_py4DSTEM_file(fname):
+                self.datacube = datacube_selector(fname)
+            else:
+                self.datacube,_ = read(fname)
+            if type(self.datacube) == str :
                 self.Unidentified_file(fname)
                 #Reset view
                 self.__init__(sys.argv)
                 return
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
-            self.datacube,_ = read(fname, load='dmmmap')
+            if is_py4DSTEM_file(fname):
+                self.datacube = datacube_selector(fname)
+            else:
+                self.datacube,_ = read(fname, mem="MEMMAP")
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
-            self.datacube,_ = read(fname, load='gatan_bin')
+            self.datacube,_ = read(fname, ft='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
