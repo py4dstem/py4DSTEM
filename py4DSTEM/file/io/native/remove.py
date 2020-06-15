@@ -12,8 +12,7 @@ def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
 
     Accepts:
         fp            path to the py4DSTEM .h5 file
-        indices             (list of ints) the indices of the DataObjects to remove, in a FileBrowser
-                            associated with fp
+        indices             (list of ints) the indices of the DataObjects to remove
     """
     assert(all([isinstance(item,(int,np.integer)) for item in indices])), "Error: indices must be ints."
     assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
@@ -51,10 +50,9 @@ def remove(fp, dataobjects):
     Remove existing dataobjects from a py4DSTEM h5 file.
 
     Accepts:
+        fp              path to the py4DSTEM .h5 file
         dataobjects     (int or list of ints) the index or indices or name of the DataObjects to
-                        remove. If an int or list of ints, indices are those of a FileBrowser
-                        associated with fp
-        fp        path to the py4DSTEM .h5 file
+                        remove.
     """
     assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
 
