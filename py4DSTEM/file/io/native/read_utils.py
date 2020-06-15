@@ -17,10 +17,13 @@ def get_py4DSTEM_topgroups(fp):
 def is_py4DSTEM_file(fp):
     """ Returns True iff fp points to a py4DSTEM formatted (EMD type 2) file.
     """
-    topgroups = get_py4DSTEM_topgroups(fp)
-    if len(topgroups)>0:
-        return True
-    else:
+    try:
+        topgroups = get_py4DSTEM_topgroups(fp)
+        if len(topgroups)>0:
+            return True
+        else:
+            return False
+    except OSError:
         return False
 
 def get_py4DSTEM_version(fp, topgroup='4DSTEM_experiment'):
