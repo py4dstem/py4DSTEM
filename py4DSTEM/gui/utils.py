@@ -11,24 +11,27 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
-from ..file.io.filebrowser import FileBrowser
+from ..file.io.native import get_N_dataobjects, read_py4DSTEM
 import pyqtgraph as pg
 
 def datacube_selector_dialog(fpath,window):
     """
-    Loads a FileBrowser from given fpath and presents the user with a dialog to
-    choose one of the datacubes inside the file, if more than one exists.
-    Returns the selected DataCube object.
+    Presents the user with a dialog to choose one of the datacubes inside the file,
+    if more than one exists. Returns the selected DataCube object.
     """
-    fb = FileBrowser(fpath)
+    info = get_py4DSTEM_dataobject_info(fpath)
+    inds = np.nonzero(info['type']=='DataCube')[0]
+    N_dc = len(inds)
 
-    if fb.N_datacubes == 1:
-        dc = fb.get_datacubes()
-    elif fb.N_datacubes > 1:
+    if N_dc == 1:
+        ind = inds[0]
+        dc,_ = read_py4DSTEM(fpath, data_id=ind)
+    elif N_dc > 1:
         # there is more than one object, so we need to present the user with a chooser
-        indices = (self.dataobject_lookup_arr=='DataCube' | 
-            self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
-
+        #indices = (self.dataobject_lookup_arr=='DataCube' | 
+        #    self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
+        print('More than one datacube detected...')
+        print('Pls harass developers to add support feature.')
 
     return dc
 
