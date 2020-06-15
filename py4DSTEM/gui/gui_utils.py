@@ -28,8 +28,8 @@ def datacube_selector(fp, data_id=0):
     if data_id==-1:
         names,indices = [],[]
         for i in inds:
-            names.append(info[i]['name']
-            indices.appen(info[i]['index']
+            names.append(info[i]['name'])
+            indices.appen(info[i]['index'])
             return names,indices
     if N_dc == 1:
         i = inds[0]
@@ -40,7 +40,7 @@ def datacube_selector(fp, data_id=0):
         dc,_ = read_py4DSTEM(fpath, data_id=data_id)
         return dc
     else:
-        print("No datacubes found in this file."
+        print("No datacubes found in this file.")
 
 
 def datacube_selector_dialog(fpath,window):
