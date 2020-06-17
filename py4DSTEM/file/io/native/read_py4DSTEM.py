@@ -162,7 +162,7 @@ def get_data_from_int(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_ds = f[tg+'/data/diffractionslices/']
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
-        grp_pla = f[tg+'/data/pointlists/']
+        grp_pla = f[tg+'/data/pointlistarrays/']
         grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
 
         Ns = np.cumsum([len(grp.keys()) for grp in grps])
@@ -186,7 +186,7 @@ def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_ds = f[tg+'/data/diffractionslices/']
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
-        grp_pla = f[tg+'/data/pointlists/']
+        grp_pla = f[tg+'/data/pointlistarrays/']
         grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
 
         l_dc = list(grp_dc.keys())
