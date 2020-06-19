@@ -4,7 +4,7 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..utils import pg_point_roi
-from ...process.diskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
+from ...process.diskdetection import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
 from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
 from ...process.diskdetection import get_bragg_vector_map
 from ...process.fit import fit_2D, plane, parabola
@@ -349,7 +349,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
 		DP_mask = np.reshape(DP_mask,(dc.Q_Nx,dc.Q_Ny))
 
 		# generate the prpbe kernel and update views
-		self.probe = get_average_probe_from_ROI(dc,RS_mask,mask_threshold=mask_threshold,\
+		self.probe = get_probe_from_4Dscan_ROI(dc,RS_mask,mask_threshold=mask_threshold,\
 			mask_expansion=mask_expansion,mask_opening=mask_opening,verbose=True, DP_mask=DP_mask)
 
 		# get an alias to the probe kernel display pane

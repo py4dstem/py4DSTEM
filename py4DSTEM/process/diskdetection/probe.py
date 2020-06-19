@@ -13,10 +13,10 @@ from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
 
 #### Get the vacuum probe ####
 
-def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
-                                                 mask_expansion=12,
-                                                 mask_opening=3,
-                                                 verbose=False):
+def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
+                                           mask_expansion=12,
+                                           mask_opening=3,
+                                           verbose=False):
     """
     Aligns and averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
     to create and average vacuum probe.
@@ -56,40 +56,7 @@ def get_average_probe_from_vacuum_scan(datacube, mask_threshold=0.2,
     return probe*mask
 
 
-def get_average_probe_from_vacuum_stack(data, mask_threshold=0.2,
-                                              mask_expansion=12,
-                                              mask_opening=3):
-    """
-    Averages all diffraction patterns in a 3D stack of diffraction patterns, assumed to be taken
-    over vacuum, to create and average vacuum probe. No alignment is performed - i.e. it is assumed
-    that the beam was stationary during acquisition of the stack.
-
-    Values outisde the average probe are zeroed, using a binary mask determined by the optional
-    parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
-    using a threshold of less than mask_threshold times the maximal probe value. A morphological
-    opening of mask_opening pixels is performed to eliminate stray pixels (e.g. from x-rays),
-    followed by a dilation of mask_expansion pixels to ensure the entire probe is captured.
-
-    Accepts:
-        data            (array) a 3D stack of vacuum diffraction patterns, shape (Q_Nx,Q_Ny,N)
-        mask_threshold  (float) threshold determining mask which zeros values outside of probe
-        mask_expansion  (int) number of pixels by which the zeroing mask is expanded to capture
-                        the full probe
-        mask_opening    (int) size of binary opening used to eliminate stray bright pixels
-
-    Returns:
-        probe           (array of shape (Q_Nx,Q_Ny)) the average probe
-    """
-    probe = np.average(data,axis=2)
-
-    mask = probe > np.max(probe)*mask_threshold
-    mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
-
-    return probe*mask
-
-
-def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
+def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
                                               mask_expansion=12,
                                               mask_opening=3,
                                               verbose=False,
@@ -134,7 +101,40 @@ def get_average_probe_from_ROI(datacube, ROI, mask_threshold=0.2,
     return probe*mask
 
 
-def get_synthetic_probe(radius, width, Q_Nx, Q_Ny):
+def get_probe_from_vacuum_3Dstack(data, mask_threshold=0.2,
+                                        mask_expansion=12,
+                                        mask_opening=3):
+    """
+    Averages all diffraction patterns in a 3D stack of diffraction patterns, assumed to be taken
+    over vacuum, to create and average vacuum probe. No alignment is performed - i.e. it is assumed
+    that the beam was stationary during acquisition of the stack.
+
+    Values outisde the average probe are zeroed, using a binary mask determined by the optional
+    parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
+    using a threshold of less than mask_threshold times the maximal probe value. A morphological
+    opening of mask_opening pixels is performed to eliminate stray pixels (e.g. from x-rays),
+    followed by a dilation of mask_expansion pixels to ensure the entire probe is captured.
+
+    Accepts:
+        data            (array) a 3D stack of vacuum diffraction patterns, shape (Q_Nx,Q_Ny,N)
+        mask_threshold  (float) threshold determining mask which zeros values outside of probe
+        mask_expansion  (int) number of pixels by which the zeroing mask is expanded to capture
+                        the full probe
+        mask_opening    (int) size of binary opening used to eliminate stray bright pixels
+
+    Returns:
+        probe           (array of shape (Q_Nx,Q_Ny)) the average probe
+    """
+    probe = np.average(data,axis=2)
+
+    mask = probe > np.max(probe)*mask_threshold
+    mask = binary_opening(mask, iterations=mask_opening)
+    mask = binary_dilation(mask, iterations=mask_expansion)
+
+    return probe*mask
+
+
+def get_probe_synthetic(radius, width, Q_Nx, Q_Ny):
     """
     Makes a synthetic probe, with the functional form of a disk blurred by a sigmoid (a logistic
     function).
