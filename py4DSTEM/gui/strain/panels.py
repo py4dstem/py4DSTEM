@@ -4,11 +4,11 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..utils import pg_point_roi
-from ...process.braggdiskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
-from ...process.braggdiskdetection import find_Bragg_disks_selected, find_Bragg_disks
+from ...process.diskdetection import get_average_probe_from_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
+from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
+from ...process.diskdetection import get_bragg_vector_map
 from ...process.fit import fit_2D, plane, parabola
 from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
-from ...process.braggdiskdetection import get_bragg_vector_map
 from skimage.transform import radon
 from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
 from scipy.ndimage.filters import gaussian_filter
