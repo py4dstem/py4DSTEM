@@ -11,24 +11,57 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
-from ..file.io.filebrowser import FileBrowser
+from numpy import nonzero
+from ..file.io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
 import pyqtgraph as pg
+
+def datacube_selector(fp, data_id=0):
+    """
+    For a py4DSTEM formatted file at fp:
+        - if there is a single datacube, return it
+        - if there are multiple datacubes, return the one at index = data_id
+        - if data_id=-1, return the names and indices of all the datacubes
+    """
+    info = get_py4DSTEM_dataobject_info(fp)
+    inds = nonzero(info['type']=='DataCube')[0]
+    N_dc = len(inds)
+
+    if data_id==-1:
+        names,indices = [],[]
+        for i in inds:
+            names.append(info[i]['name'])
+            indices.appen(info[i]['index'])
+            return names,indices
+    if N_dc == 1:
+        i = inds[0]
+        dc,_ = read_py4DSTEM(fp, data_id=i)
+        return dc
+    elif N_dc > 1:
+        assert(data_id in inds), "No datacube found at index {}.".format(data_id)
+        dc,_ = read_py4DSTEM(fp, data_id=data_id)
+        return dc
+    else:
+        print("No datacubes found in this file.")
+
 
 def datacube_selector_dialog(fpath,window):
     """
-    Loads a FileBrowser from given fpath and presents the user with a dialog to
-    choose one of the datacubes inside the file, if more than one exists.
-    Returns the selected DataCube object.
+    Presents the user with a dialog to choose one of the datacubes inside the file,
+    if more than one exists. Returns the selected DataCube object.
     """
-    fb = FileBrowser(fpath)
+    info = get_py4DSTEM_dataobject_info(fpath)
+    inds = np.nonzero(info['type']=='DataCube')[0]
+    N_dc = len(inds)
 
-    if fb.N_datacubes == 1:
-        dc = fb.get_datacubes()
-    elif fb.N_datacubes > 1:
+    if N_dc == 1:
+        ind = inds[0]
+        dc,_ = read_py4DSTEM(fpath, data_id=ind)
+    elif N_dc > 1:
         # there is more than one object, so we need to present the user with a chooser
-        indices = (self.dataobject_lookup_arr=='DataCube' | 
-            self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
-
+        #indices = (self.dataobject_lookup_arr=='DataCube' | 
+        #    self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
+        print('More than one datacube detected...')
+        print('Pls harass developers to add support feature.')
 
     return dc
 

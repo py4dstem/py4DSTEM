@@ -20,7 +20,7 @@ class DataCube(DataObject):
 
     def __init__(self, data, **kwargs):
         """
-        Instantiate a DataCube object. Set the data, scan dimensions, and metadata.
+        Instantiate a DataCube object. Set the data and scan dimensions.
         """
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)

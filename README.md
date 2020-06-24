@@ -52,14 +52,16 @@ pip install py4dstem
 ```
 
 In order, these commands
-- ensure your anaconda is up-to-date
-- make a virtual environment to install the package into
+- ensure your installation of anaconda is up-to-date
+- make a virtual environment - see below!
 - enter the environment
-- make sure your new environment talks nicely to pip, the Python package installer
-- use pip to install the py4DSTEM package
+- make sure your new environment talks nicely to pip, a tool for installing Python packages
+- use pip to install py4DSTEM
 
-Note that directions above only install py4DSTEM in the `py4dstem` conda environment.
-This means you'll need to activate the environment again each time you want to use py4DSTEM.
+Virtual environments are used to make sure packages that have different dependencies don't conflict with one another.
+Because the directions above install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM,
+you'll need to activate this environment.
+This is included in the directions below for running py4DSTEM, and assume you've named your virtual environment 'py4dstem'
 
 
 ### Running the GUI
@@ -78,14 +80,10 @@ From any python interpreter inside the `py4dstem` conda environment, py4DSTEM ca
 import py4DSTEM
 ```
 
-### Sample jupter notebooks
 
-TODO -- apologies, we are under construction ;)
+### Sample code 
 
-
-### Sample scripts
-
-TODO -- lolcats
+**As the base code is currently under construction, the sample code (Jupyter notebooks and scripts) have been temporarily taken down.  They'll be back soon.  We apologize for any inconvenience, and appreciate your patience!**
 
 
 
@@ -124,21 +122,26 @@ To merge back in to the main repository, submit a pull request to the dev branch
 * numpy
 * scipy
 * h5py
+* ncempy
+* pymatgen
+* numba
 * scikit-image
 * scikit-learn
-* tqdm
-* ncempy
-* hyperspy
 * PyQt5
 * pyqtgraph
 * qtconsole
 * ipywidgets
+* tqdm
 
+### Optional dependencies
+
+* ipyparallel
+* dask
 
 
 ### Versioning
 
-v. 0.8.0
+v. 0.9.6
 
 
 

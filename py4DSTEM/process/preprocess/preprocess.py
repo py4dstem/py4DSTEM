@@ -9,11 +9,9 @@
 
 import numpy as np
 from ..utils import bin2D
-from ...file.log import log
 
 ### Editing datacube shape ###
 
-# @log
 def set_scan_shape(datacube,R_Nx,R_Ny):
     """
     Reshape the data given the real space scan shape.
@@ -29,7 +27,6 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
         print(f"Can't reshape {datacube.data.__class__.__name__} datacube.")
         return datacube
 
-# @log
 def swap_RQ(datacube):
     """
     Swaps real and reciprocal space coordinates, so that if
@@ -41,7 +38,6 @@ def swap_RQ(datacube):
     datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Nx, datacube.Q_Ny, datacube.R_Nx, datacube.R_Ny
     return datacube
 
-# @log
 def swap_Rxy(datacube):
     """
     Swaps real space x and y coordinates, so that if
@@ -53,7 +49,6 @@ def swap_Rxy(datacube):
     datacube.R_Nx, datacube.R_Ny = datacube.R_Ny, datacube.R_Nx
     return datacube
 
-# @log
 def swap_Qxy(datacube):
     """
     Swaps reciprocal space x and y coordinates, so that if
@@ -68,20 +63,17 @@ def swap_Qxy(datacube):
 
 ### Cropping and binning ###
 
-# @log
 def crop_data_diffraction(datacube,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
     datacube.data = datacube.data[:,:,crop_Qx_min:crop_Qx_max,crop_Qy_min:crop_Qy_max]
     datacube.Q_Nx, datacube.Q_Ny = crop_Qx_max-crop_Qx_min, crop_Qy_max-crop_Qy_min
     return datacube
 
-# @log
 def crop_data_real(datacube,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max):
     datacube.data = datacube.data[crop_Rx_min:crop_Rx_max,crop_Ry_min:crop_Ry_max,:,:]
     datacube.R_Nx, datacube.R_Ny = crop_Rx_max-crop_Rx_min, crop_Ry_max-crop_Ry_min
     datacube.R_N = datacube.R_Nx*datacube.R_Ny
     return datacube
 
-# @log
 def bin_data_diffraction(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
@@ -104,7 +96,6 @@ def bin_data_diffraction(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
-# @log
 def bin_data_mmap(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
@@ -123,7 +114,6 @@ def bin_data_mmap(datacube, bin_factor):
     datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
     return datacube
 
-# @log
 def bin_data_real(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
