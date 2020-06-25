@@ -200,6 +200,7 @@ class BraggVectorClassification(object):
         # W
         self.W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
         self.W = np.where(self.W<0,0,self.W)
+        self.W = np.copy(self.W, order='C')
 
         self.W_next = None
         self.H_next = None
