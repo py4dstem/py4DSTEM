@@ -193,13 +193,15 @@ class BraggVectorClassification(object):
         self.N_c = class_images.shape[2]
 
         # H
-        self.H = np.zeros((self.N_c,self.N_meas))
+        H = np.zeros((self.N_c,self.N_meas))
         for i in range(self.N_c):
-            self.H[i,:] = class_images[:,:,i].ravel()
+            H[i,:] = class_images[:,:,i].ravel()
+        self.H = np.copy(H, order='C')
 
         # W
-        self.W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
-        self.W = np.where(self.W<0,0,self.W)
+        W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
+        W = np.where(W<0,0,W)
+        self.W = np.copy(W, order='C')
 
         self.W_next = None
         self.H_next = None

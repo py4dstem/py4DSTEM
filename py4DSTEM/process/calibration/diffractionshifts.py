@@ -5,7 +5,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
 from ...file.datastructure import PointListArray
-from ..braggdiskdetection import get_bragg_vector_map
+from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats
 
 def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
