@@ -72,7 +72,7 @@ class BraggVectorClassification(object):
 
     """
 
-    def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True):
+    def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True, max_dist=None):
         """
         Initializes a BraggVectorClassification instance.
 
@@ -94,6 +94,8 @@ class BraggVectorClassification(object):
             Qy                  (ndarray of floats) y-coords of the voronoi points
             X_is_boolean        (bool) if True, populate X with bools (BP is or is not present)
                                 if False, populate X with floats (BP c.c. intensities)
+            max_dist            (None or number) maximum distance from a given voronoi point a peak
+                                can be and still be associated with this label
         """
         assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
         assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
@@ -105,7 +107,7 @@ class BraggVectorClassification(object):
         self.Qy = Qy
 
         # Get the sets of Bragg peaks present at each scan position
-        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy)
+        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist)
 
         # Construct X matrix
         self.N_feat = len(self.Qx)
