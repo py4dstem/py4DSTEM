@@ -194,7 +194,6 @@ def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
     else:
         return fig,ax
 
-
 def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
                 min=0,max=3,power=1,figsize=(12,12),returnfig=False,**kwargs):
     """
