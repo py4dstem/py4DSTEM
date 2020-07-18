@@ -194,3 +194,39 @@ def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
     else:
         return fig,ax
 
+
+def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
+                min=0,max=3,power=1,figsize=(12,12),returnfig=False,**kwargs):
+    """
+    Visualization function which plots a 2D array with one or more overlayed circles.
+    To overlay one circle, center must be a single 2-tuple.  To overlay N rectangles,
+    center must be a list of N 2-tuples.  color, fill, and alpha may each be single values,
+    which are then applied to all the circles, or a length N list.
+
+    See the docstring for py4DSTEM.visualize.show() for descriptions of all input
+    parameters not listed below.
+
+    Accepts:
+        center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
+        R           (number of list of N numbers) the circles radius
+        color       (string of list of N strings)
+        fill        (bool or list of N bools) filled in or empty rectangles
+        alpha       (number, 0 to 1) transparency
+
+    Returns:
+        If returnfig==False (default), the figure is plotted and nothing is returned.
+        If returnfig==False, the figure and its one axis are returned, and can be
+        further edited.
+    """
+    assert(len(x)==len(y))
+    fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
+    ax.scatter(y,x,s=s*scale/np.max(s),color=point_color)
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
+
+
