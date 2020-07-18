@@ -2,20 +2,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle
 
-def show(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,**kwargs):
+def show(ar,min=0,max=3,power=1,figsize=(12,12),bordercolor=None,borderwidth=5,
+                                   contrast='std',returnfig=False,**kwargs):
     """
-    General visualization function for a single 2D array while setting the min/max
-    values in terms of standard deviations from the median - often useful for
-    diffraction data.  Data is optionally scaled by some power, handling any negative
-    pixel values by setting them to -(-val)**power.  **kwargs is passed directly to
-    ax.matshow(), and must be keywords this method accepts.
+    General visualization function for a single 2D array.
+
+    The contrast range is set according to the parameter contrast. Accepted values and
+    their behaviors are as follows:
+        'std'       (default) The min/max values are median -/+ n*std, where the two
+                    values of n are given by the arguments min and max.
+        'minmax'    The min/max values are np.min(ar)/np.max(r)
+    The function scales the data, exponentiating by power, handling negative input
+    values.
 
     Accepts:
         ar          (2D array) the array to plot
-        sig_min     (number) minimum display value is set to (median - sig_min*std)
-        sig_max     (number) maximum display value is set to (median + sig_max*std)
+        min         (number) minimum display value is set to (median - min*std)
+        max         (number) maximum display value is set to (median + max*std)
         power       (number) should be <=1; pixel values are set to val**power
         figsize     (2-tuple) size of the plot
+        bordercolor (str or None) if not None, add a border of this color
+        borderwidth (number)
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -30,19 +37,29 @@ def show(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,**kwargs
     else:
         _ar = ar**power
 
-    med,std = np.median(_ar),np.std(_ar)
-    vmin = med-sig_min*std
-    vmax = med+sig_max*std
+    if contrast == 'std':
+        med,std = np.median(_ar),np.std(_ar)
+        vmin = med-min*std
+        vmax = med+max*std
+    elif contrast == 'minmax':
+        vmin = np.min(_ar)
+        vmax = np.max(_ar)
 
     fig,ax = plt.subplots(1,1,figsize=figsize)
     ax.matshow(_ar,vmin=vmin,vmax=vmax,**kwargs)
+    if bordercolor is not None:
+        for s in ['bottom','top','left','right']:
+            ax.spines[s].set_color(bordercolor)
+            ax.spines[s].set_linewidth(borderwidth)
+        ax.set_xticks([])
+        ax.set_yticks([])
     if not returnfig:
         plt.show()
         return
     else:
         return fig,ax
 
-def show_rect(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,
+def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
               lims=(0,1,0,1),color='r',fill=True,alpha=1,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed rectangles.
@@ -92,7 +109,7 @@ def show_rect(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,
         assert(len(alpha)==N)
         assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
 
-    fig,ax = show(ar,sig_min,sig_max,power,figsize,returnfig=True,**kwargs)
+    fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
 
     rects = []
     for i in range(N):
@@ -105,7 +122,8 @@ def show_rect(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,
         return
     else:
         return fig,ax
-def show_circ(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,
+
+def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
               center=(0,0),R=10,color='r',fill=True,alpha=1,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
@@ -162,7 +180,7 @@ def show_circ(ar,sig_min=0,sig_max=3,power=1,figsize=(12,12),returnfig=False,
         assert(len(alpha)==N)
         assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
 
-    fig,ax = show(ar,sig_min,sig_max,power,figsize,returnfig=True,**kwargs)
+    fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
 
     rects = []
     for i in range(N):
