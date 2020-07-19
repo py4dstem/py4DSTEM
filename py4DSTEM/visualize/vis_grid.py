@@ -53,7 +53,8 @@ def show_grid_overlay(ar,rx0,ry0,xL,yL,color='k',linewidth=1,alpha=1,
     else:
         return fig,ax
 
-def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,**kwargs):
+def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
+                                      get_bc=None,**kwargs):
     """
     Words
 
@@ -75,7 +76,12 @@ def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,**kwargs):
             N = i*W+j
             try:
                 ar = get_ar(N)
-                _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
+                if get_bc is not None:
+                    bc = get_bc(N)
+                    _,_ = show(ar,ax=(fig,ax),returnfig=True,
+                               bordercolor=bc,**kwargs)
+                else:
+                    _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
                 if titlesize>0:
                     ax.set_title(N,fontsize=titlesize)
             except IndexError:
