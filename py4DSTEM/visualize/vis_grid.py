@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 from .visualize import show
 
 def show_DP_grid(datacube,rx0,ry0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
@@ -13,7 +14,7 @@ def show_DP_grid(datacube,rx0,ry0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
         if returnfig==false, the figure and its one axis are returned, and can be
         further edited.
     """
-    rxx,ryy = np.meshgrid(np.arange(ry0,ry0+yL),np.arange(rx0,rx0+xL))
+    ryy,rxx = np.meshgrid(np.arange(ry0,ry0+yL),np.arange(rx0,rx0+xL))
 
     fig,axs = plt.subplots(xL,yL,figsize=(yL*axsize[0],xL*axsize[1]))
     for rxi in range(xL):
@@ -29,6 +30,30 @@ def show_DP_grid(datacube,rx0,ry0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
         return
     else:
         return fig,ax
+
+def show_grid_overlay(ar,rx0,ry0,xL,yL,color='k',linewidth=1,alpha=1,
+                                            returnfig=False,**kwargs):
+    """
+    Words
+    """
+    ryy,rxx = np.meshgrid(np.arange(ry0,ry0+yL),np.arange(rx0,rx0+xL))
+
+    fig,ax = show(ar,returnfig=True,**kwargs)
+    for rxi in range(xL):
+        for ryi in range(yL):
+            rx,ry = rxx[rxi,ryi],ryy[rxi,ryi]
+            rect = Rectangle((ry-0.5,rx-0.5),1,1,lw=linewidth,color=color,
+                             alpha=alpha,fill=False)
+            ax.add_patch(rect)
+    plt.tight_layout()
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
+
 
 def show_grid(get_im,get_im_args,returnfig=False,**kwargs):
     """
