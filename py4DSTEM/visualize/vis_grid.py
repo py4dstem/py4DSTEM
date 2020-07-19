@@ -53,9 +53,7 @@ def show_grid_overlay(ar,rx0,ry0,xL,yL,color='k',linewidth=1,alpha=1,
     else:
         return fig,ax
 
-
-
-def show_grid(get_im,get_im_args,returnfig=False,**kwargs):
+def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,**kwargs):
     """
     Words
 
@@ -66,6 +64,23 @@ def show_grid(get_im,get_im_args,returnfig=False,**kwargs):
         if returnfig==false, the figure and its one axis are returned, and can be
         further edited.
     """
+    fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
+    if H==1:
+        axs = axs[np.newaxis,:]
+    elif W==1:
+        axs = axs[:,np.newaxis]
+    for i in range(H):
+        for j in range(W):
+            ax = axs[i,j]
+            N = i*H+j
+            try:
+                ar = get_ar(N)
+                _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
+                if titlesize>0:
+                    ax.set_title(N,fontsize=titlesize)
+            except IndexError:
+                ax.axis('off')
+    plt.tight_layout()
 
     if not returnfig:
         plt.show()
