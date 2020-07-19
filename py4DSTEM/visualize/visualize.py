@@ -72,7 +72,7 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
         return fig,ax
 
 def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
-              lims=(0,1,0,1),color='r',fill=True,alpha=1,**kwargs):
+              lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed rectangles.
     To overlay one rectangle, lims must be a single 4-tuple.  To overlay N rectangles,
@@ -87,6 +87,7 @@ def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         color       (string of list of N strings)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
+        linewidth   (number)
 
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
@@ -120,13 +121,20 @@ def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
         assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
 
     fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
 
     rects = []
     for i in range(N):
-        l,c,f,a = lims[i],color[i],fill[i],alpha[i]
-        rect = Rectangle((l[2],l[0]),l[3]-l[2],l[1]-l[0],color=c,fill=f,alpha=a)
+        l,c,f,a,lw = lims[i],color[i],fill[i],alpha[i],linewidth[i]
+        rect = Rectangle((l[2],l[0]),l[3]-l[2],l[1]-l[0],color=c,fill=f,
+                          alpha=a,linewidth=lw)
         ax.add_patch(rect)
 
     if not returnfig:
@@ -136,7 +144,7 @@ def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         return fig,ax
 
 def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
-              center=(0,0),R=10,color='r',fill=True,alpha=1,**kwargs):
+              center=(0,0),R=10,color='r',fill=True,alpha=1,linewidth=2,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
     To overlay one circle, center must be a single 2-tuple.  To overlay N rectangles,
@@ -152,6 +160,7 @@ def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         color       (string of list of N strings)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
+        linewidth   (number)
 
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
@@ -191,13 +200,20 @@ def show_circ(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
         assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+
 
     fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
 
     rects = []
     for i in range(N):
-        cent,r,col,f,a = center[i],R[i],color[i],fill[i],alpha[i]
-        circ = Circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a)
+        cent,r,col,f,a,lw = center[i],R[i],color[i],fill[i],alpha[i],linewidth[i]
+        circ = Circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a,linewidth=lw)
         ax.add_patch(circ)
 
     if not returnfig:
