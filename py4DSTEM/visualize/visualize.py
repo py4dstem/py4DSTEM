@@ -1,19 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
-def show(ar,min=0,max=3,power=1,figsize=(12,12),bordercolor=None,borderwidth=5,
-                                   contrast='std',returnfig=False,**kwargs):
+def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
+          bordercolor=None,borderwidth=5,returnfig=False,**kwargs):
     """
-    General visualization function for a single 2D array.
-
-    The contrast range is set according to the parameter contrast. Accepted values and
-    their behaviors are as follows:
-        'std'       (default) The min/max values are median -/+ n*std, where the two
-                    values of n are given by the arguments min and max.
-        'minmax'    The min/max values are np.min(ar)/np.max(r)
-    The function scales the data, exponentiating by power, handling negative input
-    values.
+    General visualization function for 2D arrays.
 
     Accepts:
         ar          (2D array) the array to plot
@@ -21,14 +15,24 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),bordercolor=None,borderwidth=5,
         max         (number) maximum display value is set to (median + max*std)
         power       (number) should be <=1; pixel values are set to val**power
         figsize     (2-tuple) size of the plot
+        contrast    (str) determines how image contrast is set. Accepted values
+                    and their behaviors are as follows:
+                        'std'       (default) The min/max values are
+                                    median -/+ n*std, where the two values of n
+                                    are given by the arguments min and max.
+                        'minmax'    The min/max values are np.min(ar)/np.max(r)
+        ax          (None or 2-tuple) if None, generates a new figure with a single
+                    Axes instance. Otherwise, ax must be a 2-tuple containing
+                    the matplotlib class instances (Figure,Axes), and ar is
+                    plotted in the specified Axes instance.
+                    the passed Axes instance.
         bordercolor (str or None) if not None, add a border of this color
         borderwidth (number)
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
-        If returnfig==False (default), the figure is plotted and nothing is returned.
-        If returnfig==False, the figure and its one axis are returned, and can be
-        further edited.
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, return the figure and the axis.
     """
     if np.min(ar)<0 and power!=1:
         mask = ar<0
@@ -44,8 +48,16 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),bordercolor=None,borderwidth=5,
     elif contrast == 'minmax':
         vmin = np.min(_ar)
         vmax = np.max(_ar)
+    else:
+        raise Exception("Parameter contrast must be 'std' or 'minmax'.")
 
-    fig,ax = plt.subplots(1,1,figsize=figsize)
+    if ax is None:
+        fig,ax = plt.subplots(1,1,figsize=figsize)
+    else:
+        fig,ax = ax
+        assert(isinstance(fig,Figure))
+        assert(isinstance(ax,Axes))
+
     ax.matshow(_ar,vmin=vmin,vmax=vmax,**kwargs)
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
