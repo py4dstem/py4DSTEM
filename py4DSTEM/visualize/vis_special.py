@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import Voronoi
-from . import show,show_circ
+from . import show,show_circ,show_grid
 from ..process.utils import get_voronoi_vertices
 
 def show_kernel(kernel,R,L,W,figsize=(12,6)):
@@ -47,5 +47,35 @@ def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,**kwargs)
     plt.gca().invert_yaxis()
     plt.show()
     return
+
+def show_class_BPs(ar,x,y,s,s2,color='r',color2='y',**kwargs):
+    """
+    words
+    """
+    N = len(x)
+    assert(N==len(y)==len(s))
+
+    fig,ax = show(ar,returnfig=True,**kwargs)
+    ax.scatter(y,x,s=s2,color=color2)
+    ax.scatter(y,x,s=s,color=color)
+    plt.show()
+    return
+
+def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',
+                        axsize=(6,6),titlesize=0,get_bc=None,**kwargs):
+    """
+    words
+    """
+    fig,axs = show_grid(lambda i:ar,H,W,axsize=axsize,titlesize=titlesize,
+                       get_bc=get_bc,returnfig=True,**kwargs)
+    for i in range(H):
+        for j in range(W):
+            ax = axs[i,j]
+            N = i*W+j
+            s = get_s(N)
+            ax.scatter(y,x,s=s2,color=color2)
+            ax.scatter(y,x,s=s,color=color)
+    plt.show()
+
 
 
