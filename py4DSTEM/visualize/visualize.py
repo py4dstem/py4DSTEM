@@ -75,6 +75,11 @@ def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
               lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed rectangles.
+    lims is specified in the order (x0,xf,y0,yf). The rectangle bounds begin at the upper
+    left corner of (x0,y0) and end at the upper left corner of (xf,yf) -- i.e inclusive
+    in the lower bound, exclusive in the upper bound -- so that the boxed region encloses
+    the area of array ar specified by ar[x0:xf,y0:yf].
+
     To overlay one rectangle, lims must be a single 4-tuple.  To overlay N rectangles,
     lims must be a list of N 4-tuples.  color, fill, and alpha may each be single values,
     which are then applied to all the rectangles, or a length N list.
@@ -133,7 +138,7 @@ def show_rect(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
     rects = []
     for i in range(N):
         l,c,f,a,lw = lims[i],color[i],fill[i],alpha[i],linewidth[i]
-        rect = Rectangle((l[2],l[0]),l[3]-l[2],l[1]-l[0],color=c,fill=f,
+        rect = Rectangle((l[2]-0.5,l[0]-0.5),l[3]-l[2],l[1]-l[0],color=c,fill=f,
                           alpha=a,linewidth=lw)
         ax.add_patch(rect)
 
