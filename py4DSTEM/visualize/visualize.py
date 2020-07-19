@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
-          bordercolor=None,borderwidth=5,returnfig=False,**kwargs):
+          bordercolor=None,borderwidth=5,returnfig=False,cmap='gray',**kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -58,7 +58,7 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
-    ax.matshow(_ar,vmin=vmin,vmax=vmax,**kwargs)
+    ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
             ax.spines[s].set_color(bordercolor)
