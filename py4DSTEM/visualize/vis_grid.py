@@ -92,6 +92,6 @@ def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
         plt.show()
         return
     else:
-        return fig,ax
+        return fig,axs
 
 
