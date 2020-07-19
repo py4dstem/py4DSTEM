@@ -72,7 +72,7 @@ def show_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,**kwargs):
     for i in range(H):
         for j in range(W):
             ax = axs[i,j]
-            N = i*H+j
+            N = i*W+j
             try:
                 ar = get_ar(N)
                 _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
