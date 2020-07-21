@@ -51,6 +51,7 @@ def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,
             if darkref is not None:
                 class_DP -= darkref*class_image[Rx,Ry]
     class_DP /= np.sum(class_image[class_image>=thresh])
+    class_DP = np.where(class_DP>0,class_DP,0)
     return class_DP
 
 def get_class_DP_without_Bragg_scattering(datacube, class_image, braggpeaks, radius, x0, y0, thresh=0.01, xshifts=None, yshifts=None, darkref=None, intshifts=True):

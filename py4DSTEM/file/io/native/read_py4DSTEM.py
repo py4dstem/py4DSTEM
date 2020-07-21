@@ -5,10 +5,10 @@ import numpy as np
 from os.path import splitext
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
 from .read_utils import version_is_geq, get_py4DSTEM_dataobject_info
-from .read_py4DSTEM_legacy import read_py4DSTEM_legacy
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ....process.utils import tqdmnd
+from .legacy import read_v060
 
 
 def read_py4DSTEM(fp, **kwargs):
@@ -55,7 +55,10 @@ def read_py4DSTEM(fp, **kwargs):
     assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
     version = get_py4DSTEM_version(fp)
     if not version_is_geq(version,(0,9,0)):
-        return read_py4DSTEM_legacy(fp, **kwargs)
+        if version == (0,6,0):
+            return read_v060(fp, **kwargs)
+        else:
+            raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
 
     # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
     tgs = get_py4DSTEM_topgroups(fp)
