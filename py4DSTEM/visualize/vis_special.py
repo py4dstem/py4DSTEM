@@ -19,7 +19,8 @@ def show_kernel(kernel,R,L,W,figsize=(12,6)):
     plt.show()
     return
 
-def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,**kwargs):
+def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,
+                                                returnfig=False,**kwargs):
     """
     words
     """
@@ -45,8 +46,11 @@ def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,**kwargs)
     ax.set_xlim([0,Ny])
     ax.set_ylim([0,Nx])
     plt.gca().invert_yaxis()
-    plt.show()
-    return
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
 
 def show_class_BPs(ar,x,y,s,s2,color='r',color2='y',**kwargs):
     """
@@ -61,7 +65,7 @@ def show_class_BPs(ar,x,y,s,s2,color='r',color2='y',**kwargs):
     plt.show()
     return
 
-def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',
+def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False,
                         axsize=(6,6),titlesize=0,get_bc=None,**kwargs):
     """
     words
@@ -75,7 +79,12 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',
             s = get_s(N)
             ax.scatter(y,x,s=s2,color=color2)
             ax.scatter(y,x,s=s,color=color)
-    plt.show()
+    plt.gca().invert_yaxis()
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
 
 
 
