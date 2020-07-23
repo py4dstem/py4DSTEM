@@ -79,12 +79,11 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False
             s = get_s(N)
             ax.scatter(y,x,s=s2,color=color2)
             ax.scatter(y,x,s=s,color=color)
-    plt.gca().invert_yaxis()
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,ax
+        return fig,axs
 
 
 
