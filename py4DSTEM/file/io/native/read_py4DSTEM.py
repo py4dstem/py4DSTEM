@@ -53,14 +53,9 @@ def read_py4DSTEM(fp, **kwargs):
                                     DataObject instances and the second a MetaData instance.
     """
     assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
-    version = get_py4DSTEM_version(fp)
-    if not version_is_geq(version,(0,9,0)):
-        if version == (0,6,0):
-            return read_v060(fp, **kwargs)
-        else:
-            raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
 
-    # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
+    # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
+    # disambiguate desired data
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
@@ -75,6 +70,16 @@ def read_py4DSTEM(fp, **kwargs):
             for tg in tgs:
                 print(tg)
             return None,None
+
+    # Get py4DSTEM version
+    version = get_py4DSTEM_version(fp, tg)
+    if not version_is_geq(version,(0,9,0)):
+        if version == (0,6,0):
+            return read_v060(fp, **kwargs)
+        else:
+            raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
+
+
 
     # Triage - determine what needs doing
     _data_id = 'data_id' in kwargs.keys()
