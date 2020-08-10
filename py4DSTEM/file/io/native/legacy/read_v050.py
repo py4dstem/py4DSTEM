@@ -301,17 +301,17 @@ def get_pointlist_from_grp(g):
     name = g.name.split('/')[-1]
     coordinates = []
     coord_names = list(g.keys())
-    length = len(g[coord_names[0]+'/data'])
+    length = len(g[coord_names[0]+'/pointlist'])
     if length==0:
         for coord in coord_names:
             coordinates.append((coord,None))
     else:
         for coord in coord_names:
-            dtype = type(g[coord+'/data'][0])
+            dtype = type(g[coord+'/pointlist'][0])
             coordinates.append((coord, dtype))
     data = np.zeros(length,dtype=coordinates)
     for coord in coord_names:
-        data[coord] = np.array(g[coord+'/data'])
+        data[coord] = np.array(g[coord+'/pointlist'])
     return PointList(data=data,coordinates=coordinates,name=name)
 
 def get_pointlistarray_from_grp(g):
@@ -324,16 +324,16 @@ def get_pointlistarray_from_grp(g):
     shape = (np.max(ar[:,0])+1,np.max(ar[:,1])+1)
     coord_names = list(g['0_0'])
     N = len(coord_names)
-    coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/data'])[0]) for i in range(N)]
+    coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/pointlistarray'])[0]) for i in range(N)]
     coordinates = [(coord_names[i],coord_types[i]) for i in range(N)]
     pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(range(shape[0]),range(shape[1]),desc="Reading PointListArray",unit="PointList"):
         g_pl = g[str(i)+'_'+str(j)]
-        L = len(np.array(g_pl[coordinates[0][0]+'/data']))
+        L = len(np.array(g_pl[coordinates[0][0]+'/pointlistarray']))
         data = np.zeros(L,dtype=coordinates)
         for i in range(N):
             coord = coordinates[i][0]
-            data[coord] = np.array(g_pl[coord+'/data'])
+            data[coord] = np.array(g_pl[coord+'/pointlistarray'])
         pla.get_pointlist(i,j).add_dataarray(data)
     return pla
 
