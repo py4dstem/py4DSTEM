@@ -9,6 +9,7 @@ from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSl
 from ...datastructure import PointList, PointListArray
 from ....process.utils import tqdmnd
 from .legacy import read_v060
+from .legacy import read_v050
 
 
 def read_py4DSTEM(fp, **kwargs):
@@ -59,7 +60,7 @@ def read_py4DSTEM(fp, **kwargs):
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
-        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
+        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
     else:
         if len(tgs)==1:
             tg = tgs[0]
@@ -73,13 +74,14 @@ def read_py4DSTEM(fp, **kwargs):
 
     # Get py4DSTEM version
     version = get_py4DSTEM_version(fp, tg)
+    print("py4DSTEM v{}.{}.{} file detected.".format(version[0],version[1],version[2]))
     if not version_is_geq(version,(0,9,0)):
         if version == (0,6,0):
             return read_v060(fp, **kwargs)
+        if version == (0,5,0):
+            return read_v050(fp, **kwargs)
         else:
             raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
-
-
 
     # Triage - determine what needs doing
     _data_id = 'data_id' in kwargs.keys()
