@@ -123,7 +123,6 @@ To merge back in to the main repository, submit a pull request to the dev branch
 * scipy
 * h5py
 * ncempy
-* pymatgen
 * numba
 * scikit-image
 * scikit-learn
