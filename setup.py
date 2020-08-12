@@ -30,6 +30,7 @@ setup(
         'ipywidgets',
         'jupyter',
         'tqdm',
+        'pywin32 ; platform_system=="windows"'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],
