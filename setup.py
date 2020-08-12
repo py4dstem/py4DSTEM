@@ -28,8 +28,7 @@ setup(
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
         'ipywidgets',
-        'tqdm',
-        'pywin32 ; platform_system=="windows"'
+        'tqdm'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],

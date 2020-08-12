@@ -51,12 +51,19 @@ conda install pip
 pip install py4dstem
 ```
 
+If you're running Windows, you should then also run
+
+```
+conda install pywin32
+```
+
 In order, these commands
 - ensure your installation of anaconda is up-to-date
 - make a virtual environment - see below!
 - enter the environment
 - make sure your new environment talks nicely to pip, a tool for installing Python packages
 - use pip to install py4DSTEM
+- on Windows: enable python to talk to the windows API
 
 Virtual environments are used to make sure packages that have different dependencies don't conflict with one another.
 Because the directions above install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM,
