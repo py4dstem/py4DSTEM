@@ -44,7 +44,7 @@ First, download and install Anaconda.  Instructions can be found at www.anaconda
 Then open a terminal and run
 
 ```
-conda updata conda
+conda update conda
 conda create -n py4dstem
 conda activate py4dstem
 conda install pip
