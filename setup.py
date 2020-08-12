@@ -28,7 +28,6 @@ setup(
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
         'ipywidgets',
-        'jupyter',
         'tqdm',
         'pywin32 ; platform_system=="windows"'
         ],
