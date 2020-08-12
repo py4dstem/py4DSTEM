@@ -28,6 +28,7 @@ setup(
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
         'ipywidgets',
+        'juptyer',
         'tqdm',
         ],
     extras_require={
