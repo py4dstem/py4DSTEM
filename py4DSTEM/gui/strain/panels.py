@@ -3,7 +3,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
-from ..utils import pg_point_roi
+from ..gui_utils import pg_point_roi
 from ...process.diskdetection import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
 from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
 from ...process.diskdetection import get_bragg_vector_map

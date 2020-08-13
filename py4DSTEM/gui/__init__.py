@@ -1,3 +1,3 @@
 from .dialogs import *
 from .viewer import *
-from .utils import *
+from .gui_utils import *
