@@ -65,7 +65,7 @@ or, if you're using the Anaconda Navigator, by clicking on the Environments tab 
 
 
 
-### Running the GUI
+## Running the GUI
 
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyes through the GUI eventually.
@@ -115,30 +115,9 @@ If this is unclear, again, check out `quickstart.ipynb`!
 
 
 
-### For contributors
+## For contributors
 
-To contribute to py4DSTEM, first fork the repository.
-
-Set up and activate a new environment, e.g. in anaconda use
-```
-conda create -n py4dstem_dev
-conda activate py4dstem_dev
-```
-Next, navigate to the directory where you want to put the project, and type
-```
-git clone your_fork_url.git
-```
-where `your_fork_url` is the url to the fork you created. 
-Navigate into the new py4DSTEM directory which contains the `setup.py` file, and run
-```
-conda install pip
-pip install -e .
-```
-where the -e option installs the package in 'editable' mode, so that changes within this project directory will be reflected in py4DSTEM imports from Python interpreters within this environment.
-
-Create a new branch, and make any edits.
-To merge back in to the main repository, submit a pull request to the dev branch of github.com/py4dstem/py4DSTEM.
-
+Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff4500535dba).
 
 
 
