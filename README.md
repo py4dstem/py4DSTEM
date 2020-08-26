@@ -57,11 +57,7 @@ In order, these commands
 
 Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
 Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
-You can do this in the command line with
-```
-conda activate py4dstem
-```
-or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
+You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
 
 
@@ -99,7 +95,7 @@ Some sample datasets are provided at [https://hello.i.am.a.link](https://look.at
 ### Sample code
 
 Sample code lives in this repository, in two top level directories, called `tutorials` and `sample_analysis_code`.
-To access these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
+To run these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
 Then navigate to the `tutorials` or `sample_analysis_code` directories on your local filesystem, and find a sample `.ipynb` or `.py` file, and try running it.
 A good place to start is `tutorials/quickstart.ipynb`.
 
