@@ -2,7 +2,6 @@
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
 py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
-It is open source software distributed under a GPLv3 license. It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
 
@@ -21,7 +20,9 @@ Redundant information in overlapping Bragg disks can be leveraged to calculate t
 Structure in the diffracted halos of amorphous systems can be used to describe the short and medium range order.
 
 
-For more information, see [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
+py4DSTEM supports many different modes of 4DSTEM analysis.
+The tutorials, sample code, module, and function documentation all provide more detailed discussion on some of the analytical methods possible with this code.
+More information can also be found at [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
 
 
 
@@ -155,6 +156,8 @@ v. 0.9.17
 
 GNU GPLv3
 
+py4DSTEM is open source software distributed under a GPLv3 license.
+It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
 ### Acknowledgements
