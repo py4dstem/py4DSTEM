@@ -26,19 +26,8 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 
 
-## Using py4DSTEM
 
-This sections describes:
-- Installation
-- Running the GUI
-- Running from a python interpretter
-- Sample jupter notebooks
-- Sample scripts
-- For developers
-
-
-
-### Installation
+## Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
 First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
@@ -66,32 +55,63 @@ In order, these commands
 - use pip to install py4DSTEM
 - on Windows: enable python to talk to the windows API
 
-Virtual environments are used to make sure packages that have different dependencies don't conflict with one another.
-Because the directions above install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM,
-you'll need to activate this environment.
-This is included in the directions below for running py4DSTEM, and assume you've named your virtual environment 'py4dstem'
+Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
+Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+You can do this in the command line with
+```
+conda activate py4dstem
+```
+or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
+
 
 
 ### Running the GUI
 
-From a terminal, run
+At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
+Our intention is to support many of these analyes through the GUI eventually.
+At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
+Stay tuned for further developments!
+
+To open the GUI from a terminal, run
 ```
 conda activate py4dstem
 py4dstem
 ```
 
-### Running from a python interpreter
 
-From any python interpreter inside the `py4dstem` conda environment, py4DSTEM can be imported in the usual way:
+
+## Running the code
+
+The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
+
+From any python interpreter inside the `py4dstem` conda environment, you can import py4DSTEM to access all its modules and functions using:
 
 ```
 import py4DSTEM
 ```
 
+At this point you'll need code, and data!
+Sample code is provided in this repository, discussed further in the next section.
+Some sample datasets are provided at [https://hello.i.am.a.link](https://look.at.me.being.a.link).
 
-### Sample code 
 
-**As the base code is currently under construction, the sample code (Jupyter notebooks and scripts) have been temporarily taken down.  They'll be back soon.  We apologize for any inconvenience, and appreciate your patience!**
+
+### Sample code
+
+Sample code lives in this repository, in two top level directories, called `tutorials` and `sample_analysis_code`.
+To access these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
+Then navigate to the `tutorials` or `sample_analysis_code` directories on your local filesystem, and find a sample `.ipynb` or `.py` file, and try running it.
+A good place to start is `tutorials/quickstart.ipynb`.
+
+
+The code in `tutorials` is aimed at giving an introduction to the code, including loading and saving data, summarizing what kinds of things py4DSTEM can do, orienting you regarding the structure of the code and where the functions you might need are likely to live, and pointing you to where you might go next depending on your data analysis needs.
+The code in `sample_analysis_code` is aimed at performing specific analyses, with the end goal of some scientifically meaningful plots as outputs.
+
+
+The sample codes all use one or more of the datasets linked above.
+This means that to run the code, you'll need to download the appropriate dataset, place it somewhere in your filesystem, and edit the filepath in the code to indicate where you've put that data.
+If this is unclear, again, check out `quickstart.ipynb`!
+
 
 
 
