@@ -88,13 +88,14 @@ import py4DSTEM
 
 At this point you'll need code, and data!
 Sample code is provided in this repository, discussed further in the next section.
-Some sample datasets are provided at [https://hello.i.am.a.link](https://look.at.me.being.a.link).
+Some sample datasets are provided [here](https://drive.google.com/drive/folders/1GmxF1ltY7hBU4d5ZK8INXjaRW5Etnw_4).
+Links to individual datasets are provided in the sample code files which make use of them.
 
 
 
 ### Sample code
 
-Sample code lives in this repository, in two top level directories, called `tutorials` and `sample_analysis_code`.
+Sample code lives in two top level directories, called `tutorials` and `sample_analysis_code`.
 To run these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
 Then navigate to the `tutorials` or `sample_analysis_code` directories on your local filesystem, and find a sample `.ipynb` or `.py` file, and try running it.
 A good place to start is `tutorials/quickstart.ipynb`.
