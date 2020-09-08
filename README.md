@@ -80,34 +80,18 @@ py4dstem
 
 The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
 
-From any python interpreter inside the `py4dstem` conda environment, you can import py4DSTEM to access all its modules and functions using:
+From any python interpreter inside the `py4dstem` conda environment, you can import py4DSTEM to access all its modules and functions using `import py4DSTEM`.
 
-```
-import py4DSTEM
-```
 
 At this point you'll need code, and data!
-Sample code is provided in this repository, discussed further in the next section.
-Some sample datasets are provided [here](https://drive.google.com/drive/folders/1GmxF1ltY7hBU4d5ZK8INXjaRW5Etnw_4).
-Links to individual datasets are provided in the sample code files which make use of them.
-
-
-
-### Sample code
-
-Sample code lives in two top level directories, called `tutorials` and `sample_analysis_code`.
+Sample code lives in the top level directory called `sample_code`.
 To run these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
-Then navigate to the `tutorials` or `sample_analysis_code` directories on your local filesystem, and find a sample `.ipynb` or `.py` file, and try running it.
-A good place to start is `tutorials/quickstart.ipynb`.
+Then navigate to the `sample_code` directory on your local filesystem, choose a sample `.ipynb` or `.py` file, and try running it.
 
 
-The code in `tutorials` is aimed at giving an introduction to the code, including loading and saving data, summarizing what kinds of things py4DSTEM can do, orienting you regarding the structure of the code and where the functions you might need are likely to live, and pointing you to where you might go next depending on your data analysis needs.
-The code in `sample_analysis_code` is aimed at performing specific analyses, with the end goal of some scientifically meaningful plots as outputs.
-
-
-The sample codes all use one or more of the datasets linked above.
-This means that to run the code, you'll need to download the appropriate dataset, place it somewhere in your filesystem, and edit the filepath in the code to indicate where you've put that data.
-If this is unclear, again, check out `quickstart.ipynb`!
+Sample datasets are provided [here](https://drive.google.com/drive/folders/1GmxF1ltY7hBU4d5ZK8INXjaRW5Etnw_4).
+Links to individual datasets are provided in the sample code files which make use of them.
+Once you've selected a file of sample code to run, find the link in that file to the dataset it uses, download and place it somewhere in your filesystem, then edit the filepath in the code to indicate where you've put that data.
 
 
 
