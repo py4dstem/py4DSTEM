@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from .visualize import show
+from .visualize import show,show_points
 
 def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
     """
@@ -65,7 +65,8 @@ def show_grid_overlay(ar,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         return fig,ax
 
 def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
-                                      get_bc=None,**kwargs):
+                    get_bc=None,get_x=None,get_y=None,get_pointcolors=None,
+                    get_s=None,**kwargs):
     """
     Displays a set of images in a grid.
 
@@ -78,6 +79,11 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
 
         >>> show_image_grid(lambda i:ar[:,:,i], H=2, W=2)
 
+    Its also possible to add colored borders, or overlaid points,
+    using similar functions to get_ar, i.e. functions which return
+    the color or set of points of interest as a function of index
+    i, which must be defined in the range [0,HW-1].
+
     Accepts:
         get_ar      a function which returns a 2D array when passed
                     the integers 0 through HW-1
@@ -89,16 +95,27 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     the same i as get_ar, and which returns a
                     valid matplotlib color for each i. Adds
                     a colored bounding box about each image. E.g.
+                    if `colors` is an array of colors:
 
-        >>> show_image_grid(lambda i:ar[:,:,i], H=2, W=2,
-                            get_bc=TKTKTKT)
+        >>> show_image_grid(lambda i:ar[:,:,i],H=2,W=2,
+                            get_bc=lambda i:colors[i])
 
+        get_x,get_y     functions which returns sets of x/y positions
+                        as a function of index i
+        get_s           function which returns a set of point sizes
+                        as a function of index i
+        get_pointcolors a function which returns a color or list of colors
+                        as a function of index i
 
     Returns:
         if returnfig==false (default), the figure is plotted and nothing is returned.
         if returnfig==false, the figure and its one axis are returned, and can be
         further edited.
     """
+    _get_bc = get_bc is not None
+    _get_points = (get_x is not None) and (get_y is not None)
+    _get_colors = get_pointcolors is not None
+    _get_s = get_s is not None
     fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
     if H==1:
         axs = axs[np.newaxis,:]
@@ -110,10 +127,34 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
             N = i*W+j
             try:
                 ar = get_ar(N)
-                if get_bc is not None:
+                if _get_bc and _get_points:
+                    bc = get_bc(N)
+                    x,y = get_x(N),get_y(N)
+                    if _get_colors:
+                        pointcolors = get_pointcolors(N)
+                    else:
+                        pointcolors='r'
+                    if _get_s:
+                        s = get_s(N)
+                        _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
+                                          bordercolor=bc,x=x,y=y,s=s,
+                                          point_color=pointcolors,**kwargs)
+                    else:
+                        _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
+                                          bordercolor=bc,x=x,y=y,
+                                          point_color=pointcolors,**kwargs)
+                elif _get_bc:
                     bc = get_bc(N)
                     _,_ = show(ar,ax=(fig,ax),returnfig=True,
                                bordercolor=bc,**kwargs)
+                elif _get_points:
+                    x,y = get_x(N),get_y(N)
+                    if _get_colors:
+                        pointcolors = get_pointcolors(N)
+                    else:
+                        pointcolors='r'
+                    _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
+                                      point_color=pointcolors,**kwargs)
                 else:
                     _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
                 if titlesize>0:
