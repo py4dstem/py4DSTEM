@@ -85,11 +85,11 @@ Last updated for py4DSTEM v0.6.
         |         |-...
         |
         |--grp: metadata
-                  |--grp: original
-                  |--grp: microscope
+                  |--grp: original           # all metadata in a file, untouched 
+                  |--grp: microscope         # metadata from the scope/raw file
                   |--grp: sample
                   |--grp: user
-                  |--grp: calibration
+                  |--grp: calibration        # py4DSTEM generated metadata
                   |--grp: comments
 
 
