@@ -250,7 +250,6 @@ def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
         If returnfig==False, the figure and its one axis are returned, and can be
         further edited.
     """
-    assert(len(x)==len(y))
     fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
     ax.scatter(y,x,s=s*scale/np.max(s),color=point_color)
 
