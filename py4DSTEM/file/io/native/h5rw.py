@@ -30,7 +30,7 @@ def sdebug(f):
 
 
 def _h5write(filename, mode, *args, **kwargs):
-    """\
+    """
     _h5write(filename, mode, {'var1'=..., 'var2'=..., ...})
     _h5write(filename, mode, var1=..., var2=..., ...)
     _h5write(filename, mode, dict, var1=..., var2=...)
