@@ -4,7 +4,7 @@ from scipy.spatial import Voronoi
 from . import show,show_circ,show_image_grid
 from ..process.utils import get_voronoi_vertices
 
-def show_kernel(kernel,R,L,W,figsize=(12,6)):
+def show_kernel(kernel,R,L,W,figsize=(12,6),returnfig=False,**kwargs):
     """
     Plots, side by side, the probe kernel and its line profile.
     R is the kernel plot's window size.
@@ -13,11 +13,14 @@ def show_kernel(kernel,R,L,W,figsize=(12,6)):
     lineprofile = np.concatenate([np.sum(kernel[-L:,:W],axis=(1)),
                                   np.sum(kernel[:L,:W],axis=(1))])
 
-    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    ax1.matshow(kernel[:int(R),:int(R)],cmap='gray')
-    ax2.plot(np.arange(len(lineprofile)),lineprofile)
-    plt.show()
-    return
+    fig,axs = plt.subplots(1,2,figsize=figsize)
+    axs[0].matshow(kernel[:int(R),:int(R)],cmap='gray')
+    axs[1].plot(np.arange(len(lineprofile)),lineprofile)
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,axs
 
 def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,
                                                 returnfig=False,**kwargs):
