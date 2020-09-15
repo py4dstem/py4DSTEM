@@ -338,17 +338,5 @@ def get_pointlistarray_from_grp(g):
     return pla
 
 
-########### Metadata and log ############
-
-def get_metadata(fp,tg):
-    """ Accepts a fp to a valid py4DSTEM file, and return a dictionary with its metadata.
-    """
-    return #TODO
-
-def write_log(fp,tg):
-    """ Accepts a fp to a valid py4DSTEM file, then prints its processing log to splitext(fp)[0]+'.log'.
-    """
-    return #TODO
-
 
 

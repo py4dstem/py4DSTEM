@@ -10,7 +10,7 @@ from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group, save_counted_datacube_group
 from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray, CountedDataCube
-from ...datastructure import DataObject, Metadata
+from ...datastructure import DataObject
 
 def append_from_dataobject_list(fp, dataobject_list, topgroup='4DSTEM_experiment'):
     """
@@ -107,8 +107,6 @@ def append_from_dataobject_list(fp, dataobject_list, topgroup='4DSTEM_experiment
                     name = name+"_"+str(N)
                     group_new_pointlistarray = grp_plas.create_group(name)
                 save_pointlistarray_group(group_new_pointlistarray, dataobject)
-            elif isinstance(dataobject, Metadata):
-                pass
             else:
                 print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
