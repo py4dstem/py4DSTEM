@@ -14,7 +14,7 @@ from .write import save
 from .append import append
 from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
-from ...datastructure import DataObject, Metadata
+from ...datastructure import DataObject
 
 def copy(fp_orig, fp_new, topgroup='4DSTEM_experiment', **kwargs):
     """
