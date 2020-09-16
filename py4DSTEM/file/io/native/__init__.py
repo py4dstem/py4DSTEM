@@ -3,5 +3,5 @@ from .append import *
 from .copy import *
 from .remove import *
 from .write import *
-from .h5rw import *
+from .metadata import Metadata
 
