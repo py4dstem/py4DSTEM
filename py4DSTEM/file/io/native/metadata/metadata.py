@@ -2,6 +2,7 @@ import h5py
 from os.path import exists
 from .h5rw import h5write,h5read,h5append,h5info
 from ..read_utils import is_py4DSTEM_file,get_py4DSTEM_topgroups
+from ..write import save
 
 class Metadata(object):
     """
@@ -46,40 +47,38 @@ class Metadata(object):
         """
         if exists(fp):
             assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
-            tgs = get_py4DSTEM_topgroups(fp)
-            if topgroup is not None:
-                assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
-            elif len(tgs)==1:
-                tg = tgs[0]
-            else:
-                print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
-                print("")
-                print("Topgroups found:")
-                for tg in tgs:
-                    print(tg)
-
-            with h5py.File(fp,'r+') as f:
-                if 'metadata' not in f[tg]: f[tg].create_group('metadata')
-                mgp = f[tg + '/metadata']
-                if 'microscope' not in mgp: mgp.create_group('microscope')
-                if 'sample' not in mgp: mgp.create_group('sample')
-                if 'user' not in mgp: mgp.create_group('user')
-                if 'calibration' not in mgp: mgp.create_group('calibration')
-                if 'comments' not in mgp: mgp.create_group('comments')
-
-            dicts = [self.microscope,self.sample,self.user,
-                     self.calibration,self.comments]
-            grps = [tg+'/metadata/microscope',
-                    tg+'/metadata/sample',
-                    tg+'/metadata/user',
-                    tg+'/metadata/calibration',
-                    tg+'/metadata/comments']
-            #for d,g in zip(dicts,grps):
-            #    h5write(fp,g,d)
-
         else:
-            pass
-            # Write an .h5 file
+            save(fp,[])
+        tgs = get_py4DSTEM_topgroups(fp)
+        if topgroup is not None:
+            assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
+        elif len(tgs)==1:
+            tg = tgs[0]
+        else:
+            print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
+            print("")
+            print("Topgroups found:")
+            for tg in tgs:
+                print(tg)
+
+        with h5py.File(fp,'r+') as f:
+            if 'metadata' not in f[tg]: f[tg].create_group('metadata')
+            mgp = f[tg + '/metadata']
+            if 'microscope' not in mgp: mgp.create_group('microscope')
+            if 'sample' not in mgp: mgp.create_group('sample')
+            if 'user' not in mgp: mgp.create_group('user')
+            if 'calibration' not in mgp: mgp.create_group('calibration')
+            if 'comments' not in mgp: mgp.create_group('comments')
+
+        dicts = [self.microscope,self.sample,self.user,
+                 self.calibration,self.comments]
+        grps = [tg+'/metadata/microscope',
+                tg+'/metadata/sample',
+                tg+'/metadata/user',
+                tg+'/metadata/calibration',
+                tg+'/metadata/comments']
+        for d,g in zip(dicts,grps):
+            h5append(fp,g,d)
 
         return
 
@@ -88,6 +87,16 @@ class Metadata(object):
         Reads the metadata in a py4DSTEM formatted .h5 file and stores
         it in the Metadata instance.
         """
+        dicts = [self.microscope,self.sample,self.user,
+                 self.calibration,self.comments]
+        grps = [tg+'/metadata/microscope',
+                tg+'/metadata/sample',
+                tg+'/metadata/user',
+                tg+'/metadata/calibration',
+                tg+'/metadata/comments']
+        for d,g in zip(dicts,grps):
+            h5append(fp,g,d)
+
         return
 
     def from_nonnative(fp):
