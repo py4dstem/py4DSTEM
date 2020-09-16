@@ -94,7 +94,7 @@ def _h5write(filename, mode, grouppath, *args, **kwargs):
 
     # @sdebug
     def _store_string(group, s, name):
-        dset = group.create_dataset(name, data=np.asarray(s), dtype=dt)
+        dset = group.create_dataset(name, data=np.string_(s), dtype=dt)
         dset.attrs['type'] = 'string'
         return dset
 
@@ -177,6 +177,8 @@ def _h5write(filename, mode, grouppath, *args, **kwargs):
 
     # @sdebug
     def _store(group, a, name):
+        if name in group.keys():
+            del group[name]
         if type(a) is str:
             dset = _store_string(group, a, name)
         # elif type(a) is unicode:
@@ -276,7 +278,7 @@ def h5append(filename, grouppath, *args, **kwargs):
     It defaults to overwriting an existing file.
     """
 
-    _h5write(filename, grouppath, 'a', *args, **kwargs)
+    _h5write(filename, 'a', grouppath, *args, **kwargs)
     return
 
 
