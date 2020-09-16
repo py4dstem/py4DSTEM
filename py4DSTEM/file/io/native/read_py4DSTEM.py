@@ -11,46 +11,46 @@ from ....process.utils import tqdmnd
 from .legacy import read_v060
 
 
-def read_py4DSTEM(fp, **kwargs):
+def read_py4DSTEM(fp, metadata=False, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.9.0+.  Precise behavior is detemined by which
-    arguments are passed -- see below.
+    File reader for files written by py4DSTEM v0.9.0+.  Precise behavior is
+    detemined by which arguments are passed -- see below.
 
     Accepts:
-        filepath    str or Path     When passed a filepath only, this function checks if the path
-                                    points to a valid py4DSTEM file, then prints its contents to screen.
-        data_id     int/str/list    Specifies which data to load. Use integers to specify the
-                                    data index, or strings to specify data names. A list or
-                                    tuple returns a list of DataObjects. Returns the specified data.
-        topgroup     str            Stricty, a py4DSTEM file is considered to be
-                                    everything inside a toplevel subdirectory within the
-                                    HDF5 file, so that if desired one can place many py4DSTEM
-                                    files inside a single H5.  In this case, when loading
-                                    data, the topgroup argument is passed to indicate which
-                                    py4DSTEM file to load. If an H5 containing multiple
-                                    py4DSTEM files is passed without a topgroup specified,
-                                    the topgroup names are printed to screen.
-        metadata    bool            If True, returns a dictionary with the file metadata.
-        log         bool            If True, writes the processing log to a plaintext file
-                                    called splitext(fp)[0]+'.log'.
-        mem         str             Only used if a single DataCube is loaded. In this case, mem
-                                    specifies how the data should be stored; must be "RAM"
-                                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
-                                    is "RAM".
-        binfactor   int             Only used if a single DataCube is loaded. In this case,
-                                    a binfactor of > 1 causes the data to be binned by this amount
-                                    as it's loaded.
-        dtype       dtype           Used when binning data, ignored otherwise. Defaults to whatever
-                                    the type of the raw data is, to avoid enlarging data size. May be
-                                    useful to avoid 'wraparound' errors.
+        filepath    (str or Path) When passed a filepath only, this function
+                    checks if the path points to a valid py4DSTEM file, then
+                    prints its contents to screen.
+        data_id     (int/str/list) Specifies which data to load. Use integers to
+                    specify the data index, or strings to specify data names. A
+                    list or tuple returns a list of DataObjects. Returns the
+                    specified data.
+        topgroup    (str) Stricty, a py4DSTEM file is considered to be everything
+                    inside a toplevel subdirectory within the HDF5 file, so that
+                    if desired one can place many py4DSTEM files inside a single
+                    H5.  In this case, when loading data, the topgroup argument
+                    is passed to indicate which py4DSTEM file to load. If an H5
+                    containing multiple py4DSTEM files is passed without a
+                    topgroup specified, the topgroup names are printed to screen.
+        metadata    (bool) If True, returns a dictionary with the file metadata.
+        mem         (str) Only used if a single DataCube is loaded. In this case,
+                    mem specifies how the data should be stored; must be "RAM" or
+                    "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is
+                    "RAM".
+        binfactor   (int) Only used if a single DataCube is loaded. In this case,
+                    a binfactor of > 1 causes the data to be binned by this amount
+                    as it's loaded.
+        dtype       (dtype) Used when binning data, ignored otherwise. Defaults
+                    to whatever the type of the raw data is, to avoid enlarging
+                    data size. May be useful to avoid 'wraparound' errors.
 
     Returns:
-        data,md                     The function always returns a length 2 tuple corresponding
-                                    to data and md.  If no input arguments with return values (i.e.
-                                    data, metadata), these will return None.  Otherwise, their return
-                                    values are as described above. E.f. passing data=[0,1,2],metadata=True
-                                    will return a length two tuple, the first element being a list of 3
-                                    DataObject instances and the second a MetaData instance.
+        data        Variable outpute.
+                    If no input arguments with return values (i.e. data_id or
+                    metadata) are passed, nothing is returned.
+                    If metadata==True, returns a Metadata instance with the file
+                    metadata.
+                    Otherwise, a single DataObject or list of DataObjects are
+                    returned, based on the value of the argument data_id.
     """
     assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
 
@@ -79,63 +79,40 @@ def read_py4DSTEM(fp, **kwargs):
         else:
             raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
 
+    # If metadata is requested
+    if metadata:
+        return Metadata().from_h5(fp)
 
-
-    # Triage - determine what needs doing
-    _data_id = 'data_id' in kwargs.keys()
-    _metadata = 'metadata' in kwargs.keys()
-    _log = 'log' in kwargs.keys()
-
-    # Validate inputs
-    if _data_id:
+    # If data is requested
+    elif 'data_id' in kwargs.keys():
         data_id = kwargs['data_id']
         assert(isinstance(data_id,(int,np.int_,str,list,tuple))), "Error: data must be specified with strings or integers only."
         if not isinstance(data_id,(int,np.int_,str)):
             assert(all([isinstance(d,(int,np.int_,str)) for d in data_id])), "Error: data must be specified with strings or integers only."
-    if _metadata:
-        assert(isinstance(kwargs.keys['metdata'],bool))
-        _metadata = kwargs.keys['metadata']
-    if _metadata:
-        assert(isinstance(kwargs.keys['metdata'],bool))
-        _log = kwargs.keys['log']
 
-    # Parse optional arguments
-    if 'mem' in kwargs.keys():
-        mem = kwargs['mem']
-        assert(mem in ('RAM','MEMMAP'))
-    else:
-        mem='RAM'
-    if 'binfactor' in kwargs.keys():
-        binfactor = kwargs['binfactor']
-        assert(isinstance(binfactor,(int,np.int_)))
-    else:
-        binfactor=1
-    if 'dtype' in kwargs.keys():
-        bindtype = kwargs['dtype']
-        assert(isinstance(bindtype,type))
-    else:
-        bindtype = None
+        # Parse optional arguments
+        if 'mem' in kwargs.keys():
+            mem = kwargs['mem']
+            assert(mem in ('RAM','MEMMAP'))
+        else:
+            mem='RAM'
+        if 'binfactor' in kwargs.keys():
+            binfactor = kwargs['binfactor']
+            assert(isinstance(binfactor,(int,np.int_)))
+        else:
+            binfactor=1
+        if 'dtype' in kwargs.keys():
+            bindtype = kwargs['dtype']
+            assert(isinstance(bindtype,type))
+        else:
+            bindtype = None
 
-    # Perform requested operations
-    if not (_data_id or _metadata or _log):
+        return get_data(fp,tg,data_id,mem,binfactor,bindtype)
+
+    # If no data is requested
+    else:
         print_py4DSTEM_file(fp,tg)
-        return None,None
-    if _data_id:
-        loaded_data = get_data(fp,tg,data_id,mem,binfactor,bindtype)
-    if _metadata:
-        md = get_metadata(fp,tg)
-    if _log:
-        write_log(fp,tg)
-
-    # Return
-    if (_data_id and _metadata):
-        return loaded_data,md
-    elif _data_id:
-        return loaded_data,None
-    elif _metadata:
-        return None,md
-    else:
-        return None,None
+        return
 
 
 ############ Helper functions ############
@@ -336,18 +313,6 @@ def get_pointlistarray_from_grp(g):
         pla.get_pointlist(i,j).add_dataarray(dset[i,j])
     return pla
 
-
-########### Metadata and log ############
-
-def get_metadata(fp,tg):
-    """ Accepts a fp to a valid py4DSTEM file, and return a dictionary with its metadata.
-    """
-    return #TODO
-
-def write_log(fp,tg):
-    """ Accepts a fp to a valid py4DSTEM file, then prints its processing log to splitext(fp)[0]+'.log'.
-    """
-    return #TODO
 
 
 
