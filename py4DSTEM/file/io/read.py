@@ -5,7 +5,7 @@ from os.path import splitext
 from .native import read_py4DSTEM, is_py4DSTEM_file
 from .nonnative import *
 
-def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
+def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     """
     General read function for 4D-STEM datasets. Takes a filename as input, parses
     the filetype, and calls the appropriate
@@ -60,8 +60,8 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
                     which py4DSTEM file to load. If an H5 containing multiple
                     py4DSTEM files is passed without a topgroup specified, the
                     topgroup names are printed to screen.
-        metadata    (bool) For py4DTEM files only.  If True, the file metadata
-                    as a Metadata instance.
+        metadata    (bool) If True, returns the file metadata as a Metadata
+                    instance.
         log         (bool) For py4DSTEM files only.  If True, writes the
                     processing log to a plaintext file called
                     splitext(fp)[0]+'.log'.
@@ -90,21 +90,21 @@ def read(fp, mem="RAM", binfactor=1, ft=None, **kwargs):
         ft = parse_filetype(fp)
 
     if ft == "py4DSTEM":
-        data,md = read_py4DSTEM(fp, mem=mem, binfactor=binfactor, **kwargs)
+        data = read_py4DSTEM(fp, mem=mem, binfactor=binfactor, metadata=metadata, **kwargs)
     elif ft == "dm":
-        data,md = read_dm(fp, mem, binfactor, **kwargs)
+        data = read_dm(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "empad":
-        data,md = read_empad(fp, mem, binfactor, **kwargs)
+        data = read_empad(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == 'mrc_relativity':
-        data,md = read_mrc_relativity(fp, mem, binfactor, **kwargs)
+        data = read_mrc_relativity(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "gatan_K2_bin":
-        data,md = read_gatan_K2_bin(fp, mem, binfactor, **kwargs)
+        data = read_gatan_K2_bin(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "kitware_counted":
-        data,md = read_kitware_counted(fp, mem, binfactor, **kwargs)
+        data = read_kitware_counted(fp, mem, binfactor, metadata=metadata, **kwargs)
     else:
         raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
 
-    return data, md
+    return data
 
 
 def parse_filetype(fp):
