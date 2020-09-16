@@ -7,7 +7,7 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists
 from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
-from ...datastructure import Metadata, DataObject, PointList
+from ...datastructure import DataObject, PointList
 from ...datastructure import PointListArray
 from ....process.utils import tqdmnd
 from ....version import __version__
@@ -119,8 +119,6 @@ def save_from_dataobject_list(fp, dataobject_list, topgroup="4DSTEM_experiment",
                     name = name+"_"+str(N)
                     group_new_pointlistarray = grp_pla.create_group(name)
                 save_pointlistarray_group(group_new_pointlistarray, dataobject)
-            elif isinstance(dataobject, Metadata):
-                pass
             else:
                 print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
 
