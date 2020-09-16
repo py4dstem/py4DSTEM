@@ -70,41 +70,47 @@ class Metadata(object):
             if 'calibration' not in mgp: mgp.create_group('calibration')
             if 'comments' not in mgp: mgp.create_group('comments')
 
-        dicts = [self.microscope,self.sample,self.user,
-                 self.calibration,self.comments]
-        grps = [tg+'/metadata/microscope',
-                tg+'/metadata/sample',
-                tg+'/metadata/user',
-                tg+'/metadata/calibration',
-                tg+'/metadata/comments']
-        for d,g in zip(dicts,grps):
-            h5append(fp,g,d)
+        h5append(fp,tg+'/metadata/microscope',self.microscope)
+        h5append(fp,tg+'/metadata/calibration',self.calibration)
+        h5append(fp,tg+'/metadata/sample',self.sample)
+        h5append(fp,tg+'/metadata/user',self.user)
+        h5append(fp,tg+'/metadata/comments',self.comments)
 
         return
 
-    def from_h5(fp):
+    def from_h5(self, fp, topgroup=None):
         """
-        Reads the metadata in a py4DSTEM formatted .h5 file and stores
-        it in the Metadata instance.
+        Reads the metadata in a py4DSTEM formatted .h5 file and stores it in the
+        Metadata instance.
         """
-        dicts = [self.microscope,self.sample,self.user,
-                 self.calibration,self.comments]
-        grps = [tg+'/metadata/microscope',
-                tg+'/metadata/sample',
-                tg+'/metadata/user',
-                tg+'/metadata/calibration',
-                tg+'/metadata/comments']
-        for d,g in zip(dicts,grps):
-            h5append(fp,g,d)
+        assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
+        tgs = get_py4DSTEM_topgroups(fp)
+        if topgroup is not None:
+            assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
+        elif len(tgs)==1:
+            tg = tgs[0]
+        else:
+            print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
+            print("")
+            print("Topgroups found:")
+            for tg in tgs:
+                print(tg)
 
-        return
+        self.microscope = h5read(fp,tg+'/metadata/microscope')
+        self.calibration = h5read(fp,tg+'/metadata/calibration')
+        self.sample = h5read(fp,tg+'/metadata/sample')
+        self.user = h5read(fp,tg+'/metadata/user')
+        self.comments = h5read(fp,tg+'/metadata/comments')
 
-    def from_nonnative(fp):
+        return self
+
+    def from_nonnative(self, fp):
         """
         Reads the metadata in a non-native file format and stores
         it in the Metadata instance.
         """
         return
+
 
     ### Begin get/set methods ###
 
