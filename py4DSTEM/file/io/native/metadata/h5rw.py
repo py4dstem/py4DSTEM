@@ -282,11 +282,11 @@ def h5append(filename, grouppath, *args, **kwargs):
     return
 
 
-def h5read(filename, *args, **kwargs):
+def h5read(filename, grouppath, *args, **kwargs):
     """\
-    h5read(filename)
-    h5read(filename, s1, s2, ...)
-    h5read(filename, (s1,s2, ...))
+    h5read(filename, grouppath)
+    h5read(filename, grouppath, s1, s2, ...)
+    h5read(filename, grouppath, (s1,s2, ...))
 
     Read variables from a hdf5 file created with h5write and returns them as
     a dictionary.
@@ -326,7 +326,7 @@ def h5read(filename, *args, **kwargs):
         # Loop over file names
         for f in fnames:
             # Call again, but this time without globbing.
-            d = h5read(f, *args, doglob=False, **kwargs)
+            d = h5read(f, grouppath, *args, doglob=False, **kwargs)
             dl.append(d)
         return dl
 
@@ -371,10 +371,10 @@ def h5read(filename, *args, **kwargs):
             return dset[...]
 
     def _load_str(dset):
-        return dset.value
+        return dset[()]
 
     def _load_unicode(dset):
-        return dset.value.decode('utf8')
+        return dset[()].decode('utf8')
 
     # def _load_pickle(dset):
     #     return cPickle.loads(dset[...])
@@ -435,15 +435,11 @@ def h5read(filename, *args, **kwargs):
 
     outdict = {}
     with h5py.File(filename, 'r') as f:
-        h5rw_version = f.attrs.get('h5rw_version', None)
-        #        if h5rw_version is None:
-        #            print('Warning: this file does not seem to follow h5read format.')
-        ctime = f.attrs.get('ctime', None)
-        if ctime is not None:
-            print('File created : ' + ctime)
+        assert grouppath in f.keys(), "Specified group, {}, not found in this .h5 file.".format(grouppath)
+        group = f[grouppath]
         if len(args) == 0:
             # no input arguments - load everything
-            key_list = f.keys()
+            key_list = group.keys()
         else:
             if (len(args) == 1) and (type(args[0]) is list):
                 # input argument is a list of object names
@@ -467,12 +463,12 @@ def h5read(filename, *args, **kwargs):
             if '.' in k:
                 glist = k.split('.')
                 k = glist[-1]
-                gr = f[glist[0]]
+                gr = group[glist[0]]
                 for gname in glist[1:-1]:
                     gr = gr[gname]
                 outdict[k] = _load(gr[k], sl)
             else:
-                outdict[k] = _load(f[k], sl)
+                outdict[k] = _load(group[k], sl)
 
     return outdict
 
