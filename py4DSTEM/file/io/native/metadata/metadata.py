@@ -104,13 +104,6 @@ class Metadata(object):
 
         return self
 
-    def from_nonnative(self, fp):
-        """
-        Reads the metadata in a non-native file format and stores
-        it in the Metadata instance.
-        """
-        return
-
 
     ### Begin get/set methods ###
 

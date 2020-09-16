@@ -3,6 +3,7 @@
 import h5py
 import numpy as np
 from os.path import splitext
+from .metadata import Metadata
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
 from .read_utils import version_is_geq, get_py4DSTEM_dataobject_info
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
