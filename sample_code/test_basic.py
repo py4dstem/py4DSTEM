@@ -79,8 +79,8 @@ subpixel='multicorr'
 upsample_factor=16
 
 # Generate and show/save plots of analysis?
-show_vis = True
-save_vis = True
+show_vis = False
+save_vis = False
 test_io = True
 
 ### END PARAMETERS ###
