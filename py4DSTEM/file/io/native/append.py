@@ -42,7 +42,7 @@ def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
         grp_ds = f[topgroup]['data/diffractionslices']
         grp_rs = f[topgroup]['data/realslices']
         grp_pl = f[topgroup]['data/pointlists']
-        grp_plas = f[topgroup]['data/pointlistarrays']
+        grp_pla = f[topgroup]['data/pointlistarrays']
 
         # Loop through and save all objects in the dataobjectlist
         names,grps,save_fns = [],[],[]
@@ -82,7 +82,7 @@ def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
                 if name == '':
                     name = 'pointlistarray_'+str(N_pla)
                     N_pla += 1
-                grp_curr = grp_plas
+                grp_curr = grp_pla
                 save_func_curr = save_pointlistarray_group
             else:
                 raise Exception('Unrecognized dataobject type {}'.format(type(dataobject)))
@@ -117,77 +117,7 @@ def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
                 print("Saving {} '{}'...".format(type(do).__name__,name))
                 save_fn(new_grp,do)
 
-
-#            if isinstance(dataobject, DataCube):
-#                if name == '':
-#                    name = 'datacube_'+str(N_dc)
-#                    N_dc += 1
-#                try:
-#                    group_new_datacube = grp_dc.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_dc.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_datacube = grp_dc.create_group(name)
-#                save_datacube_group(group_new_datacube, dataobject)
-#            elif isinstance(dataobject,CountedDataCube):
-#                if name == '':
-#                    name = 'counted_datacube_'+str(N_cdc)
-#                    ind_cdcs += 1
-#                try:
-#                    group_new_counted = grp_cdc.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_cdc.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_counted = grp_cdc.create_group(name)
-#                save_counted_datacube_group(group_new_counted, dataobject)
-#            elif isinstance(dataobject, DiffractionSlice):
-#                if name == '':
-#                    name = 'diffractionslice_'+str(N_ds)
-#                    N_ds += 1
-#                try:
-#                    group_new_diffractionslice = grp_ds.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_ds.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_diffractionslice = grp_ds.create_group(name)
-#                save_diffraction_group(group_new_diffractionslice, dataobject)
-#            elif isinstance(dataobject, RealSlice):
-#                if name == '':
-#                    name = 'realslice_'+str(N_rs)
-#                    N_rs += 1
-#                try:
-#                    group_new_realslice = grp_rs.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_rs.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_realslice = grp_rs.create_group(name)
-#                save_real_group(group_new_realslice, dataobject)
-#            elif isinstance(dataobject, PointList):
-#                if name == '':
-#                    name = 'pointlist_'+str(N_pl)
-#                    N_pl += 1
-#                try:
-#                    group_new_pointlist = grp_pl.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_pl.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_pointlist = grp_pl.create_group(name)
-#                save_pointlist_group(group_new_pointlist, dataobject)
-#            elif isinstance(dataobject, PointListArray):
-#                if name == '':
-#                    name = 'pointlistarray_'+str(N_pla)
-#                    N_pla += 1
-#                try:
-#                    group_new_pointlistarray = grp_plas.create_group(name)
-#                except ValueError:
-#                    N = sum([name in string for string in list(grp_plas.keys())])
-#                    name = name+"_"+str(N)
-#                    group_new_pointlistarray = grp_plas.create_group(name)
-#                save_pointlistarray_group(group_new_pointlistarray, dataobject)
-#            else:
-#                print("Error: object {} has type {}, and is not a DataCube, DiffractionSlice, RealSlice, PointList, or PointListArray instance.".format(dataobject,type(dataobject)))
-
-        ##### Finish and close #####
+        # Finish and close
         print("Done.")
         f.close()
 
