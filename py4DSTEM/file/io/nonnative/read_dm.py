@@ -24,14 +24,18 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
     Returns:
         data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
                     iff metadata==True, returns the metadata as a Metadata instance
+                    Note that metadata is read either way - in the latter case ONLY
+                    metadata is read and returned, in the former case a DataCube
+                    is returned with the metadata attached at datacube.metadata
     """
     assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"
 
+    md = get_metadata_from_dmFile(fp)
     if metadata:
-        return get_metadata_from_dmFile(fp)
+        return md
 
     if (mem,binfactor)==("RAM",1):
         with dm.fileDM(fp) as dmFile:
@@ -59,6 +63,7 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
         raise Exception("Memory mapping and on-load binning together is not supported.  Either set binfactor=1 or mem='RAM'.")
         return
 
+    dc.metadata = md
     return dc
 
 
@@ -66,8 +71,8 @@ def get_metadata_from_dmFile(fp):
     """ Accepts a filepath to a dm file and returns a Metadata instance
     """
     metadata = Metadata()
-    # TODO
-    return
+    # TODO TKTKTK
+    return metadata
 
 
 
