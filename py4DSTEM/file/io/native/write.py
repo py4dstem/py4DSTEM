@@ -54,49 +54,30 @@ def save_from_dataobject_list(fp, dataobject_list, topgroup="4DSTEM_experiment",
 
         # Loop through and save all objects in the dataobjectlist
         names,grps,save_fns = [],[],[]
+        lookupTable = {
+                'DataCube':['datacube_',ind_dcs,grp_dc,
+                                   save_datacube_group],
+                'CountedDataCube':['counted_data_cube_',ind_cdcs,grp_cdc,
+                                             save_counted_datacube_group],
+                'DiffractionSlice':['diffractionslice_',ind_dfs,grp_ds,
+                                                save_diffraction_group],
+                'RealSlice':['realslice_',ind_rls,grp_rs,
+                                         save_real_group],
+                'PointList':['pointlist_',ind_ptl,grp_pl,
+                                    save_pointlist_group],
+                'PointListArray':['pointlistarray_',ind_ptla,grp_pla,
+                                           save_pointlistarray_group]
+                 }
         for dataobject in dataobject_list:
             name = dataobject.name
-            if isinstance(dataobject, DataCube):
-                if name == '':
-                    name = 'datacube_'+str(ind_dcs)
-                    ind_dcs += 1
-                grp_curr = grp_dc
-                save_func_curr = save_datacube_group
-            elif isinstance(dataobject,CountedDataCube):
-                if name == '':
-                    name = 'counted_datacube_'+str(ind_dcs)
-                    ind_cdcs += 1
-                grp_curr = grp_cdc
-                save_func_curr = save_counted_datacube_group
-            elif isinstance(dataobject, DiffractionSlice):
-                if name == '':
-                    name = 'diffractionslice_'+str(ind_dfs)
-                    ind_dfs += 1
-                grp_curr = grp_ds
-                save_func_curr = save_diffraction_group
-            elif isinstance(dataobject, RealSlice):
-                if name == '':
-                    name = 'realslice_'+str(ind_rls)
-                    ind_rls += 1
-                grp_curr = grp_rs
-                save_func_curr = save_real_group
-            elif isinstance(dataobject, PointList):
-                if name == '':
-                    name = 'pointlist_'+str(ind_ptl)
-                    ind_ptl += 1
-                grp_curr = grp_pl
-                save_func_curr = save_pointlist_group
-            elif isinstance(dataobject, PointListArray):
-                if name == '':
-                    name = 'pointlistarray_'+str(ind_ptla)
-                    ind_ptla += 1
-                grp_curr = grp_pla
-                save_func_curr = save_pointlistarray_group
-            else:
-                raise Exception('Unrecognized dataobject type {}'.format(type(dataobejct)))
+            dtype = type(dataobject).__name__
+            basename,inds,grp,save_fn = lookupTable[dtype]
+            if name == '':
+                name = basename+str(inds)
+                inds += 1
             names.append(name)
-            grps.append(grp_curr)
-            save_fns.append(save_func_curr)
+            grps.append(grp)
+            save_fns.append(save_fn)
 
         # Save objects
         for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
@@ -105,6 +86,7 @@ def save_from_dataobject_list(fp, dataobject_list, topgroup="4DSTEM_experiment",
             save_fn(new_grp,do)
 
     print("Done.",flush=True)
+
 
 def save_dataobject(fp, dataobject, **kwargs):
     """
