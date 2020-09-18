@@ -104,8 +104,5 @@ def append(fp, data, overwrite=False, topgroup='4DSTEM_experiment'):
                 new_grp = grp.create_group(name)
                 print("Saving {} '{}'...".format(type(do).__name__,name))
                 save_fn(new_grp,do)
-
-        # Finish and close
-        print("Done.")
         f.close()
 

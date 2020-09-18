@@ -108,7 +108,6 @@ def save(fp, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):
         print("Saving {} '{}'...".format(type(do).__name__,name))
         save_fn(new_grp,do)
 
-    print("Done.",flush=True)
 
 
 
