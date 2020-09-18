@@ -46,65 +46,47 @@ def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
 
         # Loop through and save all objects in the dataobjectlist
         names,grps,save_fns = [],[],[]
+        lookupTable = {
+                'DataCube':['datacube_',N_dc,grp_dc,
+                                   save_datacube_group],
+                'CountedDataCube':['counted_data_cube_',N_cdc,grp_cdc,
+                                             save_counted_datacube_group],
+                'DiffractionSlice':['diffractionslice_',N_ds,grp_ds,
+                                                save_diffraction_group],
+                'RealSlice':['realslice_',N_rs,grp_rs,
+                                         save_real_group],
+                'PointList':['pointlist_',N_pl,grp_pl,
+                                    save_pointlist_group],
+                'PointListArray':['pointlistarray_',N_pla,grp_pla,
+                                           save_pointlistarray_group]
+                 }
         for dataobject in dataobject_list:
             name = dataobject.name
-            if isinstance(dataobject, DataCube):
-                if name == '':
-                    name = 'datacube_'+str(N_dc)
-                    N_dc += 1
-                grp_curr = grp_dc
-                save_func_curr = save_datacube_group
-            elif isinstance(dataobject, CountedDataCube):
-                if name == '':
-                    name = 'counted_datacube_'+str(N_cdc)
-                    N_cdc += 1
-                grp_curr = grp_cdc
-                save_func_curr = save_counted_datacube_group
-            elif isinstance(dataobject, DiffractionSlice):
-                if name == '':
-                    name = 'diffractionslice_'+str(N_ds)
-                    N_ds += 1
-                grp_curr = grp_ds
-                save_func_curr = save_diffraction_group
-            elif isinstance(dataobject, RealSlice):
-                if name == '':
-                    name = 'realslice_'+str(N_rs)
-                    N_rs += 1
-                grp_curr = grp_rs
-                save_func_curr = save_real_group
-            elif isinstance(dataobject, PointList):
-                if name == '':
-                    name = 'pointlist_'+str(N_pl)
-                    N_pl += 1
-                grp_curr = grp_pl
-                save_func_curr = save_pointlist_group
-            elif isinstance(dataobject, PointListArray):
-                if name == '':
-                    name = 'pointlistarray_'+str(N_pla)
-                    N_pla += 1
-                grp_curr = grp_pla
-                save_func_curr = save_pointlistarray_group
-            else:
-                raise Exception('Unrecognized dataobject type {}'.format(type(dataobject)))
+            dtype = type(dataobject).__name__
+            basename,N,grp,save_fn = lookupTable[dtype]
+            if name == '':
+                name = basename+str(N)
+                N += 1
             names.append(name)
-            grps.append(grp_curr)
+            grps.append(grp)
             # Check if a group of this name already exists
-            if name in grp_curr.keys():
+            if name in grp.keys():
                 if overwrite==True:
                     # TODO TKTKTK deal with releasing the storage space
                     # because h5 files apparently don't do this...
-                    del grp_curr[name]
+                    del grp[name]
                 else:
-                    save_func_curr = False
-            save_fns.append(save_func_curr)
+                    save_fn = False
+            save_fns.append(save_fn)
 
         # Error message if there are overwrite conflicts
         if not all(save_fns):
             inds = np.nonzero([i==False for i in save_fns])[0]
+            dtypes,names = type(dataobject_list[inds]).__name__,dataobject_list[inds].name
             print('WARNING: attempting to append one or more DataObject type/names which already exist in this h5 file. Conflicts were found with the following objects:')
             print('')
-            for i in inds:
-                print("{} '{}'".format(type(dataobject_list[i]).__name__,dataobject_list[i].name))
+            for dtype,name in zip(dtypes,names):
+                print("{} '{}'".format(dtype,name))
             print('')
             print("Either rename these objects before saving, or pass the 'overwrite=True' keyword to save over the corresponding objects in the .h5.  Note that this will *not* release the storage space on the .h5 file, so if these are large objects consider re-writing the file.")
             print("No objects saved.")
