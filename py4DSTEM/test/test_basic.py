@@ -287,6 +287,8 @@ if test_io:
     data = [max_dp_DiffSlice,BF_image_RealSlice,three_dps,dp3_disks,
                                         probe_DiffSlice,disks,datacube]
     py4DSTEM.file.io.native.save(filepath_output,data,overwrite=True)
+#    py4DSTEM.file.io.native.save(filepath_output,[],overwrite=True)
+#    py4DSTEM.file.io.native.append(filepath_output,data,overwrite=True)
 
     # Load from the .h5
     max_dp_h5 = py4DSTEM.file.io.read(filepath_output,data_id='max_dp')
