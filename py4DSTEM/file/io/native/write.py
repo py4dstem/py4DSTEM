@@ -6,137 +6,109 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from os.path import exists
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from ...datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
 from ...datastructure import DataObject, PointList
 from ...datastructure import PointListArray
 from ....process.utils import tqdmnd
 from ....version import __version__
 
-def save_from_dataobject_list(fp, dataobject_list, topgroup="4DSTEM_experiment",
-                                                      overwrite=False, **kwargs):
+def save(fp, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):
     """
-    Saves an h5 file from a list of DataObjects and an output filepath.
+    Saves data to a new py4DSTEM .h5 file at fp.
 
     Accepts:
-        fp                  path to save the .h5 file to
-        dataobject_list     a list of DataObjects to save
-        topgroup            (str) name for the toplevel group; if None, use
-                            "4DSTEM_experiment"
+        fp                  filepath
+        data                a single DataObject or a list of DataObjects
+        overwrite           boolean controlling behavior when an existing file
+                            is found at fp.  If overwrite is True, deletes the
+                            existing file and writes a new one. Otherwise,
+                            raises an error.
+        topgroup            name of the h5 toplevel group containing the py4DSTEM
+                            file of interest
     """
-
-    assert(all([isinstance(item,DataObject) for item in dataobject_list])), "Error: all elements of dataobject_list must be DataObject instances."
-    assert(isinstance(topgroup,str)), "Error: topgroup must be a string"
+    # Open the file
     if exists(fp):
-        if overwrite is False:
-            raise Exception('{} already exists.  To overwrite, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(fp))
+        if not overwrite:
+            if is_py4DSTEM_file(fp):
+                # If the file exists and is a py4DSTEM .h5, determine
+                # if we are writing a new topgroup to an existing .h5
+                tgs = get_py4DSTEM_topgroups(fp)
+                if topgroup in tgs:
+                    raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(fp))
+                else:
+                    f = h5py.File(fp,'r+')
+            else:
+                raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(fp))
+        else:
+            f = h5py.File(fp,'w')
+    else:
+        f = h5py.File(fp,'w')
+
+    # Construct dataobject list
+    if isinstance(data, DataObject):
+        dataobject_list = [data]
+    elif isinstance(data, list):
+        assert all([isinstance(item,DataObject) for item in data]), "If 'data' is a list, all items must be DataObjects."
+        dataobject_list = data
+    else:
+        raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
 
     # Handle keyword arguments
     use_compression = kwargs.get('compression',False)
 
     ##### Make .h5 file #####
-    with h5py.File(fp,'w') as f:
-        # Make topgroup
-        grp_top = f.create_group(topgroup)
-        grp_top.attrs.create("emd_group_type",2)
-        grp_top.attrs.create("version_major",__version__.split('.')[0])
-        grp_top.attrs.create("version_minor",__version__.split('.')[1])
-        grp_top.attrs.create("version_release",__version__.split('.')[2])
+    # Make topgroup
+    grp_top = f.create_group(topgroup)
+    grp_top.attrs.create("emd_group_type",2)
+    grp_top.attrs.create("version_major",__version__.split('.')[0])
+    grp_top.attrs.create("version_minor",__version__.split('.')[1])
+    grp_top.attrs.create("version_release",__version__.split('.')[2])
 
-        # Make data groups
-        group_data = grp_top.create_group("data")
-        grp_dc = group_data.create_group("datacubes")
-        grp_cdc = group_data.create_group("counted_datacubes")
-        grp_ds = group_data.create_group("diffractionslices")
-        grp_rs = group_data.create_group("realslices")
-        grp_pl = group_data.create_group("pointlists")
-        grp_pla = group_data.create_group("pointlistarrays")
-        ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
+    # Make data groups
+    group_data = grp_top.create_group("data")
+    grp_dc = group_data.create_group("datacubes")
+    grp_cdc = group_data.create_group("counted_datacubes")
+    grp_ds = group_data.create_group("diffractionslices")
+    grp_rs = group_data.create_group("realslices")
+    grp_pl = group_data.create_group("pointlists")
+    grp_pla = group_data.create_group("pointlistarrays")
+    ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
 
-        # Loop through and save all objects in the dataobjectlist
-        names,grps,save_fns = [],[],[]
-        lookupTable = {
-                'DataCube':['datacube_',ind_dcs,grp_dc,
-                                   save_datacube_group],
-                'CountedDataCube':['counted_data_cube_',ind_cdcs,grp_cdc,
-                                             save_counted_datacube_group],
-                'DiffractionSlice':['diffractionslice_',ind_dfs,grp_ds,
-                                                save_diffraction_group],
-                'RealSlice':['realslice_',ind_rls,grp_rs,
-                                         save_real_group],
-                'PointList':['pointlist_',ind_ptl,grp_pl,
-                                    save_pointlist_group],
-                'PointListArray':['pointlistarray_',ind_ptla,grp_pla,
-                                           save_pointlistarray_group]
-                 }
-        for dataobject in dataobject_list:
-            name = dataobject.name
-            dtype = type(dataobject).__name__
-            basename,inds,grp,save_fn = lookupTable[dtype]
-            if name == '':
-                name = basename+str(inds)
-                inds += 1
-            names.append(name)
-            grps.append(grp)
-            save_fns.append(save_fn)
+    # Loop through and save all objects in the dataobjectlist
+    names,grps,save_fns = [],[],[]
+    lookupTable = {
+            'DataCube':['datacube_',ind_dcs,grp_dc,
+                               save_datacube_group],
+            'CountedDataCube':['counted_data_cube_',ind_cdcs,grp_cdc,
+                                         save_counted_datacube_group],
+            'DiffractionSlice':['diffractionslice_',ind_dfs,grp_ds,
+                                            save_diffraction_group],
+            'RealSlice':['realslice_',ind_rls,grp_rs,
+                                     save_real_group],
+            'PointList':['pointlist_',ind_ptl,grp_pl,
+                                save_pointlist_group],
+            'PointListArray':['pointlistarray_',ind_ptla,grp_pla,
+                                       save_pointlistarray_group]
+             }
+    for dataobject in dataobject_list:
+        name = dataobject.name
+        dtype = type(dataobject).__name__
+        basename,inds,grp,save_fn = lookupTable[dtype]
+        if name == '':
+            name = basename+str(inds)
+            inds += 1
+        names.append(name)
+        grps.append(grp)
+        save_fns.append(save_fn)
 
-        # Save objects
-        for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
-            new_grp = grp.create_group(name)
-            print("Saving {} '{}'...".format(type(do).__name__,name))
-            save_fn(new_grp,do)
+    # Save objects
+    for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
+        new_grp = grp.create_group(name)
+        print("Saving {} '{}'...".format(type(do).__name__,name))
+        save_fn(new_grp,do)
 
     print("Done.",flush=True)
-
-
-def save_dataobject(fp, dataobject, **kwargs):
-    """
-    Saves a .h5 file containing only a single DataObject instance to fp.
-    """
-    assert isinstance(dataobject, DataObject)
-
-    # Save
-    save_from_dataobject_list(fp, [dataobject], **kwargs)
-
-def save_dataobjects_by_indices(fp, index_list, **kwargs):
-    """
-    Saves a .h5 file containing DataObjects corresponding to the indices in index_list, a list of
-    ints, in the list generated by DataObject.get_dataobjects().
-    """
-    full_dataobject_list = DataObject.get_dataobjects()
-    dataobject_list = [full_dataobject_list[i] for i in index_list]
-
-    save_from_dataobject_list(fp, dataobject_list, **kwargs)
-
-def save(fp, data, **kwargs):
-    """
-    Saves a .h5 file to outputpath. What is saved depends on the arguement data.
-
-    If data is a DataObject, saves a .h5 file containing just this object.
-    If data is a list of DataObjects, saves a .h5 file containing all these objects.
-    If data is an int, saves a .h5 file containing the dataobject corresponding to this index in
-    DataObject.get_dataobjects().
-    If data is a list of indices, saves a .h5 file containing the objects corresponding to these
-    indices in DataObject.get_dataobjects().
-    If data is 'all', saves all DataObjects in memory to a .h5 file.
-    """
-    if isinstance(data, DataObject):
-        save_dataobject(fp, data, **kwargs)
-    elif isinstance(data, int):
-        save_dataobjects_by_indices(fp, [data], **kwargs)
-    elif isinstance(data, list):
-        if all([isinstance(item,DataObject) for item in data]):
-            save_from_dataobject_list(fp, data, **kwargs)
-        elif all([isinstance(item,int) for item in data]):
-            save_dataobjects_by_indices(fp, data, **kwargs)
-        else:
-            print("Error: if data is a list, it must contain all ints or all DataObjects.")
-    elif data=='all':
-        save_from_dataobject_list(fp, DataObject.get_dataobjects(), **kwargs)
-    else:
-        print("Error: unrecognized value for argument data. Must be either a DataObject, a list of DataObjects, a list of ints, or the string 'all'.")
-
-
-################### END OF PRIMARY SAVE FUNCTIONS #####################
 
 
 
