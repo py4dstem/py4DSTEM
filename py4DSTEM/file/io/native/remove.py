@@ -1,27 +1,39 @@
-# Remove existing DataObjects from a py4DSTEM formatted .h5 file.
-# 
-# See filestructure.txt for a description of the file structure.
-
 import h5py
 import numpy as np
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_dataobject_info
+from os import remove, rename
+from os.path import exists, dirname, basename
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from .read_utils import get_py4DSTEM_dataobject_info
+from .copy import copy
 
-def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
+def remove(fp, data, topgroup='4DSTEM_experiment', d=False):
     """
-    Remove existing dataobjects from a py4DSTEM h5 file.
+    Remove some subset of dataobjects from a py4DSTEM h5 file.
+
+    IMPORTANT NOTE: by default, this function does *not* release the storage space
+    associated with the data being removed, as the HDF5 format does not easily
+    support this behavior. Links are removed and names are freed. To free the
+    disk space, use d=True.
 
     Accepts:
-        fp            path to the py4DSTEM .h5 file
-        indices             (list of ints) the indices of the DataObjects to remove
+        fp              path to the py4DSTEM .h5 file
+        data            (int or list of ints) the index or indices or name of the
+                        DataObjects to remove.
+        topgroup        the toplevel group
+        d               (bool)
     """
-    assert(all([isinstance(item,(int,np.integer)) for item in indices])), "Error: indices must be ints."
     assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(fp)
     assert(topgroup in tgs), "Error: topgroup '{}' not found.".format(topgroup)
+    if isinstance(data, (int,np.integer)):
+        dataobjects = [data]
+    else:
+        dataobjects = data
+    assert(all([isinstance(item,(int,np.integer)) for item in dataobjects])), "Error: data must be ints."
 
     info = get_py4DSTEM_dataobject_info(fp,topgroup)
     with h5py.File(fp,'a') as f:
-        for i in indices:
+        for i in dataobjects:
             name = info[i]['name']
             objtype = info[i]['type']
             if objtype == "DataCube":
@@ -40,25 +52,14 @@ def remove_from_index_list(fp, indices, topgroup='4DSTEM_experiment'):
                 raise ValueError("Unknown DataObject type {}".format(objtype))
             print("Removing {} object '{}'".format(objtype,name))
             del group[name]
-
-    ##### Finish and close #####
-    print("Done.")
     f.close()
 
-def remove(fp, dataobjects):
-    """
-    Remove existing dataobjects from a py4DSTEM h5 file.
+    if d:
+        _fp = dirname(fp)+'_'+basename(fp)
+        while exists(_fp):
+            _fp = dirname(_fp)+'_'+basename(_fp)
+        copy(fp,_fp,topgroup_orig=topgroup,topgroup_new=topgroup)
+        rename(_fp,fp)
 
-    Accepts:
-        fp              path to the py4DSTEM .h5 file
-        dataobjects     (int or list of ints) the index or indices or name of the DataObjects to
-                        remove.
-    """
-    assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
-
-    if isinstance(dataobjects, (int,np.integer)):
-        remove_from_index_list(fp, [dataobjects])
-    else:
-        remove_from_index_list(fp, dataobjects)
 
 
