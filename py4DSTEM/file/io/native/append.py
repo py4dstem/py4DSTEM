@@ -4,7 +4,7 @@
 
 import h5py
 import numpy as np
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_version
+from .read_utils import is_py4DSTEM_file
 from .read_utils import get_N_dataobjects, get_py4DSTEM_topgroups
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
@@ -13,26 +13,32 @@ from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray, CountedDataCube
 from ...datastructure import DataObject
 
-def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
-                                topgroup='4DSTEM_experiment'):
+def append(fp, data, overwrite=False, topgroup='4DSTEM_experiment'):
     """
-    Appends new dataobjects to an existing py4DSTEM h5 file.
+    Appends data to an existing py4DSTEM .h5 file at fp.
 
     Accepts:
         fp                  path to an existing py4DSTEM .h5 file to append to
-        dataobject_list     a list of DataObjects to save
+        data                a single DataObject or a list of DataObjects
         overwrite           boolean controlling behavior when a dataobject with
                             the same name as one already in the .h5 file is found.
                             If True, overwrite the object. If false, raise an error.
         topgroup            name of the h5 toplevel group containing the py4DSTEM
                             file of interest
     """
+    # Construct dataobject list
+    if isinstance(data, DataObject):
+        dataobject_list = [data]
+    elif isinstance(data, list):
+        assert all([isinstance(item,DataObject) for item in data]), "If 'data' is a list, all items must be DataObjects."
+        dataobject_list = data
+    else:
+        raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
 
-    assert all([isinstance(item,DataObject) for item in dataobject_list]), "Error: all elements of dataobject_list must be DataObject instances."
+    # Read the file
     assert(is_py4DSTEM_file(fp)), "Error: file is not recognized as a py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(fp)
     assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
-
     N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(fp)
     with h5py.File(fp,"r+") as f:
         # Get data groups
@@ -102,51 +108,4 @@ def append_from_dataobject_list(fp, dataobject_list, overwrite=False,
         # Finish and close
         print("Done.")
         f.close()
-
-def append_dataobject(fp, dataobject, **kwargs):
-    """
-    Appends dataobject to existing .h5 file at fp.
-    """
-    assert isinstance(dataobject, DataObject)
-
-    # append
-    append_from_dataobject_list(fp, [dataobject], **kwargs)
-
-def append_dataobjects_by_indices(fp, index_list, **kwargs):
-    """
-    Appends the DataObjects found at the indices in index_list in DataObject.get_dataobjects to
-    the existing py4DSTEM .h5 file at fp.
-    """
-    full_dataobject_list = DataObject.get_dataobjects()
-    dataobject_list = [full_dataobject_list[i] for i in index_list]
-
-    append_from_dataobject_list(fp, dataobject_list, **kwargs)
-
-def append(fp, data, **kwargs):
-    """
-    Appends data to an existing py4DSTEM .h5 file at fp. What is saved depends on the
-    arguement data.
-
-    If data is a DataObject, appends just this dataobject.
-    If data is a list of DataObjects, appends all these objects.
-    If data is an int, appends the dataobject corresponding to this index in
-    DataObject.get_dataobjects().
-    If data is a list of indices, appends the objects corresponding to these
-    indices in DataObject.get_dataobjects().
-    """
-    if isinstance(data, DataObject):
-        append_dataobject(fp, data, **kwargs)
-    elif isinstance(data, int):
-        append_dataobjects_by_indices(fp, [data], **kwargs)
-    elif isinstance(data, list):
-        if all([isinstance(item,DataObject) for item in data]):
-            append_from_dataobject_list(fp, data, **kwargs)
-        elif all([isinstance(item,int) for item in data]):
-            append_dataobjects_by_indices(fp, data, **kwargs)
-        else:
-            print("Error: if data is a list, it must contain all ints or all DataObjects.")
-    else:
-        print("Error: unrecognized value for argument data. Must be either a DataObject, a list of DataObjects, a list of ints, or the string 'all'.")
-
-
 
