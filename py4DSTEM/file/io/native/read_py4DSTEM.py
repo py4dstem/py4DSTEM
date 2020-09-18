@@ -32,7 +32,7 @@ def read_py4DSTEM(fp, metadata=False, **kwargs):
                     is passed to indicate which py4DSTEM file to load. If an H5
                     containing multiple py4DSTEM files is passed without a
                     topgroup specified, the topgroup names are printed to screen.
-        metadata    (bool) If True, returns a dictionary with the file metadata.
+        metadata    (bool) If True, returns the metadata as a Metadata instance.
         mem         (str) Only used if a single DataCube is loaded. In this case,
                     mem specifies how the data should be stored; must be "RAM" or
                     "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is
