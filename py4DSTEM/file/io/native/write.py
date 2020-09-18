@@ -319,40 +319,6 @@ def save_pointlistarray_group(group, pointlistarray):
 
 
 
-def close_all_h5():
-    n = 0
-    import gc
-    for obj in gc.get_objects():
-        try:
-            t = type(obj)
-            if t is h5py.Dataset:
-                try:
-                    obj.file.close()
-                    n += 1
-                except:
-                    pass
-        except:
-            pass
-    print(f'Closed {n} files.')
-
-def close_h5_at_path(fpath):
-    import gc, os
-    n=0
-    for obj in gc.get_objects():
-        try:
-            t = type(obj)
-            if t is h5py.File:
-                try:
-                    pth = obj.filename
-                    if os.path.normpath(pth) == os.path.normpath(fpath):
-                        obj.close()
-                        n += 1
-                        print(pth)
-                except:
-                    pass
-        except:
-            pass
-
 
 
 
