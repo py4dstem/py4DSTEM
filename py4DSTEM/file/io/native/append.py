@@ -5,12 +5,12 @@
 from ._append import _append
 from .repack import repack
 
-def append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
+def append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
-    Appends data to an existing py4DSTEM .h5 file at fp.
+    Appends data to an existing py4DSTEM .h5 file at filepath.
 
     Accepts:
-        fp                  path to an existing py4DSTEM .h5 file to append to
+        filepath            path to an existing py4DSTEM .h5 file to append to
         data                a single DataObject or a list of DataObjects
         overwrite           controls behavior when a dataobject with the same name
                             as one already in the .h5 file is found. Must be in
@@ -37,7 +37,7 @@ def append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
         but will quickly lead to file size bloat if done repeatedly or done with
         larger data elements, e.g. DataCubes or PointListArrays.  If you want to
         do this and then decide to release the space later, you can do
-            io.native.repack(fp)
+            io.native.repack(filepath)
 
         Using `overwrite=2` fully deletes any blocks of data being overwritten.
         To do so, it copies all the dataobjects we need to keep to a new file,
@@ -45,7 +45,7 @@ def append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
         complete, this will have released the storage space, however note that
         performing the task will then require additional CPU and storage resources.
     """
-    _append(fp,data,overwrite,topgroup)
+    _append(filepath,data,overwrite,topgroup)
     if overwrite==2:
-        repack(fp,topgroup)
+        repack(filepath,topgroup)
 
