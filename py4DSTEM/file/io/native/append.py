@@ -37,7 +37,7 @@ def append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
         but will quickly lead to file size bloat if done repeatedly or done with
         larger data elements, e.g. DataCubes or PointListArrays.  If you want to
         do this and then decide to release the space later, you can do
-            io.repack(fp)
+            io.native.repack(fp)
 
         Using `overwrite=2` fully deletes any blocks of data being overwritten.
         To do so, it copies all the dataobjects we need to keep to a new file,
