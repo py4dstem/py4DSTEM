@@ -115,12 +115,6 @@ def save(fp, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):
 
 def save_datacube_group(group, datacube, use_compression=False):
     group.attrs.create("emd_group_type",1)
-    # if datacube.metadata is not None:
-    #     group.attrs.create("metadata",datacube.metadata._ind)
-    # else:
-    #     group.attrs.create("metadata",-1)
-
-    # TODO: consider defining data chunking here, keeping k-space slices together
     if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
         if use_compression:
             data_datacube = group.create_dataset("data", data=datacube.data,
