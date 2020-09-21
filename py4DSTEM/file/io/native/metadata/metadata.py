@@ -12,9 +12,9 @@ class Metadata(object):
     read/written from the python interpretter in-program.
 
     External file methods:
-        to_h5(fp)           # Writes to a py4DSTEM .h5 file
-        from_h5(fp)         # Reads from a py4DSTEM .h5
-        from_nonnative(fp)  # Reads from nonnative files
+        to_h5(filepath)           # Writes to a py4DSTEM .h5 file
+        from_h5(filepath)         # Reads from a py4DSTEM .h5
+        from_nonnative(filepath)  # Reads from nonnative files
 
     In-program metadata access and editing can be accomplished directly
     from the dictionaries, or can be accomplished using the get/set
@@ -31,25 +31,25 @@ class Metadata(object):
         self.calibration = {}
         self.comments = {}
 
-    def to_h5(self, fp, overwrite=False, topgroup=None):
+    def to_h5(self, filepath, overwrite=False, topgroup=None):
         """
-        If fp points to an existing .h5 file, and if no metadata is
+        If filepath points to an existing .h5 file, and if no metadata is
         present, writes it there.
-        If fp points to an existing .h5 file which already contains
+        If filepath points to an existing .h5 file which already contains
         some metadata, appends any new metadata from the object
         instance to the .h5, and also checks if any conflicting
         metadata exists (same keys, different values) -- if it does,
         overwrites iff overwrite=True, otherwise skips these items.
-        If there is no file at fp, writes a new .h5 file there,
+        If there is no file at filepath, writes a new .h5 file there,
         formatted as a py4DSTEM file, and containing only the metadata.
         If an existing .h5 file has more than one topgroup, the
         'topgroup' argument should be passed which one to write to.
         """
-        if exists(fp):
-            assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
+        if exists(filepath):
+            assert is_py4DSTEM_file(filepath), "File found at path {} is not recognized as a py4DSTEM file.".format(filepath)
         else:
-            save(fp,[])
-        tgs = get_py4DSTEM_topgroups(fp)
+            save(filepath,[])
+        tgs = get_py4DSTEM_topgroups(filepath)
         if topgroup is not None:
             assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
         elif len(tgs)==1:
@@ -61,7 +61,7 @@ class Metadata(object):
             for tg in tgs:
                 print(tg)
 
-        with h5py.File(fp,'r+') as f:
+        with h5py.File(filepath,'r+') as f:
             if 'metadata' not in f[tg]: f[tg].create_group('metadata')
             mgp = f[tg + '/metadata']
             if 'microscope' not in mgp: mgp.create_group('microscope')
@@ -70,21 +70,21 @@ class Metadata(object):
             if 'calibration' not in mgp: mgp.create_group('calibration')
             if 'comments' not in mgp: mgp.create_group('comments')
 
-        h5append(fp,tg+'/metadata/microscope',self.microscope)
-        h5append(fp,tg+'/metadata/calibration',self.calibration)
-        h5append(fp,tg+'/metadata/sample',self.sample)
-        h5append(fp,tg+'/metadata/user',self.user)
-        h5append(fp,tg+'/metadata/comments',self.comments)
+        h5append(filepath,tg+'/metadata/microscope',self.microscope)
+        h5append(filepath,tg+'/metadata/calibration',self.calibration)
+        h5append(filepath,tg+'/metadata/sample',self.sample)
+        h5append(filepath,tg+'/metadata/user',self.user)
+        h5append(filepath,tg+'/metadata/comments',self.comments)
 
         return
 
-    def from_h5(self, fp, topgroup=None):
+    def from_h5(self, filepath, topgroup=None):
         """
         Reads the metadata in a py4DSTEM formatted .h5 file and stores it in the
         Metadata instance.
         """
-        assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
-        tgs = get_py4DSTEM_topgroups(fp)
+        assert is_py4DSTEM_file(filepath), "File found at path {} is not recognized as a py4DSTEM file.".format(filepath)
+        tgs = get_py4DSTEM_topgroups(filepath)
         if topgroup is not None:
             assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
         elif len(tgs)==1:
@@ -96,11 +96,11 @@ class Metadata(object):
             for tg in tgs:
                 print(tg)
 
-        self.microscope = h5read(fp,tg+'/metadata/microscope')
-        self.calibration = h5read(fp,tg+'/metadata/calibration')
-        self.sample = h5read(fp,tg+'/metadata/sample')
-        self.user = h5read(fp,tg+'/metadata/user')
-        self.comments = h5read(fp,tg+'/metadata/comments')
+        self.microscope = h5read(filepath,tg+'/metadata/microscope')
+        self.calibration = h5read(filepath,tg+'/metadata/calibration')
+        self.sample = h5read(filepath,tg+'/metadata/sample')
+        self.user = h5read(filepath,tg+'/metadata/user')
+        self.comments = h5read(filepath,tg+'/metadata/comments')
 
         return self
 

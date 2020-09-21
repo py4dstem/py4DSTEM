@@ -12,7 +12,7 @@ from ....process.utils import tqdmnd
 from .legacy import read_v060
 
 
-def read_py4DSTEM(fp, metadata=False, **kwargs):
+def read_py4DSTEM(filepath, metadata=False, **kwargs):
     """
     File reader for files written by py4DSTEM v0.9.0+.  Precise behavior is
     detemined by which arguments are passed -- see below.
@@ -53,11 +53,11 @@ def read_py4DSTEM(fp, metadata=False, **kwargs):
                     Otherwise, a single DataObject or list of DataObjects are
                     returned, based on the value of the argument data_id.
     """
-    assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
+    assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
     # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
     # disambiguate desired data
-    tgs = get_py4DSTEM_topgroups(fp)
+    tgs = get_py4DSTEM_topgroups(filepath)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
         assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
@@ -73,16 +73,16 @@ def read_py4DSTEM(fp, metadata=False, **kwargs):
             return None,None
 
     # Get py4DSTEM version
-    version = get_py4DSTEM_version(fp, tg)
+    version = get_py4DSTEM_version(filepath, tg)
     if not version_is_geq(version,(0,9,0)):
         if version == (0,6,0):
-            return read_v060(fp, **kwargs)
+            return read_v060(filepath, **kwargs)
         else:
             raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
 
     # If metadata is requested
     if metadata:
-        return Metadata().from_h5(fp)
+        return Metadata().from_h5(filepath)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():
@@ -108,41 +108,41 @@ def read_py4DSTEM(fp, metadata=False, **kwargs):
         else:
             bindtype = None
 
-        return get_data(fp,tg,data_id,mem,binfactor,bindtype)
+        return get_data(filepath,tg,data_id,mem,binfactor,bindtype)
 
     # If no data is requested
     else:
-        print_py4DSTEM_file(fp,tg)
+        print_py4DSTEM_file(filepath,tg)
         return
 
 
 ############ Helper functions ############
 
-def print_py4DSTEM_file(fp,tg):
-    """ Accepts a fp to a valid py4DSTEM file and prints to screen the file contents.
+def print_py4DSTEM_file(filepath,tg):
+    """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
     """
-    info = get_py4DSTEM_dataobject_info(fp,tg)
+    info = get_py4DSTEM_dataobject_info(filepath,tg)
     print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
     print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
     for el in info:
         print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
     return
 
-def get_data(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
-    """ Accepts a fp to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
+def get_data(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts a filepath to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
     """
     if isinstance(data_id,(int,np.int_)):
-        return get_data_from_int(fp,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
+        return get_data_from_int(filepath,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
     elif isinstance(data_id,str):
-        return get_data_from_str(fp,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
+        return get_data_from_str(filepath,tg,data_id,mem=mem,binfactor=binfactor,bindtype=bindtype)
     else:
-        return get_data_from_list(fp,tg,data_id)
+        return get_data_from_list(filepath,tg,data_id)
 
-def get_data_from_int(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
-    """ Accepts a fp to a valid py4DSTEM file and an integer specifying data, and returns the data.
+def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts a filepath to a valid py4DSTEM file and an integer specifying data, and returns the data.
     """
     assert(isinstance(data_id,(int,np.int_)))
-    with h5py.File(fp,'r') as f:
+    with h5py.File(filepath,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
         grp_cdc = f[tg+'/data/counted_datacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
@@ -162,11 +162,11 @@ def get_data_from_int(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
 
     return data
 
-def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
-    """ Accepts a fp to a valid py4DSTEM file and a string specifying data, and returns the data.
+def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts a filepath to a valid py4DSTEM file and a string specifying data, and returns the data.
     """
     assert(isinstance(data_id,str))
-    with h5py.File(fp,'r') as f:
+    with h5py.File(filepath,'r') as f:
         grp_dc = f[tg+'/data/datacubes/']
         grp_cdc = f[tg+'/data/counted_datacubes/']
         grp_ds = f[tg+'/data/diffractionslices/']
@@ -197,17 +197,17 @@ def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
 
     return data
 
-def get_data_from_list(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
-    """ Accepts a fp to a valid py4DSTEM file and a list or tuple specifying data, and returns the data.
+def get_data_from_list(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts a filepath to a valid py4DSTEM file and a list or tuple specifying data, and returns the data.
     """
     assert(isinstance(data_id,(list,tuple)))
     assert(all([isinstance(d,(int,np.int_,str)) for d in data_id]))
     data = []
     for el in data_id:
         if isinstance(el,(int,np.int_)):
-            data.append(get_data_from_int(fp,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
+            data.append(get_data_from_int(filepath,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
         elif isinstance(el,str):
-            data.append(get_data_from_str(fp,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
+            data.append(get_data_from_str(filepath,tg,data_id=el,mem=mem,binfactor=binfactor,bindtype=bindtype))
         else:
             raise Exception("Data must be specified with strings or integers only.")
     return data
