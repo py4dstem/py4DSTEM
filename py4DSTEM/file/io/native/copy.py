@@ -2,13 +2,13 @@
 
 import h5py
 import numpy as np
-from os import remove
-from os.path import exists
+from os import remove, rename
+from os.path import exists, dirname, basename
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .read_utils import get_N_dataobjects, get_py4DSTEM_dataobject_info
 from .read_py4DSTEM import read_py4DSTEM
 from .write import save
-from .append import append
+from ._append import _append
 from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ...datastructure import DataObject
@@ -54,7 +54,7 @@ def copy(fp_orig, fp_new, indices=None, delete=False,
     info = get_py4DSTEM_dataobject_info(fp_orig,topgroup_orig)
     for i in indices:
         data = read_py4DSTEM(fp_orig,ft='py4DSTEM',topgroup=topgroup_orig,data_id=i)
-        append(fp_new,data=data,topgroup=topgroup_new)
+        _append(fp_new,data=data,topgroup=topgroup_new)
 
     # Delete the old file
     if delete:

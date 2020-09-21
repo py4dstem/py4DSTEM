@@ -6,21 +6,21 @@ from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .read_utils import get_py4DSTEM_dataobject_info
 from .copy import copy
 
-def remove(fp, data, topgroup='4DSTEM_experiment', d=False):
+def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
     """
     Remove some subset of dataobjects from a py4DSTEM h5 file.
 
-    IMPORTANT NOTE: by default, this function does *not* release the storage space
-    associated with the data being removed, as the HDF5 format does not easily
-    support this behavior. Links are removed and names are freed. To free the
-    disk space, use d=True.
-
     Accepts:
         fp              path to the py4DSTEM .h5 file
-        data            (int or list of ints) the index or indices or name of the
-                        DataObjects to remove.
+        data            (int or list of ints) the index or indices or name of
+                        the DataObjects to remove.
         topgroup        the toplevel group
-        d               (bool)
+        delete          (bool) if True, fully remove objects from the file.
+                        Otherwise, just removes the links and names of these
+                        objects, without releasing the storage space. If you've
+                        already used delete=False and want to release the space,
+                        run io.repack(fp). For more info, see the docstring for
+                        io.append.
     """
     assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(fp)
@@ -54,7 +54,7 @@ def remove(fp, data, topgroup='4DSTEM_experiment', d=False):
             del group[name]
     f.close()
 
-    if d:
+    if delete:
         _fp = dirname(fp)+'_'+basename(fp)
         while exists(_fp):
             _fp = dirname(_fp)+'_'+basename(_fp)
