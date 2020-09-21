@@ -19,8 +19,8 @@ def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
                         Otherwise, just removes the links and names of these
                         objects, without releasing the storage space. If you've
                         already used delete=False and want to release the space,
-                        run io.repack(fp). For more info, see the docstring for
-                        io.append.
+                        run io.native.repack(fp). For more info, see the docstring
+                        for io.native.append.
     """
     assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(fp)
