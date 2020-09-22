@@ -4,7 +4,7 @@ filepath_input = "/Users/Ben/Work/Data/py4DSTEM_sampleData/smallDataSets/small4D
 import py4DSTEM
 
 # Load the data
-datacube = py4DSTEM.file.io.read(filepath_input)
+datacube = py4DSTEM.io.read(filepath_input)
 #print(datacube)
 print(datacube.metadata)
 

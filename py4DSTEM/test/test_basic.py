@@ -92,7 +92,7 @@ import matplotlib.pyplot as plt
 import py4DSTEM
 
 # Load the data
-datacube = py4DSTEM.file.io.read(filepath_input)
+datacube = py4DSTEM.io.read(filepath_input)
 datacube.set_scan_shape(10,10)
 datacube.crop_data_real(2,10,2,10)
 
@@ -267,15 +267,15 @@ if save_vis:
 if test_io:
 
     # Save an .h5 file
-    max_dp_DiffSlice = py4DSTEM.file.datastructure.DiffractionSlice(
+    max_dp_DiffSlice = py4DSTEM.datastructure.DiffractionSlice(
                                     data=max_dp,name='max_dp')
-    BF_image_RealSlice = py4DSTEM.file.datastructure.RealSlice(
+    BF_image_RealSlice = py4DSTEM.datastructure.RealSlice(
                                     data=BF_image,name='BF_image')
-    three_dps = py4DSTEM.file.datastructure.DiffractionSlice(
+    three_dps = py4DSTEM.datastructure.DiffractionSlice(
                                     data=np.dstack([dp1,dp2,dp3]),
                                     slicelabels=['rx,ry={},{}'.format(rxs[i],rys[i]) for i in range(len(rxs))],
                                     name='three_dps')
-    probe_DiffSlice = py4DSTEM.file.datastructure.DiffractionSlice(
+    probe_DiffSlice = py4DSTEM.datastructure.DiffractionSlice(
                                     data=np.dstack([probe,probe_kernel]),
                                     slicelabels=['probe','probe_kernel'],
                                     name='probe')
@@ -286,32 +286,32 @@ if test_io:
 
     data = [max_dp_DiffSlice,BF_image_RealSlice,three_dps,dp3_disks,
                                         probe_DiffSlice,disks,datacube]
-    py4DSTEM.file.io.native.save(filepath_output,data,overwrite=True)
-#    py4DSTEM.file.io.native.save(filepath_output,[],overwrite=True)
-#    py4DSTEM.file.io.native.append(filepath_output,data,overwrite=True)
+    py4DSTEM.io.native.save(filepath_output,data,overwrite=True)
+#    py4DSTEM.io.native.save(filepath_output,[],overwrite=True)
+#    py4DSTEM.io.native.append(filepath_output,data,overwrite=True)
 
     # Load from the .h5
-    max_dp_h5 = py4DSTEM.file.io.read(filepath_output,data_id='max_dp')
+    max_dp_h5 = py4DSTEM.io.read(filepath_output,data_id='max_dp')
     max_dp_h5 = max_dp_h5.data
 
-    BF_image_h5 = py4DSTEM.file.io.read(filepath_output,data_id='BF_image')
+    BF_image_h5 = py4DSTEM.io.read(filepath_output,data_id='BF_image')
     BF_image_h5 = BF_image_h5.data
 
-    three_dps_h5 = py4DSTEM.file.io.read(filepath_output,data_id="three_dps")
+    three_dps_h5 = py4DSTEM.io.read(filepath_output,data_id="three_dps")
     three_dps_h5 = three_dps_h5.data
     dp1_h5,dp2_h5,dp3_h5 = [three_dps_h5[:,:,i] for i in range(3)]
 
-    probe_DiffSlice_h5 = py4DSTEM.file.io.read(filepath_output,
+    probe_DiffSlice_h5 = py4DSTEM.io.read(filepath_output,
                                                  data_id='probe')
     probe_h5 = probe_DiffSlice_h5.slices['probe']
     probe_kernel_h5 = probe_DiffSlice_h5.slices['probe_kernel']
 
-    dp3_disks_h5 = py4DSTEM.file.io.read(filepath_output,
+    dp3_disks_h5 = py4DSTEM.io.read(filepath_output,
                                            data_id="some_bragg_disks")
 
-    disk_h5 = py4DSTEM.file.io.read(filepath_output,data_id="braggpeaks")
+    disk_h5 = py4DSTEM.io.read(filepath_output,data_id="braggpeaks")
 
-    datacube_h5 = py4DSTEM.file.io.read(filepath_output,data_id='4ddatacube')
+    datacube_h5 = py4DSTEM.io.read(filepath_output,data_id='4ddatacube')
 
     # Confirm that saved and loaded data are identical
     print('Running io tests...')

@@ -1,7 +1,7 @@
 # Functions for generating virtual images
 
 import numpy as np
-from ...file.datastructure import DataCube
+from ...io.datastructure import DataCube
 
 def test():
     return True

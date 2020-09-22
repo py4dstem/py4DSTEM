@@ -4,7 +4,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
-from ...file.datastructure import PointListArray
+from ...io.datastructure import PointListArray
 from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats
 
