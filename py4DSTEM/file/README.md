@@ -1,6 +1,6 @@
 # `file` submodule
 
-Contains to child modules:
-- `io`: read/write functionality
+Contains two child modules:
+- `io`: file reading and writing
 - `datastructure`: how data is stored and retreived in-program
 
