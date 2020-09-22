@@ -19,7 +19,6 @@ class Metadata(object):
         self.calibration = {}
         self.comments = {}
 
-
     ### Begin get/set methods ###
 
     def set_R_pixel_size(self,val):
