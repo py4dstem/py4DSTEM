@@ -13,37 +13,37 @@ from ..datastructure import PointListArray
 from ...process.utils import tqdmnd
 from ...version import __version__
 
-def save(fp, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):
+def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):
     """
-    Saves data to a new py4DSTEM .h5 file at fp.
+    Saves data to a new py4DSTEM .h5 file at filepath.
 
     Accepts:
-        fp                  filepath
+        filepath            path where the file will be saved
         data                a single DataObject or a list of DataObjects
         overwrite           boolean controlling behavior when an existing file
-                            is found at fp.  If overwrite is True, deletes the
+                            is found at filepath.  If overwrite is True, deletes the
                             existing file and writes a new one. Otherwise,
                             raises an error.
         topgroup            name of the h5 toplevel group containing the py4DSTEM
                             file of interest
     """
     # Open the file
-    if exists(fp):
+    if exists(filepath):
         if not overwrite:
-            if is_py4DSTEM_file(fp):
+            if is_py4DSTEM_file(filepath):
                 # If the file exists and is a py4DSTEM .h5, determine
                 # if we are writing a new topgroup to an existing .h5
-                tgs = get_py4DSTEM_topgroups(fp)
+                tgs = get_py4DSTEM_topgroups(filepath)
                 if topgroup in tgs:
-                    raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(fp))
+                    raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
                 else:
-                    f = h5py.File(fp,'r+')
+                    f = h5py.File(filepath,'r+')
             else:
-                raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(fp))
+                raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
         else:
-            f = h5py.File(fp,'w')
+            f = h5py.File(filepath,'w')
     else:
-        f = h5py.File(fp,'w')
+        f = h5py.File(filepath,'w')
 
     # Construct dataobject list
     if isinstance(data, DataObject):

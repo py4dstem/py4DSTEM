@@ -6,12 +6,12 @@ from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .read_utils import get_py4DSTEM_dataobject_info
 from .copy import copy
 
-def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
+def remove(filepath, data, topgroup='4DSTEM_experiment', delete=True):
     """
     Remove some subset of dataobjects from a py4DSTEM h5 file.
 
     Accepts:
-        fp              path to the py4DSTEM .h5 file
+        filepath        path to the py4DSTEM .h5 file
         data            (int or list of ints) the index or indices or name of
                         the DataObjects to remove.
         topgroup        the toplevel group
@@ -19,11 +19,11 @@ def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
                         Otherwise, just removes the links and names of these
                         objects, without releasing the storage space. If you've
                         already used delete=False and want to release the space,
-                        run io.repack(fp). For more info, see the docstring for
-                        io.append.
+                        run io.native.repack(filepath). For more info, see the docstring
+                        for io.native.append.
     """
-    assert is_py4DSTEM_file(fp), "fp parameter must point to an existing py4DSTEM file."
-    tgs = get_py4DSTEM_topgroups(fp)
+    assert is_py4DSTEM_file(filepath), "filepath parameter must point to an existing py4DSTEM file."
+    tgs = get_py4DSTEM_topgroups(filepath)
     assert(topgroup in tgs), "Error: topgroup '{}' not found.".format(topgroup)
     if isinstance(data, (int,np.integer)):
         dataobjects = [data]
@@ -31,8 +31,8 @@ def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
         dataobjects = data
     assert(all([isinstance(item,(int,np.integer)) for item in dataobjects])), "Error: data must be ints."
 
-    info = get_py4DSTEM_dataobject_info(fp,topgroup)
-    with h5py.File(fp,'a') as f:
+    info = get_py4DSTEM_dataobject_info(filepath,topgroup)
+    with h5py.File(filepath,'a') as f:
         for i in dataobjects:
             name = info[i]['name']
             objtype = info[i]['type']
@@ -55,11 +55,11 @@ def remove(fp, data, topgroup='4DSTEM_experiment', delete=True):
     f.close()
 
     if delete:
-        _fp = dirname(fp)+'_'+basename(fp)
-        while exists(_fp):
-            _fp = dirname(_fp)+'_'+basename(_fp)
-        copy(fp,_fp,topgroup_orig=topgroup,topgroup_new=topgroup)
-        rename(_fp,fp)
+        _filepath = dirname(filepath)+'_'+basename(filepath)
+        while exists(_filepath):
+            _filepath = dirname(_filepath)+'_'+basename(_filepath)
+        copy(filepath,_filepath,topgroup_orig=topgroup,topgroup_new=topgroup)
+        rename(_filepath,filepath)
 
 
 

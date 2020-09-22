@@ -11,7 +11,7 @@ from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
 from ..datastructure import DataObject
 
-def _append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
+def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
     Internal append function to avoid circular imports.  See io.append for docstring.
     """
@@ -26,11 +26,11 @@ def _append(fp, data, overwrite=0, topgroup='4DSTEM_experiment'):
         raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
 
     # Read the file
-    assert(is_py4DSTEM_file(fp)), "Error: file is not recognized as a py4DSTEM file."
-    tgs = get_py4DSTEM_topgroups(fp)
+    assert(is_py4DSTEM_file(filepath)), "Error: file is not recognized as a py4DSTEM file."
+    tgs = get_py4DSTEM_topgroups(filepath)
     assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
-    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(fp)
-    with h5py.File(fp,"r+") as f:
+    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath)
+    with h5py.File(filepath,"r+") as f:
         # Get data groups
         group_data = f[topgroup]['data']
         grp_dc = f[topgroup]['data/datacubes']
