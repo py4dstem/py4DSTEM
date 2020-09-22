@@ -1,4 +1,4 @@
-# Reading non-native filetypes
+# `io.nonnative`: reading non-native filetypes
 
 Implemented / tested filetypes:
 - .dm3/.dm4

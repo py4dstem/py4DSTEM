@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from ncempy.io import dm
 from ..native import Metadata
-from ...datastructure import DataCube
+from ..datastructure import DataCube
 from ....process.utils import bin2D
 
 def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
