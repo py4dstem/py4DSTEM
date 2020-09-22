@@ -4,9 +4,10 @@ from os.path import exists
 from py4DSTEM.io.native import copy, remove, repack, append
 from py4DSTEM.io import read
 
-fp0 = 'test.h5'
-fp1 = 'test2.h5'
-fp2 = 'test3.h5'
+dpath = "/Users/Ben/Work/Data/py4DSTEM_sampleData/smallDataSets/"
+fp0 = dpath+'test.h5'
+fp1 = dpath+'test2.h5'
+fp2 = dpath+'test3.h5'
 
 if exists(fp1): rm(fp1)
 if exists(fp2): rm(fp2)
