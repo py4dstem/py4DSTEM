@@ -1,5 +1,5 @@
 import time
-from py4DSTEM.file.datastructure import DataCube
+from ...io.datastructure import DataCube
 import sigpy as cp
 import torch as th
 import numpy as np

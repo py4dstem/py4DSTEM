@@ -3,7 +3,7 @@
 import unittest
 import os
 import numpy as np
-from py4DSTEM.file.io import read
+from py4DSTEM.io import read
 from py4DSTEM.process.virtualimage import get_virtualimage_rect, get_virtualimage_circ, get_virtualimage_ann
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
