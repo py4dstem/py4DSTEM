@@ -8,7 +8,7 @@ import numpy as np
 from scipy import optimize
 
 from ..utils import get_maximal_points, print_progress_bar, bin2D
-from ...file.datastructure import PointListArray
+from ...io.datastructure import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,

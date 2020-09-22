@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...file.datastructure import RealSlice
+from ...io.datastructure import RealSlice
 
 def get_reference_uv(mask, uv_map):
     """

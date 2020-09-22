@@ -32,13 +32,13 @@ import numpy as np
 
 # Prepare files
 # We want one existing file containing some data and one filepath that doesn't point to anything
-dc = py4DSTEM.file.datastructure.DataCube(data=np.ones((3,3,3,3)),name='datacube')
-py4DSTEM.file.io.native.save(filepath1,dc,overwrite=True)
+dc = py4DSTEM.datastructure.DataCube(data=np.ones((3,3,3,3)),name='datacube')
+py4DSTEM.io.native.save(filepath1,dc,overwrite=True)
 if exists(filepath2):
     remove(filepath2)
 
 # Make a metadata object
-metadata = py4DSTEM.file.io.native.Metadata()
+metadata = py4DSTEM.io.native.Metadata()
 
 # Write some metadata
 metadata.set_R_pixel_size(Rpixsize)
@@ -57,8 +57,8 @@ metadata.to_h5(filepath1)   # Add to an existing h5 file
 metadata.to_h5(filepath2)   # Write to a new h5 file
 
 # Read from the files and compare
-metadata_from_h5_1 = py4DSTEM.file.io.native.Metadata().from_h5(filepath1)
-metadata_from_h5_2 = py4DSTEM.file.io.native.Metadata().from_h5(filepath2)
+metadata_from_h5_1 = py4DSTEM.io.native.Metadata().from_h5(filepath1)
+metadata_from_h5_2 = py4DSTEM.io.native.Metadata().from_h5(filepath2)
 
 print('Testing metadata read/write...')
 assert (metadata.get_R_pixel_size() == \

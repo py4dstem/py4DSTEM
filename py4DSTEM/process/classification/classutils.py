@@ -2,7 +2,7 @@
 
 import numpy as np
 from ..utils import get_shifted_ar, tqdmnd
-from ...file.datastructure import DataCube, PointListArray
+from ...io.datastructure import DataCube, PointListArray
 
 def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None, darkref=None, intshifts=True):
     """
