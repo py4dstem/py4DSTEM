@@ -267,15 +267,15 @@ if save_vis:
 if test_io:
 
     # Save an .h5 file
-    max_dp_DiffSlice = py4DSTEM.datastructure.DiffractionSlice(
+    max_dp_DiffSlice = py4DSTEM.io.datastructure.DiffractionSlice(
                                     data=max_dp,name='max_dp')
-    BF_image_RealSlice = py4DSTEM.datastructure.RealSlice(
+    BF_image_RealSlice = py4DSTEM.io.datastructure.RealSlice(
                                     data=BF_image,name='BF_image')
-    three_dps = py4DSTEM.datastructure.DiffractionSlice(
+    three_dps = py4DSTEM.io.datastructure.DiffractionSlice(
                                     data=np.dstack([dp1,dp2,dp3]),
                                     slicelabels=['rx,ry={},{}'.format(rxs[i],rys[i]) for i in range(len(rxs))],
                                     name='three_dps')
-    probe_DiffSlice = py4DSTEM.datastructure.DiffractionSlice(
+    probe_DiffSlice = py4DSTEM.io.datastructure.DiffractionSlice(
                                     data=np.dstack([probe,probe_kernel]),
                                     slicelabels=['probe','probe_kernel'],
                                     name='probe')
