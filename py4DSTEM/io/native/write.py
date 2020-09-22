@@ -7,9 +7,9 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from .metadata import metadata_to_h5
 from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
-from ..datastructure import DataObject, PointList
-from ..datastructure import PointListArray
+from ..datastructure import DataObject, PointList, PointListArray, Metadata
 from ...process.utils import tqdmnd
 from ...version import __version__
 
@@ -53,6 +53,7 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
         dataobject_list = data
     else:
         raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
+    assert np.sum([isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))])<2, "Multiple Metadata instances were passed"
 
     # Handle keyword arguments
     use_compression = kwargs.get('compression',False)
@@ -74,6 +75,16 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     grp_pl = group_data.create_group("pointlists")
     grp_pla = group_data.create_group("pointlistarrays")
     ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
+
+    # Make metadata group and identify any metadata
+    grp_md = grp_top.create_group("metadata")
+    metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
+    assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
+    try:
+        i = metadata_list.index(True)
+        md = dataobject_list.pop(i)
+    except ValueError:
+        md = None
 
     # Loop through and save all objects in the dataobjectlist
     names,grps,save_fns = [],[],[]
@@ -102,7 +113,10 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
         grps.append(grp)
         save_fns.append(save_fn)
 
-    # Save objects
+    # Save metadata
+    if md is not None:
+        metadata_to_h5(filepath,md,overwrite=overwrite,topgroup=topgroup)
+    # Save data
     for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
         new_grp = grp.create_group(name)
         print("Saving {} '{}'...".format(type(do).__name__,name))

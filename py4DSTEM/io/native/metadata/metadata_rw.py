@@ -3,32 +3,31 @@ from os.path import exists
 from ...datastructure import Metadata
 from .h5rw import h5write,h5read,h5append,h5info
 from ..read_utils import is_py4DSTEM_file,get_py4DSTEM_topgroups
-from ..write import save
 
 def metadata_to_h5(fp, metadata, overwrite=False, topgroup=None):
     """
-    Reads metadata from a py4DSTEM .h5 file.
+    Saves metadata to an existsing py4DSTEM .h5 file.
 
     If fp points to an existing .h5 file, and if no metadata is
     present, writes it there.
     If fp points to an existing .h5 file which already contains
-    some metadata, appends any new metadata from the object
-    instance to the .h5, and also checks if any conflicting
-    metadata exists (same keys, different values) -- if it does,
-    overwrites iff overwrite=True, otherwise skips these items.
-    If there is no file at fp, writes a new .h5 file there,
-    formatted as a py4DSTEM file, and containing only the metadata.
+    some metadata, and there are no conflicting metadata items,
+    adds the new metadata.  If there are conflicts, overwrites
+    iff overwrite=True, otherwise skips these items.
     If an existing .h5 file has more than one topgroup, the
-    'topgroup' argument should be passed which one to write to.
+    'topgroup' argument should be passed to specify which group
+    to write to.
+    If there is no file at fp, raises an error.  Writing metadata
+    only to an otherwise empty .h5 can be accomplished with
+        >>> io.save(filepath,metadata)
     """
     assert isinstance(metadata,Metadata)
-    if exists(fp):
-        assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
-    else:
-        save(fp,[])
+    assert exists(fp)
+    assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
     tgs = get_py4DSTEM_topgroups(fp)
     if topgroup is not None:
         assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
+        tg = topgroup
     elif len(tgs)==1:
         tg = tgs[0]
     else:

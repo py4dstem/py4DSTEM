@@ -82,7 +82,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
 
     # If metadata is requested
     if metadata:
-        return metadata_from_h5(fp)
+        return metadata_from_h5(filepath)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():
