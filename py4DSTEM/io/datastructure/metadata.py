@@ -1,5 +1,6 @@
+from . import DataObject
 
-class Metadata(object):
+class Metadata(DataObject):
     """
     A class for storing metadata.
 
@@ -13,6 +14,8 @@ class Metadata(object):
         Initializes a new class instance with empty dicts for the
         py4DSTEM metadata types.
         """
+        DataObject.__init__(self)
+
         self.microscope = {}
         self.sample = {}
         self.user = {}

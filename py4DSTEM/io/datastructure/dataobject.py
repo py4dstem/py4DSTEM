@@ -1,19 +1,12 @@
 # Defines the DataObject class.
 #
-# The purpose of the DataObject class is to create a single, uniform interface for all of the types 
-# of data py4DSTEM creates. It enables:
-#       -naming dataobjects
-#       -searching, listing, and retrieving dataobjects in memory, by name or by child class type
-#       -linking to metadata
-#
-# All objects containing py4DSTEM data - e.g. DataCube, DiffractionSlice, RealSlice, and PointLists
-# - inherit from DataObject.
-
-#from ..log import Logger
-#logger = Logger()
+# The DataObject class has two purposes:
+# (1) a single container for all py4DSTEM datastructures, facilitating e.g. simple assert calls
+# (2) the ability to keep track of all the py4DSTEM datastructures known to the interpretter
 
 import weakref
 from functools import wraps
+
 
 # Decorator which enables more human-readable display of tracked dataobjects
 def show_object_list(method):
@@ -29,8 +22,6 @@ def show_object_list(method):
             return objectlist
     return wrapper
 
-
-################## BEGIN DataObject CLASS ###################
 
 class DataObject(object):
     """
@@ -52,38 +43,6 @@ class DataObject(object):
         self.name = name
         if searchable==True:
             self._instances.append(weakref.ref(self))
-
-    ############ Metadata methods ############
-
-#     def new_metadata(self, metadata=None):
-#         """
-#         Replace the old self.metadata object with a new Metadata object, which is a *copy* of the
-#         Metadata instance pointed to by metadata. The important distinction here is that, rather
-#         than simply having self.metadata point to some other metadata instance which may also be
-#         associated with some other objects, this method ensures that self.metadata is a fresh
-#         Metadata instance, which no other DataObjects point to.  Thus if metadata should be altered
-#         for this object only, but not other DataObjects (e.g. because a datacube is cropped or
-#         binned), this method should be called first.
-# 
-#         Accepts:
-#             metadata        (Metadata, DataObject, or None)
-#                             if Metadata, copies this metadata object and assigns it to self.metadata
-#                             if DataObject, copies that objects metadata, and assigns it to
-#                             self.metadata
-#                             if None, copies its own metadata and assigns it to self.metadata
-#         """
-#         assert metadata is None or isinstance(metadata,(Metadata,DataObject))
-# 
-#         if metadata is None:
-#             metadata = self.metadata
-#         elif isinstance(metadata,DataObject):
-#             assert isinstance(metadata.metadata,Metadata), "The DataObject selected does not have an associated Metadata instance."
-#             metadata = metadata.metadata
-# 
-#         self.metadata = metadata.copy()
-
-
-    ############ Searching methods ############
 
     @classmethod
     def get_dataobjects(cls):

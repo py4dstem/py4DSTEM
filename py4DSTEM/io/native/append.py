@@ -12,6 +12,7 @@ def append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     Accepts:
         filepath            path to an existing py4DSTEM .h5 file to append to
         data                a single DataObject or a list of DataObjects
+                            or Metadata instance
         overwrite           controls behavior when a dataobject with the same name
                             as one already in the .h5 file is found. Must be in
                             {0,1,2}.  Behaviors:
@@ -25,6 +26,9 @@ def append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
                                     and saves the new obect.  DOES release the
                                     associated storage space in the file.  See
                                     (*) below.
+                            If a Metadata instance is passed, this flag also
+                            controls behavior for conflicting metadata items;
+                            a 0 skips conflicting items, and 1 or 2 overwrites them
         topgroup            name of the h5 toplevel group containing the py4DSTEM
                             file of interest
 

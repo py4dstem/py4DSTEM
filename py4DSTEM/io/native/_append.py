@@ -9,7 +9,8 @@ from .read_utils import get_N_dataobjects, get_py4DSTEM_topgroups
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
-from ..datastructure import DataObject
+from .metadata import metadata_to_h5
+from ..datastructure import DataObject,Metadata
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
@@ -39,6 +40,16 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         grp_rs = f[topgroup]['data/realslices']
         grp_pl = f[topgroup]['data/pointlists']
         grp_pla = f[topgroup]['data/pointlistarrays']
+        grp_md = f[topgroup]['metadata']
+
+        # Identify metadata
+        metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
+        assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
+        try:
+            i = metadata_list.index(True)
+            md = dataobject_list.pop(i)
+        except ValueError:
+            md = None
 
         # Loop through and save all objects in the dataobjectlist
         names,grps,save_fns = [],[],[]
@@ -54,7 +65,7 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
                 'PointList':['pointlist_',N_pl,grp_pl,
                                     save_pointlist_group],
                 'PointListArray':['pointlistarray_',N_pla,grp_pla,
-                                           save_pointlistarray_group]
+                                           save_pointlistarray_group],
                  }
         for dataobject in dataobject_list:
             name = dataobject.name
@@ -91,6 +102,10 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
 
         # Save objects
         else:
+            # Save metadata
+            if md is not None:
+                metadata_to_h5(filepath,md,overwrite=overwrite,topgroup=topgroup)
+            # Save data
             for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
                 new_grp = grp.create_group(name)
                 print("Saving {} '{}'...".format(type(do).__name__,name))
