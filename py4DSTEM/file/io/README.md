@@ -1,4 +1,4 @@
-# Read/write functions
+# `py4DSTEM.file.io` submodule
 
 This module includes
 - reading 4D datacubes and metadata from non-native file formats
