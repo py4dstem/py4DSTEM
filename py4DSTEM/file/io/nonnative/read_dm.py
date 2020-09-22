@@ -24,6 +24,7 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
     Returns:
         data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
                     iff metadata==True, returns the metadata as a Metadata instance
+
                     Note that metadata is read either way - in the latter case ONLY
                     metadata is read and returned, in the former case a DataCube
                     is returned with the metadata attached at datacube.metadata
