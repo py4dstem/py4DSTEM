@@ -141,9 +141,9 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # Make peaks PointList
     if peaks is None:
         coords = [('qx', float), ('qy', float), ('intensity', float)]
-        peaks = py4DSTEM.file.datastructure.PointList(coordinates=coords)
+        peaks = py4DSTEM.io.datastructure.PointList(coordinates=coords)
     else:
-        assert (isinstance(peaks, py4DSTEM.file.datastructure.PointList))
+        assert (isinstance(peaks, py4DSTEM.io.datastructure.PointList))
     peaks.add_tuple_of_nparrays((maxima_x, maxima_y, maxima_int))
 
     if return_cc:
@@ -161,11 +161,11 @@ def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster
 
     # Always try to memory map the data file, if possible
     if path_to_data.rsplit('.', 1)[-1].startswith('dm'):
-        datacube = py4DSTEM.file.io.read(path_to_data, load='dmmmap')
+        datacube = py4DSTEM.io.read(path_to_data, load='dmmmap')
     elif path_to_data.rsplit('.',1)[-1].startswith('gt'):
-        datacube = py4DSTEM.file.io.read(path_to_data, load='gatan_bin')
+        datacube = py4DSTEM.io.read(path_to_data, load='gatan_bin')
     else:
-        datacube = py4DSTEM.file.io.read(path_to_data)
+        datacube = py4DSTEM.io.read(path_to_data)
 
     results = []
     for x in coords:

@@ -9,9 +9,9 @@ from .read_utils import get_N_dataobjects, get_py4DSTEM_dataobject_info
 from .read_py4DSTEM import read_py4DSTEM
 from .write import save
 from ._append import _append
-from ...datastructure import DataCube, DiffractionSlice, RealSlice
-from ...datastructure import PointList, PointListArray
-from ...datastructure import DataObject
+from ..datastructure import DataCube, DiffractionSlice, RealSlice
+from ..datastructure import PointList, PointListArray
+from ..datastructure import DataObject
 
 def copy(fp_orig, fp_new, indices=None, delete=False,
          topgroup_orig='4DSTEM_experiment',topgroup_new='4DSTEM_experiment'):
