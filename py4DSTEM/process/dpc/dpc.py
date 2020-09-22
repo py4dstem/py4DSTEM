@@ -2,7 +2,7 @@
 
 import numpy as np
 from ..utils import make_Fourier_coords2D, print_progress_bar
-from ...file.datastructure import DataCube
+from ...io.datastructure import DataCube
 
 ############################# DPC Functions ################################
 

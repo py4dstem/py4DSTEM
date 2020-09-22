@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...file.datastructure import PointList, PointListArray
+from ...io.datastructure import PointList, PointListArray
 
 def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
     """

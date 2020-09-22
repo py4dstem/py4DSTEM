@@ -10,7 +10,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 
-from ...file.datastructure import PointList, PointListArray
+from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 from ..utils import tqdmnd
 
