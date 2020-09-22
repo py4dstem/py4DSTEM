@@ -1,3 +1,18 @@
+# `io.native`: native file format reading and writing
+
+This module includes functions to perform the following operations on the native
+fileformat:
+- read
+- write
+- append data
+- remove data
+- copy
+- repack (remove unlinked data)
+
+
+
+# The py4DSTEM file format
+
 py4DSTEM files are HDF5 files with a specified group/attribute/data structure.
 
 Last updated for py4DSTEM v0.10.1

@@ -3,12 +3,12 @@
 import h5py
 import numpy as np
 from os.path import splitext
-from .metadata import Metadata
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
 from .read_utils import version_is_geq, get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
-from ...datastructure import PointList, PointListArray
-from ....process.utils import tqdmnd
+from .metadata import metadata_from_h5
+from ..datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
+from ..datastructure import PointList, PointListArray
+from ...process.utils import tqdmnd
 from .legacy import read_v060
 
 
@@ -82,7 +82,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
 
     # If metadata is requested
     if metadata:
-        return Metadata().from_h5(filepath)
+        return metadata_from_h5(fp)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():

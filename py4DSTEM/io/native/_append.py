@@ -9,7 +9,7 @@ from .read_utils import get_N_dataobjects, get_py4DSTEM_topgroups
 from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
-from ...datastructure import DataObject
+from ..datastructure import DataObject
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
