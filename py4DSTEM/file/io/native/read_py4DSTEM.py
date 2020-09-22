@@ -45,7 +45,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
                     data size. May be useful to avoid 'wraparound' errors.
 
     Returns:
-        data        Variable outpute.
+        data        Variable output.
                     If no input arguments with return values (i.e. data_id or
                     metadata) are passed, nothing is returned.
                     If metadata==True, returns a Metadata instance with the file
