@@ -4,5 +4,5 @@ from .copy import *
 from .remove import *
 from .write import *
 from .repack import *
-from .metadata import Metadata
+from .metadata import *
 
