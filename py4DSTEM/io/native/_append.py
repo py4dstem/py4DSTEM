@@ -29,7 +29,7 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     # Read the file
     assert(is_py4DSTEM_file(filepath)), "Error: file is not recognized as a py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(filepath)
-    assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(self.topgroup)
+    assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
     N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath)
     with h5py.File(filepath,"r+") as f:
         # Get data groups
