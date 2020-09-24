@@ -1,4 +1,4 @@
-# File reader for files written by py4DSTEM v0.8.0 or older.
+# Reader for py4DSTEM v0.5.0 files
 
 import h5py
 import numpy as np
@@ -55,7 +55,7 @@ def read_v050(fp, **kwargs):
                                     DataObject instances and the second a MetaData instance.
     """
     assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
-    
+
     # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
     tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
@@ -74,10 +74,7 @@ def read_v050(fp, **kwargs):
 
     version = get_py4DSTEM_version(fp, tg)
     assert(version == (0,5,0)), "File must be v0.5.0."
-    # Triage - determine what needs doing
-    _data_id = 'data_id' in kwargs.keys()
-    _metadata = 'metadata' in kwargs.keys()
-    _log = 'log' in kwargs.keys()
+    _data_id = 'data_id' in kwargs.keys()  # Flag indicating if data was requested
 
     # Validate inputs
     if _data_id:
@@ -85,12 +82,6 @@ def read_v050(fp, **kwargs):
         assert(isinstance(data_id,(int,str,list,tuple))), "Error: data must be specified with strings or integers only."
         if not isinstance(data_id,(int,str)):
             assert(all([isinstance(d,(int,str)) for d in data_id])), "Error: data must be specified with strings or integers only."
-    if _metadata:
-        assert(isinstance(kwargs.keys['metdata'],bool))
-        _metadata = kwargs.keys['metadata']
-    if _metadata:
-        assert(isinstance(kwargs.keys['metdata'],bool))
-        _log = kwargs.keys['log']
 
     # Parse optional arguments
     if 'mem' in kwargs.keys():
@@ -110,25 +101,11 @@ def read_v050(fp, **kwargs):
         bindtype = None
 
     # Perform requested operations
-    if not (_data_id or _metadata or _log):
+    if not _data_id:
         print_py4DSTEM_file(fp,tg)
-        return None,None
-    if _data_id:
-        loaded_data = get_data(fp,tg,data_id,mem,binfactor,bindtype)
-    if _metadata:
-        md = get_metadata(fp,tg)
-    if _log:
-        write_log(fp,tg)
-
-    # Return
-    if (_data_id and _metadata):
-        return loaded_data,md
-    elif _data_id:
-        return loaded_data,None
-    elif _metadata:
-        return None,md
+        return
     else:
-        return None,None
+        return get_data(fp,tg,data_id,mem,binfactor,bindtype)
 
 
 ############ Helper functions ############
