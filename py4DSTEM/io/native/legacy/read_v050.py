@@ -4,9 +4,9 @@ import h5py
 import numpy as np
 from os.path import splitext
 from ..read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from ....datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
-from ....datastructure import PointList, PointListArray
-from .....process.utils import tqdmnd
+from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray
+from ....process.utils import tqdmnd
 from .read_utils_v050 import get_py4DSTEM_dataobject_info
 
 
