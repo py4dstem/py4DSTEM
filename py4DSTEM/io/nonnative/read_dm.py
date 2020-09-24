@@ -1,0 +1,84 @@
+# Reads a digital micrograph 4D-STEM dataset
+
+import numpy as np
+from pathlib import Path
+from ncempy.io import dm
+from ..datastructure import DataCube, Metadata
+from ...process.utils import bin2D
+
+def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
+    """
+    Read a digital micrograph 4D-STEM file.
+
+    Accepts:
+        fp          str or Path Path to the file
+        mem         (str) Specifies how the data should be stored; must be "RAM"
+                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+                    is "RAM".
+        binfactor   (int) Bin the data, in diffraction space, as it's loaded. See
+                    docstring for py4DSTEM.file.io.read.  Default is 1.
+        metadata    (bool) iff True, returns the file metadata as a Metadata
+                    instance.
+
+    Returns:
+        data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
+                    iff metadata==True, returns the metadata as a Metadata instance
+
+                    Note that metadata is read either way - in the latter case ONLY
+                    metadata is read and returned, in the former case a DataCube
+                    is returned with the metadata attached at datacube.metadata
+    """
+    assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
+    assert(binfactor>=1), "Error: binfactor must be >= 1"
+
+    md = get_metadata_from_dmFile(fp)
+    if metadata:
+        return md
+
+    if (mem,binfactor)==("RAM",1):
+        with dm.fileDM(fp) as dmFile:
+            dataSet = dmFile.getDataset(0)
+            dc = DataCube(data=dataSet['data'])
+    elif (mem,binfactor)==("MEMMAP",1):
+        with dm.fileDM(fp, on_memory=False) as dmFile:
+            memmap = dmFile.getMemmap(0)
+            dc = DataCube(data=memmap)
+    elif (mem)==("RAM"):
+        with dm.fileDM(fp, on_memory=False) as dmFile:
+            memmap = dmFile.getMemmap(0)
+        if 'dtype' in kwargs.keys():
+            dtype = kwargs['dtype']
+        else:
+            dtype = memmap.dtype
+        R_Nx,R_Ny,Q_Nx,Q_Ny = memmap.shape
+        Q_Nx, Q_Ny = Q_Nx//binfactor, Q_Ny//binfactor
+        data = np.empty((R_Nx,R_Ny,Q_Nx,Q_Ny),dtype=dtype)
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                data[Rx,Ry,:,:] = bin2D(memmap[Rx,Ry,:,:,],binfactor,dtype=dtype)
+        dc = DataCube(data=data)
+    else:
+        raise Exception("Memory mapping and on-load binning together is not supported.  Either set binfactor=1 or mem='RAM'.")
+        return
+
+    dc.metadata = md
+    return dc
+
+
+def get_metadata_from_dmFile(fp):
+    """ Accepts a filepath to a dm file and returns a Metadata instance
+    """
+    metadata = Metadata()
+    # TODO TKTKTK
+    #metadata.microscope = {}
+    #metadata.calibration = {}
+    #metadata.sample = {}
+    #metadata.user = {}
+    #metadata.comments = {}
+
+    return metadata
+
+
+

@@ -5,7 +5,7 @@ with open("README.md","r") as f:
 
 setup(
     name='py4DSTEM',
-    version='0.9.6',
+    version='0.11.0',
     packages=find_packages(),
     description='An open source python package for processing and analysis of 4D STEM data.',
     long_description=long_description,
@@ -21,7 +21,6 @@ setup(
         'scipy >= 1.1',
         'h5py >= 2.10.0',
         'ncempy >= 1.6.0',
-        'pymatgen',
         'numba >= 0.49.1',
         'scikit-image >= 0.16.2',
         'scikit-learn >= 0.22.1',
@@ -29,7 +28,7 @@ setup(
         'pyqtgraph >= 0.10',
         'qtconsole >= 4.4',
         'ipywidgets',
-        'tqdm',
+        'tqdm'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],

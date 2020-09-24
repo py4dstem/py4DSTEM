@@ -9,7 +9,7 @@ from scipy.ndimage.morphology import binary_opening, binary_closing, binary_dila
 from skimage.measure import label
 from sklearn.decomposition import NMF
 
-from ...file.datastructure import PointListArray
+from ...io.datastructure import PointListArray
 
 
 class BraggVectorClassification(object):
@@ -72,7 +72,7 @@ class BraggVectorClassification(object):
 
     """
 
-    def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True):
+    def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True, max_dist=None):
         """
         Initializes a BraggVectorClassification instance.
 
@@ -94,6 +94,8 @@ class BraggVectorClassification(object):
             Qy                  (ndarray of floats) y-coords of the voronoi points
             X_is_boolean        (bool) if True, populate X with bools (BP is or is not present)
                                 if False, populate X with floats (BP c.c. intensities)
+            max_dist            (None or number) maximum distance from a given voronoi point a peak
+                                can be and still be associated with this label
         """
         assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
         assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
@@ -105,7 +107,7 @@ class BraggVectorClassification(object):
         self.Qy = Qy
 
         # Get the sets of Bragg peaks present at each scan position
-        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy)
+        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist)
 
         # Construct X matrix
         self.N_feat = len(self.Qx)
@@ -193,13 +195,15 @@ class BraggVectorClassification(object):
         self.N_c = class_images.shape[2]
 
         # H
-        self.H = np.zeros((self.N_c,self.N_meas))
+        H = np.zeros((self.N_c,self.N_meas))
         for i in range(self.N_c):
-            self.H[i,:] = class_images[:,:,i].ravel()
+            H[i,:] = class_images[:,:,i].ravel()
+        self.H = np.copy(H, order='C')
 
         # W
-        self.W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
-        self.W = np.where(self.W<0,0,self.W)
+        W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
+        W = np.where(W<0,0,W)
+        self.W = np.copy(W, order='C')
 
         self.W_next = None
         self.H_next = None
@@ -658,7 +662,7 @@ class BraggVectorClassification(object):
 
 ### Functions for initial class determination ###
 
-def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy):
+def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
     """
     For each scan position, gets a set of integers, specifying the bragg peaks at this scan
     position.
@@ -677,6 +681,8 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy):
         braggpeaks          (PointListArray) Bragg peaks; must have coords 'qx' and 'qy'
         Qx                  (ndarray of floats) x-coords of the voronoi points
         Qy                  (ndarray of floats) y-coords of the voronoi points
+        max_dist            (None or number) maximum distance from a given voronoi point a peak
+                            can be and still be associated with this label
 
     Returns:
         braggpeak_labels    (list of lists of sets) the labels found at each scan position.
@@ -692,7 +698,11 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy):
             pointlist = braggpeaks.get_pointlist(Rx,Ry)
             for i in range(pointlist.length):
                 label = np.argmin(np.hypot(Qx-pointlist.data['qx'][i],Qy-pointlist.data['qy'][i]))
-                s.add(label)
+                if max_dist is not None:
+                    if np.hypot(Qx[label]-pointlist.data['qx'][i],Qy[label]-pointlist.data['qy'][i]) < max_dist:
+                        s.add(label)
+                else:
+                    s.add(label)
 
     return braggpeak_labels
 
