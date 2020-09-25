@@ -9,7 +9,7 @@ from .metadata import metadata_from_h5
 from ..datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ..datastructure import PointList, PointListArray
 from ...process.utils import tqdmnd
-from .legacy import read_v060
+from .legacy import read_v070,read_v060,read_v050
 
 
 def read_py4DSTEM(filepath, metadata=False, **kwargs):
@@ -60,7 +60,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
     tgs = get_py4DSTEM_topgroups(filepath)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
-        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
+        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
     else:
         if len(tgs)==1:
             tg = tgs[0]
@@ -75,8 +75,12 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
     # Get py4DSTEM version
     version = get_py4DSTEM_version(filepath, tg)
     if not version_is_geq(version,(0,9,0)):
-        if version == (0,6,0):
+        if version == (0,7,0):
+            return read_v070(filepath, **kwargs)
+        elif version == (0,6,0):
             return read_v060(filepath, **kwargs)
+        elif version == (0,5,0):
+            return read_v050(filepath, **kwargs)
         else:
             raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
 
