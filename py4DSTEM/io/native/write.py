@@ -76,14 +76,22 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     grp_pla = group_data.create_group("pointlistarrays")
     ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
 
-    # Make metadata group and identify any metadata
+    # Make metadata group and identify any metadata, either passed as arguments or attached to DataCubes
     grp_md = grp_top.create_group("metadata")
-    metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
-    assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
-    try:
-        i = metadata_list.index(True)
-        md = dataobject_list.pop(i)
-    except ValueError:
+    inds = np.nonzero([isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))])[0]
+    metadata_list = []
+    for i in inds[::-1]:
+        metadata_list.append(dataobject_list.pop(i))
+    for dataobject in dataobject_list:
+        if isinstance(dataobject,DataCube):
+            if hasattr(dataobject,'metadata'):
+                metadata_list.append(dataobject.metadata)
+    if len(metadata_list)>1:
+        assert(all([id(metadata_list[0])==id(metadata_list[i]) for i in range(1,len(metadata_list))])), 'Error: multiple distinct Metadata objects found'
+        md = metadata_list[0]
+    elif len(metadata_list)==1:
+        md = metadata_list[0]
+    else:
         md = None
 
     # Loop through and save all objects in the dataobjectlist

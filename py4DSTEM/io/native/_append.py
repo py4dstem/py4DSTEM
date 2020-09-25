@@ -42,9 +42,13 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         grp_pla = f[topgroup]['data/pointlistarrays']
         grp_md = f[topgroup]['metadata']
 
-        # Identify metadata
+        # Identify metadata, either passed as arguments or attached to DataCubes
         metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
-        assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
+        for dataobject in dataobject_list:
+            if isinstance(dataobject,DataCube):
+                if hasattr(dataobject,'metadata'):
+                    metadata_list.append(dataobject.metadata)
+        assert len(metadata_list)<2, "Multiple Metadata instances were passed"
         try:
             i = metadata_list.index(True)
             md = dataobject_list.pop(i)
