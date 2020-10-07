@@ -48,7 +48,7 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
             if isinstance(dataobject,DataCube):
                 if hasattr(dataobject,'metadata'):
                     metadata_list.append(dataobject.metadata)
-        assert len(metadata_list)<2, "Multiple Metadata instances were passed"
+        assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
         try:
             i = metadata_list.index(True)
             md = dataobject_list.pop(i)
