@@ -124,6 +124,8 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     # Save metadata
     if md is not None:
         metadata_to_h5(filepath,md,overwrite=overwrite,topgroup=topgroup)
+    else:
+        metadata_to_h5(filepath,Metadata())
     # Save data
     for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
         new_grp = grp.create_group(name)
