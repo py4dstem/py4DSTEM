@@ -10,7 +10,7 @@ from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
 from .metadata import metadata_to_h5
-from ..datastructure import DataObject,Metadata
+from ..datastructure import DataObject,Metadata,DataCube
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
