@@ -137,7 +137,7 @@ def calculate_coef_strain(coef_cube, r_ref):
     return exx, eyy, exy
 
 
-def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
+def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None, fignum=88):
     """
     This function will plot strains with a unified color scale.
 
@@ -164,8 +164,8 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
     for i in strains:
         i[mask] = np.nan
 
-    plt.figure(88, figsize=(9, 5.8), clear=True)
-    f, (ax1, ax2, ax3) = plt.subplots(1, 3, num=88)
+    plt.figure(fignum, figsize=(9, 5.8), clear=True)
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3, num=fignum)
     ax1.imshow(strains[0], cmap=cmap, vmin=vmin, vmax=vmax)
     ax1.tick_params(
         axis="both",
@@ -321,7 +321,7 @@ def compute_nn_corr(datacube, mask=None):
                     ),
                     corr2d(
                         datacube[i + 1, j + 1, :, :],
-                        datacube[i + 2, j + 2, :, :],
+                        datacube[i + 1, j + 2, :, :],
                         mask=mask,
                     ),
                     corr2d(
@@ -468,7 +468,7 @@ def compute_FEM(data, method, mask=None):
 
     Inputs:
     data    - polar-transformed stacks (py4DSTEM dataobject). the shape is (R_Nx, R_Ny, theta, r)
-    method  - integer, 0-3 corresponding to the four methods of computing FEM variance. Description will be added later for which corresponds to which
+    method  - integer, 0-3 corresponding to the four methods of computing FEM variance. 0 is the variance of annular mean, 1 is mean of ring variances, 2 is ring ensemble variance, and 3 is the annular mean of the variance
     mask    - real space mask that says which patterns to include
     """
 
@@ -477,29 +477,29 @@ def compute_FEM(data, method, mask=None):
 
     data = data.data[mask, :, :]  # this turns the data from 4D to 3D
 
-    if method is 0:
-        "this is variance of the annular mean"
+    if method == 0:
+        # this is variance of the annular mean
         ann_mean = np.mean(data, axis=1)
         ann_mean_var = (
             np.mean(ann_mean ** 2, axis=0) / np.mean(ann_mean, axis=0) ** 2 - 1
         )
         fem_result = ann_mean_var
 
-    elif method is 1:
-        "this is the mean of the ring variances"
+    elif method == 1:
+        # this is the mean of the ring variances
         ring_var = np.mean(data ** 2, axis=1) / np.mean(data, axis=1) ** 2 - 1
         fem_result = np.mean(ring_var, axis=0)
 
-    elif method is 2:
-        "this is the ring ensemble variance"
+    elif method == 2:
+        # this is the ring ensemble variance
         ring_ensemble_var = np.zeros(data.shape[2])
         for i in range(data.shape[2]):
             ring = np.ravel(data[:, :, i])
             ring_ensemble_var[i] = np.mean(ring ** 2) / np.mean(ring) ** 2 - 1
         fem_result = ring_ensemble_var
 
-    elif method is 3:
-        "this is the annular mean of the variance image"
+    elif method == 3:
+        # this is the annular mean of the variance image
         var_im = np.mean(data ** 2, axis=0) / np.mean(data, axis=0) ** 2 - 1
         ann_mean_var_im = np.mean(var_im, axis=0)
         fem_result = ann_mean_var_im
