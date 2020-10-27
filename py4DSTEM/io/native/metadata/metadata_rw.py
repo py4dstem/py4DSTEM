@@ -4,7 +4,7 @@ from ...datastructure import Metadata
 from .h5rw import h5write,h5read,h5append,h5info
 from ..read_utils import is_py4DSTEM_file,get_py4DSTEM_topgroups
 
-def metadata_to_h5(fp, metadata, overwrite=False, topgroup=None):
+def metadata_to_h5(fp, metadata, overwrite=False, topgroup='4DSTEM_experiment'):
     """
     Saves metadata to an existsing py4DSTEM .h5 file.
 
@@ -25,17 +25,8 @@ def metadata_to_h5(fp, metadata, overwrite=False, topgroup=None):
     assert exists(fp)
     assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
     tgs = get_py4DSTEM_topgroups(fp)
-    if topgroup is not None:
-        assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
-        tg = topgroup
-    elif len(tgs)==1:
-        tg = tgs[0]
-    else:
-        print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
-        print("")
-        print("Topgroups found:")
-        for tg in tgs:
-            print(tg)
+    assert(topgroup in tgs)
+    tg = topgroup
 
     with h5py.File(fp,'r+') as f:
         if 'metadata' not in f[tg]: f[tg].create_group('metadata')
@@ -54,23 +45,15 @@ def metadata_to_h5(fp, metadata, overwrite=False, topgroup=None):
 
     return
 
-def metadata_from_h5(fp, topgroup=None):
+def metadata_from_h5(fp, topgroup='4DSTEM_experiment'):
     """
     Reads the metadata in a py4DSTEM formatted .h5 file and stores it in a
     Metadata instance.
     """
     assert is_py4DSTEM_file(fp), "File found at path {} is not recognized as a py4DSTEM file.".format(fp)
     tgs = get_py4DSTEM_topgroups(fp)
-    if topgroup is not None:
-        assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
-    elif len(tgs)==1:
-        tg = tgs[0]
-    else:
-        print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
-        print("")
-        print("Topgroups found:")
-        for tg in tgs:
-            print(tg)
+    assert(topgroup in tgs)
+    tg = topgroup
 
     metadata = Metadata()
     metadata.microscope = h5read(fp,tg+'/metadata/microscope')
