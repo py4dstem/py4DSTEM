@@ -22,6 +22,8 @@ class Metadata(DataObject):
         self.calibration = {}
         self.comments = {}
 
+        self.dicts = ('microscope','sample','user','calibration','comments')
+
     ####### Begin get/set methods #######
 
     # Pixel sizes
@@ -35,7 +37,7 @@ class Metadata(DataObject):
         return self.microscope['R_pixel_size']
     def get_R_pixel_size(self,where=False):
         key = 'R_pixel_size'
-        if key in self.calibration.keys(self):
+        if key in self.calibration.keys():
             _w='calibration'
             val = self.calibration[key]
         elif key in self.microscope.keys():
