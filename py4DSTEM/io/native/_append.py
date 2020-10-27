@@ -25,12 +25,19 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         dataobject_list = data
     else:
         raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
+    tgs = get_py4DSTEM_topgroups(filepath)
+    if len(tgs)>1:
+        assert(overwrite!=2), "`Hard` overwriting objects is not supported in multi-topgroup files"
+    if topgroup not in tgs:
+        print("This py4DSTEM file contains the following topgroups -- please specify one:")
+        print("")
+        for tg in tgs:
+            print(tg)
+        return
 
     # Read the file
     assert(is_py4DSTEM_file(filepath)), "Error: file is not recognized as a py4DSTEM file."
-    tgs = get_py4DSTEM_topgroups(filepath)
-    assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
-    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath)
+    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath,topgroup=topgroup)
     with h5py.File(filepath,"r+") as f:
         # Get data groups
         group_data = f[topgroup]['data']

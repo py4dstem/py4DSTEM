@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from os.path import exists
+from os import remove as rm
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .metadata import metadata_to_h5
 from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
@@ -35,12 +36,13 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
                 # if we are writing a new topgroup to an existing .h5
                 tgs = get_py4DSTEM_topgroups(filepath)
                 if topgroup in tgs:
-                    raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
+                    raise Exception("This py4DSTEM .h5 file already contains a topgroup named '{}'. Overwrite the whole file using overwrite=True, or add another topgroup.".format(topgroup))
                 else:
                     f = h5py.File(filepath,'r+')
             else:
                 raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
         else:
+            rm(filepath)
             f = h5py.File(filepath,'w')
     else:
         f = h5py.File(filepath,'w')
@@ -125,7 +127,7 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     if md is not None:
         metadata_to_h5(filepath,md,overwrite=overwrite,topgroup=topgroup)
     else:
-        metadata_to_h5(filepath,Metadata())
+        metadata_to_h5(filepath,Metadata(),overwrite=overwrite,topgroup=topgroup)
     # Save data
     for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
         new_grp = grp.create_group(name)
