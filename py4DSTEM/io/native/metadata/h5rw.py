@@ -4,6 +4,7 @@ import numpy as np
 import time
 import os.path
 import glob
+from pathlib import Path
 
 __all__ = ['h5write', 'h5append', 'h5read', 'h5info', 'h5options']
 
@@ -304,6 +305,8 @@ def h5read(filename, grouppath, *args, **kwargs):
     Reads sequentially all globbed filenames.
 
     """
+    if isinstance(filename,Path):
+        filename = str(filename)
     doglob = kwargs.get('doglob', None)
 
     # Used if we read a list of files
