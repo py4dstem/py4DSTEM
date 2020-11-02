@@ -46,7 +46,7 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
             memmap = dmFile.getMemmap(0)
             dc = DataCube(data=memmap)
     elif (mem)==("RAM"):
-        with dm.fileDM(fp, on_memory=False) as dmFile:
+        with dm.fileDM(fp, on_memory=True) as dmFile:
             memmap = dmFile.getMemmap(0)
         if 'dtype' in kwargs.keys():
             dtype = kwargs['dtype']
