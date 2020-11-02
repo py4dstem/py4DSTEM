@@ -8,6 +8,28 @@ class Metadata(DataObject):
     instance. Access, adding, and editing can be accomplished directly
     from the dictionaries, or can be accomplished using the get/set
     methods.
+
+    The dictionaries are: 'microscope', 'calibration', 'sample', 'user', 'comments'
+    They are reserved for the following uses:
+    'microscope': everything from the raw / original file goes here.
+    'calibration': all calibrations added later by the user go here.
+    'sample': information about the sample and sample prep.
+    'user': information about the microscope operator who acquired the data,
+            as well as the user who performed the computational analysis.
+    'comments': general use space for any other information
+
+    Note that certain pieces of metadata may exist in two places - 'microscope'
+    and 'calibration'.  For instance, this would occur with the pixel sizes if
+    (1) the microscope's pixel size calibrations were attached to the original
+    file and automatically added to the 'microscope' dictionary, and then (2)
+    during processing the user re-calibrates the pixel sizes manually, e.g. using
+    a reference sample to achieve optimal accuracy/precision, and stores their
+    new calibrations using the set_Q_pixel_size method, which will store the
+    values in 'calibration'. This has the advantage of keeping all the original
+    data, while also allowing more refined calibrations.  Retreiving metadata with
+    the get methods (e.g. get_Q_pixel_size) will default to using the values in
+    'calibration' if they are present and 'microscope' if they are not, unless
+    the keyword argument 'where' is specified.
     """
     def __init__(self):
         """
