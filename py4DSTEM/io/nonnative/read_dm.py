@@ -38,7 +38,7 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
         return md
 
     if (mem,binfactor)==("RAM",1):
-        with dm.fileDM(fp) as dmFile:
+        with dm.fileDM(fp,on_memory=True) as dmFile:
             dataSet = dmFile.getDataset(0)
             dc = DataCube(data=dataSet['data'])
     elif (mem,binfactor)==("MEMMAP",1):
@@ -71,6 +71,20 @@ def get_metadata_from_dmFile(fp):
     """ Accepts a filepath to a dm file and returns a Metadata instance
     """
     metadata = Metadata()
+
+    with dm.fileDM(fp, on_memory=False) as dmFile:
+        pixelSizes = dmFile.scale
+        pixelUnits = dmFile.scaleUnit
+        assert(pixelSizes[0]==pixelSizes[1]), "Rx and Ry pixel sizes don't match"
+        assert(pixelSizes[2]==pixelSizes[3]), "Qx and Qy pixel sizes don't match"
+        assert(pixelUnits[0]==pixelUnits[1]), "Rx and Ry pixel units don't match"
+        assert(pixelUnits[2]==pixelUnits[3]), "Qx and Qy pixel units don't match"
+        for i in range(len(pixelUnits)):
+            if pixelUnits[i]=='':
+                pixelUnits[i] = 'pixels'
+        microscope
+
+
     # TODO TKTKTK
     #metadata.microscope = {}
     #metadata.calibration = {}
