@@ -77,7 +77,7 @@ class Metadata(DataObject):
                     setattr(self,'set_'+k+'__'+dic,self.set_constructor(self.dicts[dic],k))
                     setattr(self,'get_'+k+'__'+dic,self.get_constructor(self.dicts[dic],k))
                 setattr(self,'set_'+k,self.set_constructor(self.dicts[dics[-1]],k))
-                setattr(self,'get_'+k,self.get_constructor(self.dicts[dics[-1]],k))
+                setattr(self,'get_'+k,self.get_constructor_multiDict([self.dicts[dic] for dic in dics],k))
 
     def set_constructor(self,dic,key):
         def fn(val):
@@ -87,6 +87,16 @@ class Metadata(DataObject):
         def fn():
             return dic[key]
         return fn
+    def get_constructor_multiDict(self,dics,key):
+        def fn():
+            for dic in dics[::-1]:
+                try:
+                    return dic[key]
+                except KeyError:
+                    pass
+            raise Exception('Metadata not found')
+        return fn
+
 
     # Additional convenience get/set methods
 

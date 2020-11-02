@@ -82,15 +82,10 @@ def get_metadata_from_dmFile(fp):
         for i in range(len(pixelUnits)):
             if pixelUnits[i]=='':
                 pixelUnits[i] = 'pixels'
-        microscope
-
-
-    # TODO TKTKTK
-    #metadata.microscope = {}
-    #metadata.calibration = {}
-    #metadata.sample = {}
-    #metadata.user = {}
-    #metadata.comments = {}
+        metadata.set_R_pixel_size__microscope(pixelSizes[0])
+        metadata.set_R_pixel_size_units__microscope(pixelUnits[0])
+        metadata.set_Q_pixel_size__microscope(pixelSizes[2])
+        metadata.set_Q_pixel_size_units__microscope(pixelUnits[2])
 
     return metadata
 
