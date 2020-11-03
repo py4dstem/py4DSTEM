@@ -70,12 +70,15 @@ class Metadata(DataObject):
             dics = getset_lookup[k]
             if len(dics)==1:
                 dic = dics[0]
+                # Construct normal get/set functions
                 setattr(self,'set_'+k,self.set_constructor(self.dicts[dic],k))
                 setattr(self,'get_'+k,self.get_constructor(self.dicts[dic],k))
             else:
                 for dic in dics:
+                    # get/set fns specifying one of multiple possible dicts
                     setattr(self,'set_'+k+'__'+dic,self.set_constructor(self.dicts[dic],k))
                     setattr(self,'get_'+k+'__'+dic,self.get_constructor(self.dicts[dic],k))
+                # get/set fns which draw from the 'best' available source
                 setattr(self,'set_'+k,self.set_constructor(self.dicts[dics[-1]],k))
                 setattr(self,'get_'+k,self.get_constructor_multiDict([self.dicts[dic] for dic in dics],k))
 
