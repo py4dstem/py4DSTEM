@@ -55,12 +55,20 @@ def metadata_from_h5(fp, topgroup='4DSTEM_experiment'):
     assert(topgroup in tgs)
     tg = topgroup
 
+    # Read the dictionaries
+    microscope = h5read(fp,tg+'/metadata/microscope')
+    calibration = h5read(fp,tg+'/metadata/calibration')
+    sample = h5read(fp,tg+'/metadata/sample')
+    user = h5read(fp,tg+'/metadata/user')
+    comments = h5read(fp,tg+'/metadata/comments')
+
+    # Put them into a Metadata instance
     metadata = Metadata()
-    metadata.microscope = h5read(fp,tg+'/metadata/microscope')
-    metadata.calibration = h5read(fp,tg+'/metadata/calibration')
-    metadata.sample = h5read(fp,tg+'/metadata/sample')
-    metadata.user = h5read(fp,tg+'/metadata/user')
-    metadata.comments = h5read(fp,tg+'/metadata/comments')
+    for key in microscope: metadata.microscope[key] = microscope[key]
+    for key in calibration: metadata.calibration[key] = calibration[key]
+    for key in sample: metadata.sample[key] = sample[key]
+    for key in user: metadata.user[key] = user[key]
+    for key in comments: metadata.comments[key] = comments[key]
 
     return metadata
 
