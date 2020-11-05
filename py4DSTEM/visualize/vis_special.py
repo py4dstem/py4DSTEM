@@ -33,7 +33,7 @@ def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
         plt.show()
         return
     else:
-        return fig,axs
+        return fig,ax
 
 def show_kernel(kernel,R,L,W,figsize=(12,6),returnfig=False,**kwargs):
     """
