@@ -3,6 +3,27 @@
 import numpy as np
 from scipy.optimize import curve_fit
 
+def gaussian(x, A, mu, sigma):
+    return A*np.exp(-0.5*((x-mu)/sigma)**2)
+
+def fit_1D_gaussian(xdata,ydata,xmin,xmax):
+    """
+    Fits a 1D gaussian to the subset of the 1D curve f(xdata)=ydata within the window (xmin,xmax).
+    Returns A,mu,sigma.  Retrieve the full curve with
+        fit_gaussian = py4DSTEM.process.fit.gaussian(xdata,A,mu,sigma)
+    """
+    mask = (xmin<=xdata)*(xmax>xdata)
+    inds = np.nonzero(mask)[0]
+    _xdata = xdata[inds]
+    _ydata = ydata[inds]
+    scale = np.max(_ydata)
+    _ydata = _ydata/scale
+
+    p0 = [np.max(_ydata),_xdata[np.argmax(_ydata)],(xmax-xmin)/8.]  # TODO: better guess for std
+    popt,pcov = curve_fit(gaussian,_xdata,_ydata,p0=p0)
+    A,mu,sigma = scale*popt[0],popt[1],popt[2]
+    return A,mu,sigma
+
 def fit_2D(function, data, data_mask=None, return_ar=True, popt_guess=None):
     """
     Performs a 2D fit, where the fit function takes its first input in the form of a length 2
@@ -55,4 +76,9 @@ def fit_2D(function, data, data_mask=None, return_ar=True, popt_guess=None):
         return popt, pcov, fit_ar
     else:
         return popt, pcov
+
+
+
+
+
 
