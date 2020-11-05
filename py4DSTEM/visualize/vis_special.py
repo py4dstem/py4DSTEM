@@ -4,6 +4,37 @@ from scipy.spatial import Voronoi
 from . import show,show_circ,show_image_grid
 from ..process.utils import get_voronoi_vertices
 
+def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
+                  color='k',xlabel='q (pixels)',ylabel='Intensity (A.U.)',
+                  labelsize=16,ticklabelsize=14,grid='on',
+                  **kwargs):
+    """
+    Plots a diffraction space radial profile.
+    Params:
+        q               (1D array) the diffraction coordinate / x-axis
+        intensity       (1D array) the y-axis values
+        ymax            (number) max value for the yaxis
+        color           (matplotlib color) profile color
+        xlabel          (str)
+        ylabel
+        labelsize       size of x and y labels
+        ticklabelsize
+        grid            'off' or 'on'
+    """
+    fig,ax = plt.subplots(figsize=figsize)
+    ax.plot(q,intensity,color=color)
+    ax.grid(grid)
+    ax.set_ylim(0,ymax)
+    ax.tick_params(axis='x',labelsize=ticklabelsize)
+    ax.set_yticklabels([])
+    ax.set_xlabel(xlabel,size=labelsize)
+    ax.set_ylabel(ylabel,size=labelsize)
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,axs
+
 def show_kernel(kernel,R,L,W,figsize=(12,6),returnfig=False,**kwargs):
     """
     Plots, side by side, the probe kernel and its line profile.
