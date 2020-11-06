@@ -1,4 +1,5 @@
 from ...file.datastructure import DataCube
+from ..utils import tqdmnd
 from . import WPFModelPrototype
 
 from typing import Optional
@@ -121,6 +122,39 @@ class WholePatternFit:
         self.mean_CBED_fit = opt
 
         return opt
+
+    def fit_all_patterns(self, **fit_opts):
+
+        # make sure we have the latest parameters
+        self._scrape_model_params()
+
+        # set tracking off
+        self._track = False
+        self._fevals = []
+
+        self.fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
+
+        for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
+            self.current_pattern = self.datacube.data[rx, ry, :, :]
+            self.current_glob = self.global_args.copy()
+
+            if self.hasJacobian & self.use_jacobian:
+                opt = least_squares(
+                    self._pattern_error,
+                    self.x0,
+                    jac=self._jacobian,
+                    bounds=(self.lower_bound, self.upper_bound),
+                    **fit_opts
+                )
+            else:
+                opt = least_squares(
+                    self._pattern_error,
+                    self.x0,
+                    bounds=(self.lower_bound, self.upper_bound),
+                    **fit_opts
+                )
+
+            self.fit_data[rx, ry, :] = opt.x
 
     def accept_mean_CBED_fit(self):
         x = self.mean_CBED_fit.x
