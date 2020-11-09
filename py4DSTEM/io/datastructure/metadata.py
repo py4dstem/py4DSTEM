@@ -62,7 +62,9 @@ class Metadata(DataObject):
             'a':('calibration',),   # elliptical distortion
             'b':('calibration',),
             'theta':('calibration',),
-            'beam_energy':('microscope',)
+            'beam_energy':('microscope',),
+            'QR_rotation':('microscope','calibration'),
+            'QR_rotation_units':('microscope','calibration')
         }
 
         # Make the get/set methods
