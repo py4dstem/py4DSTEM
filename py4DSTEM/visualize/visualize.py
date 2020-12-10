@@ -22,6 +22,9 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
                                     are given by the arguments min and max.
                         'minmax'    The min/max values are np.min(ar)/np.max(r)
                         'vrange'    The min/max values are set to min/max
+                        'log'       Takes log_10(ar) and visualizes, clipping the
+                                    histogram at the min/max vals. Values <=0 in
+                                    ar are set to 0.
         ax          (None or 2-tuple) if None, generates a new figure with a single
                     Axes instance. Otherwise, ax must be a 2-tuple containing
                     the matplotlib class instances (Figure,Axes), and ar is
@@ -39,6 +42,8 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
         mask = ar<0
         _ar = np.abs(ar)**power
         _ar[mask] = -_ar[mask]
+    elif contrast == 'log':
+        _ar = np.where(ar>0,np.log(ar),0)
     else:
         _ar = ar**power
 
@@ -52,8 +57,11 @@ def show(ar,min=0,max=3,power=1,figsize=(12,12),contrast='std',ax=None,
     elif contrast == 'vrange':
         vmin = min
         vmax = max
+    elif contrast == 'log':
+        vmin=np.min(_ar)
+        vmax=np.max(_ar)
     else:
-        raise Exception("Parameter contrast must be 'std' or 'minmax' or 'vrange'.")
+        raise Exception("Parameter contrast must be 'std' or 'minmax' or 'vrange' or 'log'.")
 
     if ax is None:
         fig,ax = plt.subplots(1,1,figsize=figsize)
