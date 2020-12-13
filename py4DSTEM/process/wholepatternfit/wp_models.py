@@ -515,7 +515,7 @@ class KernelDiskLattice(WPFModelPrototype):
         exclude_indices: list = [],
     ):
 
-        name = "Complex Overlapped Disk Lattice"
+        name = "Custom Kernel Disk Lattice"
         params = {}
 
         # if global_center:
