@@ -20,7 +20,7 @@ setup(
         'numpy >= 1.15',
         'scipy >= 1.1',
         'h5py >= 2.10.0',
-        'ncempy >= 1.6.0',
+        'ncempy >= 1.8.1',
         'numba >= 0.49.1',
         'scikit-image >= 0.16.2',
         'scikit-learn >= 0.22.1',
