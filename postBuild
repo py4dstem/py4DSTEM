@@ -14,4 +14,3 @@ wget --no-check-certificate 'https://zenodo.org/record/3592520/files/calibration
 
 # files for quickstart.ipynb
 # this is redudant as it is imported earlier 
-#wget 'https://docs.google.com/uc?export=download&id=1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o' -O small4DSTEMscan_10x10.dm3
