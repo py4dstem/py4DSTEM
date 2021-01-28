@@ -11,6 +11,3 @@ wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download
 # files for calibration.ipynb
 wget --no-check-certificate 'https://zenodo.org/record/3592520/files/calibrationData_circularProbe.h5?download=1' -O calibrationData_circularProbe_simulatedAuNanoplatelet.h5
 wget --no-check-certificate 'https://zenodo.org/record/3592520/files/calibrationData_bullseyeProbe.h5?download=1' -O calibrationData_bullseyeProbe_simulatedAuNanoplatelet.h5' 
-
-# files for quickstart.ipynb
-# this is redudant as it is imported earlier 
