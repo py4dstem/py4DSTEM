@@ -18,18 +18,18 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'numpy == 1.19',
-        'scipy == 1.4',
+        'scipy == 1.5.2',
         'h5py == 2.10.0',
         'ncempy == 1.8.1',
         'numba == 0.49.1',
         'scikit-image == 0.17.2',
-        'scikit-learn == 0.23.1',
-        'PyQt5 == 5.15.2',
+        'scikit-learn == 0.23.2',
+        'PyQt5 == 5.13',
         'pyqtgraph == 0.11',
         'qtconsole == 4.7.7',
         'ipywidgets == 7.6.3',
         'tqdm == 4.46.1',
-        'requests == 2.23.0'
+        'requests == 2.25.1'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],
