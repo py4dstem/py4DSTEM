@@ -29,6 +29,7 @@ setup(
         'qtconsole == 4.7.7',
         'ipywidgets == 7.6.3',
         'tqdm == 4.46.1'
+        'requests'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4'],

@@ -10,9 +10,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-py4DSTEM/sample_code/
+#py4DSTEM/sample_code/
 py4DSTEM/test/testdata/
-
+sample_code/data/*h5
+sample_code/data/*dm3
 # Data Specific #
 #################
 *.png
