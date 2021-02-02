@@ -122,6 +122,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * qtconsole
 * ipywidgets
 * tqdm
+* requests
 
 ### Optional dependencies
 
