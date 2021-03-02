@@ -10,7 +10,7 @@ from .write import save_datacube_group, save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
 from .metadata import metadata_to_h5
-from ..datastructure import DataObject,Metadata
+from ..datastructure import DataObject,Metadata,DataCube
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
@@ -25,12 +25,19 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         dataobject_list = data
     else:
         raise TypeError("Error: unrecognized value for argument data. Must be a DataObject or list of DataObjects")
+    tgs = get_py4DSTEM_topgroups(filepath)
+    if len(tgs)>1:
+        assert(overwrite!=2), "`Hard` overwriting objects is not supported in multi-topgroup files"
+    if topgroup not in tgs:
+        print("This py4DSTEM file contains the following topgroups -- please specify one:")
+        print("")
+        for tg in tgs:
+            print(tg)
+        return
 
     # Read the file
     assert(is_py4DSTEM_file(filepath)), "Error: file is not recognized as a py4DSTEM file."
-    tgs = get_py4DSTEM_topgroups(filepath)
-    assert(topgroup in tgs), "Error: specified topgroup, {}, not found.".format(topgroup)
-    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath)
+    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath,topgroup=topgroup)
     with h5py.File(filepath,"r+") as f:
         # Get data groups
         group_data = f[topgroup]['data']
@@ -42,8 +49,12 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         grp_pla = f[topgroup]['data/pointlistarrays']
         grp_md = f[topgroup]['metadata']
 
-        # Identify metadata
+        # Identify metadata, either passed as arguments or attached to DataCubes
         metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
+        for dataobject in dataobject_list:
+            if isinstance(dataobject,DataCube):
+                if hasattr(dataobject,'metadata'):
+                    metadata_list.append(dataobject.metadata)
         assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
         try:
             i = metadata_list.index(True)

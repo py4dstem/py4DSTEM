@@ -8,6 +8,28 @@ class Metadata(DataObject):
     instance. Access, adding, and editing can be accomplished directly
     from the dictionaries, or can be accomplished using the get/set
     methods.
+
+    The dictionaries are: 'microscope', 'calibration', 'sample', 'user', 'comments'
+    They are reserved for the following uses:
+    'microscope': everything from the raw / original file goes here.
+    'calibration': all calibrations added later by the user go here.
+    'sample': information about the sample and sample prep.
+    'user': information about the microscope operator who acquired the data,
+            as well as the user who performed the computational analysis.
+    'comments': general use space for any other information
+
+    Note that certain pieces of metadata may exist in two places - 'microscope'
+    and 'calibration'.  For instance, this would occur with the pixel sizes if
+    (1) the microscope's pixel size calibrations were attached to the original
+    file and automatically added to the 'microscope' dictionary, and then (2)
+    during processing the user re-calibrates the pixel sizes manually, e.g. using
+    a reference sample to achieve optimal accuracy/precision, and stores their
+    new calibrations using the set_Q_pixel_size method, which will store the
+    values in 'calibration'. This has the advantage of keeping all the original
+    data, while also allowing more refined calibrations.  Retreiving metadata with
+    the get methods (e.g. get_Q_pixel_size) will default to using the values in
+    'calibration' if they are present and 'microscope' if they are not, unless
+    the keyword argument 'where' is specified.
     """
     def __init__(self):
         """
@@ -22,119 +44,78 @@ class Metadata(DataObject):
         self.calibration = {}
         self.comments = {}
 
-    ### Begin get/set methods ###
+        self.dicts = {'microscope':self.microscope,
+                      'sample':self.sample,
+                      'user':self.user,
+                      'calibration':self.calibration,
+                      'comments':self.comments}
 
-    def set_R_pixel_size(self,val):
-        self.calibration['R_pixel_size'] = val
-    def set_R_pixel_size_units(self,val):
-        self.calibration['R_pixel_size_units'] = val
-    def get_R_pixel_size_calibration():
-        return self.calibration['R_pixel_size']
-    def get_R_pixel_size_microscope():
-        return self.microscope['R_pixel_size']
-    def get_R_pixel_size(self,where=False):
-        key = 'R_pixel_size'
-        if key in self.calibration.keys():
-            _w='calibration'
-            val = self.calibration[key]
-        elif key in self.microscope.keys():
-            _w ='microscope'
-            val = self.microscope[key]
-        else:
-            raise KeyError("'R_pixel_size' not found in metadata")
-        if where:
-            print("R_pixel_size retrieved from {}".format(_w))
-        return val
-    def get_R_pixel_size_units_microscope():
-        return self.microscope['R_pixel_size_units']
-    def get_R_pixel_size_units_calibration():
-        return self.calibration['R_pixel_size_units']
-    def get_R_pixel_size_units(self,where=False):
-        key = 'R_pixel_size_units'
-        if key in self.calibration.keys():
-            _w='calibration'
-            val = self.calibration[key]
-        elif key in self.microscope.keys():
-            _w ='microscope'
-            val = self.microscope[key]
-        else:
-            raise KeyError("'R_pixel_size_units' not found in metadata")
-        if where:
-            print("R_pixel_size_units retrieved from {}".format(_w))
-        return val
+        # Add new metadata items here. The get/set methods are generated from this table.
+        # Keys are the metadata items name, values are the dictionaries they belong in
+        # Multiple dictionaries will create multiple get/set methods, one for each dict
+        # with the LAST entry in the tuple specifying the default dictionary for this key
+        getset_lookup = {
+            'R_pixel_size':('microscope','calibration'),
+            'R_pixel_size_units':('microscope','calibration'),
+            'Q_pixel_size':('microscope','calibration'),
+            'Q_pixel_size_units':('microscope','calibration'),
+            'a':('calibration',),   # elliptical distortion
+            'b':('calibration',),
+            'theta':('calibration',),
+            'beam_energy':('microscope',),
+            'QR_rotation':('microscope','calibration'),
+            'QR_rotation_units':('microscope','calibration')
+        }
 
-    def set_Q_pixel_size(self,val):
-        self.calibration['Q_pixel_size'] = val
-    def set_Q_pixel_size_units(self,val):
-        self.calibration['Q_pixel_size_units'] = val
-    def get_Q_pixel_size_calibration():
-        return self.calibration['Q_pixel_size']
-    def get_Q_pixel_size_microscope():
-        return self.microscope['Q_pixel_size']
-    def get_Q_pixel_size(self,where=False):
-        key = 'Q_pixel_size'
-        if key in self.calibration.keys():
-            _w='calibration'
-            val = self.calibration[key]
-        elif key in self.microscope.keys():
-            _w ='microscope'
-            val = self.microscope[key]
-        else:
-            raise KeyError("'{}' not found in metadata".format(key))
-        if where:
-            print("'{}' retrieved from {}".format(key,_w))
-        return val
-    def get_Q_pixel_size_units_microscope():
-        return self.microscope['Q_pixel_size_units']
-    def get_Q_pixel_size_units_calibration():
-        return self.calibration['Q_pixel_size_units']
-    def get_Q_pixel_size_units(self,where=False):
-        key = 'Q_pixel_size_units'
-        if key in self.calibration.keys():
-            _w='calibration'
-            val = self.calibration[key]
-        elif key in self.microscope.keys():
-            _w ='microscope'
-            val = self.microscope[key]
-        else:
-            raise KeyError("'{}' not found in metadata",key)
-        if where:
-            print("{} retrieved from {}".format(key,_w))
-        return val
+        # Make the get/set methods
+        for k in getset_lookup:
+            dics = getset_lookup[k]
+            if len(dics)==1:
+                dic = dics[0]
+                # Construct normal get/set functions
+                setattr(self,'set_'+k,self.set_constructor(self.dicts[dic],k))
+                setattr(self,'get_'+k,self.get_constructor(self.dicts[dic],k))
+            else:
+                for dic in dics:
+                    # get/set fns specifying one of multiple possible dicts
+                    setattr(self,'set_'+k+'__'+dic,self.set_constructor(self.dicts[dic],k))
+                    setattr(self,'get_'+k+'__'+dic,self.get_constructor(self.dicts[dic],k))
+                # get/set fns which draw from the 'best' available source
+                setattr(self,'set_'+k,self.set_constructor(self.dicts[dics[-1]],k))
+                setattr(self,'get_'+k,self.get_constructor_multiDict([self.dicts[dic] for dic in dics],k))
+
+    def set_constructor(self,dic,key):
+        def fn(val):
+            dic[key] = val
+        return fn
+    def get_constructor(self,dic,key):
+        def fn():
+            return dic[key]
+        return fn
+    def get_constructor_multiDict(self,dics,key):
+        def fn():
+            for dic in dics[::-1]:
+                try:
+                    return dic[key]
+                except KeyError:
+                    pass
+            raise Exception('Metadata not found')
+        return fn
+
+
+    # Additional convenience get/set methods
+
+    def get_elliptical_distortions(self):
+        """ a,b,theta
+        """
+        return self.get_a(),self.get_b(),self.get_theta()
+    def set_elliptical_distortions(self,a,b,theta):
+        """ a,b,theta
+        """
+        self.set_a(a),self.set_b(b),self.set_theta(theta)
 
 
 
-
-
-
-#    def get_elliptical_distortions():
-#        return
-#    def set_elliptical_distortions():
-#        return
-#
-#    def get_centerposition():
-#        return
-#    def set_centerposition():
-#        return
-#
-#    def get_centerposition_meas():
-#        return
-#    def set_centerposition_meas():
-#        return
-#
-#    def get_centerposition_fit():
-#        return
-#    def set_centerposition_fit():
-#        return
-#
-#    def get_accelerating_voltage():
-#        return
-#    def set_accelerating_voltage():
-#        return
-#    def get_accelerating_voltage_units():
-#        return
-#    def set_accelerating_voltage_units():
-#        return
 
 
 

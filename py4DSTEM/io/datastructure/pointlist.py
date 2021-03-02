@@ -162,6 +162,8 @@ class PointList(DataObject):
         return new_pointlist
 
     def remove_points(self, deletemask):
+        """ Rms points wherever deletemask==True
+        """
         self.data = np.delete(self.data, deletemask.nonzero()[0])
         self.length -= len(deletemask.nonzero()[0])
 

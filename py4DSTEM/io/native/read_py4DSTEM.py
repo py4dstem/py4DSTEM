@@ -60,17 +60,16 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
     tgs = get_py4DSTEM_topgroups(filepath)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
-        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
+        #assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
     else:
         if len(tgs)==1:
             tg = tgs[0]
         else:
-            print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
+            print("Multiple topgroups were found -- please specify one:")
             print("")
-            print("Topgroups found:")
             for tg in tgs:
                 print(tg)
-            return None,None
+            return
 
     # Get py4DSTEM version
     version = get_py4DSTEM_version(filepath, tg)
@@ -86,7 +85,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
 
     # If metadata is requested
     if metadata:
-        return metadata_from_h5(filepath)
+        return metadata_from_h5(filepath, tg)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():

@@ -3,7 +3,10 @@
 
 py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
 
-
+## Try it for yourself
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/alex-rakowski/py4DSTEM/HEAD?filepath=sample_code)
+You can test some of the py4DSTEM sample Jupyter notebooks in your browser using Binder - just click the banner above.
+**Please note that these are currently under contruction and don't all work perfectly yet!**
 
 ## What is 4D-STEM?
 
@@ -35,7 +38,7 @@ Then open a terminal and run
 
 ```
 conda update conda
-conda create -n py4dstem
+conda create -n py4dstem python==3.7
 conda activate py4dstem
 conda install pip
 pip install py4dstem
@@ -128,7 +131,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 
 ### Versioning
 
-v. 0.11.1
+v. 0.11.7
 
 
 

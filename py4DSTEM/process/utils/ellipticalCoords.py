@@ -392,8 +392,8 @@ def radial_integral(ar, x0, y0, dr):
         x0,y0           (floats) the origin
 
     Returns:
-        radial_integral (1d array) the radial integral
         rbin_centers    (1d array) the bins centers of the radial integral
+        radial_integral (1d array) the radial integral
     """
     rmax = int(
         max(
@@ -410,7 +410,7 @@ def radial_integral(ar, x0, y0, dr):
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
-    return radial_integral, rbin_centers
+    return rbin_centers,radial_integral
 
 
 def radial_elliptical_integral(ar, dr, ellipse_params):
@@ -423,8 +423,8 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
         ellipse_params  (5-tuple) the parameters (x0,y0,A,B,phi) for the ellipse
 
     Returns:
-        radial_integral (1d array) the radial integral
         rbin_centers    (1d array) the bins centers of the radial integral
+        radial_integral (1d array) the radial integral
     """
     x0, y0 = ellipse_params[0], ellipse_params[1]
     rmax = int(
@@ -442,4 +442,4 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
-    return radial_integral, rbin_centers
+    return rbin_centers,radial_integral

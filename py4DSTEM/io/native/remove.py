@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-from os import remove, rename
+from os import rename
 from os.path import exists, dirname, basename
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .read_utils import get_py4DSTEM_dataobject_info

@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 from collections import OrderedDict
 from os.path import exists
+from os import remove as rm
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .metadata import metadata_to_h5
 from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
@@ -35,12 +36,13 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
                 # if we are writing a new topgroup to an existing .h5
                 tgs = get_py4DSTEM_topgroups(filepath)
                 if topgroup in tgs:
-                    raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
+                    raise Exception("This py4DSTEM .h5 file already contains a topgroup named '{}'. Overwrite the whole file using overwrite=True, or add another topgroup.".format(topgroup))
                 else:
                     f = h5py.File(filepath,'r+')
             else:
                 raise Exception('A file already exists at path {}.  To overwrite the file, use overwrite=True. To append new objects to an existing file, use append() rather than save().'.format(filepath))
         else:
+            rm(filepath)
             f = h5py.File(filepath,'w')
     else:
         f = h5py.File(filepath,'w')
@@ -76,14 +78,22 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     grp_pla = group_data.create_group("pointlistarrays")
     ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
 
-    # Make metadata group and identify any metadata
+    # Make metadata group and identify any metadata, either passed as arguments or attached to DataCubes
     grp_md = grp_top.create_group("metadata")
-    metadata_list = [isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))]
-    assert np.sum(metadata_list)<2, "Multiple Metadata instances were passed"
-    try:
-        i = metadata_list.index(True)
-        md = dataobject_list.pop(i)
-    except ValueError:
+    inds = np.nonzero([isinstance(dataobject_list[i],Metadata) for i in range(len(dataobject_list))])[0]
+    metadata_list = []
+    for i in inds[::-1]:
+        metadata_list.append(dataobject_list.pop(i))
+    for dataobject in dataobject_list:
+        if isinstance(dataobject,DataCube):
+            if hasattr(dataobject,'metadata'):
+                metadata_list.append(dataobject.metadata)
+    if len(metadata_list)>1:
+        assert(all([id(metadata_list[0])==id(metadata_list[i]) for i in range(1,len(metadata_list))])), 'Error: multiple distinct Metadata objects found'
+        md = metadata_list[0]
+    elif len(metadata_list)==1:
+        md = metadata_list[0]
+    else:
         md = None
 
     # Loop through and save all objects in the dataobjectlist
@@ -116,6 +126,8 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     # Save metadata
     if md is not None:
         metadata_to_h5(filepath,md,overwrite=overwrite,topgroup=topgroup)
+    else:
+        metadata_to_h5(filepath,Metadata(),overwrite=overwrite,topgroup=topgroup)
     # Save data
     for name,grp,save_fn,do in zip(names,grps,save_fns,dataobject_list):
         new_grp = grp.create_group(name)
