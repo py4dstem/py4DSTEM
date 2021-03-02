@@ -366,23 +366,24 @@ def plot_symmetries(datacube_symmetries, sym_order, r_range):
     return None
 
 
-def plot_nn(datacube, i, j, mask=None):
+def plot_nn(datacube, i, j, mask=None, **kwargs):
     """
     this will just plot a 3x3 grid of patterns
     datacube is a numpy array
     i is row,
     j is column
     mask is a numpy array
+    kwargs is passed to plt.imshow
     """
     if mask is None:
         mask = np.ones(datacube.shape[2:4]).astype(bool)
 
-    p = plt.figure(f"Nearest Neighbors of {i}, {j}", clear=True)
+    plt.figure(f"Nearest Neighbors of {i}, {j}", clear=True)
     tiled_image = np.concatenate(
         np.concatenate(datacube[i - 1 : i + 2, j - 1 : j + 2, :, :] * mask, axis=-2),
         axis=-1,
     )
-    plt.imshow(tiled_image)
+    plt.imshow(tiled_image, **kwargs)
 
     return None
 
@@ -411,7 +412,7 @@ def nn_sum(data, rx, ry, weighting="gaussian", order=2, testing=False):
         inds_y = np.arange(ry - 2 * order, ry + 2 * order + 1, dtype=int)
         inds_x, inds_y = np.meshgrid(inds_x, inds_y, indexing="ij")
         dist = np.sqrt((inds_x - rx) ** 2 + (inds_y - ry) ** 2)
-        weights = np.exp(-(dist) ** 2 / (2 * order ** 2))
+        weights = np.exp(-((dist) ** 2) / (2 * order ** 2))
     else:
         raise AssertionError(
             "Weighting is not understood, must be either 'gaussian' or 'flat'"
