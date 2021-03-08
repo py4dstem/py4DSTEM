@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show,show_circ,show_image_grid,ax_show,ax_addaxes,ax_addaxes_QtoR
+from . import show,show_circ,show_image_grid,ax_addaxes,ax_addaxes_QtoR
 from ..process.utils import get_voronoi_vertices
 
 def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
@@ -150,10 +150,10 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
 
     # Plot
     fig,((ax11,ax12),(ax21,ax22)) = plt.subplots(2,2,figsize=figsize)
-    cax11 = ax_show(e_xx,ax11,min=vmin_exx,max=vmax_exx,contrast='vrange',cmap=cmap,returncax=True)
-    cax12 = ax_show(e_yy,ax12,min=vmin_eyy,max=vmax_eyy,contrast='vrange',cmap=cmap,returncax=True)
-    cax21 = ax_show(e_xy,ax21,min=vmin_exy,max=vmax_exy,contrast='vrange',cmap=cmap,returncax=True)
-    cax22 = ax_show(theta,ax22,min=vmin_theta,max=vmax_theta,contrast='vrange',cmap=cmap,returncax=True)
+    cax11 = show(e_xx,figax=(fig,ax11),min=vmin_exx,max=vmax_exx,contrast='vrange',cmap=cmap,returncax=True)
+    cax12 = show(e_yy,figax=(fig,ax12),min=vmin_eyy,max=vmax_eyy,contrast='vrange',cmap=cmap,returncax=True)
+    cax21 = show(e_xy,figax=(fig,ax21),min=vmin_exy,max=vmax_exy,contrast='vrange',cmap=cmap,returncax=True)
+    cax22 = show(theta,figax=(fig,ax22),min=vmin_theta,max=vmax_theta,contrast='vrange',cmap=cmap,returncax=True)
     ax11.set_title(r'$\epsilon_{xx}$',size=titlesize)
     ax12.set_title(r'$\epsilon_{yy}$',size=titlesize)
     ax21.set_title(r'$\epsilon_{xy}$',size=titlesize)

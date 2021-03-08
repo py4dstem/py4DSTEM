@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from .visualize import ax_show
+from .visualize import show
 from ..process.calibration import get_Qvector_from_Rvector,get_Rvector_from_Qvector
 
 def show_RQ(realspace_image, realspace_pdict,
@@ -18,8 +18,8 @@ def show_RQ(realspace_image, realspace_pdict,
         diffractionspace_pdict      (dictionary)
     """
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    ax_show(realspace_image,ax1,**realspace_pdict)
-    ax_show(diffractionspace_image,ax2,**diffractionspace_pdict)
+    show(realspace_image,figax=(fig,ax1),**realspace_pdict)
+    show(diffractionspace_image,figax=(fig,ax2),**diffractionspace_pdict)
     if not returnfig:
         plt.show()
         return
