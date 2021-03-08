@@ -265,8 +265,8 @@ def show_circ(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=Fa
     else:
         return fig,ax
 
-def show_annuli(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
-              center=(0,0),Ri=10,Ro=20,color='r',fill=True,alpha=1,linewidth=2,**kwargs):
+def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
+                **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed annuli.
     To overlay one annulus, center must be a single 2-tuple.  To overlay N annuli,
@@ -309,12 +309,12 @@ def show_annuli(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         assert(isinstance(Ro,list))
         assert(len(Ro)==N)
         assert(all([isinstance(r,(float,int,np.float)) for r in Ro]))
-    if isinstance(color,str):
-        color = [color for i in range(N)]
+    if isinstance(color,list):
+        assert len(color)==N
+        assert all([is_color_like(c) for c in color])
     else:
-        assert(isinstance(color,list))
-        assert(len(color)==N)
-        assert(all([isinstance(c,str) for c in color]))
+        assert is_color_like(color)
+        color = [color for i in range(N)]
     if isinstance(fill,bool):
         fill = [fill for i in range(N)]
     else:
@@ -335,7 +335,7 @@ def show_annuli(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
 
 
-    fig,ax = show(ar,min,max,power,figsize,returnfig=True,**kwargs)
+    fig,ax = show(ar,returnfig=True,**kwargs)
 
     for i in range(N):
         cent,ri,ro,col,f,a,lw = center[i],Ri[i],Ro[i],color[i],fill[i],alpha[i],linewidth[i]
