@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle,Wedge
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib.colors import is_color_like
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max=4,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
@@ -111,7 +112,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         plt.show()
         return
 
-def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,returnfig=False,
+def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2,returnfig=False,
               **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed rectangles.
@@ -129,7 +130,7 @@ def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,returnfi
 
     Accepts:
         lims        (4-tuple, or list of N 4-tuples) the rectangle bounds (x0,xf,y0,yf)
-        color       (string of list of N strings)
+        color       (valid matplotlib color, or list of N colors)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
         linewidth   (number)
@@ -148,12 +149,12 @@ def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,returnfi
         assert(all([isinstance(t,tuple) for t in lims]))
         assert(all([len(t)==4 for t in lims]))
         N = len(lims)
-    if isinstance(color,str):
-        color = [color for i in range(N)]
+    if isinstance(color,list):
+        assert len(color)==N
+        assert all([is_color_like(c) for c in color])
     else:
-        assert(isinstance(color,list))
-        assert(len(color)==N)
-        assert(all([isinstance(c,str) for c in color]))
+        assert is_color_like(color)
+        color = [color for i in range(N)]
     if isinstance(fill,bool):
         fill = [fill for i in range(N)]
     else:
@@ -187,7 +188,7 @@ def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,returnfi
     else:
         return fig,ax
 
-def show_circ(ar,center,R,color='r',fill=True,alpha=1,linewidth=2,returnfig=False,**kwargs):
+def show_circ(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
     To overlay one circle, center must be a single 2-tuple.  To overlay N circles,
@@ -200,7 +201,7 @@ def show_circ(ar,center,R,color='r',fill=True,alpha=1,linewidth=2,returnfig=Fals
     Accepts:
         center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
         R           (number of list of N numbers) the circles radius
-        color       (string of list of N strings)
+        color       (valid matplotlib color, or list of N colors)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
         linewidth   (number)
@@ -225,12 +226,12 @@ def show_circ(ar,center,R,color='r',fill=True,alpha=1,linewidth=2,returnfig=Fals
         assert(isinstance(R,list))
         assert(len(R)==N)
         assert(all([isinstance(r,(float,int,np.float)) for r in R]))
-    if isinstance(color,str):
-        color = [color for i in range(N)]
+    if isinstance(color,list):
+        assert len(color)==N
+        assert all([is_color_like(c) for c in color])
     else:
-        assert(isinstance(color,list))
-        assert(len(color)==N)
-        assert(all([isinstance(c,str) for c in color]))
+        assert is_color_like(color)
+        color = [color for i in range(N)]
     if isinstance(fill,bool):
         fill = [fill for i in range(N)]
     else:
