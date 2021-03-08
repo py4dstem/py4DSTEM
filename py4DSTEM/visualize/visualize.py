@@ -111,69 +111,6 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         plt.show()
         return
 
-def ax_show(ar,ax,min=0,max=3,power=1,contrast='std',
-            bordercolor=None,borderwidth=5,cmap='gray',returncax=False,**kwargs):
-    """
-    Visualization function which displays the 2D array `ar` in a matplotlib
-    axis instance `ax`. `ax` must be generated and plotted elsewhere.
-
-    Accepts:
-        ar          (2D array) the array to plot
-        ax          (matplotlib.axis) the axis the plot will be displayed in
-        min         (number) minimum display value is set to (median - min*std)
-        max         (number) maximum display value is set to (median + max*std)
-        power       (number) should be <=1; pixel values are set to val**power
-        contrast    (str) determines how image contrast is set. Accepted values
-                    and their behaviors are as follows:
-                        'std'       (default) The min/max values are
-                                    median -/+ n*std, where the two values of n
-                                    are given by the arguments min and max.
-                        'minmax'    The min/max values are np.min(ar)/np.max(r)
-                        'vrange'    The min/max values are set to min/max
-        ax          (None or 2-tuple) if None, generates a new figure with a single
-                    Axes instance. Otherwise, ax must be a 2-tuple containing
-                    the matplotlib class instances (Figure,Axes), and ar is
-                    plotted in the specified Axes instance.
-                    the passed Axes instance.
-        bordercolor (str or None) if not None, add a border of this color
-        borderwidth (number)
-        returncax   (bool) if True, returns the matplotlib.image.AxesImage,
-                    i.e. the image attached to the axis; used to add colorbars
-        **kwargs    any keywords accepted by matplotlib's ax.matshow()
-    """
-    assert isinstance(ax,Axes), "ax must be a matplotlib.axis.Axes instance"
-
-    if np.min(ar)<0 and power!=1:
-        mask = ar<0
-        _ar = np.abs(ar)**power
-        _ar[mask] = -_ar[mask]
-    else:
-        _ar = ar**power
-
-    if contrast == 'std':
-        med,std = np.median(_ar),np.std(_ar)
-        vmin = med-min*std
-        vmax = med+max*std
-    elif contrast == 'minmax':
-        vmin = np.min(_ar)
-        vmax = np.max(_ar)
-    elif contrast == 'vrange':
-        vmin = min
-        vmax = max
-    else:
-        raise Exception("Parameter contrast must be 'std' or 'minmax' or 'vrange'.")
-
-    kwargs.pop('vmin',None),kwargs.pop('vmax',None)
-    ax_image = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
-    if bordercolor is not None:
-        for s in ['bottom','top','left','right']:
-            ax.spines[s].set_color(bordercolor)
-            ax.spines[s].set_linewidth(borderwidth)
-        ax.set_xticks([])
-        ax.set_yticks([])
-    if returncax:
-        return ax_image
-
 def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=1,linewidth=2,returnfig=False,
               **kwargs):
     """
@@ -410,7 +347,7 @@ def show_annuli(ar,min=0,max=3,power=1,figsize=(12,12),returnfig=False,
     else:
         return fig,ax
 
-def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
+def show_points(ar,x,y,s=1,scale=50,alpha=1,point_color='r',
                 figsize=(12,12),returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more points.
