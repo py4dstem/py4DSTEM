@@ -36,20 +36,20 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
     else:
         return fig,ax
 
-def show_grid_overlay(ar,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
+def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
                                             returnfig=False,**kwargs):
     """
-    Shows the image ar with an overlaid boxgrid outline about the pixels
+    Shows the image with an overlaid boxgrid outline about the pixels
     beginning at (x0,y0) and with extent xL,yL in the two directions.
 
     Accepts:
-        ar          the image array
+        image       the image array
         x0,y0       the corner of the grid
         xL,xL       the extent of the grid
     """
     yy,xx = np.meshgrid(np.arange(y0,y0+yL),np.arange(x0,x0+xL))
 
-    fig,ax = show(ar,returnfig=True,**kwargs)
+    fig,ax = show(image,returnfig=True,**kwargs)
     for xi in range(xL):
         for yi in range(yL):
             x,y = xx[xi,yi],yy[xi,yi]
