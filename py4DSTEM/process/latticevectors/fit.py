@@ -23,8 +23,12 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
                             be within maxPeakSpacing of one of the bragg_diretions, or it is ignored
         minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in bragg_peaks
                             which can be indexed, return None for all return parameters
+        returncenters       (bool) if True, returns the position (x0,y0) of the origin of the best
+                            fit lattice
 
     Returns:
+        x0                  (float) the x-coord of the origin of the best-fit lattice.
+        y0                  (float) the y-coord of the origin
         ux                  (float) x-coord of the first lattice vector
         uy                  (float) y-coord of the first lattice vector
         vx                  (float) x-coord of the second lattice vector
@@ -70,6 +74,7 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
 
     # Solve for lattice vectors
     beta = lstsq(weighted_M, weighted_alpha, rcond=None)[0]
+    x0,y0 = beta[0,0],beta[0,1]
     ux,uy = beta[1,0],beta[1,1]
     vx,vy = beta[2,0],beta[2,1]
 
@@ -78,10 +83,10 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
     error = np.sqrt(np.sum((alpha-alpha_calculated)**2,axis=1))
     error = np.sum(error*weights)/np.sum(weights)
 
-    return ux,uy,vx,vy,error
+    return x0,y0,ux,uy,vx,vy,error
 
 def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20,
-                                                                       minNumPeaks=5):
+                                minNumPeaks=5, returncenters=False):
     """
     Fits lattice vectors u,v to each diffraction pattern in bragg_peaks, given some known (h,k)
     indexing in bragg_directions.
@@ -99,9 +104,13 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
                             be within maxPeakSpacing of one of the bragg_diretions, or it is ignored
         minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in bragg_peaks
                             which can be indexed, return None for all return parameters
+        returncenters       (bool) if True, returns the position (x0,y0) of the origin of the best
+                            fit lattice
 
     Returns:
         uv_map                  (RealSlice) a RealSlice containing the following 6 arrays:
+        uv_map.slices['x0']     x-coord of the origin of the best fit lattice
+        uv_map.slices['y0']     y-coord of the origin
         uv_map.slices['ux']     x-coord of the first lattice vector
         uv_map.slices['uy']     y-coord of the first lattice vector
         uv_map.slices['vx']     x-coord of the second lattice vector
@@ -115,17 +124,19 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
     assert np.all([name in bragg_directions.dtype.names for name in ('qx','qy','h','k')])
 
     # Make RealSlice to contain outputs
-    slicelabels = ('ux','uy','vx','vy','error','mask')
-    uv_map = RealSlice(data=np.zeros((bragg_peaks.shape[0],bragg_peaks.shape[1],6)),
+    slicelabels = ('ux','uy','vx','vy','error','mask','x0','y0')
+    uv_map = RealSlice(data=np.zeros((bragg_peaks.shape[0],bragg_peaks.shape[1],8)),
                        slicelabels=slicelabels, name='uv_map')
 
     # Fit lattice vectors
     for (Rx, Ry) in tqdmnd(bragg_peaks.shape[0],bragg_peaks.shape[1]):
         bragg_peaks_curr = bragg_peaks.get_pointlist(Rx,Ry)
-        ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
-                                                maxPeakSpacing, minNumPeaks)
+        qx0,qy0,ux,uy,vx,vy,error = fit_lattice_vectors(bragg_peaks_curr, bragg_directions, x0, y0,
+                                                      maxPeakSpacing, minNumPeaks)
         # Store data
         if ux is not None:
+            uv_map.slices['x0'][Rx,Ry] = qx0
+            uv_map.slices['y0'][Rx,Ry] = qy0
             uv_map.slices['ux'][Rx,Ry] = ux
             uv_map.slices['uy'][Rx,Ry] = uy
             uv_map.slices['vx'][Rx,Ry] = vx
