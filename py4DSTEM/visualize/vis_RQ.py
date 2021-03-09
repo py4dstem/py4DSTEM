@@ -18,8 +18,8 @@ def show_selected_dp(datacube,image,rx,ry,figsize=(12,6),returnfig=False,
     else:
         return fig,(ax1,ax2)
 
-def show_RQ(realspace_image, realspace_pdict,
-            diffractionspace_image, diffractionspace_pdict,
+def show_RQ(realspace_image, diffractionspace_image,
+            realspace_pdict={}, diffractionspace_pdict={'scaling':'log'},
             figsize=(12,6),returnfig=False):
     """
     Shows side-by-side real/reciprocal space images.
