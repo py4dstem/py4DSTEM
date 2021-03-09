@@ -1,11 +1,25 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from .visualize import ax_show
+from .visualize import show,show_points
 from ..process.calibration import get_Qvector_from_Rvector,get_Rvector_from_Qvector
 
-def show_RQ(realspace_image, realspace_pdict,
-            diffractionspace_image, diffractionspace_pdict,
+def show_selected_dp(datacube,image,rx,ry,figsize=(12,6),returnfig=False,
+                     pointsize=50,pointcolor='r',scaling='log',**kwargs):
+    """
+    """
+    dp = datacube.data[rx,ry,:,:]
+    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
+    _,_=show_points(image,rx,ry,scale=pointsize,point_color=pointcolor,figax=(fig,ax1),returnfig=True)
+    _,_=show(dp,figax=(fig,ax2),scaling=scaling,returnfig=True)
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,(ax1,ax2)
+
+def show_RQ(realspace_image, diffractionspace_image,
+            realspace_pdict={}, diffractionspace_pdict={'scaling':'log'},
             figsize=(12,6),returnfig=False):
     """
     Shows side-by-side real/reciprocal space images.
@@ -18,8 +32,8 @@ def show_RQ(realspace_image, realspace_pdict,
         diffractionspace_pdict      (dictionary)
     """
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    ax_show(realspace_image,ax1,**realspace_pdict)
-    ax_show(diffractionspace_image,ax2,**diffractionspace_pdict)
+    show(realspace_image,figax=(fig,ax1),**realspace_pdict)
+    show(diffractionspace_image,figax=(fig,ax2),**diffractionspace_pdict)
     if not returnfig:
         plt.show()
         return
