@@ -413,5 +413,32 @@ def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
     else:
         return fig,ax
 
-
+def show_hist(arr, bins = 200, return_hist = False):
+    
+    """
+    shows histogram from any ndarray (arr).
+    
+    Accepts:
+        arr                 (ndarray)
+        bins                (int) number of bins that the intensity values will be sorted into for histogram
+        return_fig          (bool) 
+    
+    Returns:
+        If return_hist==False (default), the figure is plotted and nothing is returned.
+        If return_hist==True, the counts and bins are returned for custom visualization
+    """
+    
+    counts, bin_values = np.histogram(arr, bins = bins, range = (np.min(arr), np.max(arr)) )
+    bin_values = bin_values[0:bins]
+    
+    fig, ax = plt.subplots(1,1)
+    ax.plot(bin_values, counts)
+    plt.ylabel('Counts')
+    plt.xlabel('Intensity')
+    
+    if return_hist == True:
+        return counts, bin_values
+    else:
+        plt.show()
+        return
 
