@@ -13,6 +13,7 @@ from time import time
 from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 from ..utils import tqdmnd
+from ..visualize.visualize import show_hist
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -313,6 +314,14 @@ def find_Bragg_disks_serial(datacube, probe,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        global_threshold     (bool) if True, applies global threshold based on minGlobalIntensity and metric
+        minGlobalThreshold   (float) the minimum allowed peak intensity, relative to the selected metric (0-1), except in the case 
+                                of 'manual' metric, in which the threshold value based on the minimum intensity that you want thresholder out should be set.
+        metric               (string) the metric used to compare intensities. 'average' compares peak intensity relative to the average
+                                of the maximum intensity in each diffraction pattern. 'max' compares peak intensity relative to the
+                                maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
+                                to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
+                                based on a predetermined intensity value manually determined. In this case, minIntensity should be an int.
         hist                 (bool) if True, returns figure and axis
         bins                 (int) number of bins that the intensity values will be sorted into for histogram.
         verbose              (bool) if True, prints completion updates
@@ -601,9 +610,12 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing, ma
                                 of the maximum intensity in each diffraction pattern. 'max' compares peak intensity relative to the
                                 maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
                                 to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
-                                based on a predetermined intensity value manually determined. In this case, minIntensity should be
+                                based on a predetermined intensity value manually determined.
         minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
         maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
+    
+    Returns:
+       pointlistarray        (PointListArray) Bragg peaks thresholded by intensity.
     """
     
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
@@ -689,9 +701,8 @@ def get_pointlistarray_hist(pointlistarray, return_hist = False, bins = 200):
     Returns:
         peak_intensities    (ndarray) all detected peaks
         
-        If return_hist==False (default), the figure is plotted and nothing is returned.
-        If return_hist==True, the figure and its one axis are returned, and can be
-        further edited.
+        If return_hist==False (default), the figure is plotted and only peak intensities are returned.
+        If return_hist==True, the counts and bins are returned, and can be manually plotted.
     """
     
     assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
@@ -724,7 +735,6 @@ def get_pointlistarray_hist(pointlistarray, return_hist = False, bins = 200):
         return peak_intensities, counts, bin_values
     
     else:
-        plt.show()
         
         return peak_intensities
 
