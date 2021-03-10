@@ -413,10 +413,11 @@ def show_points(ar,x,y,s=1,scale=500,alpha=1,point_color='r',
     else:
         return fig,ax
 
+    
 def show_hist(arr, bins = 200, return_hist = False):
     
     """
-    shows histogram from any ndarray (arr).
+    Visualization function to show histogram from any ndarray (arr).
     
     Accepts:
         arr                 (ndarray)
