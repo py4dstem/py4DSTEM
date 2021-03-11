@@ -537,7 +537,6 @@ def find_Bragg_disks(datacube, probe,
     else:
         raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
-
         
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing,
                                                                                maxNumPeaks):
@@ -628,13 +627,16 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
             # Remove peaks below minRelativeIntensity threshold
             if minIntensity is not False:
                 if metric == 'average':
-                    deletemask = pointlist.data['intensity'] / mean_intensity < \ minIntensity
+                    deletemask = pointlist.data['intensity']/mean_intensity < \
+                                                                        minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'maximum':
-                    deletemask = pointlist.data['intensity'] / max_intensity < \ minIntensity
+                    deletemask = pointlist.data['intensity'] / max_intensity < \ 
+                                                                        minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'median':
-                    deletemask = pointlist.data['intensity'] / median_intensity < \ minIntensity
+                    deletemask = pointlist.data['intensity'] / median_intensity < \ 
+                                                                        minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'manual':
                     deletemask = pointlist.data['intensity'] < minIntensity
