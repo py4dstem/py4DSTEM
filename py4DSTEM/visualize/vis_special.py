@@ -101,12 +101,12 @@ def show_class_BPs(ar,x,y,s,s2,color='r',color2='y',**kwargs):
     return
 
 def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False,
-                        axsize=(6,6),titlesize=0,get_bc=None,**kwargs):
+                        axsize=(6,6),titlesize=0,get_bordercolor=None,**kwargs):
     """
     words
     """
     fig,axs = show_image_grid(lambda i:ar,H,W,axsize=axsize,titlesize=titlesize,
-                       get_bc=get_bc,returnfig=True,**kwargs)
+                       get_bordercolor=get_bordercolor,returnfig=True,**kwargs)
     for i in range(H):
         for j in range(W):
             ax = axs[i,j]
