@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from .visualize import show,show_points
 
-def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
+def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
     """
     Shows a grid of diffraction patterns from DataCube datacube, starting from
     scan position (x0,y0) and extending xL,yL.
@@ -13,6 +13,7 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
         (x0,y0)         the corner of the grid of DPs to display
         xL,yL           the extent of the grid
         axsize          the size of each diffraction pattern
+        space           (number) controls the space between subplots
 
     Returns:
         if returnfig==false (default), the figure is plotted and nothing is returned.
@@ -29,6 +30,7 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
             dp = datacube.data[x,y,:,:]
             _,_ = show(dp,figax=(fig,ax),returnfig=True,**kwargs)
     plt.tight_layout()
+    plt.subplots_adjust(wspace=space,hspace=space)
 
     if not returnfig:
         plt.show()
