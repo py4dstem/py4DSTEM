@@ -283,11 +283,8 @@ def find_Bragg_disks_serial(datacube, probe,
                             global_threshold = False,
                             minGlobalIntensity = 0.005,
                             metric = 'mean',
-                            hist = False,
-                            bins = 200,
                             verbose = False,
                             _qt_progress_bar = None):
-    
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe. When hist = True, returns histogram of intensities in the entire
@@ -322,8 +319,6 @@ def find_Bragg_disks_serial(datacube, probe,
                                 maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
                                 to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
                                 based on a predetermined intensity value manually determined. In this case, minIntensity should be an int.
-        hist                 (bool) if True, returns figure and axis
-        bins                 (int) number of bins that the intensity values will be sorted into for histogram.
         verbose              (bool) if True, prints completion updates
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
     
@@ -368,12 +363,7 @@ def find_Bragg_disks_serial(datacube, probe,
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing, maxNumPeaks)
         
-    if not hist:
-        return peaks
-    
-    else:
-        intensities, counts, bin_values = get_pointlistarray_hist(peaks, return_hist = True, bins = bins)
-        return peaks, counts, bin_values
+    return peaks
 
 
 def find_Bragg_disks(datacube, probe,
@@ -548,6 +538,7 @@ def find_Bragg_disks(datacube, probe,
         raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
 
+        
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing,
                                                                                maxNumPeaks):
     """
@@ -597,8 +588,7 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
     return pointlistarray
     
     
-def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing, maxNumPeaks):
-    
+def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=False, maxNumPeaks=False):
     """
     Takes a PointListArray of detected Bragg peaks and applies universal thresholding, returning the thresholded PointListArray. To skip a threshold, set that parameter to False.
     
@@ -611,24 +601,19 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing, ma
                                 maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
                                 to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
                                 based on a predetermined intensity value manually determined.
-        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
-        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
+        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks - optional, default is false
+        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern - optional, default is false
     
     Returns:
        pointlistarray        (PointListArray) Bragg peaks thresholded by intensity.
     """
-    
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
-        
     HI_array = np.zeros( (pointlistarray.shape[0], pointlistarray.shape[1]) )
-    
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
             pointlist.sort(coordinate='intensity', order='descending')
-            
             if pointlist.data.shape[0] == 0:
-                top_value = np.nan
-                
+                top_value = np.nan 
             else:
                 top_value = pointlist.data[0][2]
                 HI_array[Rx, Ry] = top_value
@@ -638,31 +623,21 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing, ma
     median_intensity = np.median(HI_array)
     
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
-            
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
-            #pointlist.sort(coordinate='intensity', order='descending')
-
-            # Remove peaks below minRelativeIntensity threshold
             
+            # Remove peaks below minRelativeIntensity threshold
             if minIntensity is not False:
                 if metric == 'average':
-                    deletemask = pointlist.data['intensity'] / mean_intensity < \
-                                                                               minIntensity
+                    deletemask = pointlist.data['intensity'] / mean_intensity < \ minIntensity
                     pointlist.remove_points(deletemask)
-                
                 if metric == 'maximum':
-                    deletemask = pointlist.data['intensity'] / max_intensity < \
-                                                                               minIntensity
+                    deletemask = pointlist.data['intensity'] / max_intensity < \ minIntensity
                     pointlist.remove_points(deletemask)
-                    
                 if metric == 'median':
-                    deletemask = pointlist.data['intensity'] / median_intensity < \
-                                                                               minIntensity
+                    deletemask = pointlist.data['intensity'] / median_intensity < \ minIntensity
                     pointlist.remove_points(deletemask)
-                    
                 if metric == 'manual':
                     deletemask = pointlist.data['intensity'] < minIntensity
-                    
                     pointlist.remove_points(deletemask)
             
             # Remove peaks that are too close together
@@ -683,12 +658,10 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing, ma
                     deletemask = np.zeros(pointlist.length, dtype=bool)
                     deletemask[maxNumPeaks:] = True
                     pointlist.remove_points(deletemask)
-
     return pointlistarray
 
 
-def get_pointlistarray_hist(pointlistarray, return_hist = False, bins = 200):
-    
+def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True, bins = 200):
     """
     Concatecates the Bragg peak intensities from a PointListArray of Bragg peak positions into one array and returns the counts and bins. 
     This output can be used for understanding the distribution of intensities in your dataset for universal thresholding.
@@ -696,15 +669,14 @@ def get_pointlistarray_hist(pointlistarray, return_hist = False, bins = 200):
     Accepts:
         pointlistarray      (PointListArray)
         return_hist         (bool) if True, returns histogram of intensities in the entire pointlist
+        plot_hist           (bool) if True, returns plot of histogram
         bins                (int) number of bins that the intensity values will be sorted into for histogram 
     
     Returns:
         peak_intensities    (ndarray) all detected peaks
-        
-        If return_hist==False (default), the figure is plotted and only peak intensities are returned.
-        If return_hist==True, the counts and bins are returned, and can be manually plotted.
+        If return_hist==True (default), the counts and bin edges are returned, and can be manually plotted.
+        If return_hist==False, the figure is plotted and only peak intensities are returned.
     """
-    
     assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
     assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
     assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
@@ -712,29 +684,24 @@ def get_pointlistarray_hist(pointlistarray, return_hist = False, bins = 200):
     
     first_pass = True
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
-    
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
-
-        
         for i in range(pointlist.length):
-                
             if first_pass:
                 peak_intensities = np.array(pointlist.data[i][2])
                 peak_intensities = np.reshape(peak_intensities, 1)
                 first_pass = False
-                
             else:
                 temp_array = np.array(pointlist.data[i][2])
                 temp_array = np.reshape(temp_array, 1)
                 peak_intensities = np.append(peak_intensities, temp_array)
- 
-    counts, bin_values = show_hist(peak_intensities, bins, return_hist = True)
-    
-    if return_hist:
-    
-        return peak_intensities, counts, bin_values
-    
-    else:
-        
+    if not return_hist:
         return peak_intensities
+    counts, bin_edges = np.histogram(peak_intensities, bins = bins, range = (np.min(peak_intensities), np.max(peak_intensities)) )
+    if not plot_hist:
+        if return_hist == True:
+            return peak_intensities, counts, bin_edges
+    if plot_hist == True:
+        fi, ax = show_hist(peak_intensities, bins, returnfig = True)
+            return peak_intensities, counts, bin_edges
+        
 
