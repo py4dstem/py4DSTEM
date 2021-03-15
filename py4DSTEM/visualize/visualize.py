@@ -419,7 +419,8 @@ def show_hist(arr, bins = 200, returnfig = False):
     
     Accepts:
         arr                 (ndarray) any array
-        bins                (int) number of bins that the intensity values will be sorted into for histogram 
+        bins                (int) number of bins that the intensity values will be sorted into for histogram
+        returnfig           (bool) determines whether or not figure and its axis are returned (see Returns)
     
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
