@@ -627,16 +627,13 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
             # Remove peaks below minRelativeIntensity threshold
             if minIntensity is not False:
                 if metric == 'average':
-                    deletemask = pointlist.data['intensity']/mean_intensity < \
-                                                                        minIntensity
+                    deletemask = pointlist.data['intensity']/mean_intensity < minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'maximum':
-                    deletemask = pointlist.data['intensity'] / max_intensity < \ 
-                                                                        minIntensity
+                    deletemask = pointlist.data['intensity'] / max_intensity < minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'median':
-                    deletemask = pointlist.data['intensity'] / median_intensity < \ 
-                                                                        minIntensity
+                    deletemask = pointlist.data['intensity'] / median_intensity < minIntensity
                     pointlist.remove_points(deletemask)
                 if metric == 'manual':
                     deletemask = pointlist.data['intensity'] < minIntensity
@@ -700,10 +697,9 @@ def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True
         return peak_intensities
     counts, bin_edges = np.histogram(peak_intensities, bins = bins, range = (np.min(peak_intensities), np.max(peak_intensities)) )
     if not plot_hist:
-        if return_hist == True:
-            return peak_intensities, counts, bin_edges
+        return peak_intensities, counts, bin_edges
     if plot_hist == True:
-        fi, ax = show_hist(peak_intensities, bins, returnfig = True)
+        fi, ax = show_hist(peak_intensities, bins, returnfig = False)
             return peak_intensities, counts, bin_edges
         
 
