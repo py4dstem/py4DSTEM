@@ -95,7 +95,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         assert(isinstance(ax,Axes))
 
     if hist:
-        if mask is not None:
+        if mask is None:
             hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),np.max(_ar),
                                                                num=n_bins))
         else:
