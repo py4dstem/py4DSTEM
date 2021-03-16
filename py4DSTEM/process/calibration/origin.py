@@ -286,10 +286,11 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50
     # Get mask and return
     cutoff = p1[2]*n_sigma
     mask = score > cutoff
-    mask[:edge_boundary,:] = True
-    mask[-edge_boundary:,:] = True
-    mask[:,:edge_boundary] = True
-    mask[:,-edge_boundary:] = True
+    if edge_boundary > 0:
+        mask[:edge_boundary,:] = True
+        mask[-edge_boundary:,:] = True
+        mask[:,:edge_boundary] = True
+        mask[:,-edge_boundary:] = True
 
     return mask, n, bins, cutoff
 
