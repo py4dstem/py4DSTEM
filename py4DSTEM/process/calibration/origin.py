@@ -5,9 +5,13 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
 from .qpixelsize import get_probe_size
+from ..fit import plane,parabola,fit_2D
 from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats
 from ...io.datastructure import PointListArray
+
+
+### Functions for finding the origin
 
 def get_origin_single_dp(dp,r,rscale=1.2):
     """
@@ -96,8 +100,63 @@ def get_origin_beamstop(dp,**kwargs):
     return
 
 
+### Functions for fitting the origin
 
-# Older functions for finding the origin
+def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',robustfitting=False,
+               returnfitp=False,returnmask=False):
+    """
+    docstring
+    """
+    assert isinstance(qx0_meas,np.ndarray) and len(qx0_meas.shape)==2
+    assert isinstance(qx0_meas,np.ndarray) and len(qy0_meas.shape)==2
+    assert qx0_meas.shape == qy0_meas.shape
+    assert mask is None or mask.shape==qx0_meas.shape and mask.dtype==bool
+    assert fitfunction in ('plane','parabola')
+    if fitfunction=='plane':
+        f = plane
+    elif fitfunction=='parabola':
+        f = parabola
+    else:
+        raise Exception("Invalid fitfunction '{}'".format(fitfunction))
+
+    # Fit data
+    if mask is None:
+        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas)
+        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas)
+    else:
+        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas, data_mask=mask==False)
+        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas, data_mask=mask==False)
+
+    # Robust fitting
+    if robustfitting:
+        # This should create a new mask, which is used in combination with
+        # any user-specified mask.  Before passing out of this loop, multiply
+        # them and call the result 'mask' such that whatever final mask has
+        # been applied to the data can be returned
+        # Similarly, this should update the popt and pcov params to whatever
+        # their final values are
+        pass
+
+    # Compute residuals and return
+    qx0_residuals = qx0_meas-qx0_fit
+    qy0_residuals = qy0_meas-qy0_fit
+    if not returnfitp and not returnmask:
+        return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
+    elif not returnmask:
+        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
+    elif not returnfitp:
+        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),mask
+    else:
+        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y),mask
+
+
+
+
+
+
+
+
+### Older / soon-to-be-deprecated functions for finding the origin
 
 def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     """
