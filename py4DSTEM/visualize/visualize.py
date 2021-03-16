@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle,Wedge
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from matplotlib.colors import is_color_like
+from matplotlib.colors import is_color_like,ListedColormap
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max=4,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
-         hist=False,n_bins=256,**kwargs):
+         hist=False,n_bins=256,mask=None,mask_color='k',**kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -47,6 +47,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
                     this function has performed. Plots the clipvals as dashed
                     vertical lines
         n_bins      (int) number of hist bins
+        mask        (None or boolean array) if not None, must have the same shape
+                    as 'ar'. Wherever mask==True, pixel values are set to
+                    mask_color. If hist==True, ignore these values in the histogram
+        mask_color  (color) see 'mask'
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -55,6 +59,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
     """
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','hist')
+    if mask is not None:
+        assert mask.shape == ar.shape
+        assert is_color_like(mask_color)
 
     if scaling == 'none':
         _ar = ar
@@ -88,14 +95,22 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         assert(isinstance(ax,Axes))
 
     if hist:
-        hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),np.max(_ar),
-                                                           num=n_bins))
+        if mask is not None:
+            hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),np.max(_ar),
+                                                               num=n_bins))
+        else:
+            hist,bin_edges = np.histogram(_ar[mask==False],
+                                   bins=np.linspace(np.min(_ar),np.max(_ar),num=n_bins))
         w = bin_edges[1]-bin_edges[0]
         x = bin_edges[:-1]+w/2.
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
     else:
         ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
+        if mask is not None:
+            mask_display = np.ma.array(data=mask,mask=mask==False)
+            cmap = ListedColormap([mask_color,'w'])
+            ax.matshow(mask_display,cmap=cmap)
 
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
