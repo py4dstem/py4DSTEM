@@ -1,12 +1,103 @@
-# Diffraction shift correction
+# Find the origin of diffraction space
 
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
-from ...io.datastructure import PointListArray
+from .qpixelsize import get_probe_size
 from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats
+from ...io.datastructure import PointListArray
+
+def get_origin_single_dp(dp,r,rscale=1.2):
+    """
+    Find the origin for a single diffraction pattern, assuming:
+        - There is no beam stop
+        - The center beam contains the highest intensity
+
+    Accepts:
+        dp          (ndarray) a diffraction pattern
+        r           (number) the approximate radius of the center disk
+        rscale      (number) expand 'r' by this amount to form a mask about the
+                    center disk when taking its center of mass
+
+    Returns:
+        qx0,qy0     (numbers) the origin
+    """
+    Q_Nx,Q_Ny = dp.shape
+    _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),(Q_Nx,Q_Ny))
+    qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
+    mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
+    qx0,qy0 = get_CoM(dp*mask)
+    return qx0,qy0
+
+def get_origin(datacube,r=None,rscale=1.2,dp_max=None):
+    """
+    Find the origin for all diffraction patterns in a datacube, assuming:
+        - There is no beam stop
+        - The center beam contains the highest intensity
+
+    Accepts:
+        datacube    (DataCube) the data
+        r           (number or None) the approximate radius of the center disk.
+                    If None (default), tries to compute r using the get_probe_size
+                    method.  The data used for this is controlled by dp_max.
+        rscale      (number) expand 'r' by this amount to form a mask about the
+                    center disk when taking its center of mass
+        dp_max      (ndarray or None) the diffraction pattern or dp-shaped array
+                    used to compute the center disk radius, if r is left unspecified.
+                    if dp_max==None (default), computes and uses the maximal diffraction
+                    pattern. Otherwise, this should be a (Q_Nx,Q_Ny) shaped array.
+                    diffraction
+
+    Returns:
+        qx0,qy0     (numbers) the origin
+    """
+    if r is None:
+        if dp_max is None:
+            dp_max = np.max(datacube.data,axis=(0,1))
+        else:
+            assert dp_max.shape == (datacube.Q_Nx,datacube.Q_Ny)
+        r,_,_ = get_probe_size(dp_max)
+
+    qx0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    qy0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    qyy,qxx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
+    for rx in range(datacube.R_Nx):
+        for ry in range(datacube.R_Ny):
+            dp = datacube.data[rx,ry,:,:]
+            _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
+                                         (datacube.Q_Nx,datacube.Q_Ny))
+            mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
+            qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*mask)
+    return qx0,qy0
+
+def get_origin_single_dp_beamstop(dp,**kwargs):
+    """
+    Find the origin for a single diffraction pattern, assuming there is a beam stop.
+
+    Accepts:
+
+    Returns:
+
+    """
+    return
+
+def get_origin_beamstop(dp,**kwargs):
+    """
+    Find the origin for all single diffraction patterns in a datacube,
+    assuming there is a beam stop.
+
+    Accepts:
+
+    Returns:
+
+    """
+    return
+
+
+
+# Older functions for finding the origin
 
 def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     """
