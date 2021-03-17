@@ -139,8 +139,8 @@ def show_RQ_vector(realspace_image, realspace_pdict,
                                     space vector.
     """
     assert(vector_space in ('R','Q'))
-    fig,(ax1,ax2) = show_RQ(realspace_image, realspace_pdict,
-                            diffractionspace_image, diffractionspace_pdict,
+    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
+                            realspace_pdict, diffractionspace_pdict,
                             figsize=figsize,returnfig=True)
     if vector_space=='R':
         ax_addvector(ax1,vx,vy,vlength_R,x0_R,y0_R,width=width_R,color=color_R)
@@ -200,8 +200,8 @@ def show_RQ_vectors(realspace_image, realspace_pdict,
     else:
         color_Q =[color_Q for i in range(len(vx))]
 
-    fig,(ax1,ax2) = show_RQ(realspace_image, realspace_pdict,
-                            diffractionspace_image, diffractionspace_pdict,
+    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
+                            realspace_pdict, diffractionspace_pdict,
                             figsize=figsize,returnfig=True)
     for x,y,cR,cQ in zip(vx,vy,color_R,color_Q):
         if vector_space=='R':
@@ -305,8 +305,8 @@ def ax_addaxes_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
     ax_addaxes(ax,vx,vy,vlength,x0,y0,width=width,color=color,labelaxes=labelaxes,
                labelsize=labelsize,labelcolor=labelcolor,righthandedcoords=True)
 
-def show_RQ_axes(realspace_image, realspace_pdict,
-                 diffractionspace_image, diffractionspace_pdict,
+def show_RQ_axes(realspace_image, diffractionspace_image,
+                 realspace_pdict, diffractionspace_pdict,
                  vx,vy,vlength_R,vlength_Q,x0_R,y0_R,x0_Q,y0_Q,
                  QR_rotation,vector_space='R',
                  width_R=1,color_R='r',width_Q=1,color_Q='r',
@@ -343,8 +343,8 @@ def show_RQ_axes(realspace_image, realspace_pdict,
                                     space vector.
     """
     assert(vector_space in ('R','Q'))
-    fig,(ax1,ax2) = show_RQ(realspace_image, realspace_pdict,
-                            diffractionspace_image, diffractionspace_pdict,
+    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
+                            realspace_pdict, diffractionspace_pdict,
                             figsize=figsize,returnfig=True)
     if vector_space=='R':
         ax_addaxes(ax1,vx,vy,vlength_R,x0_R,y0_R,width=width_R,color=color_R,
