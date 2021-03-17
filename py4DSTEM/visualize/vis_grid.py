@@ -156,7 +156,7 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         pointcolors = get_pointcolors(N)
                     else:
                         pointcolors='r'
-                    _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
+                    _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
                                       point_color=pointcolors,**kwargs)
                 else:
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
