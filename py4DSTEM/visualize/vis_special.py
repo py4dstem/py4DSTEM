@@ -150,10 +150,14 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
 
     # Plot
     fig,((ax11,ax12),(ax21,ax22)) = plt.subplots(2,2,figsize=figsize)
-    cax11 = show(e_xx,figax=(fig,ax11),min=vmin_exx,max=vmax_exx,clipvals='manual',cmap=cmap,returncax=True)
-    cax12 = show(e_yy,figax=(fig,ax12),min=vmin_eyy,max=vmax_eyy,clipvals='manual',cmap=cmap,returncax=True)
-    cax21 = show(e_xy,figax=(fig,ax21),min=vmin_exy,max=vmax_exy,clipvals='manual',cmap=cmap,returncax=True)
-    cax22 = show(theta,figax=(fig,ax22),min=vmin_theta,max=vmax_theta,clipvals='manual',cmap=cmap,returncax=True)
+    cax11 = show(e_xx,figax=(fig,ax11),min=vmin_exx,max=vmax_exx,clipvals='manual',
+                 cmap=cmap,returncax=True)
+    cax12 = show(e_yy,figax=(fig,ax12),min=vmin_eyy,max=vmax_eyy,clipvals='manual',
+                 cmap=cmap,returncax=True)
+    cax21 = show(e_xy,figax=(fig,ax21),min=vmin_exy,max=vmax_exy,clipvals='manual',
+                 cmap=cmap,returncax=True)
+    cax22 = show(theta,figax=(fig,ax22),min=vmin_theta,max=vmax_theta,clipvals='manual',
+                 cmap=cmap,returncax=True)
     ax11.set_title(r'$\epsilon_{xx}$',size=titlesize)
     ax12.set_title(r'$\epsilon_{yy}$',size=titlesize)
     ax21.set_title(r'$\epsilon_{xy}$',size=titlesize)
@@ -206,8 +210,8 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
         assert(xaxis_space in ('R','Q')), "xaxis_space must be 'R' or 'Q'"
         show_which_axes = np.array(['exx' in axes_plots,'eyy' in axes_plots,
                                     'exy' in axes_plots,'theta' in axes_plots])
-        for show,ax in zip(show_which_axes,(ax11,ax12,ax21,ax22)):
-            if show:
+        for show_ax,ax in zip(show_which_axes,(ax11,ax12,ax21,ax22)):
+            if show_ax:
                 if xaxis_space=='R':
                     ax_addaxes(ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,
                                width=axes_width,color=axes_color,labelaxes=labelaxes,
