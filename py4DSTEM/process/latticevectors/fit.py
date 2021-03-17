@@ -59,7 +59,7 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
 
     # Check to ensure enough peaks are present
     if bragg_peaks.length < minNumPeaks:
-        return None,None,None,None,None
+        return None,None,None,None,None,None,None
 
     # Get M, the matrix of (h,k) indices
     M = np.vstack((np.ones_like(h,dtype=int),h,k)).T
@@ -170,6 +170,8 @@ def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, x0, y0, mask, maxP
 
     Returns:
         uv_map                  (RealSlice) a RealSlice containing the following 6 arrays:
+        uv_map.slices['x0']     x-coord of the origin of the best fit lattice
+        uv_map.slices['y0']     y-coord of the origin
         uv_map.slices['ux']     x-coord of the first lattice vector
         uv_map.slices['uy']     y-coord of the first lattice vector
         uv_map.slices['vx']     x-coord of the second lattice vector
@@ -195,6 +197,8 @@ def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, x0, y0, mask, maxP
                                                     maxPeakSpacing, minNumPeaks)
             # Store data
             if ux is not None:
+                uv_map.slices['x0'][Rx,Ry] = qx0
+                uv_map.slices['y0'][Rx,Ry] = qy0
                 uv_map.slices['ux'][Rx,Ry] = ux
                 uv_map.slices['uy'][Rx,Ry] = uy
                 uv_map.slices['vx'][Rx,Ry] = vx
