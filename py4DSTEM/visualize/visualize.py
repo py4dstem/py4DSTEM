@@ -7,7 +7,7 @@ from matplotlib.colors import is_color_like
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max=4,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
-         hist=False,n_bins=256,**kwargs):
+         returncax=False,hist=False,n_bins=256,**kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -42,6 +42,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
                     Axes instance. Otherwise, ax must be a 2-tuple containing
                     the matplotlib class instances (Figure,Axes), with ar then
                     plotted in the specified Axes instance.
+        returncax   (bool) if True, returns the matplotlib color mappable object
+                    returned by matshow, used e.g. for adding colorbars
         hist        (bool) if True, instead of plotting a 2D image in ax, plots
                     a histogram of the intensity values of ar, after any scaling
                     this function has performed. Plots the clipvals as dashed
@@ -50,8 +52,13 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
-        if returnfig==False (default), the figure is plotted and nothing is returned.
-        if returnfig==True, return the figure and the axis.
+        if
+            returnfig==False and returncax==False (default),    returns nothing
+            returnfig==True  and returncax==False,              returns (fig,ax), the
+                                                                matplotlib Figure and Axis
+            returnfig==False and returncax==True,               returns cax, the matplotlib
+                                                                color mappable object
+            returnfig==True  and returncax==True                returns (fig,ax),cax
     """
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','hist')
@@ -95,7 +102,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
     else:
-        ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
+        cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
 
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
@@ -104,13 +111,18 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         ax.set_xticks([])
         ax.set_yticks([])
 
-    if returnfig:
+    if not returnfig and not returncax:
+        if figax is None:
+            plt.show()
+            return
+        else:
+            return
+    elif returnfig and not returncax:
         return fig,ax
-    elif figax is not None:
-        return
+    elif not returnfig and returncax:
+        return cax
     else:
-        plt.show()
-        return
+        return (fig,ax),cax
 
 def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2,returnfig=False,
               **kwargs):
