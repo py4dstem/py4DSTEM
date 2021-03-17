@@ -13,7 +13,6 @@ from time import time
 from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 from ..utils import tqdmnd
-from ..visualize.visualize import show_hist
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -660,27 +659,22 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
     return pointlistarray
 
 
-def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True, bins = 200):
+def get_pointlistarray_hist(pointlistarray):
     """
     Concatecates the Bragg peak intensities from a PointListArray of Bragg peak positions into one array and returns the counts and bins. 
     This output can be used for understanding the distribution of intensities in your dataset for universal thresholding.
-    
+
     Accepts:
         pointlistarray      (PointListArray)
-        return_hist         (bool) if True, returns histogram of intensities in the entire pointlist
-        plot_hist           (bool) if True, returns plot of histogram
-        bins                (int) number of bins that the intensity values will be sorted into for histogram 
-    
+
     Returns:
         peak_intensities    (ndarray) all detected peaks
-        If return_hist==True (default), the counts and bin edges are returned, and can be manually plotted.
-        If return_hist==False, the figure is plotted and only peak intensities are returned.
     """
     assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
     assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
     assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
     assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
-    
+
     first_pass = True
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
@@ -693,13 +687,6 @@ def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True
                 temp_array = np.array(pointlist.data[i][2])
                 temp_array = np.reshape(temp_array, 1)
                 peak_intensities = np.append(peak_intensities, temp_array)
-    if not return_hist:
-        return peak_intensities
-    counts, bin_edges = np.histogram(peak_intensities, bins = bins, range = (np.min(peak_intensities), np.max(peak_intensities)) )
-    if not plot_hist:
-        return peak_intensities, counts, bin_edges
-    if plot_hist == True:
-        fi, ax = show_hist(peak_intensities, bins, returnfig = False)
-        return peak_intensities, counts, bin_edges
-        
+    return peak_intensities
+
 
