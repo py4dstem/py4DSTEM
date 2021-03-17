@@ -700,6 +700,6 @@ def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True
         return peak_intensities, counts, bin_edges
     if plot_hist == True:
         fi, ax = show_hist(peak_intensities, bins, returnfig = False)
-            return peak_intensities, counts, bin_edges
+        return peak_intensities, counts, bin_edges
         
 
