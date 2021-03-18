@@ -7,7 +7,7 @@ from scipy.optimize import leastsq
 from .qpixelsize import get_probe_size
 from ..fit import plane,parabola,fit_2D
 from ..diskdetection import get_bragg_vector_map
-from ..utils import get_CoM, add_to_2D_array_from_floats
+from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
 from ...io.datastructure import PointListArray
 
 
@@ -67,13 +67,12 @@ def get_origin(datacube,r=None,rscale=1.2,dp_max=None):
     qx0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
     qy0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
     qyy,qxx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
-    for rx in range(datacube.R_Nx):
-        for ry in range(datacube.R_Ny):
-            dp = datacube.data[rx,ry,:,:]
-            _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
-                                         (datacube.Q_Nx,datacube.Q_Ny))
-            mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
-            qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*mask)
+    for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
+        dp = datacube.data[rx,ry,:,:]
+        _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
+                                     (datacube.Q_Nx,datacube.Q_Ny))
+        mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
+        qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*mask)
     return qx0,qy0
 
 def get_origin_single_dp_beamstop(dp,**kwargs):
