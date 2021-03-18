@@ -45,28 +45,50 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
 
     if (mem, binfactor) == ("RAM", 1):
         with dm.fileDM(fp, on_memory=True) as dmFile:
-            dataSet = dmFile.getDataset(0)
+            # loop through the datasets until a >2D one is found:
+            i = 0
+            valid_data = False
+            while not valid_data:
+                data = dmFile.getMemmap(i)
+                if len(np.squeeze(data).shape) > 2 :
+                    valid_data = True
+                    dataSet = dmFile.getDataset(i)
+                i += 1
             dc = DataCube(data=dataSet["data"])
     elif (mem, binfactor) == ("MEMMAP", 1):
         with dm.fileDM(fp, on_memory=False) as dmFile:
-            memmap = dmFile.getMemmap(0)
+            # loop through the datasets until a >2D one is found:
+            i = 0
+            valid_data = False
+            while not valid_data:
+                memmap = dmFile.getMemmap(i)
+                if len(np.squeeze(memmap).shape) > 2 :
+                    valid_data = True
+                i += 1
             dc = DataCube(data=memmap)
     elif (mem) == ("RAM"):
         with dm.fileDM(fp, on_memory=True) as dmFile:
-            memmap = dmFile.getMemmap(0)
-        if "dtype" in kwargs.keys():
-            dtype = kwargs["dtype"]
-        else:
-            dtype = memmap.dtype
-        R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
-        Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
-        data = np.empty((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=dtype)
-        for Rx in range(R_Nx):
-            for Ry in range(R_Ny):
-                data[Rx, Ry, :, :] = bin2D(
-                    memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
-                )
-        dc = DataCube(data=data)
+            # loop through the datasets until a >2D one is found:
+            i = 0
+            valid_data = False
+            while not valid_data:
+                memmap = dmFile.getMemmap(i)
+                if len(np.squeeze(memmap).shape) > 2 :
+                    valid_data = True
+                i += 1
+            if "dtype" in kwargs.keys():
+                dtype = kwargs["dtype"]
+            else:
+                dtype = memmap.dtype
+            R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
+            Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
+            data = np.empty((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=dtype)
+            for Rx in range(R_Nx):
+                for Ry in range(R_Ny):
+                    data[Rx, Ry, :, :] = bin2D(
+                        memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
+                    )
+            dc = DataCube(data=data)
     else:
         raise Exception(
             "Memory mapping and on-load binning together is not supported.  Either set binfactor=1 or mem='RAM'."

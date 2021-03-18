@@ -305,7 +305,7 @@ class DataViewer(QtWidgets.QMainWindow):
             if is_py4DSTEM_file(fname):
                 self.datacube = datacube_selector(fname)
             else:
-                self.datacube,_ = read(fname)
+                self.datacube = read(fname)
             if type(self.datacube) == str :
                 self.Unidentified_file(fname)
                 #Reset view
