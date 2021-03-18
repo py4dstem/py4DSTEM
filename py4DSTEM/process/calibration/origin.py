@@ -101,10 +101,22 @@ def get_origin_beamstop(dp,**kwargs):
 
 ### Functions for fitting the origin
 
-def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',robustfitting=False,
-               returnfitp=False,returnmask=False):
+def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',returnfitp=False):
     """
-    docstring
+    Fits the position of the origin of diffraction space to a plane or parabola,
+    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
+    masked by the Boolean array `mask`.
+
+    Accepts:
+        qx0_meas,qy0_meas       (2d arrays)
+        mask                    (2b boolean array)
+        fitfunction             (str) must be 'plane' or 'parabola'
+        returnfitp              (bool) if True, returns the fit parameters
+
+    Returns:
+        (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals)
+                             or
+        (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
     """
     assert isinstance(qx0_meas,np.ndarray) and len(qx0_meas.shape)==2
     assert isinstance(qx0_meas,np.ndarray) and len(qy0_meas.shape)==2
@@ -126,27 +138,15 @@ def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',robustfitting=Fal
         popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas, data_mask=mask==False)
         popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas, data_mask=mask==False)
 
-    # Robust fitting
-    if robustfitting:
-        # This should create a new mask, which is used in combination with
-        # any user-specified mask.  Before passing out of this loop, multiply
-        # them and call the result 'mask' such that whatever final mask has
-        # been applied to the data can be returned
-        # Similarly, this should update the popt and pcov params to whatever
-        # their final values are
-        pass
-
-    # Compute residuals and return
+    # Compute residuals
     qx0_residuals = qx0_meas-qx0_fit
     qy0_residuals = qy0_meas-qy0_fit
-    if not returnfitp and not returnmask:
+
+    # Return
+    if not returnfitp:
         return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
-    elif not returnmask:
-        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
-    elif not returnfitp:
-        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),mask
     else:
-        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y),mask
+        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
 
 
 
