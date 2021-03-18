@@ -1,6 +1,6 @@
 from .qpixelsize import *
 from .origin import *
-from .ellipticaldistortion import *
+from .ellipse import *
 from .rotation import *
 
 
