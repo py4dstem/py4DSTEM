@@ -73,13 +73,13 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
     if scaling == 'none':
         _ar = ar
     elif scaling == 'log':
-        mask = ar>0
-        _ar = np.zeros_like(ar)
-        _ar[mask] = np.log(ar[mask])
+        _mask = ar>0
+        _ar = np.zeros_like(ar,dtype=float)
+        _ar[_mask] = np.log(ar[_mask])
     elif scaling == 'power':
-        mask = ar>0
-        _ar = np.zeros_like(ar)
-        _ar[mask] = np.power(ar[mask],power)
+        _mask = ar>0
+        _ar = np.zeros_like(ar,dtype=float)
+        _ar[_mask] = np.power(ar[_mask],power)
     else:
         raise Exception
 
