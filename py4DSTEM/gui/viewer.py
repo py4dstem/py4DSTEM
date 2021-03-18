@@ -27,9 +27,9 @@ import gc
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
-from ..file.io.read import read
-from ..file.io.native import save, is_py4DSTEM_file
-from ..file.datastructure.datacube import DataCube
+from ..io.read import read
+from ..io.native import save, is_py4DSTEM_file
+from ..io.datastructure.datacube import DataCube
 from .strain import *
 
 import IPython
