@@ -4,6 +4,7 @@ from matplotlib.patches import Rectangle,Circle,Wedge
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
+from numbers import Number
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max=4,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
@@ -393,7 +394,8 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,point_color='r',
     else:
         return fig,ax
 
-def show_hist(arr, bins = 200, returnfig = False):
+def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
+                                        returnhist=False, returnfig=False):
     """
     Visualization function to show histogram from any ndarray (arr).
 
@@ -401,15 +403,20 @@ def show_hist(arr, bins = 200, returnfig = False):
         arr                 (ndarray) any array
         bins                (int) number of bins that the intensity values will be sorted
                             into for histogram
+        returnhist          (bool) determines whether or not the histogram values are
+                            returned (see Returns)
         returnfig           (bool) determines whether or not figure and its axis are
                             returned (see Returns)
 
     Returns:
-        If returnfig==False (default), the figure is plotted and nothing is returned.
-        If returnfig==False, the figure and its one axis are returned, and can be
-        further edited.
+        If
+            returnhist==False and returnfig==False      returns nothing
+            returnhist==True  and returnfig==True       returns (counts,bin_edges) the histogram
+                                                        values and bin edge locations
+            returnhist==False and returnfig==True       returns (fig,ax), the Figure and Axis
+            returnhist==True  and returnfig==True       returns (hist,bin_edges),(fig,ax)
     """
-    counts, bin_edges = np.histogram(arr, bins = bins, range = (np.min(arr), np.max(arr)) )
+    counts, bin_edges = np.histogram(arr, bins=bins, range=(np.min(arr), np.max(arr)))
     bin_width = bin_edges[1] - bin_edges[0]
     bin_centers = bin_edges[:-1] + bin_width/2
 
@@ -417,10 +424,16 @@ def show_hist(arr, bins = 200, returnfig = False):
     ax.bar(bin_centers, counts, width = bin_width, align = 'center')
     plt.ylabel('Counts')
     plt.xlabel('Intensity')
+    if vlines is not None:
+        ax.vlines(vlines,0,np.max(counts),color=vlinecolor,ls=vlinestyle)
 
-    if not returnfig:
+    if not returnhist and not returnfig:
         plt.show()
         return
-    else:
+    elif returnhist and not returnfig:
+        return counts,bins_edges
+    elif not returnhist and returnfig:
         return fig, ax
+    else:
+        return (counts,bin_edges),(fig,ax)
 

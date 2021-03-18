@@ -227,7 +227,7 @@ def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
     yshifts -= np.average(yshifts)
     return xshifts, yshifts, braggvectormap
 
-def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50):
+def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     """
     Finds outliers in the shift matrices.
 
@@ -242,12 +242,10 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50
         yshifts         ((R_Nx,R_Ny)-shaped array) the shifts in y
         n_sigma         (float) the cutoff value for the score function, in number of std
         edge_boundary   (int) number of pixels near the mask edge to mark as outliers
-        n_bins          (int) number of histogram bins
 
     Returns:
-        mask            ((R_Nx,R_Ny)-shaped array of bools) the outlier mask
-        n               (1D array of length n_bins-1) the histogram counts
-        bins            (1D array of length n_bins) the histogram bins
+        mask            ((R_nx,R_ny)-shaped array of bools) the outlier mask
+        score           ((R_nx,R_ny)-shaped array) the outlier scores
         cutoff          (float) the score cutoff value
     """
     # Get score
@@ -269,22 +267,8 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50
              np.abs(yshifts-np.roll(yshifts,(-1, 1),axis=(0,1))) + \
              np.abs(yshifts-np.roll(yshifts,( 1, 1),axis=(0,1)))
 
-    # Make histogram
-    bins = np.linspace(0,np.max(score),n_bins)
-    n,bins = np.histogram(score,bins=bins)
-    width = bins[1]-bins[0]
-
-    # Fit gaussian
-    fitfunc = lambda p,x: p[0]*np.exp(-0.5*((x-p[1])/p[2])**2)
-    errfunc = lambda p,x,y: fitfunc(p,x) - y
-    p0_0 = np.max(gaussian_filter(n,2))
-    p0_1 = np.average(bins[:-1]+width/2.,weights=n)
-    p0_2 = np.sqrt(np.average((bins[:-1]+width/2. - p0_1)**2,weights=n))
-    p0 = [p0_0,p0_1,p0_2]
-    p1,success = leastsq(errfunc, p0, args=(bins[:-1]+width/2.,n))
-
     # Get mask and return
-    cutoff = p1[2]*n_sigma
+    cutoff = np.std(score)*n_sigma
     mask = score > cutoff
     if edge_boundary > 0:
         mask[:edge_boundary,:] = True
@@ -292,7 +276,7 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0, n_bins=50
         mask[:,:edge_boundary] = True
         mask[:,-edge_boundary:] = True
 
-    return mask, n, bins, cutoff
+    return mask, score, cutoff
 
 def shift_braggpeaks(Braggpeaks, xshifts, yshifts):
     """

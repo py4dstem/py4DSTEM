@@ -13,7 +13,6 @@ from time import time
 from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 from ..utils import tqdmnd
-from ..visualize.visualize import show_hist
 
 def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -289,7 +288,7 @@ def find_Bragg_disks_serial(datacube, probe,
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe. When hist = True, returns histogram of intensities in the entire
     datacube.
-    
+
     Accepts:
         DP                   (ndarray) a diffraction pattern
         probe                (ndarray) the vacuum probe template, in real space.
@@ -310,24 +309,32 @@ def find_Bragg_disks_serial(datacube, probe,
                                                     (fairly fast but not very accurate)
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
-        upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        global_threshold     (bool) if True, applies global threshold based on minGlobalIntensity and metric
-        minGlobalThreshold   (float) the minimum allowed peak intensity, relative to the selected metric (0-1), except in the case 
-                                of 'manual' metric, in which the threshold value based on the minimum intensity that you want thresholder out should be set.
-        metric               (string) the metric used to compare intensities. 'average' compares peak intensity relative to the average
-                                of the maximum intensity in each diffraction pattern. 'max' compares peak intensity relative to the
-                                maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
-                                to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
-                                based on a predetermined intensity value manually determined. In this case, minIntensity should be an int.
+        upsample_factor      (int) upsampling factor for subpixel fitting (only used when
+                             subpixel='multicorr')
+        global_threshold     (bool) if True, applies global threshold based on minGlobalIntensity
+                             and metric
+        minGlobalThreshold   (float) the minimum allowed peak intensity, relative to the
+                             selected metric (0-1), except in the case of 'manual' metric,
+                             in which the threshold value based on the minimum intensity
+                             that you want thresholder out should be set.
+        metric               (string) the metric used to compare intensities. 'average'
+                             compares peak intensity relative to the average of the maximum
+                             intensity in each diffraction pattern. 'max' compares peak
+                             intensity relative to the maximum intensity value out of all
+                             the diffraction patterns.  'median' compares peak intensity relative
+                             to the median of the maximum intensity peaks in each diffraction
+                             pattern. 'manual' Allows the user to threshold based on a
+                             predetermined intensity value manually determined. In this case,
+                             minIntensity should be an int.
         verbose              (bool) if True, prints completion updates
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
-    
+
     Returns:
         peaks                (PointListArray) the Bragg peak positions and correlation intensities
         counts               (ndarray) The counts of intensities in each bin
         bin_values           (ndarray) The bins associated with counts returned
     """
-    
+
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
     peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
@@ -359,12 +366,10 @@ def find_Bragg_disks_serial(datacube, probe,
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
                                                                    int(t/60), int(t%60)))
-    
     if global_threshold == True:
-        peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing, maxNumPeaks)
-        
+        peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
+                                    maxNumPeaks)
     return peaks
-
 
 def find_Bragg_disks(datacube, probe,
                      corrPower = 1,
@@ -403,17 +408,20 @@ def find_Bragg_disks(datacube, probe,
                                                     (fairly fast but not very accurate)
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
-        upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        upsample_factor      (int) upsampling factor for subpixel fitting (only used when
+                             subpixel='multicorr')
         verbose              (bool) if True, prints completion updates for serial execution
         _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
         distributed          (dict) contains information for parallelprocessing using an IPyParallel
                              or Dask distributed cluster.  Valid keys are:
                                  ipyparallel (dict):
-                                     client_file (str): path to client json for connecting to your existing
-                                     IPyParallel cluster
+                                     client_file (str): path to client json for connecting to your
+                                                        existing IPyParallel cluster
                                  dask (dict):
-                                     client (object): a dask client that connects to your existing Dask cluster
-                                 data_file (str): the absolute path to your original data file containing the datacube
+                                     client (object): a dask client that connects to your
+                                                      existing Dask cluster
+                                 data_file (str): the absolute path to your original data
+                                                  file containing the datacube
                                  cluster_path (str): defaults to the working directory during processing
 
                              if distributed is None, which is the default, processing will be in serial
@@ -537,7 +545,7 @@ def find_Bragg_disks(datacube, probe,
     else:
         raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
-        
+
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing,
                                                                                maxNumPeaks):
     """
@@ -554,7 +562,8 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
         minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks
         maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern
     """
-    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
+    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
+                "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
         pointlist.sort(coordinate='intensity', order='descending')
@@ -585,45 +594,56 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
                 pointlist.remove_points(deletemask)
 
     return pointlistarray
-    
-    
-def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=False, maxNumPeaks=False):
+
+
+def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=False,
+                                                                    maxNumPeaks=False):
     """
-    Takes a PointListArray of detected Bragg peaks and applies universal thresholding, returning the thresholded PointListArray. To skip a threshold, set that parameter to False.
-    
+    Takes a PointListArray of detected Bragg peaks and applies universal thresholding,
+    returning the thresholded PointListArray. To skip a threshold, set that parameter to False.
+
     Accepts:
-        pointlistarray        (PointListArray) The Bragg peaks. Must have coords=('qx','qy','intensity')
-        minIntensity          (float) the minimum allowed peak intensity, relative to the selected metric (0-1), except in the case 
-                                of 'manual' metric, in which the threshold value based on the minimum intensity that you want thresholder out should be set.
-        metric                (string) the metric used to compare intensities. 'average' compares peak intensity relative to the average
-                                of the maximum intensity in each diffraction pattern. 'max' compares peak intensity relative to the
-                                maximum intensity value out of all the diffraction patterns.  'median' compares peak intensity relative
-                                to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
-                                based on a predetermined intensity value manually determined.
-        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks - optional, default is false
-        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern - optional, default is false
-    
+        pointlistarray        (PointListArray) The Bragg peaks. Must have
+                              coords=('qx','qy','intensity')
+        minIntensity          (float) the minimum allowed peak intensity, relative to the
+                              selected metric (0-1), except in the case of 'manual' metric,
+                              in which the threshold value based on the minimum intensity
+                              that you want thresholder out should be set.
+        metric                (string) the metric used to compare intensities. 'average'
+                              compares peak intensity relative to the average of the maximum
+                              intensity in each diffraction pattern. 'max' compares peak
+                              intensity relative to the maximum intensity value out of all
+                              the diffraction patterns.  'median' compares peak intensity relative
+                              to the median of the maximum intensity peaks in each diffraction
+                              pattern. 'manual' Allows the user to threshold based on a
+                              predetermined intensity value manually determined.
+        minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks -
+                              optional, default is false
+        maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern -
+                              optional, default is false
+
     Returns:
        pointlistarray        (PointListArray) Bragg peaks thresholded by intensity.
     """
-    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
+    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
+                "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
     HI_array = np.zeros( (pointlistarray.shape[0], pointlistarray.shape[1]) )
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
             pointlist.sort(coordinate='intensity', order='descending')
             if pointlist.data.shape[0] == 0:
-                top_value = np.nan 
+                top_value = np.nan
             else:
                 top_value = pointlist.data[0][2]
                 HI_array[Rx, Ry] = top_value
-    
+
     mean_intensity = np.nanmean(HI_array)
     max_intensity = np.max(HI_array)
     median_intensity = np.median(HI_array)
-    
+
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
             pointlist = pointlistarray.get_pointlist(Rx,Ry)
-            
+
             # Remove peaks below minRelativeIntensity threshold
             if minIntensity is not False:
                 if metric == 'average':
@@ -638,7 +658,7 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
                 if metric == 'manual':
                     deletemask = pointlist.data['intensity'] < minIntensity
                     pointlist.remove_points(deletemask)
-            
+
             # Remove peaks that are too close together
             if maxNumPeaks is not False:
                 r2 = minPeakSpacing**2
@@ -660,27 +680,30 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
     return pointlistarray
 
 
-def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True, bins = 200):
+def get_pointlistarray_intensities(pointlistarray):
     """
-    Concatecates the Bragg peak intensities from a PointListArray of Bragg peak positions into one array and returns the counts and bins. 
-    This output can be used for understanding the distribution of intensities in your dataset for universal thresholding.
-    
+    Concatecates the Bragg peak intensities from a PointListArray of Bragg peak positions
+    into one array and returns the intensities. This output can be used for understanding
+    the distribution of intensities in your dataset for universal thresholding.
+
     Accepts:
         pointlistarray      (PointListArray)
-        return_hist         (bool) if True, returns histogram of intensities in the entire pointlist
-        plot_hist           (bool) if True, returns plot of histogram
-        bins                (int) number of bins that the intensity values will be sorted into for histogram 
-    
+        return_hist         (bool) if True, returns histogram of intensities in the entire
+                            pointlist
+        bins                (int) number of bins that the intensity values will be sorted
+                            into for histogram
+
     Returns:
-        peak_intensities    (ndarray) all detected peaks
+        peak_intensities    (ndarray) all detected peak intensities
         If return_hist==True (default), the counts and bin edges are returned, and can be manually plotted.
         If return_hist==False, the figure is plotted and only peak intensities are returned.
     """
-    assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
+    assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), (
+                    "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'.")
     assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
     assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
     assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
-    
+
     first_pass = True
     for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
@@ -696,10 +719,6 @@ def get_pointlistarray_hist(pointlistarray, return_hist = True, plot_hist = True
     if not return_hist:
         return peak_intensities
     counts, bin_edges = np.histogram(peak_intensities, bins = bins, range = (np.min(peak_intensities), np.max(peak_intensities)) )
-    if not plot_hist:
-        return peak_intensities, counts, bin_edges
-    if plot_hist == True:
-        fi, ax = show_hist(peak_intensities, bins, returnfig = False)
-        return peak_intensities, counts, bin_edges
-        
+    return peak_intensities, counts, bin_edges
+
 
