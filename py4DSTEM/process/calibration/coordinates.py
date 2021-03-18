@@ -99,27 +99,29 @@ class Coordinates(object):
     def get_ellipse(self,rx=None,ry=None):
         return self.get_a(rx,ry),self.get_b(rx,ry),self.get_theta(rx,ry)
     def get_Q_pixel_size(self):
-        return self.Q_pixel_size
+        return self._get_value(self.Q_pixel_size)
     def get_Q_pixel_units(self):
-        return self.Q_pixel_units
+        return self._get_value(self.Q_pixel_units)
     def get_R_pixel_size(self):
-        return self.R_pixel_size
+        return self._get_value(self.R_pixel_size)
     def get_R_pixel_units(self):
-        return self.R_pixel_units
+        return self._get_value(self.R_pixel_units)
 
     def _validate_input(self,p):
         assert isinstance(p,Number) or isinstance(p,np.ndarray)
         if isinstance(p,np.ndarray):
             assert p.shape == (self.R_Nx,self.R_Ny)
     def _get_value(self,p,rx=None,ry=None):
-        assert isinstance(p,Number) or isinstance(p,np.ndarray)
-        if isinstance(p,Number):
-            return p
-        if rx is None and ry is None:
-            return p
-        else:
-            assert np.all([isinstance(i,(int,np.integer)) for i in (rx,ry)])
-            assert rx<self.R_Nx and ry<self.R_Ny
-            return p[rx,ry]
-
+        try:
+            assert isinstance(p,Number) or isinstance(p,np.ndarray)
+            if isinstance(p,Number):
+                return p
+            if rx is None and ry is None:
+                return p
+            else:
+                assert np.all([isinstance(i,(int,np.integer)) for i in (rx,ry)])
+                assert rx<self.R_Nx and ry<self.R_Ny
+                return p[rx,ry]
+        except NameError:
+            return None
 

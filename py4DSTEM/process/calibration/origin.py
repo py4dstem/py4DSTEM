@@ -335,30 +335,41 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
 
     return mask, score, cutoff
 
-def shift_braggpeaks(Braggpeaks, xshifts, yshifts):
+def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     """
-    Applies shifts xshifts,yshifts to Braggpeaks.
+    Shift the braggpeaks positions to center them about the origin, given
+    either by (qx0,qy0) or by the Coordinates instance coords. Either
+    (qx0,qy0) or coords must be specified.
 
     Accepts:
-        Braggpeaks  (PointListArray) the Bragg unshifted Bragg peaks
-        xshifts     ((R_Nx,R_Ny)-shaped array) the shifts in x
-        yshifts     ((R_Nx,R_Ny)-shaped array) the shifts in y
+        braggpeaks  (PointListArray) the detected, unshifted bragg peaks
+        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin
+        coords      (Coordinates) an object containing the origin positions
+        name        (str, optional) a name for the returned PointListArray.
+                    if unspecified appends '_centered' to the old PLA name.
 
     Returns:
-        shifted_Braggpeaks  (PointListArray) the shifted Bragg peaks
+        braggpeaks_centered  (PointListArray) the centered Bragg peaks
     """
-    assert isinstance(Braggpeaks, PointListArray)
-    shifted_Braggpeaks = Braggpeaks.copy(name=Braggpeaks.name+"_shiftcorrected")
+    assert isinstance(braggpeaks, PointListArray)
+    assert (qx0 is not None and qy0 is not None) != (coords is not None), (
+                                "Either (qx0,qy0) or coords must be specified")
+    if coords is not None:
+        qx0,qy0 = coords.get_center()
+        assert qx0 is not None and qy0 is not None, "coords did not contain center position"
+    if name is None:
+        name = braggpeaks.name+"_centered"
+    assert isinstance(name,str)
+    braggpeaks_centered = braggpeaks.copy(name=name)
 
-    for Rx in range(shifted_Braggpeaks.shape[0]):
-        for Ry in range(shifted_Braggpeaks.shape[1]):
-            pointlist = shifted_Braggpeaks.get_pointlist(Rx,Ry)
-            shifts_qx = xshifts[Rx,Ry]
-            shifts_qy = yshifts[Rx,Ry]
-            pointlist.data['qx'] -= shifts_qx
-            pointlist.data['qy'] -= shifts_qy
+    for Rx in range(braggpeaks_centered.shape[0]):
+        for Ry in range(braggpeaks_centered.shape[1]):
+            pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+            qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
+            pointlist.data['qx'] -= qx
+            pointlist.data['qy'] -= qy
 
-    return shifted_Braggpeaks
+    return braggpeaks_centered
 
 
 
