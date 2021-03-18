@@ -6,7 +6,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
 from numbers import Number
 
-def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max=4,
+def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
          hist=False,n_bins=256,mask=None,mask_color='k',**kwargs):
     """
@@ -31,6 +31,12 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
                         'std'       The min/max values are
                                             np.median(ar) -/+ N*np.std(ar),
                                     and N is this functions min,max vals.
+                        'centered'  The min/max values are set to
+                                            c -/+ m
+                                    Where by default 'c' is zero and m is
+                                    the max(abs(ar-c), or the two params
+                                    can be user specified using the kwargs
+                                    min/max -> c/m.
         min         (number) behavior depends on clipvals
         max         (number)
         power       (number)
@@ -59,7 +65,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
         if returnfig==True, return the figure and the axis.
     """
     assert scaling in ('none','log','power','hist')
-    assert clipvals in ('minmax','manual','std','hist')
+    assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
         assert mask.shape == ar.shape
         assert is_color_like(mask_color)
@@ -80,11 +86,18 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=0,max
     if clipvals == 'minmax':
         vmin,vmax = np.min(_ar),np.max(_ar)
     elif clipvals == 'manual':
+        assert min is not None and max is not None
         vmin,vmax = min,max
     elif clipvals == 'std':
+        assert min is not None and max is not None
         m,s = np.median(_ar),np.std(_ar)
         vmin = m - min*s
         vmax = m + max*s
+    elif clipvals == 'centered':
+        c = 0 if min is None else min
+        m = np.max(np.abs(ar)) if max is None else max
+        vmin = c-m
+        vmax = c+m
     else:
         raise Exception
 
