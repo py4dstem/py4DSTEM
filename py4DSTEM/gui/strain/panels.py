@@ -12,13 +12,13 @@ from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
 from skimage.transform import radon
 from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
 from scipy.ndimage.filters import gaussian_filter
-from ...file.datastructure import PointList
+from ...io.datastructure import PointList
 from .cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
 from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
-from ...file.io import read
-from ...file.io.native import save, append, is_py4DSTEM_file
-from ...file.datastructure import DiffractionSlice, RealSlice
+from ...io import read
+from ...io.native import save, append, is_py4DSTEM_file
+from ...io.datastructure import DiffractionSlice, RealSlice
 from .ImageViewMasked import ImageViewAlpha
 
 ### use for debugging:
