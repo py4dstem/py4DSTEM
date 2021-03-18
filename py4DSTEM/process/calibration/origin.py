@@ -250,22 +250,31 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     """
     # Get score
     score = np.zeros_like(xshifts)
-    score += np.abs(xshifts-np.roll(xshifts,(-1, 0),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,( 1, 0),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,( 0,-1),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,( 0, 1),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,(-1,-1),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,( 1,-1),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,(-1, 1),axis=(0,1))) + \
-             np.abs(xshifts-np.roll(xshifts,( 1, 1),axis=(0,1)))
-    score += np.abs(yshifts-np.roll(yshifts,(-1, 0),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,( 1, 0),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,( 0,-1),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,( 0, 1),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,(-1,-1),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,( 1,-1),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,(-1, 1),axis=(0,1))) + \
-             np.abs(yshifts-np.roll(yshifts,( 1, 1),axis=(0,1)))
+    score[:-1,:] += np.abs(xshifts[:-1,:]-np.roll(xshifts,(-1, 0),axis=(0,1))[:-1,:])
+    score[ 1:,:] += np.abs(xshifts[ 1:,:]-np.roll(xshifts,( 1, 0),axis=(0,1))[ 1:,:])
+    score[:,:-1] += np.abs(xshifts[:,:-1]-np.roll(xshifts,( 0,-1),axis=(0,1))[:,:-1])
+    score[:, 1:] += np.abs(xshifts[:, 1:]-np.roll(xshifts,( 0, 1),axis=(0,1))[:, 1:])
+    score[:-1,:-1] += np.abs(xshifts[:-1,:-1]-np.roll(xshifts,(-1,-1),axis=(0,1))[:-1,:-1])
+    score[ 1:,:-1] += np.abs(xshifts[ 1:,:-1]-np.roll(xshifts,( 1,-1),axis=(0,1))[ 1:,:-1])
+    score[:-1, 1:] += np.abs(xshifts[:-1, 1:]-np.roll(xshifts,(-1, 1),axis=(0,1))[:-1, 1:])
+    score[ 1:, 1:] += np.abs(xshifts[ 1:, 1:]-np.roll(xshifts,( 1, 1),axis=(0,1))[ 1:, 1:])
+    score[:-1,:] += np.abs(yshifts[:-1,:]-np.roll(yshifts,(-1, 0),axis=(0,1))[:-1,:])
+    score[ 1:,:] += np.abs(yshifts[ 1:,:]-np.roll(yshifts,( 1, 0),axis=(0,1))[ 1:,:])
+    score[:,:-1] += np.abs(yshifts[:,:-1]-np.roll(yshifts,( 0,-1),axis=(0,1))[:,:-1])
+    score[:, 1:] += np.abs(yshifts[:, 1:]-np.roll(yshifts,( 0, 1),axis=(0,1))[:, 1:])
+    score[:-1,:-1] += np.abs(yshifts[:-1,:-1]-np.roll(yshifts,(-1,-1),axis=(0,1))[:-1,:-1])
+    score[ 1:,:-1] += np.abs(yshifts[ 1:,:-1]-np.roll(yshifts,( 1,-1),axis=(0,1))[ 1:,:-1])
+    score[:-1, 1:] += np.abs(yshifts[:-1, 1:]-np.roll(yshifts,(-1, 1),axis=(0,1))[:-1, 1:])
+    score[ 1:, 1:] += np.abs(yshifts[ 1:, 1:]-np.roll(yshifts,( 1, 1),axis=(0,1))[ 1:, 1:])
+    score[1:-1,1:-1] /= 8.
+    score[: 1,1:-1] /= 5.
+    score[-1:,1:-1] /= 5.
+    score[1:-1,: 1] /= 5.
+    score[1:-1,-1:] /= 5.
+    score[ 0, 0] /= 3.
+    score[ 0,-1] /= 3.
+    score[-1, 0] /= 3.
+    score[-1,-1] /= 3.
 
     # Get mask and return
     cutoff = np.std(score)*n_sigma
