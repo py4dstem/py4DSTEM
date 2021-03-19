@@ -346,7 +346,9 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
         qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin
         coords      (Coordinates) an object containing the origin positions
         name        (str, optional) a name for the returned PointListArray.
-                    if unspecified appends '_centered' to the old PLA name.
+                    If unspecified, takes the old PLA name, removes '_raw'
+                    if present at the end of the string, then appends
+                    '_centered'.
 
     Returns:
         braggpeaks_centered  (PointListArray) the centered Bragg peaks
@@ -358,7 +360,9 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
         qx0,qy0 = coords.get_center()
         assert qx0 is not None and qy0 is not None, "coords did not contain center position"
     if name is None:
-        name = braggpeaks.name+"_centered"
+        sl = braggpeaks.name.split('_')
+        _name = '_'.join([s for i,s in enumerate(sl) if not (s=='raw' and i==len(sl)-1)])
+        name = _name+"_centered"
     assert isinstance(name,str)
     braggpeaks_centered = braggpeaks.copy(name=name)
 
