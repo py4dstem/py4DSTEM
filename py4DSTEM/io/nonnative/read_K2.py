@@ -5,7 +5,40 @@
 from collections.abc import Sequence
 import numpy as np
 import numba as nb
-from ...process.utils import print_progress_bar, tqdmnd
+from ...process.utils import tqdmnd
+from ..datastructure import DataCube
+
+
+def read_K2(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
+    """
+    Read a K2 binary 4D-STEM file.
+
+    Accepts:
+        fp          str Path to the file
+        mem         (str) Specifies how the data should be stored; must be "RAM"
+                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+                    is "MEMMAP".
+        binfactor   (int) Bin the data, in diffraction space, as it's loaded. See
+                    docstring for py4DSTEM.file.io.read.  Must be 1, retained only
+                    for compatibility.
+        metadata    (bool) iff True, returns the file metadata as a Metadata
+                    instance.
+
+    Returns:
+        data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
+                    iff metadata==True, returns the metadata as a Metadata instance
+
+                    Note that metadata is read either way - in the latter case ONLY
+                    metadata is read and returned, in the former case a DataCube
+                    is returned with the metadata attached at datacube.metadata
+    """
+    assert mem == "MEMMAP", "K2 files can only be memory-mapped, sorry."
+    assert binfactor == 1, "K2 files can only be read at full resolution, sorry."
+
+    if metadata is True:
+        return None
+
+    return DataCube(data=K2DataArray(fp))
 
 
 class K2DataArray(Sequence):
@@ -13,26 +46,26 @@ class K2DataArray(Sequence):
     K2DataArray provides an interface to a set of Gatan K2IS binary output files.
     This object behaves *similar* to a numpy memmap into the data, and supports 4-D indexing
     and slicing. Slices into this object return np.ndarray objects.
-    
+
     The object is created by passing the path to any of: (i) the folder containing the
     raw data, (ii) the *.gtg metadata file, or (iii) one of the raw data *.bin files.
     In any case, there should be only one dataset (8 *.bin's and a *.gtg) in the folder.
-    
+
     ===== Filtering and Noise Reduction =====
     This object is read-only---you cannot edit the data on disk, which means that some
     DataCube functions like swap_RQ() will not work.
-    
-    The K2IS has a "resolution" of 1920x1792, but actually saves hidden stripes in the raw data. 
-    By setting the hidden_stripe_noise_reduction flag to True, the electronic noise in these 
+
+    The K2IS has a "resolution" of 1920x1792, but actually saves hidden stripes in the raw data.
+    By setting the hidden_stripe_noise_reduction flag to True, the electronic noise in these
     stripes is used to reduce the readout noise. (This is on by default.)
-    
+
     If you want to take a separate background to subtract, set `dark_reference` to specify this
     background. This is then subtracted from the frames as they are called out (no matter where
     the object is referenced! So, for instance, Bragg disk detection will operate on the background-
-    subtracted diffraction patterns!). However, mixing the auto-background and specified background 
+    subtracted diffraction patterns!). However, mixing the auto-background and specified background
     is potentially dangerous and (currently!) not allowed. To switch back from user-background to
     auto-background, just delete the user background, i.e. `del(dc.data4D.dark_reference)`
-    
+
     ===== NOTE =====
     If you call dc.data4D[:,:,:,:] on a DataCube with a K2DataArray this will read the entire stack
     into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
@@ -40,7 +73,8 @@ class K2DataArray(Sequence):
 
     def __init__(self, filepath, hidden_stripe_noise_reduction=True):
         from ncempy.io import dm
-        import os, glob
+        import os
+        import glob
 
         # first parse the input and get the path to the *.gtg
         if not os.path.isdir(filepath):
@@ -427,9 +461,6 @@ class K2DataArray(Sequence):
         for sy in range(self.shape[1]):
             for sx in range(self.shape[0]):
                 dset[sx, sy, :, :] = self[sx, sy, :, :]
-                print_progress_bar(
-                    sy * self.shape[0] + sx + 1, self.shape[0] * self.shape[1]
-                )
 
         return dset
 
