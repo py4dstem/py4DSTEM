@@ -283,6 +283,7 @@ def find_Bragg_disks_serial(datacube, probe,
                             minGlobalIntensity = 0.005,
                             metric = 'mean',
                             verbose = False,
+                            name = 'braggpeaks_raw',
                             _qt_progress_bar = None):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
@@ -327,6 +328,7 @@ def find_Bragg_disks_serial(datacube, probe,
                              predetermined intensity value manually determined. In this case,
                              minIntensity should be an int.
         verbose              (bool) if True, prints completion updates
+        name                 (str) name for the returned PointListArray
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
 
     Returns:
@@ -369,6 +371,7 @@ def find_Bragg_disks_serial(datacube, probe,
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
+    peaks.name = name
     return peaks
 
 def find_Bragg_disks(datacube, probe,
@@ -382,6 +385,7 @@ def find_Bragg_disks(datacube, probe,
                      subpixel = 'multicorr',
                      upsample_factor = 16,
                      verbose = False,
+                     name = 'braggpeaks_raw',
                      _qt_progress_bar = None,
                      distributed = None):
     """
@@ -411,6 +415,7 @@ def find_Bragg_disks(datacube, probe,
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when
                              subpixel='multicorr')
         verbose              (bool) if True, prints completion updates for serial execution
+        name                 (str) name for the returned PointListArray
         _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
         distributed          (dict) contains information for parallelprocessing using an IPyParallel
                              or Dask distributed cluster.  Valid keys are:
@@ -500,6 +505,7 @@ def find_Bragg_disks(datacube, probe,
             subpixel=subpixel,
             upsample_factor=upsample_factor,
             verbose=verbose,
+            name=name,
             _qt_progress_bar=_qt_progress_bar)
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
