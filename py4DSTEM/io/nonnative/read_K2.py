@@ -80,8 +80,12 @@ class K2DataArray(Sequence):
         if not os.path.isdir(filepath):
             filepath = os.path.dirname(filepath)
 
-        assert len(glob.glob(os.path.join(filepath, "*.bin"))) == 8, "Wrong path, or wrong number of bin files."
-        assert len(glob.glob(os.path.join(filepath, "*.gtg"))) == 1, "Wrong path, or wrong number of gtg files."
+        assert (
+            len(glob.glob(os.path.join(filepath, "*.bin"))) == 8
+        ), "Wrong path, or wrong number of bin files."
+        assert (
+            len(glob.glob(os.path.join(filepath, "*.gtg"))) == 1
+        ), "Wrong path, or wrong number of gtg files."
 
         gtgpath = os.path.join(filepath, glob.glob(os.path.join(filepath, "*.gtg"))[0])
         binprefix = gtgpath[:-4]
@@ -117,16 +121,16 @@ class K2DataArray(Sequence):
 
         self._stripe_dtype = np.dtype(
             [
-                ("sync", ">u4", 1),
+                ("sync", ">u4"),
                 ("pad1", np.void, 5),
-                ("shutter", ">u1", 1),
+                ("shutter", ">u1"),
                 ("pad2", np.void, 6),
-                ("block", ">u4", 1),
+                ("block", ">u4",),
                 ("pad4", np.void, 4),
-                ("frame", ">u4", 1),
-                ("coords", ">u2", 4),
+                ("frame", ">u4"),
+                ("coords", ">u2", (4,)),
                 ("pad3", np.void, 4),
-                ("data", ">u1", 22320),
+                ("data", ">u1", (22320,)),
             ]
         )
 
