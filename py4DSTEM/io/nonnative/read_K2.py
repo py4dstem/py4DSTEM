@@ -9,7 +9,7 @@ from ...process.utils import tqdmnd
 from ..datastructure import DataCube
 
 
-def read_K2(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
+def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
     """
     Read a K2 binary 4D-STEM file.
 
@@ -79,12 +79,11 @@ class K2DataArray(Sequence):
         # first parse the input and get the path to the *.gtg
         if not os.path.isdir(filepath):
             filepath = os.path.dirname(filepath)
-        os.chdir(filepath)
 
-        assert len(glob.glob("*.bin")) == 8, "Wrong path, or wrong number of bin files."
-        assert len(glob.glob("*.gtg")) == 1, "Wrong path, or wrong number of gtg files."
+        assert len(glob.glob(os.path.join(filepath, "*.bin"))) == 8, "Wrong path, or wrong number of bin files."
+        assert len(glob.glob(os.path.join(filepath, "*.gtg"))) == 1, "Wrong path, or wrong number of gtg files."
 
-        gtgpath = os.path.join(filepath, glob.glob("*.gtg")[0])
+        gtgpath = os.path.join(filepath, glob.glob(os.path.join(filepath, "*.gtg"))[0])
         binprefix = gtgpath[:-4]
 
         self._gtg_file = gtgpath
