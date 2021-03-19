@@ -161,7 +161,7 @@ def parse_filetype(fp):
     elif fext in [".mrc"]:
         # TK TODO
         return "mrc_relativity"
-    elif fext in [".gtg"]:
+    elif fext in [".gtg", ".bin"]:
         return "gatan_K2_bin"
     elif fext in [".kitware_counted"]:
         # TK TODO
