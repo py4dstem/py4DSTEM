@@ -294,6 +294,86 @@ def show_circ(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=Fa
     else:
         return fig,ax
 
+def show_ellipse(ar,center,R,eps,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+                                                            returnfig=False,**kwargs):
+    """
+    Visualization function which plots a 2D array with one or more overlayed ellipses.
+    To overlay one ellipse, center must be a single 2-tuple.  To overlay N circles,
+    center must be a list of N 2-tuples.  Similarly, the remaining ellipse parameters -
+    R, eps, and theta - must each be a single number or a len-N list.  color, fill, and
+    alpha may each be single values, which are then applied to all the circles, or
+    length N lists.
+
+    See the docstring for py4DSTEM.visualize.show() for descriptions of all input
+    parameters not listed below.
+
+    Accepts:
+        center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
+        R           (number of list of N numbers) the circles radius
+        color       (valid matplotlib color, or list of N colors)
+        fill        (bool or list of N bools) filled in or empty rectangles
+        alpha       (number, 0 to 1) transparency
+        linewidth   (number)
+
+    Returns:
+        If returnfig==False (default), the figure is plotted and nothing is returned.
+        If returnfig==False, the figure and its one axis are returned, and can be
+        further edited.
+    """
+    if isinstance(center,tuple):
+        assert(len(center)==2)
+        center = [center]
+        N = 1
+    else:
+        assert(isinstance(center,list))
+        assert(all([isinstance(c,tuple) for c in center]))
+        assert(all([len(c)==2 for c in center]))
+        N = len(center)
+    if isinstance(R,(float,int,np.float)):
+        R = [R for i in range(N)]
+    else:
+        assert(isinstance(R,list))
+        assert(len(R)==N)
+        assert(all([isinstance(r,(float,int,np.float)) for r in R]))
+    if isinstance(color,list):
+        assert len(color)==N
+        assert all([is_color_like(c) for c in color])
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(N)]
+    if isinstance(fill,bool):
+        fill = [fill for i in range(N)]
+    else:
+        assert(isinstance(fill,list))
+        assert(len(fill)==N)
+        assert(all([isinstance(f,bool) for f in fill]))
+    if isinstance(alpha,(float,int,np.float)):
+        alpha = [alpha for i in range(N)]
+    else:
+        assert(isinstance(alpha,list))
+        assert(len(alpha)==N)
+        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+
+
+    fig,ax = show(ar,returnfig=True,**kwargs)
+
+    for i in range(N):
+        cent,r,col,f,a,lw = center[i],R[i],color[i],fill[i],alpha[i],linewidth[i]
+        circ = Circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a,linewidth=lw)
+        ax.add_patch(circ)
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
 def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
                 **kwargs):
     """
