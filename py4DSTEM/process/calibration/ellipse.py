@@ -1,211 +1,256 @@
-# Methods for correcting elliptical distortion
+"""
+Methods related to elliptical calibration, coordinates, and transformations.
+
+Typically use of this module will follow a workflow like:
+(1) fit an ellipse
+(2) define an elliptical coordinate system
+(3) perform some analysis using these coordinates
+
+Methods for (1) include fit_ellipse_1d() and fit_ellipse_amorphring().
+The former fits a 1D elliptical curve to a 2d arry of data e.g. a
+ring of peaks in a Bragg vector map.  The latter function fits a 2d
+pattern of ring of amorphous scattering, using a double-sided gaussian
+function intended.
+
+(2) is accomlished by feeding the output elliptical parameters of (1)
+into a Coordinates instance.
+
+(3) will depend on the dataset.  2d data can be transformed from
+carterisn (x,y) space to polar-ellitical (r,phi).  Detected Bragg
+disk positions can be transformed from their elliptically-distorted
+cooridinates into a circularly symmetric coordinate system.
+
+The user-facing ellipse parametrization used here is in terms of
+the parameters (x0,y0,a,b,theta), where (x0,y0) are the center,
+a/b are the semimajor/semiminor axis lengths, and theta is the angle
+subtended by the x-axis and the semimajor- (a-) axis, in radians.
+Fitting is performed in the more canonical form of
+       A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1
+and it is possible to convert between (a,b,theta) <--> (A,B,C) using
+the convert_ellipse_params() methods.
+
+Transformation from cartesian to polar-elliptical space is done using
+       x = x0 + a*r*cos(theta)*cos(phi) + b*r*sin(theta)*sin(phi)
+       y = y0 + b*r*sin(theta)*sin(phi) - a*r*cos(theta)*cos(phi)
+"""
+
 
 import numpy as np
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
-
 from ..utils import get_CoM
 
-def measure_elliptical_distortion(ar, x0, y0, r_inner, r_outer, datamask=None):
-    """
-    Fits an ellipse to the data in an annular region of array ar, centered at (x0,y0) and with inner
-    and outer radii of r_inner, r_outer, respectively.
 
-    Returns two sets of parameters, corresponding to two different representations of the same
-    ellipse.  In the first, we write the ellipse as
-        $ x^2/a^2 + y^2/b^2 = 1 $
-    and in the second we write
-        $ Ax'^2 + Bx'y' + Cy'^2 = 1 $
-    The primed coordinates are orthogonal to the detector.  The unprimed coordinated are rotated
-    counterclockwise by an angle theta with respect to the primed coordinates; thus in the unprimed
-    system the semiaxes of the ellipse are oriented at angle theta.  Both coordinate systems take
-    the center of the ellipse as the origin.
+###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
+
+def fit_ellipse_1d(ar,x0,y0,ri,ro,mask=None,returnABC=False):
+    """
+    For a 2d array ar, fits a 1d elliptical curve to the data inside an annulus centered
+    at (x0,y0) with inner and outer radii ri and ro.  The data to fit make optionally
+    be additionally masked with the boolean array mask. See module docstring for more info.
 
     Accepts:
         ar          (ndarry) array containing the data to fit
         x0,y0       (floats) the center of the annular fitting region
-        r_inner     (float) inner radius of the fit region
-        r_outer     (float) outer radius of the fit region
-        datamask    (ar-shaped ndarray of bools) ignore datapoints where mask==False
+        ri          (float) inner radius of the fit region
+        ro          (float) outer radius of the fit region
+        mask        (ar-shaped ndarray of bools) ignore data wherever mask==True
 
     Returns:
-        p1          (5-tuple) the parameters of the ellipse in the unprimed coordinates, with
-                        p0 = (x,y,a,b,theta)
-                    where (x,y) is the center of the ellipse, and a,b,theta are as decribed above.
-        p2          (5-tuple) the parameters of the ellipse in the primed coordinates, with
-                        p1 = (x,y,A,B,C)
+        If returnABC is False (default), returns the ellipse parameters (x0,y0,a,b,theta)
+        If returnABC is True, returns the ellipse parameters (x0,y0,A,B,C)
     """
     # Get the datapoints to fit
     yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
     rr = np.sqrt((xx-x0)**2 + (yy-y0)**2)
-    mask = (rr>r_inner) * (rr<=r_outer)
-    if datamask is not None:
-        mask *= datamask
-    xs,ys = np.nonzero(mask)
-    vals = ar[mask]
+    _mask = (rr>ri) * (rr<=ro)
+    if mask is not None:
+        _mask *= mask==False
+    xs,ys = np.nonzero(_mask)
+    vals = ar[_mask]
 
     # Get initial parameters guess
-    p0_0 = x0
-    p0_1 = y0
-    p0_2 = (2/(r_inner+r_outer))**2
-    p0_3 = 0
-    p0_4 = (2/(r_inner+r_outer))**2
-    p0 = [p0_0,p0_1,p0_2,p0_3,p0_4]
+    p0 = [x0,y0,(2/(ri+ro))**2,0,(2/(ri+ro))**2]
 
     # Fit
-    p2 = leastsq(ellipse_err, p0, args=(xs,ys,vals))[0]
+    x,y,A,B,C = leastsq(ellipse_err, p0, args=(xs,ys,vals))[0]
 
-    # Convert between representations
-    x,y,A,B,C = p2
+    # Convert ellipse params
     a,b,theta = convert_ellipse_params(A,B,C)
-    p1 = (x,y,a,b,theta)
 
-    return p1, p2
+    if not returnABC:
+        return x,y,a,b,theta
+    else:
+        return x,y,A,B,C
 
 def ellipse_err(p, x, y, val):
     """
-    Returns the error associated with point (x,y), which has value val, with respect to the ellipse
-    given by parameters p. p is a 5-tuple in the form of (x,y,A,B,C) specifying the ellipse
-        $ Ax^2 + Bxy + Cy^2 = 1 $
+    For a point (x,y) in a 2d cartesian space, and a function taking the value
+    val at point (x,y), and some 1d ellipse in this space given by
+            A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1
+    this function computes the error associated with the function's value at (x,y)
+    given by its deviation from the ellipse times val.
     """
     x,y = x-p[0],y-p[1]
     return (p[2]*x**2 + p[3]*x*y + p[4]*y**2 - 1)*val
 
+
+###### Fitting from amorphous diffraction rings ######
+
+def fit_ellipse_amorphousring(data,x0,y0,ri,ro,p0=None,mask=None):
+    """
+    Fit the amorphous halo of a diffraction pattern, including any elliptical distortion.
+
+    The fit function is:
+
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) =
+            Norm(r; I0,sigma0,0) +
+            Norm(r; I1,sigma1,R)*Theta(r-R)
+            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
+
+    where (x,y) are coordinates and
+    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters.
+    The function contains a pair of gaussian-shaped peaks along the radial direction of
+    a polar-elliptical parametrization of a 2D plane.
+    The first gaussian is centered at the origin.
+    The second gaussian is centered about some finite R, and is 'two-faced': it's comprised of
+    two half-gaussians of different widths, stitched together at R.
+    This Janus-gaussian thus comprises an elliptical ring with different inner and
+    outer widths.
+
+    The parameters of the fit function are
+
+        I0          the intensity of the first gaussian function
+        I1          the intensity of the Janus gaussian
+        sigma0      std of first gaussian
+        sigma1      inner std of Janus gaussian
+        sigma2      outer std of Janus gaussian
+        c_bkgd      a constant offset
+        R           center of the Janus gaussian
+        x0,y0       the origin
+        B,C         The ellipse parameters, in the form
+                            1x^2 + Bxy + Cy^2 = 1
+
+    Accepts:
+        data        (2d array)
+        x0,y0       (numbers) the center
+        ri,r0       (numbers) the inner and outer radii of the fitting annulus
+        p0          (11-tuple) initial guess parameters. If p0 is None, the
+                    function will compute a guess at all parameters. If p0 is
+                    a 11-tuple it must be populated by some mix of numbers
+                    and None; any parameters which are set to None will be guessed
+                    by the function.  The parameters are:
+                        p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C)
+                    Note that x0,y0 are redundant; their guess values are the x0,y0
+                    values passed to the main function, but if they are passed as
+                    elements of p0 these will take precendence.
+        mask        only fit to datapoints where mask is True
+
+    Returns:
+        (x0,y0,a,b,theta)     (3-tuple) the ellipse parameters only
+        p                     (11-tuple) the full set of fit parameters
+    """
+    if mask is None:
+        mask = np.ones_like(data).astype(bool)
+    assert data.shape == mask.shape, "data and mask must have same shapes."
+
+    # Get data mask
+    Nx,Ny = data.shape
+    yy,xx = np.meshgrid(np.arange(Ny),np.arange(Nx))
+    rr = np.hypot(xx-x0,yy-y0)
+    _mask = ((rr>ri)*(rr<ro)).astype(bool)
+    _mask *= mask
+
+    # Make coordinates, get data values
+    x_inds, y_inds = np.nonzero(_mask)
+    vals = data[_mask]
+
+    # Get initial parameter guesses
+    I0 = np.max(data)
+    I1 = np.max(data*mask)
+    sigma0 = ri/2.
+    sigma1 = (ro-ri)/4.
+    sigma2 = (ro-ri)/4.
+    c_bkgd = np.min(data)
+    B=0
+    C=1
+    # To guess R, we take a radial integral
+    q,radial_profile = radial_integral(data,x0,y0,1)
+    R = q[(q>ri)*(q<ro)][np.argmax(radial_profile[(q>ri)*(q<ro)])]
+
+    print(R)
+
+    # Populate initial parameters
+    p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C])
+    if p0 is None:
+        _p0 = p0_guess
+    else:
+        assert len(p0)==11
+        _p0 = tuple([p0_guess[i] if p0[i] is None else p0[i] for i in range(len(p0))])
+
+    # Perform fit
+    p = leastsq(double_sided_gaussian_fiterr, _p0, args=(x_inds, y_inds, vals))[0]
+
+    # Return
+    _x0,_y0 = p[7],p[8]
+    _A,_B,_C = 1,p[9],p[10]
+    _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
+    return (_x0,_y0,_a,_b,_theta),p
+
+def double_sided_gaussian_fiterr(p, x, y, val):
+    """
+    Returns the fit error associated with a point (x,y) with value val, given parameters p.
+    """
+    return double_sided_gaussian(p, x, y) - val
+
+
+def double_sided_gaussian(p, x, y):
+    """
+    Return the value of the double-sided gaussian function at point (x,y) given parameters p.
+    """
+
+    # Unpack parameters
+    I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
+    r2 = 1 * (x - x0) ** 2 + B * (x - x0) * (y - y0) + C * (y - y0) ** 2
+    r = np.sqrt(r2) - R
+
+    return (
+        I0 * np.exp(-r2 / (2 * sigma0 ** 2))
+        + I1 * np.exp(-r ** 2 / (2 * sigma1 ** 2)) * np.heaviside(-r, 0.5)
+        + I1 * np.exp(-r ** 2 / (2 * sigma2 ** 2)) * np.heaviside(r, 0.5)
+        + c_bkgd
+    )
+
+
+### Convert between representations
+
 def convert_ellipse_params(A,B,C):
     """
-    Takes A, B, and C for an ellipse given by
-        $ Ax^2 + Bxy + Cy^2 = 1 $
-    and return the semiaxes (a,b) and the tilt (theta) in radians.
+    Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
+    See module docstring for more info.
+
+    Accepts:
+        A,B,C    (floats) parameters of an ellipse in the form:
+                             Ax^2 + Bxy + Cy^2 = 1
+
+    Returns:
+        a,b         (floats) the semimajor and semiminor axis lengths, respectively
+        theta       (float) the tilt of the ellipse semimajor axis with respect to
+                    the x-axis, in radians
     """
-    x = (A-C)*np.sqrt(1+(B/(A-C))**2)
-    a = np.sqrt(2/(A+C+x))
-    b = np.sqrt(2/(A+C-x))
-    theta = 0.5*np.arctan(B/(A-C))
+    if A == C:
+        x = B
+        theta = np.pi / 4.0 * np.sign(B)
+    else:
+        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
+        theta = 0.5 * np.arctan(B / (A - C))
+    a = np.sqrt(2 / (A + C + x))
+    b = np.sqrt(2 / (A + C - x))
     return a,b,theta
 
-def correct_elliptical_distortion(braggpeaks, p):
-    """
-    Corrects the elliptical distortions described by the ellipse parameters p in the PointListArray
-    of peak positions braggpeaks.
-
-    Accepts:
-        braggpeaks              (PointListArray) the Bragg peaks
-        p                       (5-tuple) the parameters (x0,y0,a,b,theta) of an ellipse centered at
-                                (x0,y0), with semiaxis of length a,b and tilted at angle theta.
-
-    Returns:
-        braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
-    """
-    # Get the transformation matrix
-    x0,y0,a,b,theta = p
-    s = min(a,b)/max(a,b)
-    theta += np.pi/2.*(np.argmin([a,b])==0)
-    sint,cost = np.sin(theta),np.cos(theta)
-    T = np.squeeze(np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]]))
-
-    # Correct distortions
-    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipticalcorrected")
-    for Rx in range(braggpeaks_corrected.shape[0]):
-        for Ry in range(braggpeaks_corrected.shape[1]):
-            pointlist = braggpeaks_corrected.get_pointlist(Rx,Ry)
-            x,y = pointlist.data['qx']-x0, pointlist.data['qy']-y0
-            xyar_i = np.vstack([x,y])
-            xyar_f = np.matmul(T,xyar_i)
-            pointlist.data['qx'] = xyar_f[0,:]+x0
-            pointlist.data['qy'] = xyar_f[1,:]+y0
-    return braggpeaks_corrected
-
-def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_known, fitrad=6):
-    """
-    When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus about the
-    central beam, the answer is degenerate: an infinite number of ellipses correctly fit this
-    data.  Starting from one ellipse in the degenerate family of ellipses, this function selects
-    the ellipse which will yield a final angle of phi_known between a pair of the diffraction
-    peaks after performing elliptical distortion correction.
-
-    Note that there are two possible angles which phi_known might refer to, because the angle of
-    interest is well defined up to a complementary angle.  This function is written such that
-    phi_known should be the smaller of these two angles.
-
-    Accepts:
-        data        (ndarray) the data to fit, typically a Bragg vector map
-        x           (float) the initial ellipse center, x
-        y           (float) the initial ellipse center, y
-        a           (float) the initial ellipse first semiaxis
-        b           (float) the initial ellipse second semiaxis
-        theta       (float) the initial ellipse angle, in radians
-        r_inner     (float) the fitting annulus inner radius
-        r_outer     (float) the fitting annulus outer radius
-        phi_known   (float) the known angle between a pair of diffraction peaks, in radians
-        fitrad      (float) the region about the fixed data point used to refine its position
-
-    Returns:
-        a_constrained   (float) the first semiaxis of the selected ellipse
-        b_constrained   (float) the second semiaxis of the selected ellipse
-    """
-    # Get 4 constraining points
-    xs,ys = np.zeros(4),np.zeros(4)
-    yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
-    rr = np.sqrt((xx-x)**2+(yy-y)**2)
-    annular_mask = (rr>r_inner)*(rr<=r_outer)
-    data_temp = np.zeros_like(data)
-    data_temp[annular_mask] = data[annular_mask]
-    for i in range(4):
-        x_constr,y_constr = np.unravel_index(np.argmax(gaussian_filter(data_temp,2)),(data.shape[0],data.shape[1]))
-        rr = np.sqrt((xx-x_constr)**2+(yy-y_constr)**2)
-        mask = rr<fitrad
-        xs[i],ys[i] = get_CoM(data*mask)
-        data_temp[mask] = 0
-
-    # Transform constraining points coordinate system
-    xs -= x
-    ys -= y
-    T = np.squeeze(np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]]))
-    xs,ys = np.matmul(T,np.array([xs,ys]))
-
-    # Get symmetrized constraining point
-    angles = np.arctan2(ys,xs)
-    distances = np.hypot(xs,ys)
-    angle = np.mean(np.min(np.vstack([np.abs(angles),np.pi-np.abs(angles)]),axis=0))
-    distance = np.mean(distances)
-    x_fixed,y_fixed = distance*np.cos(angle),distance*np.sin(angle)
-
-    # Get semiaxes a,b for the specified theta
-    t = x_fixed/(a*np.cos(phi_known/2.))
-    a_constrained = a*t
-    b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
-
-    return a_constrained, b_constrained
 
 
-
-
-
-
-
-
-
-
-
-# Contains methods relating to polar-elliptical calculations.
-#
-# This includes
-#   - measuring / fitting elliptical distortions
-#   - transforming data from cartesian to polar-elliptical coordinates
-#   - correcting Bragg peak positions for elliptical distortions
-#   - converting between ellipse representations
-#
-# We define the transformation from cartesian to polar-elliptical coordinates by:
-#
-#       x = x0 + A*r*cos(theta)*cos(phi) + B*r*sin(theta)*sin(phi)
-#       y = y0 + B*r*sin(theta)*sin(phi) - A*r*cos(theta)*cos(phi)
-#
-# All angular quantities are in radians.
-
-import numpy as np
-from scipy.optimize import leastsq, least_squares
-import matplotlib.pyplot as plt
-
+### Polar elliptical transformations
 
 def cartesianDataAr_to_polarEllipticalDataAr(
     cartesianData,
@@ -317,252 +362,7 @@ def cartesianDataAr_to_polarEllipticalDataAr(
     return polarEllipticalData, rr, tt
 
 
-def convert_ellipse_params(A0, B0, C0):
-    """
-    Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
-
-    Accepts:
-        A0,B0,C0    (floats) parameters of an ellipse in canonical form, i.e.:
-                                A0*x^2 + B0*x*y + C0*y^2 = 1
-
-    Returns:
-        A,B         (floats) the semi-axis lengths
-        phi         (float) the tilt of the ellipse semi-axes, in radians
-    """
-    if A0 == C0:
-        x = B0
-        phi = np.pi / 4.0 * np.sign(B0)
-    else:
-        x = (A0 - C0) * np.sqrt(1 + (B0 / (A0 - C0)) ** 2)
-        phi = 0.5 * np.arctan(B0 / (A0 - C0))
-    A = np.sqrt(2 / (A0 + C0 + x))
-    B = np.sqrt(2 / (A0 + C0 - x))
-    return A, B, phi
-
-
-def fit_ellipse_inside_annulus(
-    ar, x0, y0, r_inner, r_outer, datamask=None, output=None
-):
-    """
-    Fits an ellipse to the data in an annular region of array ar, centered at (x0,y0) and with inner
-    and outer radii of r_inner, r_outer, respectively.  Returns the ellipse parameters.
-
-    Accepts:
-        ar          (array) array containing the data to fit
-        x0,y0       (floats) the center of the annular fitting region
-        r_inner     (float) inner radius of the fit region
-        r_outer     (float) outer radius of the fit region
-        datamask    (ar-shaped array of bools) ignore datapoints where mask==False
-        output      (str or None) controls the parametrization of the output
-
-    Returns
-        params      (5-tuple) the ellipse parameters. Parametrization depends on the flag 'output'.
-                    if output != ('canonical' or 'both'):
-                        returns (x0,y0,A,B,phi), using
-                            x = x0 + A*r*cos(theta)*cos(phi) + B*r*sin(theta)*sin(phi)
-                            y = y0 + B*r*sin(theta)*sin(phi) - A*r*cos(theta)*cos(phi)
-                    if output == 'canonical':
-                        returns (x0,y0,A0,B0,C0), using
-                            A0*(x-x0)^2 + B0*(x-x0)*(y-y0) + C0*(y-y0)^2 = 1
-                    if output == 'both':
-                        returns both of the parametrizations above, in the order written.
-    """
-    # Get the datapoints to fit
-    yy, xx = np.meshgrid(np.arange(ar.shape[1]), np.arange(ar.shape[0]))
-    rr = np.hypot(xx - x0, yy - y0)
-    mask = (rr > r_inner) * (rr <= r_outer)
-    if datamask is not None:
-        mask *= datamask
-    xs, ys = np.nonzero(mask)
-    vals = ar[mask]
-
-    # Get initial parameters guess
-    p0_0 = x0
-    p0_1 = y0
-    p0_2 = (2 / (r_inner + r_outer)) ** 2
-    p0_3 = 0
-    p0_4 = (2 / (r_inner + r_outer)) ** 2
-    p0 = (p0_0, p0_1, p0_2, p0_3, p0_4)
-
-    # Fit
-    p2 = leastsq(ellipse_err, p0, args=(xs, ys, vals))[0]
-
-    # Convert between parametrizations
-    x, y, A0, B0, C0 = p2
-    A, B, phi = convert_ellipse_params(A0, B0, C0)
-    p1 = (x, y, A, B, phi)
-
-    if output == "canonical":
-        return p2
-    elif output == "both":
-        return p1, p2
-    else:
-        return p1
-
-
-def ellipse_err(p, x, y, val):
-    """
-    Returns the error associated with point (x,y), which has value val, with respect to the ellipse
-    given by parameters p.  p is a 5-tuple of the form (x,y,A0,B0,C0) specifying the ellipse
-        A0*(x-x0)^2 + B0*(x-x0)*(y-y0) + C0*(y-y0)^2 = 1
-    """
-    x, y = x - p[0], y - p[1]
-    return (p[2] * x ** 2 + p[3] * x * y + p[4] * y ** 2 - 1) * val
-
-
-def correct_braggpeak_elliptical_distortions(braggpeaks, p):
-    """
-    Given some elliptical distortions with ellipse parameters p and some measured PointListArray
-    of Bragg peak positions braggpeaks, returns the elliptically corrected Bragg peaks.
-
-    Accepts:
-        braggpeaks              (PointListArray) the Bragg peaks
-        p                       (5-tuple) the parameters (x0,y0,A,B,phi) of an ellipse describing
-                                the elliptical distortions in the data
-
-    Returns:
-        braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
-    """
-    # Get the transformation matrix
-    x0, y0, A, B, phi = p
-    s = min(A, B) / max(
-        A, B
-    )  # scale the larger semiaxis down to the size of the smaller semiaxis
-    phi += (
-        np.pi / 2.0 * (np.argmin([A, B]) == 0)
-    )  # if A was smaller, rotated phi by pi/2 to make A->B
-    sinp, cosp = np.sin(phi), np.cos(phi)
-    T = np.squeeze(
-        np.array(
-            [
-                [sinp ** 2 + s * cosp ** 2, sinp * cosp * (s - 1)],
-                [sinp * cosp * (s - 1), s * sinp ** 2 + cosp ** 2],
-            ]
-        )
-    )
-
-    # Correct distortions
-    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name + "_ellipsecorrected")
-    for Rx in range(braggpeaks_corrected.shape[0]):
-        for Ry in range(braggpeaks_corrected.shape[1]):
-            pointlist = braggpeaks_corrected.get_pointlist(Rx, Ry)
-            x, y = pointlist.data["qx"] - x0, pointlist.data["qy"] - y0
-            xyar_i = np.vstack([x, y])
-            xyar_f = np.matmul(T, xyar_i)
-            pointlist.data["qx"] = xyar_f[0, :] + x0
-            pointlist.data["qy"] = xyar_f[1, :] + y0
-    return braggpeaks_corrected
-
-
-def fit_double_sided_gaussian(data, p0, mask=None):
-    """
-    Fits a double sided gaussian to the data.
-
-    The fit function is
-
-        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgrd,R,x0,y0,B,C) =
-            Norm(r; I0,sigma0,0) +
-            Norm(r; I1,sigma1,R)*Theta(r-R)
-            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
-
-    where (x,y) are coordinates and
-    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters.
-
-    The function contains a pair of gaussian-shaped peaks along the radial direction of
-    a polar-elliptical parametrization of a 2D plane.
-    The first gaussian is centered at the origin.
-    The second gaussian is centered about some finite R, and is 'two-faced': it's comprised of
-    two half-gaussians of different widths, stitched together at R.
-    The Janus-gaussian thus comprises an elliptical ring with different inner and
-    outer widths.
-
-    These should be empirically useful fit functions for amorphous diffraction data.
-    A recommended proceedure, for starts:
-    mask the central disk, and everything beyond some max q.  See if you can grab just the
-    smooth plasmonic background as well as a single |q| ring.
-
-    The parameters in p are
-
-        I0          the intensity of the first gaussian function
-        I1          the intensity of the Janus gaussian
-        sigma0      std of first gaussian
-        sigma1      inner std of Janus gaussian
-        sigma2      outer std of Janus gaussian
-        c_bkgd      a constant offset
-        R           center of the Janus gaussian
-        x0,y0       the origin
-        B,C         1x^2 + Bxy + Cy^2 = 1
-
-    Accepts:
-        data        (2d array)
-        p0          (12-tuple of floats) initial guess at parameters
-        mask        ignore datapoints data[mask==False]
-
-    Returns:
-        p           (12-tuple of floats) the best fit parameters
-    """
-    if mask is None:
-        mask = np.ones_like(data).astype(bool)
-    assert data.shape == mask.shape, "data and mask must have same shapes."
-    assert len(p0) == 11, "Initial guess needs 11 parameters."
-
-    # Make coordinates, get data values
-    x_inds, y_inds = np.nonzero(mask)
-    vals = data[mask]
-
-    # make bounds - speed things up
-    # upper_bounds = [np.inf, np.inf, 1000, 1000, 1000, np.inf, np.max(data.shape), np.max(data.shape), np.max(data.shape), np.inf, np.inf, np.inf]
-    # lower_bounds = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    # Fit
-    p = leastsq(double_sided_gaussian_fiterr, p0, args=(x_inds, y_inds, vals))[0]
-    return p
-
-
-def compare_double_sided_gaussian(data, p, power=1, mask=None):
-    """
-    Plots a comparison between a diffraction pattern and a fit, given p. 
-    """
-    if mask is None:
-        mask = np.ones_like(data)
-
-    yy, xx = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
-    data_fit = double_sided_gaussian(p, xx, yy)
-
-    theta = np.arctan2(xx - p[7], yy - p[8])
-    theta_mask = np.cos(theta * 8) > 0
-    data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
-    data_combined = mask * data_combined
-    plt.figure(12, clear=True)
-    plt.imshow(data_combined)
-
-    return
-
-
-def double_sided_gaussian_fiterr(p, x, y, val):
-    """
-    Returns the fit error associated with a point (x,y) with value val, given parameters p.
-    """
-    return double_sided_gaussian(p, x, y) - val
-
-
-# @np.errstate(invalid='ignore') # activate if supressing warnings
-def double_sided_gaussian(p, x, y):
-    """
-    Return the value of the double-sided gaussian function at point (x,y) given parameters p.
-    """
-
-    # Unpack parameters
-    I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
-    r2 = 1 * (x - x0) ** 2 + B * (x - x0) * (y - y0) + C * (y - y0) ** 2
-    r = np.sqrt(r2) - R
-
-    return (
-        I0 * np.exp(-r2 / (2 * sigma0 ** 2))
-        + I1 * np.exp(-r ** 2 / (2 * sigma1 ** 2)) * np.heaviside(-r, 0.5)
-        + I1 * np.exp(-r ** 2 / (2 * sigma2 ** 2)) * np.heaviside(r, 0.5)
-        + c_bkgd
-    )
-
+### Radial integration
 
 def radial_integral(ar, x0, y0, dr):
     """
@@ -624,3 +424,171 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
     return rbin_centers,radial_integral
+
+
+
+### Correct Bragg peak positions, making a circular coordinate system
+
+def correct_elliptical_distortion(braggpeaks, p):
+    """
+    Corrects the elliptical distortions described by the ellipse parameters p in the PointListArray
+    of peak positions braggpeaks.
+
+    Accepts:
+        braggpeaks              (PointListArray) the Bragg peaks
+        p                       (5-tuple) the parameters (x0,y0,a,b,theta) of an ellipse centered at
+                                (x0,y0), with semiaxis of length a,b and tilted at angle theta.
+
+    Returns:
+        braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
+    """
+    # Get the transformation matrix
+    x0,y0,a,b,theta = p
+    s = min(a,b)/max(a,b)
+    theta += np.pi/2.*(np.argmin([a,b])==0)
+    sint,cost = np.sin(theta),np.cos(theta)
+    T = np.squeeze(np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]]))
+
+    # Correct distortions
+    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipticalcorrected")
+    for Rx in range(braggpeaks_corrected.shape[0]):
+        for Ry in range(braggpeaks_corrected.shape[1]):
+            pointlist = braggpeaks_corrected.get_pointlist(Rx,Ry)
+            x,y = pointlist.data['qx']-x0, pointlist.data['qy']-y0
+            xyar_i = np.vstack([x,y])
+            xyar_f = np.matmul(T,xyar_i)
+            pointlist.data['qx'] = xyar_f[0,:]+x0
+            pointlist.data['qy'] = xyar_f[1,:]+y0
+    return braggpeaks_corrected
+
+def correct_braggpeak_elliptical_distortions(braggpeaks, p):
+    """
+    Given some elliptical distortions with ellipse parameters p and some measured PointListArray
+    of Bragg peak positions braggpeaks, returns the elliptically corrected Bragg peaks.
+
+    Accepts:
+        braggpeaks              (PointListArray) the Bragg peaks
+        p                       (5-tuple) the parameters (x0,y0,A,B,phi) of an ellipse describing
+                                the elliptical distortions in the data
+
+    Returns:
+        braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
+    """
+    # Get the transformation matrix
+    x0, y0, A, B, phi = p
+    s = min(A, B) / max(
+        A, B
+    )  # scale the larger semiaxis down to the size of the smaller semiaxis
+    phi += (
+        np.pi / 2.0 * (np.argmin([A, B]) == 0)
+    )  # if A was smaller, rotated phi by pi/2 to make A->B
+    sinp, cosp = np.sin(phi), np.cos(phi)
+    T = np.squeeze(
+        np.array(
+            [
+                [sinp ** 2 + s * cosp ** 2, sinp * cosp * (s - 1)],
+                [sinp * cosp * (s - 1), s * sinp ** 2 + cosp ** 2],
+            ]
+        )
+    )
+
+    # Correct distortions
+    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name + "_ellipsecorrected")
+    for Rx in range(braggpeaks_corrected.shape[0]):
+        for Ry in range(braggpeaks_corrected.shape[1]):
+            pointlist = braggpeaks_corrected.get_pointlist(Rx, Ry)
+            x, y = pointlist.data["qx"] - x0, pointlist.data["qy"] - y0
+            xyar_i = np.vstack([x, y])
+            xyar_f = np.matmul(T, xyar_i)
+            pointlist.data["qx"] = xyar_f[0, :] + x0
+            pointlist.data["qy"] = xyar_f[1, :] + y0
+    return braggpeaks_corrected
+
+
+
+### Fit an ellipse to crystalline scattering with a known angle between peaks
+
+def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_known, fitrad=6):
+    """
+    When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus about the
+    central beam, the answer is degenerate: an infinite number of ellipses correctly fit this
+    data.  Starting from one ellipse in the degenerate family of ellipses, this function selects
+    the ellipse which will yield a final angle of phi_known between a pair of the diffraction
+    peaks after performing elliptical distortion correction.
+
+    Note that there are two possible angles which phi_known might refer to, because the angle of
+    interest is well defined up to a complementary angle.  This function is written such that
+    phi_known should be the smaller of these two angles.
+
+    Accepts:
+        data        (ndarray) the data to fit, typically a Bragg vector map
+        x           (float) the initial ellipse center, x
+        y           (float) the initial ellipse center, y
+        a           (float) the initial ellipse first semiaxis
+        b           (float) the initial ellipse second semiaxis
+        theta       (float) the initial ellipse angle, in radians
+        r_inner     (float) the fitting annulus inner radius
+        r_outer     (float) the fitting annulus outer radius
+        phi_known   (float) the known angle between a pair of diffraction peaks, in radians
+        fitrad      (float) the region about the fixed data point used to refine its position
+
+    Returns:
+        a_constrained   (float) the first semiaxis of the selected ellipse
+        b_constrained   (float) the second semiaxis of the selected ellipse
+    """
+    # Get 4 constraining points
+    xs,ys = np.zeros(4),np.zeros(4)
+    yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
+    rr = np.sqrt((xx-x)**2+(yy-y)**2)
+    annular_mask = (rr>r_inner)*(rr<=r_outer)
+    data_temp = np.zeros_like(data)
+    data_temp[annular_mask] = data[annular_mask]
+    for i in range(4):
+        x_constr,y_constr = np.unravel_index(np.argmax(gaussian_filter(data_temp,2)),(data.shape[0],data.shape[1]))
+        rr = np.sqrt((xx-x_constr)**2+(yy-y_constr)**2)
+        mask = rr<fitrad
+        xs[i],ys[i] = get_CoM(data*mask)
+        data_temp[mask] = 0
+
+    # Transform constraining points coordinate system
+    xs -= x
+    ys -= y
+    T = np.squeeze(np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta),np.cos(theta)]]))
+    xs,ys = np.matmul(T,np.array([xs,ys]))
+
+    # Get symmetrized constraining point
+    angles = np.arctan2(ys,xs)
+    distances = np.hypot(xs,ys)
+    angle = np.mean(np.min(np.vstack([np.abs(angles),np.pi-np.abs(angles)]),axis=0))
+    distance = np.mean(distances)
+    x_fixed,y_fixed = distance*np.cos(angle),distance*np.sin(angle)
+
+    # Get semiaxes a,b for the specified theta
+    t = x_fixed/(a*np.cos(phi_known/2.))
+    a_constrained = a*t
+    b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
+
+    return a_constrained, b_constrained
+
+
+## MOVE TO VIS
+def compare_double_sided_gaussian(data, p, power=1, mask=None):
+    """
+    Plots a comparison between a diffraction pattern and a fit, given p. 
+    """
+    if mask is None:
+        mask = np.ones_like(data)
+
+    yy, xx = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+    data_fit = double_sided_gaussian(p, xx, yy)
+
+    theta = np.arctan2(xx - p[7], yy - p[8])
+    theta_mask = np.cos(theta * 8) > 0
+    data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
+    data_combined = mask * data_combined
+    plt.figure(12, clear=True)
+    plt.imshow(data_combined)
+
+    return
+
+
