@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle,Circle,Wedge
+from matplotlib.patches import Rectangle,Circle,Wedge,Ellipse
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
@@ -294,13 +294,13 @@ def show_circ(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=Fa
     else:
         return fig,ax
 
-def show_ellipse(ar,center,R,eps,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+def show_ellipse(ar,center,R,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
                                                             returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
     To overlay one ellipse, center must be a single 2-tuple.  To overlay N circles,
     center must be a list of N 2-tuples.  Similarly, the remaining ellipse parameters -
-    R, eps, and theta - must each be a single number or a len-N list.  color, fill, and
+    R, a, b, and theta - must each be a single number or a len-N list.  color, fill, and
     alpha may each be single values, which are then applied to all the circles, or
     length N lists.
 
@@ -309,7 +309,9 @@ def show_ellipse(ar,center,R,eps,theta,color='r',fill=True,alpha=0.3,linewidth=2
 
     Accepts:
         center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
-        R           (number of list of N numbers) the circles radius
+        R           (number or list of N numbers) the radius, in units of (a+b)/2
+        a,b         (number or list of N numbers) the semimajor and semiminor axes
+        theta       (number or list of N numbers) the tilt angle in radians
         color       (valid matplotlib color, or list of N colors)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
@@ -335,6 +337,24 @@ def show_ellipse(ar,center,R,eps,theta,color='r',fill=True,alpha=0.3,linewidth=2
         assert(isinstance(R,list))
         assert(len(R)==N)
         assert(all([isinstance(r,(float,int,np.float)) for r in R]))
+    if isinstance(a,(float,int,np.float)):
+        a = [a for i in range(N)]
+    else:
+        assert(isinstance(a,list))
+        assert(len(a)==N)
+        assert(all([isinstance(_a,(float,int,np.float)) for _a in a]))
+    if isinstance(b,(float,int,np.float)):
+        b = [b for i in range(N)]
+    else:
+        assert(isinstance(b,list))
+        assert(len(b)==N)
+        assert(all([isinstance(_b,(float,int,np.float)) for _b in b]))
+    if isinstance(theta,(float,int,np.float)):
+        theta = [theta for i in range(N)]
+    else:
+        assert(isinstance(theta,list))
+        assert(len(theta)==N)
+        assert(all([isinstance(t,(float,int,np.float)) for t in theta]))
     if isinstance(color,list):
         assert len(color)==N
         assert all([is_color_like(c) for c in color])
@@ -360,13 +380,14 @@ def show_ellipse(ar,center,R,eps,theta,color='r',fill=True,alpha=0.3,linewidth=2
         assert(len(linewidth)==N)
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
 
-
     fig,ax = show(ar,returnfig=True,**kwargs)
 
     for i in range(N):
-        cent,r,col,f,a,lw = center[i],R[i],color[i],fill[i],alpha[i],linewidth[i]
-        circ = Circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a,linewidth=lw)
-        ax.add_patch(circ)
+        cent,r,_a,_b,_theta,col,f,_alpha,lw = (center[i],R[i],a[i],b[i],theta[i],color[i],fill[i],
+                                               alpha[i],linewidth[i])
+        ellipse = Ellipse((cent[1],cent[0]),2*_a*r,2*_b*r,90-np.degrees(_theta),color=col,fill=f,
+                        alpha=_alpha,linewidth=lw)
+        ax.add_patch(ellipse)
 
     if not returnfig:
         plt.show()
