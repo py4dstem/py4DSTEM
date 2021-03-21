@@ -8,7 +8,8 @@ from numbers import Number
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
-         hist=False,n_bins=256,mask=None,mask_color='k',**kwargs):
+         hist=False,n_bins=256,mask=None,mask_color='k',rectangle=None,
+         circle=None,annulus=None,ellipse=None,points=None,grid=None,**kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -70,6 +71,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         assert mask.shape == ar.shape
         assert is_color_like(mask_color)
 
+    # Perform any scaling
     if scaling == 'none':
         _ar = ar
     elif scaling == 'log':
@@ -83,6 +85,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
     else:
         raise Exception
 
+    # Set the clipvalues
     if clipvals == 'minmax':
         vmin,vmax = np.min(_ar),np.max(_ar)
     elif clipvals == 'manual':
@@ -101,6 +104,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
     else:
         raise Exception
 
+    # Create or attach to the appropriate Figure and Axis
     if figax is None:
         fig,ax = plt.subplots(1,1,figsize=figsize)
     else:
@@ -108,7 +112,15 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
-    if hist:
+    # Plot the image
+    if not hist:
+        ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
+        if mask is not None:
+            mask_display = np.ma.array(data=mask,mask=mask==False)
+            cmap = ListedColormap([mask_color,'w'])
+            ax.matshow(mask_display,cmap=cmap)
+    # ...or, plot its histogram
+    else:
         if mask is None:
             hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),np.max(_ar),
                                                                num=n_bins))
@@ -119,13 +131,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         x = bin_edges[:-1]+w/2.
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
-    else:
-        ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
-        if mask is not None:
-            mask_display = np.ma.array(data=mask,mask=mask==False)
-            cmap = ListedColormap([mask_color,'w'])
-            ax.matshow(mask_display,cmap=cmap)
 
+    # Add any overlays
+    if rectangle is not None:
+        add_rectangles(ax,rectangle)
+    if circle is not None:
+        add_circles(ax,circle)
+    if annulus is not None:
+        add_annuli(ax,annulus)
+    if ellipse is not None:
+        add_ellipses(ax,ellipse)
+    if grid is not None:
+        add_grid(ax,grid)
+
+    # Add a border
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
             ax.spines[s].set_color(bordercolor)
@@ -133,6 +152,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         ax.set_xticks([])
         ax.set_yticks([])
 
+    # Show or return
     if returnfig:
         return fig,ax
     elif figax is not None:
@@ -140,6 +160,309 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
     else:
         plt.show()
         return
+
+def add_rectangles(ax,d):
+    """
+    Adds one or more rectangles to Axis ax using the parameters in dictionary d.
+    """
+    # Handle inputs
+    assert isinstance(ax,Axes)
+    # lims
+    assert('lims' in d.keys())
+    lims = d['lims']
+    if isinstance(lims,tuple):
+        assert(len(lims)==4)
+        lims = [lims]
+    assert(isinstance(lims,list))
+    N = len(lims)
+    assert(all([isinstance(t,tuple) for t in lims]))
+    assert(all([len(t)==4 for t in lims]))
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    if isinstance(color,list):
+        assert(len(color)==N)
+        assert(all([is_color_like(c) for c in color]))
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(N)]
+    # fill
+    fill = d['fill'] if 'fill' in d.keys() else False
+    if isinstance(fill,bool):
+        fill = [fill for i in range(N)]
+    else:
+        assert(isinstance(fill,list))
+        assert(len(fill)==N)
+        assert(all([isinstance(f,bool) for f in fill]))
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    if isinstance(alpha,(float,int,np.float)):
+        alpha = [alpha for i in range(N)]
+    else:
+        assert(isinstance(alpha,list))
+        assert(len(alpha)==N)
+        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    # linewidth
+    linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('lims','color','fill','alpha','linewidth')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the rectangles
+    for i in range(N):
+        l,c,f,a,lw = lims[i],color[i],fill[i],alpha[i],linewidth[i]
+        rect = Rectangle((l[2]-0.5,l[0]-0.5),l[3]-l[2],l[1]-l[0],color=c,fill=f,
+                          alpha=a,linewidth=lw,**kwargs)
+        ax.add_patch(rect)
+
+    return
+
+def add_circles(ax,d):
+    """
+    adds one or more circles to axis ax using the parameters in dictionary d.
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # center
+    assert('center' in d.keys())
+    center = d['center']
+    if isinstance(center,tuple):
+        assert(len(center)==2)
+        center = [center]
+    assert(isinstance(center,list))
+    N = len(center)
+    assert(all([isinstance(x,tuple) for x in center]))
+    assert(all([len(x)==2 for x in center]))
+    # radius
+    assert('R' in d.keys())
+    R = d['R']
+    if isinstance(R,Number):
+        R = [R for i in range(N)]
+    assert(isinstance(R,list))
+    assert(len(R)==N)
+    assert(all([isinstance(i,Number) for i in R]))
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    if isinstance(color,list):
+        assert(len(color)==N)
+        assert(all([is_color_like(c) for c in color]))
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(N)]
+    # fill
+    fill = d['fill'] if 'fill' in d.keys() else False
+    if isinstance(fill,bool):
+        fill = [fill for i in range(N)]
+    else:
+        assert(isinstance(fill,list))
+        assert(len(fill)==N)
+        assert(all([isinstance(f,bool) for f in fill]))
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    if isinstance(alpha,(float,int,np.float)):
+        alpha = [alpha for i in range(N)]
+    else:
+        assert(isinstance(alpha,list))
+        assert(len(alpha)==N)
+        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    # linewidth
+    linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('center','R','color','fill','alpha','linewidth')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the circles
+    for i in range(N):
+        cent,r,col,f,a,lw = center[i],R[i],color[i],fill[i],alpha[i],linewidth[i]
+        circ = Circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a,linewidth=lw,**kwargs)
+        ax.add_patch(circ)
+
+    return
+
+def add_annuli(ax,d):
+    """
+    Adds one or more annuli to Axis ax using the parameters in dictionary d.
+    """
+    # Handle inputs
+    assert isinstance(ax,Axes)
+    # center
+    assert('center' in d.keys())
+    center = d['center']
+    if isinstance(center,tuple):
+        assert(len(center)==2)
+        center = [center]
+    assert(isinstance(center,list))
+    N = len(center)
+    assert(all([isinstance(x,tuple) for x in center]))
+    assert(all([len(x)==2 for x in center]))
+    # radii
+    assert('Ri' in d.keys())
+    assert('Ro' in d.keys())
+    Ri,Ro = d['Ri'],d['Ro']
+    if isinstance(Ri,Number):
+        Ri = [Ri for i in range(N)]
+    if isinstance(Ro,Number):
+        Ro = [Ro for i in range(N)]
+    assert(isinstance(Ri,list))
+    assert(isinstance(Ro,list))
+    assert(len(Ri)==N)
+    assert(len(Ro)==N)
+    assert(all([isinstance(i,Number) for i in Ri]))
+    assert(all([isinstance(i,Number) for i in Ro]))
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    if isinstance(color,list):
+        assert(len(color)==N)
+        assert(all([is_color_like(c) for c in color]))
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(N)]
+    # fill
+    fill = d['fill'] if 'fill' in d.keys() else False
+    if isinstance(fill,bool):
+        fill = [fill for i in range(N)]
+    else:
+        assert(isinstance(fill,list))
+        assert(len(fill)==N)
+        assert(all([isinstance(f,bool) for f in fill]))
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    if isinstance(alpha,(float,int,np.float)):
+        alpha = [alpha for i in range(N)]
+    else:
+        assert(isinstance(alpha,list))
+        assert(len(alpha)==N)
+        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    # linewidth
+    linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(N)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==N)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('center','Ri','Ro','color','fill','alpha','linewidth')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the circles
+    for i in range(N):
+        cent,ri,ro,col,f,a,lw = center[i],Ri[i],Ro[i],color[i],fill[i],alpha[i],linewidth[i]
+        annulus = Wedge((cent[1],cent[0]),ro,0,360,width=ro-ri,color=col,fill=f,alpha=a,linewidth=lw)
+        ax.add_patch(annulus)
+
+    return
+
+def add_ellipses(ax,d):
+    """
+    adds one or more ellipses to axis ax using the parameters in dictionary d.
+    """
+    # handle inputs
+    assert isinstance(ax,axes)
+    # center
+    assert('center' in d.keys())
+    center = d['center']
+    if isinstance(center,tuple):
+        assert(len(center)==2)
+        center = [center]
+    assert(isinstance(center,list))
+    n = len(center)
+    assert(all([isinstance(x,tuple) for x in center]))
+    assert(all([len(x)==2 for x in center]))
+    # radius
+    assert('r' in d.keys())
+    r = d['r']
+    if isinstance(r,number):
+        r = [r for i in range(n)]
+    assert(isinstance(r,list))
+    assert(len(r)==n)
+    assert(all([isinstance(i,number) for i in r]))
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    if isinstance(color,list):
+        assert(len(color)==n)
+        assert(all([is_color_like(c) for c in color]))
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(n)]
+    # fill
+    fill = d['fill'] if 'fill' in d.keys() else false
+    if isinstance(fill,bool):
+        fill = [fill for i in range(n)]
+    else:
+        assert(isinstance(fill,list))
+        assert(len(fill)==n)
+        assert(all([isinstance(f,bool) for f in fill]))
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    if isinstance(alpha,(float,int,np.float)):
+        alpha = [alpha for i in range(n)]
+    else:
+        assert(isinstance(alpha,list))
+        assert(len(alpha)==n)
+        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+    # linewidth
+    linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
+    if isinstance(linewidth,(float,int,np.float)):
+        linewidth = [linewidth for i in range(n)]
+    else:
+        assert(isinstance(linewidth,list))
+        assert(len(linewidth)==n)
+        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('center','r','color','fill','alpha','linewidth')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the circles
+    for i in range(n):
+        cent,r,col,f,a,lw = center[i],r[i],color[i],fill[i],alpha[i],linewidth[i]
+        circ = circle((cent[1],cent[0]),r,color=col,fill=f,alpha=a,linewidth=lw,**kwargs)
+        ax.add_patch(circ)
+
+    return
+
+
+
+
+
+
+
+
+    #if ellipse is not None:
+    #    add_ellipses(ax,ellipse)
+    #if grid is not None:
+    #    add_grid(ax,grid)
+
+
+
+
+
+
+
+
+
+
+
+
 
 def show_rect(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2,returnfig=False,
               **kwargs):
