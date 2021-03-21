@@ -2,7 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show,show_circ,show_image_grid,ax_addaxes,ax_addaxes_QtoR
+from . import show
+from .vis_grid import show_image_grid
+from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..process.utils import get_voronoi_vertices
 
 def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
@@ -68,8 +70,8 @@ def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,
         fig,ax = show(ar,returnfig=True,**kwargs)
     else:
         centers = [(x[i],y[i]) for i in range(len(x))]
-        fig,ax = show_circ(ar,returnfig=True,**kwargs,
-                           center=centers,R=max_dist,fill=False,color=color_points)
+        fig,ax = show(ar,returnfig=True,**kwargs,
+                      circle={'center':centers,'R':max_dist,'fill':False,'color':color_points})
 
     ax.scatter(voronoi.points[:,1],voronoi.points[:,0],color=color_points)
     for region in range(len(vertices)):
