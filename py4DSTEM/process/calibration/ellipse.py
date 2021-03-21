@@ -178,8 +178,6 @@ def fit_ellipse_amorphousring(data,x0,y0,ri,ro,p0=None,mask=None):
     q,radial_profile = radial_integral(data,x0,y0,1)
     R = q[(q>ri)*(q<ro)][np.argmax(radial_profile[(q>ri)*(q<ro)])]
 
-    print(R)
-
     # Populate initial parameters
     p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C])
     if p0 is None:
