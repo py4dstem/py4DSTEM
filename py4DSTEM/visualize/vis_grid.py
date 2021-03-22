@@ -141,11 +141,11 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         s = get_s(N)
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,s=s,
-                                          point_color=pointcolors,**kwargs)
+                                          pointcolor=pointcolors,**kwargs)
                     else:
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,
-                                          point_color=pointcolors,**kwargs)
+                                          pointcolor=pointcolors,**kwargs)
                 elif _get_bordercolor:
                     bc = get_bordercolor(N)
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,
@@ -157,7 +157,7 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     else:
                         pointcolors='r'
                     _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
-                                      point_color=pointcolors,**kwargs)
+                                      pointcolor=pointcolors,**kwargs)
                 else:
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
                 if titlesize>0:
