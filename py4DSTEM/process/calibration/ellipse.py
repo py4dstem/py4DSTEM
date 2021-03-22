@@ -267,8 +267,8 @@ def convert_ellipse_params(A,B,C):
     else:
         x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
         theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C + x))
-    b = np.sqrt(2 / (A + C - x))
+    a = np.sqrt(2 / (A + C - x))
+    b = np.sqrt(2 / (A + C + x))
     e = b/a
     return a,e,theta
 
@@ -292,8 +292,8 @@ def convert_ellipse_params_ABC_to_abtheta(A,B,C):
     else:
         x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
         theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C + x))
-    b = np.sqrt(2 / (A + C - x))
+    a = np.sqrt(2 / (A + C - x))
+    b = np.sqrt(2 / (A + C + x))
     return a,b,theta
 
 

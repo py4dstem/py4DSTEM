@@ -298,7 +298,7 @@ def add_ellipses(ax,d):
     for i in range(N):
         cent,_a,_e,_theta,col,f,_alpha,lw = (center[i],a[i],e[i],theta[i],color[i],fill[i],
                                                alpha[i],linewidth[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a,2*_a*_e,90-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,90-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,**kwargs)
         ax.add_patch(ellipse)
 
