@@ -10,7 +10,7 @@ def show_selected_dp(datacube,image,rx,ry,figsize=(12,6),returnfig=False,
     """
     dp = datacube.data[rx,ry,:,:]
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    _,_=show_points(image,rx,ry,scale=pointsize,point_color=pointcolor,figax=(fig,ax1),returnfig=True)
+    _,_=show_points(image,rx,ry,scale=pointsize,pointcolor=pointcolor,figax=(fig,ax1),returnfig=True)
     _,_=show(dp,figax=(fig,ax2),scaling=scaling,returnfig=True)
     if not returnfig:
         plt.show()
