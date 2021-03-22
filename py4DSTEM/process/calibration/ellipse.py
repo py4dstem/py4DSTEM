@@ -16,24 +16,35 @@ function intended.
 into a Coordinates instance.
 
 (3) will depend on the dataset.  2d data can be transformed from
-carterisn (x,y) space to polar-ellitical (r,phi).  Detected Bragg
+carterian (x,y) space to polar-ellitical (r,phi) space.  Detected Bragg
 disk positions can be transformed from their elliptically-distorted
 cooridinates into a circularly symmetric coordinate system.
 
-The user-facing ellipse parametrization used here is in terms of
-the parameters (x0,y0,a,b,theta), where (x0,y0) are the center,
-a/b are the semimajor/semiminor axis lengths, and theta is the angle
-subtended by the x-axis and the semimajor- (a-) axis, in radians.
-Fitting is performed in the more canonical form of
-       A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1
-and it is possible to convert between (a,b,theta) <--> (A,B,C) using
+The user-facing description of ellipses is in terms of the following 5
+parameters:
+
+    x0,y0       the center of the ellipse
+    a           the semimajor axis length
+    e           the ratio of lengths of the semiminor to semimajor
+                axes
+    theta       the (positive, right handed) tilt of the a-axis
+                to the x-axis, in radians
+
+Internally, fits are performed using the canonical ellipse parameterization,
+in terms of the parameters (x0,y0,A,B,C):
+
+    A(x-x0)^2 + B(x-x0)(y-y0) C(y-y0)^2 = 1
+
+It is possible to convert between (a,b,theta) <--> (A,B,C) using
 the convert_ellipse_params() methods.
 
 Transformation from cartesian to polar-elliptical space is done using
+
        x = x0 + a*r*cos(theta)*cos(phi) + b*r*sin(theta)*sin(phi)
        y = y0 + b*r*sin(theta)*sin(phi) - a*r*cos(theta)*cos(phi)
-"""
 
+where b = a*e is the semiminor axis length.
+"""
 
 import numpy as np
 from scipy.optimize import leastsq, least_squares
