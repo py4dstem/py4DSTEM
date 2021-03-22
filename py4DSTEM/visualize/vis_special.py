@@ -7,6 +7,40 @@ from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..process.utils import get_voronoi_vertices
 
+def show_elliptical_fit(ar,center,Ri,Ro,a,b,theta,fill=True,
+                        color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
+                        linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
+    """
+    Plots an elliptical curve over its annular fit region.
+
+    Accepts:
+        center      (2-tuple) the center
+        Ri,Ro       (numbers) the annulus radii
+        a,b,theta   (numbers) the ellipse params
+        fill        (bool) the fill value of the annulus
+        color_ann   (color) annulus color
+        color_ell   (color) ellipse color
+        alpha_ann
+        alpha_ell
+        linewidth_ann
+        linewidth_ell
+    """
+    fig,ax = show(ar,
+                  annulus={'center':(center[0],center[1]),'Ri':Ri,'Ro':Ro,'fill':fill,
+                           'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
+                  ellipse={'center':(center[0],center[1]),'R':1,'a':a,'b':b,'theta':theta,
+                           'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
+                  returnfig=True,**kwargs)
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
+
+
+
 def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
                   color='k',xlabel='q (pixels)',ylabel='Intensity (A.U.)',
                   labelsize=16,ticklabelsize=14,grid='on',
