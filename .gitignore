@@ -16,7 +16,7 @@ sample_code/data/*h5
 sample_code/data/*dm3
 # Data Specific #
 #################
-*.png
+#*.png
 #*.gif
 *.emd
 *.emf
