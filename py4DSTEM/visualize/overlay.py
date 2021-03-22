@@ -304,9 +304,54 @@ def add_ellipses(ax,d):
 
     return
 
+def add_points(ax,d):
+    """
+    adds one or more points to axis ax using the parameters in dictionary d.
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # x
+    assert('x' in d.keys())
+    x = np.array(d['x'])
+    N = len(x)
+    # y
+    assert('y' in d.keys())
+    y = np.array(d['y'])
+    assert(len(y)==N)
+    # s
+    assert('s' in d.keys())
+    s = d['s']
+    if isinstance(s,Number):
+        s = np.ones_like(x)*s
+    assert(len(s)==N)
+    # scale
+    assert('scale' in d.keys())
+    scale = d['scale']
+    assert isinstance(scale,Number)
+    # point color
+    color = d['pointcolor'] if 'pointcolor' in d.keys() else 'r'
+    if isinstance(color,(list,np.ndarray)):
+        assert(len(color)==N)
+        assert(all([is_color_like(c) for c in color]))
+    else:
+        assert is_color_like(color)
+        color = [color for i in range(N)]
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1.
+    assert isinstance(alpha,Number)
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the points
+    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha)
+
+    return
+
+
 
     #if grid is not None:
     #    add_grid(ax,grid)
-
-
 

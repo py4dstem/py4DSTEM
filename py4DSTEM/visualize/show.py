@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
-from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses
+from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
          power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
@@ -350,21 +350,22 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
     else:
         return fig,ax
 
-def show_points(ar,x,y,s=1,scale=50,alpha=1,point_color='r',
+def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',
                 figsize=(12,12),returnfig=False,**kwargs):
     """
-    Visualization function which plots a 2D array with one or more points.
+    Plots a 2D array with one or more points.
     x and y are the point centers and must have the same length, N.
-    s and point_color are the size and color and must each have length 1 or N.
-
-    See the docstring for py4DSTEM.visualize.show() for descriptions of all input
-    parameters not listed below.
+    s is the relative point sizes, and must have length 1 or N.
+    scale is the size of the largest point.
+    pointcolor have length 1 or N.
 
     Accepts:
         ar          (array) the image
         x,y         (number or iterable of numbers) the point positions
-        s           (number or iterable of numbers) the point sizes
-        point_color
+        s           (number or iterable of numbers) the relative point sizes
+        scale       (number) the maximum point size
+        pointcolor
+        alpha
 
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
@@ -372,7 +373,8 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,point_color='r',
         further edited.
     """
     fig,ax = show(ar,figsize,returnfig=True,**kwargs)
-    ax.scatter(y,x,s=s*scale/np.max(s),color=point_color)
+    d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha}
+    add_points(ax,d)
 
     if not returnfig:
         plt.show()
