@@ -312,11 +312,17 @@ def add_points(ax,d):
     assert isinstance(ax,Axes)
     # x
     assert('x' in d.keys())
-    x = np.array(d['x'])
+    x = d['x']
+    if isinstance(x,Number):
+        x = [x]
+    x = np.array(x)
     N = len(x)
     # y
     assert('y' in d.keys())
-    y = np.array(d['y'])
+    y = d['y']
+    if isinstance(y,Number):
+        y = [y]
+    y = np.array(y)
     assert(len(y)==N)
     # s
     assert('s' in d.keys())
