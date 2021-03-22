@@ -231,15 +231,7 @@ def add_ellipses(ax,d):
     N = len(center)
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
-    # radius
-    assert('R' in d.keys())
-    R = d['R']
-    if isinstance(R,Number):
-        R = [R for i in range(N)]
-    assert(isinstance(R,list))
-    assert(len(R)==N)
-    assert(all([isinstance(i,Number) for i in R]))
-    # a
+    # semimajor axis length
     assert('a' in d.keys())
     a = d['a']
     if isinstance(a,Number):
@@ -247,14 +239,14 @@ def add_ellipses(ax,d):
     assert(isinstance(a,list))
     assert(len(a)==N)
     assert(all([isinstance(i,Number) for i in a]))
-    # b
-    assert('b' in d.keys())
-    b = d['b']
-    if isinstance(b,Number):
-        b = [b for i in range(N)]
-    assert(isinstance(b,list))
-    assert(len(b)==N)
-    assert(all([isinstance(i,Number) for i in b]))
+    # ratio of axis lengths
+    assert('e' in d.keys())
+    e = d['e']
+    if isinstance(e,Number):
+        e = [e for i in range(N)]
+    assert(isinstance(e,list))
+    assert(len(e)==N)
+    assert(all([isinstance(i,Number) for i in e]))
     # theta
     assert('theta' in d.keys())
     theta = d['theta']
@@ -296,7 +288,7 @@ def add_ellipses(ax,d):
         assert(len(linewidth)==N)
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','R','a','b','theta','color',
+    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
                                             'fill','alpha','linewidth')]
     kwargs = dict()
     for k in kws:
@@ -304,9 +296,9 @@ def add_ellipses(ax,d):
 
     # add the ellipses
     for i in range(N):
-        cent,r,_a,_b,_theta,col,f,_alpha,lw = (center[i],R[i],a[i],b[i],theta[i],color[i],fill[i],
+        cent,_a,_e,_theta,col,f,_alpha,lw = (center[i],a[i],e[i],theta[i],color[i],fill[i],
                                                alpha[i],linewidth[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a*r,2*_b*r,90-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_a,2*_a*_e,90-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,**kwargs)
         ax.add_patch(ellipse)
 

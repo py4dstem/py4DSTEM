@@ -7,7 +7,7 @@ from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..process.utils import get_voronoi_vertices
 
-def show_elliptical_fit(ar,center,Ri,Ro,a,b,theta,fill=True,
+def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
                         linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
     """
@@ -16,7 +16,7 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,b,theta,fill=True,
     Accepts:
         center      (2-tuple) the center
         Ri,Ro       (numbers) the annulus radii
-        a,b,theta   (numbers) the ellipse params
+        a,e,theta   (numbers) the ellipse params
         fill        (bool) the fill value of the annulus
         color_ann   (color) annulus color
         color_ell   (color) ellipse color
@@ -28,7 +28,7 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,b,theta,fill=True,
     fig,ax = show(ar,
                   annulus={'center':(center[0],center[1]),'Ri':Ri,'Ro':Ro,'fill':fill,
                            'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
-                  ellipse={'center':(center[0],center[1]),'R':1,'a':a,'b':b,'theta':theta,
+                  ellipse={'center':(center[0],center[1]),'a':a,'e':e,'theta':theta,
                            'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
                   returnfig=True,**kwargs)
 
