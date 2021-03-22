@@ -281,7 +281,6 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     t0 = time()
     for i in range(len(Rx)):
         DP = datacube.data[Rx[i],Ry[i],:,:] 
-
         peaks.append(_find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                                    corrPower = corrPower,
                                                    sigma = sigma,
