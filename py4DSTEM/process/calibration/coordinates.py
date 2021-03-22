@@ -34,10 +34,11 @@ class Coordinates(object):
             Q_Nx,Q_Ny         (ints) the shape of diffraction space
             R_Nx,R_Ny         (ints) the shape of real space
             qx0,qy0           (numbers or ndarrays) the origin of diffraction space
-            a,b               (numbers or ndarrays) the stretch along the major/minor
-                              axes of the polar-elliptical coordinate system
-            theta             (number or ndarray) the tilt angle, in radians, of the
-                              polar-elliptical coordinate system
+            e                 (number) the ratio of lengths of the semiminor to
+                              semimajor axes of the elliptical distortions
+            theta             (number) the (positive, right handed) tilt of the
+                              semimajor axis of the elliptical distortions with
+                              respect to the x-axis, in radians
             Q_pixel_size      (number)
             Q_pixel_units     (string)
             R_pixel_size      (number)
@@ -61,20 +62,16 @@ class Coordinates(object):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
-    def set_a(self,a):
-        self._validate_input(a)
-        self.a = a
-    def set_b(self,b):
-        self._validate_input(b)
-        self.b = b
+    def set_e(self,e):
+        self._validate_input(e)
+        self.e = e
     def set_theta(self,theta):
         self._validate_input(theta)
         self.theta = theta
-    def set_ellipse(self,a,b,theta):
-        self._validate_input(a)
-        self._validate_input(b)
+    def set_ellipse(self,e,theta):
+        self._validate_input(e)
         self._validate_input(theta)
-        self.a,self.b,self.theta = a,b,theta
+        self.e,self.theta = e,theta
     def set_Q_pixel_size(self,Q_pixel_size):
         self.Q_pixel_size = Q_pixel_size
     def set_Q_pixel_units(self,Q_pixel_units):
@@ -90,14 +87,12 @@ class Coordinates(object):
         return self._get_value(self.qy0,rx,ry)
     def get_center(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
-    def get_a(self,rx=None,ry=None):
-        return self._get_value(self.a,rx,ry)
-    def get_b(self,rx=None,ry=None):
-        return self._get_value(self.b,rx,ry)
+    def get_e(self,rx=None,ry=None):
+        return self._get_value(self.e,rx,ry)
     def get_theta(self,rx=None,ry=None):
         return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
-        return self.get_a(rx,ry),self.get_b(rx,ry),self.get_theta(rx,ry)
+        return self.get_e(rx,ry),self.get_theta(rx,ry)
     def get_Q_pixel_size(self):
         return self._get_value(self.Q_pixel_size)
     def get_Q_pixel_units(self):
