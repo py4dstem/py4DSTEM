@@ -324,6 +324,7 @@ def add_points(ax,d):
     if isinstance(s,Number):
         s = np.ones_like(x)*s
     assert(len(s)==N)
+    s = np.where(s>0,s,0)
     # scale
     assert('scale' in d.keys())
     scale = d['scale']
