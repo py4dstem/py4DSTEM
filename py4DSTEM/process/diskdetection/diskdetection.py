@@ -71,12 +71,13 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
-                             to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
-                             This is useful for doing noise reduction or binning on the fly for memory mapped
-                             datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel.
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -190,12 +191,13 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
-                             to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
-                             This is useful for doing noise reduction or binning on the fly for memory mapped
-                             datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel.
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
 
     Returns:
@@ -256,12 +258,13 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
-                             to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
-                             This is useful for doing noise reduction or binning on the fly for memory mapped
-                             datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel.
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
 
     Returns:
         peaks                (n-tuple of PointLists, n=len(Rx)) the Bragg peak positions and
@@ -348,12 +351,13 @@ def find_Bragg_disks_serial(datacube, probe,
                                 to the median of the maximum intensity peaks in each diffraction pattern. 'manual' Allows the user to threshold
                                 based on a predetermined intensity value manually determined. In this case, minIntensity should be an int.
         verbose              (bool) if True, prints completion updates
-        filter_function      (callable: lambda or partial function of one argument) filtering function to apply
-                             to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
-                             This is useful for doing noise reduction or binning on the fly for memory mapped
-                             datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel.
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
     
     Returns:
@@ -446,13 +450,13 @@ def find_Bragg_disks(datacube, probe,
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
         verbose              (bool) if True, prints completion updates for serial execution
-        filter_function      (callable: lambda or function of one argument) filtering function to apply
-                             to each diffraction pattern before peakfinding. must be a function of only
-                             one argument (the diffraction pattern) and able to be pickled by the dill library.
-                             This is useful for doing noise reduction or binning on the fly for memory mapped
-                             datasets or for parallel operation. The shape of the returned DP must match the shape
-                             of the probe kernel. When using distributed mode, the function must contain
-                             all its own imports.
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
         distributed          (dict) contains information for parallelprocessing using an IPyParallel
                              or Dask distributed cluster.  Valid keys are:
