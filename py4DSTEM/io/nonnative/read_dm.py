@@ -29,15 +29,10 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
                     metadata is read and returned, in the former case a DataCube
                     is returned with the metadata attached at datacube.metadata
     """
-    assert isinstance(
-        fp, (str, Path)
-    ), "Error: filepath fp must be a string or pathlib.Path"
-    assert mem in [
-        "RAM",
-        "MEMMAP",
-    ], 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert isinstance(binfactor, int), "Error: argument binfactor must be an integer"
-    assert binfactor >= 1, "Error: binfactor must be >= 1"
+    assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
+    assert(binfactor>=1), "Error: binfactor must be >= 1"
 
     md = get_metadata_from_dmFile(fp)
     if metadata:
