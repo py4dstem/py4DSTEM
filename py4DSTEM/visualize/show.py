@@ -276,13 +276,13 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     else:
         return fig,ax
 
-def show_ellipses(ar,center,R,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
-                                                            returnfig=False,**kwargs):
+def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+                                                        returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
     To overlay one ellipse, center must be a single 2-tuple.  To overlay N circles,
     center must be a list of N 2-tuples.  Similarly, the remaining ellipse parameters -
-    R, a, b, and theta - must each be a single number or a len-N list.  color, fill, and
+    a, e, and theta - must each be a single number or a len-N list.  color, fill, and
     alpha may each be single values, which are then applied to all the circles, or
     length N lists.
 
@@ -291,8 +291,8 @@ def show_ellipses(ar,center,R,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=
 
     Accepts:
         center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
-        R           (number or list of N numbers) the radius, in units of (a+b)/2
-        a,b         (number or list of N numbers) the semimajor and semiminor axes
+        a           (number or list of N numbers) the semimajor axis length
+        e           (number or list of N numbers) ratio of semiminor/semimajor length
         theta       (number or list of N numbers) the tilt angle in radians
         color       (valid matplotlib color, or list of N colors)
         fill        (bool or list of N bools) filled in or empty rectangles
@@ -305,7 +305,7 @@ def show_ellipses(ar,center,R,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'R':R,'a':a,'b':b,'theta':theta,'color':color,'fill':fill,
+    d = {'center':center,'a':a,'e':e,'theta':theta,'color':color,'fill':fill,
          'alpha':alpha,'linewidth':linewidth}
     add_ellipses(ax,d)
 

@@ -6,7 +6,7 @@ Typically use of this module will follow a workflow like:
 (2) define an elliptical coordinate system
 (3) perform some analysis using these coordinates
 
-Methods for (1) include fit_ellipse_1d() and fit_ellipse_amorphring().
+Methods for (1) include fit_ellipse_1d() and fit_ellipse_amorphous_ring().
 The former fits a 1D elliptical curve to a 2d arry of data e.g. a
 ring of peaks in a Bragg vector map.  The latter function fits a 2d
 pattern of ring of amorphous scattering, using a double-sided gaussian
@@ -57,8 +57,16 @@ def fit_ellipse_1d(ar,x0,y0,ri,ro,mask=None,returnABC=False):
         mask        (ar-shaped ndarray of bools) ignore data wherever mask==True
 
     Returns:
-        If returnABC is False (default), returns the ellipse parameters (x0,y0,a,b,theta)
-        If returnABC is True, returns the ellipse parameters (x0,y0,A,B,C)
+        (default)
+        x0,y0       (floats) the center
+        a           (float) the semimajor axis length
+        e           (float) the ratio of lengths of the semiminor to the semimajor axes
+        theta       (float) the tilt of the ellipse semimajor axis with respect to
+                    the x-axis, in radians
+
+        (if returnABC is True)
+        x0,y0,A,B,C     (floats) A,B,C are the ellipse parameters in canonical form -
+                        see the module docstring for more info.
     """
     # Get the datapoints to fit
     yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
@@ -76,10 +84,10 @@ def fit_ellipse_1d(ar,x0,y0,ri,ro,mask=None,returnABC=False):
     x,y,A,B,C = leastsq(ellipse_err, p0, args=(xs,ys,vals))[0]
 
     # Convert ellipse params
-    a,b,theta = convert_ellipse_params(A,B,C)
+    a,e,theta = convert_ellipse_params(A,B,C)
 
     if not returnABC:
-        return x,y,a,b,theta
+        return x,y,a,e,theta
     else:
         return x,y,A,B,C
 
@@ -97,7 +105,7 @@ def ellipse_err(p, x, y, val):
 
 ###### Fitting from amorphous diffraction rings ######
 
-def fit_ellipse_amorphousring(data,x0,y0,ri,ro,p0=None,mask=None):
+def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     """
     Fit the amorphous halo of a diffraction pattern, including any elliptical distortion.
 
@@ -147,7 +155,11 @@ def fit_ellipse_amorphousring(data,x0,y0,ri,ro,p0=None,mask=None):
         mask        only fit to datapoints where mask is True
 
     Returns:
-        (x0,y0,a,b,theta)     (3-tuple) the ellipse parameters only
+        (x0,y0,a,e,theta)     (5-tuple of floats) the ellipse parameters. They are:
+                                    x0,y0       center_x,center_y,
+                                    a           semimajor axis length
+                                    e           ratio of semiminor/semimajor lengths
+                                    theta       tilt of a-axis w.r.t x-axis, in radians
         p                     (11-tuple) the full set of fit parameters
     """
     if mask is None:
@@ -192,8 +204,9 @@ def fit_ellipse_amorphousring(data,x0,y0,ri,ro,p0=None,mask=None):
     # Return
     _x0,_y0 = p[7],p[8]
     _A,_B,_C = 1,p[9],p[10]
-    _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
-    return (_x0,_y0,_a,_b,_theta),p
+    _a,_e,_theta = convert_ellipse_params(_A,_B,_C)
+    _a *= p[6]
+    return (_x0,_y0,_a,_e,_theta),p
 
 def double_sided_gaussian_fiterr(p, x, y, val):
     """
@@ -223,6 +236,32 @@ def double_sided_gaussian(p, x, y):
 ### Convert between representations
 
 def convert_ellipse_params(A,B,C):
+    """
+    Converts from ellipse parameters (A,B,C) to (e,theta,R).
+    See module docstring for more info.
+
+    Accepts:
+        A,B,C    (floats) parameters of an ellipse in the form:
+                             Ax^2 + Bxy + Cy^2 = 1
+
+    Returns:
+        a           (float) the semimajor axis length
+        e           (float) the ratio of lengths of the semiminor to the semimajor axes
+        theta       (float) the tilt of the ellipse semimajor axis with respect to
+                    the x-axis, in radians
+    """
+    if A == C:
+        x = B
+        theta = np.pi / 4.0 * np.sign(B)
+    else:
+        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
+        theta = 0.5 * np.arctan(B / (A - C))
+    a = np.sqrt(2 / (A + C + x))
+    b = np.sqrt(2 / (A + C - x))
+    e = b/a
+    return a,e,theta
+
+def convert_ellipse_params_ABC_to_abtheta(A,B,C):
     """
     Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
     See module docstring for more info.
