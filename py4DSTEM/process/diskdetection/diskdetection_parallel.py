@@ -71,6 +71,13 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -226,6 +233,13 @@ def find_Bragg_disks_ipp(DP, probe,
                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor           (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         ipyparallel_client_file   (str) absolute path to ipyparallel client JSON file for connecting to a cluster
         data_file                 (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path              (str) working directory for cluster processing, defaults to current directory
@@ -386,6 +400,13 @@ def find_Bragg_disks_dask(DP, probe,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         dask_client          (obj) dask client for connecting to a cluster
         data_file             (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path         (str) working directory for cluster processing, defaults to current directory
