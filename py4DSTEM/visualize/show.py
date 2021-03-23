@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
+from numpy.ma import MaskedArray
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
-         power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
+         power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,returnclipvals=False,
          hist=False,n_bins=256,mask=None,mask_color='k',rectangle=None,
          circle=None,annulus=None,ellipse=None,points=None,grid=None,**kwargs):
     """
@@ -83,6 +84,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         _ar[_mask] = np.power(ar[_mask],power)
     else:
         raise Exception
+    if isinstance(ar,MaskedArray):
+        _ar = np.ma.array(data=_ar,mask=ar.mask)
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -102,6 +105,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         vmax = c+m
     else:
         raise Exception
+    if returnclipvals:
+        return vmin,vmax
 
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
