@@ -269,6 +269,7 @@ def convert_ellipse_params(A,B,C):
         theta = 0.5 * np.arctan(B / (A - C))
     a = np.sqrt(2 / (A + C - x))
     b = np.sqrt(2 / (A + C + x))
+    a,b = max(a,b),min(a,b)
     e = b/a
     return a,e,theta
 
