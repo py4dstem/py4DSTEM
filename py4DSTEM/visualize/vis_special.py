@@ -1,11 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 from . import show
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..process.utils import get_voronoi_vertices
+from ..process.calibration import double_sided_gaussian
 
 def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -39,6 +41,74 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
         return fig,ax
 
 
+def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
+                            fitborder=True,fitbordercolor='k',fitborderlw=0.5,
+                            scaling='log',returnfig=False,**kwargs):
+    """
+    Display a diffraction pattern with a fit to its amorphous ring, interleaving
+    the data and the fit in a pinwheel pattern.
+
+    Accepts:
+        dp              (array) the diffraction pattern
+        qmin,qmax       (numbers) the min/max distances of the fitting annulus
+        p_ellipse       (11-tuple) the fit parameters to the double-sided gaussian
+                        fit function returned by fit_ellipse_amorphous_ring
+        N               (int) the number of pinwheel sections
+        cmap            (colormap or 2-tuple of colormaps) if passed a single cmap,
+                        uses this colormap for both the data and the fit; if passed
+                        a 2-tuple of cmaps, uses the first for the data and the
+                        second for the fit
+        fitborder       (bool) if True, plots a border line around the fit data
+        fitbordercolor  (color) color of the fitborder
+        fitborderlw     (number) linewidth of the fitborder
+        scaling         (str) the normal scaling param -- see docstring for
+                        visualize.show
+        returnfig       (bool) if True, returns the figure
+    """
+    assert(len(p_ellipse)==11)
+    assert(isinstance(N,(int,np.integer)))
+    if isinstance(cmap,tuple):
+        cmap_data,cmap_fit = cmap[0],cmap[1]
+    else:
+        cmap_data,cmap_fit = cmap,cmap
+    Q_Nx,Q_Ny = dp.shape
+
+    # Make coords
+    qx0,qy0 = p_ellipse[7],p_ellipse[8]
+    qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
+    qx,qy = qxx-qx0,qyy-qy0
+    q = np.hypot(qx,qy)
+    theta = np.arctan2(qy,qx)
+
+    # Make mask
+    thetas = np.linspace(-np.pi,np.pi,2*N+1)
+    pinwheel = np.zeros((Q_Nx,Q_Ny),dtype=bool)
+    for i in range(N):
+        pinwheel += (theta>thetas[2*i]) * (theta<=thetas[2*i+1])
+    mask = pinwheel * (q>qmin) * (q<=qmax)
+
+    # Get fit data
+    fit = double_sided_gaussian(p_ellipse, qxx, qyy)
+
+    # Make masked arrays
+    data_ma = np.ma.array(data=dp, mask=mask)
+    fit_ma = np.ma.array(data=fit, mask=mask==False)
+
+    # Show
+    fig,ax = show(data_ma,scaling=scaling,returnfig=True,cmap=cmap_data,**kwargs)
+    vmin,vmax = show(data_ma,scaling=scaling,returnclipvals=True,**kwargs)
+    show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,**kwargs)
+
+    if fitborder:
+        for i in range(N):
+            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(thetas[2*i]),np.degrees(thetas[2*i+1]),
+                               width=qmax-qmin,fill=None,color=fitbordercolor,lw=fitborderlw))
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
 
 
 def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
