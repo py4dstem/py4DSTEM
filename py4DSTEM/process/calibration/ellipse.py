@@ -50,7 +50,7 @@ import numpy as np
 from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
 from ..utils import get_CoM
-
+from ...io import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
 
@@ -477,68 +477,30 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
 
 ### Correct Bragg peak positions, making a circular coordinate system
 
-def correct_elliptical_distortion(braggpeaks, p):
-    """
-    Corrects the elliptical distortions described by the ellipse parameters p in the PointListArray
-    of peak positions braggpeaks.
-
-    Accepts:
-        braggpeaks              (PointListArray) the Bragg peaks
-        p                       (5-tuple) the parameters (x0,y0,a,b,theta) of an ellipse centered at
-                                (x0,y0), with semiaxis of length a,b and tilted at angle theta.
-
-    Returns:
-        braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
-    """
-    # Get the transformation matrix
-    x0,y0,a,b,theta = p
-    s = min(a,b)/max(a,b)
-    theta += np.pi/2.*(np.argmin([a,b])==0)
-    sint,cost = np.sin(theta),np.cos(theta)
-    T = np.squeeze(np.array([[sint**2 + s*cost**2, sint*cost*(s-1)],[sint*cost*(s-1), s*sint**2 + cost**2]]))
-
-    # Correct distortions
-    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name+"_ellipticalcorrected")
-    for Rx in range(braggpeaks_corrected.shape[0]):
-        for Ry in range(braggpeaks_corrected.shape[1]):
-            pointlist = braggpeaks_corrected.get_pointlist(Rx,Ry)
-            x,y = pointlist.data['qx']-x0, pointlist.data['qy']-y0
-            xyar_i = np.vstack([x,y])
-            xyar_f = np.matmul(T,xyar_i)
-            pointlist.data['qx'] = xyar_f[0,:]+x0
-            pointlist.data['qy'] = xyar_f[1,:]+y0
-    return braggpeaks_corrected
-
-def correct_braggpeak_elliptical_distortions(braggpeaks, p):
+def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
     """
     Given some elliptical distortions with ellipse parameters p and some measured PointListArray
     of Bragg peak positions braggpeaks, returns the elliptically corrected Bragg peaks.
 
     Accepts:
         braggpeaks              (PointListArray) the Bragg peaks
-        p                       (5-tuple) the parameters (x0,y0,A,B,phi) of an ellipse describing
-                                the elliptical distortions in the data
+        e                       (number) the length ratio of semiminor/semimajor axes
+        theta                   (number) tilt of the a-axis with respect to the x-axis, in radians
+        x0,y0                   (numbers) the ellipse center; if the braggpeaks have been centered,
+                                these should be zero
 
     Returns:
         braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
     """
+    assert(isinstance(braggpeaks,PointListArray))
     # Get the transformation matrix
-    x0, y0, A, B, phi = p
-    s = min(A, B) / max(
-        A, B
-    )  # scale the larger semiaxis down to the size of the smaller semiaxis
-    phi += (
-        np.pi / 2.0 * (np.argmin([A, B]) == 0)
-    )  # if A was smaller, rotated phi by pi/2 to make A->B
-    sinp, cosp = np.sin(phi), np.cos(phi)
-    T = np.squeeze(
-        np.array(
+    sint, cost = np.sin(theta), np.cos(theta)
+    T = np.array(
             [
-                [sinp ** 2 + s * cosp ** 2, sinp * cosp * (s - 1)],
-                [sinp * cosp * (s - 1), s * sinp ** 2 + cosp ** 2],
+                [e*sint**2 + cost**2, sint*cost*(1-e)],
+                [sint*cost*(1-e), sint**2 + e*cost**2]
             ]
         )
-    )
 
     # Correct distortions
     braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name + "_ellipsecorrected")
