@@ -100,8 +100,9 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,**kwargs)
 
     if fitborder:
+        _thetas = np.roll(thetas,-1)
         for i in range(N):
-            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(thetas[2*i]),np.degrees(thetas[2*i+1]),
+            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),np.degrees(_thetas[2*i+1]),
                                width=qmax-qmin,fill=None,color=fitbordercolor,lw=fitborderlw))
 
     if not returnfig:
