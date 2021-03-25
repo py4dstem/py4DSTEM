@@ -313,14 +313,14 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
         assert(xaxis_space in ('R','Q')), "xaxis_space must be 'R' or 'Q'"
         show_which_axes = np.array(['exx' in axes_plots,'eyy' in axes_plots,
                                     'exy' in axes_plots,'theta' in axes_plots])
-        for show,ax in zip(show_which_axes,(ax11,ax12,ax21,ax22)):
-            if show:
+        for _show,_ax in zip(show_which_axes,(ax11,ax12,ax21,ax22)):
+            if _show:
                 if xaxis_space=='R':
-                    ax_addaxes(ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,
+                    ax_addaxes(_ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,
                                width=axes_width,color=axes_color,labelaxes=labelaxes,
                                labelsize=axes_labelsize,labelcolor=axes_labelcolor)
                 else:
-                    ax_addaxes_QtoR(ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,QR_rotation,
+                    ax_addaxes_QtoR(_ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,QR_rotation,
                                     width=axes_width,color=axes_color,labelaxes=labelaxes,
                                     labelsize=axes_labelsize,labelcolor=axes_labelcolor)
     if not returnfig:
