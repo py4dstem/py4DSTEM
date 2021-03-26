@@ -1,11 +1,11 @@
 # stdlib
 import os
-import pickle
 import tempfile
 from time import time
 
 # 3rd party
 import numpy as np
+import dill
 
 # local
 import py4DSTEM
@@ -22,6 +22,7 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                    maxNumPeaks=70,
                                    subpixel='multicorr',
                                    upsample_factor=16,
+                                   filter_function=None,
                                    return_cc=False,
                                    peaks=None):
     """
@@ -70,6 +71,13 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -85,6 +93,9 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     import numpy
     import scipy.ndimage.filters
     import py4DSTEM.process.utils.multicorr
+
+    # apply filter function:
+    DP = DP if filter_function is None else filter_function(DP)
 
     if subpixel == 'none':
         cc = py4DSTEM.process.utils.get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
@@ -154,10 +165,10 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
 
 def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster_path):
     import os
-    import pickle
+    import dill
 
     with open(path_to_static, 'rb') as infile:
-        inputs = pickle.load(infile)
+        inputs = dill.load(infile)
 
     # Always try to memory map the data file, if possible
     if path_to_data.rsplit('.', 1)[-1].startswith('dm'):
@@ -176,7 +187,7 @@ def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster
 
     path_to_output = os.path.join(cluster_path, "{}_{}.data".format(start, end))
     with open(path_to_output, 'wb') as data_file:
-        pickle.dump(results, data_file)
+        dill.dump(results, data_file)
 
     return path_to_output
 
@@ -191,6 +202,7 @@ def find_Bragg_disks_ipp(DP, probe,
                          maxNumPeaks=70,
                          subpixel='poly',
                          upsample_factor=4,
+                         filter_function=None,
                          ipyparallel_client_file=None,
                          data_file=None,
                          cluster_path=None):
@@ -221,6 +233,13 @@ def find_Bragg_disks_ipp(DP, probe,
                                            'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor           (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         ipyparallel_client_file   (str) absolute path to ipyparallel client JSON file for connecting to a cluster
         data_file                 (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path              (str) working directory for cluster processing, defaults to current directory
@@ -260,7 +279,8 @@ def find_Bragg_disks_ipp(DP, probe,
         minPeakSpacing,
         maxNumPeaks,
         subpixel,
-        upsample_factor
+        upsample_factor,
+        filter_function
         ]
 
     if cluster_path is None:
@@ -272,7 +292,7 @@ def find_Bragg_disks_ipp(DP, probe,
     # write out static inputs
     path_to_inputs = os.path.join(tmpdir.name, "inputs")
     with open(path_to_inputs, 'wb') as inputs_file:
-        pickle.dump(inputs_list, inputs_file)
+        dill.dump(inputs_list, inputs_file)
     t_inputs_save = time() - t_00
     print("Serialize input values : {}".format(t_inputs_save))
 
@@ -319,7 +339,7 @@ def find_Bragg_disks_ipp(DP, probe,
     t3 = time()
     for i in range(len(results)):
         with open(results[i].get(), 'rb') as f:
-            data_chunk = pickle.load(f)
+            data_chunk = dill.load(f)
 
         for Rx, Ry, data in data_chunk:
             peaks.get_pointlist(Rx, Ry).add_dataarray(data)
@@ -349,6 +369,7 @@ def find_Bragg_disks_dask(DP, probe,
                           maxNumPeaks=70,
                           subpixel='poly',
                           upsample_factor=4,
+                          filter_function=None,
                           dask_client=None,
                           data_file=None,
                           cluster_path=None):
@@ -379,6 +400,13 @@ def find_Bragg_disks_dask(DP, probe,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         dask_client          (obj) dask client for connecting to a cluster
         data_file             (str) absolute path to the data file containing the datacube for processing remotely
         cluster_path         (str) working directory for cluster processing, defaults to current directory
@@ -417,7 +445,8 @@ def find_Bragg_disks_dask(DP, probe,
         minPeakSpacing,
         maxNumPeaks,
         subpixel,
-        upsample_factor
+        upsample_factor,
+        filter_function
         ]
 
     if cluster_path is None:
@@ -428,7 +457,7 @@ def find_Bragg_disks_dask(DP, probe,
     # write out static inputs
     path_to_inputs = os.path.join(tmpdir.name, "{}.inputs".format(dask_client.id))
     with open(path_to_inputs, 'wb') as inputs_file:
-        pickle.dump(inputs_list, inputs_file)
+        dill.dump(inputs_list, inputs_file)
     t_inputs_save = time() - t0
     print("Serialize input values : {}".format(t_inputs_save))
 
@@ -474,7 +503,7 @@ def find_Bragg_disks_dask(DP, probe,
     for batch in distributed.as_completed(submits, with_results=True).batches():
         for future, result in batch:
             with open(result, 'rb') as f:
-                data_chunk = pickle.load(f)
+                data_chunk = dill.load(f)
 
             for Rx, Ry, data in data_chunk:
                 peaks.get_pointlist(Rx, Ry).add_dataarray(data)
