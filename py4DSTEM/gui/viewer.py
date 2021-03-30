@@ -19,11 +19,12 @@
 #############################################################################################
 
 from __future__ import division, print_function
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
 import sys, os
 import pyqtgraph as pg
 import gc
+from pathlib import Path
 
 from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
 from .gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
@@ -65,6 +66,10 @@ class DataViewer(QtWidgets.QMainWindow):
 
         self.main_window = QtWidgets.QWidget()
         self.main_window.setWindowTitle("py4DSTEM")
+
+        icon = QtGui.QIcon(str(Path(__file__).parent.absolute() / "logo.png"))
+        self.setWindowIcon(icon)
+        self.qtapp.setWindowIcon(icon)
 
         # Set up sub-windows and arrange into primary py4DSTEM window
         self.setup_diffraction_space_widget()
