@@ -94,12 +94,30 @@ def calculate_coef_strain(coef_cube, r_ref):
     Accepts:
         coef_cube   - output from fit_stack
         r_ref       - a reference 0 strain radius - needed because we fit r as well as B and C
+                      if r_ref is a number, it will assume that the reference ellipse is a perfect circle
+                      r_ref can also be a 3-tuple, in which case it is (r_ref, B_ref, C_ref)
+                      in this case, the reference 0 strain measurement is an ellipse defined by these numbers, which are defined as the outputs of fit_double_sided_gaussian
     Returns:
         exx         - strain in the x axis direction in image coordinates
         eyy         - strain in the y axis direction in image coordinates
         exy         - shear
 
     """
+    # parse r_ref input
+    if isinstance(r_ref, (int, float)):
+        # r_ref is integer, and we will measure strain with circle
+        A_ref, B_ref, C_ref = 1, 0, 1
+    elif isinstance(r_ref, tuple):
+        if len(r_ref) != 3:
+            raise AssertionError(
+                "r_ref must be a 3 element tuple with elements(r_ref, B_ref, C_ref)."
+            )
+        # r_ref is a tuple with (r_ref, B_ref, C_ref)
+        A_ref, B_ref, C_ref = 1, r_ref[1], r_ref[2]
+        r_ref = r_ref[0]
+    else:
+        raise ValueError("r_ref must be a number, or 3 element tuple")
+
     R = coef_cube[:, :, 6]
     r_ratio = (
         R / r_ref
@@ -108,6 +126,23 @@ def calculate_coef_strain(coef_cube, r_ref):
     A = 1 / r_ratio ** 2
     B = coef_cube[:, :, 9] / r_ratio ** 2
     C = coef_cube[:, :, 10] / r_ratio ** 2
+
+    # make reference transformation matrix
+    m_ellipse_ref = np.asarray([[A_ref, B_ref / 2], [B_ref / 2, C_ref]])
+    e_vals_ref, e_vecs_ref = np.linalg.eig(m_ellipse_ref)
+    ang_ref = np.arctan2(e_vecs_ref[1, 0], e_vecs_ref[0, 0])
+
+    rot_matrix_ref = np.asarray(
+        [[np.cos(ang_ref), -np.sin(ang_ref)], [np.sin(ang_ref), np.cos(ang_ref)]]
+    )
+
+    transformation_matrix_ref = np.diag(np.sqrt(e_vals_ref))
+
+    transformation_matrix_ref = (
+        rot_matrix_ref @ transformation_matrix_ref @ rot_matrix_ref.T
+    )
+
+    transformation_matrix_ref_inv = np.linalg.inv(transformation_matrix_ref)
 
     exx, eyy, exy = np.empty_like(A), np.empty_like(C), np.empty_like(B)
 
@@ -122,10 +157,15 @@ def calculate_coef_strain(coef_cube, r_ref):
             transformation_matrix = np.diag(np.sqrt(e_vals))
             transformation_matrix = rot_matrix @ transformation_matrix @ rot_matrix.T
 
-            exx[i, j] = transformation_matrix[0, 0] - 1
-            eyy[i, j] = transformation_matrix[1, 1] - 1
+            transformation_matrix_from_ref = (
+                transformation_matrix @ transformation_matrix_ref_inv
+            )
+
+            exx[i, j] = transformation_matrix_from_ref[0, 0] - 1
+            eyy[i, j] = transformation_matrix_from_ref[1, 1] - 1
             exy[i, j] = 0.5 * (
-                transformation_matrix[0, 1] + transformation_matrix[1, 0]
+                transformation_matrix_from_ref[0, 1]
+                + transformation_matrix_from_ref[1, 0]
             )
 
     return exx, eyy, exy

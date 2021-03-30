@@ -68,9 +68,8 @@ if run_test:
     compare_double_sided_gaussian(ring2, fit2)
 
 if run_test2:
-    # recreating colin's matlab code. Several things are printed for comparison to the outputs of test11.m
     # this code tests to see from an arbitrary ellipse created via known strains, if the strains can be recovered. This is a more complex test than run_test, in that the double_sided_gaussian function is not used to create the data.
-    # this test also can be used to check if the math behind using a reference ellipse works by changing x and y in the definitions below 
+    # this test also can be used to check if the math behind using a reference ellipse works by changing ref_x and ref_y in the definitions below
     yy, xx = np.meshgrid(np.arange(256), np.arange(256))
     r = np.sqrt((xx - 128) ** 2 + (yy - 128) ** 2)
     r_ref = 65
@@ -79,12 +78,12 @@ if run_test2:
     e12 = 5 / 100
 
     num_points = 360
-    ref_x = 1
-    ref_y = 1.1
-    ref_rot = -np.pi/4
+    ref_x = 1.0
+    ref_y = 1.2
+    ref_rot = -np.pi / 4
     t = np.linspace(0, 2 * np.pi, num_points)
-    x = ref_x*np.cos(t+ref_rot) * r_ref
-    y = ref_y*np.sin(t+ref_rot) * r_ref
+    x = ref_x * np.cos(t + ref_rot) * r_ref
+    y = ref_y * np.sin(t + ref_rot) * r_ref
 
     m = np.array([[1 + e11, e12], [e12, 1 + e22]])
     m_inv = np.linalg.inv(m)
@@ -93,7 +92,10 @@ if run_test2:
     xy = np.matmul(m_inv, xy_ref)
 
     ring_ref = np.zeros((256, 256))
-    ring_ref[np.round(xy_ref[0, :]).astype(int) + 128, np.round(xy_ref[1, :]).astype(int) + 128] = 1
+    ring_ref[
+        np.round(xy_ref[0, :]).astype(int) + 128,
+        np.round(xy_ref[1, :]).astype(int) + 128,
+    ] = 1
     ring_ref = gaussian_filter(ring_ref, sigma=5)
     ring_ref *= 10000
 
@@ -105,20 +107,20 @@ if run_test2:
     plt.figure(1, clear=True)
     plt.plot(xy_ref[1, :], xy_ref[0, :])
     plt.plot(xy[1, :], xy[0, :])
-    plt.plot(np.cos(t) * r_ref, np.sin(t) * r_ref, '--')
+    plt.plot(np.cos(t) * r_ref, np.sin(t) * r_ref, "--")
     plt.axis("equal")
     plt.gca().invert_yaxis()
-    plt.legend(['reference', 'strained', 'circle'])
+    plt.legend(["reference", "strained", "circle"])
 
     plt.figure(2, clear=True)
     plt.imshow(ring, cmap="plasma")
 
     coef_fit = [1e-3, 1e3, 36, 3, 3, 1e-3, 60, 128, 128, 0, 1]
     fit = fit_double_sided_gaussian(ring, coef_fit)
-    fit0 = fit_double_sided_gaussian(ring_ref, coef_fit)
+    fit_ref = fit_double_sided_gaussian(ring_ref, coef_fit)
     compare_double_sided_gaussian(ring, fit)
     # now we need to get appropriate A, B, C again compared to colin's code, so we can then extract e11, e22, and e12
-    r_ratio = fit[6] / fit0[6]
+    r_ratio = fit[6] / fit_ref[6]
     A, B, C = 1, fit[9], fit[10]
 
     # print(f"r_ref = {r_ref}, fit_r = {fit[6]}")
@@ -126,12 +128,12 @@ if run_test2:
     # print(f"B = {B:.2f}, B_new = {B / r_ratio ** 2:.4f}")
     # print(f"C = {C:.2f}, C_new = {C / r_ratio ** 2:.4f}")
 
-    r_ratio_ref = fit0[6] / fit0[6]
-    A_ref, B_ref, C_ref = 1, fit0[9], fit0[10]
+    r_ratio_ref = fit_ref[6] / fit_ref[6]
+    A_ref, B_ref, C_ref = 1, fit_ref[9], fit_ref[10]
 
     # print(f'r_ratio = {r_ratio}')
 
-    # print(f"r_ref = {r_ref}, fit_r = {fit0[6]}")
+    # print(f"r_ref = {r_ref}, fit_r = {fit_ref[6]}")
     # print(f"A_ref = {A_ref:.2f}, A_ref_new = {A_ref / r_ratio_ref ** 2:.4f}")
     # print(f"B_ref = {B_ref:.2f}, B_ref_new = {B_ref / r_ratio_ref ** 2:.4f}")
     # print(f"C_ref = {C_ref:.2f}, C_ref_new = {C_ref / r_ratio_ref ** 2:.4f}")
@@ -154,43 +156,60 @@ if run_test2:
     # now fit reference ellipse
     m_ellipse_ref = np.asarray([[A_ref, B_ref / 2], [B_ref / 2, C_ref]])
     e_vals_ref, e_vecs_ref = np.linalg.eig(m_ellipse_ref)
-    ang0 = np.arctan2(e_vecs_ref[1, 0], e_vecs_ref[0, 0])
+    ang_ref = np.arctan2(e_vecs_ref[1, 0], e_vecs_ref[0, 0])
 
-    rot_matrix_ref = np.asarray([[np.cos(ang0), -np.sin(ang0)], [np.sin(ang0), np.cos(ang0)]])
+    rot_matrix_ref = np.asarray(
+        [[np.cos(ang_ref), -np.sin(ang_ref)], [np.sin(ang_ref), np.cos(ang_ref)]]
+    )
 
     transformation_matrix_ref = np.diag(np.sqrt(e_vals_ref))
 
-    transformation_matrix_ref = rot_matrix_ref @ transformation_matrix_ref @ rot_matrix_ref.T
+    transformation_matrix_ref = (
+        rot_matrix_ref @ transformation_matrix_ref @ rot_matrix_ref.T
+    )
 
-    # print(f"angle0 = {ang0:.4f}")
-    print(f"transformation_matrix_ref=\n{transformation_matrix_ref}\nThis is the transformation from a circle to the reference ellipse")
+    # uncomment to confirm that we used to assume circle - the two printed results should match
+    # transformation_matrix_ref = np.asarray([[1,0],[0,1]])
+
+    # print(f"angle0 = {ang_ref:.4f}")
+    print(
+        f"This is the transformation from a circle to the reference ellipse\ntransformation_matrix_ref=\n{transformation_matrix_ref}\n"
+    )
     # print(f"angle = {ang:.4f}")
-    print(f"transformation_matrix=\n{transformation_matrix}\nThis is the transformation from a circle to the fitted (strained) ellipse")
+    print(
+        f"This is the transformation from a circle to the fitted (strained) ellipse\ntransformation_matrix=\n{transformation_matrix}\n"
+    )
 
     # now compute strains
     e11_fit = transformation_matrix[0, 0] - 1
     e22_fit = transformation_matrix[1, 1] - 1
     e12_fit = 0.5 * (transformation_matrix[0, 1] + transformation_matrix[1, 0])
 
-    # If you have a transformation matrix from A->B and from A->C, this is how 
-    # you get the transformation matrix from B->C. A->B represents circle to 
-    # reference ellipse, A->C is circle to strained ellipse, and so then B->C 
-    # is reference ellipse to strained ellipse, from which we can then extract 
+    # If you have a transformation matrix from A->B and from A->C, this is how
+    # you get the transformation matrix from B->C. A->B represents circle to
+    # reference ellipse, A->C is circle to strained ellipse, and so then B->C
+    # is reference ellipse to strained ellipse, from which we can then extract
     # strains.
-    transformation_matrix_from_ref = transformation_matrix @ np.linalg.inv(transformation_matrix_ref)
+    transformation_matrix_from_ref = transformation_matrix @ np.linalg.inv(
+        transformation_matrix_ref
+    )
     e11_fit_from_ref = transformation_matrix_from_ref[0, 0] - 1
     e22_fit_from_ref = transformation_matrix_from_ref[1, 1] - 1
-    e12_fit_from_ref = 0.5 * (transformation_matrix_from_ref[0, 1] + transformation_matrix_from_ref[1, 0])
+    e12_fit_from_ref = 0.5 * (
+        transformation_matrix_from_ref[0, 1] + transformation_matrix_from_ref[1, 0]
+    )
 
-    print("\nThe fit will not be exact as we are fitting the image, not points.\nStrain with respect to perfect circle:")
+    print(
+        "\nThe fit will not be exact as we are fitting the image, not points.\nStrain with respect to perfect circle:"
+    )
     print(f"e11 = {e11:.3f}, e11_fit = {e11_fit:.3f}")
     print(f"e22 = {e22:.3f}, e22_fit = {e22_fit:.3f}")
     print(f"e12 = {e12:.3f}, e12_fit = {e12_fit:.3f}")
-    print('Strain with respect to reference ellipse:')
+    print("Strain with respect to reference ellipse:")
     print(f"e11 = {e11:.3f}, e11_fit_from_ref = {e11_fit_from_ref:.3f}")
     print(f"e22 = {e22:.3f}, e22_fit_from_ref = {e22_fit_from_ref:.3f}")
     print(f"e12 = {e12:.3f}, e12_fit_from_ref = {e12_fit_from_ref:.3f}")
-    print('These values should be the same as the input values. ')
+    print("These values should be the same as the input values. ")
 
 
 if make_data:
