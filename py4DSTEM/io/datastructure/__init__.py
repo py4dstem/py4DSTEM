@@ -5,3 +5,5 @@ from .diffraction import *
 from .real import *
 from .pointlist import *
 from .metadata import *
+from .coordinates import *
+
