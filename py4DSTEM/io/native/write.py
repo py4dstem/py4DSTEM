@@ -10,7 +10,7 @@ from os import remove as rm
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from .metadata import metadata_to_h5
 from ..datastructure import DataCube, DiffractionSlice, RealSlice, CountedDataCube
-from ..datastructure import DataObject, PointList, PointListArray, Metadata
+from ..datastructure import DataObject, PointList, PointListArray, Metadata, Coordinates
 from ...process.utils import tqdmnd
 from ...version import __version__
 
@@ -76,7 +76,8 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     grp_rs = group_data.create_group("realslices")
     grp_pl = group_data.create_group("pointlists")
     grp_pla = group_data.create_group("pointlistarrays")
-    ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla = 0,0,0,0,0,0
+    grp_coords = group_data.create_group("coordinates")
+    ind_dcs, ind_cdcs, ind_dfs, ind_rls, ind_ptl, ind_ptla, ind_coords = 0,0,0,0,0,0,0
 
     # Make metadata group and identify any metadata, either passed as arguments or attached to DataCubes
     grp_md = grp_top.create_group("metadata")
@@ -110,7 +111,9 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
             'PointList':['pointlist_',ind_ptl,grp_pl,
                                 save_pointlist_group],
             'PointListArray':['pointlistarray_',ind_ptla,grp_pla,
-                                       save_pointlistarray_group]
+                                       save_pointlistarray_group],
+            'Coordinates':['coordinates_',ind_coords,grp_coords,
+                                       save_coordinates_group]
              }
     for dataobject in dataobject_list:
         name = dataobject.name
@@ -336,6 +339,33 @@ def save_pointlistarray_group(group, pointlistarray):
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
         dset[i,j] = pointlistarray.get_pointlist(i,j).data
 
+
+def save_coordinates_group(group, coordinates):
+
+    group.attrs.create("depth", diffractionslice.depth)
+    data_diffractionslice = group.create_dataset("data", data=diffractionslice.data)
+
+    shape = diffractionslice.data.shape
+    assert len(shape)==2 or len(shape)==3
+
+    # Dimensions 1 and 2
+    Q_Nx,Q_Ny = shape[:2]
+    dim1 = group.create_dataset("dim1",(Q_Nx,))
+    dim2 = group.create_dataset("dim2",(Q_Ny,))
+
+    # Populate uncalibrated dimensional axes
+    dim1[...] = np.arange(0,Q_Nx)
+    dim1.attrs.create("name",np.string_("Q_x"))
+    dim1.attrs.create("units",np.string_("[pix]"))
+    dim2[...] = np.arange(0,Q_Ny)
+    dim2.attrs.create("name",np.string_("Q_y"))
+    dim2.attrs.create("units",np.string_("[pix]"))
+
+    # TODO: Calibrate axes, if calibrations are present
+
+    # Dimension 3
+    if len(shape)==3:
+        dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
 
 
 
