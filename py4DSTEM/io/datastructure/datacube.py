@@ -228,6 +228,51 @@ class DataCube(DataObject):
         return virtualimage.get_virtual_image_annular_CoMY(self,slice_x,slice_y,R)
 
 
+
+def save_datacube_group(group, datacube, use_compression=False):
+    """
+    Expects an open .h5 group and a DataCube; saves the DataCube to the group
+    """
+    group.attrs.create("emd_group_type",1)
+    if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
+        if use_compression:
+            data_datacube = group.create_dataset("data", data=datacube.data,
+                chunks=(1,1,datacube.Q_Nx,datacube.Q_Ny),compression='gzip')
+        else:
+            data_datacube = group.create_dataset("data", data=datacube.data)
+    else:
+        # handle K2DataArray datacubes
+        data_datacube = datacube.data._write_to_hdf5(group)
+
+    # Dimensions
+    assert len(data_datacube.shape)==4, "Shape of datacube is {}".format(len(data_datacube))
+    R_Nx,R_Ny,Q_Nx,Q_Ny = data_datacube.shape
+    data_R_Nx = group.create_dataset("dim1",(R_Nx,))
+    data_R_Ny = group.create_dataset("dim2",(R_Ny,))
+    data_Q_Nx = group.create_dataset("dim3",(Q_Nx,))
+    data_Q_Ny = group.create_dataset("dim4",(Q_Ny,))
+
+    # Populate uncalibrated dimensional axes
+    data_R_Nx[...] = np.arange(0,R_Nx)
+    data_R_Nx.attrs.create("name",np.string_("R_x"))
+    data_R_Nx.attrs.create("units",np.string_("[pix]"))
+    data_R_Ny[...] = np.arange(0,R_Ny)
+    data_R_Ny.attrs.create("name",np.string_("R_y"))
+    data_R_Ny.attrs.create("units",np.string_("[pix]"))
+    data_Q_Nx[...] = np.arange(0,Q_Nx)
+    data_Q_Nx.attrs.create("name",np.string_("Q_x"))
+    data_Q_Nx.attrs.create("units",np.string_("[pix]"))
+    data_Q_Ny[...] = np.arange(0,Q_Ny)
+    data_Q_Ny.attrs.create("name",np.string_("Q_y"))
+    data_Q_Ny.attrs.create("units",np.string_("[pix]"))
+
+    # TODO: Calibrate axes, if calibrations are present
+
+
+
+
+
+
 ########################## END OF DATACUBE OBJECT ########################
 
 class CountedDataCube(DataObject):

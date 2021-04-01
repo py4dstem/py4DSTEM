@@ -6,10 +6,11 @@ import h5py
 import numpy as np
 from .read_utils import is_py4DSTEM_file
 from .read_utils import get_N_dataobjects, get_py4DSTEM_topgroups
-from .write import save_datacube_group, save_diffraction_group, save_real_group
+from .write import save_diffraction_group, save_real_group
 from .write import save_pointlist_group, save_pointlistarray_group
 from .write import save_counted_datacube_group
 from .metadata import metadata_to_h5
+from ..datastructure import save_datacube_group
 from ..datastructure import DataObject,Metadata,DataCube
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
