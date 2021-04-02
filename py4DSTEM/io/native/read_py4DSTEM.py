@@ -14,7 +14,7 @@ from .legacy import read_v070,read_v060,read_v050
 
 def read_py4DSTEM(filepath, metadata=False, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.9.0+.  Precise behavior is
+    File reader for py4DSTEM formated .h5 files.  Precise behavior is
     detemined by which arguments are passed -- see below.
 
     Accepts:

@@ -78,8 +78,9 @@ def get_N_dataobjects(filepath, topgroup='4DSTEM_experiment'):
         N_rs = len(f[topgroup]['data/realslices'].keys())
         N_pl = len(f[topgroup]['data/pointlists'].keys())
         N_pla = len(f[topgroup]['data/pointlistarrays'].keys())
-        N_do = N_dc+N_cdc+N_ds+N_rs+N_pl+N_pla
-        return N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do
+        N_coords = len(f[topgroup]['data/coordinates'].keys())
+        N_do = N_dc+N_cdc+N_ds+N_rs+N_pl+N_pla+N_coords
+        return N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_coords,N_do
 
 def get_py4DSTEM_dataobject_info(filepath, topgroup='4DSTEM_experiment'):
     """ Returns a numpy structured array with basic metadata for all contained dataobjects.
@@ -97,6 +98,8 @@ def get_py4DSTEM_dataobject_info(filepath, topgroup='4DSTEM_experiment'):
         grp_rs = f[topgroup+'/data/realslices/']
         grp_pl = f[topgroup+'/data/pointlists/']
         grp_pla = f[topgroup+'/data/pointlistarrays/']
+        #grp_coords = f[topgroup+'/data/coordinates/']
+        #N = len(grp_dc)+len(grp_cdc)+len(grp_ds)+len(grp_rs)+len(grp_pl)+len(grp_pla)+len(grp_coords)
         N = len(grp_dc)+len(grp_cdc)+len(grp_ds)+len(grp_rs)+len(grp_pl)+len(grp_pla)
         info = np.zeros(N,dtype=[('index',int),('type','U16'),('shape',tuple),('name','U64')])
         for name in sorted(grp_dc.keys()):
@@ -134,6 +137,11 @@ def get_py4DSTEM_dataobject_info(filepath, topgroup='4DSTEM_experiment'):
             dtype = 'PointListArray'
             info[i] = i,dtype,shape,name
             i += 1
+        #for name in sorted(grp_coords.keys()):
+        #    shape=0 #TODO?
+        #    dtype = 'Coordinates'
+        #    info[i] = i,dtype,shape,name
+        #    i += 1
 
     return info
 
