@@ -134,30 +134,15 @@ def save_coordinates_group(group, coordinates):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
     """
-    group.attrs.create("depth", diffractionslice.depth)
-    data_diffractionslice = group.create_dataset("data", data=diffractionslice.data)
+    keys,datakeys = dir(coordinates),[]
+    for key in keys:
+        if (key[0]!='_') and (key[:4] not in ('get_','set_','sort','show','name')):
+            datakeys.append(key)
 
-    shape = diffractionslice.data.shape
-    assert len(shape)==2 or len(shape)==3
+    for key in datakeys:
+        data = vars(coordinates)[key]
+        group.create_dataset(key, data=data)
 
-    # Dimensions 1 and 2
-    Q_Nx,Q_Ny = shape[:2]
-    dim1 = group.create_dataset("dim1",(Q_Nx,))
-    dim2 = group.create_dataset("dim2",(Q_Ny,))
-
-    # Populate uncalibrated dimensional axes
-    dim1[...] = np.arange(0,Q_Nx)
-    dim1.attrs.create("name",np.string_("Q_x"))
-    dim1.attrs.create("units",np.string_("[pix]"))
-    dim2[...] = np.arange(0,Q_Ny)
-    dim2.attrs.create("name",np.string_("Q_y"))
-    dim2.attrs.create("units",np.string_("[pix]"))
-
-    # TODO: Calibrate axes, if calibrations are present
-
-    # Dimension 3
-    if len(shape)==3:
-        dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
 
 
 
