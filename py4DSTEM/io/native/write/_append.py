@@ -5,8 +5,7 @@
 import h5py
 import numpy as np
 from os.path import exists
-from ..read import is_py4DSTEM_file
-from ..read import get_N_dataobjects, get_py4DSTEM_topgroups
+from ..read import is_py4DSTEM_file, get_N_dataobjects, get_py4DSTEM_topgroups
 from ..metadata import metadata_to_h5
 from ...datastructure import save_datacube_group
 from ...datastructure import save_diffraction_group

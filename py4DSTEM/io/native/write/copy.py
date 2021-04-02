@@ -7,8 +7,8 @@ from os.path import exists, dirname, basename
 from .write import save
 from ._append import _append
 from ..read import is_py4DSTEM_file, get_py4DSTEM_topgroups
-from ..read import get_N_dataobjects, get_py4DSTEM_dataobject_info
-from ..read import read_py4DSTEM
+from ..read import get_N_dataobjects, read_py4DSTEM
+from ..read.read_v0_12 import get_py4DSTEM_dataobject_info
 from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ...datastructure import DataObject
@@ -40,7 +40,7 @@ def copy(filepath_orig, filepath_new, indices=None, delete=False,
 
     # Determine what needs to be copied
     if indices is None:
-        _,_,_,_,_,_,N = get_N_dataobjects(filepath_orig,topgroup_orig)
+        _,_,_,_,_,_,_,N = get_N_dataobjects(filepath_orig,topgroup_orig)
         indices = list(np.arange(N))
     else:
         if isinstance(indices, int):
