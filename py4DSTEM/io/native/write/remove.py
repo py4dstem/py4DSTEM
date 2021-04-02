@@ -4,7 +4,7 @@ from os import rename
 from os.path import exists, dirname, basename
 from .copy import copy
 from ..read import is_py4DSTEM_file, get_py4DSTEM_topgroups
-from ..read import get_py4DSTEM_dataobject_info
+from ..read.read_v0_12 import get_py4DSTEM_dataobject_info
 
 def remove(filepath, data, topgroup='4DSTEM_experiment', delete=True):
     """
