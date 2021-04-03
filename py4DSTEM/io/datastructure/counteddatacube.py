@@ -203,6 +203,9 @@ def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
     return dp
 
 
+
+### Read/Write
+
 def save_counted_datacube_group(group,datacube):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
@@ -261,6 +264,12 @@ def save_counted_datacube_group(group,datacube):
     data_Q_Ny[...] = np.arange(0,Q_Ny)
     data_Q_Ny.attrs.create("name",np.string_("Q_y"))
     data_Q_Ny.attrs.create("units",np.string_("[pix]"))
+
+def get_counted_datacube_from_grp(g):
+    """ Accepts an h5py Group corresponding to a counted datacube in an open, correctly formatted H5 file,
+        and returns a CountedDataCube.
+    """
+    return #TODO
 
 
 

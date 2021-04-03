@@ -228,6 +228,7 @@ class DataCube(DataObject):
         return virtualimage.get_virtual_image_annular_CoMY(self,slice_x,slice_y,R)
 
 
+### Read/Write
 
 def save_datacube_group(group, datacube, use_compression=False):
     """
@@ -268,6 +269,15 @@ def save_datacube_group(group, datacube, use_compression=False):
 
     # TODO: Calibrate axes, if calibrations are present
 
+
+def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
+        and returns a DataCube.
+    """
+    # TODO: add memmapping, binning
+    data = np.array(g['data'])
+    name = g.name.split('/')[-1]
+    return DataCube(data=data,name=name)
 
 
 

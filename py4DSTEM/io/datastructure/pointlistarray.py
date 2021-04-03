@@ -97,6 +97,10 @@ class PointListArray(DataObject):
 
         return new_pointlistarray
 
+
+
+### Read/Write
+
 def save_pointlistarray_group(group, pointlistarray):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
@@ -115,5 +119,18 @@ def save_pointlistarray_group(group, pointlistarray):
 
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
         dset[i,j] = pointlistarray.get_pointlist(i,j).data
+
+def get_pointlistarray_from_grp(g):
+    """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
+        and returns a PointListArray.
+    """
+    name = g.name.split('/')[-1]
+    dset = g['data']
+    shape = g['data'].shape
+    coordinates = g['data'][0,0].dtype
+    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
+        pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+    return pla
 
 
