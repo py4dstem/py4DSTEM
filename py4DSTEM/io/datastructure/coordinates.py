@@ -139,7 +139,7 @@ class Coordinates(DataObject):
     def _validate_input(self,p):
         assert isinstance(p,Number) or isinstance(p,np.ndarray)
         if isinstance(p,np.ndarray):
-            assert p.shape == (self.R_Nx,self.R_Ny)
+            assert p.shape == (self.R_Nx,self.R_Ny) or len(p.shape)==0
     def _get_value(self,p,rx=None,ry=None):
         try:
             assert isinstance(p,Number) or isinstance(p,np.ndarray)
@@ -187,7 +187,7 @@ def get_coordinates_from_grp(g):
     for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny','Q_pixel_units','R_pixel_units'):
         del data[key]
     for key in data.keys():
-        vars(coordinates)['set_'+key](data[key])
+        getattr(coordinates,'set_'+key)(data[key])
 
     coordinates.name = name
     return coordinates
