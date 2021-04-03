@@ -39,6 +39,8 @@ class DiffractionSlice(DataSlice):
                            slicelabels=slicelabels, **kwargs)
 
 
+### Read/Write
+
 def save_diffraction_group(group, diffractionslice):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
@@ -67,6 +69,23 @@ def save_diffraction_group(group, diffractionslice):
     # Dimension 3
     if len(shape)==3:
         dim3 = group.create_dataset("dim3", data=np.array(diffractionslice.slicelabels).astype("S64"))
+
+def get_diffractionslice_from_grp(g):
+    """ Accepts an h5py Group corresponding to a diffractionslice in an open, correctly formatted H5 file,
+        and returns a DiffractionSlice.
+    """
+    data = np.array(g['data'])
+    name = g.name.split('/')[-1]
+    Q_Nx,Q_Ny = data.shape[:2]
+    if len(data.shape)==2:
+        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name)
+    else:
+        lbls = g['dim3']
+        if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
+            with lbls.astype('S64'):
+                lbls = lbls[:]
+            lbls = [lbl.decode('UTF-8') for lbl in lbls]
+        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name,slicelabels=lbls)
 
 
 

@@ -191,6 +191,9 @@ class PointList(DataObject):
 
         return PointList(coordinates=coords, data=data)
 
+
+### Read/Write
+
 def save_pointlist_group(group, pointlist):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
@@ -205,6 +208,26 @@ def save_pointlist_group(group, pointlist):
         group_current_coord = group.create_group(name)
         group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
         group_current_coord.create_dataset("data", data=pointlist.data[name])
+
+def get_pointlist_from_grp(g):
+    """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
+        and returns a PointList.
+    """
+    name = g.name.split('/')[-1]
+    coordinates = []
+    coord_names = list(g.keys())
+    length = len(g[coord_names[0]+'/data'])
+    if length==0:
+        for coord in coord_names:
+            coordinates.append((coord,None))
+    else:
+        for coord in coord_names:
+            dtype = type(g[coord+'/data'][0])
+            coordinates.append((coord, dtype))
+    data = np.zeros(length,dtype=coordinates)
+    for coord in coord_names:
+        data[coord] = np.array(g[coord+'/data'])
+    return PointList(data=data,coordinates=coordinates,name=name)
 
 
 

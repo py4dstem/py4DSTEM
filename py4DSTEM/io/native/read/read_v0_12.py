@@ -5,8 +5,12 @@ import numpy as np
 from os.path import splitext, exists
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
 from .read_utils_v0_12 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
-from ...datastructure import PointList, PointListArray
+from ...datastructure import DataCube, get_datacube_from_grp
+from ...datastructure import CountedDataCube, get_counted_datacube_from_grp
+from ...datastructure import DiffractionSlice, get_diffractionslice_from_grp
+from ...datastructure import RealSlice, get_realslice_from_grp
+from ...datastructure import PointList, get_pointlist_from_grp
+from ...datastructure import PointListArray, get_pointlistarray_from_grp
 from ....process.utils import tqdmnd
 
 def read_v0_12(fp, **kwargs):
@@ -110,24 +114,7 @@ def read_v0_12(fp, **kwargs):
         return
 
 
-
-
-
-
-
-
-
-############ Helper functions ############
-
-def print_py4DSTEM_file(filepath,tg):
-    """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
-    """
-    info = get_py4DSTEM_dataobject_info(filepath,tg)
-    print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
-    print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
-    for el in info:
-        print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
-    return
+###### Get data ######
 
 def get_data(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a filepath to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
@@ -233,87 +220,19 @@ def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     else:
         raise Exception('Unrecognized data object type {}'.format(dtype))
 
-def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
-    """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
-        and returns a DataCube.
-    """
-    # TODO: add memmapping, binning
-    data = np.array(g['data'])
-    name = g.name.split('/')[-1]
-    return DataCube(data=data,name=name)
 
-def get_counted_datacube_from_grp(g):
-    """ Accepts an h5py Group corresponding to a counted datacube in an open, correctly formatted H5 file,
-        and returns a CountedDataCube.
-    """
-    return #TODO
+# Print to screen
 
-def get_diffractionslice_from_grp(g):
-    """ Accepts an h5py Group corresponding to a diffractionslice in an open, correctly formatted H5 file,
-        and returns a DiffractionSlice.
+def print_py4DSTEM_file(filepath,tg):
+    """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
     """
-    data = np.array(g['data'])
-    name = g.name.split('/')[-1]
-    Q_Nx,Q_Ny = data.shape[:2]
-    if len(data.shape)==2:
-        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name)
-    else:
-        lbls = g['dim3']
-        if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            with lbls.astype('S64'):
-                lbls = lbls[:]
-            lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name,slicelabels=lbls)
+    info = get_py4DSTEM_dataobject_info(filepath,tg)
+    print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
+    print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
+    for el in info:
+        print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
+    return
 
-def get_realslice_from_grp(g):
-    """ Accepts an h5py Group corresponding to a realslice in an open, correctly formatted H5 file,
-        and returns a RealSlice.
-    """
-    data = np.array(g['data'])
-    name = g.name.split('/')[-1]
-    R_Nx,R_Ny = data.shape[:2]
-    if len(data.shape)==2:
-        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name)
-    else:
-        lbls = g['dim3']
-        if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            with lbls.astype('S64'):
-                lbls = lbls[:]
-            lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name,slicelabels=lbls)
-
-def get_pointlist_from_grp(g):
-    """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
-        and returns a PointList.
-    """
-    name = g.name.split('/')[-1]
-    coordinates = []
-    coord_names = list(g.keys())
-    length = len(g[coord_names[0]+'/data'])
-    if length==0:
-        for coord in coord_names:
-            coordinates.append((coord,None))
-    else:
-        for coord in coord_names:
-            dtype = type(g[coord+'/data'][0])
-            coordinates.append((coord, dtype))
-    data = np.zeros(length,dtype=coordinates)
-    for coord in coord_names:
-        data[coord] = np.array(g[coord+'/data'])
-    return PointList(data=data,coordinates=coordinates,name=name)
-
-def get_pointlistarray_from_grp(g):
-    """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
-        and returns a PointListArray.
-    """
-    name = g.name.split('/')[-1]
-    dset = g['data']
-    shape = g['data'].shape
-    coordinates = g['data'][0,0].dtype
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
-    for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-        pla.get_pointlist(i,j).add_dataarray(dset[i,j])
-    return pla
 
 
 
