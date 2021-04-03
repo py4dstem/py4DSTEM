@@ -1,5 +1,6 @@
 import numpy as np
 from numbers import Number
+import h5py
 from .dataobject import DataObject
 
 class Coordinates(DataObject):
@@ -26,8 +27,8 @@ class Coordinates(DataObject):
     will retrieve the value p if p is a number, and the value p[rx,ry] if p is an array.
     """
     def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny,
-                 Q_pixel_size=1,Q_pixel_units='pixels',R_pixel_size=1,R_pixel_units='pixels',
-                 qx0=None,qy0=None,e=None,theta=None,
+                 Q_pixel_size=1,Q_pixel_units='pixels',
+                 R_pixel_size=1,R_pixel_units='pixels',
                  **kwargs):
         """
         Initialize a coordinate system.
@@ -49,67 +50,73 @@ class Coordinates(DataObject):
         """
         DataObject.__init__(self, **kwargs)
 
-        self.Q_Nx,self.Q_Ny = Q_Nx,Q_Ny
-        self.R_Nx,self.R_Ny = R_Nx,R_Ny
+        # Define the data items that can be stored
+        datakeys = ('R_Nx',
+                    'R_Ny',
+                    'Q_Nx',
+                    'Q_Ny',
+                    'R_pixel_size',
+                    'Q_pixel_size',
+                    'qx0',
+                    'qy0',
+                    'e',
+                    'theta')
+
+        # Construct get/set functions
+        for key in datakeys:
+            setattr(self,'set_'+key,self.set_constructor(key))
+            setattr(self,'get_'+key,self.get_constructor(key))
+
+        # Set attributes
+        self.set_R_Nx(R_Nx)
+        self.set_R_Ny(R_Ny)
+        self.set_Q_Nx(Q_Nx)
+        self.set_Q_Ny(Q_Ny)
         self.set_Q_pixel_size(Q_pixel_size)
         self.set_Q_pixel_units(Q_pixel_units)
         self.set_R_pixel_size(R_pixel_size)
         self.set_R_pixel_units(R_pixel_units)
-        if qx0 is not None: self.set_qx0(qx0)
-        if qy0 is not None: self.set_qy0(qy0)
-        if e is not None: self.set_e(e)
-        if theta is not None: self.set_theta(theta)
 
+        # Set attributes passed as kwargs
+        for key,val in kwargs.items():
+            try:
+                vars(self)['set_'+key](val)
+            except:
+                KeyError
 
-    def set_Q_pixel_size(self,Q_pixel_size):
-        self.Q_pixel_size = Q_pixel_size
+    # Special get/set functions
     def set_Q_pixel_units(self,Q_pixel_units):
         self.Q_pixel_units = Q_pixel_units
-    def set_R_pixel_size(self,R_pixel_size):
-        self.R_pixel_size = R_pixel_size
     def set_R_pixel_units(self,R_pixel_units):
         self.R_pixel_units = R_pixel_units
-    def set_qx0(self,qx0):
-        self._validate_input(qx0)
-        self.qx0 = qx0
-    def set_qy0(self,qy0):
-        self._validate_input(qy0)
-        self.qy0 = qy0
     def set_origin(self,qx0,qy0):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
-    def set_e(self,e):
-        self._validate_input(e)
-        self.e = e
-    def set_theta(self,theta):
-        self._validate_input(theta)
-        self.theta = theta
     def set_ellipse(self,e,theta):
         self._validate_input(e)
         self._validate_input(theta)
         self.e,self.theta = e,theta
 
-    def get_Q_pixel_size(self):
-        return self._get_value(self.Q_pixel_size)
     def get_Q_pixel_units(self):
         return self._get_value(self.Q_pixel_units)
-    def get_R_pixel_size(self):
-        return self._get_value(self.R_pixel_size)
     def get_R_pixel_units(self):
         return self._get_value(self.R_pixel_units)
-    def get_qx0(self,rx=None,ry=None):
-        return self._get_value(self.qx0,rx,ry)
-    def get_qy0(self,rx=None,ry=None):
-        return self._get_value(self.qy0,rx,ry)
     def get_center(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
-    def get_e(self,rx=None,ry=None):
-        return self._get_value(self.e,rx,ry)
-    def get_theta(self,rx=None,ry=None):
-        return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
         return self.get_e(rx,ry),self.get_theta(rx,ry)
+
+    # Get/set constructors
+    def set_constructor(self,key):
+        def fn(val):
+            self._validate_input(val)
+            vars(self)[key] = val
+        return fn
+    def get_constructor(self,key):
+        def fn(rx=None,ry=None):
+            return self._get_value(vars(self)[key],rx,ry)
+        return fn
 
     def _validate_input(self,p):
         assert isinstance(p,Number) or isinstance(p,np.ndarray)
@@ -130,6 +137,9 @@ class Coordinates(DataObject):
             return None
 
 
+
+### Read/Write
+
 def save_coordinates_group(group, coordinates):
     """
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
@@ -142,6 +152,33 @@ def save_coordinates_group(group, coordinates):
     for key in datakeys:
         data = vars(coordinates)[key]
         group.create_dataset(key, data=data)
+
+def get_coordinates_from_grp(g):
+    """ Accepts an h5py Group corresponding to a Coordinates instance in an open,
+        correctly formatted H5 file, and returns the instance.
+    """
+    name = g.name.split('/')[-1]
+    data = dict()
+    for key in g.keys():
+        data[key] = np.array(g[key])
+        if len(data[key].shape)==0:
+            data[key] = data[key][0]
+    dimensionkeys = ('R_Nx','R_Ny','Q_Nx','Q_Ny')
+    for key in dimensionkeys:
+        if key not in data.keys():
+            data[key] = 1
+    coordinates = Coordinates(dimensionkeys[0],dimensionkeys[1],
+                              dimensionkeys[2],dimensionkeys[2])
+    for key in dimensionkeys:
+        del data[key]
+    #for key in data.keys():
+    #    coordinates.
+
+
+
+
+    coordinates.name = name
+    return coordinates
 
 
 
