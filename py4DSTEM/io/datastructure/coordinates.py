@@ -117,11 +117,11 @@ class Coordinates(DataObject):
     def get_Q_pixel_size(self):
         return self._get_value(self.Q_pixel_size)
     def get_Q_pixel_units(self):
-        return self._get_value(self.Q_pixel_units)
+        return self.Q_pixel_units
     def get_R_pixel_size(self):
         return self._get_value(self.R_pixel_size)
     def get_R_pixel_units(self):
-        return self._get_value(self.R_pixel_units)
+        return self.R_pixel_units
     def get_qx0(self,rx=None,ry=None):
         return self._get_value(self.qx0,rx,ry)
     def get_qy0(self,rx=None,ry=None):
@@ -179,12 +179,15 @@ def get_coordinates_from_grp(g):
     data = dict()
     for key in g.keys():
         data[key] = np.array(g[key])
+        if len(data[key].shape) == 0:
+            data[key] = data[key].item()
     for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny'):
         if key not in data.keys():
             data[key] = 1
     coordinates = Coordinates(data['R_Nx'],data['R_Ny'],data['Q_Nx'],data['Q_Ny'])
-    # TODO set pixel units here
-    for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny','Q_pixel_units','R_pixel_units'):
+    coordinates.R_pixel_units = str(data['R_pixel_units'])
+    coordinates.Q_pixel_units = str(data['Q_pixel_units'])
+    for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny','R_pixel_units','Q_pixel_units'):
         del data[key]
     for key in data.keys():
         getattr(coordinates,'set_'+key)(data[key])
