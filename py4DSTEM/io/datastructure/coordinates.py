@@ -50,23 +50,6 @@ class Coordinates(DataObject):
         """
         DataObject.__init__(self, **kwargs)
 
-        # Define the data items that can be stored
-        datakeys = ('R_Nx',
-                    'R_Ny',
-                    'Q_Nx',
-                    'Q_Ny',
-                    'R_pixel_size',
-                    'Q_pixel_size',
-                    'qx0',
-                    'qy0',
-                    'e',
-                    'theta')
-
-        # Construct get/set functions
-        for key in datakeys:
-            setattr(self,'set_'+key,self.set_constructor(key))
-            setattr(self,'get_'+key,self.get_constructor(key))
-
         # Set attributes
         self.set_R_Nx(R_Nx)
         self.set_R_Ny(R_Ny)
@@ -79,44 +62,79 @@ class Coordinates(DataObject):
 
         # Set attributes passed as kwargs
         for key,val in kwargs.items():
+            #vars(self)['set_'+key](val)
             try:
-                vars(self)['set_'+key](val)
-            except:
-                KeyError
+                getattr(self,'set_'+key)(val)
+            except AttributeError:
+                pass
 
     # Special get/set functions
+    def set_R_Nx(self,R_Nx):
+        self.R_Nx = R_Nx
+    def set_R_Ny(self,R_Ny):
+        self.R_Ny = R_Ny
+    def set_Q_Nx(self,Q_Nx):
+        self.Q_Nx = Q_Nx
+    def set_Q_Ny(self,Q_Ny):
+        self.Q_Ny = Q_Ny
+    def set_Q_pixel_size(self,Q_pixel_size):
+        self.Q_pixel_size = Q_pixel_size
     def set_Q_pixel_units(self,Q_pixel_units):
         self.Q_pixel_units = Q_pixel_units
+    def set_R_pixel_size(self,R_pixel_size):
+        self.R_pixel_size = R_pixel_size
     def set_R_pixel_units(self,R_pixel_units):
         self.R_pixel_units = R_pixel_units
+    def set_qx0(self,qx0):
+        self._validate_input(qx0)
+        self.qx0 = qx0
+    def set_qy0(self,qy0):
+        self._validate_input(qy0)
+        self.qy0 = qy0
     def set_origin(self,qx0,qy0):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
+    def set_e(self,e):
+        self._validate_input(e)
+        self.e = e
+    def set_theta(self,theta):
+        self._validate_input(theta)
+        self.theta = theta
     def set_ellipse(self,e,theta):
         self._validate_input(e)
         self._validate_input(theta)
         self.e,self.theta = e,theta
 
+    def get_R_Nx(self):
+        return self.R_Nx
+    def get_R_Ny(self):
+        return self.R_Ny
+    def get_Q_Nx(self):
+        return self.Q_Nx
+    def get_Q_Ny(self):
+        return self.Q_Ny
+    def get_Q_pixel_size(self):
+        return self._get_value(self.Q_pixel_size)
     def get_Q_pixel_units(self):
         return self._get_value(self.Q_pixel_units)
+    def get_R_pixel_size(self):
+        return self._get_value(self.R_pixel_size)
     def get_R_pixel_units(self):
         return self._get_value(self.R_pixel_units)
+    def get_qx0(self,rx=None,ry=None):
+        return self._get_value(self.qx0,rx,ry)
+    def get_qy0(self,rx=None,ry=None):
+        return self._get_value(self.qy0,rx,ry)
     def get_center(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
+    def get_e(self,rx=None,ry=None):
+        return self._get_value(self.e,rx,ry)
+    def get_theta(self,rx=None,ry=None):
+        return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
         return self.get_e(rx,ry),self.get_theta(rx,ry)
 
-    # Get/set constructors
-    def set_constructor(self,key):
-        def fn(val):
-            self._validate_input(val)
-            vars(self)[key] = val
-        return fn
-    def get_constructor(self,key):
-        def fn(rx=None,ry=None):
-            return self._get_value(vars(self)[key],rx,ry)
-        return fn
 
     def _validate_input(self,p):
         assert isinstance(p,Number) or isinstance(p,np.ndarray)
@@ -161,21 +179,15 @@ def get_coordinates_from_grp(g):
     data = dict()
     for key in g.keys():
         data[key] = np.array(g[key])
-        if len(data[key].shape)==0:
-            data[key] = data[key][0]
-    dimensionkeys = ('R_Nx','R_Ny','Q_Nx','Q_Ny')
-    for key in dimensionkeys:
+    for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny'):
         if key not in data.keys():
             data[key] = 1
-    coordinates = Coordinates(dimensionkeys[0],dimensionkeys[1],
-                              dimensionkeys[2],dimensionkeys[2])
-    for key in dimensionkeys:
+    coordinates = Coordinates(data['R_Nx'],data['R_Ny'],data['Q_Nx'],data['Q_Ny'])
+    # TODO set pixel units here
+    for key in ('R_Nx','R_Ny','Q_Nx','Q_Ny','Q_pixel_units','R_pixel_units'):
         del data[key]
-    #for key in data.keys():
-    #    coordinates.
-
-
-
+    for key in data.keys():
+        vars(coordinates)['set_'+key](data[key])
 
     coordinates.name = name
     return coordinates

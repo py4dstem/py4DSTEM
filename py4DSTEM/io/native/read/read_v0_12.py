@@ -11,6 +11,7 @@ from ...datastructure import DiffractionSlice, get_diffractionslice_from_grp
 from ...datastructure import RealSlice, get_realslice_from_grp
 from ...datastructure import PointList, get_pointlist_from_grp
 from ...datastructure import PointListArray, get_pointlistarray_from_grp
+from ...datastructure import Coordinates, get_coordinates_from_grp
 from ....process.utils import tqdmnd
 
 def read_v0_12(fp, **kwargs):
@@ -137,7 +138,8 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlistarrays/']
-        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
+        grp_coords = f[tg+'/data/coordinates/']
+        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla,grp_coords]
 
         Ns = np.cumsum([len(grp.keys()) for grp in grps])
         i = np.nonzero(data_id<Ns)[0][0]
@@ -161,7 +163,8 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlistarrays/']
-        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
+        grp_coords = f[tg+'/data/coordinates/']
+        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla,grp_coords]
 
         l_dc = list(grp_dc.keys())
         l_cdc = list(grp_cdc.keys())
@@ -169,7 +172,8 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         l_rs = list(grp_rs.keys())
         l_pl = list(grp_pl.keys())
         l_pla = list(grp_pla.keys())
-        names = l_dc+l_cdc+l_ds+l_rs+l_pl+l_pla
+        l_coords = list(grp_coords.keys())
+        names = l_dc+l_cdc+l_ds+l_rs+l_pl+l_pla+l_coords
 
         inds = [i for i,name in enumerate(names) if name==data_id]
         assert(len(inds)!=0), "Error: no data named {} found.".format(data_id)
@@ -217,6 +221,8 @@ def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
         return get_pointlist_from_grp(g)
     elif dtype == 'pointlistarrays':
         return get_pointlistarray_from_grp(g)
+    elif dtype == 'coordinates':
+        return get_coordinates_from_grp(g)
     else:
         raise Exception('Unrecognized data object type {}'.format(dtype))
 
