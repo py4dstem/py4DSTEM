@@ -7,10 +7,10 @@ from numpy.ma import MaskedArray
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
-         power=1,bordercolor=None,borderwidth=5,returnfig=False,figax=None,
-         returnclipvals=False,returncax=False,
-         hist=False,n_bins=256,mask=None,mask_color='k',rectangle=None,
-         circle=None,annulus=None,ellipse=None,points=None,grid=None,**kwargs):
+         power=1,bordercolor=None,borderwidth=5,
+         returnclipvals=False,returncax=False,returnfig=False,figax=None,
+         hist=False,n_bins=256,mask=None,mask_color='k',
+         rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid=None,**kwargs):
     """
     General visualization function for 2D arrays.
 
