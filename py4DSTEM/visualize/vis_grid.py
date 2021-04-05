@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from .show import show,show_points
+from .overlay import add_grid_overlay
 
 def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
     """
@@ -39,6 +40,28 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwa
         return fig,ax
 
 def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
+                                            returnfig=False,**kwargs):
+    """
+    Shows the image with an overlaid boxgrid outline about the pixels
+    beginning at (x0,y0) and with extent xL,yL in the two directions.
+
+    Accepts:
+        image       the image array
+        x0,y0       the corner of the grid
+        xL,xL       the extent of the grid
+    """
+    fig,ax = show(image,returnfig=True,**kwargs)
+    add_grid_overlay(ax,d={'x0':x0,'y0':y0,'xL':xL,'yL':yL,
+                           'color':color,'linewidth':linewidth,'alpha':alpha})
+    plt.tight_layout()
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
+def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
                                             returnfig=False,**kwargs):
     """
     Shows the image with an overlaid boxgrid outline about the pixels

@@ -358,7 +358,51 @@ def add_points(ax,d):
     return
 
 
+def add_grid_overlay(ax,d):
+    """
+    adds an overlaid grid over some subset of pixels in an image
+    using the parameters in dictionary d.
 
-    #if grid is not None:
-    #    add_grid(ax,grid)
+    The dictionary d has required and optional parameters as follows:
+        x0,y0       (req'd) (ints) the corner of the grid
+        xL,xL       (req'd) (ints) the extent of the grid
+        color       (color)
+        linewidth   (number)
+        alpha       (number)
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # corner, extent
+    lims = [0,0,0,0]
+    for i,k in enumerate(('x0','y0','xL','yL')):
+        assert(k in d.keys()), "Error: add_grid_overlay expects keys 'x0','y0','xL','yL'"
+        lims[i] = d[k]
+    x0,y0,xL,yL = lims
+    # color
+    color = d['color'] if 'color' in d.keys() else 'k'
+    assert is_color_like(color)
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    assert isinstance(alpha,(Number))
+    # linewidth
+    linewidth = d['linewidth'] if 'linewidth' in d.keys() else 1
+    assert isinstance(linewidth,(Number))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x0','y0','xL','yL','color',
+                                            'alpha','linewidth')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the grid
+    yy,xx = np.meshgrid(np.arange(y0,y0+yL),np.arange(x0,x0+xL))
+    for xi in range(xL):
+        for yi in range(yL):
+            x,y = xx[xi,yi],yy[xi,yi]
+            rect = Rectangle((y-0.5,x-0.5),1,1,lw=linewidth,color=color,
+                             alpha=alpha,fill=False)
+            ax.add_patch(rect)
+    return
+
+
 
