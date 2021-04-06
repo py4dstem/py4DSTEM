@@ -405,4 +405,67 @@ def add_grid_overlay(ax,d):
     return
 
 
+def add_cartesian_grid(ax,d):
+    """
+    adds an overlaid cartesian coordinate grid over an image
+    using the parameters in dictionary d.
+
+    The dictionary d has required and optional parameters as follows:
+        x0,y0           (req'd) the origin
+        spacing         (req'd) spacing between major gridlines
+        lw              (number)
+        ls              (str)
+        color           (color)
+        label           (bool)
+        labelsize       (number)
+        labelcolor      (color)
+        alpha           (number)
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # origin and spacing
+    assert('x0' in d.keys())
+    assert('y0' in d.keys())
+    assert('spacing' in d.keys())
+    x0,y0,spacing = d['x0'],d['y0'],d['spacing']
+    # gridlines
+    lw = d['lw'] if 'lw' in d.keys() else 1
+    ls = d['ls'] if 'ls' in d.keys() else '-'
+    # color
+    color = d['color'] if 'color' in d.keys() else 'k'
+    assert is_color_like(color)
+    # labels
+    label = d['label'] if 'label' in d.keys() else False
+    labelsize = d['labelsize'] if 'labelsize' in d.keys() else 12
+    labelcolor = d['labelcolor'] if 'labelcolor' in d.keys() else 'k'
+    assert isinstance(label,bool)
+    assert isinstance(labelsize,Number)
+    assert is_color_like(labelcolor)
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    assert isinstance(alpha,(Number))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x0','y0','spacing','lw','ls',
+                        'color','label','labelsize','labelcolor','alpha')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the axes
+    #ax.vlines(...)
+    #ax.hlines(...)
+
+
+    return
+
+
+def add_polarelliptical_grid(ar,d):
+    return
+
+def add_rtheta_grid(ar,d):
+    return
+
+
+
+
 
