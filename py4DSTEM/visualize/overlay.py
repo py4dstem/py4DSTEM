@@ -4,6 +4,7 @@ from matplotlib.patches import Rectangle,Circle,Wedge,Ellipse
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from numbers import Number
+from math import log
 
 def add_rectangles(ax,d):
     """
@@ -412,7 +413,10 @@ def add_cartesian_grid(ax,d):
 
     The dictionary d has required and optional parameters as follows:
         x0,y0           (req'd) the origin
-        spacing         (req'd) spacing between major gridlines
+        Nx,Ny           (req'd) the image extent
+        spacing         (number) spacing between gridlines
+        pixelsize       (number)
+        pixelunits      (str)
         lw              (number)
         ls              (str)
         color           (color)
@@ -423,16 +427,24 @@ def add_cartesian_grid(ax,d):
     """
     # handle inputs
     assert isinstance(ax,Axes)
-    # origin and spacing
+    # origin
     assert('x0' in d.keys())
     assert('y0' in d.keys())
-    assert('spacing' in d.keys())
-    x0,y0,spacing = d['x0'],d['y0'],d['spacing']
+    x0,y0 = d['x0'],d['y0']
+    # image extent
+    assert('Nx' in d.keys())
+    assert('Ny' in d.keys())
+    Nx,Ny = d['Nx'],d['Ny']
+    assert x0<Nx and y0<Ny
+    # spacing, pixelsize, pixelunits
+    spacing = d['spacing'] if 'spacing' in d.keys() else None
+    pixelsize = d['pixelsize'] if 'pixelsize' in d.keys() else 1
+    pixelunits = d['pixelunits'] if 'pixelunits' in d.keys() else 'pixels'
     # gridlines
     lw = d['lw'] if 'lw' in d.keys() else 1
-    ls = d['ls'] if 'ls' in d.keys() else '-'
+    ls = d['ls'] if 'ls' in d.keys() else ':'
     # color
-    color = d['color'] if 'color' in d.keys() else 'k'
+    color = d['color'] if 'color' in d.keys() else 'w'
     assert is_color_like(color)
     # labels
     label = d['label'] if 'label' in d.keys() else False
@@ -442,7 +454,7 @@ def add_cartesian_grid(ax,d):
     assert isinstance(labelsize,Number)
     assert is_color_like(labelcolor)
     # alpha
-    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    alpha = d['alpha'] if 'alpha' in d.keys() else 0.35
     assert isinstance(alpha,(Number))
     # additional parameters
     kws = [k for k in d.keys() if k not in ('x0','y0','spacing','lw','ls',
@@ -451,18 +463,103 @@ def add_cartesian_grid(ax,d):
     for k in kws:
         kwargs[k] = d[k]
 
-    # add the axes
-    #ax.vlines(...)
-    #ax.hlines(...)
+    # Get the major grid-square size
+    if spacing is None:
+        D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
+        exp = int(log(D,10))
+        if np.sign(log(D,10))<0:
+            exp-=1
+        base = D/(10**exp)
+        if base>=1 and base<1.25:
+            _gridspacing=0.4
+        elif base>=1.25 and base<1.75:
+            _gridspacing=0.5
+        elif base>=1.75 and base<2.5:
+            _gridspacing=0.75
+        elif base>=2.5 and base<3.25:
+            _gridspacing=1
+        elif base>=3.25 and base<4.75:
+            _gridspacing=1.5
+        elif base>=4.75 and base<6:
+            _gridspacing=2
+        elif base>=6 and base<8:
+            _gridspacing=2.5
+        elif base>=8 and base<10:
+            _gridspacing=3
+        else:
+            raise Exception("how did this happen?? base={}".format(base))
+        gridspacing = _gridspacing * 10**exp
 
+    # Get positions for the major gridlines
+    xmin = (-x0)*pixelsize
+    xmax = (Nx-1-x0)*pixelsize
+    ymin = (-y0)*pixelsize
+    ymax = (Ny-1-y0)*pixelsize
+    xticksmajor = np.concatenate((-1*np.arange(0,np.abs(xmin),gridspacing)[1:][::-1],
+                                  np.arange(0,xmax,gridspacing)))
+    yticksmajor = np.concatenate((-1*np.arange(0,np.abs(ymin),gridspacing)[1:][::-1],
+                                  np.arange(0,ymax,gridspacing)))
+    xticklabels = xticksmajor.copy()
+    yticklabels = yticksmajor.copy()
+    xticksmajor = (xticksmajor-xmin)/pixelsize
+    yticksmajor = (yticksmajor-ymin)/pixelsize
+
+    # Get labels
+    exp_spacing = int(np.round(log(gridspacing,10),6))
+    if np.sign(log(gridspacing,10))<0:
+        exp_spacing-=1
+    base_spacing = gridspacing/(10**exp_spacing)
+    xticklabels = xticklabels/(10**exp_spacing)
+    yticklabels = yticklabels/(10**exp_spacing)
+    if exp_spacing == 1:
+        xticklabels *= 10
+        yticklabels *= 10
+    if _gridspacing in (0.4,0.75,1.5,2.5) and exp_spacing!=1:
+        xticklabels = ["{:.1f}".format(n) for n in xticklabels]
+        yticklabels = ["{:.1f}".format(n) for n in yticklabels]
+    else:
+        xticklabels = ["{:.0f}".format(n) for n in xticklabels]
+        yticklabels = ["{:.0f}".format(n) for n in yticklabels]
+
+    # Add the grid
+    ax.set_xticks(yticksmajor)
+    ax.set_yticks(xticksmajor)
+    ax.xaxis.set_ticks_position('bottom')
+    if label:
+        ax.set_xticklabels(yticklabels,size=labelsize,color=labelcolor)
+        ax.set_yticklabels(xticklabels,size=labelsize,color=labelcolor)
+        if exp_spacing in (0,1):
+            ax.set_xlabel(r"$q_y$ ("+pixelunits+")")
+            ax.set_ylabel(r"$q_x$ ("+pixelunits+")")
+        else:
+            ax.set_xlabel(r"$q_y$ ("+pixelunits+" e"+str(exp_spacing)+")")
+            ax.set_ylabel(r"$q_x$ ("+pixelunits+" e"+str(exp_spacing)+")")
+    else:
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+    ax.grid(linestyle=ls,linewidth=lw,color=color,alpha=alpha)
 
     return
+
+
+
+
+
+
+
+
+
+
+
 
 
 def add_polarelliptical_grid(ar,d):
     return
 
 def add_rtheta_grid(ar,d):
+    return
+
+def add_scalebar(ar,d):
     return
 
 

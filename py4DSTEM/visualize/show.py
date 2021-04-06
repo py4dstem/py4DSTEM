@@ -7,14 +7,18 @@ from numpy.ma import MaskedArray
 from numbers import Number
 from math import log
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
-from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid
+from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
 from ..io.datastructure import Coordinates
 
-def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
-         power=1,bordercolor=None,borderwidth=5,
+def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
+         min=None,max=None,power=1,bordercolor=None,borderwidth=5,
          returnclipvals=False,returncax=False,returnfig=False,figax=None,
          hist=False,n_bins=256,mask=None,mask_color='k',
-         rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid=None,**kwargs):
+         rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
+         cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
+         coordinates=None,rx=None,ry=None,space='Q',
+         pixelsize=None,pixelunits=None,x0=None,y0=None,e=None,theta=None,
+         **kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -66,16 +70,47 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         mask_color  (color) see 'mask'
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
-        Overlays    The following arguments generate overlays. If they are not None,
-                    they should be a dictionary, which is passed to the corresponding
-                    add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
-                    See those functions docstrings for acceptable dict params.
+        ---------------------------------Overlays-------------------------------
+
+        The following arguments generate overlays, including points, shapes,
+        scalebars, and coordinate grids. If they are not None,
+        they should be a dictionary, which is passed to the corresponding
+        add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
+
+                      ---------------Shapes and Points-------------
+
+        The shape/point overlays are below. See those functions' docstrings for
+        acceptable dict params.
 
         rectangle   (dictionary)
         circle
         ellipse
         points
-        grid
+        grid_overlay
+
+               ---------------Coordinate grids and Scalebars-------------
+
+        For coordinate systems and scalebars, as above, the argument passed to this
+        function should be a dictionary.  The passed dict may be empty, in which case
+        default formatting options will be used.
+
+        Additionally, the appropriate metadata is required.  This data is passed directly
+        to this function, and may be passed manually, or it may be fetched from a passed
+        Coordinates instance. If a coordinates instance is used, it may also
+        be necessary to specify a scan position (rx,ry) or the space ('Q' or 'R').
+        These should be passed directly to this function.
+
+        The coordinate/scalebar overlays are listed below.  See also the docstrings for
+        the correspondoing add_* functions for addition formatting options which may be
+        passed in these dictionaries.  Note that in those docstrings there are several
+        required paremeters -- these *do not* need to be passed by the user, and will be
+        selected automatically by this function.  The user-passed dict is only for
+        any desired optional formatting parameters.
+
+        cartesian_grid
+        polarelliptical_grid
+        rtheta_grid
+        scalebar
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -152,7 +187,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
 
-    # Add any overlays
+    # Add shape/point overlays
     if rectangle is not None:
         add_rectangles(ax,rectangle)
     if circle is not None:
@@ -161,8 +196,67 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
         add_annuli(ax,annulus)
     if ellipse is not None:
         add_ellipses(ax,ellipse)
-    if grid is not None:
-        add_grid(ax,grid)
+    if grid_overlay is not None:
+        add_grid_overly(ax,grid)
+
+    # Add cartesian grid
+    if cartesian_grid is not None:
+        # parse arguments
+        if coordinates is not None:
+            assert isinstance(coordinates,Coordinates)
+        assert space in ('Q','R')
+        if space == 'Q':
+            try:
+                pixelsize = pixelsize if pixelsize is not None else \
+                               coordinates.get_Q_pixel_size()
+            except AttributeError:
+                raise Exception("pixelsize must be specified, either in coordinates or manually")
+            try:
+                pixelunits = pixelunits if pixelunits is not None else \
+                               coordinates.get_Q_pixel_units()
+            except AttributeError:
+                raise Exception("pixelsize must be specified, either in coordinates or manually")
+            try:
+                x0 = x0 if x0 is not None else coordinates.get_qx0(rx,ry)
+            except AttributeError:
+                raise Exception("x0 must be specified, either in coordinates or manually")
+            try:
+                y0 = y0 if y0 is not None else coordinates.get_qy0(rx,ry)
+            except AttributeError:
+                raise Exception("y0 must be specified, either in coordinates or manually")
+        else:
+            try:
+                pixelsize = pixelsize if pixelsize is not None else \
+                               coordinates.get_R_pixel_size()
+            except AttributeError:
+                raise Exception("pixelsize must be specified, either in coordinates or manually")
+            try:
+                pixelunits = pixelunits if pixelunits is not None else \
+                               coordinates.get_Q_pixel_units()
+            except AttributeError:
+                raise Exception("pixelsize must be specified, either in coordinates or manually")
+        assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+
+        # Add the grid
+        cartesian_grid['x0'],cartesian_grid['y0']=x0,y0
+        cartesian_grid['Nx'],cartesian_grid['Ny']=ar.shape
+        add_cartesian_grid(ax,cartesian_grid)
+
+
+    # Add polarelliptical grid
+    if polarelliptical_grid is not None:
+        add_polarelliptical_grid(ax,grid)
+
+
+    # Add r-theta grid
+    if rtheta_grid is not None:
+        add_rtheta_grid(ax,grid)
+
+
+    # Add a scalebar
+    if scalebar is not None:
+        add_scaleber(ax,grid)
 
     # Add a border
     if bordercolor is not None:
@@ -372,14 +466,6 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
             xticklabels = ["{:.0f}".format(n) for n in xticklabels]
             yticklabels = ["{:.0f}".format(n) for n in yticklabels]
 
-        # Get minor gridline positions
-        #xticksminor = np.concatenate((-1*np.arange(0,np.abs(xmin),gridspacing/n_mg)[1:][::-1],
-        #                              np.arange(0,xmax,gridspacing)))
-        #yticksminor = np.concatenate((-1*np.arange(0,np.abs(ymin),gridspacing/n_mg)[1:][::-1],
-        #                              np.arange(0,ymax,gridspacing)))
-        #xticksminor = xticksminor/Q_pixel_size - Q_Nx
-        #yticksminor = yticksminor/Q_pixel_size - Q_Ny
-
         # Add the grid
         ax.set_xticks(yticksmajor)
         ax.set_yticks(xticksmajor)
@@ -397,6 +483,8 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
             ax.set_xticklabels([])
             ax.set_yticklabels([])
         ax.grid(linestyle=majorgridls,linewidth=majorgridlw,color=gridcolor,alpha=alpha)
+
+
 
         # Add the grid
         if majorgridlines:
