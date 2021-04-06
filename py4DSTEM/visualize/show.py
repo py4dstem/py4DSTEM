@@ -4,7 +4,11 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
 from numpy.ma import MaskedArray
+from numbers import Number
+from math import log
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
+from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid
+from ..io.datastructure import Coordinates
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,max=None,
          power=1,bordercolor=None,borderwidth=5,
@@ -61,6 +65,17 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',min=None,
                     mask_color. If hist==True, ignore these values in the histogram
         mask_color  (color) see 'mask'
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
+
+        Overlays    The following arguments generate overlays. If they are not None,
+                    they should be a dictionary, which is passed to the corresponding
+                    add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
+                    See those functions docstrings for acceptable dict params.
+
+        rectangle   (dictionary)
+        circle
+        ellipse
+        points
+        grid
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -211,7 +226,215 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
     else:
         return (counts,bin_edges),(fig,ax)
 
-# Show with overlays
+# Show functions with overlaid scalebars and/or coordinate system gridlines
+
+def show_Q(ar,scalebar=True,grid=False,polargrid=False,
+           Q_pixel_size=None,Q_pixel_units=None,
+           coordinates=None,rx=None,ry=None,
+           qx0=None,qy0=None,
+           e=None,theta=None,
+           scalebarloc=0,scalebarsize=None,scalebarwidth=None,
+           scalebartext=None,scalebartextloc='above',scalebartextsize=12,
+           gridspacing=None,gridcolor='w',
+           majorgridlines=True,majorgridlw=1,majorgridls=':',
+           minorgridlines=True,minorgridlw=0.5,minorgridls=':',
+           gridlabels=False,gridlabelsize=12,gridlabelcolor='k',
+           alpha=0.35,
+           **kwargs):
+    """
+    Shows a diffraction space image with options for several overlays to define the scale,
+    including a scalebar, a cartesian grid, or a polar / polar-elliptical grid.
+
+    Regardless of which overlay is requested, the function must recieve either values
+    for Q_pixel_size and Q_pixel_units, or a Coordinates instance containing these values.
+    If both are passed, the manually passed values take precedence.
+    If a cartesian grid is requested, (qx0,qy0) are required, either passed manually or
+    passed as a Coordinates instance with the appropriate (rx,ry) value.
+    If a polar grid is requested, (qx0,qy0,e,theta) are required, again either manually
+    or via a Coordinates instance.
+
+    Any arguments accepted by the show() function (e.g. image scaling, clipvalues, etc)
+    may be passed to this function as kwargs.
+    """
+    # Check inputs
+    assert(isinstance(ar,np.ndarray) and len(ar.shape)==2)
+    if coordinates is not None:
+        assert isinstance(coordinates,Coordinates)
+    try:
+        Q_pixel_size = Q_pixel_size if Q_pixel_size is not None else \
+                       coordinates.get_Q_pixel_size()
+    except AttributeError:
+        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+    try:
+        Q_pixel_units = Q_pixel_units if Q_pixel_units is not None else \
+                       coordinates.get_Q_pixel_units()
+    except AttributeError:
+        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+    if grid or polargrid:
+        try:
+            qx0 = qx0 if qx0 is not None else coordinates.get_qx0(rx,ry)
+        except AttributeError:
+            raise Exception("qx0 must be specified, either in coordinates or manually")
+        try:
+            qy0 = qy0 if qy0 is not None else coordinates.get_qy0(rx,ry)
+        except AttributeError:
+            raise Exception("qy0 must be specified, either in coordinates or manually")
+        assert isinstance(qx0,Number), "Error: qx0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        assert isinstance(qy0,Number), "Error: qy0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+    if polargrid:
+        e = e if e is not None else coordinates.get_e(rx,ry)
+        theta = theta if theta is not None else coordinates.get_theta(rx,ry)
+        assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+
+    # Make the plot
+    fig,ax = show(ar,returnfig=True,**kwargs)
+
+    # Add a scalebar
+    if scalebar:
+        pass
+
+    # Add a cartesian grid
+    if grid:
+        # parse arguments
+        assert isinstance(majorgridlines,bool)
+        majorgridlw = majorgridlw if majorgridlines else 0
+        assert isinstance(majorgridlw,Number)
+        assert isinstance(majorgridls,str)
+        assert isinstance(minorgridlines,bool)
+        minorgridlw = minorgridlw if minorgridlines else 0
+        assert isinstance(minorgridlw,Number)
+        assert isinstance(minorgridls,str)
+        assert is_color_like(gridcolor)
+        assert isinstance(gridlabels,bool)
+        assert isinstance(gridlabelsize,Number)
+        assert is_color_like(gridlabelcolor)
+        if gridspacing is not None:
+            assert isinstance(gridspacing,Number)
+
+        Q_Nx,Q_Ny = ar.shape
+        assert qx0<Q_Nx and qy0<Q_Ny
+
+        # Get the major grid-square size
+        if gridspacing is None:
+            D = np.mean((Q_Nx*Q_pixel_size,Q_Ny*Q_pixel_size))/2.
+            exp = int(log(D,10))
+            if np.sign(log(D,10))<0:
+                exp-=1
+            base = D/(10**exp)
+            if base>=1 and base<1.25:
+                _gridspacing=0.4
+            elif base>=1.25 and base<1.75:
+                _gridspacing=0.5
+            elif base>=1.75 and base<2.5:
+                _gridspacing=0.75
+            elif base>=2.5 and base<3.25:
+                _gridspacing=1
+            elif base>=3.25 and base<4.75:
+                _gridspacing=1.5
+            elif base>=4.75 and base<6:
+                _gridspacing=2
+            elif base>=6 and base<8:
+                _gridspacing=2.5
+            elif base>=8 and base<10:
+                _gridspacing=3
+            else:
+                raise Exception("how did this happen?? base={}".format(base))
+            gridspacing = _gridspacing * 10**exp
+
+        # Get the positions and label for the major gridlines
+        xmin = (-qx0)*Q_pixel_size
+        xmax = (Q_Nx-1-qx0)*Q_pixel_size
+        ymin = (-qy0)*Q_pixel_size
+        ymax = (Q_Ny-1-qy0)*Q_pixel_size
+        xticksmajor = np.concatenate((-1*np.arange(0,np.abs(xmin),gridspacing)[1:][::-1],
+                                      np.arange(0,xmax,gridspacing)))
+        yticksmajor = np.concatenate((-1*np.arange(0,np.abs(ymin),gridspacing)[1:][::-1],
+                                      np.arange(0,ymax,gridspacing)))
+        xticklabels = xticksmajor.copy()
+        yticklabels = yticksmajor.copy()
+        xticksmajor = (xticksmajor-xmin)/Q_pixel_size
+        yticksmajor = (yticksmajor-ymin)/Q_pixel_size
+        # Labels
+        exp_spacing = int(np.round(log(gridspacing,10),6))
+        if np.sign(log(gridspacing,10))<0:
+            exp_spacing-=1
+        base_spacing = gridspacing/(10**exp_spacing)
+        xticklabels = xticklabels/(10**exp_spacing)
+        yticklabels = yticklabels/(10**exp_spacing)
+        if exp_spacing == 1:
+            xticklabels *= 10
+            yticklabels *= 10
+        if _gridspacing in (0.4,0.75,1.5,2.5) and exp_spacing!=1:
+            xticklabels = ["{:.1f}".format(n) for n in xticklabels]
+            yticklabels = ["{:.1f}".format(n) for n in yticklabels]
+        else:
+            xticklabels = ["{:.0f}".format(n) for n in xticklabels]
+            yticklabels = ["{:.0f}".format(n) for n in yticklabels]
+
+        # Get minor gridline positions
+        #xticksminor = np.concatenate((-1*np.arange(0,np.abs(xmin),gridspacing/n_mg)[1:][::-1],
+        #                              np.arange(0,xmax,gridspacing)))
+        #yticksminor = np.concatenate((-1*np.arange(0,np.abs(ymin),gridspacing/n_mg)[1:][::-1],
+        #                              np.arange(0,ymax,gridspacing)))
+        #xticksminor = xticksminor/Q_pixel_size - Q_Nx
+        #yticksminor = yticksminor/Q_pixel_size - Q_Ny
+
+        # Add the grid
+        ax.set_xticks(yticksmajor)
+        ax.set_yticks(xticksmajor)
+        ax.xaxis.set_ticks_position('bottom')
+        if gridlabels:
+            ax.set_xticklabels(yticklabels,size=gridlabelsize,color=gridlabelcolor)
+            ax.set_yticklabels(xticklabels,size=gridlabelsize,color=gridlabelcolor)
+            if exp_spacing in (0,1):
+                ax.set_xlabel(r"$q_y$ ("+Q_pixel_units+")")
+                ax.set_ylabel(r"$q_x$ ("+Q_pixel_units+")")
+            else:
+                ax.set_xlabel(r"$q_y$ ("+Q_pixel_units+" e"+str(exp_spacing)+")")
+                ax.set_ylabel(r"$q_x$ ("+Q_pixel_units+" e"+str(exp_spacing)+")")
+        else:
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+        ax.grid(linestyle=majorgridls,linewidth=majorgridlw,color=gridcolor,alpha=alpha)
+
+        # Add the grid
+        if majorgridlines:
+            add_cartesian_grid(ax,d={
+                            'x0':qx0,'y0':qy0,
+                            'spacing':gridspacing,
+                            'majorlw':majorgridlw,
+                            'majorls':majorgridls,
+                            'minorlw':minorgridlw,
+                            'minorls':minorgridls,
+                            'color':gridcolor,
+                            'label':gridlabels,
+                            'labelsize':gridlabelsize,
+                            'labelcolor':gridlabelcolor,
+                            'alpha':alpha})
+        if minorgridlines:
+            add_cartesian_grid(ax,d={
+                            'x0':qx0,'y0':qy0,
+                            'spacing':gridspacing,
+                            'majorlw':majorgridlw,
+                            'majorls':majorgridls,
+                            'minorlw':minorgridlw,
+                            'minorls':minorgridls,
+                            'color':gridcolor,
+                            'label':gridlabels,
+                            'labelsize':gridlabelsize,
+                            'labelcolor':gridlabelcolor,
+                            'alpha':alpha})
+
+
+    # Add a polar-elliptical grid
+    if polargrid:
+        pass
+
+    return
+
+
+# Shape overlays
 
 def show_rectangles(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2,returnfig=False,
                     **kwargs):
