@@ -205,17 +205,27 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if coordinates is not None:
             assert isinstance(coordinates,Coordinates)
         assert space in ('Q','R')
+        # pixel size/units
+        if pixelsize is None and coordinates is None:
+            pixelsize = 1
+        if pixelsize is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelsize = coordinates.get_Q_pixel_size()
+            else:
+                pixelsize = coordinates.get_R_pixel_size()
+        if pixelunits is None and coordinates is None:
+            pixelunits = 'pixels'
+        if pixelunits is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelunits = coordinates.get_Q_pixel_units()
+            else:
+                pixelunits = coordinates.get_R_pixel_units()
+        # origin
         if space == 'Q':
-            try:
-                pixelsize = pixelsize if pixelsize is not None else \
-                               coordinates.get_Q_pixel_size()
-            except AttributeError:
-                raise Exception("pixelsize must be specified, either in coordinates or manually")
-            try:
-                pixelunits = pixelunits if pixelunits is not None else \
-                               coordinates.get_Q_pixel_units()
-            except AttributeError:
-                raise Exception("pixelsize must be specified, either in coordinates or manually")
             try:
                 x0 = x0 if x0 is not None else coordinates.get_qx0(rx,ry)
             except AttributeError:
@@ -232,15 +242,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
                 raise Exception("pixelsize must be specified, either in coordinates or manually")
             try:
                 pixelunits = pixelunits if pixelunits is not None else \
-                               coordinates.get_Q_pixel_units()
+                               coordinates.get_R_pixel_units()
             except AttributeError:
                 raise Exception("pixelsize must be specified, either in coordinates or manually")
+            x0 = x0 if x0 is not None else 0
+            y0 = y0 if y0 is not None else 0
         assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
 
         # Add the grid
         cartesian_grid['x0'],cartesian_grid['y0']=x0,y0
         cartesian_grid['Nx'],cartesian_grid['Ny']=ar.shape
+        cartesian_grid['pixelsize'] = pixelsize
+        cartesian_grid['pixelunits'] = pixelunits
+        cartesian_grid['space'] = space
         add_cartesian_grid(ax,cartesian_grid)
 
 
