@@ -94,6 +94,11 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         function should be a dictionary.  The passed dict may be empty, in which case
         default formatting options will be used.
 
+        There are two types of additional optional parameters which can be passed to
+        specify how coordinates or scalebars should be plotted: (1) metadata specifying
+        the scale, units, and other parameters of the coordinates, e.g. the position
+        of the origin, and (2) visual formatting parameters.
+
         Additionally, the appropriate metadata is required.  This data is passed directly
         to this function, and may be passed manually, or it may be fetched from a passed
         Coordinates instance. If a coordinates instance is used, it may also
@@ -187,6 +192,14 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
 
+    # Add a border
+    if bordercolor is not None:
+        for s in ['bottom','top','left','right']:
+            ax.spines[s].set_color(bordercolor)
+            ax.spines[s].set_linewidth(borderwidth)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     # Add shape/point overlays
     if rectangle is not None:
         add_rectangles(ax,rectangle)
@@ -226,25 +239,25 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
                 pixelunits = coordinates.get_R_pixel_units()
         # origin
         if space == 'Q':
-            try:
-                x0 = x0 if x0 is not None else coordinates.get_qx0(rx,ry)
-            except AttributeError:
-                raise Exception("x0 must be specified, either in coordinates or manually")
-            try:
-                y0 = y0 if y0 is not None else coordinates.get_qy0(rx,ry)
-            except AttributeError:
-                raise Exception("y0 must be specified, either in coordinates or manually")
+            if x0 is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    x0 = coordinates.get_qx0(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for qx0')
+            else:
+                x0 = 0
+            if y0 is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    y0 = coordinates.get_qy0(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for qy0')
+            else:
+                y0 = 0
         else:
-            try:
-                pixelsize = pixelsize if pixelsize is not None else \
-                               coordinates.get_R_pixel_size()
-            except AttributeError:
-                raise Exception("pixelsize must be specified, either in coordinates or manually")
-            try:
-                pixelunits = pixelunits if pixelunits is not None else \
-                               coordinates.get_R_pixel_units()
-            except AttributeError:
-                raise Exception("pixelsize must be specified, either in coordinates or manually")
             x0 = x0 if x0 is not None else 0
             y0 = y0 if y0 is not None else 0
         assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
@@ -272,14 +285,6 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Add a scalebar
     if scalebar is not None:
         add_scaleber(ax,grid)
-
-    # Add a border
-    if bordercolor is not None:
-        for s in ['bottom','top','left','right']:
-            ax.spines[s].set_color(bordercolor)
-            ax.spines[s].set_linewidth(borderwidth)
-        ax.set_xticks([])
-        ax.set_yticks([])
 
     # Show or return
     if returnfig:
