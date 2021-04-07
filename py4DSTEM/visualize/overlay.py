@@ -414,6 +414,7 @@ def add_cartesian_grid(ax,d):
     The dictionary d has required and optional parameters as follows:
         x0,y0           (req'd) the origin
         Nx,Ny           (req'd) the image extent
+        space           (str) 'Q' or 'R'
         spacing         (number) spacing between gridlines
         pixelsize       (number)
         pixelunits      (str)
@@ -436,6 +437,10 @@ def add_cartesian_grid(ax,d):
     assert('Ny' in d.keys())
     Nx,Ny = d['Nx'],d['Ny']
     assert x0<Nx and y0<Ny
+    # real or diffraction
+    assert('space' in d.keys())
+    space = d['space']
+    assert(space in ('Q','R'))
     # spacing, pixelsize, pixelunits
     spacing = d['spacing'] if 'spacing' in d.keys() else None
     pixelsize = d['pixelsize'] if 'pixelsize' in d.keys() else 1
@@ -489,6 +494,9 @@ def add_cartesian_grid(ax,d):
         else:
             raise Exception("how did this happen?? base={}".format(base))
         gridspacing = _gridspacing * 10**exp
+    else:
+        gridspacing = spacing
+        _gridspacing = 1.5
 
     # Get positions for the major gridlines
     xmin = (-x0)*pixelsize
@@ -528,12 +536,16 @@ def add_cartesian_grid(ax,d):
     if label:
         ax.set_xticklabels(yticklabels,size=labelsize,color=labelcolor)
         ax.set_yticklabels(xticklabels,size=labelsize,color=labelcolor)
+        axislabel_x = r"$q_x$" if space=='Q' else r"$x$"
+        axislabel_y = r"$q_y$" if space=='Q' else r"$y$"
         if exp_spacing in (0,1):
-            ax.set_xlabel(r"$q_y$ ("+pixelunits+")")
-            ax.set_ylabel(r"$q_x$ ("+pixelunits+")")
+            ax.set_xlabel(axislabel_y+" ("+pixelunits+")",size=labelsize,color=labelcolor)
+            ax.set_ylabel(axislabel_x+" ("+pixelunits+")",size=labelsize,color=labelcolor)
         else:
-            ax.set_xlabel(r"$q_y$ ("+pixelunits+" e"+str(exp_spacing)+")")
-            ax.set_ylabel(r"$q_x$ ("+pixelunits+" e"+str(exp_spacing)+")")
+            ax.set_xlabel(axislabel_y+" ("+pixelunits+" e"+str(exp_spacing)+")",
+                          size=labelsize,color=labelcolor)
+            ax.set_ylabel(axislabel_x+" ("+pixelunits+" e"+str(exp_spacing)+")",
+                          size=labelsize,color=labelcolor)
     else:
         ax.set_xticklabels([])
         ax.set_yticklabels([])
