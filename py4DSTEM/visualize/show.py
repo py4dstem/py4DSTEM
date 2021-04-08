@@ -94,28 +94,43 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         function should be a dictionary.  The passed dict may be empty, in which case
         default formatting options will be used.
 
+        The coordinate/scalebar overlays are listed below:
+
+            cartesian_grid
+            polarelliptical_grid
+            rtheta_grid
+            scalebar
+
         There are two types of additional optional parameters which can be passed to
         specify how coordinates or scalebars should be plotted: (1) metadata specifying
         the scale, units, and other parameters of the coordinates, e.g. the position
         of the origin, and (2) visual formatting parameters.
 
-        Additionally, the appropriate metadata is required.  This data is passed directly
-        to this function, and may be passed manually, or it may be fetched from a passed
-        Coordinates instance. If a coordinates instance is used, it may also
-        be necessary to specify a scan position (rx,ry) or the space ('Q' or 'R').
-        These should be passed directly to this function.
+        (1) scale/unit/coordinate parameter metadata should be passed as arguments to the
+        show function. These may be passed manually, or in a Coordinates instance.
 
-        The coordinate/scalebar overlays are listed below.  See also the docstrings for
-        the correspondoing add_* functions for addition formatting options which may be
-        passed in these dictionaries.  Note that in those docstrings there are several
-        required paremeters -- these *do not* need to be passed by the user, and will be
-        selected automatically by this function.  The user-passed dict is only for
-        any desired optional formatting parameters.
+        To use a Coordinates instance, pass it to the 'coordinates' argument.  The
+        function will find and use relevant metadata it finds in the instance.  Some
+        metadata may vary by scan position - e.g. the origin of diffraction space.  In
+        this case please also pass this function a scan position with the parameters
+        'rx' and 'ry'.
 
-        cartesian_grid
-        polarelliptical_grid
-        rtheta_grid
-        scalebar
+        To pass metadata manually, just specify the values as function arguments.  The
+        relevant arguments are: pixelsize, pixelunits, x0, y0, e, theta. Any arguments
+        passed in this way will supercede the values found in a Coordinates instance.
+
+        Use the argument 'space' to specify whether the data is in diffraction space,
+        real space, or r-theta space, with values of ('Q','R','rtheta').
+
+        (2) visual formatting parameters should be passed as keyword-value pairs inside
+        the dictionary associated with the overlay being drawn.  E.g.:
+
+            >>> show(im,cartesian_grid{'color':'black','alpha':0.25,'label':True}
+
+        will plot an image with a cartesian grid overlay in black, with a transparency
+        set to 0.25, and with labeled axes and tickmarks.  For the full set of
+        formatting parameters which can be specified for each overlay, see the docstring
+        for the corresponding add_* function.
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
