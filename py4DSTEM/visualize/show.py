@@ -209,6 +209,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         add_annuli(ax,annulus)
     if ellipse is not None:
         add_ellipses(ax,ellipse)
+    if points is not None:
+        add_points(ax,points)
     if grid_overlay is not None:
         add_grid_overly(ax,grid)
 
