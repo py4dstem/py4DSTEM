@@ -326,15 +326,13 @@ def add_points(ax,d):
     y = np.array(y)
     assert(len(y)==N)
     # s
-    assert('s' in d.keys())
-    s = d['s']
+    s = d['s'] if 's' in d.keys() else np.ones(N)
     if isinstance(s,Number):
         s = np.ones_like(x)*s
     assert(len(s)==N)
     s = np.where(s>0,s,0)
     # scale
-    assert('scale' in d.keys())
-    scale = d['scale']
+    scale = d['scale'] if 'scale' in d.keys() else 25
     assert isinstance(scale,Number)
     # point color
     color = d['pointcolor'] if 'pointcolor' in d.keys() else 'r'
