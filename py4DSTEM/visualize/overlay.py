@@ -5,6 +5,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
+from fractions import Fraction
 
 def add_rectangles(ax,d):
     """
@@ -218,28 +219,39 @@ def add_annuli(ax,d):
 
 def add_ellipses(ax,d):
     """
-    adds one or more circles to axis ax using the parameters in dictionary d.
+    Adds one or more ellipses to axis ax using the parameters in dictionary d.
+
+    Parameters:
+        center
+        r
+        e
+        theta
+        color
+        fill
+        alpha
+        linewidth
+        linestyle
     """
     # handle inputs
     assert isinstance(ax,Axes)
+    # semimajor axis length
+    assert('r' in d.keys())
+    r = d['r']
+    if isinstance(r,Number):
+        r = [r]
+    assert(isinstance(r,list))
+    N = len(r)
+    assert(all([isinstance(i,Number) for i in r]))
     # center
     assert('center' in d.keys())
     center = d['center']
     if isinstance(center,tuple):
         assert(len(center)==2)
-        center = [center]
+        center = [center for i in range(N)]
     assert(isinstance(center,list))
-    N = len(center)
+    assert(len(center)==N)
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
-    # semimajor axis length
-    assert('a' in d.keys())
-    a = d['a']
-    if isinstance(a,Number):
-        a = [a for i in range(N)]
-    assert(isinstance(a,list))
-    assert(len(a)==N)
-    assert(all([isinstance(i,Number) for i in a]))
     # ratio of axis lengths
     assert('e' in d.keys())
     e = d['e']
@@ -288,19 +300,27 @@ def add_ellipses(ax,d):
         assert(isinstance(linewidth,list))
         assert(len(linewidth)==N)
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+    # linestyle
+    linestyle = d['linestyle'] if 'linestyle' in d.keys() else '-'
+    if isinstance(linestyle,(str)):
+        linestyle = [linestyle for i in range(N)]
+    else:
+        assert(isinstance(linestyle,list))
+        assert(len(linestyle)==N)
+        assert(all([isinstance(lw,(str)) for lw in linestyle]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
-                                            'fill','alpha','linewidth')]
+    kws = [k for k in d.keys() if k not in ('center','r','e','theta','color',
+                                            'fill','alpha','linewidth','linestyle')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the ellipses
     for i in range(N):
-        cent,_a,_e,_theta,col,f,_alpha,lw = (center[i],a[i],e[i],theta[i],color[i],fill[i],
-                                               alpha[i],linewidth[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,90-np.degrees(_theta),color=col,fill=f,
-                        alpha=_alpha,linewidth=lw,**kwargs)
+        cent,_r,_e,_theta,col,f,_alpha,lw,ls = (center[i],r[i],e[i],theta[i],color[i],fill[i],
+                                                alpha[i],linewidth[i],linestyle[i])
+        ellipse = Ellipse((cent[1],cent[0]),2*_r*_e,2*_r,90-np.degrees(_theta),color=col,fill=f,
+                        alpha=_alpha,linewidth=lw,linestyle=ls,**kwargs)
         ax.add_patch(ellipse)
 
     return
@@ -552,19 +572,166 @@ def add_cartesian_grid(ax,d):
     return
 
 
+def add_polarelliptical_grid(ax,d):
+    """
+    adds an overlaid polar-ellitpical coordinate grid over an image
+    using the parameters in dictionary d.
 
+    The dictionary d has required and optional parameters as follows:
+        x0,y0           (req'd) the origin
+        e,theta         (req'd) the ellipticity (a/b) and major axis angle (radians)
+        Nx,Ny           (req'd) the image extent
+        space           (str) 'Q' or 'R'
+        spacing         (number) spacing between radial gridlines
+        N_thetalines    (int) the number of theta gridlines
+        pixelsize       (number)
+        pixelunits      (str)
+        lw              (number)
+        ls              (str)
+        color           (color)
+        label           (bool)
+        labelsize       (number)
+        labelcolor      (color)
+        alpha           (number)
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # origin
+    assert('x0' in d.keys())
+    assert('y0' in d.keys())
+    x0,y0 = d['x0'],d['y0']
+    # ellipticity
+    assert('e' in d.keys())
+    assert('theta' in d.keys())
+    e,theta = d['e'],d['theta']
+    # image extent
+    assert('Nx' in d.keys())
+    assert('Ny' in d.keys())
+    Nx,Ny = d['Nx'],d['Ny']
+    assert x0<Nx and y0<Ny
+    # real or diffraction
+    assert('space' in d.keys())
+    space = d['space']
+    assert(space in ('Q','R'))
+    # spacing, N_thetalines, pixelsize, pixelunits
+    spacing = d['spacing'] if 'spacing' in d.keys() else None
+    N_thetalines = d['N_thetalines'] if 'N_thetalines' in d.keys() else 8
+    assert isinstance(N_thetalines,(int,np.integer))
+    pixelsize = d['pixelsize'] if 'pixelsize' in d.keys() else 1
+    pixelunits = d['pixelunits'] if 'pixelunits' in d.keys() else 'pixels'
+    # gridlines
+    lw = d['lw'] if 'lw' in d.keys() else 1
+    ls = d['ls'] if 'ls' in d.keys() else ':'
+    # color
+    color = d['color'] if 'color' in d.keys() else 'w'
+    assert is_color_like(color)
+    # labels
+    label = d['label'] if 'label' in d.keys() else False
+    labelsize = d['labelsize'] if 'labelsize' in d.keys() else 8
+    labelcolor = d['labelcolor'] if 'labelcolor' in d.keys() else color
+    assert isinstance(label,bool)
+    assert isinstance(labelsize,Number)
+    assert is_color_like(labelcolor)
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 0.35
+    assert isinstance(alpha,(Number))
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x0','y0','spacing','lw','ls',
+                        'color','label','labelsize','labelcolor','alpha')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
 
+    # Get the radial spacing
+    if spacing is None:
+        D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
+        exp = int(log(D,10))
+        if np.sign(log(D,10))<0:
+            exp-=1
+        base = D/(10**exp)
+        if base>=1 and base<1.25:
+            _spacing=0.4
+        elif base>=1.25 and base<1.75:
+            _spacing=0.5
+        elif base>=1.75 and base<2.5:
+            _spacing=0.75
+        elif base>=2.5 and base<3.25:
+            _spacing=1
+        elif base>=3.25 and base<4.75:
+            _spacing=1.5
+        elif base>=4.75 and base<6:
+            _spacing=2
+        elif base>=6 and base<8:
+            _spacing=2.5
+        elif base>=8 and base<10:
+            _spacing=3
+        else:
+            raise Exception("how did this happen?? base={}".format(base))
+        spacing = _spacing * 10**exp
+        spacing = spacing/2.
+    else:
+        _spacing = 1.5
 
+    # Get positions for the radial gridlines
+    xmin = (-x0)*pixelsize
+    xmax = (Nx-1-x0)*pixelsize
+    ymin = (-y0)*pixelsize
+    ymax = (Ny-1-y0)*pixelsize
+    rcorners = (np.hypot(xmin,ymin),
+               np.hypot(xmin,ymax),
+               np.hypot(xmax,ymin),
+               np.hypot(xmax,ymax))
+    rticks = np.arange(0,np.max(rcorners),spacing)[1:]
+    rticklabels = rticks.copy()
+    rticks = rticks/pixelsize
 
+    # Add radial gridlines
+    N = len(rticks)
+    d_ellipses = {'r':list(rticks),
+                  'center':(x0,y0),
+                  'e':e,
+                  'theta':theta,
+                  'fill':False,
+                  'color':color,
+                  'linewidth':lw,
+                  'linestyle':ls,
+                  'alpha':alpha}
+    add_ellipses(ax,d_ellipses)
 
+    # Add radial gridline labels
+    if label:
+        # Get gridline label positions
+        rlabelpos_scale = 1+ (e-1)*np.sin(np.pi/2-theta)**2
+        rlabelpositions = x0 - rticks*rlabelpos_scale  + labelsize/4
+        for i in range(len(rticklabels)):
+            xpos = rlabelpositions[i]
+            if xpos>labelsize/2:
+                ax.text(y0,rlabelpositions[i],rticklabels[i],
+                        size=labelsize,color=labelcolor,alpha=alpha)
+        pass
 
+    # Get angles for the theta gridlines
+    thetaticks = np.linspace(0,2*np.pi,N_thetalines,endpoint=False)
+    thetaticklabels = [str(Fraction(i,N_thetalines))+r'$\pi$' for i in range(N_thetalines)]
+    thetaticklabels[0] = '0'
+    thetaticks += theta
 
+    # Add theta gridlines
+    #TODO
 
+    # Add theta gridline labels
+    if label:
+        #TODO
+        pass
 
-
-
-def add_polarelliptical_grid(ar,d):
+    ax.set_xticks([])
+    ax.set_yticks([])
     return
+
+
+
+
+
 
 def add_rtheta_grid(ar,d):
     return
