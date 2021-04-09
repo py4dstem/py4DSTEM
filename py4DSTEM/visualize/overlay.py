@@ -616,6 +616,8 @@ def add_polarelliptical_grid(ax,d):
     # spacing, N_thetalines, pixelsize, pixelunits
     spacing = d['spacing'] if 'spacing' in d.keys() else None
     N_thetalines = d['N_thetalines'] if 'N_thetalines' in d.keys() else 8
+    assert(N_thetalines%2==0), "N_thetalines must be even"
+    N_thetalines = N_thetalines//2
     assert isinstance(N_thetalines,(int,np.integer))
     pixelsize = d['pixelsize'] if 'pixelsize' in d.keys() else 1
     pixelunits = d['pixelunits'] if 'pixelunits' in d.keys() else 'pixels'
@@ -633,7 +635,7 @@ def add_polarelliptical_grid(ax,d):
     assert isinstance(labelsize,Number)
     assert is_color_like(labelcolor)
     # alpha
-    alpha = d['alpha'] if 'alpha' in d.keys() else 0.35
+    alpha = d['alpha'] if 'alpha' in d.keys() else 0.5
     assert isinstance(alpha,(Number))
     # additional parameters
     kws = [k for k in d.keys() if k not in ('x0','y0','spacing','lw','ls',
@@ -701,31 +703,71 @@ def add_polarelliptical_grid(ax,d):
     # Add radial gridline labels
     if label:
         # Get gridline label positions
-        rlabelpos_scale = 1+ (e-1)*np.sin(np.pi/2-theta)**2
-        rlabelpositions = x0 - rticks*rlabelpos_scale  + labelsize/4
+        rlabelpos_scale = 1+ (e-1)*np.sin(np.pi/2-theta)**4
+        rlabelpositions = x0 - rticks*rlabelpos_scale
         for i in range(len(rticklabels)):
             xpos = rlabelpositions[i]
             if xpos>labelsize/2:
-                ax.text(y0,rlabelpositions[i],rticklabels[i],
-                        size=labelsize,color=labelcolor,alpha=alpha)
-        pass
-
-    # Get angles for the theta gridlines
-    thetaticks = np.linspace(0,2*np.pi,N_thetalines,endpoint=False)
-    thetaticklabels = [str(Fraction(i,N_thetalines))+r'$\pi$' for i in range(N_thetalines)]
-    thetaticklabels[0] = '0'
-    thetaticks += theta
+                ax.text(y0,rlabelpositions[i],rticklabels[i],size=labelsize,
+                color=labelcolor,alpha=alpha,ha='center',va='center')
 
     # Add theta gridlines
-    #TODO
+    def add_line(ax,x0,y0,theta,Nx,Ny):
+        """ adds a line through (x0,y0) at an angle theta which terminates at the image edges
+            returns the termination points (xi,yi),(xf,xy)
+        """
+        theta = np.mod(np.pi/2-theta,np.pi)
+        if theta==0:
+            xs,ys = [0,Nx-1],[y0,y0]
+        elif theta==np.pi/2:
+            xs,ys = [x0,x0],[0,Ny-1]
+        else:
+            # Get line params
+            m = np.tan(theta)
+            b = y0-m*x0
+            # Get intersections with x=0,x=Nx-1,y=0,y=Ny-1
+            x1,y1 = 0,b
+            x2,y2 = Nx-1,m*(Nx-1)+b
+            x3,y3 = -b/m,0
+            x4,y4 = (Ny-1 -b)/m,Ny-1
+            # Determine which points are on the image bounding box
+            xs,ys = [],[]
+            if 0<=y1<Ny-1: xs.append(x1),ys.append(y1)
+            if 0<=y2<Ny-1: xs.append(x2),ys.append(y2)
+            if 0<=x3<Nx-1: xs.append(x3),ys.append(y3)
+            if 0<=x4<Nx-1: xs.append(x4),ys.append(y4)
+            assert len(xs)==len(ys)==2
+
+        ax.plot(xs,ys,color=color,ls=ls,alpha=alpha,lw=lw)
+        return tuple([(xs[i],ys[i]) for i in range(2)])
+
+    thetalabelpos = []
+    for t in theta+np.linspace(0,np.pi,N_thetalines,endpoint=False):
+        thetalabelpos.append(add_line(ax,x0,y0,t,Nx,Ny))
+    thetalabelpos = [thetalabelpos[i][0] for i in range(len(thetalabelpos))] + \
+                    [thetalabelpos[i][1] for i in range(len(thetalabelpos))]
+    # Get angles for the theta gridlines
+    thetaticklabels = [str(Fraction(i,N_thetalines))+r'$\pi$' for i in range(2*N_thetalines)]
+    thetaticklabels[0] = '0'
+    thetaticklabels[N_thetalines] = r'$\pi$'
 
     # Add theta gridline labels
     if label:
-        #TODO
+        for i in range(len(thetaticklabels)):
+            x,y = thetalabelpos[i]
+            if x==0: ha,va='left','center'
+            elif x==Nx-1: ha,va='right','center'
+            elif y==0: ha,va='center','top'
+            else: ha,va='center','bottom'
+            ax.text(x,y,thetaticklabels[i],size=labelsize,color=labelcolor,
+                    alpha=alpha,ha=ha,va=va)
         pass
 
     ax.set_xticks([])
     ax.set_yticks([])
+    ax.set_xlim([0,Nx-1])
+    ax.set_ylim([0,Ny-1])
+    ax.invert_yaxis()
     return
 
 
