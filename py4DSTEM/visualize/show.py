@@ -79,14 +79,15 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
                       ---------------Shapes and Points-------------
 
-        The shape/point overlays are below. See those functions' docstrings for
-        acceptable dict params.
+        The shape/point overlays are:
 
-        rectangle   (dictionary)
-        circle
-        ellipse
-        points
-        grid_overlay
+            rectangle   (dictionary)
+            circle
+            ellipse
+            points
+            grid_overlay
+
+        See those functions' docstrings for acceptable dict keyword-value pairs.
 
                ---------------Coordinate grids and Scalebars-------------
 
@@ -94,7 +95,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         function should be a dictionary.  The passed dict may be empty, in which case
         default formatting options will be used.
 
-        The coordinate/scalebar overlays are listed below:
+        The coordinate/scalebar overlays are:
 
             cartesian_grid
             polarelliptical_grid
@@ -291,7 +292,88 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
     # Add polarelliptical grid
     if polarelliptical_grid is not None:
-        add_polarelliptical_grid(ax,grid)
+        # parse arguments
+        if coordinates is not None:
+            assert isinstance(coordinates,Coordinates)
+        assert space in ('Q','R')
+        # pixel size/units
+        if pixelsize is None and coordinates is None:
+            pixelsize = 1
+        if pixelsize is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelsize = coordinates.get_Q_pixel_size()
+            else:
+                pixelsize = coordinates.get_R_pixel_size()
+        if pixelunits is None and coordinates is None:
+            pixelunits = 'pixels'
+        if pixelunits is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelunits = coordinates.get_Q_pixel_units()
+            else:
+                pixelunits = coordinates.get_R_pixel_units()
+        # origin
+        if space == 'Q':
+            if x0 is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    x0 = coordinates.get_qx0(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for qx0')
+            else:
+                x0 = 0
+            if y0 is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    y0 = coordinates.get_qy0(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for qy0')
+            else:
+                y0 = 0
+        else:
+            x0 = x0 if x0 is not None else 0
+            y0 = y0 if y0 is not None else 0
+        assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        # ellipticity
+        if space == 'Q':
+            if e is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    e = coordinates.get_e(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for e')
+            else:
+                e = 1
+            if theta is not None:
+                pass
+            elif coordinates is not None:
+                try:
+                    theta = coordinates.get_theta(rx,ry)
+                except AttributeError:
+                    raise Exception('The Coordinates instance passed does not contain a value for theta')
+            else:
+                theta = 0
+        else:
+            e = e if e is not None else 1
+            theta = theta if theta is not None else 0
+        assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+        assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+
+        # Add the grid
+        polarelliptical_grid['x0'],polarelliptical_grid['y0']=x0,y0
+        polarelliptical_grid['e'],polarelliptical_grid['theta']=e,theta
+        polarelliptical_grid['Nx'],polarelliptical_grid['Ny']=ar.shape
+        polarelliptical_grid['pixelsize'] = pixelsize
+        polarelliptical_grid['pixelunits'] = pixelunits
+        polarelliptical_grid['space'] = space
+        add_polarelliptical_grid(ax,polarelliptical_grid)
 
 
     # Add r-theta grid
