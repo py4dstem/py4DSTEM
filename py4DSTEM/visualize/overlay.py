@@ -424,9 +424,117 @@ def add_grid_overlay(ax,d):
     return
 
 
+def add_scalebar(ax,d):
+    """
+    Adds an overlaid scalebar to an image, using the parameters in dict d.
+
+    The dictionary d has required and optional parameters as follows:
+        Nx,Ny           (req'd) the image extent
+        space           (str) 'Q' or 'R'
+        length          (number) the scalebar length
+        width           (number) the scalebar width
+        pixelsize       (number)
+        pixelunits      (str)
+        color           (color)
+        label           (bool)
+        labelsize       (number)
+        labelcolor      (color)
+        alpha           (number)
+        position        (str) 'ul','ur','bl', or 'br' for the
+                        upperleft, upperright, bottomleft, bottomright
+        ticks           (bool) if False, turns off image border ticks
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # image extent
+    assert('Nx' in d.keys())
+    assert('Ny' in d.keys())
+    Nx,Ny = d['Nx'],d['Ny']
+    # real or diffraction
+    space = d['space'] if 'space' in d.keys() else 'Q'
+    assert(space in ('Q','R'))
+    # length,width
+    length = d['length'] if 'length' in d.keys() else None
+    width = d['width'] if 'width' in d.keys() else 6
+    # pixelsize, pixelunits
+    pixelsize = d['pixelsize'] if 'pixelsize' in d.keys() else 1
+    pixelunits = d['pixelunits'] if 'pixelunits' in d.keys() else 'pixels'
+    # color
+    color = d['color'] if 'color' in d.keys() else 'w'
+    assert is_color_like(color)
+    # labels
+    label = d['label'] if 'label' in d.keys() else True
+    labelsize = d['labelsize'] if 'labelsize' in d.keys() else 16
+    labelcolor = d['labelcolor'] if 'labelcolor' in d.keys() else color
+    assert isinstance(label,bool)
+    assert isinstance(labelsize,Number)
+    assert is_color_like(labelcolor)
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1
+    assert isinstance(alpha,(Number))
+    # position
+    position = d['position'] if 'position' in d.keys() else 'br'
+    assert position in ('ul','ur','bl','br')
+    # ticks
+    ticks = d['ticks'] if 'ticks' in d.keys() else False
+    assert isinstance(ticks,bool)
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('Nx','Ny','length',
+                       'width','pixelsize','pixelunits','color','label',
+                       'labelsize','labelcolor','alpha','position','ticks')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # Get length
+    if length is None:
+        length_units,length_pixels,_ = get_nice_spacing(Nx,Ny,pixelsize)
+    else:
+        length_units,length_pixels = length,length/pixelsize
+
+    # Get position
+    if position == 'ul':
+        x0,y0 = 0,0
+        xshiftdir,yshiftdir = 1,1
+    elif position == 'ur':
+        x0,y0 = 0,Ny-1
+        xshiftdir,yshiftdir = 1,-1
+    elif position == 'bl':
+        x0,y0 = Nx-1,0
+        xshiftdir,yshiftdir = -1,1
+    else:
+        x0,y0 = Nx-1,Ny-1
+        xshiftdir,yshiftdir = -1,-1
+    pad = 0.2*length_pixels
+    xshift = xshiftdir * pad
+    yshift = yshiftdir * (length_pixels/2.+pad)
+    x0 = x0 + xshift
+    y0 = y0 + yshift
+    xi,yi = x0,y0-length_pixels/2.
+    xf,yf = x0,y0+length_pixels/2.
+    labelpos_x = x0 + pad*xshiftdir/2.
+    labelpos_y = y0
+
+    # Add line
+    ax.plot((yi,yf),(xi,xf),lw=width,color=color,alpha=alpha)
+
+    # Add label
+    if label:
+        labeltext = str(length_units)+' '+pixelunits
+        if xshiftdir>0: va='top'
+        else: va='bottom'
+        ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
+                color=labelcolor,alpha=alpha,ha='center',va=va)
+
+    if not ticks:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    return
+
+
 def add_cartesian_grid(ax,d):
     """
-    adds an overlaid cartesian coordinate grid over an image
+    Adds an overlaid cartesian coordinate grid over an image
     using the parameters in dictionary d.
 
     The dictionary d has required and optional parameters as follows:
@@ -456,8 +564,7 @@ def add_cartesian_grid(ax,d):
     Nx,Ny = d['Nx'],d['Ny']
     assert x0<Nx and y0<Ny
     # real or diffraction
-    assert('space' in d.keys())
-    space = d['space']
+    space = d['space'] if 'space' in d.keys() else 'Q'
     assert(space in ('Q','R'))
     # spacing, pixelsize, pixelunits
     spacing = d['spacing'] if 'spacing' in d.keys() else None
@@ -488,33 +595,9 @@ def add_cartesian_grid(ax,d):
 
     # Get the major grid-square size
     if spacing is None:
-        D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
-        exp = int(log(D,10))
-        if np.sign(log(D,10))<0:
-            exp-=1
-        base = D/(10**exp)
-        if base>=1 and base<1.25:
-            _gridspacing=0.4
-        elif base>=1.25 and base<1.75:
-            _gridspacing=0.5
-        elif base>=1.75 and base<2.5:
-            _gridspacing=0.75
-        elif base>=2.5 and base<3.25:
-            _gridspacing=1
-        elif base>=3.25 and base<4.75:
-            _gridspacing=1.5
-        elif base>=4.75 and base<6:
-            _gridspacing=2
-        elif base>=6 and base<8:
-            _gridspacing=2.5
-        elif base>=8 and base<10:
-            _gridspacing=3
-        else:
-            raise Exception("how did this happen?? base={}".format(base))
-        gridspacing = _gridspacing * 10**exp
+        gridspacing,_,_gridspacing = get_nice_spacing(Nx,Ny,pixelsize)
     else:
-        gridspacing = spacing
-        _gridspacing = 1.5
+        gridspacing,_gridspacing = spacing,1.5
 
     # Get positions for the major gridlines
     xmin = (-x0)*pixelsize
@@ -610,8 +693,7 @@ def add_polarelliptical_grid(ax,d):
     Nx,Ny = d['Nx'],d['Ny']
     assert x0<Nx and y0<Ny
     # real or diffraction
-    assert('space' in d.keys())
-    space = d['space']
+    space = d['space'] if 'space' in d.keys() else 'Q'
     assert(space in ('Q','R'))
     # spacing, N_thetalines, pixelsize, pixelunits
     spacing = d['spacing'] if 'spacing' in d.keys() else None
@@ -646,30 +728,7 @@ def add_polarelliptical_grid(ax,d):
 
     # Get the radial spacing
     if spacing is None:
-        D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
-        exp = int(log(D,10))
-        if np.sign(log(D,10))<0:
-            exp-=1
-        base = D/(10**exp)
-        if base>=1 and base<1.25:
-            _spacing=0.4
-        elif base>=1.25 and base<1.75:
-            _spacing=0.5
-        elif base>=1.75 and base<2.5:
-            _spacing=0.75
-        elif base>=2.5 and base<3.25:
-            _spacing=1
-        elif base>=3.25 and base<4.75:
-            _spacing=1.5
-        elif base>=4.75 and base<6:
-            _spacing=2
-        elif base>=6 and base<8:
-            _spacing=2.5
-        elif base>=8 and base<10:
-            _spacing=3
-        else:
-            raise Exception("how did this happen?? base={}".format(base))
-        spacing = _spacing * 10**exp
+        spacing,_,_spacing = get_nice_spacing(Nx,Ny,pixelsize)
         spacing = spacing/2.
     else:
         _spacing = 1.5
@@ -778,10 +837,39 @@ def add_polarelliptical_grid(ax,d):
 def add_rtheta_grid(ar,d):
     return
 
-def add_scalebar(ar,d):
-    return
 
-
+def get_nice_spacing(Nx,Ny,pixelsize):
+    """ Get a nice distance for gridlines, scalebars, etc
+        Returns
+            spacing_units   the spacing in real units
+            spacing_pixels  the spacing in pixels
+            _spacing        the leading digits of the spacing
+    """
+    D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
+    exp = int(log(D,10))
+    if np.sign(log(D,10))<0:
+        exp-=1
+    base = D/(10**exp)
+    if base>=1 and base<1.25:
+        _spacing=0.4
+    elif base>=1.25 and base<1.75:
+        _spacing=0.5
+    elif base>=1.75 and base<2.5:
+        _spacing=0.75
+    elif base>=2.5 and base<3.25:
+        _spacing=1
+    elif base>=3.25 and base<4.75:
+        _spacing=1.5
+    elif base>=4.75 and base<6:
+        _spacing=2
+    elif base>=6 and base<8:
+        _spacing=2.5
+    elif base>=8 and base<10:
+        _spacing=3
+    else:
+        raise Exception("how did this happen?? base={}".format(base))
+    spacing = _spacing * 10**exp
+    return spacing,spacing/pixelsize,_spacing
 
 
 
