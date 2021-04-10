@@ -602,6 +602,7 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
                                 based on a predetermined intensity value manually determined.
         minPeakSpacing        (int) the minimum allowed spacing between adjacent peaks - optional, default is false
         maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern - optional, default is false
+        mask                  (2d bool) Region the user wishes to delete peaks within
     
     Returns:
        pointlistarray        (PointListArray) Bragg peaks thresholded by intensity.
@@ -656,6 +657,13 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
                 if maxNumPeaks < pointlist.length:
                     deletemask = np.zeros(pointlist.length, dtype=bool)
                     deletemask[maxNumPeaks:] = True
+                    pointlist.remove_points(deletemask)
+                    
+                                # Delete peaks within a defined mask
+            if mask is not False:
+                deletemask = np.zeros(pointlist.length, dtype=bool)
+                for i in range(pointlist.length):
+                    deletemask = np.where((mask[pointlist.data['qx'].astype(int), pointlist.data['qy'].astype(int)] == False), True, False) 
                     pointlist.remove_points(deletemask)
     return pointlistarray
 
