@@ -223,7 +223,7 @@ def add_ellipses(ax,d):
 
     Parameters:
         center
-        r
+        a
         e
         theta
         color
@@ -235,13 +235,13 @@ def add_ellipses(ax,d):
     # handle inputs
     assert isinstance(ax,Axes)
     # semimajor axis length
-    assert('r' in d.keys())
-    r = d['r']
-    if isinstance(r,Number):
-        r = [r]
-    assert(isinstance(r,list))
-    N = len(r)
-    assert(all([isinstance(i,Number) for i in r]))
+    assert('a' in d.keys())
+    a = d['a']
+    if isinstance(a,Number):
+        a = [a]
+    assert(isinstance(a,list))
+    N = len(a)
+    assert(all([isinstance(i,Number) for i in a]))
     # center
     assert('center' in d.keys())
     center = d['center']
@@ -309,7 +309,7 @@ def add_ellipses(ax,d):
         assert(len(linestyle)==N)
         assert(all([isinstance(lw,(str)) for lw in linestyle]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','r','e','theta','color',
+    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
                                             'fill','alpha','linewidth','linestyle')]
     kwargs = dict()
     for k in kws:
@@ -317,9 +317,9 @@ def add_ellipses(ax,d):
 
     # add the ellipses
     for i in range(N):
-        cent,_r,_e,_theta,col,f,_alpha,lw,ls = (center[i],r[i],e[i],theta[i],color[i],fill[i],
+        cent,_a,_e,_theta,col,f,_alpha,lw,ls = (center[i],a[i],e[i],theta[i],color[i],fill[i],
                                                 alpha[i],linewidth[i],linestyle[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_r*_e,2*_r,90-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,90-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,linestyle=ls,**kwargs)
         ax.add_patch(ellipse)
 
@@ -748,7 +748,7 @@ def add_polarelliptical_grid(ax,d):
 
     # Add radial gridlines
     N = len(rticks)
-    d_ellipses = {'r':list(rticks),
+    d_ellipses = {'a':list(rticks),
                   'center':(x0,y0),
                   'e':e,
                   'theta':theta,
