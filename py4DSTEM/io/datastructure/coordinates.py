@@ -46,7 +46,12 @@ class Coordinates(DataObject):
             theta             (number) the (positive, right handed) tilt of the
                               semimajor axis of the elliptical distortions with
                               respect to the x-axis, in radians
-
+            QR_rotation       (number) the (positive,right handed) rotational
+                              misalignment of image plane with respect to the
+                              diffraction plane, in radians
+            QR_flip           (bool) descibes whether the image and diffraction
+                              plane's coordinate systems are inverted with
+                              respect to one another
         """
         DataObject.__init__(self, **kwargs)
 
@@ -105,6 +110,12 @@ class Coordinates(DataObject):
         self._validate_input(e)
         self._validate_input(theta)
         self.e,self.theta = e,theta
+    def set_QR_rotation(self,QR_rotation):
+        self._validate_input(QR_rotation)
+        self.QR_rotation = QR_rotation
+    def set_QR_flip(self,QR_flip):
+        self._validate_input(QR_flip)
+        self.QR_flip = QR_flip
 
     def get_R_Nx(self):
         return self.R_Nx
@@ -134,6 +145,10 @@ class Coordinates(DataObject):
         return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
         return self.get_e(rx,ry),self.get_theta(rx,ry)
+    def get_QR_rotation(self):
+        return self.QR_rotation
+    def get_QR_flip(self):
+        return self.QR_flip
 
 
     def _validate_input(self,p):
