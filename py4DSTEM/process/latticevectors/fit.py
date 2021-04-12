@@ -6,7 +6,7 @@ from numpy.linalg import lstsq
 from ...io.datastructure import PointList, PointListArray, RealSlice
 from ..utils import tqdmnd
 
-def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20, minNumPeaks=5):
+def fit_lattice_vectors(bragg_peaks, bragg_directions, x0=0, y0=0, maxPeakSpacing=20, minNumPeaks=5):
     """
     Fits lattice vectors u,v to bragg_peaks given some known (h,k) indexing in bragg_directions.
 
@@ -59,7 +59,7 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
 
     # Check to ensure enough peaks are present
     if bragg_peaks.length < minNumPeaks:
-        return None,None,None,None,None
+        return None,None,None,None,None,None,None
 
     # Get M, the matrix of (h,k) indices
     M = np.vstack((np.ones_like(h,dtype=int),h,k)).T
@@ -85,7 +85,7 @@ def fit_lattice_vectors(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20
 
     return x0,y0,ux,uy,vx,vy,error
 
-def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSpacing=20,
+def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0=0, y0=0, maxPeakSpacing=20,
                                 minNumPeaks=5, returncenters=False):
     """
     Fits lattice vectors u,v to each diffraction pattern in bragg_peaks, given some known (h,k)
@@ -146,7 +146,7 @@ def fit_lattice_vectors_all_DPs(bragg_peaks, bragg_directions, x0, y0, maxPeakSp
 
     return uv_map
 
-def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, x0, y0, mask, maxPeakSpacing=20,
+def fit_lattice_vectors_masked(bragg_peaks, bragg_directions, mask, x0=0, y0=0, maxPeakSpacing=20,
                                                                             minNumPeaks=5):
     """
     Fits lattice vectors u,v to each diffraction pattern in bragg_peaks corresponding to a scan
