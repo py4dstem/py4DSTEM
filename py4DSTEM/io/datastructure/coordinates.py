@@ -83,10 +83,12 @@ class Coordinates(DataObject):
     def set_Q_Ny(self,Q_Ny):
         self.Q_Ny = Q_Ny
     def set_Q_pixel_size(self,Q_pixel_size):
+        self._validate_input(Q_pixel_size)
         self.Q_pixel_size = Q_pixel_size
     def set_Q_pixel_units(self,Q_pixel_units):
         self.Q_pixel_units = Q_pixel_units
     def set_R_pixel_size(self,R_pixel_size):
+        self._validate_input(R_pixel_size)
         self.R_pixel_size = R_pixel_size
     def set_R_pixel_units(self,R_pixel_units):
         self.R_pixel_units = R_pixel_units
@@ -168,6 +170,17 @@ class Coordinates(DataObject):
                 return p[rx,ry]
         except (NameError,AttributeError):
             return None
+
+
+    def show(self):
+        if 'name' in vars(self).keys():
+            print('{0:<16}\t{1:<16}'.format('name',self.name))
+        for k,v in vars(self).items():
+            if k != 'name':
+                if isinstance(v,np.ndarray):
+                    v = 'array'
+                print('{0:<16}\t{1:<16}'.format(k,v))
+
 
 
 
