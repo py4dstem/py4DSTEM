@@ -694,15 +694,9 @@ def get_pointlistarray_intensities(pointlistarray):
 
     Accepts:
         pointlistarray      (PointListArray)
-        return_hist         (bool) if True, returns histogram of intensities in the entire
-                            pointlist
-        bins                (int) number of bins that the intensity values will be sorted
-                            into for histogram
 
     Returns:
         peak_intensities    (ndarray) all detected peak intensities
-        If return_hist==True (default), the counts and bin edges are returned, and can be manually plotted.
-        If return_hist==False, the figure is plotted and only peak intensities are returned.
     """
     assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), (
                     "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'.")
@@ -722,10 +716,7 @@ def get_pointlistarray_intensities(pointlistarray):
                 temp_array = np.array(pointlist.data[i][2])
                 temp_array = np.reshape(temp_array, 1)
                 peak_intensities = np.append(peak_intensities, temp_array)
-    if not return_hist:
-        return peak_intensities
-    counts, bin_edges = np.histogram(peak_intensities, bins = bins, range = (np.min(peak_intensities), np.max(peak_intensities)) )
-    return peak_intensities, counts, bin_edges
+    return peak_intensities
 
 
 
