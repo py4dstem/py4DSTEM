@@ -118,7 +118,7 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
 
     return ideal_lattice
 
-def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
+def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0, qy_shift=0, mask=None):
     """
     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
     identify the indices for each peak in the PointListArray braggpeaks.
@@ -135,6 +135,8 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
                                     Must contain the coordinates 'qx', 'qy', 'h', and 'k'
         maxPeakSpacing          (float) Maximum distance from the ideal lattice points
                                     to include a peak for indexing
+        qx_shift,qy_shift       (numbers) the shift of the origin in the `lattice` PointList
+                                    relative to the `braggpeaks` PointListArray
         mask                    (bool)  Boolean mask, same shape as the pointlistarray,
                                     indicating which locations should be indexed. This
                                     can be used to index different regions of the scan
@@ -175,8 +177,8 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, mask=None):
                 pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
 
                 for i in range(pl.length):
-                    r2 = (pl.data['qx'][i]-lattice.data['qx'])**2 + \
-                         (pl.data['qy'][i]-lattice.data['qy'])**2
+                    r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
+                         (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
                     ind = np.argmin(r2)
                     if r2[ind] <= maxPeakSpacing**2:
                         pl.data['h'][i] = lattice.data['h'][ind]
