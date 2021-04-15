@@ -633,9 +633,11 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
     """
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
                 "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
-    HI_array = np.zeros( (pointlistarray.shape[0], pointlistarray.shape[1]) )
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
-            pointlist = pointlistarray.get_pointlist(Rx,Ry)
+    _pointlistarray = pointlistarray.copy()
+
+    HI_array = np.zeros( (_pointlistarray.shape[0], _pointlistarray.shape[1]) )
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+            pointlist = _pointlistarray.get_pointlist(Rx,Ry)
             pointlist.sort(coordinate='intensity', order='descending')
             if pointlist.data.shape[0] == 0:
                 top_value = np.nan
@@ -647,8 +649,8 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
     max_intensity = np.max(HI_array)
     median_intensity = np.median(HI_array)
 
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
-            pointlist = pointlistarray.get_pointlist(Rx,Ry)
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+            pointlist = _pointlistarray.get_pointlist(Rx,Ry)
 
             # Remove peaks below minRelativeIntensity threshold
             if minIntensity is not False:
@@ -683,7 +685,7 @@ def universal_threshold(pointlistarray, minIntensity, metric, minPeakSpacing=Fal
                     deletemask = np.zeros(pointlist.length, dtype=bool)
                     deletemask[maxNumPeaks:] = True
                     pointlist.remove_points(deletemask)
-    return pointlistarray
+    return _pointlistarray
 
 
 def get_pointlistarray_intensities(pointlistarray):
