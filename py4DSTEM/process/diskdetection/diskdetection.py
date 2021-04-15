@@ -656,18 +656,11 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
         _thresh = np.max(HI_array)*thresh
     elif metric=='average':
         _thresh = np.nanmean(HI_array)*thresh
-        print(thresh)
-        print(np.nanmean(HI_array))
-        print(_thresh)
     elif metric=='median':
         _thresh = np.median(HI_array)*thresh
-        print(thresh)
-        print(np.median(HI_array))
-        print(_thresh)
     else:
         _thresh = thresh
 
-    print(_thresh)
     for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
             pointlist = _pointlistarray.get_pointlist(Rx,Ry)
 
