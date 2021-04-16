@@ -28,10 +28,11 @@ def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     g2y = gy[i2] - gy[i0]
     return (g1x,g1y),(g2x,g2y)
 
-def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
+def index_bragg_directions(x0, y0, gx, gy, g1, g2):
     """
-    From an origin (x0,y0), an pair of lattice vectors (ux,uy), (vx,vy), and a set of measured
-    bragg directions (bragg_x,bragg_y), find the indices (h,k) of all the bragg directions.
+    From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
+    lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the reciprocal
+    lattice directions.
 
     The approach is to solve the matrix equation
             alpha = beta * M
@@ -41,12 +42,10 @@ def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
     Accepts:
         x0                  (float) x-coord of origin
         y0                  (float) y-coord of origin
-        ux                  (float) x-coord of first lattice vector
-        uy                  (float) y-coord of first lattice vector
-        vx                  (float) x-coord of second lattice vector
-        vy                  (float) y-coord of second lattice vector
-        bragg_x             (ndarray of floats) x-coords of bragg directions
-        bragg_y             (ndarray of floats) y-coords of bragg directions
+        gx                  (1d array) x-coord of the reciprocal lattice vectors
+        gy                  (1d array) y-coord of the reciprocal lattice vectors
+        g1                  (2-tuple of floats) g1x,g1y
+        g2                  (2-tuple of floats) g2x,g2y
 
     Returns:
         h                   (ndarray of ints) first index of the bragg directions
@@ -56,10 +55,10 @@ def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
                             coords 'h' and 'k' contain h and k.
     """
     # Get beta, the matrix of lattice vectors
-    beta = np.array([[ux,vx],[uy,vy]])
+    beta = np.array([[g1[0],g2[0]],[g1[1],g2[1]]])
 
     # Get alpha, the matrix of measured bragg angles
-    alpha = np.vstack([bragg_x-x0,bragg_y-y0])
+    alpha = np.vstack([gx-x0,gy-y0])
 
     # Calculate M, the matrix of peak positions
     M = lstsq(beta, alpha, rcond=None)[0].T
@@ -72,7 +71,7 @@ def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
     # Store in a PointList
     coords = [('qx',float),('qy',float),('h',int),('k',int)]
     bragg_directions = PointList(coordinates=coords)
-    bragg_directions.add_tuple_of_nparrays((bragg_x,bragg_y,h,k))
+    bragg_directions.add_tuple_of_nparrays((gx,gy,h,k))
 
     return h,k, bragg_directions
 
