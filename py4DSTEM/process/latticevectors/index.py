@@ -5,6 +5,29 @@ from numpy.linalg import lstsq
 
 from ...io.datastructure import PointList, PointListArray
 
+def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
+    """
+    From a set of reciprocal lattice points (gx,gy), and indices in those arrays which specify
+        i0 - the center beam
+        i1 - g1, the first basis lattice vector
+        i2 - g2, the second basis lattice vector
+    computes and returns the lattice vectors g1 and g2.
+
+    Accepts:
+        gx,gy       (1d arrays) the reciprocal lattice points
+        i0,i1,i2    (integers) indices of the reciprocal lattice points of interest
+
+    Returns:
+        g1,g2       (2-tuples) the lattice vectors, (g1x,g1y),(g2x,g2y)
+    """
+    for i in (i0,i1,i2):
+        assert isinstance(i,(int,np.integer))
+    g1x = gx[i1] - gx[i0]
+    g1y = gy[i1] - gy[i0]
+    g2x = gx[i2] - gx[i0]
+    g2y = gy[i2] - gy[i0]
+    return (g1x,g1y),(g2x,g2y)
+
 def index_bragg_directions(x0, y0, ux, uy, vx, vy, bragg_x, bragg_y):
     """
     From an origin (x0,y0), an pair of lattice vectors (ux,uy), (vx,vy), and a set of measured

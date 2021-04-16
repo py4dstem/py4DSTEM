@@ -4,10 +4,13 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 from . import show
+from .overlay import add_pointlabels,add_vector,add_bragg_index_labels
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
+from ..io import PointList
 from ..process.utils import get_voronoi_vertices
 from ..process.calibration import double_sided_gaussian
+from ..process.latticevectors import get_selected_lattice_vectors
 
 def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -330,3 +333,131 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
         return fig,axs
 
 
+def show_pointlabels(ar,x,y,color='lightblue',size=20,alpha=1,returnfig=False,**kwargs):
+    """
+    Show enumerated index labels for a set of points
+    """
+    fig,ax = show(ar,returnfig=True,**kwargs)
+    d = {'x':x,'y':y,'size':size,'color':color,'alpha':alpha}
+    add_pointlabels(ax,d)
+
+    if returnfig:
+        return fig,ax
+    else:
+        plt.show()
+        return
+
+
+def select_point(ar,x,y,i,color='lightblue',color_selected='r',size=20,returnfig=False,**kwargs):
+    """
+    Show enumerated index labels for a set of points, with one selected point highlighted
+    """
+    fig,ax = show(ar,returnfig=True,**kwargs)
+    d1 = {'x':x,'y':y,'size':size,'color':color}
+    d2 = {'x':x[i],'y':y[i],'size':size,'color':color_selected,'fontweight':'bold'}
+    add_pointlabels(ax,d1)
+    add_pointlabels(ax,d2)
+
+    if returnfig:
+        return fig,ax
+    else:
+        plt.show()
+        return
+
+
+def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
+               c_indices='lightblue',c0='g',c1='r',c2='r',c_vectors='r',c_vectorlabels='w',
+               size_indices=20,width_vectors=1,size_vectorlabels=20,
+               figsize=(12,6),returnfig=False,**kwargs):
+    """
+    This function accepts a set of reciprocal lattice points (gx,gy) and three indices
+    (i0,i1,i2).  Using those indices as, respectively, the origin, the endpoint of g1, and
+    the endpoint of g2, this function computes the basis lattice vectors g1,g2, visualizes
+    them, and returns them.  To compute these vectors without visualizing, use
+    latticevectors.get_selected_lattice_vectors().
+
+    Returns:
+        if returnfig==False:    g1,g2
+        if returnfig==True      g1,g2,fig,ax
+    """
+    # Make the figure
+    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
+    show(ar,figax=(fig,ax1),**kwargs)
+    show(ar,figax=(fig,ax2),**kwargs)
+
+    # Add indices to left panel
+    d = {'x':gx,'y':gy,'size':size_indices,'color':c_indices}
+    d0 = {'x':gx[i0],'y':gy[i0],'size':size_indices,'color':c0,'fontweight':'bold','labels':[str(i0)]}
+    d1 = {'x':gx[i1],'y':gy[i1],'size':size_indices,'color':c1,'fontweight':'bold','labels':[str(i1)]}
+    d2 = {'x':gx[i2],'y':gy[i2],'size':size_indices,'color':c2,'fontweight':'bold','labels':[str(i2)]}
+    add_pointlabels(ax1,d)
+    add_pointlabels(ax1,d0)
+    add_pointlabels(ax1,d1)
+    add_pointlabels(ax1,d2)
+
+    # Compute vectors
+    g1,g2 = get_selected_lattice_vectors(gx,gy,i0,i1,i2)
+
+    # Add vectors to right panel
+    dg1 = {'x0':gx[i0],'y0':gy[i0],'vx':g1[0],'vy':g1[1],'width':width_vectors,
+           'color':c_vectors,'label':r'$g_1$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
+    dg2 = {'x0':gx[i0],'y0':gy[i0],'vx':g2[0],'vy':g2[1],'width':width_vectors,
+           'color':c_vectors,'label':r'$g_2$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
+    add_vector(ax2,dg1)
+    add_vector(ax2,dg2)
+
+    if returnfig:
+        return g1,g2,fig,ax
+    else:
+        plt.show()
+        return g1,g2
+
+
+def show_lattice_vectors(ar,x0,y0,g1,g2,color='r',width=1,labelsize=20,labelcolor='w',returnfig=False,**kwargs):
+    """ Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).  g1 and g2 are 2-tuples (gx,gy).
+    """
+    fig,ax = show(ar,returnfig=True,**kwargs)
+
+    # Add vectors
+    dg1 = {'x0':x0,'y0':y0,'vx':g1[0],'vy':g1[1],'width':width,
+           'color':color,'label':r'$g_1$','labelsize':labelsize,'labelcolor':labelcolor}
+    dg2 = {'x0':x0,'y0':y0,'vx':g2[0],'vy':g2[1],'width':width,
+           'color':color,'label':r'$g_2$','labelsize':labelsize,'labelcolor':labelcolor}
+    add_vector(ax,dg1)
+    add_vector(ax,dg2)
+
+    if returnfig:
+        return fig,ax
+    else:
+        plt.show()
+        return
+
+
+def show_bragg_indexing(ar,braggdirections,voffset=5,hoffset=0,color='w',size=20,
+                        points=True,pointcolor='r',pointsize=50,returnfig=False,**kwargs):
+    """
+    Shows an array with an overlay describing the Bragg directions
+
+    Accepts:
+        ar                  (arrray) the image
+        bragg_directions    (PointList) the bragg scattering directions; must have coordinates
+                            'qx','qy','h', and 'k'. Optionally may also have 'l'.
+    """
+    assert isinstance(braggdirections,PointList)
+    for k in ('qx','qy','h','k'):
+        assert k in braggdirections.data.dtype.fields
+
+    fig,ax = show(ar,returnfig=True,**kwargs)
+    d = {'braggdirections':braggdirections,'voffset':voffset,'hoffset':hoffset,'color':color,
+         'size':size,'points':points,'pointsize':pointsize,'pointcolor':pointcolor}
+    add_bragg_index_labels(ax,d)
+
+    if returnfig:
+        return fig,ax
+    else:
+        plt.show()
+        return
+
+
+def show_max_peak_spacing(ar,d):
+    return

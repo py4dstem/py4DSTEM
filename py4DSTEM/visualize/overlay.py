@@ -6,6 +6,7 @@ from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
 from fractions import Fraction
+from ..io import PointList
 
 def add_rectangles(ax,d):
     """
@@ -375,6 +376,166 @@ def add_points(ax,d):
     ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha)
 
     return
+
+
+def add_pointlabels(ax,d):
+    """
+    adds number indices for a set of points to axis ax using the parameters in dictionary d.
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # x
+    assert('x' in d.keys())
+    x = d['x']
+    if isinstance(x,Number):
+        x = [x]
+    x = np.array(x)
+    N = len(x)
+    # y
+    assert('y' in d.keys())
+    y = d['y']
+    if isinstance(y,Number):
+        y = [y]
+    y = np.array(y)
+    assert(len(y)==N)
+    # size
+    size = d['size'] if 'size' in d.keys() else 20
+    assert isinstance(size,Number)
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    assert is_color_like(color)
+    # alpha
+    alpha = d['alpha'] if 'alpha' in d.keys() else 1.
+    assert isinstance(alpha,Number)
+    # labels
+    labels = d['labels'] if 'labels' in d.keys() else np.arange(N).astype(str)
+    assert len(labels)==N
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x','y','size','color','alpha','labels')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # add the point labels
+    for i in range(N):
+        ax.text(y[i],x[i],s=labels[i],color=color,size=size,alpha=alpha,**kwargs)
+
+    return
+
+def add_bragg_index_labels(ax,d):
+    """
+    Adds labels for indexed bragg directions to a plot, using the parameters in dict d.
+
+    The dictionary d has required and optional parameters as follows:
+        braggdirections (req'd) (PointList) the Bragg directions. This PointList must have
+                        the fields 'qx','qy','h', and 'k', and may optionally have 'l'
+        voffset         (number) vertical offset for the labels
+        hoffset         (number) horizontal offset for the labels
+        color           (color)
+        size            (number)
+        points          (bool)
+        pointsize       (number)
+        pointcolor      (color)
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # bragg directions
+    assert('braggdirections' in d.keys())
+    braggdirections = d['braggdirections']
+    assert isinstance(braggdirections,PointList)
+    for k in ('qx','qy','h','k'):
+        assert k in braggdirections.data.dtype.fields
+    include_l = True if 'l' in braggdirections.data.dtype.fields else False
+    # offsets
+    hoffset = d['hoffset'] if 'hoffset' in d.keys() else 0
+    voffset = d['voffset'] if 'voffset' in d.keys() else 5
+    # size, color
+    size = d['size'] if 'size' in d.keys() else 20
+    assert isinstance(size,Number)
+    color = d['color'] if 'color' in d.keys() else 'w'
+    assert is_color_like(color)
+    # points
+    points = d['points'] if 'points' in d.keys() else True
+    pointsize = d['pointsize'] if 'pointsize' in d.keys() else 50
+    pointcolor = d['pointcolor'] if 'pointcolor' in d.keys() else 'r'
+    assert isinstance(points,bool)
+    assert isinstance(pointsize,Number)
+    assert is_color_like(pointcolor)
+
+    # add the points
+    if points:
+        ax.scatter(braggdirections.data['qy'],braggdirections.data['qx'],
+                   color=pointcolor,s=pointsize)
+
+    # add index labels
+    for i in range(braggdirections.length):
+        x,y = braggdirections.data['qx'][i],braggdirections.data['qy'][i]
+        x -= voffset
+        y += hoffset
+        h,k = braggdirections.data['h'][i],braggdirections.data['k'][i]
+        h = str(h) if h>=0 else '$\overline{{{}}}$'.format(np.abs(h))
+        k = str(k) if k>=0 else '$\overline{{{}}}$'.format(np.abs(k))
+        s = h+k
+        if include_l:
+            l = braggdirections.data['l'][i]
+            l = str(l) if l>=0 else '$\overline{{{}}}$'.format(np.abs(l))
+            s += l
+        ax.text(y,x,s,color=color,size=size,ha='center',va='center')
+
+    return
+
+
+def add_vector(ax,d):
+    """
+    Adds a vector to an image, using the parameters in dict d.
+
+    The dictionary d has required and optional parameters as follows:
+        x0,y0           (req'd) the tail position
+        vx,vy           (req'd) the vector
+        color           (color)
+        width           (number)
+        label           (str)
+        labelsize       (number)
+        labelcolor      (color)
+    """
+    # handle inputs
+    assert isinstance(ax,Axes)
+    # head and tail positions
+    assert('x0' in d.keys())
+    assert('y0' in d.keys())
+    assert('vx' in d.keys())
+    assert('vy' in d.keys())
+    x0,y0,vx,vy = d['x0'],d['y0'],d['vx'],d['vy']
+    # width
+    width = d['width'] if 'width' in d.keys() else 1
+    # color
+    color = d['color'] if 'color' in d.keys() else 'r'
+    assert is_color_like(color)
+    # label
+    label = d['label'] if 'label' in d.keys() else False
+    labelsize = d['labelsize'] if 'labelsize' in d.keys() else 20
+    labelcolor = d['labelcolor'] if 'labelcolor' in d.keys() else 'w'
+    assert isinstance(label,(str,bool))
+    assert isinstance(labelsize,Number)
+    assert is_color_like(labelcolor)
+    # additional parameters
+    kws = [k for k in d.keys() if k not in ('x0','y0','vx','vy',
+                       'width','color','label','labelsize','labelcolor')]
+    kwargs = dict()
+    for k in kws:
+        kwargs[k] = d[k]
+
+    # Add the vector
+    ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True,**kwargs)
+
+    # Add label
+    if label:
+        x,y = x0+0.5*vx,y0+0.5*vy
+        ax.text(y,x,label,size=labelsize,
+                color=labelcolor,ha='center',va='center')
+
+    return
+
 
 
 def add_grid_overlay(ax,d):
