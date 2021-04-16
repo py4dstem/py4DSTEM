@@ -459,5 +459,14 @@ def show_bragg_indexing(ar,braggdirections,voffset=5,hoffset=0,color='w',size=20
         return
 
 
-def show_max_peak_spacing(ar,d):
-    return
+def show_max_peak_spacing(ar,spacing,braggdirections,color='g',lw=2,returnfig=False,**kwargs):
+    """ Show a circle of radius `spacing` about each Bragg direction
+    """
+    centers = [(braggdirections.data['qx'][i],braggdirections.data['qy'][i]) for i in range(braggdirections.length)]
+    fig,ax = show(ar,circle={'center':centers,'R':spacing,'color':color,'fill':False,'lw':lw},
+                  returnfig=True,**kwargs)
+    if returnfig:
+        return fig,ax
+    else:
+        plt.show()
+        return
