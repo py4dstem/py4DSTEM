@@ -65,8 +65,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
                     vertical lines
         n_bins      (int) number of hist bins
         mask        (None or boolean array) if not None, must have the same shape
-                    as 'ar'. Wherever mask==True, pixel values are set to
-                    mask_color. If hist==True, ignore these values in the histogram
+                    as 'ar'. Wherever mask==True, plot the pixel normally, and where
+                    mask==False, pixel values are set to mask_color. If hist==True,
+                    ignore these values in the histogram
         mask_color  (color) see 'mask'
         **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
@@ -142,6 +143,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     if mask is not None:
         assert mask.shape == ar.shape
         assert is_color_like(mask_color)
+    else:
+        mask = np.ones_like(ar,dtype=bool)
 
     # Perform any scaling
     if scaling == 'none':
@@ -158,6 +161,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         raise Exception
     if isinstance(ar,MaskedArray):
         _ar = np.ma.array(data=_ar,mask=ar.mask)
+    else:
+        _ar = np.ma.array(data=_ar,mask=mask==False)
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -171,8 +176,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         vmin = m - min*s
         vmax = m + max*s
     elif clipvals == 'centered':
-        c = 0 if min is None else min
-        m = np.max(np.abs(ar)) if max is None else max
+        c = np.mean(_ar) if min is None else min
+        m = np.max(np.abs(c-_ar)) if max is None else max
         vmin = c-m
         vmax = c+m
     else:
@@ -191,18 +196,14 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Plot the image
     if not hist:
         cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
-        if mask is not None:
-            mask_display = np.ma.array(data=mask,mask=mask==False)
+        if np.any(mask==False):
+            mask_display = np.ma.array(data=_ar.mask,mask=_ar.mask==False)
             cmap = ListedColormap([mask_color,'w'])
             ax.matshow(mask_display,cmap=cmap)
     # ...or, plot its histogram
     else:
-        if mask is None:
-            hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),np.max(_ar),
-                                                               num=n_bins))
-        else:
-            hist,bin_edges = np.histogram(_ar[mask==False],
-                                   bins=np.linspace(np.min(_ar),np.max(_ar),num=n_bins))
+        hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
+                                                np.max(_ar),num=n_bins))
         w = bin_edges[1]-bin_edges[0]
         x = bin_edges[:-1]+w/2.
         ax.bar(x,hist,width=w)
