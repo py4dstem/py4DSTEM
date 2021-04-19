@@ -238,7 +238,8 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
                 axes_labelsize=12,axes_labelcolor='r',axes_plots=('exx'),cmap='RdBu_r',
                 figsize=(12,12),returnfig=False):
     """
-    Words
+    Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
+    masking each image with strainmap.slices['mask'].
     """
     # Contrast limits
     if vrange_exy is None:
