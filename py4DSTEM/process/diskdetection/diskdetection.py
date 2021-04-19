@@ -604,7 +604,7 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
 
 
 def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing=False,
-                                                                    maxNumPeaks=False):
+                                                            maxNumPeaks=False,name=None):
     """
     Takes a PointListArray of detected Bragg peaks and applies universal thresholding,
     returning the thresholded PointListArray. To skip a threshold, set that parameter to False.
@@ -633,6 +633,9 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
                               optional, default is false
         maxNumPeaks           (int) maximum number of allowed peaks per diffraction pattern -
                               optional, default is false
+        name                  (str, optional) a name for the returned PointListArray.
+                              If unspecified, takes the old PLA name and appends
+                              '_unithresh'.
 
     Returns:
        pointlistarray        (PointListArray) Bragg peaks thresholded by intensity.
@@ -643,6 +646,8 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
                 "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
     _pointlistarray = pointlistarray.copy()
+    if name is None:
+        _pointlistarray.name = pointlistarray.name+"_unithresh"
 
     HI_array = np.zeros( (_pointlistarray.shape[0], _pointlistarray.shape[1]) )
     for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
