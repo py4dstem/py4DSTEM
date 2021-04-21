@@ -143,26 +143,31 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     if mask is not None:
         assert mask.shape == ar.shape
         assert is_color_like(mask_color)
+        if isinstance(ar,np.ma.masked_array):
+            ar = np.ma.array(data=ar.data,mask=mask==False)
+        else:
+            ar = np.ma.array(data=ar,mask=mask==False)
+    elif isinstance(ar,np.ma.masked_array):
+        pass
     else:
         mask = np.ones_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask==False)
 
     # Perform any scaling
     if scaling == 'none':
-        _ar = ar
+        _ar = ar.copy()
+        _mask = np.ones_like(_ar.data,dtype=bool)
     elif scaling == 'log':
         _mask = ar>0
-        _ar = np.zeros_like(ar,dtype=float)
+        _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
     elif scaling == 'power':
         _mask = ar>0
-        _ar = np.zeros_like(ar,dtype=float)
+        _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar[_mask],power)
     else:
         raise Exception
-    if isinstance(ar,MaskedArray):
-        _ar = np.ma.array(data=_ar,mask=ar.mask)
-    else:
-        _ar = np.ma.array(data=_ar,mask=mask==False)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_and(ar.mask==False,_mask)==False)
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -196,7 +201,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Plot the image
     if not hist:
         cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
-        if np.any(mask==False):
+        if np.any(_ar.mask==True):
             mask_display = np.ma.array(data=_ar.mask,mask=_ar.mask==False)
             cmap = ListedColormap([mask_color,'w'])
             ax.matshow(mask_display,cmap=cmap)
