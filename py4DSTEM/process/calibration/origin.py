@@ -84,7 +84,7 @@ def get_origin_single_dp(dp,r,rscale=1.2):
     qx0,qy0 = get_CoM(dp*mask)
     return qx0,qy0
 
-def get_origin(datacube,r=None,rscale=1.2,dp_max=None):
+def get_origin(datacube,r=None,rscale=1.2,dp_max=None,mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, assuming:
         - There is no beam stop
@@ -102,9 +102,12 @@ def get_origin(datacube,r=None,rscale=1.2,dp_max=None):
                     if dp_max==None (default), computes and uses the maximal diffraction
                     pattern. Otherwise, this should be a (Q_Nx,Q_Ny) shaped array.
                     diffraction
+        mask        (ndarray or None) if not None, should be an (R_Nx,R_Ny) shaped
+                    boolean array. Origin is found only where mask==True, and masked
+                    arrays are returned for qx0,qy0
 
     Returns:
-        qx0,qy0     (numbers) the origin
+        qx0,qy0     (ndarrays) the origin
     """
     if r is None:
         if dp_max is None:
@@ -116,12 +119,30 @@ def get_origin(datacube,r=None,rscale=1.2,dp_max=None):
     qx0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
     qy0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
     qyy,qxx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
-    for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
-        dp = datacube.data[rx,ry,:,:]
-        _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
-                                     (datacube.Q_Nx,datacube.Q_Ny))
-        mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
-        qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*mask)
+
+    if mask is None:
+        for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
+            dp = datacube.data[rx,ry,:,:]
+            _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
+                                         (datacube.Q_Nx,datacube.Q_Ny))
+            _mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
+            qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*_mask)
+
+    else:
+        assert mask.shape==(datacube.R_Nx,datacube.R_Ny)
+        assert mask.dtype==bool
+        qx0 = np.ma.array(data=qx0,mask=np.zeros((datacube.R_Nx,datacube.R_Ny),dtype=bool))
+        qy0 = np.ma.array(data=qy0,mask=np.zeros((datacube.R_Nx,datacube.R_Ny),dtype=bool))
+        for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
+            if mask[rx,ry]:
+                dp = datacube.data[rx,ry,:,:]
+                _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
+                                             (datacube.Q_Nx,datacube.Q_Ny))
+                _mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
+                qx0.data[rx,ry],qy0.data[rx,ry] = get_CoM(dp*_mask)
+            else:
+                qx0.mask,qy0.mask = True,True
+
     return qx0,qy0
 
 def get_origin_single_dp_beamstop(dp,**kwargs):
