@@ -1,12 +1,12 @@
 # py4DSTEM: open source processing and analysis of 4D-STEM data
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
-py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
+py4DSTEM is a python tool for analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
 
 ## Try it for yourself
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/alex-rakowski/py4DSTEM/HEAD?filepath=sample_code)
 You can test some of the py4DSTEM sample Jupyter notebooks in your browser using Binder - just click the banner above.
-**Please note that these are currently under contruction and don't all work perfectly yet!**
+**Please note that these are currently under construction and don't all work perfectly yet!**
 
 ## What is 4D-STEM?
 
@@ -33,7 +33,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 ## Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
-First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
+First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
 Then open a terminal and run
 
 ```
@@ -67,7 +67,7 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 ## Running the GUI
 
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
-Our intention is to support many of these analyes through the GUI eventually.
+Our intention is to support many of these analyses through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
 Stay tuned for further developments!
 
