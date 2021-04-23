@@ -373,7 +373,7 @@ def add_points(ax,d):
         kwargs[k] = d[k]
 
     # add the points
-    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha)
+    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
 
     return
 
