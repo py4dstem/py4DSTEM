@@ -179,7 +179,7 @@ def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',returnfitp=False)
 
     Accepts:
         qx0_meas,qy0_meas       (2d arrays)
-        mask                    (2b boolean array)
+        mask                    (2b boolean array) ignore points where mask=True
         fitfunction             (str) must be 'plane' or 'parabola'
         returnfitp              (bool) if True, returns the fit parameters
 
