@@ -1,91 +1,83 @@
-# File reader for files written by py4DSTEM v0.9.0+
+# Reader for py4DSTEM v0.9 - v0.11 files
 
 import h5py
 import numpy as np
-from os.path import splitext
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version
-from .read_utils import version_is_geq, get_py4DSTEM_dataobject_info
-from .metadata import metadata_from_h5
-from ..datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
-from ..datastructure import PointList, PointListArray
-from ...process.utils import tqdmnd
-from .legacy import read_v070,read_v060,read_v050
+from os.path import splitext, exists
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from .read_utils_v0_9 import get_py4DSTEM_dataobject_info
+from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray
+from ....process.utils import tqdmnd
 
-
-def read_py4DSTEM(filepath, metadata=False, **kwargs):
+def read_v0_9(fp, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.9.0+.  Precise behavior is
-    detemined by which arguments are passed -- see below.
+    File reader for files written by py4DSTEM v0.9-0.11.  Precise behavior is detemined by which
+    arguments are passed -- see below.
 
     Accepts:
-        filepath    (str or Path) When passed a filepath only, this function
-                    checks if the path points to a valid py4DSTEM file, then
-                    prints its contents to screen.
-        data_id     (int/str/list) Specifies which data to load. Use integers to
-                    specify the data index, or strings to specify data names. A
-                    list or tuple returns a list of DataObjects. Returns the
-                    specified data.
-        topgroup    (str) Stricty, a py4DSTEM file is considered to be everything
-                    inside a toplevel subdirectory within the HDF5 file, so that
-                    if desired one can place many py4DSTEM files inside a single
-                    H5.  In this case, when loading data, the topgroup argument
-                    is passed to indicate which py4DSTEM file to load. If an H5
-                    containing multiple py4DSTEM files is passed without a
-                    topgroup specified, the topgroup names are printed to screen.
-        metadata    (bool) If True, returns the metadata as a Metadata instance.
-        mem         (str) Only used if a single DataCube is loaded. In this case,
-                    mem specifies how the data should be stored; must be "RAM" or
-                    "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is
-                    "RAM".
-        binfactor   (int) Only used if a single DataCube is loaded. In this case,
-                    a binfactor of > 1 causes the data to be binned by this amount
-                    as it's loaded.
-        dtype       (dtype) Used when binning data, ignored otherwise. Defaults
-                    to whatever the type of the raw data is, to avoid enlarging
-                    data size. May be useful to avoid 'wraparound' errors.
+        filepath    str or Path     When passed a filepath only, this function checks if the path
+                                    points to a valid py4DSTEM file, then prints its contents to screen.
+        data_id     int/str/list    Specifies which data to load. Use integers to specify the
+                                    data index, or strings to specify data names. A list or
+                                    tuple returns a list of DataObjects. Returns the specified data.
+        topgroup     str            Stricty, a py4DSTEM file is considered to be
+                                    everything inside a toplevel subdirectory within the
+                                    HDF5 file, so that if desired one can place many py4DSTEM
+                                    files inside a single H5.  In this case, when loading
+                                    data, the topgroup argument is passed to indicate which
+                                    py4DSTEM file to load. If an H5 containing multiple
+                                    py4DSTEM files is passed without a topgroup specified,
+                                    the topgroup names are printed to screen.
+        metadata    bool            If True, returns a dictionary with the file metadata.
+        log         bool            If True, writes the processing log to a plaintext file
+                                    called splitext(fp)[0]+'.log'.
+        mem         str             Only used if a single DataCube is loaded. In this case, mem
+                                    specifies how the data should be stored; must be "RAM"
+                                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+                                    is "RAM".
+        binfactor   int             Only used if a single DataCube is loaded. In this case,
+                                    a binfactor of > 1 causes the data to be binned by this amount
+                                    as it's loaded.
+        dtype       dtype           Used when binning data, ignored otherwise. Defaults to whatever
+                                    the type of the raw data is, to avoid enlarging data size. May be
+                                    useful to avoid 'wraparound' errors.
 
     Returns:
-        data        Variable output.
-                    If no input arguments with return values (i.e. data_id or
-                    metadata) are passed, nothing is returned.
-                    If metadata==True, returns a Metadata instance with the file
-                    metadata.
-                    Otherwise, a single DataObject or list of DataObjects are
-                    returned, based on the value of the argument data_id.
+        data,md                     The function always returns a length 2 tuple corresponding
+                                    to data and md.  If no input arguments with return values (i.e.
+                                    data, metadata), these will return None.  Otherwise, their return
+                                    values are as described above. E.f. passing data=[0,1,2],metadata=True
+                                    will return a length two tuple, the first element being a list of 3
+                                    DataObject instances and the second a MetaData instance.
     """
-    assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
+    assert(exists(fp)), "Error: specified filepath does not exist"
+    assert(is_py4DSTEM_file(fp)), "Error: {} isn't recognized as a py4DSTEM file.".format(fp)
 
-    # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
-    # disambiguate desired data
-    tgs = get_py4DSTEM_topgroups(filepath)
+    # For HDF5 files containing multiple valid EMD type 2 files, disambiguate desired data
+    tgs = get_py4DSTEM_topgroups(fp)
     if 'topgroup' in kwargs.keys():
         tg = kwargs['topgroup']
-        #assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
+        assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
     else:
         if len(tgs)==1:
             tg = tgs[0]
         else:
-            print("Multiple topgroups were found -- please specify one:")
+            print("Multiple topgroups detected.  Please specify one by passing the 'topgroup' keyword argument.")
             print("")
+            print("Topgroups found:")
             for tg in tgs:
                 print(tg)
-            return
+            return None,None
 
-    # Get py4DSTEM version
-    version = get_py4DSTEM_version(filepath, tg)
-    if not version_is_geq(version,(0,9,0)):
-        if version == (0,7,0):
-            return read_v070(filepath, **kwargs)
-        elif version == (0,6,0):
-            return read_v060(filepath, **kwargs)
-        elif version == (0,5,0):
-            return read_v050(filepath, **kwargs)
-        else:
-            raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
+    version = get_py4DSTEM_version(fp, tg)
+    assert(version_is_geq(version,(0,9,0)) and not version_is_geq(version,(0,12,0))), (
+                                                               "File must be v0.9-0.11")
+    _data_id = 'data_id' in kwargs.keys()  # Flag indicating if data was requested
 
     # If metadata is requested
-    if metadata:
-        return metadata_from_h5(filepath, tg)
+    if 'metadata' in kwargs.keys():
+        if kwargs['metadata']:
+            return metadata_from_h5(fp, tg)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():
@@ -111,12 +103,19 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
         else:
             bindtype = None
 
-        return get_data(filepath,tg,data_id,mem,binfactor,bindtype)
+        return get_data(fp,tg,data_id,mem,binfactor,bindtype)
 
     # If no data is requested
     else:
-        print_py4DSTEM_file(filepath,tg)
+        print_py4DSTEM_file(fp,tg)
         return
+
+
+
+
+
+
+
 
 
 ############ Helper functions ############
@@ -316,7 +315,6 @@ def get_pointlistarray_from_grp(g):
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         pla.get_pointlist(i,j).add_dataarray(dset[i,j])
     return pla
-
 
 
 
