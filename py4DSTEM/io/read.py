@@ -1,7 +1,7 @@
 # General reader for 4D-STEM datasets.
 
 import pathlib
-from os.path import splitext
+from os.path import exists,splitext
 from .native import read_py4DSTEM, is_py4DSTEM_file
 from .nonnative import *
 
@@ -79,6 +79,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
         md          MetaData    The metadata.
     """
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(exists(fp)), "Error: specified filepath does not exist."
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"

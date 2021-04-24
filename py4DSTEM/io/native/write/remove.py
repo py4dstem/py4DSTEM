@@ -2,9 +2,9 @@ import h5py
 import numpy as np
 from os import rename
 from os.path import exists, dirname, basename
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
-from .read_utils import get_py4DSTEM_dataobject_info
 from .copy import copy
+from ..read import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from ..read.read_v0_12 import get_py4DSTEM_dataobject_info
 
 def remove(filepath, data, topgroup='4DSTEM_experiment', delete=True):
     """
