@@ -15,7 +15,7 @@ from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar, upsampled_correlation
 from ..utils import tqdmnd
 
-def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
                                   sigma = 2,
                                   edgeBoundary = 20,
@@ -25,6 +25,7 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   maxNumPeaks = 70,
                                   subpixel = 'multicorr',
                                   upsample_factor = 16,
+                                  filter_function = None,
                                   return_cc = False,
                                   peaks = None):
     """
@@ -71,6 +72,13 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -81,6 +89,8 @@ def find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         peaks                (PointList) the Bragg peak positions and correlation intensities
     """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+
+    DP = DP if filter_function is None else filter_function(DP)
 
     if subpixel == 'none':
         cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
@@ -154,10 +164,11 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                maxNumPeaks = 70,
                                subpixel = 'multicorr',
                                upsample_factor = 16,
+                               filter_function = None,
                                return_cc = False):
     """
-    Identical to find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
-    real space, rather than Fourier space. For more info, see the find_Bragg_disks_single_DP_FK
+    Identical to _find_Bragg_disks_single_DP_FK, accept that this function accepts a probe_kernel in
+    real space, rather than Fourier space. For more info, see the _find_Bragg_disks_single_DP_FK
     documentation.
 
     Accepts:
@@ -181,14 +192,22 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
         return_cc            (bool) if True, return the cross correlation
 
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
 
     """
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
-    return find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+    return _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                          corrPower = corrPower,
                                          sigma = sigma,
                                          edgeBoundary = edgeBoundary,
@@ -198,6 +217,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          maxNumPeaks = maxNumPeaks,
                                          subpixel = subpixel,
                                          upsample_factor = upsample_factor,
+                                         filter_function = filter_function,
                                          return_cc = return_cc)
 
 
@@ -210,7 +230,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               minPeakSpacing = 60,
                               maxNumPeaks = 70,
                               subpixel = 'multicorr',
-                              upsample_factor = 16):
+                              upsample_factor = 16,
+                              filter_function = None):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions (Rx,Ry) by
     cross, hybrid, or phase correlation with probe.
@@ -238,12 +259,20 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill. 
 
     Returns:
         peaks                (n-tuple of PointLists, n=len(Rx)) the Bragg peak positions and
                              correlation intensities at each scan position (Rx,Ry)
     """
     assert(len(Rx)==len(Ry))
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
     peaks = []
 
     # Get probe kernel in Fourier space
@@ -252,8 +281,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     # Loop over selected diffraction patterns
     t0 = time()
     for i in range(len(Rx)):
-        DP = datacube.data[Rx[i],Ry[i],:,:]
-        peaks.append(find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+        DP = datacube.data[Rx[i],Ry[i],:,:] 
+        peaks.append(_find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                                    corrPower = corrPower,
                                                    sigma = sigma,
                                                    edgeBoundary = edgeBoundary,
@@ -262,7 +291,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                                    minPeakSpacing = minPeakSpacing,
                                                    maxNumPeaks = maxNumPeaks,
                                                    subpixel = subpixel,
-                                                   upsample_factor = upsample_factor))
+                                                   upsample_factor = upsample_factor,
+                                                   filter_function = filter_function))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
                                                                    int((t%3600)/60), int(t%60)))
@@ -283,6 +313,7 @@ def find_Bragg_disks_serial(datacube, probe,
                             global_threshold = False,
                             minGlobalIntensity = 0.005,
                             metric = 'mean',
+                            filter_function = None,
                             verbose = False,
                             name = 'braggpeaks_raw',
                             _qt_progress_bar = None):
@@ -330,6 +361,13 @@ def find_Bragg_disks_serial(datacube, probe,
                              minIntensity should be an int.
         verbose              (bool) if True, prints completion updates
         name                 (str) name for the returned PointListArray
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill.
         _qt_progress_bar     (QProgressBar instance) used only by the GUI.
 
     Returns:
@@ -341,6 +379,11 @@ def find_Bragg_disks_serial(datacube, probe,
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
     peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+
+    # check that the filtered DP is the right size for the probe kernel:
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
+    DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
+    assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
@@ -355,7 +398,7 @@ def find_Bragg_disks_serial(datacube, probe,
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
         DP = datacube.data[Rx,Ry,:,:]
-        find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+        _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                       corrPower = corrPower,
                                       sigma = sigma,
                                       edgeBoundary = edgeBoundary,
@@ -365,6 +408,7 @@ def find_Bragg_disks_serial(datacube, probe,
                                       maxNumPeaks = maxNumPeaks,
                                       subpixel = subpixel,
                                       upsample_factor = upsample_factor,
+                                      filter_function = filter_function,
                                       peaks = peaks.get_pointlist(Rx,Ry))
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
@@ -387,6 +431,7 @@ def find_Bragg_disks(datacube, probe,
                      upsample_factor = 16,
                      verbose = False,
                      name = 'braggpeaks_raw',
+                     filter_function = None,
                      _qt_progress_bar = None,
                      distributed = None):
     """
@@ -417,6 +462,13 @@ def find_Bragg_disks(datacube, probe,
                              subpixel='multicorr')
         verbose              (bool) if True, prints completion updates for serial execution
         name                 (str) name for the returned PointListArray
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
+                             Must be a function of only one argument (the diffraction pattern) and return
+                             the filtered diffraction pattern.
+                             The shape of the returned DP must match the shape of the probe kernel (but does
+                             not need to match the shape of the input diffraction pattern, e.g. the filter
+                             can be used to bin the diffraction pattern). If using distributed disk detection,
+                             the function must be able to be pickled with by dill.
         _qt_progress_bar     (QProgressBar instance) used only by the GUI for serial execution
         distributed          (dict) contains information for parallelprocessing using an IPyParallel
                              or Dask distributed cluster.  Valid keys are:
@@ -507,6 +559,7 @@ def find_Bragg_disks(datacube, probe,
             upsample_factor=upsample_factor,
             verbose=verbose,
             name=name,
+            filter_function=filter_function,
             _qt_progress_bar=_qt_progress_bar)
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
@@ -526,6 +579,7 @@ def find_Bragg_disks(datacube, probe,
                 maxNumPeaks=maxNumPeaks,
                 subpixel=subpixel,
                 upsample_factor=upsample_factor,
+                filter_function=filter_function,
                 ipyparallel_client_file=connect,
                 data_file=data_file,
                 cluster_path=cluster_path
@@ -545,6 +599,7 @@ def find_Bragg_disks(datacube, probe,
                 maxNumPeaks=maxNumPeaks,
                 subpixel=subpixel,
                 upsample_factor=upsample_factor,
+                filter_function=filter_function,
                 dask_client=connect,
                 data_file=data_file,
                 cluster_path=cluster_path
