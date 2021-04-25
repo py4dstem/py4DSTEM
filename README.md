@@ -1,7 +1,8 @@
-# py4DSTEM: open source processing and analysis of 4D-STEM data
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
-py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
+![py4DSTEM logo](/images/py4DSTEM_logo.png)
+
+py4DSTEM is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
 
 
 ## What is 4D-STEM?
@@ -144,3 +145,4 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
+![TRI logo](/images/toyota_research_institute.png)
