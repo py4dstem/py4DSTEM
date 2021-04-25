@@ -148,3 +148,4 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
+![TRI logo](/images/toyota_research_institute.png)
