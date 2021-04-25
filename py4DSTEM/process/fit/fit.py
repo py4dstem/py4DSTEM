@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy.optimize import curve_fit
+from inspect import signature
 
 def gaussian(x, A, mu, sigma):
     return A*np.exp(-0.5*((x-mu)/sigma)**2)
@@ -55,6 +56,7 @@ def fit_2D(function, data, data_mask=None, popt_guess=None,
     shape = data.shape
     shape1D = [1,np.prod(shape)]
     x,y = np.arange(shape[0]),np.arange(shape[1])
+    x,y = np.linspace(0, 1, shape[0]),np.linspace(0, 1, shape[1])
     ry,rx = np.meshgrid(y,x)
     rx_1D = rx.reshape((1,np.prod(shape)))
     ry_1D = ry.reshape((1,np.prod(shape)))
@@ -68,7 +70,7 @@ def fit_2D(function, data, data_mask=None, popt_guess=None,
     for k in range(robust_steps+1):
         if k == 0:
             if popt_guess is None:
-                popt = [0,0,0]
+                popt = np.zeros((1,len(signature(function).parameters)-1))
             if data_mask is not None:
                 mask = data_mask
             else:
@@ -96,7 +98,24 @@ def plane(xy, mx, my, b):
     return mx*xy[0] + my*xy[1] + b
 
 def parabola(xy, c0, cx1, cx2, cy1, cy2, cxy):
-    return c0 + cx1*xy[0] + cy1*xy[1] + cx2*xy[0] + cy2*xy[1] + cxy*xy[0]*xy[1]
+    return c0 + \
+        cx1*xy[0] + cy1*xy[1] + \
+        cx2*xy[0]**2 + cy2*xy[1]**2 + cxy*xy[0]*xy[1]
+
+def bezier_two(xy, c00, c01, c02, c10, c11, c12, c20, c21, c22):
+
+    return \
+        c00  *((1-xy[0])**2)  * ((1-xy[1])**2) + \
+        c10*2*(1-xy[0])*xy[0] * ((1-xy[1])**2) + \
+        c20  *(xy[0]**2)      * ((1-xy[1])**2) + \
+        c01*2*((1-xy[0])**2)  * (1-xy[1])*xy[1] + \
+        c11*4*(1-xy[0])*xy[0] * (1-xy[1])*xy[1] + \
+        c21*2*(xy[0]**2)      * (1-xy[1])*xy[1] + \
+        c02  *((1-xy[0])**2)  * (xy[1]**2) + \
+        c12*2*(1-xy[0])*xy[0] * (xy[1]**2) + \
+        c22  *(xy[0]**2)      * (xy[1]**2)
+
+
 
 
 
