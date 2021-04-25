@@ -30,7 +30,7 @@ def fit_2D(function, data, data_mask=None, return_ar=True, popt_guess=None,
     Performs a 2D fit, where the fit function takes its first input in the form of a length 2
     vector (ndarray) of (x,y) positions, followed by the remaining parameters, and the data to
     fit takes the form of an (n,m) shaped array. If robust fitting is specified, regression is 
-    repeated using 
+    repeated robust_steps times with outliers removed, defined by a root-mean-square error threshold.
 
     Inputs:
         function     - First input should be a length 2 array xy, where (xy[0],xy[1]) are the (x,y)
@@ -45,7 +45,8 @@ def fit_2D(function, data, data_mask=None, return_ar=True, popt_guess=None,
                        the fit parameters.
         robust       - Optional parameter. If set to True, fit will be repeated with outliers removed.
         robust_steps - Optional parameter. Number of robust iterations performed after initial fit.
-        robust_thresh- Optional parameter. Number of robust iterations performed after initial fit.
+        robust_thresh- Optional parameter. Threshold for including points, in units of root-mean-square
+                       (standard deviations) error of the predicted values after fitting. 
 
     Outputs:
         popt      - optimal fit parameters to function
@@ -65,31 +66,23 @@ def fit_2D(function, data, data_mask=None, return_ar=True, popt_guess=None,
     if robust==False:
         robust_steps=0
 
-    # initial mask
-    if data_mask is not None:
-        mask = data_mask
-    else:
-        mask = np.ones(shape,dtype=bool)
-
-    #  least squares fitting
-    if popt_guess is not None:
-        popt, pcov = curve_fit(function, 
-            np.vstack((rx_1D[mask.reshape(shape1D)],ry_1D[mask.reshape(shape1D)])), 
-            data[mask], 
-            p0=popt_guess)
-    else:
-        popt, pcov = curve_fit(function,
-            np.vstack((rx_1D[mask.reshape(shape1D)],ry_1D[mask.reshape(shape1D)])), 
-            data[mask])
-
-    # repeat fitting, with values beyond error threshold removed
-    for x in range(robust_steps):
-        fit_mean_square_error = (function(xy,*popt).reshape(shape) - data)**2
-        mask = fit_mean_square_error <= np.mean(fit_mean_square_error) * robust_thresh**2
-        # include user-specified mask if provided
-        if data_mask is not None:
-            mask[data_mask==False] = False
-        # updated fit
+    # least squares fitting - 1st iteration 
+    for k in range(robust_steps+1):
+        if k == 0:
+            if popt_guess is None:
+                popt = [0,0,0]
+            if data_mask is not None:
+                mask = data_mask
+            else:
+                mask = np.ones(shape,dtype=bool)
+        else:
+            fit_mean_square_error = (function(xy,*popt).reshape(shape) - data)**2
+            mask = fit_mean_square_error <= np.mean(fit_mean_square_error) * robust_thresh**2
+            # include user-specified mask if provided
+            if data_mask is not None:
+                mask[data_mask==False] = False
+        
+        # perform fitting
         popt, pcov = curve_fit(function, 
             np.vstack((rx_1D[mask.reshape(shape1D)],ry_1D[mask.reshape(shape1D)])), 
             data[mask], 
