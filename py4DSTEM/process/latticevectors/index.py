@@ -189,14 +189,13 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0, q
         indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('h',int)])
     if not ('k' in braggpeaks.dtype.names):
         indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('k',int)])
-    if not ('hindex_mask' in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('index_mask',bool)])
 
     # loop over all the scan positions
     for Rx in range(mask.shape[0]):
         for Ry in range(mask.shape[1]):
             if mask[Rx,Ry]:
                 pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
+                rm_peak_mask = np.zeros(pl.length,dtype=bool)
 
                 for i in range(pl.length):
                     r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
@@ -205,9 +204,9 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0, q
                     if r2[ind] <= maxPeakSpacing**2:
                         pl.data['h'][i] = lattice.data['h'][ind]
                         pl.data['k'][i] = lattice.data['k'][ind]
-                        pl.data['index_mask'][i] = True
                     else:
-                        pl.data['index_mask'][i] = False
+                        rm_peak_mask[i] = True
+                pl.remove_points(rm_peak_mask)
 
     indexed_braggpeaks.name = braggpeaks.name + "_indexed"
     return indexed_braggpeaks
