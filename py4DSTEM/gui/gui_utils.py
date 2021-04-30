@@ -12,7 +12,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
 from numpy import nonzero
-from ..file.io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
+from ..io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
 import pyqtgraph as pg
 
 def datacube_selector(fp, data_id=0):

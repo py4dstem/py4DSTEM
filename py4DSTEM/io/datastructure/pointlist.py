@@ -48,7 +48,7 @@ class PointList(DataObject):
         self.data = np.array([],dtype=self.dtype)
 
         if data is not None:
-            if isinstance(data, PointListArray):
+            if isinstance(data, PointList):
                 self.add_pointlist(data)  # If types agree, add all at once
             elif isinstance(data, np.ndarray):
                 self.add_dataarray(data)  # If types agree, add all at once
@@ -192,96 +192,42 @@ class PointList(DataObject):
         return PointList(coordinates=coords, data=data)
 
 
-class PointListArray(DataObject):
+### Read/Write
+
+def save_pointlist_group(group, pointlist):
     """
-    An object containing an array of PointLists.
-    Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
-    as real space scan positions R_Nx,R_Ny.
+    Expects an open .h5 group and a DataCube; saves the DataCube to the group
     """
-    def __init__(self, coordinates, shape, dtype=float, **kwargs):
-        """
-		Instantiate a PointListArray object.
-		Creates a PointList with coordinates at each point of a 2D grid with a shape specified by
-        the shape argument.
+    n_coords = len(pointlist.dtype.names)
+    coords = np.string_(str([coord for coord in pointlist.dtype.names]))
+    group.attrs.create("coordinates", coords)
+    group.attrs.create("dimensions", n_coords)
+    group.attrs.create("length", pointlist.length)
 
-		Inputs:
-			coordinates - see PointList documentation
-            shape - a 2-tuple of ints specifying the array shape.  Often the desired shape
-                    will be the real space shape (R_Nx, R_Ny).
-        """
-        DataObject.__init__(self, **kwargs)
+    for name in pointlist.dtype.names:
+        group_current_coord = group.create_group(name)
+        group_current_coord.attrs.create("dtype", np.string_(pointlist.dtype[name]))
+        group_current_coord.create_dataset("data", data=pointlist.data[name])
 
-        self.coordinates = coordinates
-        self.default_dtype = dtype
+def get_pointlist_from_grp(g):
+    """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
+        and returns a PointList.
+    """
+    name = g.name.split('/')[-1]
+    coordinates = []
+    coord_names = list(g.keys())
+    length = len(g[coord_names[0]+'/data'])
+    if length==0:
+        for coord in coord_names:
+            coordinates.append((coord,None))
+    else:
+        for coord in coord_names:
+            dtype = type(g[coord+'/data'][0])
+            coordinates.append((coord, dtype))
+    data = np.zeros(length,dtype=coordinates)
+    for coord in coord_names:
+        data[coord] = np.array(g[coord+'/data'])
+    return PointList(data=data,coordinates=coordinates,name=name)
 
-        assert isinstance(shape,tuple), "Shape must be a tuple."
-        assert len(shape) == 2, "Shape must be a length 2 tuple."
-        self.shape = shape
-
-        # Define the data type for the structured arrays in the PointLists
-        if type(coordinates) in (type, np.dtype):
-            self.dtype = coordinates
-        elif type(coordinates[0])==str:
-            self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
-        elif type(coordinates[0])==tuple:
-            self.dtype = np.dtype(coordinates)
-        else:
-            raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
-
-        kwargs['searchable']=False   # Ensure that the subpointlists don't all appear in searches
-        self.pointlists = [[PointList(coordinates=self.coordinates,
-                            dtype = self.default_dtype,
-                            **kwargs) for j in range(self.shape[1])] for i in range(self.shape[0])]
-
-    def get_pointlist(self, i, j):
-        """
-        Returns the pointlist at i,j
-        """
-        return self.pointlists[i][j]
-
-    def copy(self, **kwargs):
-        """
-        Returns a copy of itself.
-        """
-        new_pointlistarray = PointListArray(coordinates=self.coordinates,
-                                            shape=self.shape,
-                                            dtype=self.default_dtype,
-                                            **kwargs)
-
-        for i in range(new_pointlistarray.shape[0]):
-            for j in range(new_pointlistarray.shape[1]):
-                curr_pointlist = new_pointlistarray.get_pointlist(i,j)
-                curr_pointlist.add_pointlist(self.get_pointlist(i,j).copy())
-
-        return new_pointlistarray
-
-    def add_coordinates(self, new_coords, **kwargs):
-        """
-        Creates a copy of the PointListArray, but with additional coordinates given by new_coords.
-        new_coords must be a string of 2-tuples, ('name', dtype)
-        """
-        coords = []
-        for key in self.dtype.fields.keys():
-            coords.append((key,self.dtype.fields[key][0]))
-        for coord in new_coords:
-            coords.append((coord[0],coord[1]))
-
-        new_pointlistarray = PointListArray(coordinates=coords,
-                                            shape=self.shape,
-                                            dtype=self.default_dtype,
-                                            **kwargs)
-
-        for i in range(new_pointlistarray.shape[0]):
-            for j in range(new_pointlistarray.shape[1]):
-                curr_pointlist_new = new_pointlistarray.get_pointlist(i,j)
-                curr_pointlist_old = self.get_pointlist(i,j)
-
-                data = np.zeros(curr_pointlist_old.length, np.dtype(coords))
-                for key in self.dtype.fields.keys():
-                    data[key] = np.copy(curr_pointlist_old.data[key])
-
-                curr_pointlist_new.add_dataarray(data)
-
-        return new_pointlistarray
 
 

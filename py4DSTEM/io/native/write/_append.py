@@ -4,19 +4,24 @@
 
 import h5py
 import numpy as np
-from .read_utils import is_py4DSTEM_file
-from .read_utils import get_N_dataobjects, get_py4DSTEM_topgroups
-from .write import save_datacube_group, save_diffraction_group, save_real_group
-from .write import save_pointlist_group, save_pointlistarray_group
-from .write import save_counted_datacube_group
-from .metadata import metadata_to_h5
-from ..datastructure import DataObject,Metadata,DataCube
+from os.path import exists
+from ..read import is_py4DSTEM_file, get_N_dataobjects, get_py4DSTEM_topgroups
+from ..metadata import metadata_to_h5
+from ...datastructure import save_datacube_group
+from ...datastructure import save_diffraction_group
+from ...datastructure import save_real_group
+from ...datastructure import save_pointlist_group
+from ...datastructure import save_pointlistarray_group
+from ...datastructure import save_counted_datacube_group
+from ...datastructure import save_coordinates_group
+from ...datastructure import DataObject,Metadata,DataCube
 
 def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
     """
     Internal append function to avoid circular imports.  See io.append for docstring.
     """
-    assert overwrite in (0,1,2), "'overwrite' must have a value of 0,1 or 2."
+    assert(exists(filepath)), "Error: specified filepath does not exist."
+    assert(overwrite in (0,1,2)), "'overwrite' must have a value of 0,1 or 2."
     # Construct dataobject list
     if isinstance(data, DataObject):
         dataobject_list = [data]
@@ -37,7 +42,7 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
 
     # Read the file
     assert(is_py4DSTEM_file(filepath)), "Error: file is not recognized as a py4DSTEM file."
-    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_do = get_N_dataobjects(filepath,topgroup=topgroup)
+    N_dc,N_cdc,N_ds,N_rs,N_pl,N_pla,N_coords,N_do = get_N_dataobjects(filepath,topgroup=topgroup)
     with h5py.File(filepath,"r+") as f:
         # Get data groups
         group_data = f[topgroup]['data']
@@ -47,6 +52,7 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
         grp_rs = f[topgroup]['data/realslices']
         grp_pl = f[topgroup]['data/pointlists']
         grp_pla = f[topgroup]['data/pointlistarrays']
+        grp_coords = f[topgroup]['data/coordinates']
         grp_md = f[topgroup]['metadata']
 
         # Identify metadata, either passed as arguments or attached to DataCubes
@@ -77,6 +83,8 @@ def _append(filepath, data, overwrite=0, topgroup='4DSTEM_experiment'):
                                     save_pointlist_group],
                 'PointListArray':['pointlistarray_',N_pla,grp_pla,
                                            save_pointlistarray_group],
+                'Coordinates':['coordinates_',N_coords,grp_coords,
+                                           save_coordinates_group],
                  }
         for dataobject in dataobject_list:
             name = dataobject.name

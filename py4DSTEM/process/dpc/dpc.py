@@ -254,7 +254,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         phase_init      (2D array) initial guess for the phase
 
     Returns:
-        phase           (2D array) the phase of the sample transmittance
+        phase           (2D array) the phase of the sample transmittance, in radians
         error           (1D array) the error - RMSD of the phase gradients compared to the CoM - at
                         each iteration step
     """

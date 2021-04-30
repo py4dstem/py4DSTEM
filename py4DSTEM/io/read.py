@@ -1,9 +1,10 @@
 # General reader for 4D-STEM datasets.
 
 import pathlib
-from os.path import splitext
+from os.path import exists,splitext
 from .native import read_py4DSTEM, is_py4DSTEM_file
 from .nonnative import *
+
 
 def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     """
@@ -79,30 +80,46 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
         md          MetaData    The metadata.
     """
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(exists(fp)), "Error: specified filepath does not exist."
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     if binfactor > 1:
-        assert(mem!='MEMMAP'), "Error: binning is not supported for memory mapping.  Either set binfactor=1 or set mem='RAM'"
-    assert(ft in [None,'dm','empad','mrc_relativity','gatan_K2_bin','kitware_counted']), "Error: ft argument not recognized"
+        assert (
+            mem != "MEMMAP"
+        ), "Error: binning is not supported for memory mapping.  Either set binfactor=1 or set mem='RAM'"
+    assert ft in [
+        None,
+        "dm",
+        "empad",
+        "mrc_relativity",
+        "gatan_K2_bin",
+        "kitware_counted",
+    ], "Error: ft argument not recognized"
 
     if ft is None:
         ft = parse_filetype(fp)
 
     if ft == "py4DSTEM":
-        data = read_py4DSTEM(fp, mem=mem, binfactor=binfactor, metadata=metadata, **kwargs)
+        data = read_py4DSTEM(
+            fp, mem=mem, binfactor=binfactor, metadata=metadata, **kwargs
+        )
     elif ft == "dm":
         data = read_dm(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "empad":
         data = read_empad(fp, mem, binfactor, metadata=metadata, **kwargs)
-    elif ft == 'mrc_relativity':
+    elif ft == "mrc_relativity":
         data = read_mrc_relativity(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "gatan_K2_bin":
         data = read_gatan_K2_bin(fp, mem, binfactor, metadata=metadata, **kwargs)
     elif ft == "kitware_counted":
         data = read_kitware_counted(fp, mem, binfactor, metadata=metadata, **kwargs)
     else:
-        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
+        raise Exception(
+            "Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(
+                fext
+            )
+        )
 
     return data
 
@@ -110,30 +127,44 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
 def parse_filetype(fp):
     """ Accepts a path to a 4D-STEM dataset, and returns the file type.
     """
-    assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert isinstance(
+        fp, (str, pathlib.Path)
+    ), "Error: filepath fp must be a string or pathlib.Path"
 
-    _,fext = splitext(fp)
-    if fext in ['.h5','.H5','hdf5','HDF5','.py4dstem','.py4DSTEM','.PY4DSTEM','.emd','.EMD']:
+    _, fext = splitext(fp)
+    if fext in [
+        ".h5",
+        ".H5",
+        "hdf5",
+        "HDF5",
+        ".py4dstem",
+        ".py4DSTEM",
+        ".PY4DSTEM",
+        ".emd",
+        ".EMD",
+    ]:
         if is_py4DSTEM_file(fp):
-            return 'py4DSTEM'
+            return "py4DSTEM"
         else:
-            raise Exception("Non-py4DSTEM formatted .h5 files are not presently supported.")
-    elif fext in ['.dm','.dm3','.dm4','.DM','.DM3','.DM4']:
-        return 'dm'
-    elif fext in ['.empad']:
+            raise Exception(
+                "Non-py4DSTEM formatted .h5 files are not presently supported."
+            )
+    elif fext in [".dm", ".dm3", ".dm4", ".DM", ".DM3", ".DM4"]:
+        return "dm"
+    elif fext in [".empad"]:
         # TK TODO
-        return 'empad'
-    elif fext in ['.mrc']:
+        return "empad"
+    elif fext in [".mrc"]:
         # TK TODO
-        return 'mrc_relativity'
-    elif fext in ['.gatan_K2_bin']:
+        return "mrc_relativity"
+    elif fext in [".gtg", ".bin"]:
+        return "gatan_K2_bin"
+    elif fext in [".kitware_counted"]:
         # TK TODO
-        return 'gatan_K2_bin'
-    elif fext in ['.kitware_counted']:
-        # TK TODO
-        return 'kitware_counted'
+        return "kitware_counted"
     else:
-        raise Exception("Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(fext))
-
-
-
+        raise Exception(
+            "Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(
+                fext
+            )
+        )

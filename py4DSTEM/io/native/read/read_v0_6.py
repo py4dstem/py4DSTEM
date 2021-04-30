@@ -1,18 +1,17 @@
-# Reader for py4DSTEM v0.7.0 files
+# Reader for py4DSTEM v0.6 files
 
 import h5py
 import numpy as np
 from os.path import splitext
-from ..read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from .read_utils_v0_6 import get_py4DSTEM_dataobject_info
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ....process.utils import tqdmnd
-from .read_utils_v070 import get_py4DSTEM_dataobject_info
 
-
-def read_v070(fp, **kwargs):
+def read_v0_6(fp, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.7.0.  Precise behavior is detemined by which
+    File reader for files written by py4DSTEM v0.6.  Precise behavior is detemined by which
     arguments are passed -- see below.
 
     ***NOTE: this function has not yet been tested on all legacy py4DSTEM formats. Please report
@@ -73,7 +72,7 @@ def read_v070(fp, **kwargs):
             return None,None
 
     version = get_py4DSTEM_version(fp, tg)
-    assert(version == (0,7,0)), "File must be v0.7.0."
+    assert(version == (0,6,0)), "File must be v0.6.0."
     _data_id = 'data_id' in kwargs.keys()  # Flag indicating if data was requested
 
     # Validate inputs
@@ -296,17 +295,22 @@ def get_pointlistarray_from_grp(g):
         and returns a PointListArray.
     """
     name = g.name.split('/')[-1]
-    #l = list(g)
-    print(g)
-    ar = np.array(g['data'])
-    shape = ar.shape
-    coord_names = ar[0,0].dtype.names
+    l = list(g)
+    ar = np.array([l[i].split('_') for i in range(len(l))]).astype(int)
+    shape = (np.max(ar[:,0])+1,np.max(ar[:,1])+1)
+    coord_names = list(g['0_0'])
     N = len(coord_names)
-    coord_types = [ar[0,0].dtype.fields[i][0] for i in coord_names]
+    coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/data'])[0]) for i in range(N)]
     coordinates = [(coord_names[i],coord_types[i]) for i in range(N)]
     pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(range(shape[0]),range(shape[1]),desc="Reading PointListArray",unit="PointList"):
-        pla.get_pointlist(i,j).add_dataarray(ar[i,j])
+        g_pl = g[str(i)+'_'+str(j)]
+        L = len(np.array(g_pl[coordinates[0][0]+'/data']))
+        data = np.zeros(L,dtype=coordinates)
+        for i in range(N):
+            coord = coordinates[i][0]
+            data[coord] = np.array(g_pl[coord+'/data'])
+        pla.get_pointlist(i,j).add_dataarray(data)
     return pla
 
 
