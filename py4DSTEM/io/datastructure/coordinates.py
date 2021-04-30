@@ -139,7 +139,7 @@ class Coordinates(DataObject):
         return self._get_value(self.qx0,rx,ry)
     def get_qy0(self,rx=None,ry=None):
         return self._get_value(self.qy0,rx,ry)
-    def get_center(self,rx=None,ry=None):
+    def get_origin(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
     def get_e(self,rx=None,ry=None):
         return self._get_value(self.e,rx,ry)
