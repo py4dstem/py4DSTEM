@@ -2,10 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 import py4DSTEM
-from py4DSTEM.process.rdf import amorph
 import matplotlib
-from py4DSTEM.process.utils.ellipticalCoords import *
-from py4DSTEM.process.utils.utils import bin2D
+import py4DSTEM.process.amorph as amorph
+from py4DSTEM.process.utils import bin2D, double_sided_gaussian, fit_double_sided_gaussian, compare_double_sided_gaussian
 from tqdm import tqdm
 from scipy.signal import medfilt2d
 from scipy.ndimage.morphology import binary_closing
@@ -50,7 +49,7 @@ if run_test:
     mask = np.logical_and(r2 ** 0.5 > 40, r2 ** 0.5 < 80)
     # mask = np.ones_like(mask, dtype=bool)
 
-    ring = double_sided_gaussian(coef, xx, yy)
+    ring = double_sided_gaussian(coef, xx, yy) + np.random.rand(256,256)*100
 
     coef_fit = [250, 200, 1, 3, 3, 2, 60, 128, 128, 0, 1]
     fit = fit_double_sided_gaussian(ring, coef_fit, mask=mask)
@@ -61,11 +60,12 @@ if run_test:
     plt.figure(2, clear=True)
     ring_fit = double_sided_gaussian(fit, xx, yy)
     plt.imshow(ring_fit * mask)
+    compare_double_sided_gaussian(ring, fit, fig_num=13)
 
     # try on affine transformed data
-    ring2 = affine_transform(ring, [[2, 0], [0, 1]])
+    ring2 = affine_transform(ring, [[1.3, 0], [0, 1.2]])
     fit2 = fit_double_sided_gaussian(ring2, coef_fit)
-    compare_double_sided_gaussian(ring2, fit2)
+    compare_double_sided_gaussian(ring2, fit2) #TODO remove this
 
 if run_test2:
     # this code tests to see from an arbitrary ellipse created via known strains, if the strains can be recovered. This is a more complex test than run_test, in that the double_sided_gaussian function is not used to create the data.
