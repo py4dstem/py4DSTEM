@@ -6,5 +6,5 @@ from . import calibration
 from . import latticevectors
 from . import classification
 from . import dpc
-from . import rdf
+from . import amorph
 from . import virtualimage
