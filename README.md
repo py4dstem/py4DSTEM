@@ -1,17 +1,12 @@
-[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
-
 ![py4DSTEM logo](/images/py4DSTEM_logo.png)
 
-py4DSTEM is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
 
-
+[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
 ## What is 4D-STEM?
 
-In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of or, often, smaller than the atomic lattice spacings - and rastered across the surface of the sample.
-A two-dimensional image is then formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position.
-In 4D-STEM a pixellated detector is used, such that a 2D image of the diffraction plane is acquired at every raster position of the electron beam.
-A 4D-STEM scan thus results in a 4D data array.
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A concentional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
 
 4D-STEM data is information rich.
