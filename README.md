@@ -25,7 +25,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 ## Installation
 
-The recommended installation for py4DSTEM uses the Anaconda python distribution.
+The recommended installation for **py4DSTEM** uses the Anaconda python distribution.
 First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
 Then open a terminal and run
 
@@ -48,18 +48,18 @@ In order, these commands
 - make a virtual environment - see below!
 - enter the environment
 - make sure your new environment talks nicely to pip, a tool for installing Python packages
-- use pip to install py4DSTEM
+- use pip to install **py4DSTEM**
 - on Windows: enable python to talk to the windows API
 
 Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
-Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+Because these directions install **py4DSTEM** to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
 You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
 
 
 ## Running the GUI
 
-At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
+At this stage of development, most of the analyses possible with **py4DSTEM** are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyes through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
 Stay tuned for further developments!
@@ -76,7 +76,7 @@ py4dstem
 
 The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
 
-From any python interpreter inside the `py4dstem` conda environment, you can import py4DSTEM to access all its modules and functions using `import py4DSTEM`.
+From any python interpreter inside the `py4dstem` conda environment, you can import **py4DSTEM** to access all its modules and functions using `import py4DSTEM`.
 
 
 At this point you'll need code, and data!
@@ -134,8 +134,8 @@ v. 0.12.2
 
 GNU GPLv3
 
-py4DSTEM is open source software distributed under a GPLv3 license.
-It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
+**py4DSTEM** is open source software distributed under a GPLv3 license.
+It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open.
 
 
 ### Acknowledgements
