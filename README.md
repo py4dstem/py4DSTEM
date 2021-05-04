@@ -1,15 +1,12 @@
-# py4DSTEM: open source processing and analysis of 4D-STEM data
+![py4DSTEM logo](/images/py4DSTEM_logo.png)
+
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
+
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
-
-py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
-
 
 ## What is 4D-STEM?
 
-In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of or, often, smaller than the atomic lattice spacings - and rastered across the surface of the sample.
-A two-dimensional image is then formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position.
-In 4D-STEM a pixellated detector is used, such that a 2D image of the diffraction plane is acquired at every raster position of the electron beam.
-A 4D-STEM scan thus results in a 4D data array.
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A concentional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
 
 4D-STEM data is information rich.
@@ -19,7 +16,7 @@ Redundant information in overlapping Bragg disks can be leveraged to calculate t
 Structure in the diffracted halos of amorphous systems can be used to describe the short and medium range order.
 
 
-py4DSTEM supports many different modes of 4DSTEM analysis.
+**py4DSTEM** supports many different modes of 4DSTEM analysis.
 The tutorials, sample code, module, and function documentation all provide more detailed discussion on some of the analytical methods possible with this code.
 More information can also be found at [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
 
@@ -28,7 +25,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 ## Installation
 
-The recommended installation for py4DSTEM uses the Anaconda python distribution.
+The recommended installation for **py4DSTEM** uses the Anaconda python distribution.
 First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
 Then open a terminal and run
 
@@ -51,18 +48,18 @@ In order, these commands
 - make a virtual environment - see below!
 - enter the environment
 - make sure your new environment talks nicely to pip, a tool for installing Python packages
-- use pip to install py4DSTEM
+- use pip to install **py4DSTEM**
 - on Windows: enable python to talk to the windows API
 
 Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
-Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+Because these directions install **py4DSTEM** to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
 You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
 
 
 ## Running the GUI
 
-At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
+At this stage of development, most of the analyses possible with **py4DSTEM** are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyes through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
 Stay tuned for further developments!
@@ -79,7 +76,7 @@ py4dstem
 
 The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
 
-From any python interpreter inside the `py4dstem` conda environment, you can import py4DSTEM to access all its modules and functions using `import py4DSTEM`.
+From any python interpreter inside the `py4dstem` conda environment, you can import **py4DSTEM** to access all its modules and functions using `import py4DSTEM`.
 
 
 At this point you'll need code, and data!
@@ -120,6 +117,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * tqdm
 * requests
 
+
 ### Optional dependencies
 
 * ipyparallel
@@ -136,11 +134,12 @@ v. 0.12.2
 
 GNU GPLv3
 
-py4DSTEM is open source software distributed under a GPLv3 license.
-It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
+**py4DSTEM** is open source software distributed under a GPLv3 license.
+It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open.
 
 
 ### Acknowledgements
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
+![TRI logo](/images/toyota_research_institute.png)
