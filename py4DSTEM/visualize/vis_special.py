@@ -43,18 +43,19 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
     else:
         return fig,ax
 
-
-def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
+def show_amorphous_ring_fit(dp,p_ellipse,qmin=0,qmax=None,N=12,
+                            cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
-                            scaling='log',returnfig=False,**kwargs):
+                            scaling='log',returnfig=False, maskcenter=None,
+                            mask=None, fignum=None,**kwargs):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
     the data and the fit in a pinwheel pattern.
 
     Accepts:
         dp              (array) the diffraction pattern
-        qmin,qmax       (numbers) the min/max distances of the fitting annulus
         p_ellipse       (11-tuple) the fit parameters to the double-sided gaussian
+        qmin,qmax       (numbers) the min/max distances of the fitting annulus
                         fit function returned by fit_ellipse_amorphous_ring
         N               (int) the number of pinwheel sections
         cmap            (colormap or 2-tuple of colormaps) if passed a single cmap,
@@ -67,7 +68,13 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
         scaling         (str) the normal scaling param -- see docstring for
                         visualize.show
         returnfig       (bool) if True, returns the figure
+        maskcenter      (bool) if True, uses qmin to mask off center spot
+        mask            (array) if exists, replace masked values with small
+                        values, useful when you want to mask off diffraction
+                        spots
     """
+    dp = np.copy(dp)
+    
     assert(len(p_ellipse)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
@@ -76,6 +83,9 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
         cmap_data,cmap_fit = cmap,cmap
     Q_Nx,Q_Ny = dp.shape
 
+    if  qmax is None:
+        qmax = np.sqrt(Q_Nx**2 + Q_Ny**2)
+
     # Make coords
     qx0,qy0 = p_ellipse[7],p_ellipse[8]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
@@ -83,12 +93,23 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     q = np.hypot(qx,qy)
     theta = np.arctan2(qy,qx)
 
-    # Make mask
+    # mask off center peak if maskcenter is true
+    if maskcenter is True:
+        dp[q<qmin] = np.mean(dp[q>qmin])
+
+    # mask off diffraction spots if mask is passed in
+    if mask is not None:
+        assert mask.shape == dp.shape
+        dp[~mask] = np.min(dp[~mask])
+
+
+    # Make pinwheel mask
     thetas = np.linspace(-np.pi,np.pi,2*N+1)
     pinwheel = np.zeros((Q_Nx,Q_Ny),dtype=bool)
     for i in range(N):
         pinwheel += (theta>thetas[2*i]) * (theta<=thetas[2*i+1])
     mask = pinwheel * (q>qmin) * (q<=qmax)
+
 
     # Get fit data
     fit = double_sided_gaussian(p_ellipse, qxx, qyy)
@@ -98,9 +119,9 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     fit_ma = np.ma.array(data=fit, mask=mask==False)
 
     # Show
-    fig,ax = show(data_ma,scaling=scaling,returnfig=True,cmap=cmap_data,**kwargs)
-    vmin,vmax = show(data_ma,scaling=scaling,returnclipvals=True,**kwargs)
-    show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,**kwargs)
+    fig,ax = show(data_ma,scaling=scaling,returnfig=True,cmap=cmap_data, mask_color='None', figax=fignum,**kwargs)
+    vmin,vmax = show(data_ma,scaling=scaling,returnclipvals=True,mask_color='None',figax=(fig,ax),**kwargs)
+    show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,mask_color='None',**kwargs)
 
     if fitborder:
         _thetas = np.roll(thetas,-1)
@@ -113,6 +134,8 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
         return
     else:
         return fig,ax
+
+
 
 
 def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
