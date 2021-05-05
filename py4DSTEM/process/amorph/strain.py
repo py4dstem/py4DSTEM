@@ -1,5 +1,7 @@
 import numpy as np
+from numpy.lib.arraysetops import isin
 from tqdm import tqdm
+from py4DSTEM.process.calibration import ellipse
 
 # this fixes figure si
 # bring strain mapping, fit stack code here, rely on visualization package for plotting. also bring in make_mask_array
@@ -45,7 +47,7 @@ def make_mask_array(
     return mask_array.astype(bool)
 
 
-def fit_stack(datacube, init_coefs, mask=None):
+def fit_stack(datacube, init_coefs, ri, ro, mask=None):
     """
     This will fit an ellipse using the polar elliptical transform code to all the diffraction patterns. It will take in a datacube and return a coefficient array which can then be used to map strain, fit the centers, etc.
 
@@ -64,9 +66,15 @@ def fit_stack(datacube, init_coefs, mask=None):
             elif len(mask.shape) == 4:
                 mask_current = mask[i, j, :, :]
 
-            coefs = fit_double_sided_gaussian(
-                datacube.data[i, j, :, :], init_coefs, mask=mask_current
-            )
+            coefs = ellipse.fit_ellipse_amorphous_ring(
+                datacube.data[i, j, :, :],
+                init_coefs[7],
+                init_coefs[8],
+                ri,
+                ro,
+                p0=init_coefs,
+                mask=mask_current,
+            )[1]
             coefs_array[i, j] = coefs
 
     return coefs_array
@@ -92,7 +100,7 @@ def calculate_coef_strain(coef_cube, r_ref):
         r_ref       - a reference 0 strain radius - needed because we fit r as well as B and C
                       if r_ref is a number, it will assume that the reference ellipse is a perfect circle
                       r_ref can also be a 3-tuple, in which case it is (r_ref, B_ref, C_ref)
-                      in this case, the reference 0 strain measurement is an ellipse defined by these numbers, which are defined as the outputs of fit_double_sided_gaussian
+                      in this case, the reference 0 strain measurement is an ellipse defined by these numbers, which are defined as the outputs of fit_ellipse_amorphous_ring
     Returns:
         exx         - strain in the x axis direction in image coordinates
         eyy         - strain in the y axis direction in image coordinates
@@ -103,7 +111,7 @@ def calculate_coef_strain(coef_cube, r_ref):
     if isinstance(r_ref, (int, float)):
         # r_ref is integer, and we will measure strain with circle
         A_ref, B_ref, C_ref = 1, 0, 1
-    elif isinstance(r_ref, tuple):
+    elif isinstance(r_ref, (tuple, list)):
         if len(r_ref) != 3:
             raise AssertionError(
                 "r_ref must be a 3 element tuple with elements(r_ref, B_ref, C_ref)."
@@ -165,4 +173,3 @@ def calculate_coef_strain(coef_cube, r_ref):
             )
 
     return exx, eyy, exy
-

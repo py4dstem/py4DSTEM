@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+
 def compute_polar_symmetries(dp):
     """
     This function will take in a polar transformed diffraction pattern (2D), compute the autocorrelation, and then the symmetries as well. 
@@ -89,3 +90,18 @@ def compute_FEM(data, method, mask=None):
         raise ValueError("Incorrect method input, must be int between 0 and 3.")
 
     return fem_result
+
+
+def get_symmetries(datacube_symmetries, sym_order, r_range):
+    """
+    Accepts:
+        datacube_symmetries - result of compute_polar_stack_symmetries, the stack of fft'd autocorrelated diffraction patterns. This is just a 4D numpy array
+        sym_order           - symmetry order desired to plot
+        r_range             - tuple of r indexes to avg over, indicating start, and stop
+    Returns:
+        array to be plotted using imshow
+    """
+
+    return np.mean(
+        datacube_symmetries[:, :, sym_order, r_range[0] : r_range[1]], axis=2
+    )

@@ -1,15 +1,17 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import h5py
-import py4DSTEM
 import matplotlib
-import py4DSTEM.process.amorph as amorph
-from py4DSTEM.process.utils import bin2D, double_sided_gaussian, fit_double_sided_gaussian, compare_double_sided_gaussian
-from tqdm import tqdm
-from scipy.signal import medfilt2d
-from scipy.ndimage.morphology import binary_closing
+import matplotlib.pyplot as plt
+import numpy as np
+import py4DSTEM
+from py4DSTEM.process import amorph
+from py4DSTEM.process.calibration import ellipse
+from py4DSTEM.process.utils import bin2D
 from scipy.ndimage import affine_transform
 from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.morphology import binary_closing
+from scipy.signal import medfilt2d
+from scipy.signal.filter_design import ellip
+from tqdm import tqdm
 
 matplotlib.rcParams["figure.dpi"] = 100
 plt.ion()
@@ -19,11 +21,11 @@ linux = False
 mac = True
 # flags to control which part of the script to run
 run_test = False
-run_test2 = True
+run_test2 = False
 make_data = False
 load_data = False
 run_data = False
-analyze_data = False
+analyze_data = True
 # make ellipse
 """
 The parameters in p are
@@ -39,6 +41,28 @@ The parameters in p are
     p[9:11] A,B,C       Ax^2 + Bxy + Cy^2 = 1
 
 """
+
+
+# def compare_double_sided_gaussian(data, p, power=1, mask=None, fig_num=12):
+#     """
+#     Plots a comparison between a diffraction pattern and a fit, given p.
+#     """
+#     if mask is None:
+#         mask = np.ones_like(data)
+
+#     yy, xx = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+#     data_fit = ellipse.double_sided_gaussian(p, xx, yy)
+
+#     theta = np.arctan2(xx - p[7], yy - p[8])
+#     theta_mask = np.cos(theta * 8) > 0
+#     data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
+#     data_combined = mask * data_combined
+#     plt.figure(fig_num, clear=True)
+#     plt.imshow(data_combined)
+
+#     return data_combined
+
+
 if run_test:
     # this tests if double sided gaussian is functioning properly, and it's result can be properly fit by the fitting function
     yy, xx = np.meshgrid(np.arange(256), np.arange(256))
@@ -49,23 +73,29 @@ if run_test:
     mask = np.logical_and(r2 ** 0.5 > 40, r2 ** 0.5 < 80)
     # mask = np.ones_like(mask, dtype=bool)
 
-    ring = double_sided_gaussian(coef, xx, yy) + np.random.rand(256,256)*100
+    ring = ellipse.double_sided_gaussian(coef, xx, yy) + np.random.rand(256, 256) * 100
 
     coef_fit = [250, 200, 1, 3, 3, 2, 60, 128, 128, 0, 1]
-    fit = fit_double_sided_gaussian(ring, coef_fit, mask=mask)
+    fit = ellipse.fit_ellipse_amorphous_ring(
+        ring, 128, 128, 10, 1000, p0=coef_fit, mask=mask
+    )[1]
 
     plt.figure(1, clear=True)
     plt.imshow(ring * mask)
 
     plt.figure(2, clear=True)
-    ring_fit = double_sided_gaussian(fit, xx, yy)
+    ring_fit = ellipse.double_sided_gaussian(fit, xx, yy)
     plt.imshow(ring_fit * mask)
-    compare_double_sided_gaussian(ring, fit, fig_num=13)
+    py4DSTEM.visualize.vis_special.show_amorphous_ring_fit(
+        ring, fit, qmin=10, fignum=12
+    )
 
     # try on affine transformed data
-    ring2 = affine_transform(ring, [[1.3, 0], [0, 1.2]])
-    fit2 = fit_double_sided_gaussian(ring2, coef_fit)
-    compare_double_sided_gaussian(ring2, fit2) #TODO remove this
+    ring2 = affine_transform(ring, [[1.1, 0], [0, 1.1]])
+    fit2 = ellipse.fit_ellipse_amorphous_ring(ring2, 110, 110, 10, 100, p0=coef_fit)[1]
+    py4DSTEM.visualize.vis_special.show_amorphous_ring_fit(
+        ring2, fit2, qmin=10, fignum=13
+    )  # TODO remove this
 
 if run_test2:
     # this code tests to see from an arbitrary ellipse created via known strains, if the strains can be recovered. This is a more complex test than run_test, in that the double_sided_gaussian function is not used to create the data.
@@ -116,9 +146,19 @@ if run_test2:
     plt.imshow(ring, cmap="plasma")
 
     coef_fit = [1e-3, 1e3, 36, 3, 3, 1e-3, 60, 128, 128, 0, 1]
-    fit = fit_double_sided_gaussian(ring, coef_fit)
-    fit_ref = fit_double_sided_gaussian(ring_ref, coef_fit)
-    compare_double_sided_gaussian(ring, fit)
+    fit = ellipse.fit_ellipse_amorphous_ring(ring, 128, 128, 10, 1000, p0=coef_fit)[1]
+    fit_ref = ellipse.fit_ellipse_amorphous_ring(
+        ring_ref, 128, 128, 10, 1000, p0=coef_fit
+    )[1]
+    py4DSTEM.visualize.vis_special.show_amorphous_ring_fit(
+        ring,
+        fit,
+        qmin=10,
+        fignum=14,
+        scaling="none",
+        fitbordercolor="pink",
+        cmap=("gray", "plasma"),
+    )
     # now we need to get appropriate A, B, C again compared to colin's code, so we can then extract e11, e22, and e12
     r_ratio = fit[6] / fit_ref[6]
     A, B, C = 1, fit[9], fit[10]
@@ -244,16 +284,21 @@ if load_data:
             "/home/tom/Documents/Research/results/2020-1-10 Strain Mapping/data_mask_spots_and_radius.h5"
         )
     elif mac:
-        data = py4DSTEM.file.io.read(
-            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/binned_data.h5"
+        data = py4DSTEM.io.read(
+            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/binned_data.h5",
+            mem="MEMMAP",
+            data_id=0,
         )
-        helper_data_browser = py4DSTEM.file.io.FileBrowser(
-            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/Dataset38_20190918_processing.h5"
-        )
-        peaks = helper_data_browser.get_dataobject("braggpeaks_unshifted")
 
-        mask_array = py4DSTEM.file.io.read(
-            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/data_mask_spots_and_radius.h5"
+        peaks = py4DSTEM.io.read(
+            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/Dataset38_20190918_processing.h5",
+            data_id="braggpeaks_unshifted",
+        )
+
+        mask_array = py4DSTEM.io.read(
+            "/Users/Tom/Documents/Research/Data/2020/amorphous_py4DSTEM_paper/data_mask_spots_and_radius.h5",
+            data_id=0,
+            mem="MEMMAP",
         )
 
 if run_data:
@@ -264,8 +309,9 @@ if run_data:
     center = [52, 59]
     r = ((xx - center[0]) ** 2 + (yy - center[1]) ** 2) ** 0.5
     mask_r = np.ones_like(r)
-    mask_r[r < 15] = 0
-    mask_r[r > 40] = 0
+    ri, ro = 15, 40
+    mask_r[r < ri] = 0
+    mask_r[r > ro] = 0
     mask_r = mask_r.astype(bool)
 
     test_im = data.data[152, 101, :, :]
@@ -274,14 +320,28 @@ if run_data:
     plt.imshow(test_im * mask_r)
 
     p_init = [10, 700, 5, 4, 4, 50, 30, 50, 60, 0, 1]
-    test_fit = fit_double_sided_gaussian(test_im, p_init, mask=mask_r)
+    # test_fit = ellipse.fit_ellipse_amorphous_ring(test_im, 50,60,10,40,p0=p_init,)[1]
+    test_fit = ellipse.fit_ellipse_amorphous_ring(
+        test_im, 50, 50, 10, 400, p0=p_init, mask=mask_r
+    )[1]
     # compare_double_sided_gaussian(test_im, p_init, mask=mask_r)
+    py4DSTEM.visualize.vis_special.show_amorphous_ring_fit(
+        test_im,
+        test_fit,
+        qmin=ri,
+        qmax=ro,
+        fignum=19,
+        scaling="none",
+        fitbordercolor="pink",
+        cmap=("gray", "gray"),
+        maskcenter=True,
+    )
 
     # mask_array = amorph.make_mask_array(peaks, data.data.shape, peak_radius=4.3, bin_factor=4, universal_mask=mask_r)
     # mask_array = py4DSTEM.file.datastructure.DataCube(mask_array)
     np.seterr(all="ignore")
     print("running whole fit")
-    coef_array = amorph.fit_stack(data, p_init, mask_array.data)
+    coef_array = amorph.strain.fit_stack(data, p_init, ri, ro, mask_array.data)
 
 if analyze_data:
     # coef_array = py4DSTEM.file.io.read(
@@ -302,10 +362,16 @@ if analyze_data:
 
     # used to set 0 strain value - remember that strain values are comparative! 29 seems good
     radius_ref = 29.25
+    mean_ellipse_coeffs = np.mean(coef_array[150:, :, :], axis=(0, 1))
+    radius_ref = (
+        mean_ellipse_coeffs[6],
+        mean_ellipse_coeffs[9],
+        mean_ellipse_coeffs[10],
+    )
 
     # mask of regions that are crystalline
     # strains = amorph.calculate_coef_strain(coef_array, r_ref=radius_ref, A_ref=np.median(coef_array[:,:,9]), B_ref=np.median(coef_array[:,:,10]), C_ref=np.median(coef_array[:,:,11]))
-    strains = amorph.calculate_coef_strain(coef_array, r_ref=radius_ref)
+    strains = amorph.strain.calculate_coef_strain(coef_array, r_ref=radius_ref)
 
     print(f"reference radius = {radius_ref}")
     print(
@@ -318,4 +384,37 @@ if analyze_data:
     normalized_strains = [
         medfilt2d(i) - np.median(medfilt2d(i)[135:, :]) for i in strains
     ]
-    amorph.plot_strains(normalized_strains, vmax=0.04, vmin=-0.04, mask=mask_strain)
+
+    titles = [r"$\epsilon_{xx}$", r"$\epsilon_{yy}$", r"$\epsilon_{xy}$"]
+
+    fig, axs = py4DSTEM.visualize.vis_grid.show_image_grid(
+        lambda x: np.ma.array(normalized_strains[x], mask=mask_strain),
+        1,
+        3,
+        (3, 3),
+        title=titles,
+        returnfig=True,
+        clipvals="manual",
+        min=-0.04,
+        max=0.04,
+        cmap="RdBu_r",
+        num=11,
+    )
+
+    for i in axs:
+        i.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            top=False,
+            left=False,
+            right=False,
+            labelbottom=False,
+            labelleft=False,
+        )
+
+    cbar_ax = fig.add_axes([0.05, 0.1, 0.9, 0.05])
+    fig.colorbar(
+        plt.cm.ScalarMappable(cmap="RdBu_r"), cax=cbar_ax, orientation="horizontal"
+    )
+    plt.tight_layout()
