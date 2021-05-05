@@ -5,45 +5,46 @@ from numpy.linalg import lstsq
 
 from ...io.datastructure import RealSlice
 
-def get_reference_uv(mask, uv_map):
+def get_reference_g1g2(g1g2_map, mask):
     """
     Gets a pair of reference lattice vectors from a region of real space specified by mask.
-    Takes the median of the lattice vectors in uv_map within the specified region.
+    Takes the median of the lattice vectors in g1g2_map within the specified region.
 
     Accepts:
-        mask        (ndarray of bools) use lattice vectors from uv_map scan positions wherever
-                    mask==True
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
-                    the keys 'ux', 'uy', 'vx', and 'vy'.  See documentation for
+        g1g2_map    (RealSlice) the lattice vector map; contains 2D arrays in g1g2_map.data
+                    under the keys 'g1x', 'g1y', 'g2x', and 'g2y'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
+        mask        (ndarray of bools) use lattice vectors from g1g2_map scan positions wherever
+                    mask==True
 
     Returns:
-        ux          (float) x-coord of the first reference lattice vector
-        uy          (float) y-coord of the first reference lattice vector
-        vx          (float) x-coord of the second reference lattice vector
-        vy          (float) y-coord of the second reference lattice vector
+        g1          (2-tuple) first reference lattice vector (x,y)
+        g2          (2-tuple) second reference lattice vector (x,y)
     """
-    assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.slices.keys() for name in ('ux','uy','vx','vy')])
+    assert isinstance(g1g2_map, RealSlice)
+    assert np.all([name in g1g2_map.slices.keys() for name in ('g1x','g1y','g2x','g2y')])
     assert mask.dtype == bool
-    ux = np.median(uv_map.slices['ux'][mask])
-    uy = np.median(uv_map.slices['uy'][mask])
-    vx = np.median(uv_map.slices['vx'][mask])
-    vy = np.median(uv_map.slices['vy'][mask])
-    return ux,uy,vx,vy
+    g1x = np.median(g1g2_map.slices['g1x'][mask])
+    g1y = np.median(g1g2_map.slices['g1y'][mask])
+    g2x = np.median(g1g2_map.slices['g2x'][mask])
+    g2y = np.median(g1g2_map.slices['g2y'][mask])
+    return (g1x,g1y),(g2x,g2y)
 
-def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
+def get_strain_from_reference_g1g2(g1g2_map, g1, g2):
     """
-    Gets a strain map from the reference lattice vectors (u,v) and lattice vector map uv_map.
+    Gets a strain map from the reference lattice vectors g1,g2 and lattice vector map g1g2_map.
+
+    Note that this function will return the strain map oriented with respect to the x/y axes of
+    diffraction space - to rotate the coordinate system, use get_rotated_strain_map().
+    Calibration of the rotational misalignment between real and diffraction space may also be
+    necessary.
 
     Accepts:
-        ux          (float) x-coord of the first reference lattice vector
-        uy          (float) y-coord of the first reference lattice vector
-        vx          (float) x-coord of the second reference lattice vector
-        vy          (float) y-coord of the second reference lattice vector
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
-                    the keys 'ux', 'uy', 'vx', 'vy', 'mask'.  See documentation for
+        g1g2_map    (RealSlice) the lattice vector map; contains 2D arrays in g1g2_map.data
+                    under the keys 'g1x', 'g1y', 'g2x', and 'g2y'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
+        g1          (2-tuple) first reference lattice vector (x,y)
+        g2          (2-tuple) second reference lattice vector (x,y)
 
     Returns:
         strain_map                  (RealSlice) the strain map; contains the elements of the
@@ -55,27 +56,26 @@ def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
         strain_map.slices['mask']   0/False indicates unknown values
                                     Note 1: the strain matrix has been symmetrized, so e_xy and
                                     e_yx are identical
-                                    Note 2: x and y are here the coordinate axes of diffraction
-                                    space, where the lattice vectors were measured.  Calibration
-                                    of their rotation with respect to real space may be necessary.
     """
-    assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.slices.keys() for name in ('ux','uy','vx','vy','mask')])
+    assert isinstance(g1g2_map, RealSlice)
+    assert np.all([name in g1g2_map.slices.keys() for name in ('g1x','g1y','g2x','g2y','mask')])
 
     # Get RealSlice for output storage
-    R_Nx,R_Ny = uv_map.slices['ux'].shape
+    R_Nx,R_Ny = g1g2_map.slices['g1x'].shape
     strain_map = RealSlice(data=np.zeros((R_Nx,R_Ny,5)),
                            slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
                            name='strain_map')
 
     # Get reference lattice matrix
-    M = np.array([[ux,uy],[vx,vy]])
+    g1x,g1y = g1
+    g2x,g2y = g2
+    M = np.array([[g1x,g1y],[g2x,g2y]])
 
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
             # Get lattice vectors for DP at Rx,Ry
-            alpha = np.array([[uv_map.slices['ux'][Rx,Ry],uv_map.slices['uy'][Rx,Ry]],
-                              [uv_map.slices['vx'][Rx,Ry],uv_map.slices['vy'][Rx,Ry]]])
+            alpha = np.array([[g1g2_map.slices['g1x'][Rx,Ry],g1g2_map.slices['g1y'][Rx,Ry]],
+                              [g1g2_map.slices['g2x'][Rx,Ry],g1g2_map.slices['g2y'][Rx,Ry]]])
             # Get transformation matrix
             beta = lstsq(M, alpha, rcond=None)[0].T
 
@@ -84,24 +84,29 @@ def get_strain_from_reference_uv(ux, uy, vx, vy, uv_map):
             strain_map.slices['e_yy'][Rx,Ry] = 1 - beta[1,1]
             strain_map.slices['e_xy'][Rx,Ry] = -(beta[0,1]+beta[1,0])/2.
             strain_map.slices['theta'][Rx,Ry] =  (beta[0,1]-beta[1,0])/2.
-            strain_map.slices['mask'][Rx,Ry] = uv_map.slices['mask'][Rx,Ry]
+            strain_map.slices['mask'][Rx,Ry] = g1g2_map.slices['mask'][Rx,Ry]
     return strain_map
 
-def get_strain_from_reference_region(mask, uv_map):
+def get_strain_from_reference_region(g1g2_map, mask):
     """
     Gets a strain map from the reference region of real space specified by mask and the lattice
-    vector map uv_map.
+    vector map g1g2_map.
+
+    Note that this function will return the strain map oriented with respect to the x/y axes of
+    diffraction space - to rotate the coordinate system, use get_rotated_strain_map().
+    Calibration of the rotational misalignment between real and diffraction space may also be
+    necessary.
 
     Accepts:
-        mask        (ndarray of bools) use lattice vectors from uv_map scan positions wherever
-                    mask==True
-        uv_map      (RealSlice) the lattice vector map; contains 2D arrays in uv_map.data under
-                    the keys 'ux', 'uy', 'vx', 'vy', 'mask'.  See documentation for
+        g1g2_map    (RealSlice) the lattice vector map; contains 2D arrays in g1g2_map.data
+                    under the keys 'g1x', 'g1y', 'g2x', and 'g2y'.  See documentation for
                     fit_lattice_vectors_all_DPs() for more information.
+        mask        (ndarray of bools) use lattice vectors from g1g2_map scan positions wherever
+                    mask==True
 
     Returns:
         strain_map                  (RealSlice) the strain map; contains the elements of the
-                                    infinitessimal strain matrix, in the following 4 arrays:
+                                    infinitessimal strain matrix, in the following 5 arrays:
         strain_map.slices['e_xx']   change in lattice x-components with respect to x
         strain_map.slices['e_yy']   change in lattice y-components with respect to y
         strain_map.slices['e_xy']   change in lattice x-components with respect to y
@@ -109,28 +114,25 @@ def get_strain_from_reference_region(mask, uv_map):
         strain_map.slices['mask']   0/False indicates unknown values
                                     Note 1: the strain matrix has been symmetrized, so e_xy and
                                     e_yx are identical
-                                    Note 2: x and y are here the coordinate axes of diffraction
-                                    space, where the lattice vectors were measured.  Calibration
-                                    of their rotation with respect to real space may be necessary.
     """
-    assert isinstance(uv_map, RealSlice)
-    assert np.all([name in uv_map.slices.keys() for name in ('ux','uy','vx','vy','mask')])
+    assert isinstance(g1g2_map, RealSlice)
+    assert np.all([name in g1g2_map.slices.keys() for name in ('g1x','g1y','g2x','g2y','mask')])
     assert mask.dtype == bool
 
-    ux,uy,vx,vy = get_reference_uv(mask, uv_map)
-    strain_map = get_strain_from_reference_uv(ux,uy,vx,vy,uv_map)
+    g1,g2 = get_reference_g1g2(g1g2_map,mask)
+    strain_map = get_strain_from_reference_g1g2(g1g2_map,g1,g2)
     return strain_map
 
-def get_rotated_strain_map(unrotated_strain_map, ux, uy):
+def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y):
     """
     Starting from a strain map defined with respect to the xy coordinate system of diffraction space,
     i.e. where exx and eyy are the compression/tension along the Qx and Qy directions, respectively,
-    get a strain map defined with respect to a right-handed uv coordinate system, with the u-axis
-    oriented along u=(ux,uy).
+    get a strain map defined with respect to some other right-handed coordinate system, in which the
+    x-axis is oriented along (xaxis_x,xaxis_y).
 
     Accepts:
-        ux                      (float) diffraction space x coordinate of u
-        uy                      (float) diffraction space y coordinate of u
+        xaxis_x,xaxis_y         (float) diffraction space (x,y) coordinates of a vector
+                                along the new x-axis
         unrotated_strain_map    (RealSlice) a RealSlice object containing 2D arrays of the
                                 infinitessimal strain matrix elements, stored at
                                         unrotated_strain_map.slices['e_xx']
@@ -140,12 +142,13 @@ def get_rotated_strain_map(unrotated_strain_map, ux, uy):
 
     Returns:
         rotated_strain_map      (RealSlice) the rotated counterpart to unrotated_strain_map, with
-                                the rotated_strain_map.slices['e_xx'] element oriented along (ux,uy)
+                                the rotated_strain_map.slices['e_xx'] element oriented along the
+                                new coordinate system
     """
     assert isinstance(unrotated_strain_map, RealSlice)
     assert np.all([key in ['e_xx','e_xy','e_yy','theta','mask'] for key in unrotated_strain_map.slices.keys()])
 
-    theta = -np.arctan2(uy,ux)
+    theta = -np.arctan2(xaxis_y,xaxis_x)
     cost = np.cos(theta)
     sint = np.sin(theta)
     cost2 = cost**2

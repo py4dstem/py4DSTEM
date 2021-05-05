@@ -1,19 +1,13 @@
-# py4DSTEM: open source processing and analysis of 4D-STEM data
+![py4DSTEM logo](/images/py4DSTEM_logo.png)
+
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
+
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
-py4DSTEM is a python tool for analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
-
-## Try it for yourself
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/alex-rakowski/py4DSTEM/HEAD?filepath=sample_code)
-You can test some of the py4DSTEM sample Jupyter notebooks in your browser using Binder - just click the banner above.
-**Please note that these are currently under construction and don't all work perfectly yet!**
 
 ## What is 4D-STEM?
 
-In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of or, often, smaller than the atomic lattice spacings - and rastered across the surface of the sample.
-A two-dimensional image is then formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position.
-In 4D-STEM a pixellated detector is used, such that a 2D image of the diffraction plane is acquired at every raster position of the electron beam.
-A 4D-STEM scan thus results in a 4D data array.
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
 
 4D-STEM data is information rich.
@@ -124,6 +118,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * tqdm
 * requests
 
+
 ### Optional dependencies
 
 * ipyparallel
@@ -132,7 +127,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 
 ### Versioning
 
-v. 0.11.11
+v. 0.12.2
 
 
 
@@ -140,7 +135,7 @@ v. 0.11.11
 
 GNU GPLv3
 
-py4DSTEM is open source software distributed under a GPLv3 license.
+**py4DSTEM** is open source software distributed under a GPLv3 license.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
@@ -148,3 +143,4 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
+![TRI logo](/images/toyota_research_institute.png)
