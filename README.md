@@ -4,6 +4,7 @@
 
 [![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
+
 ## What is 4D-STEM?
 
 In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
@@ -26,7 +27,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 ## Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
-First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
+First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
 Then open a terminal and run
 
 ```
@@ -60,7 +61,7 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 ## Running the GUI
 
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
-Our intention is to support many of these analyes through the GUI eventually.
+Our intention is to support many of these analyses through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
 Stay tuned for further developments!
 
