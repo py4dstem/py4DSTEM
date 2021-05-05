@@ -1,14 +1,20 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
-from matplotlib.colors import is_color_like,ListedColormap
-from numpy.ma import MaskedArray
-from numbers import Number
+import copy
 from math import log
-from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
-from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
+from numbers import Number
+
+import matplotlib.pyplot as plt
+import numpy as np
+from IPython.core.pylabtools import figsize
+from matplotlib.axes import Axes
+from matplotlib.colors import ListedColormap, is_color_like
+from matplotlib.figure import Figure
+from numpy.ma import MaskedArray
+
 from ..io.datastructure import Coordinates
+from .overlay import (add_annuli, add_cartesian_grid, add_circles,
+                      add_ellipses, add_points, add_polarelliptical_grid,
+                      add_rectangles, add_rtheta_grid, add_scalebar)
+
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
          min=None,max=None,power=1,bordercolor=None,borderwidth=5,
@@ -150,8 +156,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
-        mask = np.ones_like(ar,dtype=bool)
-        ar = np.ma.array(data=ar,mask=mask==False)
+        mask = np.zeros_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask)
 
     # Perform any scaling
     if scaling == 'none':
@@ -167,7 +173,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _ar[_mask] = np.power(ar[_mask],power)
     else:
         raise Exception
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_and(ar.mask==False,_mask)==False)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,_mask==False))
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -193,6 +199,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
         fig,ax = plt.subplots(1,1,figsize=figsize)
+    elif isinstance(figax, int):
+        fig,ax = plt.subplots(1,1,figsize=figsize, num=figax)
     else:
         fig,ax = figax
         assert(isinstance(fig,Figure))
@@ -200,11 +208,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
     # Plot the image
     if not hist:
-        cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
-        if np.any(_ar.mask==True):
-            mask_display = np.ma.array(data=_ar.mask,mask=_ar.mask==False)
-            cmap = ListedColormap([mask_color,'w'])
-            ax.matshow(mask_display,cmap=cmap)
+        if np.any(_ar.mask==True) and mask_color is not None:
+            cmap = copy.copy(plt.get_cmap(cmap))
+            cmap.set_bad(color=mask_color)
+        cax = ax.imshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
     # ...or, plot its histogram
     else:
         hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
