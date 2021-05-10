@@ -4,7 +4,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
-from ..fit import plane,parabola,fit_2D
+from ..fit import plane,parabola,bezier_two,fit_2D
 from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
 from ...io.datastructure import PointListArray
@@ -171,7 +171,8 @@ def get_origin_beamstop(dp,**kwargs):
 
 ### Functions for fitting the origin
 
-def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',returnfitp=False):
+def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=False, 
+	           robust=False, robust_steps=3, robust_thresh=2):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
@@ -180,8 +181,15 @@ def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',returnfitp=False)
     Accepts:
         qx0_meas,qy0_meas       (2d arrays)
         mask                    (2b boolean array) ignore points where mask=True
-        fitfunction             (str) must be 'plane' or 'parabola'
+        fitfunction             (str) must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp              (bool) if True, returns the fit parameters
+        robust                  (bool) Optional parameter. If set to True, fit will be
+                                repeated with outliers removed.
+        robust_steps            (int) Optional parameter. Number of robust iterations 
+                                performed after initial fit.
+        robust_thresh-          (int) Optional parameter. Threshold for including points, 
+                                in units of root-mean-square (standard deviations) error 
+                                of the predicted values after fitting. 
 
     Returns:
         (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals)
@@ -192,21 +200,30 @@ def fit_origin(qx0_meas,qy0_meas,mask=None,fitfunction='plane',returnfitp=False)
     assert isinstance(qx0_meas,np.ndarray) and len(qy0_meas.shape)==2
     assert qx0_meas.shape == qy0_meas.shape
     assert mask is None or mask.shape==qx0_meas.shape and mask.dtype==bool
-    assert fitfunction in ('plane','parabola')
+    assert fitfunction in ('plane','parabola','bezier_two')
     if fitfunction=='plane':
         f = plane
     elif fitfunction=='parabola':
         f = parabola
+    elif fitfunction=='bezier_two':
+        f = bezier_two
     else:
         raise Exception("Invalid fitfunction '{}'".format(fitfunction))
 
     # Fit data
     if mask is None:
-        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas)
-        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas)
+        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas,
+            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
+        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas,  
+        	robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
+
     else:
-        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas, data_mask=mask==False)
-        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas, data_mask=mask==False)
+        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas, 
+        	robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
+        	data_mask=mask==False)
+        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas, 
+        	robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
+        	data_mask=mask==False)
 
     # Compute residuals
     qx0_residuals = qx0_meas-qx0_fit
