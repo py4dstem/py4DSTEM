@@ -395,7 +395,7 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     assert (qx0 is not None and qy0 is not None) != (coords is not None), (
                                 "Either (qx0,qy0) or coords must be specified")
     if coords is not None:
-        qx0,qy0 = coords.get_center()
+        qx0,qy0 = coords.get_origin()
         assert qx0 is not None and qy0 is not None, "coords did not contain center position"
     if name is None:
         sl = braggpeaks.name.split('_')
