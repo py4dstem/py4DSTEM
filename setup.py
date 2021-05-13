@@ -5,7 +5,7 @@ with open("README.md","r") as f:
 
 setup(
     name='py4DSTEM',
-    version='0.11.7',
+    version='0.12.2',
     packages=find_packages(),
     description='An open source python package for processing and analysis of 4D STEM data.',
     long_description=long_description,
@@ -29,11 +29,11 @@ setup(
         'qtconsole == 4.7.7',
         'ipywidgets == 7.6.3',
         'tqdm == 4.46.1',
-        'requests == 2.25.1'
+        'requests == 2.25.1',
         ],
     extras_require={
-        'ipyparallel': ['ipyparallel >= 6.2.4'],
-        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0']
+        'ipyparallel': ['ipyparallel >= 6.2.4', 'dill == 0.3.3'],
+        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0', 'dill == 0.3.3']
         },
     entry_points={
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']

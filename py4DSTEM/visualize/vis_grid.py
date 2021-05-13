@@ -1,9 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from .visualize import show,show_points
+from .show import show,show_points
+from .overlay import add_grid_overlay
 
-def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
+def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
     """
     Shows a grid of diffraction patterns from DataCube datacube, starting from
     scan position (x0,y0) and extending xL,yL.
@@ -13,6 +14,7 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
         (x0,y0)         the corner of the grid of DPs to display
         xL,yL           the extent of the grid
         axsize          the size of each diffraction pattern
+        space           (number) controls the space between subplots
 
     Returns:
         if returnfig==false (default), the figure is plotted and nothing is returned.
@@ -27,7 +29,30 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
             ax = axs[xi,yi]
             x,y = xx[xi,yi],yy[xi,yi]
             dp = datacube.data[x,y,:,:]
-            _,_ = show(dp,ax=(fig,ax),returnfig=True,**kwargs)
+            _,_ = show(dp,figax=(fig,ax),returnfig=True,**kwargs)
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=space,hspace=space)
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax
+
+def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
+                                            returnfig=False,**kwargs):
+    """
+    Shows the image with an overlaid boxgrid outline about the pixels
+    beginning at (x0,y0) and with extent xL,yL in the two directions.
+
+    Accepts:
+        image       the image array
+        x0,y0       the corner of the grid
+        xL,xL       the extent of the grid
+    """
+    fig,ax = show(image,returnfig=True,**kwargs)
+    add_grid_overlay(ax,d={'x0':x0,'y0':y0,'xL':xL,'yL':yL,
+                           'color':color,'linewidth':linewidth,'alpha':alpha})
     plt.tight_layout()
 
     if not returnfig:
@@ -36,20 +61,20 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,**kwargs):
     else:
         return fig,ax
 
-def show_grid_overlay(ar,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
+def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
                                             returnfig=False,**kwargs):
     """
-    Shows the image ar with an overlaid boxgrid outline about the pixels
+    Shows the image with an overlaid boxgrid outline about the pixels
     beginning at (x0,y0) and with extent xL,yL in the two directions.
 
     Accepts:
-        ar          the image array
+        image       the image array
         x0,y0       the corner of the grid
         xL,xL       the extent of the grid
     """
     yy,xx = np.meshgrid(np.arange(y0,y0+yL),np.arange(x0,x0+xL))
 
-    fig,ax = show(ar,returnfig=True,**kwargs)
+    fig,ax = show(image,returnfig=True,**kwargs)
     for xi in range(xL):
         for yi in range(yL):
             x,y = xx[xi,yi],yy[xi,yi]
@@ -65,7 +90,7 @@ def show_grid_overlay(ar,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         return fig,ax
 
 def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
-                    get_bc=None,get_x=None,get_y=None,get_pointcolors=None,
+                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None,
                     get_s=None,**kwargs):
     """
     Displays a set of images in a grid.
@@ -91,14 +116,15 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
         axsize      the size of each image
         titlesize   if >0, prints the index i passed to get_ar over
                     each image
-        get_bc      if not None, should be a function defined over
+        get_bordercolor
+                    if not None, should be a function defined over
                     the same i as get_ar, and which returns a
                     valid matplotlib color for each i. Adds
                     a colored bounding box about each image. E.g.
                     if `colors` is an array of colors:
 
         >>> show_image_grid(lambda i:ar[:,:,i],H=2,W=2,
-                            get_bc=lambda i:colors[i])
+                            get_bordercolor=lambda i:colors[i])
 
         get_x,get_y     functions which returns sets of x/y positions
                         as a function of index i
@@ -112,7 +138,7 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
         if returnfig==false, the figure and its one axis are returned, and can be
         further edited.
     """
-    _get_bc = get_bc is not None
+    _get_bordercolor = get_bordercolor is not None
     _get_points = (get_x is not None) and (get_y is not None)
     _get_colors = get_pointcolors is not None
     _get_s = get_s is not None
@@ -127,8 +153,8 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
             N = i*W+j
             try:
                 ar = get_ar(N)
-                if _get_bc and _get_points:
-                    bc = get_bc(N)
+                if _get_bordercolor and _get_points:
+                    bc = get_bordercolor(N)
                     x,y = get_x(N),get_y(N)
                     if _get_colors:
                         pointcolors = get_pointcolors(N)
@@ -136,16 +162,16 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         pointcolors='r'
                     if _get_s:
                         s = get_s(N)
-                        _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
+                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,s=s,
-                                          point_color=pointcolors,**kwargs)
+                                          pointcolor=pointcolors,**kwargs)
                     else:
-                        _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
+                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,
-                                          point_color=pointcolors,**kwargs)
-                elif _get_bc:
-                    bc = get_bc(N)
-                    _,_ = show(ar,ax=(fig,ax),returnfig=True,
+                                          pointcolor=pointcolors,**kwargs)
+                elif _get_bordercolor:
+                    bc = get_bordercolor(N)
+                    _,_ = show(ar,figax=(fig,ax),returnfig=True,
                                bordercolor=bc,**kwargs)
                 elif _get_points:
                     x,y = get_x(N),get_y(N)
@@ -153,10 +179,10 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         pointcolors = get_pointcolors(N)
                     else:
                         pointcolors='r'
-                    _,_ = show_points(ar,ax=(fig,ax),returnfig=True,
-                                      point_color=pointcolors,**kwargs)
+                    _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
+                                      pointcolor=pointcolors,**kwargs)
                 else:
-                    _,_ = show(ar,ax=(fig,ax),returnfig=True,**kwargs)
+                    _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
                 if titlesize>0:
                     ax.set_title(N,fontsize=titlesize)
             except IndexError:
