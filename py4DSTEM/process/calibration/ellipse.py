@@ -153,7 +153,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     Accepts:
         data        (2d array)
         x0,y0       (numbers) the center
-        ri,r0       (numbers) the inner and outer radii of the fitting annulus
+        ri,ro       (numbers) the inner and outer radii of the fitting annulus
         p0          (11-tuple) initial guess parameters. If p0 is None, the
                     function will compute a guess at all parameters. If p0 is
                     a 11-tuple it must be populated by some mix of numbers
@@ -580,26 +580,3 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
 
     return a_constrained, b_constrained
-
-
-## MOVE TO VIS
-def compare_double_sided_gaussian(data, p, power=1, mask=None):
-    """
-    Plots a comparison between a diffraction pattern and a fit, given p. 
-    """
-    if mask is None:
-        mask = np.ones_like(data)
-
-    yy, xx = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
-    data_fit = double_sided_gaussian(p, xx, yy)
-
-    theta = np.arctan2(xx - p[7], yy - p[8])
-    theta_mask = np.cos(theta * 8) > 0
-    data_combined = (data * theta_mask + data_fit * (1 - theta_mask)) ** power
-    data_combined = mask * data_combined
-    plt.figure(12, clear=True)
-    plt.imshow(data_combined)
-
-    return
-
-
