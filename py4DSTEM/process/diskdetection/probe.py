@@ -222,7 +222,7 @@ def get_probe_kernel(probe,origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale, origin=None):
+def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian from the normalized
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -263,7 +263,7 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale, origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth, origin=None):
+def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench about the
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -271,9 +271,8 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth, origi
 
     Accepts:
         probe           (ndarray) the diffraction pattern corresponding to the probe over vacuum
-        radius          (float) the inner radius of the trench, from the probe center
-        trenchwidth     (float) the trench annulus width (r_outer - r_inner)
-        blurwidth       (float) the full width of the blurring of the trench walls
+        ri              (float) the sigmoid inner radius, from the probe center
+        ro              (float) the sigmoid outer radius
         origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
                         Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
@@ -291,15 +290,16 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth, origi
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qr = np.sqrt((qx-xCoM)**2 + (qy-yCoM)**2)
-    qr = qr-radius                                        # Shift qr=0 to disk edge
 
-    # Calculate logistic function
-    logistic_annulus = 1/(1+np.exp(4*qr/blurwidth)) - 1/(1+np.exp(4*(qr-trenchwidth)/blurwidth))
+    # Calculate sigmoid
+    r0 = 0.5*(ro+ri)
+    sigma = 0.25*(ro-ri)
+    sigmoid = 1/(1+np.exp((qr-r0)/sigma))
 
     # Normalize to one, then subtract off logistic annulus, yielding kernel which integrates to zero
     probe_template_norm = probe/np.sum(probe)
-    logistic_annulus_norm = logistic_annulus/np.sum(logistic_annulus)
-    probe_kernel = probe_template_norm - logistic_annulus_norm
+    sigmoid_norm = sigmoid/np.sum(sigmoid)
+    probe_kernel = probe_template_norm - sigmoid_norm
 
     # Shift center to array corners
     probe_kernel = get_shifted_ar(probe_kernel, -xCoM, -yCoM)
