@@ -13,13 +13,11 @@ from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
 
 #### Get the vacuum probe ####
 
-def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
-                                           mask_expansion=12,
-                                           mask_opening=3,
-                                           verbose=False):
+def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
+                                 mask_opening=3,verbose=False,align=True):
     """
-    Aligns and averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
-    to create and average vacuum probe.
+    Averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
+    to create and average vacuum probe. Optionally (default) aligns the patterns.
 
     Values outisde the average probe are zeroed, using a binary mask determined by the optional
     parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
@@ -34,6 +32,7 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        align           (bool) if True, aligns the probes before averaging
 
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
@@ -44,10 +43,10 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
         curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,datacube.R_N))
-
-        xshift,yshift = get_shift(probe, curr_DP)
-        curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)
-        probe = probe*(n-1)/n + curr_DP_shifted/n
+        if align:
+            xshift,yshift = get_shift(probe, curr_DP)
+            curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+        probe = probe*(n-1)/n + curr_DP/n
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
@@ -56,14 +55,12 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
     return probe*mask
 
 
-def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
-                                              mask_expansion=12,
-                                              mask_opening=3,
-                                              verbose=False,
-                                              DP_mask=1):
+def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=12,
+                              mask_opening=3,verbose=False,align=True,DP_mask=1):
     """
-    Aligns and averages all diffraction patterns within a specified ROI of a datacube to create an
-    average vacuum probe.
+    Averages all diffraction patterns within a specified ROI of a datacube to create an
+    average vacuum probe. Optionally (default) aligns the patterns.
+
 
     See documentation for get_average_probe_from_vacuum_scan for more detailed discussion of the
     algorithm.
@@ -78,6 +75,7 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        align           (bool) if True, aligns the probes before averaging
         DP_mask         (array) array of same shape as diffraction pattern to mask probes
 
     Returns:
@@ -89,10 +87,10 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
     probe = datacube.data[xy[0,0],xy[1,0],:,:]
     for n in tqdmnd(range(1,length)):
         curr_DP = datacube.data[xy[0,n],xy[1,n],:,:] * DP_mask
-
-        xshift,yshift = get_shift(probe, curr_DP)
-        curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)
-        probe = probe*(n-1)/n + curr_DP_shifted/n
+        if align:
+            xshift,yshift = get_shift(probe, curr_DP)
+            curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+        probe = probe*(n-1)/n + curr_DP/n
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
