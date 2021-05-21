@@ -9,7 +9,8 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation
-from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
+from ..utils import get_shifted_ar, get_shift, tqdmnd
+from ..calibration import get_probe_size
 
 #### Get the vacuum probe ####
 
@@ -205,7 +206,7 @@ def get_probe_kernel(probe):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    _,xCoM,yCoM = get_probe_size(probe)
 
     # Normalize
     probe = probe/np.sum(probe)
@@ -233,7 +234,7 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    _,xCoM,yCoM = get_probe_size(probe)
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
@@ -270,7 +271,7 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    _,xCoM,yCoM = get_probe_size(probe)
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))

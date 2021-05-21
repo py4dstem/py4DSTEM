@@ -5,7 +5,6 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
 from ..fit import plane,parabola,bezier_two,fit_2D
-from ..diskdetection import get_bragg_vector_map
 from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
 from ...io.datastructure import PointListArray
 
@@ -243,75 +242,6 @@ def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=Fa
 
 
 ### Older / soon-to-be-deprecated functions for finding the origin
-
-def get_diffraction_shifts(Braggpeaks, Q_Nx, Q_Ny, findcenter='CoM'):
-    """
-    Gets the diffraction shifts.
-
-    First, an guess at the unscattered beam position is determined, either by taking the CoM of the
-    Bragg vector map, or by taking its maximal pixel.  If the CoM is used, an additional
-    refinement step is used where we take the CoM of a Bragg vector map contructed from a first guess
-    at the central Bragg peaks (as opposed to the BVM of all BPs). Once a
-    unscattered beam position is determined, the Bragg peak closest to this position is identified.
-    The shifts in these peaks positions from their average are returned as the diffraction shifts.
-
-    Accepts:
-        Braggpeaks      (PointListArray) the Bragg peak positions
-        Q_Nx, Q_Ny      (ints) the shape of diffration space
-        findcenter      (str) specifies the method for determining the unscattered beam position
-                        options: 'CoM', or 'max'
-
-    Returns:
-        xshifts         ((R_Nx,R_Ny)-shaped array) the shifts in x
-        yshifts         ((R_Nx,R_Ny)-shaped array) the shifts in y
-        braggvectormap  ((R_Nx,R_Ny)-shaped array) the Bragg vector map of only the Bragg peaks
-                        identified with the unscattered beam. Useful for diagnostic purposes.
-    """
-    assert isinstance(Braggpeaks, PointListArray), "Braggpeaks must be a PointListArray"
-    assert all([isinstance(item, (int,np.integer)) for item in [Q_Nx,Q_Ny]])
-    assert isinstance(findcenter, str), "center must be a str"
-    assert findcenter in ['CoM','max'], "center must be either 'CoM' or 'max'"
-    R_Nx,R_Ny = Braggpeaks.shape
-
-    # Get guess at position of unscattered beam
-    braggvectormap_all = get_bragg_vector_map(Braggpeaks, Q_Nx, Q_Ny)
-    if findcenter=='max':
-        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(braggvectormap_all,10)),(Q_Nx,Q_Ny))
-    else:
-        x0,y0 = get_CoM(braggvectormap_all)
-        braggvectormap = np.zeros_like(braggvectormap_all)
-        for Rx in range(R_Nx):
-            for Ry in range(R_Ny):
-                pointlist = Braggpeaks.get_pointlist(Rx,Ry)
-                if pointlist.length > 0:
-                    r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
-                    index = np.argmin(r2)
-                    braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                                pointlist.data['qx'][index],
-                                                                pointlist.data['qy'][index],
-                                                                pointlist.data['intensity'][index])
-        x0,y0 = get_CoM(braggvectormap)
-
-    # Get Bragg peak closest to unscattered beam at each scan position
-    braggvectormap = np.zeros_like(braggvectormap_all)
-    xshifts = np.zeros((R_Nx,R_Ny))
-    yshifts = np.zeros((R_Nx,R_Ny))
-    for Rx in range(R_Nx):
-        for Ry in range(R_Ny):
-            pointlist = Braggpeaks.get_pointlist(Rx,Ry)
-            if pointlist.length > 0:
-                r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
-                index = np.argmin(r2)
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                            pointlist.data['qx'][index],
-                                                            pointlist.data['qy'][index],
-                                                            pointlist.data['intensity'][index])
-                xshifts[Rx,Ry] = pointlist.data['qx'][index]
-                yshifts[Rx,Ry] = pointlist.data['qy'][index]
-
-    xshifts -= np.average(xshifts)
-    yshifts -= np.average(yshifts)
-    return xshifts, yshifts, braggvectormap
 
 def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     """
