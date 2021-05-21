@@ -192,13 +192,15 @@ def get_probe_synthetic(radius, width, Q_Nx, Q_Ny):
 
 #### Get the probe kernel ####
 
-def get_probe_kernel(probe):
+def get_probe_kernel(probe,origin=None):
     """
     Creates a convolution kernel from an average probe, by normalizing, then shifting the center of
     the probe to the corners of the array.
 
     Accepts:
         probe           (ndarray) the diffraction pattern corresponding to the probe over vacuum
+        origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                        Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe, in real space
@@ -206,7 +208,10 @@ def get_probe_kernel(probe):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    _,xCoM,yCoM = get_probe_size(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Normalize
     probe = probe/np.sum(probe)
@@ -217,7 +222,7 @@ def get_probe_kernel(probe):
     return probe_kernel
 
 
-def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
+def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian from the normalized
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -227,6 +232,8 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
         probe              (ndarray) the diffraction pattern corresponding to the probe over vacuum
         sigma_probe_scale  (float) the width of the gaussian to subtract, relative to the standard
                            deviation of the probe
+        origin             (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                           Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel       (ndarray) the convolution kernel corresponding to the probe
@@ -234,7 +241,10 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    _,xCoM,yCoM = get_probe_size(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
@@ -253,7 +263,7 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
     return probe_kernel
 
 
-def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
+def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench about the
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -264,6 +274,8 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
         radius          (float) the inner radius of the trench, from the probe center
         trenchwidth     (float) the trench annulus width (r_outer - r_inner)
         blurwidth       (float) the full width of the blurring of the trench walls
+        origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                        Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe
@@ -271,7 +283,10 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    _,xCoM,yCoM = get_probe_size(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
