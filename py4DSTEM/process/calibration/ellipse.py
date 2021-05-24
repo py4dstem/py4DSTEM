@@ -49,6 +49,8 @@ where b = a*e is the semiminor axis length.
 import numpy as np
 from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
+from scipy.signal import savgol_filter
+from scipy.interpolate import interp1d
 from ..utils import get_CoM
 from ...io import PointListArray
 
@@ -602,4 +604,90 @@ def compare_double_sided_gaussian(data, p, power=1, mask=None):
 
     return
 
+## Create look up table for background subtraction
+def get_1Dbackground(data, qx0, qy0 ,e, phi, 
+                    mask_update_iter=3, 
+                    min_relative_threshold = 4, 
+                    smoothing_window_size = None, 
+                    smoothing_poly_order = 4, 
+                    smoothing_log = True, 
+                    min_background_value=1E-3):
+    """
+    Gets the median polar background for a diffraction pattern
+
+    Accepts: 
+    data      (ndarray) the data for which to find the polar eliptical background, usually a diffraction pattern
+    qx0,qy0   (numbers) the ellipse center; if the braggpeaks have been centered,
+              these should be zero
+    e         (number) the length ratio of semiminor/semimajor axes
+    phi       (number) tilt of the major axis with respect  to (qx, qy) axis, in radians 
+    """
+    PolarData, rr, tt = cartesianDataAr_to_polarEllipticalDataAr(data,tuple([qx0,qy0, 1, e, phi]))
+   
+    if (PolarData.mask.sum(axis = (0))==PolarData.shape[0]).any():
+            Maximal_Distance  = np.min(np.where(PolarData.mask.sum(axis = (0))==PolarData.shape[0]))
+            PolarData = PolarData[:,0:Maximal_Distance]
+            r_bins = rr[0,0:Maximal_Distance]
+    else:
+            r_bins = rr[0,:]
+    Mask_Polar = PolarData.mask
+    for ii in range(mask_update_iter+1): 
+        if ii > 0:    
+            # Update Mask
+            mask_update = np.logical_or(Mask_Polar,  
+                                        PolarData/background_1D > min_relative_threshold)
+            col_mask_min = np.all(mask_update, axis = 0)
+            mask_update[:,col_mask_min] = PolarData.mask[:,col_mask_min]
+            PolarData.mask  = mask_update
+        background_1D = np.ma.median(PolarData, axis = 0) 
+
+    background_1D = np.maximum(background_1D, min_background_value)
+
+    if smoothing_window_size != None:
+        if smoothing_log==True: 
+            background_1D = np.log(background_1D)
+
+        background_1D = savgol_filter(background_1D, 
+                                     smoothing_window_size, 
+                                     smoothing_poly_order)
+        if smoothing_log==True: 
+            background_1D = np.exp(background_1D)
+
+    return(background_1D, r_bins, PolarData)
+
+#Create 2D Background 
+def get_2Dbackground(data, background1D, r_bins, qx0, qy0, phi, e):
+    """
+    Gets 2D polar elliptical background
+
+    Accepts:
+    data:
+    background1D:
+    qx0,qy0:
+
+    Returns: 2D Background
+    """
+    # Define centered 2D cartesian coordinate system
+    yc, xc = np.meshgrid(np.arange(0,data.shape[1])-qy0, 
+                         np.arange(0,data.shape[0])-qx0)
+    # r = xc**2(e**2*sin(phi)**2+cos(phi)**2)+yc*(cos(phi)**2-e**2*sin(phi)**2)
+
+    # xc, yc = xc-qx0, yc-qy0
+    # r = np.sqrt((xc**2+yc**2)*np.cos(phi)**2+(xc**2-yc**2)*e**2*np.sin(phi)**2)
+    a, b = (xc*np.cos(phi)+yc*np.sin(phi))**2, (xc*np.sin(phi)-yc*np.cos(phi))**2
+    r = np.sqrt(a+(b/(e**2)))
+    # AA =  np.sqrt(
+    #             (xx*np.cos(phi)+yy*np.sin(phi))**2+
+    #             ((1/e)**2)*(xx*np.sin(phi)-yy*np.cos(phi))**2
+    #          )
+    # AA = xx/(np.cos(tt)*np.cos(phi)-e*np.sin(tt)*np.cos(phi))
+    # r_bins = np.append(-r_bins[0], r_bins)
+    # background1D = np.append(background1D[0], background1D)
+    # r_bins = np.append(r_bins, r_bins[-1]+40)
+    # background1D = np.append(background1D, background1D[-1])
+    f = interp1d(r_bins, background1D, fill_value = 'extrapolate')
+    background_2D = f(r)
+
+
+    return(background_2D, r_bins)
 
