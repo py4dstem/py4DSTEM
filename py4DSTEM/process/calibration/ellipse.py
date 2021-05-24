@@ -611,7 +611,8 @@ def get_1Dbackground(data, qx0, qy0 ,e, phi,
                     smoothing_window_size = None, 
                     smoothing_poly_order = 4, 
                     smoothing_log = True, 
-                    min_background_value=1E-3):
+                    min_background_value=1E-3, 
+                    return_polararr=False):
     """
     Gets the median polar background for a diffraction pattern
 
@@ -621,24 +622,34 @@ def get_1Dbackground(data, qx0, qy0 ,e, phi,
               these should be zero
     e         (number) the length ratio of semiminor/semimajor axes
     phi       (number) tilt of the major axis with respect  to (qx, qy) axis, in radians 
+
+    Returns: 
+    background1D (ndarray) 1D polar elliptical background
+    r_bins       (ndarray) the elliptical semimajor axis radius associated with background1D
+    PolarData    (ndarray) **optional: returns the masked polar transform from which the 1D background is computed
     """
+    # Compute Polar Transform
     PolarData, rr, tt = cartesianDataAr_to_polarEllipticalDataAr(data,tuple([qx0,qy0, 1, e, phi]))
    
+    # Crop polar data to maximum distance which contains information from original image
     if (PolarData.mask.sum(axis = (0))==PolarData.shape[0]).any():
             Maximal_Distance  = np.min(np.where(PolarData.mask.sum(axis = (0))==PolarData.shape[0]))
             PolarData = PolarData[:,0:Maximal_Distance]
             r_bins = rr[0,0:Maximal_Distance]
     else:
             r_bins = rr[0,:]
+
+    # Iteratively mask off high intensity peaks
     Mask_Polar = PolarData.mask
     for ii in range(mask_update_iter+1): 
         if ii > 0:    
-            # Update Mask
             mask_update = np.logical_or(Mask_Polar,  
                                         PolarData/background_1D > min_relative_threshold)
-            col_mask_min = np.all(mask_update, axis = 0)
-            mask_update[:,col_mask_min] = PolarData.mask[:,col_mask_min]
-            PolarData.mask  = mask_update
+            # Prevent entire columns from being masked off 
+            col_mask_min = np.all(mask_update, axis = 0)  # Detect columns that are empty
+            mask_update[:,col_mask_min] = PolarData.mask[:,col_mask_min] # reset empty columns to values of previous iterations
+            PolarData.mask  = mask_update  # Update Mask
+
         background_1D = np.ma.median(PolarData, axis = 0) 
 
     background_1D = np.maximum(background_1D, min_background_value)
@@ -652,42 +663,40 @@ def get_1Dbackground(data, qx0, qy0 ,e, phi,
                                      smoothing_poly_order)
         if smoothing_log==True: 
             background_1D = np.exp(background_1D)
-
-    return(background_1D, r_bins, PolarData)
+    if return_polararr ==True: 
+        return(background_1D, r_bins, PolarData)
+    else: 
+        return(background_1D, r_bins)
 
 #Create 2D Background 
 def get_2Dbackground(data, background1D, r_bins, qx0, qy0, phi, e):
     """
-    Gets 2D polar elliptical background
+    Gets 2D polar elliptical background from linear 1D background 
 
     Accepts:
-    data:
-    background1D:
-    qx0,qy0:
+    data            (ndarray) the data for which to find the polar eliptical background, usually a diffraction pattern
+    background1D:   (ndarray) a vector representing the radial elliptical background 
+    r_bins:         (ndarray) a vector of the elliptical semimajor axis radius associated with background1D
+    qx0,qy0         (numbers) the ellipse center; if the braggpeaks have been centered,
+                              these should be zero
+    e               (number) the length ratio of semiminor/semimajor axes
+    phi             (number) tilt of the major axis with respect  to (qx, qy) axis, in radians 
 
     Returns: 2D Background
     """
+    
     # Define centered 2D cartesian coordinate system
     yc, xc = np.meshgrid(np.arange(0,data.shape[1])-qy0, 
                          np.arange(0,data.shape[0])-qx0)
-    # r = xc**2(e**2*sin(phi)**2+cos(phi)**2)+yc*(cos(phi)**2-e**2*sin(phi)**2)
+   
 
-    # xc, yc = xc-qx0, yc-qy0
-    # r = np.sqrt((xc**2+yc**2)*np.cos(phi)**2+(xc**2-yc**2)*e**2*np.sin(phi)**2)
-    a, b = (xc*np.cos(phi)+yc*np.sin(phi))**2, (xc*np.sin(phi)-yc*np.cos(phi))**2
-    r = np.sqrt(a+(b/(e**2)))
-    # AA =  np.sqrt(
-    #             (xx*np.cos(phi)+yy*np.sin(phi))**2+
-    #             ((1/e)**2)*(xx*np.sin(phi)-yy*np.cos(phi))**2
-    #          )
-    # AA = xx/(np.cos(tt)*np.cos(phi)-e*np.sin(tt)*np.cos(phi))
-    # r_bins = np.append(-r_bins[0], r_bins)
-    # background1D = np.append(background1D[0], background1D)
-    # r_bins = np.append(r_bins, r_bins[-1]+40)
-    # background1D = np.append(background1D, background1D[-1])
+    # Calculate the semimajor axis distance for each point in the 2D array
+    r = np.sqrt(((xc*np.cos(phi)+yc*np.sin(phi))**2)+
+                (((xc*np.sin(phi)-yc*np.cos(phi))**2)/(e**2)))
+
+    # Create a 2D eliptical background using linear interpolation  
     f = interp1d(r_bins, background1D, fill_value = 'extrapolate')
     background_2D = f(r)
 
-
-    return(background_2D, r_bins)
+    return(background_2D)
 
