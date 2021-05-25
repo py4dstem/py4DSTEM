@@ -9,17 +9,16 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation
-from ..utils import get_shifted_ar, get_CoM, get_shift, tqdmnd
+from ..utils import get_shifted_ar, get_shift, tqdmnd
+from ..calibration import get_probe_size
 
 #### Get the vacuum probe ####
 
-def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
-                                           mask_expansion=12,
-                                           mask_opening=3,
-                                           verbose=False):
+def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
+                                 mask_opening=3,verbose=False,align=True):
     """
-    Aligns and averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
-    to create and average vacuum probe.
+    Averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
+    to create and average vacuum probe. Optionally (default) aligns the patterns.
 
     Values outisde the average probe are zeroed, using a binary mask determined by the optional
     parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
@@ -34,6 +33,7 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        align           (bool) if True, aligns the probes before averaging
 
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
@@ -44,10 +44,10 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
         curr_DP = datacube.data[Rx,Ry,:,:]
         if verbose:
             print("Shifting and averaging diffraction pattern {} of {}.".format(n,datacube.R_N))
-
-        xshift,yshift = get_shift(probe, curr_DP)
-        curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)
-        probe = probe*(n-1)/n + curr_DP_shifted/n
+        if align:
+            xshift,yshift = get_shift(probe, curr_DP)
+            curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+        probe = probe*(n-1)/n + curr_DP/n
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
@@ -56,14 +56,12 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,
     return probe*mask
 
 
-def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
-                                              mask_expansion=12,
-                                              mask_opening=3,
-                                              verbose=False,
-                                              DP_mask=1):
+def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=12,
+                              mask_opening=3,verbose=False,align=True,DP_mask=1):
     """
-    Aligns and averages all diffraction patterns within a specified ROI of a datacube to create an
-    average vacuum probe.
+    Averages all diffraction patterns within a specified ROI of a datacube to create an
+    average vacuum probe. Optionally (default) aligns the patterns.
+
 
     See documentation for get_average_probe_from_vacuum_scan for more detailed discussion of the
     algorithm.
@@ -78,6 +76,7 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
                         the full probe
         mask_opening    (int) size of binary opening used to eliminate stray bright pixels
         verbose         (bool) if True, prints progress updates
+        align           (bool) if True, aligns the probes before averaging
         DP_mask         (array) array of same shape as diffraction pattern to mask probes
 
     Returns:
@@ -89,10 +88,10 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,
     probe = datacube.data[xy[0,0],xy[1,0],:,:]
     for n in tqdmnd(range(1,length)):
         curr_DP = datacube.data[xy[0,n],xy[1,n],:,:] * DP_mask
-
-        xshift,yshift = get_shift(probe, curr_DP)
-        curr_DP_shifted = get_shifted_ar(curr_DP, xshift, yshift)
-        probe = probe*(n-1)/n + curr_DP_shifted/n
+        if align:
+            xshift,yshift = get_shift(probe, curr_DP)
+            curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+        probe = probe*(n-1)/n + curr_DP/n
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
@@ -193,13 +192,15 @@ def get_probe_synthetic(radius, width, Q_Nx, Q_Ny):
 
 #### Get the probe kernel ####
 
-def get_probe_kernel(probe):
+def get_probe_kernel(probe,origin=None):
     """
     Creates a convolution kernel from an average probe, by normalizing, then shifting the center of
     the probe to the corners of the array.
 
     Accepts:
         probe           (ndarray) the diffraction pattern corresponding to the probe over vacuum
+        origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                        Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe, in real space
@@ -207,7 +208,10 @@ def get_probe_kernel(probe):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Normalize
     probe = probe/np.sum(probe)
@@ -218,7 +222,7 @@ def get_probe_kernel(probe):
     return probe_kernel
 
 
-def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
+def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian from the normalized
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -228,6 +232,8 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
         probe              (ndarray) the diffraction pattern corresponding to the probe over vacuum
         sigma_probe_scale  (float) the width of the gaussian to subtract, relative to the standard
                            deviation of the probe
+        origin             (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                           Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel       (ndarray) the convolution kernel corresponding to the probe
@@ -235,7 +241,10 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
@@ -254,7 +263,7 @@ def get_probe_kernel_subtrgaussian(probe, sigma_probe_scale):
     return probe_kernel
 
 
-def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
+def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench about the
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -262,9 +271,10 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
 
     Accepts:
         probe           (ndarray) the diffraction pattern corresponding to the probe over vacuum
-        radius          (float) the inner radius of the trench, from the probe center
-        trenchwidth     (float) the trench annulus width (r_outer - r_inner)
-        blurwidth       (float) the full width of the blurring of the trench walls
+        ri              (float) the sigmoid inner radius, from the probe center
+        ro              (float) the sigmoid outer radius
+        origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
+                        Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
 
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe
@@ -272,20 +282,24 @@ def get_probe_kernel_logistictrench(probe, radius, trenchwidth, blurwidth):
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
-    xCoM, yCoM = get_CoM(probe)
+    if origin is None:
+        _,xCoM,yCoM = get_probe_size(probe)
+    else:
+        xCoM,yCoM = origin
 
     # Get probe size
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qr = np.sqrt((qx-xCoM)**2 + (qy-yCoM)**2)
-    qr = qr-radius                                        # Shift qr=0 to disk edge
 
-    # Calculate logistic function
-    logistic_annulus = 1/(1+np.exp(4*qr/blurwidth)) - 1/(1+np.exp(4*(qr-trenchwidth)/blurwidth))
+    # Calculate sigmoid
+    r0 = 0.5*(ro+ri)
+    sigma = 0.25*(ro-ri)
+    sigmoid = 1/(1+np.exp((qr-r0)/sigma))
 
     # Normalize to one, then subtract off logistic annulus, yielding kernel which integrates to zero
     probe_template_norm = probe/np.sum(probe)
-    logistic_annulus_norm = logistic_annulus/np.sum(logistic_annulus)
-    probe_kernel = probe_template_norm - logistic_annulus_norm
+    sigmoid_norm = sigmoid/np.sum(sigmoid)
+    probe_kernel = probe_template_norm - sigmoid_norm
 
     # Shift center to array corners
     probe_kernel = get_shifted_ar(probe_kernel, -xCoM, -yCoM)
