@@ -4,7 +4,7 @@ https://github.com/ercius/openNCEM/blob/master/ncempy/algo/multicorr.py
 
 modified by SEZ, May 2019 to integrate with py4DSTEM utility functions
  * rewrote upsampleFFT (previously did not work correctly)
- * modified upsampled_correlation to accept xyShift, the point around which to 
+ * modified upsampled_correlation to accept xyShift, the point around which to
  upsample the DFT
  * eliminated the factor-2 FFT upsample step in favor of using parabolic
  for first-pass subpixel (since parabolic is so fast)
@@ -19,19 +19,19 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     There are two approaches to Fourier upsampling for subpixel refinement: (a) one
     can pad an (appropriately shifted) FFT with zeros and take the inverse transform,
-    or (b) one can compute the DFT by matrix multiplication using modified 
+    or (b) one can compute the DFT by matrix multiplication using modified
     transformation matrices. The former approach is straightforward but requires
     performing the FFT algorithm (which is fast) on very large data. The latter method
     trades one speedup for a slowdown elsewhere: the matrix multiply steps are expensive
     but we operate on smaller matrices. Since we are only interested in a very small
     region of the FT around a peak of interest, we use the latter method to get
-    a substantial speedup and enormous decrease in memory requirement. This 
+    a substantial speedup and enormous decrease in memory requirement. This
     "DFT upsampling" approach computes the transformation matrices for the matrix-
     multiply DFT around a small 1.5px wide region in the original `imageCorr`.
 
-    Following the matrix multiply DFT we use parabolic subpixel fitting to 
+    Following the matrix multiply DFT we use parabolic subpixel fitting to
     get even more precision! (below 1/upsampleFactor pixels)
-    
+
     NOTE: previous versions of multiCorr operated in two steps: using the zero-
     padding upsample method for a first-pass factor-2 upsampling, followed by the
     DFT upsampling (at whatever user-specified factor). I have implemented it
@@ -45,22 +45,22 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
 
     Accepts:
-        imageCorr : ndarray complex 
+        imageCorr : ndarray complex
             Complex product of the FFTs of the two images to be registered
             i.e. m = np.fft.fft2(DP) * probe_kernel_FT;
             imageCorr = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
         upsampleFactor : int
-            Upsampling factor. Must be greater than 2. (To do upsampling 
+            Upsampling factor. Must be greater than 2. (To do upsampling
             with factor 2, use upsampleFFT, which is faster.)
         xyShift
-            Location in original image coordinates around which to upsample the 
+            Location in original image coordinates around which to upsample the
             FT. This should be given to exactly half-pixel precision to
             replicate the initial FFT step that this implementation skips
 
     Returns
     -------
         xyShift : 2-element np array
-            Refined location of the peak in image coordinates. 
+            Refined location of the peak in image coordinates.
     '''
 
     assert upsampleFactor > 2
@@ -72,7 +72,7 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     upsampleCenter = globalShift - upsampleFactor*xyShift
 
-    imageCorrUpsample = np.conj(dftUpsample(np.conj(imageCorr), upsampleFactor, upsampleCenter )) 
+    imageCorrUpsample = np.conj(dftUpsample(np.conj(imageCorr), upsampleFactor, upsampleCenter ))
 
     xySubShift = np.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
 
