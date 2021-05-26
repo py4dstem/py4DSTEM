@@ -67,18 +67,18 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
         maxNumPeaks          (int) the maximum number of peaks to return
         subpixel             (str)          'none': no subpixel fitting
-                                    default 'poly': polynomial interpolation of correlogram peaks
+                                  (default) 'poly': polynomial interpolation of correlogram peaks
                                                     (fairly fast but not very accurate)
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
                              Must be a function of only one argument (the diffraction pattern) and return
                              the filtered diffraction pattern.
                              The shape of the returned DP must match the shape of the probe kernel (but does
                              not need to match the shape of the input diffraction pattern, e.g. the filter
                              can be used to bin the diffraction pattern). If using distributed disk detection,
-                             the function must be able to be pickled with by dill. 
+                             the function must be able to be pickled with by dill.
         return_cc            (bool) if True, return the cross correlation
         peaks                (PointList) For internal use.
                              If peaks is None, the PointList of peak positions is created here.
@@ -90,55 +90,28 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
+    # Perform any prefiltering
     DP = DP if filter_function is None else filter_function(DP)
 
-    if subpixel == 'none':
+    # Get the cross correlation
+    if subpixel in ('none','poly'):
         cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-        cc = np.maximum(cc,0)
-        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                     edgeBoundary=edgeBoundary,
-                                                     minRelativeIntensity=minRelativeIntensity,
-                                                     relativeToPeak=relativeToPeak,
-                                                     minSpacing=minPeakSpacing,
-                                                     maxNumPeaks=maxNumPeaks,
-                                                     subpixel=False)
-    elif subpixel == 'poly':
-        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-        cc = np.maximum(cc,0)
-        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                     edgeBoundary=edgeBoundary,
-                                                     minRelativeIntensity=minRelativeIntensity,
-                                                     relativeToPeak=relativeToPeak,
-                                                     minSpacing=minPeakSpacing,
-                                                     maxNumPeaks=maxNumPeaks,
-                                                     subpixel=True)
+        ccc = None
+    # for multicorr subpixel fitting, we need both the real and complex cross correlation
     else:
-        # Multicorr subpixel:
-        m = np.fft.fft2(DP) * probe_kernel_FT
-        ccc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
-
+        ccc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower, returnval='fourier')
         cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
 
-        maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                     edgeBoundary=edgeBoundary,
-                                                     minRelativeIntensity=minRelativeIntensity,
-                                                     relativeToPeak=relativeToPeak,
-                                                     minSpacing=minPeakSpacing,
-                                                     maxNumPeaks=maxNumPeaks,
-                                                     subpixel=True)
-
-        # Use the DFT upsample to refine the detected peaks (but not the intensity)
-        for ipeak in range(len(maxima_x)):
-            xyShift = np.array((maxima_x[ipeak],maxima_y[ipeak]))
-            # we actually have to lose some precision and go down to half-pixel
-            # accuracy. this could also be done by a single upsampling at factor 2
-            # instead of get_maxima_2D.
-            xyShift[0] = np.round(xyShift[0] * 2) / 2
-            xyShift[1] = np.round(xyShift[1] * 2) / 2
-
-            subShift = upsampled_correlation(ccc,upsample_factor,xyShift)
-            maxima_x[ipeak]=subShift[0]
-            maxima_y[ipeak]=subShift[1]
+    # Find the maxima
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
+                                                 edgeBoundary=edgeBoundary,
+                                                 minRelativeIntensity=minRelativeIntensity,
+                                                 relativeToPeak=relativeToPeak,
+                                                 minSpacing=minPeakSpacing,
+                                                 maxNumPeaks=maxNumPeaks,
+                                                 subpixel=subpixel,
+                                                 ccc = ccc,
+                                                 upsample_factor = upsample_factor)
 
     # Make peaks PointList
     if peaks is None:
@@ -192,13 +165,13 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
                              Must be a function of only one argument (the diffraction pattern) and return
                              the filtered diffraction pattern.
                              The shape of the returned DP must match the shape of the probe kernel (but does
                              not need to match the shape of the input diffraction pattern, e.g. the filter
                              can be used to bin the diffraction pattern). If using distributed disk detection,
-                             the function must be able to be pickled with by dill. 
+                             the function must be able to be pickled with by dill.
         return_cc            (bool) if True, return the cross correlation
 
     Returns:
@@ -259,13 +232,13 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                                             'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding. 
+        filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
                              Must be a function of only one argument (the diffraction pattern) and return
                              the filtered diffraction pattern.
                              The shape of the returned DP must match the shape of the probe kernel (but does
                              not need to match the shape of the input diffraction pattern, e.g. the filter
                              can be used to bin the diffraction pattern). If using distributed disk detection,
-                             the function must be able to be pickled with by dill. 
+                             the function must be able to be pickled with by dill.
 
     Returns:
         peaks                (n-tuple of PointLists, n=len(Rx)) the Bragg peak positions and
@@ -281,7 +254,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     # Loop over selected diffraction patterns
     t0 = time()
     for i in range(len(Rx)):
-        DP = datacube.data[Rx[i],Ry[i],:,:] 
+        DP = datacube.data[Rx[i],Ry[i],:,:]
         peaks.append(_find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                                    corrPower = corrPower,
                                                    sigma = sigma,
