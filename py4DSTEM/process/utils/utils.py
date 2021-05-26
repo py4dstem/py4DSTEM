@@ -227,7 +227,7 @@ def get_maximal_points(ar):
 
 
 def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ccc=None, upsample_factor=16):
+                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -248,8 +248,10 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                                                     (fairly fast but not very accurate)
                                                'multicorr': uses the multicorr algorithm with
                                                         DFT upsampling
-        ccc                     (None or complex array) required iff subpixel=='multicorr'; the
-                                complex cross correlation of the image should be passed here
+        ar_FT                   (None or complex array) if subpixel=='multicorr' the
+                                fourier transform of the image is required.  It may be
+                                passed here as a complex array.  Otherwise, if ar_FT is None,
+                                it is computed
         upsample_factor         (int) required iff subpixel=='multicorr'
 
     Returns
@@ -326,6 +328,8 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
         # Further refinement with fourier upsampling
         if subpixel == 'multicorr':
+            if ar_FT is None:
+                ar_FT = np.fft.fft2(ar)
             for ipeak in range(len(maxima['x'])):
                 xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
                 # we actually have to lose some precision and go down to half-pixel
@@ -334,7 +338,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 xyShift[0] = np.round(xyShift[0] * 2) / 2
                 xyShift[1] = np.round(xyShift[1] * 2) / 2
 
-                subShift = upsampled_correlation(ccc,upsample_factor,xyShift)
+                subShift = upsampled_correlation(ar_FT,upsample_factor,xyShift)
                 maxima['x'][ipeak]=subShift[0]
                 maxima['y'][ipeak]=subShift[1]
 
