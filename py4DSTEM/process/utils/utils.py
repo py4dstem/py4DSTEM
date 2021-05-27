@@ -10,6 +10,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
+from .multicorr import upsampled_correlation
+
 try:
     from IPython.display import clear_output
 except ImportError:
@@ -161,26 +163,44 @@ def get_shifted_ar(ar, xshift, yshift):
     return shifted_ar
 
 
-def get_cross_correlation(ar, kernel, corrPower=1):
+def get_cross_correlation(ar, kernel, corrPower=1, returnval='cc'):
     """
     Calculates the cross correlation of ar with kernel.
     corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
     correlation, and values in between are hybrids.
+
+    The return value depends on the argument `returnval`:
+        if return=='cc' (default), returns the real part of the cross correlation in real
+        space.
+        if return=='fourier', returns the output in Fourier space, before taking the
+        inverse transform.
     """
-    m = np.fft.fft2(ar) * np.conj(np.fft.fft2(kernel))
-    return np.real(np.fft.ifft2(np.abs(m) ** (corrPower) * np.exp(1j * np.angle(m))))
+    assert(returnval in ('cc','fourier'))
+    fourierkernel = np.conj(np.fft.fft2(kernel))
+    return get_cross_correlation_fk(ar, fourierkernel, corrPower=corrPower, returnval=returnval)
 
 
-def get_cross_correlation_fk(ar, fourierkernel, corrPower=1):
+def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval='cc'):
     """
     Calculates the cross correlation of ar with fourierkernel.
     Here, fourierkernel = np.conj(np.fft.fft2(kernel)); speeds up computation when the same
     kernel is to be used for multiple cross correlations.
     corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
     correlation, and values in between are hybrids.
+
+    The return value depends on the argument `returnval`:
+        if return=='cc' (default), returns the real part of the cross correlation in real
+        space.
+        if return=='fourier', returns the output in Fourier space, before taking the
+        inverse transform.
     """
+    assert(returnval in ('cc','fourier'))
     m = np.fft.fft2(ar) * fourierkernel
-    return np.real(np.fft.ifft2(np.abs(m) ** (corrPower) * np.exp(1j * np.angle(m))))
+    ccc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
+    if returnval=='fourier':
+        return ccc
+    else:
+        return np.real(np.fft.ifft2(ccc))
 
 
 def get_CoM(ar):
@@ -207,7 +227,7 @@ def get_maximal_points(ar):
 
 
 def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel=True):
+                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -223,14 +243,24 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                                 relativeToPeak'th brightest maximum are removed
         relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks             (int) return only the first maxNumPeaks maxima
-        subpixel                (bool) if False, return locally maximal pixels.
-                                if True, perform subpixel fitting
+        subpixel                (str)          'none': no subpixel fitting
+                                     (default) 'poly': polynomial interpolation of correlogram peaks
+                                                    (fairly fast but not very accurate)
+                                               'multicorr': uses the multicorr algorithm with
+                                                        DFT upsampling
+        ar_FT                   (None or complex array) if subpixel=='multicorr' the
+                                fourier transform of the image is required.  It may be
+                                passed here as a complex array.  Otherwise, if ar_FT is None,
+                                it is computed
+        upsample_factor         (int) required iff subpixel=='multicorr'
 
     Returns
         maxima_x                (ndarray) x-coords of the local maximum, sorted by intensity.
         maxima_y                (ndarray) y-coords of the local maximum, sorted by intensity.
         maxima_intensity        (ndarray) intensity of the local maxima
     """
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+
     # Get maxima
     ar = gaussian_filter(ar, sigma)
     maxima_bool = get_maximal_points(ar)
@@ -281,8 +311,9 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
             if len(maxima) > maxNumPeaks:
                 maxima = maxima[:maxNumPeaks]
 
-        # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
-        if subpixel is True:
+        # Subpixel fitting 
+        # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
+        if subpixel != 'none':
             for i in range(len(maxima)):
                 Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])]
                 Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])]
@@ -295,6 +326,21 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 maxima['x'][i] += deltax
                 maxima['y'][i] += deltay
                 maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
+        # Further refinement with fourier upsampling
+        if subpixel == 'multicorr':
+            if ar_FT is None:
+                ar_FT = np.fft.fft2(ar)
+            for ipeak in range(len(maxima['x'])):
+                xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
+                # we actually have to lose some precision and go down to half-pixel
+                # accuracy. this could also be done by a single upsampling at factor 2
+                # instead of get_maxima_2D.
+                xyShift[0] = np.round(xyShift[0] * 2) / 2
+                xyShift[1] = np.round(xyShift[1] * 2) / 2
+
+                subShift = upsampled_correlation(ar_FT,upsample_factor,xyShift)
+                maxima['x'][ipeak]=subShift[0]
+                maxima['y'][ipeak]=subShift[1]
 
     return maxima['x'], maxima['y'], maxima['intensity']
 
