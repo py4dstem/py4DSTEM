@@ -8,7 +8,7 @@
 # kernel by shifting and normalizing.
 
 import numpy as np
-from scipy.ndimage.morphology import binary_opening, binary_dilation
+from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt 
 from ..utils import get_shifted_ar, get_shift, tqdmnd
 from ..calibration import get_probe_size
 
@@ -38,6 +38,7 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
     Returns:
         probe           (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)) the average probe
     """
+
     probe = datacube.data[0,0,:,:]
     for n in tqdmnd(range(1,datacube.R_N)):
         Rx,Ry = np.unravel_index(n,datacube.data.shape[:2])
@@ -51,10 +52,10 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
-
 
 def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=12,
                               mask_opening=3,verbose=False,align=True,DP_mask=1):
@@ -95,7 +96,8 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=1
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
 
@@ -128,7 +130,8 @@ def get_probe_from_vacuum_3Dstack(data, mask_threshold=0.2,
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
 
@@ -156,7 +159,8 @@ def get_probe_from_vacuum_2Dimage(data, mask_threshold=0.2,
     """
     mask = data > np.max(data)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return data*mask
 
