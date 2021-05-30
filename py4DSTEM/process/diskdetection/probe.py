@@ -20,7 +20,7 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
     Averages all diffraction patterns in a datacube, assumed to be taken over vacuum,
     to create and average vacuum probe. Optionally (default) aligns the patterns.
 
-    Values outisde the average probe are zeroed, using a binary mask determined by the optional
+    Values outside the average probe are zeroed, using a binary mask determined by the optional
     parameters mask_threshold, mask_expansion, and mask_opening.  An initial binary mask is created
     using a threshold of less than mask_threshold times the maximal probe value. A morphological
     opening of mask_opening pixels is performed to eliminate stray pixels (e.g. from x-rays),
