@@ -267,7 +267,7 @@ def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
+def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='logistic'):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench about the
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
@@ -279,6 +279,7 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
         ro              (float) the sigmoid outer radius
         origin          (2-tuple or None) if None (default), finds the origin using get_probe_radius.
                         Otherwise, should be a 2-tuple (x0,y0) specifying the origin position
+        type            (string), must be 'logistic' or 'sine_squared'
 
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe
@@ -296,9 +297,15 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
     qr = np.sqrt((qx-xCoM)**2 + (qy-yCoM)**2)
 
     # Calculate sigmoid
-    r0 = 0.5*(ro+ri)
-    sigma = 0.25*(ro-ri)
-    sigmoid = 1/(1+np.exp((qr-r0)/sigma))
+    if type == 'logistic':
+        r0 = 0.5*(ro+ri)
+        sigma = 0.25*(ro-ri)
+        sigmoid = 1/(1+np.exp((qr-r0)/sigma))
+    elif type == 'sine_squared':
+        sigmoid = (qr - ri) / (ro - ri)
+        sigmoid = np.minimum(np.maximum(sigmoid, 0.0), 1.0)
+        sigmoid = np.cos((np.pi/2)*sigmoid)**2
+
 
     # Normalize to one, then subtract off logistic annulus, yielding kernel which integrates to zero
     probe_template_norm = probe/np.sum(probe)
