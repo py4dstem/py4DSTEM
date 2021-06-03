@@ -3,9 +3,6 @@ Welcome to the py4DSTEM documentation
 =====================================
 
 
-..
-    meow
-
 Just use::
 
     import py4dstem
@@ -18,18 +15,15 @@ Contents
 .. toctree:: 
    :maxdepth: 2
 
-   meow
-   woof
+   process
+   visualize
+   io
 
 
 Test Area
 ^^^^^^^^^
 
-..
-    .. automodule:: py4DSTEM
-       :members:
-
-.. autofunction:: py4DSTEM.io.read
+Meow
 
 
 Indices and tables
