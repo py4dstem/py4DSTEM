@@ -9,7 +9,7 @@ from .nonnative import *
 def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     """
     General read function for 4D-STEM datasets. Takes a filename as input, parses
-    the filetype, and calls the appropriate
+    the filetype, and calls the appropriate reader.
 
     For non-native filetypes, returns a DataCube instance with the 4D-STEM data.
     For native .h5 files, behavior is contingent on the 'data_id' argument, as
