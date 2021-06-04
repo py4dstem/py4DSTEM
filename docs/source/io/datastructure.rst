@@ -2,7 +2,7 @@ datastructure
 =============
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    datastructure/datacube
    datastructure/dataslice
