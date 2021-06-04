@@ -24,16 +24,18 @@ class PointListArray(DataObject):
         """
         DataObject.__init__(self, **kwargs)
 
-        self.coordinates = coordinates
-        self.default_dtype = dtype
+        self.coordinates = coordinates  #: the coordinates; see the PointList documentation
+        self.default_dtype = dtype      #: the default datatype; see the PointList documentation
 
         assert isinstance(shape,tuple), "Shape must be a tuple."
         assert len(shape) == 2, "Shape must be a length 2 tuple."
+        #: the shape of the 2D grid of positions populated with PointList instances;
+        #: typically, this will be ``(R_Nx,R_Ny)``
         self.shape = shape
 
         # Define the data type for the structured arrays in the PointLists
         if type(coordinates) in (type, np.dtype):
-            self.dtype = coordinates
+            self.dtype = coordinates  # the custom datatype; see the PointList documentation
         elif type(coordinates[0])==str:
             self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
