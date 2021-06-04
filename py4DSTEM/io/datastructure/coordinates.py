@@ -13,18 +13,18 @@ class Coordinates(DataObject):
     where the parameter varies with scan position, e.g. the shifting of the optic axis as
     the beam is scanned.
 
-	Storing and accessing some parameter p is accomplished with get/set methods, e.g.:
-		```
-		coords = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
-		coords.set_p(p)
-		p = coords.get_p()
-		```
-	The get methods support retrieving numbers, arrays, or values at specified (rx,ry)
-	positions.  The code
-		```
-        p = coords.get_p(rx,ry)
-		```
-    will retrieve the value p if p is a number, and the value p[rx,ry] if p is an array.
+    Storing and accessing some parameter ``p`` is accomplished with the get/set methods, e.g.
+
+        >>> coords = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
+        >>> coords.set_p(p)
+        >>> p = coords.get_p()
+
+    The get methods support retrieving numbers, arrays, or values at specified positions.
+    The code:
+
+        >>> p = coords.get_p(rx,ry)
+
+    will retrieve the value ``p`` if ``p`` is a number, and the value ``p[rx,ry]`` if ``p`` is an array.
     """
     def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny,
                  Q_pixel_size=1,Q_pixel_units='pixels',

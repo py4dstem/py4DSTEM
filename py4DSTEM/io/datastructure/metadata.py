@@ -38,11 +38,11 @@ class Metadata(DataObject):
         """
         DataObject.__init__(self)
 
-        self.microscope = {}
-        self.sample = {}
-        self.user = {}
-        self.calibration = {}
-        self.comments = {}
+        self.microscope = {}    #: a dictionary of microscope condition related metadata
+        self.sample = {}        #: a dictionary of sample related metadata
+        self.user = {}          #: a dictionary of user related metadata
+        self.calibration = {}   #: a dictionary of calibration related metadata
+        self.comments = {}      #: a dictionary of for custom comments
 
         self.dicts = {'microscope':self.microscope,
                       'sample':self.sample,
