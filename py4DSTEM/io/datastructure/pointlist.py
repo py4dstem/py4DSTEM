@@ -31,13 +31,17 @@ class PointList(DataObject):
         """
         DataObject.__init__(self, **kwargs)
 
+        #: either a list of length 2 tuples, each a (string,dtype) pair, specifying
+        #: each of the coordinates' name and type, or, a list of strings, specifying
+        #: each of the coordinates' names. In the latter case all datatypes will
+        #: use the default dtype (defaults to float)
         self.coordinates = coordinates
-        self.default_dtype = dtype
-        self.length = 0
+        self.default_dtype = dtype  #: the default datatype
+        self.length = 0  #: the number of coordinates
 
         # Define the data type for the PointList structured array
         if type(coordinates) in (type, np.dtype):
-            self.dtype = coordinates
+            self.dtype = coordinates  #: the custom datatype, generated from the coordinates
         elif type(coordinates[0])==str:
             self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
@@ -45,7 +49,7 @@ class PointList(DataObject):
         else:
             raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
 
-        self.data = np.array([],dtype=self.dtype)
+        self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
 
         if data is not None:
             if isinstance(data, PointList):
