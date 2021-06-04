@@ -2,7 +2,7 @@ diskdetection
 =============
 
 .. toctree::
-   maxdepth: 2
+   :maxdepth: 2
 
    diskdetection/diskdetection
    diskdetection/probe
