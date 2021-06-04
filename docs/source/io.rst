@@ -2,10 +2,11 @@ io
 ==
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    io/read
-   io/native
-   io/nonnative
+   io/write
    io/datastructure
+   io/io_utils
+
 

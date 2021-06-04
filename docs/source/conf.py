@@ -43,6 +43,11 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
+# Change the order members of a module or class are listed in
+# Remove to return to default of alphabetical
+autodoc_member_order = 'bysource'
+
+
 
 # -- Options for HTML output -------------------------------------------------
 
