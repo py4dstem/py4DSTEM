@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import py4DSTEM
 import scipy.io as sio
 from py4DSTEM.process.utils import print_progress_bar
-from py4DSTEM.process.utils import polar_elliptical_transform
 from py4DSTEM.process.utils.ellipticalCoords import *
 import matplotlib
 from tqdm import tqdm
