@@ -10,24 +10,22 @@ from .dataobject import DataObject
 
 class PointList(DataObject):
     """
-    Essentially a wrapper around a structured numpy array, with the py4DSTEM DataObject
-    interface enabling saving and logging.
+    Essentially a wrapper around a structured numpy array, which py4DSTEM can save and load.
+
+    Args:
+        coordinates (list): specifies the coordinates. Can be either (1) a list of
+            strings, or (2) a list of length-2 tuples.  In the latter case each tuple
+            specifies a coordinate name a dtype.  In the former case only the name is
+            specified, and all datatypes will default to the ``dtype`` kwarg
+        data (ndarray): the data, which shape (n,m), where m=len(coordinates), and n
+            is the number of points being specified additional data can be added
+            later with the add_point() method
+        dtype (dtype, optional): used if coordinates don't explicitly specify dtypes.
     """
     def __init__(self, coordinates, data=None, dtype=float, **kwargs):
         """
 		Instantiate a PointList object.
 		Defines the coordinates, data, and parentDataCube.
-
-		Inputs:
-			coordinates - a list specifying the coordinates. Can be:
-                          (1) a list of strings, which specify coordinate names. datatypes will
-                          all default to the dtype kwarg
-                          (2) a list of length-2 tuples, each a (string, dtype) pair, specifying
-                          coordinate names and types
-            data - an (n,m)-shape ndarray, where m=len(coordinates), and n is the number of
-                   points being specified additional data can be added later with the
-                   add_point() method
-            dtype - optional, used if coordinates don't explicitly specify dtypes.
         """
         DataObject.__init__(self, **kwargs)
 

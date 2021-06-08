@@ -44,9 +44,14 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
-# Change the order members of a module or class are listed in
-# Remove to return to default of alphabetical
-autodoc_member_order = 'bysource'
+# Set autodoc defaults
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource',
+    'special-members': '__init__'
+}
+
+#autodoc_member_order = 'bysource'
 
 
 

@@ -25,6 +25,24 @@ class Coordinates(DataObject):
         >>> p = coords.get_p(rx,ry)
 
     will retrieve the value ``p`` if ``p`` is a number, and the value ``p[rx,ry]`` if ``p`` is an array.
+
+    Args:
+        Q_Nx,Q_Ny (int): the shape of diffraction space
+        R_Nx,R_Ny (int): the shape of real space
+        Q_pixel_size (number): the detector pixel size, in units of ``Q_pixel_units``
+        Q_pixel_units (string): the detector pixel size units
+        R_pixel_size (number): the spacing between beam raster positions, in units of
+            ``R_pixel_units``
+        R_pixel_units (string): the real space pixel units
+        qx0,qy0 (number or ndarray): the origin of diffraction space
+        e (number): the ratio of lengths of the semiminor to semimajor axes of the
+            elliptical distortions
+        theta (number): the (positive, right handed) tilt of the semimajor axis of
+            the elliptical distortions with respect to the x-axis, in radians
+        QR_rotation (number): the (positive,right handed) rotational misalignment of
+            image plane with respec diffraction plane, in radians
+        QR_flip (bool): descibes whether the image and diffraction plane's coordinate
+            systems are inverted with respect to one another
     """
     def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny,
                  Q_pixel_size=1,Q_pixel_units='pixels',
@@ -32,26 +50,6 @@ class Coordinates(DataObject):
                  **kwargs):
         """
         Initialize a coordinate system.
-
-        Accepts:
-            Q_Nx,Q_Ny         (ints) the shape of diffraction space
-            R_Nx,R_Ny         (ints) the shape of real space
-            Q_pixel_size      (number)
-            Q_pixel_units     (string)
-            R_pixel_size      (number)
-            R_pixel_units     (string)
-            qx0,qy0           (numbers or ndarrays) the origin of diffraction space
-            e                 (number) the ratio of lengths of the semiminor to
-                              semimajor axes of the elliptical distortions
-            theta             (number) the (positive, right handed) tilt of the
-                              semimajor axis of the elliptical distortions with
-                              respect to the x-axis, in radians
-            QR_rotation       (number) the (positive,right handed) rotational
-                              misalignment of image plane with respect to the
-                              diffraction plane, in radians
-            QR_flip           (bool) descibes whether the image and diffraction
-                              plane's coordinate systems are inverted with
-                              respect to one another
         """
         DataObject.__init__(self, **kwargs)
 
