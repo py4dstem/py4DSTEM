@@ -9,13 +9,13 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
     braggpeak positions which have been centered about the origin. In the returned array
     braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
+    Args:
+        braggpeaks (PointListArray):  Must have the coords 'qx','qy','intensity', the
+                                      default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (ndarray): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
