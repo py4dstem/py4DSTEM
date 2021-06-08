@@ -13,24 +13,26 @@ def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
     """
     Read a K2 binary 4D-STEM file.
 
-    Accepts:
-        fp          str Path to the file
-        mem         (str) Specifies how the data should be stored; must be "RAM"
-                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
-                    is "MEMMAP".
-        binfactor   (int) Bin the data, in diffraction space, as it's loaded. See
-                    docstring for py4DSTEM.file.io.read.  Must be 1, retained only
-                    for compatibility.
-        metadata    (bool) iff True, returns the file metadata as a Metadata
-                    instance.
+    Args:
+        fp: str Path to the file
+        mem (str, optional): Specifies how the data should be stored; must be "RAM"
+            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "MEMMAP".
+        binfactor: (int, optional): Bin the data, in diffraction space, as it's loaded.
+            See docstring for py4DSTEM.file.io.read.  Must be 1, retained only for
+            compatibility.
+        metadata (bool, optional): if True, returns the file metadata as a Metadata
+            instance.
 
     Returns:
-        data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
-                    iff metadata==True, returns the metadata as a Metadata instance
+        (variable): The return value depends on usage:
 
-                    Note that metadata is read either way - in the latter case ONLY
-                    metadata is read and returned, in the former case a DataCube
-                    is returned with the metadata attached at datacube.metadata
+
+            * if metadata==False, returns the 4D-STEM dataset as a DataCube
+            * if metadata==True, returns the metadata as a Metadata instance
+
+        Note that metadata is read either way - in the latter case ONLY
+        metadata is read and returned, in the former case a DataCube
+        is returned with the metadata attached at datacube.metadata
     """
     assert mem == "MEMMAP", "K2 files can only be memory-mapped, sorry."
     assert binfactor == 1, "K2 files can only be read at full resolution, sorry."
@@ -66,9 +68,9 @@ class K2DataArray(Sequence):
     is potentially dangerous and (currently!) not allowed. To switch back from user-background to
     auto-background, just delete the user background, i.e. `del(dc.data4D.dark_reference)`
 
-    ===== NOTE =====
-    If you call dc.data4D[:,:,:,:] on a DataCube with a K2DataArray this will read the entire stack
-    into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
+    Note:
+        If you call dc.data4D[:,:,:,:] on a DataCube with a K2DataArray this will read the entire stack
+        into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
     """
 
     def __init__(self, filepath, hidden_stripe_noise_reduction=True):
