@@ -16,18 +16,17 @@ class CountedDataCube(DataObject):
     """
     A 4D-STEM dataset using an electron event list as the data source.
 
-    Accepts:
-        electrons:      (PointListArray or h5py.Dataset) array of lists of
-                        electron strike events. *DO NOT MODIFY THIS AFTER CREATION*
-        detector_shape: (list of ints) size Q_Nx and Q_Ny of detector
-        index_keys:     (list) if the data arrays in electrons are structured, specify
-                        the keys that correspond to the electron data. If electrons
-                        is unstructured, pass [None] (as a list!)
-        use_dask:       (bool) by default, the CountedDataCube.data object DOES NOT
-                        SUPPORT slicing along the realspace axes (i.e. you can ONLY
-                        pass single scan positions). By setting use_dask = True,
-                        a Dask array will be created that enables all slicing modes
-                        supported by Dask. This can add substantial overhead.
+    Args:
+        electrons (PointListArray or h5py.Dataset): array of lists of electron strike
+            events. *DO NOT MODIFY THIS AFTER CREATION*
+        detector_shape (list of ints): size Q_Nx and Q_Ny of detector
+        index_keys (list): if the data arrays in electrons are structured, specify the
+            keys that correspond to the electron data. If electrons is unstructured, pass
+            [None] (as a list!)
+        use_dask (bool): by default, the CountedDataCube.data object DOES NOT SUPPORT
+            slicing along the realspace axes (i.e. you can ONLY pass single scan
+            positions). By setting use_dask = True, a Dask array will be created that
+            enables all slicing modes supported by Dask. This can add substantial overhead.
     """
 
     def __init__(self,electrons,detector_shape,index_keys='ind',
@@ -93,7 +92,7 @@ class CountedDataCube(DataObject):
 
 class Sparse4D(Sequence):
     """
-    A wrapper for a PointListArray or HDF5 dataset of electron events 
+    A wrapper for a PointListArray or HDF5 dataset of electron events
     that returns a reconstructed diffraction pattern when sliced.
     NOTE: This class is meant to be constructed by the
     CountedDataCube object, and should not be invoked directly.

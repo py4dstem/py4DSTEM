@@ -10,17 +10,17 @@ class PointListArray(DataObject):
     An object containing an array of PointLists.
     Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
     as real space scan positions R_Nx,R_Ny.
+
+    Args:
+        coordinates: see PointList documentation
+        shape (2-tuple of ints): the array shape.  Typically the real space shape
+            ``(R_Nx, R_Ny)``.
     """
     def __init__(self, coordinates, shape, dtype=float, **kwargs):
         """
 		Instantiate a PointListArray object.
-		Creates a PointList with coordinates at each point of a 2D grid with a shape specified by
-        the shape argument.
-
-		Inputs:
-			coordinates - see PointList documentation
-            shape - a 2-tuple of ints specifying the array shape.  Often the desired shape
-                    will be the real space shape (R_Nx, R_Ny).
+		Creates a PointList with coordinates at each point of a 2D grid with a shape specified
+        by the shape argument.
         """
         DataObject.__init__(self, **kwargs)
 

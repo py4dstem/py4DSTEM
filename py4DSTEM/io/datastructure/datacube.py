@@ -17,6 +17,12 @@ from ...process import virtualimage_viewer as virtualimage
 from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
+    """
+    A class storing a single 4D STEM dataset.
+
+    Args:
+        data (ndarray): the data, in a 4D array of shape ``(R_Nx,R_Ny,Q_Nx,Q_Ny)``
+    """
 
     def __init__(self, data, **kwargs):
         """
@@ -54,6 +60,9 @@ class DataCube(DataObject):
     def set_scan_shape(self,R_Nx,R_Ny):
         """
         Reshape the data given the real space scan shape.
+
+        Args:
+            R_Nx,R_Ny (int): the scan shape
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
