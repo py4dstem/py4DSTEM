@@ -19,7 +19,8 @@ Contents
    support
    license
    api
-
+   references
+   acknowledgements
 
 
 Indices and tables
