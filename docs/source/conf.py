@@ -51,6 +51,9 @@ autodoc_default_options = {
     'special-members': '__init__'
 }
 
+# Include todo items/lists
+todo_include_todos = True
+
 #autodoc_member_order = 'bysource'
 
 
