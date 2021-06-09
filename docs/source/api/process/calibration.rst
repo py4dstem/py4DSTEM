@@ -1,27 +1,11 @@
 calibration
 ===========
 
-ellipse
-^^^^^^^
+.. toctree::
+   :maxdepth: 2
 
-.. automodule:: py4DSTEM.process.calibration.ellipse
-   :members:
-
-origin
-^^^^^^
-
-.. automodule:: py4DSTEM.process.calibration.origin
-   :members:
-
-qpixelsize
-^^^^^^^^^^
-
-.. automodule:: py4DSTEM.process.calibration.qpixelsize
-   :members:
-
-rotation
-^^^^^^^^
-
-.. automodule:: py4DSTEM.process.calibration.rotation
-   :members:
+   calibration/ellipse
+   calibration/origin
+   calibration/qpixelsize
+   calibration/rotation
 
