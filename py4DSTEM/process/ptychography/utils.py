@@ -5,27 +5,27 @@ import cmath as cm
 from numba import cuda
 
 @cuda.jit
-def single_sideband_kernel(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrations, aberration_angles, theta_rot, alpha,
-                           Ψ_Qp, Ψ_Qp_left_sb, Ψ_Qp_right_sb, eps, lam, scale):
+def single_sideband_kernel(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrations,
+                           aberration_angles, theta_rot, alpha, Ψ_Qp, Ψ_Qp_left_sb,
+                           Ψ_Qp_right_sb, eps, lam, scale):
     """
-
-    :param G: array_like , 4D G-function used in ptychography
-    :param strides: array_like shape (4,) contains the strides of the G array
-    :param Qx_all: array_like, shape (G.shape[1],)
-    :param Qy_all: array_like, shape (G.shape[0],)
-    :param Kx_all: array_like, shape (G.shape[3],)
-    :param Ky_all: array_like, shape (G.shape[2],)
-    :param aberrations: array_like, shape (16,)
-    :param aberration_angles: array_like, shape (12,)
-    :param theta_rot: float, STEM rotation angle in radians
-    :param alpha: float, converge half-angle in radians
-    :param Ψ_Qp: array_like, shape (G.shape[0], G.shape[1],) to store the result of the weak phase approximation
-    :param Ψ_Qp_left_sb: array_like, shape (G.shape[0], G.shape[1],) to store the result of the left sideband
-    :param Ψ_Qp_right_sb: array_like, shape (G.shape[0], G.shape[1],) to store the result of the right sideband
-    :param eps: float, threshold for which Γ-function values to include in the summation Γ_abs > eps
-    :param lam: float, wavelength in Angstrom
-    :param scale: float, scale factor to scale the aperture to the measured intensity
-    :return: nothing
+    Args:
+        G: array_like , 4D G-function used in ptychography
+        strides: array_like shape (4,) contains the strides of the G array
+        Qx_all: array_like, shape (G.shape[1],)
+        Qy_all: array_like, shape (G.shape[0],)
+        Kx_all: array_like, shape (G.shape[3],)
+        Ky_all: array_like, shape (G.shape[2],)
+        aberrations: array_like, shape (16,)
+        aberration_angles: array_like, shape (12,)
+        theta_rot: float, STEM rotation angle in radians
+        alpha: float, converge half-angle in radians
+        Ψ_Qp: array_like, shape (G.shape[0], G.shape[1],) to store the result of the weak phase approximation
+        Ψ_Qp_left_sb: array_like, shape (G.shape[0], G.shape[1],) to store the result of the left sideband
+        Ψ_Qp_right_sb: array_like, shape (G.shape[0], G.shape[1],) to store the result of the right sideband
+        eps: float, threshold for which Γ-function values to include in the summation Γ_abs > eps
+        lam: float, wavelength in Angstrom
+        scale: float, scale factor to scale the aperture to the measured intensity
     """
     def aperture2(qx, qy, lam, alpha_max, scale):
         qx2 = qx ** 2
@@ -38,38 +38,41 @@ def single_sideband_kernel(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberratio
         """
         Creates an aberration surface from aberration coefficients.
 
-        :param qx: M1 x M2 tensor of x coefficients of reciprocal space
-        :param qy: M1 x M2 tensor of y coefficients of reciprocal space
-        :param lam: wavelength in Angstrom
-        :param a10: shift                               in Angstrom
-        :param a11: shift                               in Angstrom
-        :param a20: defocus                             in Angstrom
-        :param a22: two-fold Astigmatism                in Angstrom
-        :param a31: axial coma                          in Angstrom
-        :param a33: three-fold astigmatism              in Angstrom
-        :param a40: spherical aberration                in um
-        :param a42: star aberration                     in um
-        :param a44: four-fold astigmatism               in um
-        :param a51: fourth order axial coma             in um
-        :param a53: three-lobe aberration               in um
-        :param a55: five-fold astigmatism               im um
-        :param a60: fifth-order spherical               in mm
-        :param a62: fifth-order two-fold astigmatism    in mm
-        :param a64: fifth-order four-fold astigmatism   in mm
-        :param a66: siz-fold astigmatism                in mm
-        :param phi11: shift angle
-        :param phi22: two-fold Astigmatism angle
-        :param phi33: three-fold astigmatism angle
-        :param phi44: four-fold astigmatism angle
-        :param phi55: five-fold astigmatism angle
-        :param phi51: fourth order axial coma angle
-        :param phi66: Chromatic aberration angle
-        :param phi62: fifth-order two-fold astigmatism angle
-        :param phi64: fifth-order four-fold astigmatism angle
-        :param phi31: axial coma angle
-        :param phi42: star aberration angle
-        :param phi53: three-lobe aberration angle
-        :return: M1 x M1 x (maximum size of all aberration tensors)
+        Args:
+            qx: M1 x M2 tensor of x coefficients of reciprocal space
+            qy: M1 x M2 tensor of y coefficients of reciprocal space
+            lam: wavelength in Angstrom
+            a10: shift                               in Angstrom
+            a11: shift                               in Angstrom
+            a20: defocus                             in Angstrom
+            a22: two-fold Astigmatism                in Angstrom
+            a31: axial coma                          in Angstrom
+            a33: three-fold astigmatism              in Angstrom
+            a40: spherical aberration                in um
+            a42: star aberration                     in um
+            a44: four-fold astigmatism               in um
+            a51: fourth order axial coma             in um
+            a53: three-lobe aberration               in um
+            a55: five-fold astigmatism               im um
+            a60: fifth-order spherical               in mm
+            a62: fifth-order two-fold astigmatism    in mm
+            a64: fifth-order four-fold astigmatism   in mm
+            a66: siz-fold astigmatism                in mm
+            phi11: shift angle
+            phi22: two-fold Astigmatism angle
+            phi33: three-fold astigmatism angle
+            phi44: four-fold astigmatism angle
+            phi55: five-fold astigmatism angle
+            phi51: fourth order axial coma angle
+            phi66: Chromatic aberration angle
+            phi62: fifth-order two-fold astigmatism angle
+            phi64: fifth-order four-fold astigmatism angle
+            phi31: axial coma angle
+            phi42: star aberration angle
+            phi53: three-lobe aberration angle
+
+        Returns:
+            M1 x M1 x (maximum size of all aberration tensors)
         """
         qx2 = qx ** 2
         qy2 = qy ** 2
