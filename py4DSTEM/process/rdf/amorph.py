@@ -14,14 +14,18 @@ plt.ion()
 
 def fit_stack(datacube, init_coefs, mask=None):
     """
-    This will fit an ellipse using the polar elliptical transform code to all the diffraction patterns. It will take in a datacube and return a coefficient array which can then be used to map strain, fit the centers, etc.
+    This will fit an ellipse using the polar elliptical transform code to all the
+    diffraction patterns. It will take in a datacube and return a coefficient array which
+    can then be used to map strain, fit the centers, etc.
 
-    Accepts:
-        datacute    - a datacube of diffraction data
-        init_coefs  - an initial starting guess for the fit
-        mask        - a mask, either 2D or 4D, for either one mask for the whole stack, or one per pattern. 
+    Args:
+        datacute: a datacube of diffraction data
+        init_coefs: an initial starting guess for the fit
+        mask: a mask, either 2D or 4D, for either one mask for the whole stack, or one
+            per pattern.
+
     Returns:
-        coef_cube  - an array of coefficients of the fit
+        an array of coefficients of the fit
     """
     coefs_array = np.zeros([i for i in datacube.data.shape[0:2]] + [len(init_coefs)])
     for i in tqdm(range(datacube.R_Nx)):
@@ -44,23 +48,26 @@ def calculate_coef_strain(coef_cube, r_ref):
     This function will calculate the strains from a 3D matrix output by fit_stack
 
     Coefs order:
-        I0          the intensity of the first gaussian function
-        I1          the intensity of the Janus gaussian
-        sigma0      std of first gaussian
-        sigma1      inner std of Janus gaussian
-        sigma2      outer std of Janus gaussian
-        c_bkgd      a constant offset
-        R           center of the Janus gaussian
-        x0,y0       the origin
-        B,C         1x^2 + Bxy + Cy^2 = 1
+        * I0          the intensity of the first gaussian function
+        * I1          the intensity of the Janus gaussian
+        * sigma0      std of first gaussian
+        * sigma1      inner std of Janus gaussian
+        * sigma2      outer std of Janus gaussian
+        * c_bkgd      a constant offset
+        * R           center of the Janus gaussian
+        * x0,y0       the origin
+        * B,C         1x^2 + Bxy + Cy^2 = 1
 
-    Accepts:
-        coef_cube   - output from fit_stack
-        r_ref       - a reference 0 strain radius - needed because we fit r as well as B and C
+    Args:
+        coef_cube: output from fit_stack
+        r_ref: a reference 0 strain radius - needed because we fit r as well as B and C
+
     Returns:
-        exx         - strain in the x axis direction in image coordinates
-        eyy         - strain in the y axis direction in image coordinates
-        exy         - shear
+        (3-tuple) A 3-tuple containing:
+
+            * **exx**: strain in the x axis direction in image coordinates
+            * **eyy**: strain in the y axis direction in image coordinates
+            * **exy**: shear
 
     """
     R = coef_cube[:, :, 6]
@@ -98,10 +105,10 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
     """
     This function will plot strains with a unified color scale.
 
-    Accepts:
-        strains             - a collection of 3 arrays in the format (exx, eyy, exy)
-        cmap, vmin, vmax    - imshow parameters
-        mask                - real space mask of values not to show (black)
+    Args:
+        strains (3-tuple of arrays): (exx, eyy, exy)
+        cmap, vmin, vmax: imshow parameters
+        mask: real space mask of values not to show (black)
     """
     cmap = matplotlib.cm.get_cmap(cmap)
     if vmin is None:
@@ -169,14 +176,15 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
 
 def convert_stack_polar(datacube, coef_cube):
     """
-    This function will take the coef_cube from fit_stack and apply it to the image stack, to return polar transformed images.
+    This function will take the coef_cube from fit_stack and apply it to the image stack,
+    to return polar transformed images.
 
-    Accepts:
-        datacube    - data in datacube format
-        coef_cube  - coefs from fit_stack
+    Args:
+        datacube: data in datacube format
+        coef_cube: coefs from fit_stack
 
     Returns:
-        datacube_polar - polar transformed datacube
+        polar transformed datacube
     """
 
     return datacube_polar
@@ -184,13 +192,17 @@ def convert_stack_polar(datacube, coef_cube):
 
 def compute_polar_stack_symmetries(datacube_polar):
     """
-    This function will take in a datacube of polar-transformed diffraction patterns, and do the autocorrelation, before taking the fourier transform along the theta direction, such that symmetries can be measured. They will be plotted by a different function
+    This function will take in a datacube of polar-transformed diffraction patterns, and
+    do the autocorrelation, before taking the fourier transform along the theta
+    direction, such that symmetries can be measured. They will be plotted by a different
+    function
 
-    Accepts:
-        datacube_polar  - diffraction pattern cube that has been polar transformed
+    Args:
+        datacube_polar: diffraction pattern cube that has been polar transformed
 
     Returns:
-        datacube_symmetries - the normalized fft along the theta direction of the autocorrelated patterns in datacube_polar
+        the normalized fft along the theta direction of the autocorrelated patterns in
+        datacube_polar
     """
 
     return datacube_symmetries
@@ -198,11 +210,14 @@ def compute_polar_stack_symmetries(datacube_polar):
 
 def plot_symmetries(datacube_symmetries, sym_order):
     """
-    This function will take in a datacube from compute_polar_stack_symmetries and plot a specific symmetry order. 
+    This function will take in a datacube from compute_polar_stack_symmetries and plot a
+    specific symmetry order.
 
-    Accepts:
-        datacube_symmetries - result of compute_polar_stack_symmetries, the stack of fft'd autocorrelated diffraction patterns
-        sym_order           - symmetry order desired to plot
+    Args:
+        datacube_symmetries: result of compute_polar_stack_symmetries, the stack of
+            fft'd autocorrelated diffraction patterns
+        sym_order: symmetry order desired to plot
+
     Returns:
         None
     """
