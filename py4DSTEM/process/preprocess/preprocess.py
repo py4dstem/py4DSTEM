@@ -30,9 +30,14 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
 def swap_RQ(datacube):
     """
     Swaps real and reciprocal space coordinates, so that if
-        datacube.data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> datacube.data.shape
+        (Rx,Ry,Qx,Qy)
+
     Then
-        swap_RQ(datacube).data.shape = (Qx,Qy,Rx,Ry)
+
+        >>> swap_RQ(datacube).data.shape
+        (Qx,Qy,Rx,Ry)
     """
     datacube.data = np.transpose(datacube.data, axes=(2, 3, 0, 1))
     datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Nx, datacube.Q_Ny, datacube.R_Nx, datacube.R_Ny
@@ -41,9 +46,14 @@ def swap_RQ(datacube):
 def swap_Rxy(datacube):
     """
     Swaps real space x and y coordinates, so that if
-        datacube.data.shape = (Ry,Rx,Qx,Qy)
+
+        >>> datacube.data.shape
+        (Ry,Rx,Qx,Qy)
+
     Then
-        swap_Rxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> swap_Rxy(datacube).data.shape
+        (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 1, 0)
     datacube.R_Nx, datacube.R_Ny = datacube.R_Ny, datacube.R_Nx
@@ -52,9 +62,14 @@ def swap_Rxy(datacube):
 def swap_Qxy(datacube):
     """
     Swaps reciprocal space x and y coordinates, so that if
-        datacube.data.shape = (Rx,Ry,Qy,Qx)
+
+        >>> datacube.data.shape
+        (Rx,Ry,Qy,Qx)
+
     Then
-        swap_Qxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> swap_Qxy(datacube).data.shape
+        (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 3, 2)
     datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Ny, datacube.Q_Nx
