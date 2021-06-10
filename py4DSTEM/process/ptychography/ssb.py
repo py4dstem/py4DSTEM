@@ -41,11 +41,14 @@ def cartesian_aberrations(qx, qy, lam, C):
     """
     Aberrations defined with dimensionless cartesian coordinates
 
-    :param qx: array_like, 2d qx vector
-    :param qy: array_like, 2d qy vector
-    :param lam: wavelength
-    :param C: aberration coefficients
-    :return: the aberration surface chi
+    Args:
+        qx: array_like, 2d qx vector
+        qy: array_like, 2d qy vector
+        lam: wavelength
+        C: aberration coefficients
+
+    Returns:
+        the aberration surface chi
     """
 
     u = qx * lam
@@ -89,25 +92,34 @@ def cartesian_aberrations(qx, qy, lam, C):
 
 def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
     """
-    Perform a ptychographic reconstruction of the datacube assuming a weak phase object. In the weak phase object
-    approximation, the dataset in double Fourier-space coordinates can be described as [1]
+    Perform a ptychographic reconstruction of the datacube assuming a weak phase object.
+    In the weak phase object approximation, the dataset in double Fourier-space
+    coordinates can be described as [1]::
 
-    G(r',\rho') = |A(r')|^2 \delta(\rho') + A(r')A*(r'+\rho')Ψ*(-\rho')+ A*(r')A(r'-\rho')Ψ(\rho')
+        G(r',\rho') = |A(r')|^2 \delta(\rho') + A(r')A*(r'+\rho')Ψ*(-\rho')+ A*(r')A(r'-\rho')Ψ(\rho')
 
     We solve this equation for Ψ*(\rho') in two different ways:
 
-    1) collect all the signal in the bright-field by multiplying G with A(r')A*(r'+\rho')+ A*(r')A(r'-\rho')[2]
+    1) collect all the signal in the bright-field by multiplying G with::
+
+        A(r')A*(r'+\rho')+ A*(r')A(r'-\rho')[2]
+
     2) collect only the signal in the double-overlap region [1]
 
     References:
-    [1] Rodenburg, J. M., McCallum, B. C. & Nellist, P. D. Experimental tests on double-resolution coherent imaging via
-        STEM. Ultramicroscopy 48, 304–314 (1993).
-    [2] Yang, H., Ercius, P., Nellist, P. D. & Ophus, C. Enhanced phase contrast transfer using ptychography combined
-        with a pre-specimen phase plate in a scanning transmission electron microscope. Ultramicroscopy 171, 117–125 (2016).
+        * [1] Rodenburg, J. M., McCallum, B. C. & Nellist, P. D. Experimental tests on
+          double-resolution coherent imaging via STEM. Ultramicroscopy 48, 304–314 (1993).
+        * [2] Yang, H., Ercius, P., Nellist, P. D. & Ophus, C. Enhanced phase contrast
+          transfer using ptychography combined with a pre-specimen phase plate in a
+          scanning transmission electron microscope. Ultramicroscopy 171, 117–125 (2016).
 
-    :param dc: py4DSTEM datacube
-    :return: (Ψ_Rp, Ψ_Rp_left_sb, Ψ_Rp_right_sb)
-            Ψ_Rp is the result of method 1) and Ψ_Rp_left_sb, Ψ_Rp_right_sb are the results of method 2)
+    Args:
+        dc: py4DSTEM datacube
+
+    Returns:
+        (Ψ_Rp, Ψ_Rp_left_sb, Ψ_Rp_right_sb)
+        Ψ_Rp is the result of method 1) and Ψ_Rp_left_sb, Ψ_Rp_right_sb are the results
+        of method 2)
     """
 
     assert 'accelerating_voltage' in dc.metadata.microscope, 'metadata.microscope dictionary missing key: accelerating_voltage'
