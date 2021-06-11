@@ -1,5 +1,5 @@
 # Reads an EMPAD file
-# 
+#
 # Created on Tue Jan 15 13:06:03 2019
 # @author: percius
 # Edited on 20190409 by bsavitzky and rdhall
@@ -7,6 +7,7 @@
 
 import numpy as np
 from pathlib import Path
+
 
 def read_empad(filename):
     """
@@ -31,22 +32,21 @@ def read_empad(filename):
     fPath = Path(filename)
 
     # Parse the EMPAD metadata for first and last images
-    empadDTYPE = np.dtype([('data','16384float32'),('metadata','256float32')])
-    with open(fPath,'rb') as fid:
-        imFirst = np.fromfile(fid,dtype=empadDTYPE,count=1)
-        fid.seek(-128*130*4,2)
-        imLast = np.fromfile(fid,dtype=empadDTYPE,count=1)
+    empadDTYPE = np.dtype([("data", "16384float32"), ("metadata", "256float32")])
+    with open(fPath, "rb") as fid:
+        imFirst = np.fromfile(fid, dtype=empadDTYPE, count=1)
+        fid.seek(-128 * 130 * 4, 2)
+        imLast = np.fromfile(fid, dtype=empadDTYPE, count=1)
 
     # Get the scan shape
-    shape0 = imFirst['metadata'][0][128+12:128+16]
-    shape1 = imLast['metadata'][0][128+12:128+16]
-    kShape = shape0[2:4]                        # detector shape
-    rShape = 1 + shape1[0:2] - shape0[0:2]      # scan shape
+    shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
+    shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
+    kShape = shape0[2:4]  # detector shape
+    rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
 
     # Load the full data set
-    with open(fPath,'rb') as fid:
-        data = np.fromfile(fid,np.float32)
+    with open(fPath, "rb") as fid:
+        data = np.fromfile(fid, np.float32)
         data = np.reshape(data, (int(rShape[0]), int(rShape[1]), row, col))
 
     return data
-
