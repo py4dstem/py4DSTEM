@@ -8,16 +8,16 @@ def test():
 
 def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
     """
-    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax) in the diffraction plane.
-    Floating point limits will be rounded and cast to ints.
+    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
+    in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
-    Accepts:
-        datacube        (DataCube)
-        xmin,xmax       (ints) x limits of the detector
-        ymin,ymax       (ints) y limits of the detector
+    Args:
+        datacube (DataCube):
+        xmin,xmax (ints): x limits of the detector
+        ymin,ymax (ints): y limits of the detector
 
     Returns:
-        virtual_image   (2D array)
+        (2D array): the virtual image
     """
     assert isinstance(datacube, DataCube)
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
@@ -28,15 +28,16 @@ def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
 
 def get_virtualimage_circ(datacube, x0, y0, R):
     """
-    Get a virtual image using a circular detector centered at (x0,y0) and with radius R in the diffraction plane.
+    Get a virtual image using a circular detector centered at (x0,y0) and with radius R
+    in the diffraction plane.
 
-    Accepts:
-        datacube        (DataCube)
-        x0,y0           (numbers) center of detector
-        R               (number) radius of detector
+    Args:
+        datacube (DataCube):
+        x0,y0 (numbers): center of detector
+        R (number): radius of detector
 
     Returns:
-        virtual_image   (2D array)
+        (2D array): the virtual image
     """
     assert isinstance(datacube, DataCube)
     xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
@@ -51,15 +52,16 @@ def get_virtualimage_circ(datacube, x0, y0, R):
 
 def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
     """
-    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer radii of Ri/Ro.
+    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
+    radii of Ri/Ro.
 
-    Accepts:
-        datacube        (DataCube)
-        x0,y0           (numbers) center of detector
-        Ri,Ro           (numbers) inner/outer detector radii
+    Args:
+        datacube (DataCube):
+        x0,y0 (numbers): center of detector
+        Ri,Ro (numbers): inner/outer detector radii
 
     Returns:
-        virtual_image   (2D array)
+        (2D array): the virtual image
     """
     assert isinstance(datacube, DataCube)
     assert Ro>Ri, "Inner radius must be smaller than outer radius"
