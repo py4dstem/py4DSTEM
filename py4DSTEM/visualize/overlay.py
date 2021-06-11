@@ -1008,10 +1008,17 @@ def add_rtheta_grid(ar,d):
 
 def get_nice_spacing(Nx,Ny,pixelsize):
     """ Get a nice distance for gridlines, scalebars, etc
-        Returns
-            spacing_units   the spacing in real units
-            spacing_pixels  the spacing in pixels
-            _spacing        the leading digits of the spacing
+
+        Args:
+            Nx,Nx (int): the image dimensions
+            pixelsize (float): the size of each pixel, in some units
+
+        Returns:
+            (3-tuple): A 3-tuple containing:
+
+                * **spacing_units**: the spacing in real units
+                * **spacing_pixels**:the spacing in pixels
+                * **spacing**: the leading digits of the spacing
     """
     D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
     exp = int(log(D,10))
