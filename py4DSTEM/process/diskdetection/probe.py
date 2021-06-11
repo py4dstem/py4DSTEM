@@ -267,7 +267,7 @@ def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='logistic'):
+def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared'):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench about the
     probe such that the kernel integrates to zero, then shifting the center of the probe to the
