@@ -270,13 +270,13 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     qy = np.fft.rfftfreq(R_Ny_padded)
     qr2 = qx[:,None]**2 + qy[None,:]**2
 
-    # Invese operators
+    # Inverse operators
     denominator = qr2 + regHighPass + qr2**2*regLowPass
     _ = np.seterr(divide='ignore')
     denominator = 1./denominator
     denominator[0,0] = 0
     _ = np.seterr(divide='warn')
-    f = 1j * 0.25*stepsize
+    f = 1j * -0.25*stepsize
     qxOperator = f*qx[:,None]*denominator
     qyOperator = f*qy[None,:]*denominator
 
@@ -462,6 +462,29 @@ def get_interaction_constant(E):
     k0 = get_wavenumber(E)           # Electron wavenumber in inverse Angstroms
     gamma = get_relativistic_mass_correction(E)   # Relativistic mass correction
     return 2*np.pi*gamma*me*qe/(k0*1e-20*h**2)
+
+def make_circular_mask(shape, qxy0, radius):
+    """
+    # Create a hard circular mask, for use in DPC integration.
+    TODO - move this to utils
+
+    Accepts:
+        shape       (2-tuple of ints) image size, in pixels
+        qxy0        (2-tuple of floats) center coordinates, in pixels.  Must be in (row, column) format.
+        radius      (float) radius of mask, in pixels
+
+    Returns:
+        mask        (2D boolean array) the mask
+
+    """
+
+    # coordinates
+    qx = np.arange(shape[0]) - qxy0[0]
+    qy = np.arange(shape[1]) - qxy0[1]
+    [qya,qxa] = np.meshgrid(qy, qx)
+
+    # mask
+    return qxa**2 + qya**2 < radius**2
 
 
 
