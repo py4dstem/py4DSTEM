@@ -270,13 +270,13 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
     qy = np.fft.rfftfreq(R_Ny_padded)
     qr2 = qx[:,None]**2 + qy[None,:]**2
 
-    # Invese operators
+    # Inverse operators
     denominator = qr2 + regHighPass + qr2**2*regLowPass
     _ = np.seterr(divide='ignore')
     denominator = 1./denominator
     denominator[0,0] = 0
     _ = np.seterr(divide='warn')
-    f = 1j * 0.25*stepsize
+    f = 1j * -0.25*stepsize
     qxOperator = f*qx[:,None]*denominator
     qyOperator = f*qy[None,:]*denominator
 
@@ -462,7 +462,6 @@ def get_interaction_constant(E):
     k0 = get_wavenumber(E)           # Electron wavenumber in inverse Angstroms
     gamma = get_relativistic_mass_correction(E)   # Relativistic mass correction
     return 2*np.pi*gamma*me*qe/(k0*1e-20*h**2)
-
 
 
 ####################### Utility functions ##########################

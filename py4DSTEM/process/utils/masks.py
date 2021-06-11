@@ -47,3 +47,25 @@ def get_beamstop_mask(dp,qx0,qy0,theta,dtheta=1,w=10,r=10):
     mask = np.logical_or(mask1,mask2)
 
     return mask
+
+
+def make_circular_mask(shape, qxy0, radius):
+    """
+    # Create a hard circular mask, for use in DPC integration.
+
+    Args:
+        shape       (2-tuple of ints) image size, in pixels
+        qxy0        (2-tuple of floats) center coordinates, in pixels.  Must be in (row, column) format.
+        radius      (float) radius of mask, in pixels
+
+    Returns:
+        mask        (2D boolean array) the mask
+
+    """
+    # coordinates
+    qx = np.arange(shape[0]) - qxy0[0]
+    qy = np.arange(shape[1]) - qxy0[1]
+    [qya,qxa] = np.meshgrid(qy, qx)
+
+    # return circular mask
+    return qxa**2 + qya**2 < radius**2
