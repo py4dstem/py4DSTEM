@@ -171,18 +171,18 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
     # Set the clipvalues
     if clipvals == 'minmax':
-        vmin,vmax = np.min(_ar),np.max(_ar)
+        vmin,vmax = np.ma.min(_ar),np.ma.max(_ar)
     elif clipvals == 'manual':
         assert min is not None and max is not None
         vmin,vmax = min,max
     elif clipvals == 'std':
         assert min is not None and max is not None
-        m,s = np.median(_ar),np.std(_ar)
+        m,s = np.ma.median(_ar),np.ma.std(_ar)
         vmin = m - min*s
         vmax = m + max*s
     elif clipvals == 'centered':
-        c = np.mean(_ar) if min is None else min
-        m = np.max(np.abs(c-_ar)) if max is None else max
+        c = np.ma.mean(_ar) if min is None else min
+        m = np.ma.max(np.ma.abs(c-_ar)) if max is None else max
         vmin = c-m
         vmax = c+m
     else:
