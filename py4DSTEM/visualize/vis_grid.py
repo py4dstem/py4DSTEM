@@ -91,7 +91,7 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
 
 def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None,
-                    get_s=None,**kwargs):
+                    get_s=None,open_circles=False,**kwargs):
     """
     Displays a set of images in a grid.
 
@@ -164,11 +164,13 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         s = get_s(N)
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,s=s,
-                                          pointcolor=pointcolors,**kwargs)
+                                          pointcolor=pointcolors,
+                                          open_circles=open_circles,**kwargs)
                     else:
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,
-                                          pointcolor=pointcolors,**kwargs)
+                                          pointcolor=pointcolors,
+                                          open_circles=open_circles,**kwargs)
                 elif _get_bordercolor:
                     bc = get_bordercolor(N)
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,
@@ -180,7 +182,8 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     else:
                         pointcolors='r'
                     _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
-                                      pointcolor=pointcolors,**kwargs)
+                                      pointcolor=pointcolors,
+                                      open_circles=open_circles,**kwargs)
                 else:
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
                 if titlesize>0:
