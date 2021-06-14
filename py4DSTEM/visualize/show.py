@@ -755,7 +755,8 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
     else:
         return fig,ax
 
-def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',returnfig=False,**kwargs):
+def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
+                returnfig=False,**kwargs):
     """
     Plots a 2D array with one or more points.
     x and y are the point centers and must have the same length, N.
@@ -777,7 +778,8 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',returnfig=False,**kwa
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha}
+    d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha,
+         'open_circles':open_circles}
     add_points(ax,d)
 
     if not returnfig:
