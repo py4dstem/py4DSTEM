@@ -22,171 +22,117 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     """
     General visualization function for 2D arrays.
 
-    The simplest use of this function is::
+    Accepts:
+        ar          (2D array) the array to plot
+        figsize     (2-tuple) size of the plot
+        cmap        (colormap) any matplotlib cmap; default is gray
+        scaling     (str) selects a scaling scheme for the intensity values.
+                    Default is none. Accepted values:
+                        'none'
+                        'log'       values where ar<=0 are set to 0
+                        'power'     requires the 'power' argument be set.
+                                    values where ar<=0 are set to 0
+        clipvals    (str) method for setting clipvalues.  Default is the array
+                    min and max values. Accepted values:
+                        'minmax'    The min/max values are np.min(ar)/np.max(r)
 
-        >>> show(ar)
+                        'manual'    The min/max values are set to the values of
+                                    the min,max arguments received by this function
+                        'std'       The min/max values are
+                                            np.median(ar) -/+ N*np.std(ar),
+                                    and N is this functions min,max vals.
+                        'centered'  The min/max values are set to
+                                            c -/+ m
+                                    Where by default 'c' is zero and m is
+                                    the max(abs(ar-c), or the two params
+                                    can be user specified using the kwargs
+                                    min/max -> c/m.
+        min         (number) behavior depends on clipvals
+        max         (number)
+        power       (number)
+        bordercolor (str or None) if not None, add a border of this color.
+                    The color can be anything matplotlib recognizes as a color.
+        borderwidth (number)
+        returnfig   (bool) if True, the function returns the tuple (figure,axis)
+        figax       (None or 2-tuple) controls which matplotlib Axes object draws
+                    the image.  If None, generates a new figure with a single
+                    Axes instance. Otherwise, ax must be a 2-tuple containing
+                    the matplotlib class instances (Figure,Axes), with ar then
+                    plotted in the specified Axes instance.
+        hist        (bool) if True, instead of plotting a 2D image in ax, plots
+                    a histogram of the intensity values of ar, after any scaling
+                    this function has performed. Plots the clipvals as dashed
+                    vertical lines
+        n_bins      (int) number of hist bins
+        mask        (None or boolean array) if not None, must have the same shape
+                    as 'ar'. Wherever mask==True, plot the pixel normally, and where
+                    mask==False, pixel values are set to mask_color. If hist==True,
+                    ignore these values in the histogram
+        mask_color  (color) see 'mask'
+        **kwargs    any keywords accepted by matplotlib's ax.matshow()
 
-    which will display the 2D array ``ar`` in a matplotlib figure.  Additional
-    functionality includes:
+        ---------------------------------Overlays-------------------------------
 
-        * scaling the image (log scaling, power law scaling)
-        * altering the histogram clip values
-        * adding geometric overlays (e.g. points, circles, rectangles, annuli)
-        * adding informational overlays (scalebars, coordinate grids, oriented axes or
-          vectors)
-        * displaying the image histogram
-        * masking some subset of the image
-        * setting the colormap
-        * altering the matplotlib figure appearance
-        * tools for manual figure customization (returning the figure, using ``show`` to
-          plot in a subplot of an existing figure)
+        The following arguments generate overlays, including points, shapes,
+        scalebars, and coordinate grids. If they are not None,
+        they should be a dictionary, which is passed to the corresponding
+        add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
 
-    These are each discussed in turn below.
+                      ---------------Shapes and Points-------------
 
-    Scaling:
-        Setting the parameter ``scaling`` will scale the display image. Options are
-        'none', 'power', or 'log'.  If 'power' is specified, the parameter ``power`` must
-        also be passed. The underlying data is not altered. Values less than or equal to
-        zero are set to zero. If the image histogram is displayed using ``hist=True``,
-        the scaled image histogram is shown.
+        The shape/point overlays are:
 
-        Examples::
+            rectangle   (dictionary)
+            circle
+            ellipse
+            points
+            grid_overlay
 
-            >>> show(ar,scaling='log')
-            >>> show(ar,scaling='power',power=0.5)
-            >>> show(ar,scaling='power',power=0.5,hist=True)
+        See those functions' docstrings for acceptable dict keyword-value pairs.
 
-    Clip values:
-        By 'clip values' we mean the lower and upper values at which the display image
-        will be saturated. Controlling the clip values is accomplished using the input
-        parameters ``clipvals``, ``min``, and ``max``, and the clipvalues can be returned
-        with the ``returnclipvals`` parameter.  ``clipvals`` controls how the clip values
-        are determined, and must be a string in ('minmax','manual','std','centered').
-        Default is 'minmax', and sets the clip values to min(ar) and max(ar). 'manual'
-        sets the min/max clipvals to ``min``/``max``.
+               ---------------Coordinate grids and Scalebars-------------
 
-        are to be determined
-                * 'minmax': The min/max values are np.min(ar)/np.max(r)
-                * 'manual': The min/max values are set to the values of
-                  the min,max arguments received by this function
-                * 'std': The min/max values are ``np.median(ar) -/+ N*np.std(ar)``, and
-                   N is this functions min,max vals.
-                * 'centered': The min/max values are set to ``c -/+ m``, where by default
-                  'c' is zero and m is the max(abs(ar-c), or the two params can be user
-                  specified using the kwargs min/max -> c/m.
+        For coordinate systems and scalebars, as above, the argument passed to this
+        function should be a dictionary.  The passed dict may be empty, in which case
+        default formatting options will be used.
 
+        The coordinate/scalebar overlays are:
 
-    ---------------------------------Overlays-------------------------------
+            cartesian_grid
+            polarelliptical_grid
+            rtheta_grid
+            scalebar
 
-    The following arguments generate overlays, including points, shapes,
-    scalebars, and coordinate grids. If they are not None,
-    they should be a dictionary, which is passed to the corresponding
-    add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
+        There are two types of additional optional parameters which can be passed to
+        specify how coordinates or scalebars should be plotted: (1) metadata specifying
+        the scale, units, and other parameters of the coordinates, e.g. the position
+        of the origin, and (2) visual formatting parameters.
 
-                  ---------------Shapes and Points-------------
+        (1) scale/unit/coordinate parameter metadata should be passed as arguments to the
+        show function. These may be passed manually, or in a Coordinates instance.
 
-    The shape/point overlays are:
+        To use a Coordinates instance, pass it to the 'coordinates' argument.  The
+        function will find and use relevant metadata it finds in the instance.  Some
+        metadata may vary by scan position - e.g. the origin of diffraction space.  In
+        this case please also pass this function a scan position with the parameters
+        'rx' and 'ry'.
 
-        rectangle   (dictionary)
-        circle
-        ellipse
-        points
-        grid_overlay
+        To pass metadata manually, just specify the values as function arguments.  The
+        relevant arguments are: pixelsize, pixelunits, x0, y0, e, theta. Any arguments
+        passed in this way will supercede the values found in a Coordinates instance.
 
-    See those functions' docstrings for acceptable dict keyword-value pairs.
+        Use the argument 'space' to specify whether the data is in diffraction space,
+        real space, or r-theta space, with values of ('Q','R','rtheta').
 
-           ---------------Coordinate grids and Scalebars-------------
+        (2) visual formatting parameters should be passed as keyword-value pairs inside
+        the dictionary associated with the overlay being drawn.  E.g.:
 
-    For coordinate systems and scalebars, as above, the argument passed to this
-    function should be a dictionary.  The passed dict may be empty, in which case
-    default formatting options will be used.
+            >>> show(im,cartesian_grid{'color':'black','alpha':0.25,'label':True}
 
-    The coordinate/scalebar overlays are:
-
-        cartesian_grid
-        polarelliptical_grid
-        rtheta_grid
-        scalebar
-
-    There are two types of additional optional parameters which can be passed to
-    specify how coordinates or scalebars should be plotted: (1) metadata specifying
-    the scale, units, and other parameters of the coordinates, e.g. the position
-    of the origin, and (2) visual formatting parameters.
-
-    (1) scale/unit/coordinate parameter metadata should be passed as arguments to the
-    show function. These may be passed manually, or in a Coordinates instance.
-
-    To use a Coordinates instance, pass it to the 'coordinates' argument.  The
-    function will find and use relevant metadata it finds in the instance.  Some
-    metadata may vary by scan position - e.g. the origin of diffraction space.  In
-    this case please also pass this function a scan position with the parameters
-    'rx' and 'ry'.
-
-    To pass metadata manually, just specify the values as function arguments.  The
-    relevant arguments are: pixelsize, pixelunits, x0, y0, e, theta. Any arguments
-    passed in this way will supercede the values found in a Coordinates instance.
-
-    Use the argument 'space' to specify whether the data is in diffraction space,
-    real space, or r-theta space, with values of ('Q','R','rtheta').
-
-    (2) visual formatting parameters should be passed as keyword-value pairs inside
-    the dictionary associated with the overlay being drawn.  E.g.:
-
-        >>> show(im,cartesian_grid{'color':'black','alpha':0.25,'label':True}
-
-    will plot an image with a cartesian grid overlay in black, with a transparency
-    set to 0.25, and with labeled axes and tickmarks.  For the full set of
-    formatting parameters which can be specified for each overlay, see the docstring
-    for the corresponding add_* function.
-
-
-
-
-
-
-    ******************
-
-    Args:
-        ar (2D array): the array to plot
-        figsize (2-tuple): size of the plot
-        cmap (colormap): any matplotlib cmap; default is gray
-        scaling (str): selects a scaling scheme for the intensity values. Default is
-            none. Accepted values:
-                * 'none'
-                * 'log': values where ar<=0 are set to 0
-                * 'power': requires the 'power' argument be set.
-                  values where ar<=0 are set to 0
-        clipvals (str): method for setting clipvalues.  Default is the array min and max
-            values. Accepted values:
-                * 'minmax': The min/max values are np.min(ar)/np.max(r)
-                * 'manual': The min/max values are set to the values of
-                  the min,max arguments received by this function
-                * 'std': The min/max values are ``np.median(ar) -/+ N*np.std(ar)``, and
-                   N is this functions min,max vals.
-                * 'centered': The min/max values are set to ``c -/+ m``, where by default
-                  'c' is zero and m is the max(abs(ar-c), or the two params can be user
-                  specified using the kwargs min/max -> c/m.
-        min (number): behavior depends on clipvals
-        max (number): behavior depends on clipvals
-        power (number): when ``scaling='power'``, specifies the scaling power
-        bordercolor (color or None): if not None, add a border of this color.
-            The color can be anything matplotlib recognizes as a color.
-        borderwidth (number):
-        returnfig (bool): if True, the function returns the tuple (figure,axis)
-        figax (None or 2-tuple): controls which matplotlib Axes object draws the image.
-            If None, generates a new figure with a single Axes instance. Otherwise, ax
-            must be a 2-tuple containing the matplotlib class instances (Figure,Axes),
-            with ar then plotted in the specified Axes instance.
-        hist (bool): if True, instead of plotting a 2D image in ax, plots a histogram of
-            the intensity values of ar, after any scaling this function has performed.
-            Plots the clipvals as dashed vertical lines
-        n_bins (int): number of hist bins
-        mask (None or boolean array): if not None, must have the same shape as 'ar'.
-            Wherever mask==True, plot the pixel normally, and where ``mask==False``,
-            pixel values are set to mask_color. If hist==True, ignore these values in the
-            histogram
-        mask_color (color): see 'mask'
-        **kwargs: any keywords accepted by matplotlib's ax.matshow()
+        will plot an image with a cartesian grid overlay in black, with a transparency
+        set to 0.25, and with labeled axes and tickmarks.  For the full set of
+        formatting parameters which can be specified for each overlay, see the docstring
+        for the corresponding add_* function.
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -215,28 +161,35 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _mask = ar>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
+        if min != 0:
+            min = np.log(min)
+        else:
+            min = np.min(_ar[_mask])
+        max = np.log(max)
     elif scaling == 'power':
         _mask = ar>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar[_mask],power)
+        min = np.power(min,power)
+        max = np.power(max,power)
     else:
         raise Exception
     _ar = np.ma.array(data=_ar.data,mask=np.logical_and(ar.mask==False,_mask)==False)
 
     # Set the clipvalues
     if clipvals == 'minmax':
-        vmin,vmax = np.ma.min(_ar),np.ma.max(_ar)
+        vmin,vmax = np.min(_ar),np.max(_ar)
     elif clipvals == 'manual':
         assert min is not None and max is not None
         vmin,vmax = min,max
     elif clipvals == 'std':
         assert min is not None and max is not None
-        m,s = np.ma.median(_ar),np.ma.std(_ar)
-        vmin = m - min*s
+        m,s = np.median(_ar),np.std(_ar)
+        vmin = m + min*s
         vmax = m + max*s
     elif clipvals == 'centered':
-        c = np.ma.mean(_ar) if min is None else min
-        m = np.ma.max(np.ma.abs(c-_ar)) if max is None else max
+        c = np.mean(_ar) if min is None else min
+        m = np.max(np.abs(c-_ar)) if max is None else max
         vmin = c-m
         vmax = c+m
     else:
@@ -809,8 +762,7 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
     else:
         return fig,ax
 
-def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
-                returnfig=False,**kwargs):
+def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',returnfig=False,**kwargs):
     """
     Plots a 2D array with one or more points.
     x and y are the point centers and must have the same length, N.
@@ -832,8 +784,7 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha,
-         'open_circles':open_circles}
+    d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha}
     add_points(ax,d)
 
     if not returnfig:
