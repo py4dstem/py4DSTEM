@@ -170,8 +170,8 @@ def get_origin_beamstop(dp,**kwargs):
 
 ### Functions for fitting the origin
 
-def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=False, 
-	           robust=False, robust_steps=3, robust_thresh=2):
+def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=False,
+               robust=False, robust_steps=3, robust_thresh=2):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
@@ -184,11 +184,11 @@ def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=Fa
         returnfitp              (bool) if True, returns the fit parameters
         robust                  (bool) Optional parameter. If set to True, fit will be
                                 repeated with outliers removed.
-        robust_steps            (int) Optional parameter. Number of robust iterations 
+        robust_steps            (int) Optional parameter. Number of robust iterations
                                 performed after initial fit.
-        robust_thresh-          (int) Optional parameter. Threshold for including points, 
-                                in units of root-mean-square (standard deviations) error 
-                                of the predicted values after fitting. 
+        robust_thresh-          (int) Optional parameter. Threshold for including points,
+                                in units of root-mean-square (standard deviations) error
+                                of the predicted values after fitting.
 
     Returns:
         (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals)
