@@ -2,7 +2,7 @@ import h5py
 from os.path import exists
 from ...datastructure import Metadata
 from .h5rw import h5write,h5read,h5append,h5info
-from ..read_utils import is_py4DSTEM_file,get_py4DSTEM_topgroups
+from ..read import is_py4DSTEM_file,get_py4DSTEM_topgroups
 
 def metadata_to_h5(fp, metadata, overwrite=False, topgroup='4DSTEM_experiment'):
     """
