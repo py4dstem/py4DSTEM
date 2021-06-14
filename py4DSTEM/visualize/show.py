@@ -161,10 +161,17 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _mask = ar>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
+        if min != 0:
+            min = np.log(min)
+        else:
+            min = np.min(_ar[_mask])
+        max = np.log(max)
     elif scaling == 'power':
         _mask = ar>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar[_mask],power)
+        min = np.power(min,power)
+        max = np.power(max,power)
     else:
         raise Exception
     _ar = np.ma.array(data=_ar.data,mask=np.logical_and(ar.mask==False,_mask)==False)
@@ -178,7 +185,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     elif clipvals == 'std':
         assert min is not None and max is not None
         m,s = np.median(_ar),np.std(_ar)
-        vmin = m - min*s
+        vmin = m + min*s
         vmax = m + max*s
     elif clipvals == 'centered':
         c = np.mean(_ar) if min is None else min
