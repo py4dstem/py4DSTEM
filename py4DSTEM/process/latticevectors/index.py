@@ -166,9 +166,8 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0, q
 
     Returns:
         indexed_braggpeaks      (PointListArray) The original braggpeaks pointlistarray, with new
-                                    coordinates 'h', 'k', and 'index_mask', containing the indices
-                                    of each indexable peak and a bool indicating if each peak has
-                                    been successfully indexed
+                                    coordinates 'h', 'k' containing the indices
+                                    of each indexable peak
     """
 
     assert isinstance(braggpeaks,PointListArray)

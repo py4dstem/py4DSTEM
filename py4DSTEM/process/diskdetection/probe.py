@@ -8,7 +8,7 @@
 # kernel by shifting and normalizing.
 
 import numpy as np
-from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt 
+from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt
 from ..utils import get_shifted_ar, get_shift, tqdmnd
 from ..calibration import get_probe_size
 
@@ -284,6 +284,8 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared
     Returns:
         probe_kernel    (ndarray) the convolution kernel corresponding to the probe
     """
+    valid_types = ('logistic','sine_squared')
+    assert(type in valid_types), "type must be in {}".format(valid_types)
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
@@ -305,6 +307,8 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared
         sigmoid = (qr - ri) / (ro - ri)
         sigmoid = np.minimum(np.maximum(sigmoid, 0.0), 1.0)
         sigmoid = np.cos((np.pi/2)*sigmoid)**2
+    else:
+        raise Exception("type must be in {}".format(valid_types))
 
 
     # Normalize to one, then subtract off logistic annulus, yielding kernel which integrates to zero
