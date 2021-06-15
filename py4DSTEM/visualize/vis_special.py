@@ -232,7 +232,7 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False
 
 def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=None,
                 bkgrd=True,show_cbars=('exx','eyy','exy','theta'),
-                titlesize=24,ticklabelsize=16,unitlabelsize=24,
+                titlesize=24,ticklabelsize=16,ticknumber=5,unitlabelsize=24,
                 show_axes=True,axes_x0=0,axes_y0=0,xaxis_x=1,xaxis_y=0,axes_length=10,
                 axes_width=1,axes_color='r',xaxis_space='Q',labelaxes=True,QR_rotation=0,
                 axes_labelsize=12,axes_labelcolor='r',axes_plots=('exx'),cmap='RdBu_r',
@@ -308,8 +308,9 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
                                     ('left','right','left','right'),
                                     ('% ',' %','% ',r' $^\circ$')):
             if show_cbar:
-                cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,5,endpoint=True))
-                cb.ax.set_yticklabels(['{}'.format(val) for val in np.linspace(100*vmin,100*vmax,5,endpoint=True)],size=ticklabelsize)
+                cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,ticknumber,endpoint=True))
+                cb.ax.set_yticklabels(['{}'.format(val) \
+                    for val in np.round(np.linspace(100*vmin,100*vmax,ticknumber,endpoint=True)*100)/100],size=ticklabelsize)
                 cbax.yaxis.set_ticks_position(tickside)
                 cbax.set_ylabel(tickunits,size=unitlabelsize,rotation=0)
                 cbax.yaxis.set_label_position(tickside)
