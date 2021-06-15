@@ -387,7 +387,8 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
 
     Accepts:
         braggpeaks  (PointListArray) the detected, unshifted bragg peaks
-        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin
+        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin,
+                    or scalar values for constant origin position.
         coords      (Coordinates) an object containing the origin positions
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
@@ -410,12 +411,19 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     assert isinstance(name,str)
     braggpeaks_centered = braggpeaks.copy(name=name)
 
-    for Rx in range(braggpeaks_centered.shape[0]):
-        for Ry in range(braggpeaks_centered.shape[1]):
-            pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
-            qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
-            pointlist.data['qx'] -= qx
-            pointlist.data['qy'] -= qy
+    if np.isscalar(qx0) & np.isscalar(qy0):
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                pointlist.data['qx'] -= qx0
+                pointlist.data['qy'] -= qy0        
+    else:
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
+                pointlist.data['qx'] -= qx
+                pointlist.data['qy'] -= qy
 
     return braggpeaks_centered
 
