@@ -366,14 +366,21 @@ def add_points(ax,d):
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1.
     assert isinstance(alpha,Number)
+    # open_circles
+    open_circles = d['open_circles'] if 'open_circles' in d.keys() else False
+    assert isinstance(open_circles,bool)
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha')]
+    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha',
+                                            'open_circles')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the points
-    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
+    if open_circles:
+        ax.scatter(y,x,s=scale,edgecolor=color,facecolor='none',alpha=alpha,**kwargs)
+    else:
+        ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
 
     return
 
