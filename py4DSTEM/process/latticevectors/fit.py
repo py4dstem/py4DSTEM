@@ -30,12 +30,14 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
         error               (float) the fit error
     """
     assert isinstance(braggpeaks, PointList)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    # assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
     braggpeaks = braggpeaks.copy()
 
     # Remove unindexed peaks
-    deletemask = braggpeaks.data['index_mask'] == False
-    braggpeaks.remove_points(deletemask)
+    if 'index_mask' in braggpeaks.data:
+        deletemask = braggpeaks.data['index_mask'] == False
+        braggpeaks.remove_points(deletemask)
 
     # Check to ensure enough peaks are present
     if braggpeaks.length < minNumPeaks:
@@ -93,7 +95,8 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
         g1g2_map.slices['mask']   1 for successful fits, 0 for unsuccessful fits
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    # assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
 
     # Make RealSlice to contain outputs
     slicelabels = ('x0','y0','g1x','g1y','g2x','g2y','error','mask')
