@@ -162,7 +162,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
         if min != None:
-            if min != 0:
+            if min > 0:
                 min = np.log(min)
             else:
                 min = np.min(_ar[_mask])
