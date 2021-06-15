@@ -309,7 +309,8 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
                                     ('% ',' %','% ',r' $^\circ$')):
             if show_cbar:
                 cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,5,endpoint=True))
-                cb.ax.set_yticklabels(['{}'.format(val) for val in np.linspace(100*vmin,100*vmax,5,endpoint=True)],size=ticklabelsize)
+                cb.ax.set_yticklabels(['{}'.format(val) \
+                    for val in np.round(np.linspace(100*vmin,100*vmax,5,endpoint=True)*100)/100],size=ticklabelsize)
                 cbax.yaxis.set_ticks_position(tickside)
                 cbax.set_ylabel(tickunits,size=unitlabelsize,rotation=0)
                 cbax.yaxis.set_label_position(tickside)
