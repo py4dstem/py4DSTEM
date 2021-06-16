@@ -248,54 +248,56 @@ def double_sided_gaussian(p, x, y):
 
 def convert_ellipse_params(A,B,C):
     """
-    Converts from ellipse parameters (A,B,C) to (e,theta,R).
+    Converts ellipse parameters from canonical form (A,B,C) into semi-axis lengths and
+    tilt (a,e,theta), where e = b/a.
     See module docstring for more info.
 
     Accepts:
-        A,B,C    (floats) parameters of an ellipse in the form:
-                             Ax^2 + Bxy + Cy^2 = 1
+        A,B,C (number): parameters of an ellipse in the form ``Ax^2 + Bxy + Cy^2 = 1``
 
     Returns:
-        a           (float) the semimajor axis length
-        e           (float) the ratio of lengths of the semiminor to the semimajor axes
-        theta       (float) the tilt of the ellipse semimajor axis with respect to
-                    the x-axis, in radians
+        (3-tuple): (a,e,theta) the semimajor axis, the ratio a/b (semimajor to
+        semiminor), the tilt angle from the positive x-axis to the semimajor axis,
+        in radians
     """
-    if A == C:
-        x = B
-        theta = np.pi / 4.0 * np.sign(B)
+    val = np.sqrt((A-C)**2+B**2)
+    b4a = B**2 - 4*A*C
+    # Get theta
+    if B == 0:
+        if A<C:
+            theta = 0
+        else:
+            theta = np.pi/2.
     else:
-        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
-        theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C - x))
-    b = np.sqrt(2 / (A + C + x))
+        theta = np.arctan2((C-A-val),B)
+    # Get a,b
+    a = - np.sqrt( -2*b4a*(A+C+val) ) / b4a
+    b = - np.sqrt( -2*b4a*(A+C-val) ) / b4a
     a,b = max(a,b),min(a,b)
     e = b/a
     return a,e,theta
 
-def convert_ellipse_params_ABC_to_abtheta(A,B,C):
+def convert_ellipse_params_r(a,e,theta):
     """
-    Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
+    Converts from ellipse parameters (a,e,theta) to (A,B,C).
     See module docstring for more info.
 
     Accepts:
-        A,B,C    (floats) parameters of an ellipse in the form:
-                             Ax^2 + Bxy + Cy^2 = 1
+        a (number): the semimajor axis length
+        e (number): the ratio of the semi-major to semiminor axis lengths
+        theta (number): the rotation angle from the positive x-axis to the
+            semimajor axis, in radians
 
     Returns:
-        a,b         (floats) the semimajor and semiminor axis lengths, respectively
-        theta       (float) the tilt of the ellipse semimajor axis with respect to
-                    the x-axis, in radians
+        (3-tuple): (A,B,C), the ellipse parameters in canonical form
     """
-    if A == C:
-        x = B
-        theta = np.pi / 4.0 * np.sign(B)
-    else:
-        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
-        theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C - x))
-    b = np.sqrt(2 / (A + C + x))
-    return a,b,theta
+    sin2,cos2 = np.sin(theta)**2,np.cos(theta)**2
+    b = a*e
+    a2,b2 = a**2,b**2
+    A = sin2/b2 + cos2/a2
+    C = cos2/b2 + sin2/a2
+    B = 2*(b2-a2)*np.sin(theta)*np.cos(theta)/(a2*b2)
+    return A,B,C
 
 
 
@@ -495,7 +497,7 @@ def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
     """
     assert(isinstance(braggpeaks,PointListArray))
     # Get the transformation matrix
-    sint, cost = np.sin(theta), np.cos(theta)
+    sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
     T = np.array(
             [
                 [e*sint**2 + cost**2, sint*cost*(1-e)],
