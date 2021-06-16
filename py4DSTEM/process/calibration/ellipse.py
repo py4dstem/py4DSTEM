@@ -60,30 +60,24 @@ def fit_ellipse_1d(ar,x0,y0,ri,ro,mask=None,returnABC=False):
     at (x0,y0) with inner and outer radii ri and ro.  The data to fit make optionally
     be additionally masked with the boolean array mask. See module docstring for more info.
 
-    Args:
-        ar (ndarray): array containing the data to fit
-        x0,y0 (floats): the center of the annular fitting region
-        ri (float): inner radius of the fit region
-        ro (float): outer radius of the fit region
-        mask (ar-shaped ndarray of bools): ignore data wherever mask==True
-        returnABC (bool): if True, returns ellipse params in canonical form
+    Accepts:
+        ar          (ndarry) array containing the data to fit
+        x0,y0       (floats) the center of the annular fitting region
+        ri          (float) inner radius of the fit region
+        ro          (float) outer radius of the fit region
+        mask        (ar-shaped ndarray of bools) ignore data wherever mask==True
 
     Returns:
-        (5-tuple of floats): A 5-tuple containing the ellipse parameters. The form of
-        the returned parameters depends on the input value `returnABC`.
+        (default)
+        x0,y0       (floats) the center
+        a           (float) the semimajor axis length
+        e           (float) the ratio of lengths of the semiminor to the semimajor axes
+        theta       (float) the tilt of the ellipse semimajor axis with respect to
+                    the x-axis, in radians
 
-        If ``returnABC==False`` (default), returns:
-
-            * **x0**: the center x-position
-            * **y0**: the center y-position
-            * **a**: the semimajor axis length
-            * **e**: the ratio of lengths of the semiminor to the semimajor axes
-            * **theta**: the tilt of the ellipse semimajor axis with respect to the
-              x-axis, in radians
-
-        If ``returnABC==True``, returns (x0,y0,A,B,C), where (x0,y0) are as above, and
-        (A,B,C) are the ellipse parameters in canonical form.  See the module docstring
-        for more info.
+        (if returnABC is True)
+        x0,y0,A,B,C     (floats) A,B,C are the ellipse parameters in canonical form -
+                        see the module docstring for more info.
     """
     # Get the datapoints to fit
     yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
@@ -112,7 +106,7 @@ def ellipse_err(p, x, y, val):
     """
     For a point (x,y) in a 2d cartesian space, and a function taking the value
     val at point (x,y), and some 1d ellipse in this space given by
-            ``A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1``
+            A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1
     this function computes the error associated with the function's value at (x,y)
     given by its deviation from the ellipse times val.
     """
@@ -126,69 +120,58 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     """
     Fit the amorphous halo of a diffraction pattern, including any elliptical distortion.
 
-    The fit function is::
+    The fit function is:
 
         f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) =
             Norm(r; I0,sigma0,0) +
             Norm(r; I1,sigma1,R)*Theta(r-R)
             Norm(r; I1,sigma2,R)*Theta(R-r) + offset
 
-    where
-
-        * (x,y) are cartesian coordinates,
-        * r is the radial coordinate,
-        * (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters,
-        * Norm(x;I,s,u) is a gaussian in the variable x with maximum amplitude I,
-          standard deviation s, and mean u
-        * Theta(x) is a Heavyside step function
-
-    The function thus contains a pair of gaussian-shaped peaks along the radial
-    direction of a polar-elliptical parametrization of a 2D plane. The first gaussian is
-    centered at the origin. The second gaussian is centered about some finite R, and is
-    'two-faced': it's comprised of two half-gaussians of different standard deviations,
-    stitched together at their mean value of R. This Janus (two-faced ;p) gaussian thus
-    comprises an elliptical ring with different inner and outer widths.
+    where (x,y) are coordinates and
+    (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters.
+    The function contains a pair of gaussian-shaped peaks along the radial direction of
+    a polar-elliptical parametrization of a 2D plane.
+    The first gaussian is centered at the origin.
+    The second gaussian is centered about some finite R, and is 'two-faced': it's comprised of
+    two half-gaussians of different widths, stitched together at R.
+    This Janus-gaussian thus comprises an elliptical ring with different inner and
+    outer widths.
 
     The parameters of the fit function are
 
-        * I0: the intensity of the first gaussian function
-        * I1: the intensity of the Janus gaussian
-        * sigma0: std of first gaussian
-        * sigma1: inner std of Janus gaussian
-        * sigma2: outer std of Janus gaussian
-        * c_bkgd: a constant offset
-        * R: center of the Janus gaussian
-        * x0,y0: the origin
-        * B,C: The ellipse parameters, in the form 1x^2 + Bxy + Cy^2 = 1
+        I0          the intensity of the first gaussian function
+        I1          the intensity of the Janus gaussian
+        sigma0      std of first gaussian
+        sigma1      inner std of Janus gaussian
+        sigma2      outer std of Janus gaussian
+        c_bkgd      a constant offset
+        R           center of the Janus gaussian
+        x0,y0       the origin
+        B,C         The ellipse parameters, in the form
+                            1x^2 + Bxy + Cy^2 = 1
 
-    Args:
-        data (2d array): the data
-        x0,y0 (numbers): the center
-        ri,r0 (numbers): the inner and outer radii of the fitting annulus
-        p0 (11-tuple): initial guess parameters. If p0 is None, the function will compute
-            a guess at all parameters. If p0 is a 11-tuple it must be populated by some
-            mix of numbers and None; any parameters which are set to None will be guessed
-            by the function.  The parameters are the 11 parameters of the fit function
-            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C).
-            Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
-            to the main function, but if they are passed as elements of p0 these will
-            take precendence.
-        mask (2d array of bools): only fit to datapoints where mask is True
+    Accepts:
+        data        (2d array)
+        x0,y0       (numbers) the center
+        ri,r0       (numbers) the inner and outer radii of the fitting annulus
+        p0          (11-tuple) initial guess parameters. If p0 is None, the
+                    function will compute a guess at all parameters. If p0 is
+                    a 11-tuple it must be populated by some mix of numbers
+                    and None; any parameters which are set to None will be guessed
+                    by the function.  The parameters are:
+                        p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C)
+                    Note that x0,y0 are redundant; their guess values are the x0,y0
+                    values passed to the main function, but if they are passed as
+                    elements of p0 these will take precendence.
+        mask        only fit to datapoints where mask is True
 
     Returns:
-        (2-tuple comprised of a 5-tuple and an 11-tuple): Returns a 2-tuple.
-
-        The first element is the ellipse parameters need to elliptically parametrize
-        diffraction space, and is itself a 5-tuple:
-
-            * **x0**: x center
-            * **y0**: y center,
-            * **a**: semimajor axis length
-            * **e**: ratio of semiminor/semimajor lengths
-            * **theta**: tilt of a-axis w.r.t x-axis, in radians
-
-        The second element is the full set of fit parameters to the double sided gaussian
-        function, described above, and is an 11-tuple
+        (x0,y0,a,e,theta)     (5-tuple of floats) the ellipse parameters. They are:
+                                    x0,y0       center_x,center_y,
+                                    a           semimajor axis length
+                                    e           ratio of semiminor/semimajor lengths
+                                    theta       tilt of a-axis w.r.t x-axis, in radians
+        p                     (11-tuple) the full set of fit parameters
     """
     if mask is None:
         mask = np.ones_like(data).astype(bool)
@@ -265,59 +248,56 @@ def double_sided_gaussian(p, x, y):
 
 def convert_ellipse_params(A,B,C):
     """
-    Converts from ellipse parameters (A,B,C) to (e,theta,R).
+    Converts ellipse parameters from canonical form (A,B,C) into semi-axis lengths and
+    tilt (a,e,theta), where e = b/a.
     See module docstring for more info.
 
-    Args:
-        A,B,C (floats): parameters of an ellipse in the form:
-                             Ax^2 + Bxy + Cy^2 = 1
+    Accepts:
+        A,B,C (number): parameters of an ellipse in the form ``Ax^2 + Bxy + Cy^2 = 1``
 
     Returns:
-        (3-tuple): A 3-tuple consisting of:
-
-        * **a**: (float) the semimajor axis length
-        * **e**: (float) the ratio of lengths of the semiminor to the semimajor axes
-        * **theta**: (float) the tilt of the ellipse semimajor axis with respect to
-          the x-axis, in radians
+        (3-tuple): (a,e,theta) the semimajor axis, the ratio a/b (semimajor to
+        semiminor), the tilt angle from the positive x-axis to the semimajor axis,
+        in radians
     """
-    if A == C:
-        x = B
-        theta = np.pi / 4.0 * np.sign(B)
+    val = np.sqrt((A-C)**2+B**2)
+    b4a = B**2 - 4*A*C
+    # Get theta
+    if B == 0:
+        if A<C:
+            theta = 0
+        else:
+            theta = np.pi/2.
     else:
-        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
-        theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C - x))
-    b = np.sqrt(2 / (A + C + x))
+        theta = np.arctan2((C-A-val),B)
+    # Get a,b
+    a = - np.sqrt( -2*b4a*(A+C+val) ) / b4a
+    b = - np.sqrt( -2*b4a*(A+C-val) ) / b4a
     a,b = max(a,b),min(a,b)
     e = b/a
     return a,e,theta
 
-def convert_ellipse_params_ABC_to_abtheta(A,B,C):
+def convert_ellipse_params_r(a,e,theta):
     """
-    Converts ellipse parameters from canonical form into semi-axis lengths and tilt.
+    Converts from ellipse parameters (a,e,theta) to (A,B,C).
     See module docstring for more info.
 
-    Args:
-        A,B,C (floats): parameters of an ellipse in the form:
-                             Ax^2 + Bxy + Cy^2 = 1
+    Accepts:
+        a (number): the semimajor axis length
+        e (number): the ratio of the semi-major to semiminor axis lengths
+        theta (number): the rotation angle from the positive x-axis to the
+            semimajor axis, in radians
 
     Returns:
-        (3-tuple): A 3-tuple consisting of:
-
-        * **a**: (float) the semimajor axis length
-        * **b**: (float) the semiminor axis length
-        * **theta**: (float) the tilt of the ellipse semimajor axis with respect to
-          the x-axis, in radians
+        (3-tuple): (A,B,C), the ellipse parameters in canonical form
     """
-    if A == C:
-        x = B
-        theta = np.pi / 4.0 * np.sign(B)
-    else:
-        x = (A - C) * np.sqrt(1 + (B / (A - C)) ** 2)
-        theta = 0.5 * np.arctan(B / (A - C))
-    a = np.sqrt(2 / (A + C - x))
-    b = np.sqrt(2 / (A + C + x))
-    return a,b,theta
+    sin2,cos2 = np.sin(theta)**2,np.cos(theta)**2
+    b = a*e
+    a2,b2 = a**2,b**2
+    A = sin2/b2 + cos2/a2
+    C = cos2/b2 + sin2/a2
+    B = 2*(b2-a2)*np.sin(theta)*np.cos(theta)/(a2*b2)
+    return A,B,C
 
 
 
@@ -333,48 +313,43 @@ def cartesianDataAr_to_polarEllipticalDataAr(
     maskThresh=0.99,
 ):
     """
-    Transforms an array of data in cartesian coordinates into a data array in
-    polar-elliptical coordinates.
+    Transforms an array of data in cartesian coordinates into a data array in polar elliptical
+    coordinates.
 
-    If the cartesian coordinates are (qx,qy), then the parametrization for the
-    polar-elliptical coordinate system is::
+    If the cartesian coordinates are (qx,qy), then the parametrization for the polar-elliptical
+    coordinate system is
 
         qx = qx0 + A*r*cos(theta)*cos(phi) - B*r*sin(theta)*sin(phi)
         qy = qy0 + B*r*cos(theta)*sin(phi) + A*r*sin(theta)*cos(phi)
 
-    where the final coordinates are (r,theta), and the parameters are (qx0,qy0,A,B,phi).
-    Physically, this corresponds to elliptical coordinates centered at (qx0,qy0),
-    stretched by A/B along the semimajor axes, and with those axes tilted by phi with
-    respect to the (qx,qy) axes.
+    where the final coordinates are (r,theta), and the parameters are (qx0,qy0,A,B,phi). Physically,
+    this corresponds to elliptical coordinates centered at (qx0,qy0), stretched by A/B along the
+    semimajor axes, and with those axes tilted by phi with respect to the (qx,qy) axes.
 
-    Args:
-        cartesianData (2D float array): the data in cartesian coordinates
-        params (5-tuple): specifies (qx0,qy0,A,B,phi), the parameters for the
-            transformation
-        dr (float): sampling of the (r,theta) coords: the width of the bins in r
-        dtheta (float): sampling of the (r,theta) coords: the width of the bins in theta,
-            in radians
-        r_range (number or length 2 list/tuple or None): specifies the sampling of the
-            (r,theta) coords.  Precise behavior which depends on the parameter type:
-                * if r_range is a number, specifies the maximum r value
-                * if r_range is a length 2 list/tuple, specifies the min/max r values
-                * if None, autoselects max r value
-        mask (2d array of bools): shape must match cartesianData; where mask==False,
-            ignore these datapoints in making the polarElliptical data array
-        maskThresh (float): the final data mask is calculated by converting mask (above)
-            from cartesian to polar elliptical coords.  Due to interpolation, this
-            results in some non-boolean values - this is converted back to a boolean
-            array by taking polarEllipticalMask = polarTrans(mask) < maskThresh. Cells
-            where polarTrans is less than 1 (i.e. has at least one masked NN) should
-            generally be masked, hence the default value of 0.99.
+    Accepts:
+        cartesianData   (2D float array) the data in cartesian coordinates
+        params          (5-tuple) specifies (qx0,qy0,A,B,phi), the parameters for the transformation
+        dr              (float) sampling of the (r,theta) coords: the width of the bins in r
+        dtheta          (float) sampling of the (r,theta) coords: the width of the bins in theta,
+                        in radians
+        r_range         (float) sampling of the (r,theta) coords:
+                        if r_range is a number, specifies the maximum r value
+                        if r_range is a length 2 list/tuple, specifies the min/max r values
+                        if None, autoselects max r value
+        mask            (2D bool array) shape must match cartesianData; where mask==False, ignore
+                        these datapoints in making the polarElliptical data array
+        maskThresh      (float) the final data mask is calculated by converting mask (above) from
+                        cartesian to polar elliptical coords.  Due to interpolation, this results in
+                        some non-boolean values - this is converted back to a boolean array by
+                        taking polarEllipticalMask = polarTrans(mask) < maskThresh. Cells where
+                        polarTrans is less than 1 (i.e. has at least one masked NN) should generally
+                        be masked, hence the default value of 0.99.
 
     Returns:
-        (3-tuple): A 3-tuple, containing:
-
-            * **polarEllipticalData**: *(2D masked array)* a masked array containing
-              the data and the data mask, in polarElliptical coordinates
-            * **rr**: *(2D array)* meshgrid of the r coordinates
-            * **tt**: *(2D array)* meshgrid of the theta coordinates
+        polarEllipticalData     (2D masked array) a masked array containing
+                                    data: the data in polarElliptical coordinates
+                                    mask: the data mask, in polarElliptical coordinates
+        rr, tt                  (2D arrays) meshgrid of the (r,theta) coordinates
     """
     if mask is None:
         mask = np.ones_like(cartesianData, dtype=bool)
@@ -444,15 +419,13 @@ def radial_integral(ar, x0, y0, dr):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
-    Args:
-        ar (2d array): the data
-        x0,y0 (floats): the origin
+    Accepts:
+        ar              (2d array) the data
+        x0,y0           (floats) the origin
 
     Returns:
-        (2-tuple): A 2-tuple containing:
-
-            * **rbin_centers**: *(1d array)* the bins centers of the radial integral
-            * **radial_integral**: *(1d array)* the radial integral
+        rbin_centers    (1d array) the bins centers of the radial integral
+        radial_integral (1d array) the radial integral
     """
     rmax = int(
         max(
@@ -476,16 +449,13 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
-    Args:
-        ar (2d array): the data
-        dr (number): the r sampling
-        ellipse_params (5-tuple): the parameters (x0,y0,A,B,phi) for the ellipse
+    Accepts:
+        ar              (2d array) the data
+        dr              (number) the r sampling
+        ellipse_params  (5-tuple) the parameters (x0,y0,A,B,phi) for the ellipse
 
     Returns:
-        (2-tuple): A 2-tuple containing:
-
-            * **rbin_centers**: *(1d array)* the bins centers of the radial integral
-            * **radial_integral**: *(1d array)* the radial integral
+        rbin_centers    (1d array) the bins centers of the radial integral
         radial_integral (1d array) the radial integral
     """
     x0, y0 = ellipse_params[0], ellipse_params[1]
@@ -512,23 +482,22 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
 
 def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
     """
-    Given some elliptical distortions with ellipse parameters p and some measured
-    PointListArray of Bragg peak positions braggpeaks, returns the elliptically corrected
-    Bragg peaks.
+    Given some elliptical distortions with ellipse parameters p and some measured PointListArray
+    of Bragg peak positions braggpeaks, returns the elliptically corrected Bragg peaks.
 
-    Args:
-        braggpeaks (PointListArray): the Bragg peaks
-        e (number): the length ratio of semiminor/semimajor axes
-        theta (number): tilt of the a-axis with respect to the x-axis, in radians
-        x0,y0 (number): the ellipse center; if the braggpeaks have been centered, these
-            should be zero
+    Accepts:
+        braggpeaks              (PointListArray) the Bragg peaks
+        e                       (number) the length ratio of semiminor/semimajor axes
+        theta                   (number) tilt of the a-axis with respect to the x-axis, in radians
+        x0,y0                   (numbers) the ellipse center; if the braggpeaks have been centered,
+                                these should be zero
 
     Returns:
         braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
     """
     assert(isinstance(braggpeaks,PointListArray))
     # Get the transformation matrix
-    sint, cost = np.sin(theta), np.cos(theta)
+    sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
     T = np.array(
             [
                 [e*sint**2 + cost**2, sint*cost*(1-e)],
@@ -564,23 +533,21 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
     interest is well defined up to a complementary angle.  This function is written such that
     phi_known should be the smaller of these two angles.
 
-    Args:
-        data (ndarray) the data to fit, typically a Bragg vector map
-        x (float): the initial ellipse center, x
-        y (float): the initial ellipse center, y
-        a (float): the initial ellipse first semiaxis
-        b (float): the initial ellipse second semiaxis
-        theta (float): the initial ellipse angle, in radians
-        r_inner (float): the fitting annulus inner radius
-        r_outer (float): the fitting annulus outer radius
-        phi_known (float): the known angle between a pair of diffraction peaks, in radians
-        fitrad (float): the region about the fixed data point used to refine its position
+    Accepts:
+        data        (ndarray) the data to fit, typically a Bragg vector map
+        x           (float) the initial ellipse center, x
+        y           (float) the initial ellipse center, y
+        a           (float) the initial ellipse first semiaxis
+        b           (float) the initial ellipse second semiaxis
+        theta       (float) the initial ellipse angle, in radians
+        r_inner     (float) the fitting annulus inner radius
+        r_outer     (float) the fitting annulus outer radius
+        phi_known   (float) the known angle between a pair of diffraction peaks, in radians
+        fitrad      (float) the region about the fixed data point used to refine its position
 
     Returns:
-        (2-tuple): A 2-tuple containing:
-
-            * **a_constrained**: *(float)* the first semiaxis of the selected ellipse
-            * **b_constrained**: *(float)* the second semiaxis of the selected ellipse
+        a_constrained   (float) the first semiaxis of the selected ellipse
+        b_constrained   (float) the second semiaxis of the selected ellipse
     """
     # Get 4 constraining points
     xs,ys = np.zeros(4),np.zeros(4)
@@ -620,7 +587,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
 ## MOVE TO VIS
 def compare_double_sided_gaussian(data, p, power=1, mask=None):
     """
-    Plots a comparison between a diffraction pattern and a fit, given p.
+    Plots a comparison between a diffraction pattern and a fit, given p. 
     """
     if mask is None:
         mask = np.ones_like(data)
