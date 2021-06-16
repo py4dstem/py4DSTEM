@@ -336,6 +336,7 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
         plt.show()
         return
     else:
+        axs = ((ax11,ax12),(ax21,ax22))
         return fig,axs
 
 
