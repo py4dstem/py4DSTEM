@@ -1,9 +1,10 @@
 import requests 
 from typing import Union
 import pathlib
+import os
 
 
-def download_file_from_google_drive(id_,destination):
+def download_file_from_google_drive(id_,destination, overwrite=False):
     """
     Downloads a file from google drive to the destination file path
     Args:
@@ -12,7 +13,18 @@ def download_file_from_google_drive(id_,destination):
             id='1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM'
         destination (Union[pathlib.PurePosixPath, pathlib.PureWindowsPath,str]): path
             file will be downloaded
+        overwrite (bool): switch to add overwrite protection
     """
+
+    if os.path.exists(destination) and overwrite == False:
+        print("File Already Exists")
+        return None
+    
+    elif os.path.exists(destination) and overwrite == True:
+        print("File Already Existed, Downloading and Overwriting")
+    else:
+        print("Downloading")
+
     def get_confirm_token(response):
         for key, value in response.cookies.items():
             if key.startswith('download_warning'):
