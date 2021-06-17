@@ -21,7 +21,8 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = peaks.data['qx'][i]+qx0
@@ -48,7 +49,8 @@ def get_bragg_vector_maxima_map(braggpeaks, Q_Nx, Q_Ny):
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = int(np.round(peaks.data['qx'][i]))+qx0
@@ -78,7 +80,8 @@ def get_weighted_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, weights):
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
             for i in range(peaks.length):
@@ -107,7 +110,8 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = peaks.data['qx'][i]
@@ -132,7 +136,8 @@ def get_bragg_vector_maxima_map_raw(braggpeaks, Q_Nx, Q_Ny):
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = int(np.round(peaks.data['qx'][i]))
@@ -160,7 +165,8 @@ def get_weighted_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, weights):
     assert weights.shape == braggpeaks.shape, "weights must have shape (R_Nx,R_Ny)"
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
             for i in range(peaks.length):
