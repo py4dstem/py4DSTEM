@@ -291,6 +291,7 @@ def find_Bragg_disks_serial(datacube, probe,
                             minGlobalIntensity = 0.005,
                             metric = 'mean',
                             filter_function = None,
+                            CUDA=False,
                             name = 'braggpeaks_raw',
                             _qt_progress_bar = None):
     """
@@ -361,29 +362,35 @@ def find_Bragg_disks_serial(datacube, probe,
     assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
     # Get the probe kernel FT
-    probe_kernel_FT = np.conj(np.fft.fft2(probe))
+    if CUDA:
+        import cupy as cp
+        from .diskdetection_cuda import _find_Bragg_disks_single_DP_FK_CUDA as diskdetection_function
+        probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
+    else:
+        probe_kernel_FT = np.conj(np.fft.fft2(probe))
+        diskdetection_function = _find_Bragg_disks_single_DP_FK
 
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
 
     # Loop over all diffraction patterns
     for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
-        if _qt_progress_bar is not None:
+        if _qt_progress_bar is not None: # If this is being called by the GUI, make sure it updates
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
         DP = datacube.data[Rx,Ry,:,:]
-        _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                      corrPower = corrPower,
-                                      sigma = sigma,
-                                      edgeBoundary = edgeBoundary,
-                                      minRelativeIntensity = minRelativeIntensity,
-                                      relativeToPeak = relativeToPeak,
-                                      minPeakSpacing = minPeakSpacing,
-                                      maxNumPeaks = maxNumPeaks,
-                                      subpixel = subpixel,
-                                      upsample_factor = upsample_factor,
-                                      filter_function = filter_function,
-                                      peaks = peaks.get_pointlist(Rx,Ry))
+        diskdetection_function(DP, probe_kernel_FT,
+                              corrPower = corrPower,
+                              sigma = sigma,
+                              edgeBoundary = edgeBoundary,
+                              minRelativeIntensity = minRelativeIntensity,
+                              relativeToPeak = relativeToPeak,
+                              minPeakSpacing = minPeakSpacing,
+                              maxNumPeaks = maxNumPeaks,
+                              subpixel = subpixel,
+                              upsample_factor = upsample_factor,
+                              filter_function = filter_function,
+                              peaks = peaks.get_pointlist(Rx,Ry))
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
@@ -403,7 +410,8 @@ def find_Bragg_disks(datacube, probe,
                      name = 'braggpeaks_raw',
                      filter_function = None,
                      _qt_progress_bar = None,
-                     distributed = None):
+                     distributed = None,
+                     CUDA = False):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or phase
     correlation with probe.
@@ -528,6 +536,7 @@ def find_Bragg_disks(datacube, probe,
             upsample_factor=upsample_factor,
             name=name,
             filter_function=filter_function,
+            CUDA=CUDA,
             _qt_progress_bar=_qt_progress_bar)
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
