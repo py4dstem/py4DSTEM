@@ -594,7 +594,7 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak, m
     """
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
                 "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
         pointlist.sort(coordinate='intensity', order='descending')
 
@@ -673,7 +673,7 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
         _pointlistarray.name = pointlistarray.name+"_unithresh"
 
     HI_array = np.zeros( (_pointlistarray.shape[0], _pointlistarray.shape[1]) )
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
             pointlist = _pointlistarray.get_pointlist(Rx,Ry)
             if pointlist.data.shape[0] == 0:
                 top_value = np.nan
@@ -689,7 +689,7 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
     else:
         _thresh = thresh
 
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
             pointlist = _pointlistarray.get_pointlist(Rx,Ry)
 
             # Remove peaks below minRelativeIntensity threshold
@@ -736,7 +736,7 @@ def get_pointlistarray_intensities(pointlistarray):
     assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
 
     first_pass = True
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Getting disk intensities',unit='DP',unit_scale=True):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
         for i in range(pointlist.length):
             if first_pass:
