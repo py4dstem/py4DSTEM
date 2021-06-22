@@ -427,7 +427,7 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
             for Ry in range(braggpeaks_centered.shape[1]):
                 pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
                 pointlist.data['qx'] -= qx0
-                pointlist.data['qy'] -= qy0        
+                pointlist.data['qy'] -= qy0
     else:
         for Rx in range(braggpeaks_centered.shape[0]):
             for Ry in range(braggpeaks_centered.shape[1]):
