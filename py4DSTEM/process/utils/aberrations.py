@@ -2,12 +2,11 @@
 
 def cartesian_aberrations(qx, qy, lam, C):
     """
-
-    :param qx:
-    :param qy:
-    :param lam:
-    :param C:
-    :return:
+    Args:
+        qx:
+        qy:
+        lam:
+        C:
     """
 
     u = qx * lam

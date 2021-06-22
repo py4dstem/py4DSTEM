@@ -7,16 +7,16 @@ def get_beamstop_mask(dp,qx0,qy0,theta,dtheta=1,w=10,r=10):
     """
     Generates a beamstop shaped mask.
 
-    Accepts:
-        dp        (2d array) a diffraction pattern
-        qx0,qy0   (numbers) the center position of the beamstop
-        theta     (number) the orientation of the beamstop, in degrees
-        dtheta    (number) angular span of the wedge representing the beamstop, in degrees
-        w         (integer) half the width of the beamstop arm, in pixels
-        r         (number) the radius of a circle at the end of the beamstop, in pixels
+    Args:
+        dp (2d array): a diffraction pattern
+        qx0,qy0 (numbers): the center position of the beamstop
+        theta (number): the orientation of the beamstop, in degrees
+        dtheta (number): angular span of the wedge representing the beamstop, in degrees
+        w (integer): half the width of the beamstop arm, in pixels
+        r (number): the radius of a circle at the end of the beamstop, in pixels
 
     Returns:
-        mask      (2d boolean array)
+        (2d boolean array): the mask
     """
     # Handle inputs
     theta = np.mod(np.radians(theta),2*np.pi)
