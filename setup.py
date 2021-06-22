@@ -22,6 +22,7 @@ setup(
         'h5py == 2.10.0',
         'ncempy == 1.8.1',
         'numba == 0.49.1',
+        'matplotlib == 3.4.2',
         'scikit-image == 0.17.2',
         'scikit-learn == 0.23.2',
         'PyQt5 == 5.13',
