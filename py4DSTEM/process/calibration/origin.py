@@ -147,6 +147,82 @@ def get_origin(datacube,r=None,rscale=1.2,dp_max=None,mask=None):
 
     return qx0,qy0
 
+def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
+    """
+    Gets the diffraction shifts using detected Bragg disk positions.
+
+    First, an guess at the unscattered beam position is determined, either by taking the
+    CoM of the Bragg vector map, or by taking its maximal pixel.  If the CoM is used, an
+    additional refinement step is used where we take the CoM of a Bragg vector map
+    contructed from a first guess at the central Bragg peaks (as opposed to the BVM of all
+    BPs). Once a unscattered beam position is determined, the Bragg peak closest to this
+    position is identified. The shifts in these peaks positions from their average are
+    returned as the diffraction shifts.
+
+    Args:
+        braggpeaks (PointListArray): the Bragg peak positions
+        Q_Nx, Q_Ny (ints): the shape of diffration space
+        findcenter (str): specifies the method for determining the unscattered beam
+            position options: 'CoM', or 'max'
+        bvm (array or None): the braggvector map. If None (default), the bvm is
+            calculated
+
+    Returns:
+        (3-tuple): A 3-tuple comprised of:
+
+            * **qx0** *((R_Nx,R_Ny)-shaped array)*: the origin x-coord
+            * **qy0** *((R_Nx,R_Ny)-shaped array)*: the origin y-coord
+            * **braggvectormap** *((R_Nx,R_Ny)-shaped array)*: the Bragg vector map of only
+              the Bragg peaks identified with the unscattered beam. Useful for diagnostic
+              purposes.
+    """
+    assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
+    assert all([isinstance(item, (int,np.integer)) for item in [Q_Nx,Q_Ny]])
+    assert isinstance(findcenter, str), "center must be a str"
+    assert findcenter in ['CoM','max'], "center must be either 'CoM' or 'max'"
+    R_Nx,R_Ny = braggpeaks.shape
+
+    # Get guess at position of unscattered beam
+    if bvm is None:
+        braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
+    else:
+        braggvectormap_all = bvm
+    if findcenter=='max':
+        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(braggvectormap_all,10)),(Q_Nx,Q_Ny))
+    else:
+        x0,y0 = get_CoM(braggvectormap_all)
+        braggvectormap = np.zeros_like(braggvectormap_all)
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                pointlist = braggpeaks.get_pointlist(Rx,Ry)
+                if pointlist.length > 0:
+                    r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                    index = np.argmin(r2)
+                    braggvectormap = add_to_2D_array_from_floats(braggvectormap,
+                                                    pointlist.data['qx'][index],
+                                                    pointlist.data['qy'][index],
+                                                    pointlist.data['intensity'][index])
+        x0,y0 = get_CoM(braggvectormap)
+
+    # Get Bragg peak closest to unscattered beam at each scan position
+    braggvectormap = np.zeros_like(braggvectormap_all)
+    qx0 = np.zeros((R_Nx,R_Ny))
+    qy0 = np.zeros((R_Nx,R_Ny))
+    for Rx in range(R_Nx):
+        for Ry in range(R_Ny):
+            pointlist = braggpeaks.get_pointlist(Rx,Ry)
+            if pointlist.length > 0:
+                r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                index = np.argmin(r2)
+                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
+                                                pointlist.data['qx'][index],
+                                                pointlist.data['qy'][index],
+                                                pointlist.data['intensity'][index])
+                qx0[Rx,Ry] = pointlist.data['qx'][index]
+                qy0[Rx,Ry] = pointlist.data['qy'][index]
+
+    return qx0, qy0, braggvectormap
+
 def get_origin_single_dp_beamstop(dp,**kwargs):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
@@ -322,7 +398,8 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
 
     Accepts:
         braggpeaks  (PointListArray) the detected, unshifted bragg peaks
-        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin
+        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin,
+                    or scalar values for constant origin position.
         coords      (Coordinates) an object containing the origin positions
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
@@ -345,12 +422,19 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     assert isinstance(name,str)
     braggpeaks_centered = braggpeaks.copy(name=name)
 
-    for Rx in range(braggpeaks_centered.shape[0]):
-        for Ry in range(braggpeaks_centered.shape[1]):
-            pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
-            qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
-            pointlist.data['qx'] -= qx
-            pointlist.data['qy'] -= qy
+    if np.isscalar(qx0) & np.isscalar(qy0):
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                pointlist.data['qx'] -= qx0
+                pointlist.data['qy'] -= qy0        
+    else:
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
+                pointlist.data['qx'] -= qx
+                pointlist.data['qy'] -= qy
 
     return braggpeaks_centered
 

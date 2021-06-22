@@ -12,8 +12,7 @@ from time import time
 from numbers import Number
 
 from ...io.datastructure import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maxima_2D, print_progress_bar
-from ..utils import upsampled_correlation, tqdmnd
+from ..utils import get_cross_correlation_fk, get_maxima_2D,tqdmnd
 
 def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   corrPower = 1,
@@ -207,7 +206,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               maxNumPeaks = 70,
                               subpixel = 'multicorr',
                               upsample_factor = 16,
-                              filter_function = None):
+                              filter_function = None,
+                              return_ccs = False):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions
     (Rx,Ry) by cross, hybrid, or phase correlation with probe.
@@ -241,12 +241,15 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
             diffraction pattern) and return the filtered diffraction pattern. The
             shape of the returned DP must match the shape of the probe kernel (but does
             not need to match the shape of the input diffraction pattern, e.g. the filter
-            can be used to bin the diffraction pattern). If using distributed disk detection,
-            the function must be able to be pickled with by dill.
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        return_ccs (bool): if True, return the cross correlations
 
     Returns:
         (n-tuple of PointLists, n=len(Rx)): the Bragg peak positions and
-        correlation intensities at each scan position (Rx,Ry)
+        correlation intensities at each scan position (Rx,Ry).  If return_ccs=True, returns
+        (peaks,ccs), where peaks is the n-tuple of PointLists, and ccs is a (QNx,QNy,n)
+        shaped array of the correlograms.
     """
     assert(len(Rx)==len(Ry))
     if filter_function: assert callable(filter_function), "filter_function must be callable"
@@ -255,26 +258,27 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     # Get probe kernel in Fourier space
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
 
+    n = len(Rx)
+    if return_ccs:
+        ccs = np.zeros((datacube.Q_Nx,datacube.Q_Ny,n))
+
     # Loop over selected diffraction patterns
-    t0 = time()
     for i in range(len(Rx)):
         DP = datacube.data[Rx[i],Ry[i],:,:]
-        peaks.append(_find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                                   corrPower = corrPower,
-                                                   sigma = sigma,
-                                                   edgeBoundary = edgeBoundary,
-                                                   minRelativeIntensity = minRelativeIntensity,
-                                                   relativeToPeak = relativeToPeak,
-                                                   minPeakSpacing = minPeakSpacing,
-                                                   maxNumPeaks = maxNumPeaks,
-                                                   subpixel = subpixel,
-                                                   upsample_factor = upsample_factor,
-                                                   filter_function = filter_function))
-    t = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(len(Rx), int(t/3600),
-                                                                   int((t%3600)/60), int(t%60)))
+        _peaks =  _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+           corrPower=corrPower,sigma=sigma,edgeBoundary=edgeBoundary,
+           minRelativeIntensity=minRelativeIntensity,relativeToPeak=relativeToPeak,
+           minPeakSpacing=minPeakSpacing,maxNumPeaks=maxNumPeaks,subpixel=subpixel,
+           upsample_factor=upsample_factor,filter_function=filter_function,
+           return_cc=return_ccs)
+        if return_ccs:
+            _peaks,ccs[:,:,i] = _peaks
+        peaks.append(_peaks)
 
-    return tuple(peaks)
+    peaks = tuple(peaks)
+    if return_ccs:
+        return peaks,ccs
+    return peaks
 
 
 def find_Bragg_disks_serial(datacube, probe,
@@ -291,7 +295,6 @@ def find_Bragg_disks_serial(datacube, probe,
                             minGlobalIntensity = 0.005,
                             metric = 'mean',
                             filter_function = None,
-                            verbose = False,
                             name = 'braggpeaks_raw',
                             _qt_progress_bar = None):
     """
@@ -366,7 +369,6 @@ def find_Bragg_disks_serial(datacube, probe,
         from PyQt5.QtWidgets import QApplication
 
     # Loop over all diffraction patterns
-    t0 = time()
     for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
         if _qt_progress_bar is not None:
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
@@ -384,9 +386,6 @@ def find_Bragg_disks_serial(datacube, probe,
                                       upsample_factor = upsample_factor,
                                       filter_function = filter_function,
                                       peaks = peaks.get_pointlist(Rx,Ry))
-    t = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
-                                                                   int(t/60), int(t%60)))
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
@@ -403,7 +402,6 @@ def find_Bragg_disks(datacube, probe,
                      maxNumPeaks = 70,
                      subpixel = 'multicorr',
                      upsample_factor = 16,
-                     verbose = False,
                      name = 'braggpeaks_raw',
                      filter_function = None,
                      _qt_progress_bar = None,
@@ -531,7 +529,6 @@ def find_Bragg_disks(datacube, probe,
             maxNumPeaks=maxNumPeaks,
             subpixel=subpixel,
             upsample_factor=upsample_factor,
-            verbose=verbose,
             name=name,
             filter_function=filter_function,
             _qt_progress_bar=_qt_progress_bar)
@@ -601,7 +598,7 @@ def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak,
     """
     assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
                 "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
         pointlist.sort(coordinate='intensity', order='descending')
 
@@ -674,7 +671,7 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
         _pointlistarray.name = pointlistarray.name+"_unithresh"
 
     HI_array = np.zeros( (_pointlistarray.shape[0], _pointlistarray.shape[1]) )
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
             pointlist = _pointlistarray.get_pointlist(Rx,Ry)
             if pointlist.data.shape[0] == 0:
                 top_value = np.nan
@@ -690,7 +687,7 @@ def universal_threshold(pointlistarray, thresh, metric='maximum', minPeakSpacing
     else:
         _thresh = thresh
 
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
             pointlist = _pointlistarray.get_pointlist(Rx,Ry)
 
             # Remove peaks below minRelativeIntensity threshold
@@ -737,7 +734,7 @@ def get_pointlistarray_intensities(pointlistarray):
     assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
 
     first_pass = True
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Getting disk intensities',unit='DP',unit_scale=True):
         pointlist = pointlistarray.get_pointlist(Rx,Ry)
         for i in range(pointlist.length):
             if first_pass:
