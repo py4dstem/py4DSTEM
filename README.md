@@ -2,7 +2,9 @@
 
 **py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
 
-[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
+For additional information beyond what's decribed below, please see
+    * [the py4DSTEM documentation pages](file:///Users/Ben/Work/NCEM/Projects/py4DSTEM/project_code_dev/docs/build/html/index.html)
+    * [our open access publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications
 
 
 ## What is 4D-STEM?
@@ -32,7 +34,7 @@ Then open a terminal and run
 
 ```
 conda update conda
-conda create -n py4dstem python==3.7
+conda create -n py4dstem python==3.8
 conda activate py4dstem
 conda install pip
 pip install py4dstem
@@ -59,6 +61,8 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 
 
 ## Running the GUI
+
+**WARNING: the GUI is currently down. Thanks for you patience as we work through various bugs!**
 
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyses through the GUI eventually.
