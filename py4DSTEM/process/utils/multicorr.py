@@ -44,23 +44,21 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
     to the other subpixel methods.)
 
 
-    Accepts:
-        imageCorr : ndarray complex
+    Args:
+        imageCorr (complex valued ndarray):
             Complex product of the FFTs of the two images to be registered
             i.e. m = np.fft.fft2(DP) * probe_kernel_FT;
             imageCorr = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
-        upsampleFactor : int
+        upsampleFactor (int):
             Upsampling factor. Must be greater than 2. (To do upsampling
             with factor 2, use upsampleFFT, which is faster.)
-        xyShift
+        xyShift:
             Location in original image coordinates around which to upsample the
             FT. This should be given to exactly half-pixel precision to
             replicate the initial FFT step that this implementation skips
 
-    Returns
-    -------
-        xyShift : 2-element np array
-            Refined location of the peak in image coordinates.
+    Returns:
+        (2-element np array): Refined location of the peak in image coordinates.
     '''
 
     assert upsampleFactor > 2
@@ -98,42 +96,42 @@ def upsampleFFT(cc):
     '''
     sz = cc.shape
     ups = np.zeros((sz[0]*2,sz[1]*2),dtype=complex)
-    
+
     ups[:int(np.ceil(sz[0]/2)),:int(np.ceil(sz[1]/2))] = cc[:int(np.ceil(sz[0]/2)),:int(np.ceil(sz[1]/2))]
     ups[-int(np.ceil(sz[0]/2)):,:int(np.ceil(sz[1]/2))] = cc[-int(np.ceil(sz[0]/2)):,:int(np.ceil(sz[1]/2))]
     ups[:int(np.ceil(sz[0]/2)),-int(np.ceil(sz[1]/2)):] = cc[:int(np.ceil(sz[0]/2)),-int(np.ceil(sz[1]/2)):]
     ups[-int(np.ceil(sz[0]/2)):,-int(np.ceil(sz[1]/2)):] = cc[-int(np.ceil(sz[0]/2)):,-int(np.ceil(sz[1]/2)):]
-    
+
     return np.real(np.fft.ifft2(ups))
-  
+
 
 def dftUpsample(imageCorr, upsampleFactor, xyShift):
     '''
-    This performs a matrix multiply DFT around a small neighboring region of the inital correlation peak.
-    By using the matrix multiply DFT to do the Fourier upsampling, the efficiency is greatly improved.
-    This is adapted from the subfuction dftups found in the dftregistration function on the Matlab File Exchange.
+    This performs a matrix multiply DFT around a small neighboring region of the inital
+    correlation peak. By using the matrix multiply DFT to do the Fourier upsampling, the
+    efficiency is greatly improved. This is adapted from the subfuction dftups found in
+    the dftregistration function on the Matlab File Exchange.
 
     https://www.mathworks.com/matlabcentral/fileexchange/18401-efficient-subpixel-image-registration-by-cross-correlation
 
-    The matrix multiplication DFT is from 
-    Manuel Guizar-Sicairos, Samuel T. Thurman, and James R. Fienup, "Efficient subpixel image registration algorithms," 
-    Opt. Lett. 33, 156-158 (2008). http://www.sciencedirect.com/science/article/pii/S0045790612000778
+    The matrix multiplication DFT is from:
 
-    Parameters
-    ----------
-        imageCorr : ndarray complex
+    Manuel Guizar-Sicairos, Samuel T. Thurman, and James R. Fienup, "Efficient subpixel
+    image registration algorithms," Opt. Lett. 33, 156-158 (2008).
+    http://www.sciencedirect.com/science/article/pii/S0045790612000778
+
+    Args:
+        imageCorr (complex valued ndarray):
             Correlation image between two images in Fourier space.
-        upsampleFactor : int 
+        upsampleFactor (int):
             Scalar integer of how much to upsample.
-        xyShift : list of 2 floats 
-            Coordinates in the UPSAMPLED GRID around which to upsample. 
+        xyShift (list of 2 floats):
+            Coordinates in the UPSAMPLED GRID around which to upsample.
             These must be single-pixel IN THE UPSAMPLED GRID
-        
-    Returns
-    -------
-        imageUpsample : ndarray
+
+    Returns:
+        (ndarray):
             Upsampled image from region around correlation peak.
-        
     '''
     imageSize = imageCorr.shape
     pixelRadius = 1.5
