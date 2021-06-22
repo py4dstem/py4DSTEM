@@ -13,17 +13,14 @@ If you run into trouble, first make sure you've activated the right :ref:`Python
 Try it now!
 ^^^^^^^^^^^
 
-.. Warning::
-   The Binder link is not active yet! Coming soon, thanks for your patience........! In the meantime, please enjoy the internet relic currently linked in its stead.
-
-To run sample Jupyter notebooks remotely using binder, `go here <https://www.zombo.com>`_.
+To run sample Jupyter notebooks remotely using binder, `go here <https://mybinder.org/v2/gh/py4dstem/py4DSTEM_tutorials/structure_change?urlpath=lab/tree/notebooks/Index.ipynb>`_.
 Try starting with ``quickstart.ipynb``.
 
 
 Try it locally
 ^^^^^^^^^^^^^^
 
-More sample code is available in the ``sample_code`` directory of the project's github repository. 
-You can `find that code here <https://github.com/py4dstem/py4DSTEM/tree/dev/sample_code>`_, including instructions for finding and downloading sample datasets.
+More sample code is available in the `py4DSTEM_tutorials repository <https://github.com/py4dstem/py4DSTEM_tutorials>`_, as well as in the `sample code directory <https://github.com/py4dstem/py4DSTEM/tree/dev/sample_code>`_ of the projects primary repository, which includes instructions for finding and downloading sample datasets.
+
 
 
