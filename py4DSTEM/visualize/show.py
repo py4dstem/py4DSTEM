@@ -26,20 +26,18 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
         >>> show(ar)
 
-    which will display the 2D array ``ar`` in a matplotlib figure.  Additional
-    functionality includes:
+    which will generate and display a matplotlib figure showing the 2D array ``ar``.
+    Additional functionality includes:
 
         * scaling the image (log scaling, power law scaling)
+        * displaying the image histogram
         * altering the histogram clip values
+        * masking some subset of the image
+        * setting the colormap
         * adding geometric overlays (e.g. points, circles, rectangles, annuli)
         * adding informational overlays (scalebars, coordinate grids, oriented axes or
           vectors)
-        * displaying the image histogram
-        * masking some subset of the image
-        * setting the colormap
-        * altering the matplotlib figure appearance
-        * tools for manual figure customization (returning the figure, using ``show`` to
-          plot in a subplot of an existing figure)
+        * further customization tools
 
     These are each discussed in turn below.
 
@@ -56,95 +54,132 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             >>> show(ar,scaling='power',power=0.5)
             >>> show(ar,scaling='power',power=0.5,hist=True)
 
+    Histogram:
+        Setting the argument ``hist=True`` will display the image histogram, instead of
+        the image. The displayed histogram will reflect any scaling requested. The number
+        of bins can be set with ``n_bins``. The upper and lower clip values, indicating
+        where the image display will be saturated, are shown with dashed lines.
+
     Clip values:
         By 'clip values' we mean the lower and upper values at which the display image
         will be saturated. Controlling the clip values is accomplished using the input
         parameters ``clipvals``, ``min``, and ``max``, and the clipvalues can be returned
-        with the ``returnclipvals`` parameter.  ``clipvals`` controls how the clip values
-        are determined, and must be a string in ('minmax','manual','std','centered').
-        Default is 'minmax', and sets the clip values to min(ar) and max(ar). 'manual'
-        sets the min/max clipvals to ``min``/``max``.
+        with the ``returnclipvals`` parameter.  ``clipvals`` controls the method by which
+        the clip values are determined, and must be a string in ('minmax','manual',
+        'std','centered'). Their behaviors are
+            * 'minmax' (default): The min/max values are set to np.min(ar)/np.max(ar)
+            * 'manual': The min/max values are set to ``min``/``max``
+            * 'std': The min/max values are ``np.median(ar) + N*np.std(ar)``, and
+               N is this functions ``min``/``max`` values.
+            * 'centered': The min/max values are set to ``c -/+ m``, where by default
+              'c' is zero and m is the max(abs(ar-c)), or, the two params can be user
+              specified using  ``min``/``max`` -> ``c``/``m``.
 
-        are to be determined
-                * 'minmax': The min/max values are np.min(ar)/np.max(r)
-                * 'manual': The min/max values are set to the values of
-                  the min,max arguments received by this function
-                * 'std': The min/max values are ``np.median(ar) -/+ N*np.std(ar)``, and
-                   N is this functions min,max vals.
-                * 'centered': The min/max values are set to ``c -/+ m``, where by default
-                  'c' is zero and m is the max(abs(ar-c), or the two params can be user
-                  specified using the kwargs min/max -> c/m.
+    Masking:
+        If a numpy masked array is passed to show, the function will automatically
+        mask the appropriate pixels. Alternatively, a boolean array of the same shape as
+        the data array may be passed to the ``mask`` argument, and these pixels will be
+        masked.  Masked pixels are displayed as a single uniform color, black by default,
+        and which can be specified with the ``mask_color`` argument.  Masked pixels
+        are excluded when displaying the histogram or computing clip values.
 
+    Overlays (geometric):
+        The function natively supports overlaying points, circles, rectangles, annuli,
+        and ellipses. Each is invoked by passing a dictionary to the appropriate input
+        variable specifying the geometry and features of the requested overlay. For
+        example:
 
-    ---------------------------------Overlays-------------------------------
+            >>> show(ar, rectangle={'lims':(10,20,10,20),'color':'r'})
 
-    The following arguments generate overlays, including points, shapes,
-    scalebars, and coordinate grids. If they are not None,
-    they should be a dictionary, which is passed to the corresponding
-    add_* functions (e.g. add_rectangles(ax,dict), add_circles(), etc.)
+        will overlay a single red square, and
 
-                  ---------------Shapes and Points-------------
+            >>> show(ar, annulus={'center':[(28,68),(92,160)],'fill':True,
+                                  'alpha':[0.9,0.3],'Ri':[16,12],'Ro':[24,36],
+                                  'color':['r',(0,1,1,1)]})
 
-    The shape/point overlays are:
+        will overlay two annuli with two different centers, radii, colors, and
+        transparencies. For a description of the accepted dictionary parameters
+        for each type of overlay, see the visualize functions add_*, where
+        * = ('rectangle','circle','annulus','ellipse','points'). (These docstrings
+        are under construction!)
 
-        rectangle   (dictionary)
-        circle
-        ellipse
-        points
-        grid_overlay
+    Overlays (informational):
+        Informational overlays supported by this function include coordinate axes
+        (cartesian, polar-elliptical, or r-theta) and scalebars.  These are added
+        by passing the appropriate input argument a dictionary of the desired
+        parameters, as with geometric overlays. However, there are two key differences
+        between these overlays and the geometric overlays.  First, informational
+        overlays (coordinate systems and scalebars) require information about the
+        plot - e.g. the position of the origin, the pixel sizes, the pixel units,
+        any elliptical distortions, etc.  The easiest way to pass this information
+        is by pass a Coordinates object containing this info to ``show`` as the
+        keyword ``coordinates``. Second, once the coordinate information has been
+        passed, informational overlays can autoselect their own parameters, thus simply
+        passing an empty dict to one of these parameters will add that overlay.
 
-    See those functions' docstrings for acceptable dict keyword-value pairs.
+        For example:
 
-           ---------------Coordinate grids and Scalebars-------------
+            >>> show(dp, scalebar={}, coordinates=coords)
 
-    For coordinate systems and scalebars, as above, the argument passed to this
-    function should be a dictionary.  The passed dict may be empty, in which case
-    default formatting options will be used.
+        will display the diffraction pattern ``dp`` with a scalebar overlaid in the
+        bottom left corner given the pixel size and units described in ``coords``,
+        and
 
-    The coordinate/scalebar overlays are:
+            >>> show(dp, coordinates=coords, scalebar={'length':0.5,'width':2,
+                                                       'position':'ul','label':True'})
 
-        cartesian_grid
-        polarelliptical_grid
-        rtheta_grid
-        scalebar
+        will display a more customized scalebar.
 
-    There are two types of additional optional parameters which can be passed to
-    specify how coordinates or scalebars should be plotted: (1) metadata specifying
-    the scale, units, and other parameters of the coordinates, e.g. the position
-    of the origin, and (2) visual formatting parameters.
+        When overlaying coordinate grids, it is important to note that some relevant
+        parameters, e.g. the position of the origin, may change by scan position.
+        In these cases, the parameters ``rx``,``ry`` must also be passed to ``show``,
+        to tell the ``Coordinates`` object where to look for the relevant parameters.
+        For example:
 
-    (1) scale/unit/coordinate parameter metadata should be passed as arguments to the
-    show function. These may be passed manually, or in a Coordinates instance.
+            >>> show(dp, cartesian_grid={}, coordinates=coords, rx=2,ry=5)
 
-    To use a Coordinates instance, pass it to the 'coordinates' argument.  The
-    function will find and use relevant metadata it finds in the instance.  Some
-    metadata may vary by scan position - e.g. the origin of diffraction space.  In
-    this case please also pass this function a scan position with the parameters
-    'rx' and 'ry'.
+        will overlay a cartesian coordinate grid on the diffraction pattern at scan
+        position (2,5). Adding
 
-    To pass metadata manually, just specify the values as function arguments.  The
-    relevant arguments are: pixelsize, pixelunits, x0, y0, e, theta. Any arguments
-    passed in this way will supercede the values found in a Coordinates instance.
+            >>> show(dp, coordinates=coords, rx=2, ry=5, cartesian_grid={'label':True,
+                        'alpha':0.7,'color':'r'})
 
-    Use the argument 'space' to specify whether the data is in diffraction space,
-    real space, or r-theta space, with values of ('Q','R','rtheta').
+        will customize the appearance of the grid further. And
 
-    (2) visual formatting parameters should be passed as keyword-value pairs inside
-    the dictionary associated with the overlay being drawn.  E.g.:
+            >>> show(im, coordinates=coords, cartesian_grid={}, space='R')
 
-        >>> show(im,cartesian_grid{'color':'black','alpha':0.25,'label':True}
+        displays a cartesian grid over a real space image.  For more details, see the
+        documentation for the visualize functions add_*, where * = ('scalebar',
+        'cartesian_grid', 'polarelliptical_grid', 'rtheta_grid'). (Under construction!)
 
-    will plot an image with a cartesian grid overlay in black, with a transparency
-    set to 0.25, and with labeled axes and tickmarks.  For the full set of
-    formatting parameters which can be specified for each overlay, see the docstring
-    for the corresponding add_* function.
+    Further customization:
+        Most parameters accepted by a matplotlib axis will be accepted by ``show``.
+        Pass a valid matplotlib colormap or a known string indicating a colormap
+        as the argument ``cmap`` to specify the colormap.  Pass ``figsize`` to
+        specify the figure size.  Etc.
 
+        Further customization can be accomplished by either (1) returning the figure
+        generated by show and then manipulating it using the normal matplotlib
+        functions, or (2) generating a matplotlib Figure with Axes any way you like
+        (e.g. with ``plt.subplots``) and then using this function to plot inside a
+        single one of the Axes of your choice.
 
+        Option (1) is accomplished by simply passing this function ``returnfig=True``.
+        Thus:
 
+            >>> fig,ax = show(ar, returnfig=True)
 
+        will now give you direct access to the figure and axes to continue to alter.
+        Option (2) is accomplished by passing an existing figure and axis to ``show``
+        as a 2-tuple to the ``figax`` argument. Thus:
 
+            >>> fig,(ax1,ax2) = plt.subplots(1,2)
+            >>> show(ar, figax=(fig,ax1))
+            >>> show(ar, figax=(fig,ax2), hist=True)
 
-    ******************
+        will generate a 2-axis figure, and then plot the array ``ar`` as an image on
+        the left, while plotting its histogram on the right.
+
 
     Args:
         ar (2D array): the array to plot
