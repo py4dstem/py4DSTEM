@@ -16,28 +16,30 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     Gets the center and radius of the probe in the diffraction plane.
 
     The algorithm is as follows:
-    First, create a series of N binary masks, by thresholding the diffraction pattern DP with a
-    linspace of N thresholds from thresh_lower to thresh_upper, measured relative to the maximum
-    intensity in DP.
+    First, create a series of N binary masks, by thresholding the diffraction pattern
+    DP with a linspace of N thresholds from thresh_lower to thresh_upper, measured
+    relative to the maximum intensity in DP.
     Using the area of each binary mask, calculate the radius r of a circular probe.
-    Because the central disk is typically very intense relative to the rest of the DP, r should
-    change very little over a wide range of intermediate values of the threshold. The range in which
-    r is trustworthy is found by taking the derivative of r(thresh) and finding identifying where it
-    is small.  The radius is taken to be the mean of these r values.
-    Using the threshold corresponding to this r, a mask is created and the CoM of the DP times this
-    mask it taken.  This is taken to be the origin x0,y0.
+    Because the central disk is typically very intense relative to the rest of the DP, r
+    should change very little over a wide range of intermediate values of the threshold.
+    The range in which r is trustworthy is found by taking the derivative of r(thresh)
+    and finding identifying where it is small.  The radius is taken to be the mean of
+    these r values. Using the threshold corresponding to this r, a mask is created and
+    the CoM of the DP times this mask it taken.  This is taken to be the origin x0,y0.
 
-    Accepts:
-        DP              (2D array) the diffraction pattern in which to find the central disk.
-                        A position averaged, or shift-corrected and averaged, DP work well.
-        thresh_lower    (float, 0 to 1) the lower limit of threshold values
-        thresh_upper    (float, 0 to 1) the upper limit of threshold values
-        N               (int) the number of thresholds / masks to use
+    Args:
+        DP (2D array): the diffraction pattern in which to find the central disk.
+            A position averaged, or shift-corrected and averaged, DP works best.
+        thresh_lower (float, 0 to 1): the lower limit of threshold values
+        thresh_upper (float, 0 to 1): the upper limit of threshold values
+        N (int): the number of thresholds / masks to use
 
     Returns:
-        r               (float) the central disk radius, in pixels
-        x0              (float) the x position of the central disk center
-        y0              (float) the y position of the central disk center
+        (3-tuple): A 3-tuple containing:
+
+            * **r**: *(float)* the central disk radius, in pixels
+            * **x0**: *(float)* the x position of the central disk center
+            * **y0**: *(float)* the y position of the central disk center
     """
     thresh_vals = np.linspace(thresh_lower,thresh_upper,N)
     r_vals = np.zeros(N)
@@ -63,18 +65,17 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
 
 def get_origin_single_dp(dp,r,rscale=1.2):
     """
-    Find the origin for a single diffraction pattern, assuming:
-        - There is no beam stop
-        - The center beam contains the highest intensity
+    Find the origin for a single diffraction pattern, assuming (a) there is no beam stop,
+    and (b) the center beam contains the highest intensity.
 
-    Accepts:
-        dp          (ndarray) a diffraction pattern
-        r           (number) the approximate radius of the center disk
-        rscale      (number) expand 'r' by this amount to form a mask about the
-                    center disk when taking its center of mass
+    Args:
+        dp (ndarray): a diffraction pattern
+        r (number): the approximate radius of the center disk
+        rscale (number): expand 'r' by this amount to form a mask about the center disk
+            when taking its center of mass
 
     Returns:
-        qx0,qy0     (numbers) the origin
+        (2-tuple): The origin
     """
     Q_Nx,Q_Ny = dp.shape
     _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),(Q_Nx,Q_Ny))
@@ -85,28 +86,30 @@ def get_origin_single_dp(dp,r,rscale=1.2):
 
 def get_origin(datacube,r=None,rscale=1.2,dp_max=None,mask=None):
     """
-    Find the origin for all diffraction patterns in a datacube, assuming:
-        - There is no beam stop
-        - The center beam contains the highest intensity
+    Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
+    beam stop, and (b) the center beam contains the highest intensity
 
-    Accepts:
-        datacube    (DataCube) the data
-        r           (number or None) the approximate radius of the center disk.
-                    If None (default), tries to compute r using the get_probe_size
-                    method.  The data used for this is controlled by dp_max.
-        rscale      (number) expand 'r' by this amount to form a mask about the
-                    center disk when taking its center of mass
-        dp_max      (ndarray or None) the diffraction pattern or dp-shaped array
-                    used to compute the center disk radius, if r is left unspecified.
-                    if dp_max==None (default), computes and uses the maximal diffraction
-                    pattern. Otherwise, this should be a (Q_Nx,Q_Ny) shaped array.
-                    diffraction
-        mask        (ndarray or None) if not None, should be an (R_Nx,R_Ny) shaped
+    Args:
+        datacube (DataCube): the data
+        r (number or None): the approximate radius of the center disk. If None (default),
+            tries to compute r using the get_probe_size method.  The data used for this
+            is controlled by dp_max.
+        rscale (number): expand 'r' by this amount to form a mask about the center disk
+            when taking its center of mass
+        dp_max (ndarray or None): the diffraction pattern or dp-shaped array used to
+            compute the center disk radius, if r is left unspecified. Behavior depends
+            on type:
+
+                * if ``dp_max==None`` (default), computes and uses the maximal
+                  diffraction pattern. Note that for a large datacube, this may be a
+                  slow operation.
+                * otherwise, this should be a (Q_Nx,Q_Ny) shaped array
+        mask (ndarray or None): if not None, should be an (R_Nx,R_Ny) shaped
                     boolean array. Origin is found only where mask==True, and masked
                     arrays are returned for qx0,qy0
 
     Returns:
-        qx0,qy0     (ndarrays) the origin
+        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
     """
     if r is None:
         if dp_max is None:
@@ -224,10 +227,9 @@ def get_origin_single_dp_beamstop(dp,**kwargs):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
-    Accepts:
+    Args:
 
     Returns:
-
     """
     return
 
@@ -236,10 +238,9 @@ def get_origin_beamstop(dp,**kwargs):
     Find the origin for all single diffraction patterns in a datacube,
     assuming there is a beam stop.
 
-    Accepts:
+    Args:
 
     Returns:
-
     """
     return
 
@@ -253,23 +254,33 @@ def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=Fa
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
     masked by the Boolean array `mask`.
 
-    Accepts:
-        qx0_meas,qy0_meas       (2d arrays)
-        mask                    (2b boolean array) ignore points where mask=True
-        fitfunction             (str) must be 'plane' or 'parabola' or 'bezier_two'
-        returnfitp              (bool) if True, returns the fit parameters
-        robust                  (bool) Optional parameter. If set to True, fit will be
-                                repeated with outliers removed.
-        robust_steps            (int) Optional parameter. Number of robust iterations
+    Args:
+        qx0_meas (2d array): measured origin x-position
+        qy0_meas (2d array): measured origin y-position
+        mask (2b boolean array, optional): ignore points where mask=True
+        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+        returnfitp (bool, optional): if True, returns the fit parameters
+        robust (bool, optional): If set to True, fit will be repeated with outliers
+            removed.
+        robust_steps (int, optional): Optional parameter. Number of robust iterations
                                 performed after initial fit.
-        robust_thresh-          (int) Optional parameter. Threshold for including points,
-                                in units of root-mean-square (standard deviations) error
-                                of the predicted values after fitting.
+        robust_thresh (int, optional): Threshold for including points, in units of
+            root-mean-square (standard deviations) error of the predicted values after
+            fitting.
 
     Returns:
-        (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals)
-                             or
-        (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
+        (variable): Return value depends on returnfitp. If ``returnfitp==False``
+        (default), returns a 4-tuple containing:
+
+            * **qx0_fit**: *(ndarray)* the fit origin x-position
+            * **qy0_fit**: *(ndarray)* the fit origin y-position
+            * **qx0_residuals**: *(ndarray)* the x-position fit residuals
+            * **qy0_residuals**: *(ndarray)* the y-position fit residuals
+
+        If ``returnfitp==True``, returns a 2-tuple.  The first element is the 4-tuple
+        described above.  The second element is a 4-tuple (popt_x,popt_y,pcov_x,pcov_y)
+        giving fit parameters and covariance matrices with respect to the chosen
+        fitting function.
     """
     assert isinstance(qx0_meas,np.ndarray) and len(qx0_meas.shape)==2
     assert isinstance(qx0_meas,np.ndarray) and len(qy0_meas.shape)==2
@@ -290,15 +301,15 @@ def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=Fa
         popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas,
             robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
         popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas,
-			robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
+            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
 
     else:
         popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas,
-			robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
-			data_mask=mask==False)
+            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
+            data_mask=mask==False)
         popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas,
-			robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
-			data_mask=mask==False)
+            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
+            data_mask=mask==False)
 
     # Compute residuals
     qx0_residuals = qx0_meas-qx0_fit
@@ -387,7 +398,8 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
 
     Accepts:
         braggpeaks  (PointListArray) the detected, unshifted bragg peaks
-        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin
+        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin,
+                    or scalar values for constant origin position.
         coords      (Coordinates) an object containing the origin positions
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
@@ -410,12 +422,19 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     assert isinstance(name,str)
     braggpeaks_centered = braggpeaks.copy(name=name)
 
-    for Rx in range(braggpeaks_centered.shape[0]):
-        for Ry in range(braggpeaks_centered.shape[1]):
-            pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
-            qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
-            pointlist.data['qx'] -= qx
-            pointlist.data['qy'] -= qy
+    if np.isscalar(qx0) & np.isscalar(qy0):
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                pointlist.data['qx'] -= qx0
+                pointlist.data['qy'] -= qy0
+    else:
+        for Rx in range(braggpeaks_centered.shape[0]):
+            for Ry in range(braggpeaks_centered.shape[1]):
+                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
+                qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
+                pointlist.data['qx'] -= qx
+                pointlist.data['qy'] -= qy
 
     return braggpeaks_centered
 
