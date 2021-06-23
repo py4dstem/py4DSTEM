@@ -97,8 +97,16 @@ def find_Bragg_disks_CUDA(datacube, probe,
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
     assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
-    # Get the probe kernel FT
-    probe_kernel_FT = np.conj(np.fft.fft2(probe))
+    # Get the probe kernel FT as a cupy array
+    probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
+
+    # get the maximal array kernel
+    if probe_kernel_FT.dtype == 'float64':
+        get_maximal_points = kernels['maximal_pts_float64']
+    elif probe_kernel_FT.dtype == 'float32':
+        get_maximal_points = kernels['maximal_pts_float32']
+    else:
+        raise TypeError("Maximal kernel only valid for float32 and float64 types...")
 
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
@@ -110,7 +118,7 @@ def find_Bragg_disks_CUDA(datacube, probe,
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
         DP = datacube.data[Rx,Ry,:,:]
-        _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+        _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                       corrPower = corrPower,
                                       sigma = sigma,
                                       edgeBoundary = edgeBoundary,
@@ -121,7 +129,8 @@ def find_Bragg_disks_CUDA(datacube, probe,
                                       subpixel = subpixel,
                                       upsample_factor = upsample_factor,
                                       filter_function = filter_function,
-                                      peaks = peaks.get_pointlist(Rx,Ry))
+                                      peaks = peaks.get_pointlist(Rx,Ry),
+                                      get_maximal_points=get_maximal_points)
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
                                                                    int(t/60), int(t%60)))
@@ -143,7 +152,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                   upsample_factor = 16,
                                   filter_function = None,
                                   return_cc = False,
-                                  peaks = None):
+                                  peaks = None,
+                                  get_maximal_points=None):
     """
      Finds the Bragg disks in DP by cross, hybrid, or phase correlation with probe_kernel_FT.
 
@@ -227,7 +237,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                                  maxNumPeaks=maxNumPeaks,
                                                  subpixel=subpixel,
                                                  ar_FT = ccc,
-                                                 upsample_factor = upsample_factor)
+                                                 upsample_factor = upsample_factor,
+                                                 get_maximal_points=get_maximal_points)
 
     # Make peaks PointList
     if peaks is None:
@@ -267,7 +278,8 @@ def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval='cc'):
 
 
 def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16):
+                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16,
+                  get_maximal_points=None):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -319,7 +331,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
         maxima_bool[:, -1:] = False
 
     # Get indices, sorted by intensity
-    maxima_x, maxima_y = np.nonzero(maxima_bool)
+    maxima_x, maxima_y = cp.nonzero(maxima_bool)
     dtype = np.dtype([('x', float), ('y', float), ('intensity', float)])
     maxima = np.zeros(len(maxima_x), dtype=dtype)
     maxima['x'] = maxima_x
@@ -384,17 +396,4 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
 
     return maxima['x'], maxima['y'], maxima['intensity']
 
-def get_maximal_points_kernel(dtype):
-    """
-    For 2D cupy array cpar, returns an array of bools of the same shape which is True for all entries with
-    values larger than all 8 of their nearest neighbors. Writes into outarr if passed, else returns a
-    numpy boolean array. Input array must be float32 or float64 type.
-    """
-    if dtype == 'float64':
-        maxkernel = kernels['maximal_pts_float64']
-    elif dtype == 'float32':
-        maxkernel = kernels['maximal_pts_float32']
-    else:
-        raise TypeError("Maximal kernel only valid for float32 and float64 types...")
 
-    return cp.RawKernel(maxkernel,'maximal_pts')
