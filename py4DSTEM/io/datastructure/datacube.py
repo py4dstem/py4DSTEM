@@ -10,7 +10,8 @@ import numpy as np
 import numba as nb
 import h5py
 
-import numpy as np
+from ncempy.io import emd
+
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage_viewer as virtualimage
@@ -286,7 +287,15 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
         and returns a DataCube.
     """
-    # TODO: add memmapping, binning
+    # TODO: add binning
+    if mem == 'MEMMAP':
+        h5_filename = g.file.filename
+        with emd.fileEMD(h5_filename) as emdF:
+            emd_memmap = emdF.get_memmap(0)
+            dataset = emd_memmap[0]
+            mm = np.memmap(h5_filename, shape=dataset.shape, dtype=dataset.dtype, offset=dataset.id.get_offset())
+            name = dataset.parent.name.split('/')[-1]
+            return DataCube(data=mm, name=name)
     data = np.array(g['data'])
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
