@@ -15,6 +15,122 @@ from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
 
+def find_Bragg_disks_CUDA(datacube, probe,
+                          corrPower = 1,
+                          sigma = 2,
+                          edgeBoundary = 20,
+                          minRelativeIntensity = 0.005,
+                          relativeToPeak = 0,
+                          minPeakSpacing = 60,
+                          maxNumPeaks = 70,
+                          subpixel = 'multicorr',
+                          upsample_factor = 16,
+                          global_threshold = False,
+                          minGlobalIntensity = 0.005,
+                          metric = 'mean',
+                          filter_function = None,
+                          verbose = False,
+                          name = 'braggpeaks_raw',
+                          _qt_progress_bar = None):
+    """
+    Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
+    phase correlation with probe. When hist = True, returns histogram of intensities in
+    the entire datacube.
+
+    Args:
+        DP (ndarray): a diffraction pattern
+        probe (ndarray): the vacuum probe template, in real space.
+        corrPower (float between 0 and 1, inclusive): the cross correlation power. A
+             value of 1 corresponds to a cross correaltion, and 0 corresponds to a
+             phase correlation, with intermediate values giving various hybrids.
+        sigma (float): the standard deviation for the gaussian smoothing applied to
+             the cross correlation
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the brightest peak
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+             subpixel='multicorr')
+        global_threshold (bool): if True, applies global threshold based on
+            minGlobalIntensity and metric
+        minGlobalThreshold (float): the minimum allowed peak intensity, relative to the
+             selected metric (0-1), except in the case of 'manual' metric, in which the
+             threshold value based on the minimum intensity that you want thresholder
+             out should be set.
+        metric (string): the metric used to compare intensities. 'average' compares peak
+            intensity relative to the average of the maximum intensity in each
+            diffraction pattern. 'max' compares peak intensity relative to the maximum
+            intensity value out of all the diffraction patterns.  'median' compares peak
+            intensity relative to the median of the maximum intensity peaks in each
+            diffraction pattern. 'manual' Allows the user to threshold based on a
+            predetermined intensity value manually determined. In this case,
+            minIntensity should be an int.
+        verbose (bool): if True, prints completion updates
+        name (str): name for the returned PointListArray
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The
+            shape of the returned DP must match the shape of the probe kernel (but does
+            not need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        _qt_progress_bar (QProgressBar instance): used only by the GUI.
+
+    Returns:
+        (PointListArray): the Bragg peak positions and correlation intensities
+    """
+
+    # Make the peaks PointListArray
+    coords = [('qx',float),('qy',float),('intensity',float)]
+    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+
+    # check that the filtered DP is the right size for the probe kernel:
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
+    DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
+    assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
+
+    # Get the probe kernel FT
+    probe_kernel_FT = np.conj(np.fft.fft2(probe))
+
+    if _qt_progress_bar is not None:
+        from PyQt5.QtWidgets import QApplication
+
+    # Loop over all diffraction patterns
+    t0 = time()
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+        if _qt_progress_bar is not None:
+            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+            QApplication.processEvents()
+        DP = datacube.data[Rx,Ry,:,:]
+        _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
+                                      corrPower = corrPower,
+                                      sigma = sigma,
+                                      edgeBoundary = edgeBoundary,
+                                      minRelativeIntensity = minRelativeIntensity,
+                                      relativeToPeak = relativeToPeak,
+                                      minPeakSpacing = minPeakSpacing,
+                                      maxNumPeaks = maxNumPeaks,
+                                      subpixel = subpixel,
+                                      upsample_factor = upsample_factor,
+                                      filter_function = filter_function,
+                                      peaks = peaks.get_pointlist(Rx,Ry))
+    t = time()-t0
+    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
+                                                                   int(t/60), int(t%60)))
+    if global_threshold == True:
+        peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
+                                    maxNumPeaks)
+    peaks.name = name
+    return peaks
+
 def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                   corrPower = 1,
                                   sigma = 2,
