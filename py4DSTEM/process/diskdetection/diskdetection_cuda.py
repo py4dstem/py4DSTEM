@@ -9,7 +9,7 @@ __all__ = ['_find_Bragg_disks_single_DP_FK_CUDA']
 
 import numpy as np
 import cupy as cp
-from scipy.ndimage.filters import gaussian_filter
+from cupyx.scipy.ndimage import gaussian_filter
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
@@ -51,7 +51,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
 
      Accepts:
          DP                   (ndarray) a diffraction pattern
-         probe_kernel_FT      (ndarray) the vacuum probe template, in Fourier space. Related to the
+         probe_kernel_FT      (cparray) the vacuum probe template, in Fourier space. Related to the
                               real space probe kernel by probe_kernel_FT = F(probe_kernel)*, where F
                               indicates a Fourier Transform and * indicates complex conjugation.
          corrPower            (float between 0 and 1, inclusive) the cross correlation power. A

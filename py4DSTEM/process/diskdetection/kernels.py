@@ -1,8 +1,12 @@
+import cupy as cp
+
 __all__ = ['kernels']
 
 kernels = {}
 
-kernels['maximal_pts_float32'] = r'''
+
+############################# get_maximal_points ################################
+maximal_pts_float32 = r'''
 extern "C" __global__
 void maximal_pts(const float *ar, bool *out, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -24,7 +28,9 @@ void maximal_pts(const float *ar, bool *out, const long long sizex, const long l
 }
 '''
 
-kernels['maximal_pts_float64'] = r'''
+kernels['maximal_pts_float32'] = cp.RawKernel(maximal_pts_float32,'maximal_pts')
+
+maximal_pts_float64 = r'''
 extern "C" __global__
 void maximal_pts(const double *ar, bool *out, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -45,3 +51,5 @@ void maximal_pts(const double *ar, bool *out, const long long sizex, const long 
     }
 }
 '''
+
+kernels['maximal_pts_float64'] = cp.RawKernel(maximal_pts_float64,'maximal_pts')
