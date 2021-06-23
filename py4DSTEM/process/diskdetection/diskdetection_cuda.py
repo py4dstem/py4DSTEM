@@ -5,11 +5,11 @@ Functions for finding Braggdisks using cupy
 
 
 '''
-__all__ = ['_find_Bragg_disks_single_DP_FK_CUDA']
 
 import numpy as np
 import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
+from time import time
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
@@ -103,12 +103,13 @@ def find_Bragg_disks_CUDA(datacube, probe,
     probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
 
     # get the maximal array kernel
-    if probe_kernel_FT.dtype == 'float64':
-        get_maximal_points = kernels['maximal_pts_float64']
-    elif probe_kernel_FT.dtype == 'float32':
-        get_maximal_points = kernels['maximal_pts_float32']
-    else:
-        raise TypeError("Maximal kernel only valid for float32 and float64 types...")
+    #if probe_kernel_FT.dtype == 'float64':
+    #    get_maximal_points = kernels['maximal_pts_float64']
+    #elif probe_kernel_FT.dtype == 'float32':
+    #    get_maximal_points = kernels['maximal_pts_float32']
+    #else:
+    #    raise TypeError("Maximal kernel only valid for float32 and float64 types...")
+    get_maximal_points = kernels['maximal_pts_float64']
 
     if get_maximal_points.max_threads_per_block < DP.shape[1]:
         # naive blocks/threads will not work, figure out an OK distribution
@@ -231,7 +232,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
     # Perform any prefiltering
-    DP = cp.array(DP if filter_function is None else filter_function(DP))
+    DP = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
 
     # Get the cross correlation
     if subpixel in ('none','poly'):
@@ -252,7 +253,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                                  subpixel=subpixel,
                                                  ar_FT = ccc,
                                                  upsample_factor = upsample_factor,
-                                                 get_maximal_points=get_maximal_points)
+                                                 get_maximal_points=get_maximal_points,
+                                                 blocks=blocks, threads=threads)
 
     # Make peaks PointList
     if peaks is None:
@@ -293,7 +295,7 @@ def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval='cc'):
 
 def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
                   relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16,
-                  get_maximal_points=None):
+                  get_maximal_points=None,blocks=None,threads=None):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -329,7 +331,11 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
 
     # Get maxima
     ar = gaussian_filter(ar, sigma)
-    maxima_bool = get_maximal_points(ar)
+    maxima_bool = cp.zeros_like(ar,dtype=bool)
+    sizex = ar.shape[0]
+    sizey = ar.shape[1]
+    N = sizex*sizey
+    get_maximal_points(blocks,threads,(ar,maxima_bool,sizex,sizey,N))
 
     # Remove edges
     if edgeBoundary > 0:
@@ -346,10 +352,14 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
 
     # Get indices, sorted by intensity
     maxima_x, maxima_y = cp.nonzero(maxima_bool)
+    maxima_x = maxima_x.get()
+    maxima_y = maxima_y.get()
     dtype = np.dtype([('x', float), ('y', float), ('intensity', float)])
     maxima = np.zeros(len(maxima_x), dtype=dtype)
     maxima['x'] = maxima_x
     maxima['y'] = maxima_y
+
+    ar = ar.get()
     maxima['intensity'] = ar[maxima_x, maxima_y]
     maxima = np.sort(maxima, order='intensity')[::-1]
 
@@ -533,3 +543,14 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     imageUpsample = cp.real(rowKern @ imageCorr @ colKern)
     return imageUpsample
 
+def linear_interpolation_2D(ar, x, y):
+    """
+    Calculates the 2D linear interpolation of array ar at position x,y using the four
+    nearest array elements.
+    """
+    x0, x1 = int(np.floor(x)), int(np.ceil(x))
+    y0, y1 = int(np.floor(y)), int(np.ceil(y))
+    dx = x - x0
+    dy = y - y0
+    return (1 - dx) * (1 - dy) * ar[x0, y0] + (1 - dx) * dy * ar[x0, y1] + dx * (1 - dy) * ar[x1, y0] + dx * dy * ar[
+        x1, y1]
