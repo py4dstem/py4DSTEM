@@ -15,6 +15,8 @@ from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
 
+from pdb import set_trace
+
 def find_Bragg_disks_CUDA(datacube, probe,
                           corrPower = 1,
                           sigma = 2,
@@ -108,6 +110,14 @@ def find_Bragg_disks_CUDA(datacube, probe,
     else:
         raise TypeError("Maximal kernel only valid for float32 and float64 types...")
 
+    if get_maximal_points.max_threads_per_block < DP.shape[1]:
+        # naive blocks/threads will not work, figure out an OK distribution
+        blocks = ((np.prod(DP.shape)//get_maximal_points.max_threads_per_block + 1),)
+        threads = ((get_maximal_points.max_threads_per_block))
+    else:
+        blocks = (DP.shape[0],)
+        threads = (DP.shape[1],)
+
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
 
@@ -130,7 +140,9 @@ def find_Bragg_disks_CUDA(datacube, probe,
                                       upsample_factor = upsample_factor,
                                       filter_function = filter_function,
                                       peaks = peaks.get_pointlist(Rx,Ry),
-                                      get_maximal_points=get_maximal_points)
+                                      get_maximal_points = get_maximal_points,
+                                      blocks = blocks,
+                                      threads = threads)
     t = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
                                                                    int(t/60), int(t%60)))
@@ -153,7 +165,9 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                   filter_function = None,
                                   return_cc = False,
                                   peaks = None,
-                                  get_maximal_points=None):
+                                  get_maximal_points = None,
+                                  blocks = None,
+                                  threads = None):
     """
      Finds the Bragg disks in DP by cross, hybrid, or phase correlation with probe_kernel_FT.
 
@@ -226,7 +240,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
     # for multicorr subpixel fitting, we need both the real and complex cross correlation
     else:
         ccc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower, returnval='fourier')
-        cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
+        cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)),0)
 
     # Find the maxima
     maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
@@ -396,4 +410,126 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
 
     return maxima['x'], maxima['y'], maxima['intensity']
 
+
+def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
+    '''
+    Refine the correlation peak of imageCorr around xyShift by DFT upsampling.
+
+    There are two approaches to Fourier upsampling for subpixel refinement: (a) one
+    can pad an (appropriately shifted) FFT with zeros and take the inverse transform,
+    or (b) one can compute the DFT by matrix multiplication using modified
+    transformation matrices. The former approach is straightforward but requires
+    performing the FFT algorithm (which is fast) on very large data. The latter method
+    trades one speedup for a slowdown elsewhere: the matrix multiply steps are expensive
+    but we operate on smaller matrices. Since we are only interested in a very small
+    region of the FT around a peak of interest, we use the latter method to get
+    a substantial speedup and enormous decrease in memory requirement. This
+    "DFT upsampling" approach computes the transformation matrices for the matrix-
+    multiply DFT around a small 1.5px wide region in the original `imageCorr`.
+
+    Following the matrix multiply DFT we use parabolic subpixel fitting to
+    get even more precision! (below 1/upsampleFactor pixels)
+
+    NOTE: previous versions of multiCorr operated in two steps: using the zero-
+    padding upsample method for a first-pass factor-2 upsampling, followed by the
+    DFT upsampling (at whatever user-specified factor). I have implemented it
+    differently, to better support iterating over multiple peaks. **The DFT is always
+    upsampled around xyShift, which MUST be specified to HALF-PIXEL precision
+    (no more, no less) to replicate the behavior of the factor-2 step.**
+    (It is possible to refactor this so that peak detection is done on a Fourier
+    upsampled image rather than using the parabolic subpixel and rounding as now...
+    I like keeping it this way because all of the parameters and logic will be identical
+    to the other subpixel methods.)
+
+
+    Args:
+        imageCorr (complex valued ndarray):
+            Complex product of the FFTs of the two images to be registered
+            i.e. m = np.fft.fft2(DP) * probe_kernel_FT;
+            imageCorr = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
+        upsampleFactor (int):
+            Upsampling factor. Must be greater than 2. (To do upsampling
+            with factor 2, use upsampleFFT, which is faster.)
+        xyShift:
+            Location in original image coordinates around which to upsample the
+            FT. This should be given to exactly half-pixel precision to
+            replicate the initial FFT step that this implementation skips
+
+    Returns:
+        (2-element np array): Refined location of the peak in image coordinates.
+    '''
+
+    assert upsampleFactor > 2
+
+    xyShift[0] = np.round(xyShift[0] * upsampleFactor) / upsampleFactor
+    xyShift[1] = np.round(xyShift[1] * upsampleFactor) / upsampleFactor
+
+    globalShift = np.fix(np.ceil(upsampleFactor * 1.5)/2)
+
+    upsampleCenter = globalShift - upsampleFactor*xyShift
+
+    imageCorrUpsample = np.conj(dftUpsample(np.conj(imageCorr), upsampleFactor, upsampleCenter ))
+
+    xySubShift = np.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
+
+    # add a subpixel shift via parabolic fitting
+    try:
+        icc = np.real(imageCorrUpsample[xySubShift[0] - 1 : xySubShift[0] + 2, xySubShift[1] - 1 : xySubShift[1] + 2])
+        dx = (icc[2,1] - icc[0,1]) / (4 * icc[1,1] - 2 * icc[2,1] - 2 * icc[0,1])
+        dy = (icc[1,2] - icc[1,0]) / (4 * icc[1,1] - 2 * icc[1,2] - 2 * icc[1,0])
+    except:
+        dx, dy = 0, 0 # this is the case when the peak is near the edge and one of the above values does not exist
+
+    xySubShift = xySubShift - globalShift
+
+    xyShift = xyShift + (xySubShift + np.array([dx, dy])) / upsampleFactor
+
+    return xyShift
+
+
+def dftUpsample(imageCorr, upsampleFactor, xyShift):
+    '''
+    This performs a matrix multiply DFT around a small neighboring region of the inital
+    correlation peak. By using the matrix multiply DFT to do the Fourier upsampling, the
+    efficiency is greatly improved. This is adapted from the subfuction dftups found in
+    the dftregistration function on the Matlab File Exchange.
+
+    https://www.mathworks.com/matlabcentral/fileexchange/18401-efficient-subpixel-image-registration-by-cross-correlation
+
+    The matrix multiplication DFT is from:
+
+    Manuel Guizar-Sicairos, Samuel T. Thurman, and James R. Fienup, "Efficient subpixel
+    image registration algorithms," Opt. Lett. 33, 156-158 (2008).
+    http://www.sciencedirect.com/science/article/pii/S0045790612000778
+
+    Args:
+        imageCorr (complex valued ndarray):
+            Correlation image between two images in Fourier space.
+        upsampleFactor (int):
+            Scalar integer of how much to upsample.
+        xyShift (list of 2 floats):
+            Coordinates in the UPSAMPLED GRID around which to upsample.
+            These must be single-pixel IN THE UPSAMPLED GRID
+
+    Returns:
+        (ndarray):
+            Upsampled image from region around correlation peak.
+    '''
+    imageSize = imageCorr.shape
+    pixelRadius = 1.5
+    numRow = np.ceil(pixelRadius * upsampleFactor)
+    numCol = numRow
+
+    colKern = cp.exp(
+    (-1j * 2 * cp.pi / (imageSize[1] * upsampleFactor))
+    * cp.outer( (cp.fft.ifftshift( (cp.arange(imageSize[1])) ) - cp.floor(imageSize[1]/2)),  (cp.arange(numCol) - xyShift[1]))
+    )
+
+    rowKern = cp.exp(
+    (-1j * 2 * cp.pi / (imageSize[0] * upsampleFactor))
+    * cp.outer( (cp.arange(numRow) - xyShift[0]), (cp.fft.ifftshift(cp.arange(imageSize[0])) - cp.floor(imageSize[0]/2)))
+    )
+
+    imageUpsample = cp.real(rowKern @ imageCorr @ colKern)
+    return imageUpsample
 
