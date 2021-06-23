@@ -165,12 +165,12 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,s=s,
                                           pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
+                                          **kwargs)
                     else:
                         _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
                                           bordercolor=bc,x=x,y=y,
                                           pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
+                                          **kwargs)
                 elif _get_bordercolor:
                     bc = get_bordercolor(N)
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,
