@@ -6,6 +6,16 @@ kernels = {}
 
 
 ############################# get_maximal_points ################################
+
+"""
+These kernels are approximately 50x faster than the np.roll approach used in the CPU version,
+per my testing with 1024x1024 pixels and float64 on a Jetson Xavier NX.
+The boundary conditions are slightly different in this version, in that pixels on the edge
+of the frame are always false. This simplifies the indexing, and since in the Braggdisk 
+detection application an edgeBoundary is always applied in the case of subpixel detection, 
+this is not considered a problem. 
+"""
+
 maximal_pts_float32 = r'''
 extern "C" __global__
 void maximal_pts(const float *ar, bool *out, const long long sizex, const long long sizey, const long long N){
