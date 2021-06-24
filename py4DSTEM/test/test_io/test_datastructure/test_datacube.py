@@ -7,43 +7,32 @@ from tempfile import mkdtemp
 from shutil import rmtree
 
 from py4DSTEM.io.datastructure.datacube import get_datacube_from_grp
+from test_utils import create_EMD
 
 class Test(unittest.TestCase):
-
+    
     def setUp(self):
         self.tmpdir = mkdtemp()
-        self.h5_file = h5py.File(os.path.join(self.tmpdir, 'test.h5'), 'w')
-        (self.h5_file
-         .create_group('4DSTEM_experiment')
-         .create_group('data')
-         .create_group('datacubes')
-         .create_group('datacube_0')
-         .create_dataset('data', data=np.ones(shape=(2,2,3,3)), dtype='uint8')
-        )
-        self.datacube = self.h5_file['4DSTEM_experiment']['data']['datacubes']['datacube_0']
-        self.datacube.attrs.create('emd_group_type', 1)
-        dim1 = self.datacube.create_dataset('dim1', shape=(2,), dtype='uint8')
-        dim1.attrs.create('name', np.string_("R_x"))
-        dim1.attrs.create('units', np.string_("[pix]"))
-        dim2 = self.datacube.create_dataset('dim2', shape=(2,), dtype='uint8')
-        dim2.attrs.create('name', np.string_("R_y"))
-        dim2.attrs.create('units', np.string_("[pix]"))
-        dim3 = self.datacube.create_dataset('dim3', shape=(3,), dtype='uint8')
-        dim3.attrs.create('name', np.string_("Q_x"))
-        dim3.attrs.create('units', np.string_("[pix]"))
-        dim4 = self.datacube.create_dataset('dim4', shape=(3,), dtype='uint8')
-        dim4.attrs.create('name', np.string_("Q_y"))
-        dim4.attrs.create('units', np.string_("[pix]"))
+        self.contiguous_h5file, self.contiguous_datacube = create_EMD('test.h5', self.tmpdir)
+        self.chunked_h5file, self.chunked_datacube = create_EMD('test_chunked.h5', self.tmpdir, chunks=True)
         
-
-    def testH5Memmap(self):
-        memmap_datacube = get_datacube_from_grp(self.datacube, mem='MEMMAP')
-        ram_datacube = get_datacube_from_grp(self.datacube)
+    def test_contiguous_h5_memmap(self):
+        memmap_datacube = get_datacube_from_grp(self.contiguous_datacube, mem='MEMMAP')
+        ram_datacube = get_datacube_from_grp(self.contiguous_datacube)
+        print(memmap_datacube.data, ram_datacube.data)
+        self.assertTrue(np.array_equal(np.array(memmap_datacube.data), ram_datacube.data))
+        self.assertTrue(memmap_datacube.name == ram_datacube.name)
+        
+    @unittest.skip("Not yet")
+    def test_chunked_h5_memmap(self):
+        memmap_datacube = get_datacube_from_grp(self.chunked_datacube, mem='MEMMAP')
+        ram_datacube = get_datacube_from_grp(self.chunked_datacube)
         self.assertTrue(np.array_equal(memmap_datacube.data, ram_datacube.data))
         self.assertTrue(memmap_datacube.name == ram_datacube.name)
 
     def tearDown(self):
-        self.h5_file.close()
+        self.contiguous_h5file.close()
+        self.chunked_h5file.close()
         rmtree(self.tmpdir)
 
 
