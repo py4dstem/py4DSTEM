@@ -14,6 +14,7 @@ from time import time
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
+from .diskdetection import universal_threshold
 
 from pdb import set_trace
 
@@ -31,7 +32,6 @@ def find_Bragg_disks_CUDA(datacube, probe,
                           minGlobalIntensity = 0.005,
                           metric = 'mean',
                           filter_function = None,
-                          verbose = False,
                           name = 'braggpeaks_raw',
                           _qt_progress_bar = None):
     """
@@ -75,7 +75,6 @@ def find_Bragg_disks_CUDA(datacube, probe,
             diffraction pattern. 'manual' Allows the user to threshold based on a
             predetermined intensity value manually determined. In this case,
             minIntensity should be an int.
-        verbose (bool): if True, prints completion updates
         name (str): name for the returned PointListArray
         filter_function (callable): filtering function to apply to each diffraction
             pattern before peakfinding. Must be a function of only one argument (the
