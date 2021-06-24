@@ -290,12 +290,10 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     # TODO: add binning
     if mem == 'MEMMAP':
         h5_filename = g.file.filename
-        with emd.fileEMD(h5_filename) as emdF:
-            emd_memmap = emdF.get_memmap(0)
-            dataset = emd_memmap[0]
-            mm = np.memmap(h5_filename, shape=dataset.shape, dtype=dataset.dtype, offset=dataset.id.get_offset())
-            name = dataset.parent.name.split('/')[-1]
-            return DataCube(data=mm, name=name)
+        emdF = emd.fileEMD(h5_filename)
+        dataset, dims = emdF.get_memmap(0)
+        name = dataset.parent.name.split('/')[-1]
+        return DataCube(data=dataset, name=name, nothing=emdF)
     data = np.array(g['data'])
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
