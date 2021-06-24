@@ -63,3 +63,24 @@ void maximal_pts(const double *ar, bool *out, const long long sizex, const long 
 '''
 
 kernels['maximal_pts_float64'] = cp.RawKernel(maximal_pts_float64,'maximal_pts')
+
+
+
+################################ edge_boundary ######################################
+
+edge_boundary = r'''
+extern "C" __global__
+void edge_boundary(bool *ar, const long long edgeBoundary, 
+                const long long sizex, const long long sizey, const long long N){
+    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+    int x = tid % sizex;
+    int y = tid / sizey; // Floor divide
+    if (tid < N) {
+        if (x<edgeBoundary || x>(sizex-1-edgeBoundary) || y<edgeBoundary || y>(sizey-1-edgeBoundary)){
+            ar[tid] = false;
+        }
+    }
+}
+'''
+
+kernels['edge_boundary'] = cp.RawKernel(edge_boundary,'edge_boundary')
