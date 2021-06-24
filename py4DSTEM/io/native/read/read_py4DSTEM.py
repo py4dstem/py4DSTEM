@@ -16,41 +16,38 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
     File reader for py4DSTEM formated .h5 files.  Precise behavior is
     detemined by which arguments are passed -- see below.
 
-    Accepts:
-        filepath    (str or Path) When passed a filepath only, this function
-                    checks if the path points to a valid py4DSTEM file, then
-                    prints its contents to screen.
-        data_id     (int/str/list) Specifies which data to load. Use integers to
-                    specify the data index, or strings to specify data names. A
-                    list or tuple returns a list of DataObjects. Returns the
-                    specified data.
-        topgroup    (str) Stricty, a py4DSTEM file is considered to be everything
-                    inside a toplevel subdirectory within the HDF5 file, so that
-                    if desired one can place many py4DSTEM files inside a single
-                    H5.  In this case, when loading data, the topgroup argument
-                    is passed to indicate which py4DSTEM file to load. If an H5
-                    containing multiple py4DSTEM files is passed without a
-                    topgroup specified, the topgroup names are printed to screen.
-        metadata    (bool) If True, returns the metadata as a Metadata instance.
-        mem         (str) Only used if a single DataCube is loaded. In this case,
-                    mem specifies how the data should be stored; must be "RAM" or
-                    "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is
-                    "RAM".
-        binfactor   (int) Only used if a single DataCube is loaded. In this case,
-                    a binfactor of > 1 causes the data to be binned by this amount
-                    as it's loaded.
-        dtype       (dtype) Used when binning data, ignored otherwise. Defaults
-                    to whatever the type of the raw data is, to avoid enlarging
-                    data size. May be useful to avoid 'wraparound' errors.
+    Args:
+        filepath (str or pathlib.Path): When passed a filepath only, this function checks
+            if the path points to a valid py4DSTEM file, then prints its contents to
+            screen.
+        data_id (int/str/list, optional): Specifies which data to load. Use integers to
+            specify the data index, or strings to specify data names. A list or tuple
+            returns a list of DataObjects. Returns the specified data.
+        topgroup (str, optional:) Stricty, a py4DSTEM file is considered to be everything
+            inside a toplevel subdirectory within the HDF5 file, so that if desired one
+            can place many py4DSTEM files inside a single H5.  In this case, when loading
+            data, the topgroup argument is passed to indicate which py4DSTEM file to
+            load. If an H5 containing multiple py4DSTEM files is passed without a
+            topgroup specified, the topgroup names are printed to screen.
+        metadata (bool, optional) If True, returns the metadata as a Metadata instance.
+        mem (str, optional): Only used if a single DataCube is loaded. In this case,
+            mem specifies how the data should be stored; must be "RAM" or "MEMMAP". See
+            docstring for py4DSTEM.file.io.read. Default is "RAM".
+        binfactor (int, optional): Only used if a single DataCube is loaded. In this
+            case, a binfactor of > 1 causes the data to be binned by this amount as it's
+            loaded.
+        dtype (dtype, optional): Used when binning data, ignored otherwise. Defaults to
+            whatever the type of the raw data is, to avoid enlarging data size. May be
+            useful to avoid 'wraparound' errors.
 
     Returns:
-        data        Variable output.
-                    If no input arguments with return values (i.e. data_id or
-                    metadata) are passed, nothing is returned.
-                    If metadata==True, returns a Metadata instance with the file
-                    metadata.
-                    Otherwise, a single DataObject or list of DataObjects are
-                    returned, based on the value of the argument data_id.
+        (variable): The output depends on usage:
+
+            * If no input arguments with return values (i.e. data_id or metadata) are
+              passed, nothing is returned.
+            * If metadata==True, returns a Metadata instance with the file metadata.
+            * Otherwise, a single DataObject or list of DataObjects are returned, based
+              on the value of the argument data_id.
     """
     assert(exists(filepath)), "Error: specified filepath does not exist"
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)

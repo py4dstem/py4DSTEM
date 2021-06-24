@@ -10,17 +10,16 @@ def remove(filepath, data, topgroup='4DSTEM_experiment', delete=True):
     """
     Remove some subset of dataobjects from a py4DSTEM h5 file.
 
-    Accepts:
-        filepath        path to the py4DSTEM .h5 file
-        data            (int or list of ints) the index or indices or name of
-                        the DataObjects to remove.
-        topgroup        the toplevel group
-        delete          (bool) if True, fully remove objects from the file.
-                        Otherwise, just removes the links and names of these
-                        objects, without releasing the storage space. If you've
-                        already used delete=False and want to release the space,
-                        run io.native.repack(filepath). For more info, see the docstring
-                        for io.native.append.
+    Args:
+        filepath: path to the py4DSTEM .h5 file
+        data (int or list of ints): the index or indices or name of the DataObjects to
+            remove.
+        topgroup: the toplevel group
+        delete (bool): if True, fully remove objects from the file. Otherwise, just
+            removes the links and names of these objects, without releasing the storage
+            space. If you've already used ``delete=False`` and want to release the space,
+            run ``io.native.repack(filepath)``. For more info, see the docstring for
+            ``io.native.append``.
     """
     assert is_py4DSTEM_file(filepath), "filepath parameter must point to an existing py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(filepath)

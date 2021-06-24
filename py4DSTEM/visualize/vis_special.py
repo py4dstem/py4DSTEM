@@ -232,7 +232,8 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False
 
 def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=None,
                 bkgrd=True,show_cbars=('exx','eyy','exy','theta'),
-                titlesize=24,ticklabelsize=16,unitlabelsize=24,
+                bordercolor='k',borderwidth=1,
+                titlesize=24,ticklabelsize=16,ticknumber=5,unitlabelsize=24,
                 show_axes=True,axes_x0=0,axes_y0=0,xaxis_x=1,xaxis_y=0,axes_length=10,
                 axes_width=1,axes_color='r',xaxis_space='Q',labelaxes=True,QR_rotation=0,
                 axes_labelsize=12,axes_labelcolor='r',axes_plots=('exx'),cmap='RdBu_r',
@@ -273,10 +274,6 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
     ax12.set_title(r'$\epsilon_{yy}$',size=titlesize)
     ax21.set_title(r'$\epsilon_{xy}$',size=titlesize)
     ax22.set_title(r'$\theta$',size=titlesize)
-    ax11.axis('off')
-    ax12.axis('off')
-    ax21.axis('off')
-    ax22.axis('off')
 
     # Add black background
     if bkgrd:
@@ -308,8 +305,9 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
                                     ('left','right','left','right'),
                                     ('% ',' %','% ',r' $^\circ$')):
             if show_cbar:
-                cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,5,endpoint=True))
-                cb.ax.set_yticklabels(['{}'.format(val) for val in np.linspace(100*vmin,100*vmax,5,endpoint=True)],size=ticklabelsize)
+                cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,ticknumber,endpoint=True))
+                cb.ax.set_yticklabels(['{}'.format(val) \
+                    for val in np.round(np.linspace(100*vmin,100*vmax,ticknumber,endpoint=True)*100)/100],size=ticklabelsize)
                 cbax.yaxis.set_ticks_position(tickside)
                 cbax.set_ylabel(tickunits,size=unitlabelsize,rotation=0)
                 cbax.yaxis.set_label_position(tickside)
@@ -331,10 +329,21 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
                     ax_addaxes_QtoR(_ax,xaxis_x,xaxis_y,axes_length,axes_x0,axes_y0,QR_rotation,
                                     width=axes_width,color=axes_color,labelaxes=labelaxes,
                                     labelsize=axes_labelsize,labelcolor=axes_labelcolor)
+
+    # Add borders
+    if bordercolor is not None:
+        for ax in (ax11,ax12,ax21,ax22):
+            for s in ['bottom','top','left','right']:
+                ax.spines[s].set_color(bordercolor)
+                ax.spines[s].set_linewidth(borderwidth)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
     if not returnfig:
         plt.show()
         return
     else:
+        axs = ((ax11,ax12),(ax21,ax22))
         return fig,axs
 
 
