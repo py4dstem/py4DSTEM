@@ -17,6 +17,12 @@ from ...process import virtualimage_viewer as virtualimage
 from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
+    """
+    A class storing a single 4D STEM dataset.
+
+    Args:
+        data (ndarray): the data, in a 4D array of shape ``(R_Nx,R_Ny,Q_Nx,Q_Ny)``
+    """
 
     def __init__(self, data, **kwargs):
         """
@@ -24,7 +30,7 @@ class DataCube(DataObject):
         """
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)
-        self.data = data
+        self.data = data   #: the 4D dataset
 
         # Set shape
         assert (len(data.shape)==3 or len(data.shape)==4)
@@ -33,8 +39,11 @@ class DataCube(DataObject):
             self.R_Nx, self.R_Ny = self.R_N, 1
             self.set_scan_shape(self.R_Nx,self.R_Ny)
         else:
-            self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = data.shape
-            self.R_N = self.R_Nx*self.R_Ny
+            self.R_Nx = data.shape[0]  #: real space x pixels
+            self.R_Ny = data.shape[1]  #: real space y pixels
+            self.Q_Nx = data.shape[2]  #: diffraction space x pixels
+            self.Q_Ny = data.shape[3]  #: diffraction space y pixels
+            self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
 
         self.update_slice_parsers()
         # Set shape
@@ -51,6 +60,9 @@ class DataCube(DataObject):
     def set_scan_shape(self,R_Nx,R_Ny):
         """
         Reshape the data given the real space scan shape.
+
+        Args:
+            R_Nx,R_Ny (int): the scan shape
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()

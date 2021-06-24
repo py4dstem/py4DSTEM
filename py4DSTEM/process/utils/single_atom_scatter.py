@@ -3,13 +3,15 @@ import os
 
 class single_atom_scatter(object):
     """
-    This class calculates the composition averaged single atom scattering factor for a material.
-    The parameterization is based upon Lobato, Acta Cryst. (2014). A70, 636–649.
+    This class calculates the composition averaged single atom scattering factor for a
+    material. The parameterization is based upon Lobato, Acta Cryst. (2014). A70,
+    636–649.
 
     Elements is an 1D array of atomic numbers.
-    Composition is a 1D array, same length as elements, describing the average atomic composition
-    of the sample. If the Q_coords is a 1D array of Fourier coordinates, given in inverse Angstroms.
-    Units is a string of 'VA' or 'A', which returns the scattering factor in volt angtroms or in angstroms.
+    Composition is a 1D array, same length as elements, describing the average atomic
+    composition of the sample. If the Q_coords is a 1D array of Fourier coordinates,
+    given in inverse Angstroms. Units is a string of 'VA' or 'A', which returns the
+    scattering factor in volt angtroms or in angstroms.
     """
     def __init__(self,elements=None,composition=None,q_coords=None,units=None):
         self.elements = elements

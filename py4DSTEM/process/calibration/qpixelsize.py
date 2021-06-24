@@ -6,36 +6,40 @@ from py4DSTEM.process.utils import get_CoM
 
 def get_dq(q,d):
     """
-    Get dq, the size of the detector pixels in the diffraction plane, in inverse length units.
+    Get dq, the size of the detector pixels in the diffraction plane, in inverse length
+    units.
 
-    Accepts:
-        q       (number) a measured diffraction space distance, in pixels
-        d       (number) the known corresponding length, in *real space* length units
-                (e.g. in Angstroms)
+    Args:
+        q (number): a measured diffraction space distance, in pixels
+        d (number): the known corresponding length, in *real space* length units (e.g.
+            in Angstroms)
 
     Returns:
-        dq      (number) the detector pixel size
+        (number): the detector pixel size
     """
     return 1/(q*d)
 
 def get_dq_from_indexed_peaks(qs,hkl,a):
     """
-    Get dq, the size of the detector pixels in the diffraction plane, in inverse length units,
-    using a set of measured peak distances from the optic axis, their Miller indices, and the known
-    unit cell size.
+    Get dq, the size of the detector pixels in the diffraction plane, in inverse length
+    units, using a set of measured peak distances from the optic axis, their Miller
+    indices, and the known unit cell size.
 
-    Accepts:
-        qs      (array) the measured peak positions
-        hkl     (list/tuple of length-3 tuples) the Miller indices of the peak positions qs.
-                The length of qs and hkl must be the same.  To ignore any peaks, for this peak
-                set (h,k,l)=(0,0,0).
-        a       (number) the unit cell size
+    Args:
+        qs (array): the measured peak positions
+        hkl (list/tuple of length-3 tuples): the Miller indices of the peak positions qs.
+            The length of qs and hkl must be the same.  To ignore any peaks, for this
+            peak set (h,k,l)=(0,0,0).
+        a (number): the unit cell size
 
     Returns:
-        dq      (number) the detector pixel size
-        qs_fit  (array) the fit positions of the peaks
-        hkl_fit (list/tuple of length-3 tuples) the Miller indices of the fit peaks
-        mask    (array of bools) False wherever hkl[i]==(0,0,0)
+        (4-tuple): A 4-tuple containing:
+
+            * **dq**: *(number)* the detector pixel size
+            * **qs_fit**: *(array)* the fit positions of the peaks
+            * **hkl_fit**: *(list/tuple of length-3 tuples)* the Miller indices of the
+              fit peaks
+            * **mask**: *(array of bools)* False wherever hkl[i]==(0,0,0)
     """
     assert len(qs)==len(hkl), "qs and hkl must have same length"
 

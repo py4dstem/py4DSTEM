@@ -1,15 +1,16 @@
-# py4DSTEM: open source processing and analysis of 4D-STEM data
-[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
+![py4DSTEM logo](/images/py4DSTEM_logo.png)
 
-py4DSTEM is a python tool for analysis of four-dimensional scanning transimission electron microscopy (4D-STEM) data.
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
+
+For additional information beyond what's decribed below, please see:
+
+- [the py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html)
+- [our open access publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications
 
 
 ## What is 4D-STEM?
 
-In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of or, often, smaller than the atomic lattice spacings - and rastered across the surface of the sample.
-A two-dimensional image is then formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position.
-In 4D-STEM a pixellated detector is used, such that a 2D image of the diffraction plane is acquired at every raster position of the electron beam.
-A 4D-STEM scan thus results in a 4D data array.
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
 
 4D-STEM data is information rich.
@@ -29,12 +30,12 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 ## Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
-First, download and install Anaconda.  Instructions can be found at www.anaconda.com/download.
+First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
 Then open a terminal and run
 
 ```
 conda update conda
-conda create -n py4dstem python==3.7
+conda create -n py4dstem python==3.8
 conda activate py4dstem
 conda install pip
 pip install py4dstem
@@ -62,8 +63,10 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 
 ## Running the GUI
 
+**WARNING: the GUI is currently down. Thanks for you patience as we work through various bugs!**
+
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
-Our intention is to support many of these analyes through the GUI eventually.
+Our intention is to support many of these analyses through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
 Stay tuned for further developments!
 
@@ -120,6 +123,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * tqdm
 * requests
 
+
 ### Optional dependencies
 
 * ipyparallel
@@ -128,7 +132,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 
 ### Versioning
 
-v. 0.12.1
+v. 0.12.3
 
 
 
@@ -136,7 +140,7 @@ v. 0.12.1
 
 GNU GPLv3
 
-py4DSTEM is open source software distributed under a GPLv3 license.
+**py4DSTEM** is open source software distributed under a GPLv3 license.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
@@ -144,3 +148,4 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
+![TRI logo](/images/toyota_research_institute.png)

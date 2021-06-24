@@ -11,23 +11,24 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Read a digital micrograph 4D-STEM file.
 
-    Accepts:
-        fp          str or Path Path to the file
-        mem         (str) Specifies how the data should be stored; must be "RAM"
-                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
-                    is "RAM".
-        binfactor   (int) Bin the data, in diffraction space, as it's loaded. See
-                    docstring for py4DSTEM.file.io.read.  Default is 1.
-        metadata    (bool) iff True, returns the file metadata as a Metadata
-                    instance.
+    Args:
+        fp: str or Path Path to the file
+        mem (str, optional): Specifies how the data should be stored; must be "RAM",
+            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "RAM".
+        binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
+            See docstring for py4DSTEM.file.io.read.  Default is 1.
+        metadata (bool, optional): if True, returns the file metadata as a Metadata
+            instance.
 
     Returns:
-        data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
-                    iff metadata==True, returns the metadata as a Metadata instance
+        (variable): The return value depends on usage:
 
-                    Note that metadata is read either way - in the latter case ONLY
-                    metadata is read and returned, in the former case a DataCube
-                    is returned with the metadata attached at datacube.metadata
+            * if metadata==False, returns the 4D-STEM dataset as a DataCube
+            * if metadata==True, returns the metadata as a Metadata instance
+
+        Note that metadata is read either way - in the latter case ONLY
+        metadata is read and returned, in the former case a DataCube
+        is returned with the metadata attached at datacube.metadata
     """
     assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'

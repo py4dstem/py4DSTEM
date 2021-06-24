@@ -9,19 +9,20 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
     braggpeak positions which have been centered about the origin. In the returned array
     braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity', the
+            default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (ndarray): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = peaks.data['qx'][i]+qx0
@@ -36,19 +37,20 @@ def get_bragg_vector_maxima_map(braggpeaks, Q_Nx, Q_Ny):
     given braggpeak positions which have been centered about the origin. In the returned
     array braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
+            the default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (2D ndarray, shape (Q_Nx,Q_Ny)) the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = int(np.round(peaks.data['qx'][i]))+qx0
@@ -64,21 +66,22 @@ def get_weighted_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, weights):
     at each scan position according to the array weights. In the returned array
     braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
-        weights             (2D array) The shape of weights must be (R_Nx,R_Ny)
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
+            the default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (int): the size of diffraction space in pixels
+        weights (2D array): The shape of weights must be (R_Nx,R_Ny)
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
     assert weights.shape == braggpeaks.shape, "weights must have shape (R_Nx,R_Ny)"
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
     qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
             for i in range(peaks.length):
@@ -96,18 +99,19 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
     Calculates the Bragg vector map from a PointListArray of Bragg peak positions, where
     the peak positions have not been centered.
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
+            the default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = peaks.data['qx'][i]
@@ -121,18 +125,19 @@ def get_bragg_vector_maxima_map_raw(braggpeaks, Q_Nx, Q_Ny):
     Calculates the Bragg vector maxima map from a PointListArray of Bragg peak positions,
     where the peak positions have not been centered.
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
+            the default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         peaks = braggpeaks.get_pointlist(Rx,Ry)
         for i in range(peaks.length):
             qx = int(np.round(peaks.data['qx'][i]))
@@ -144,23 +149,24 @@ def get_bragg_vector_maxima_map_raw(braggpeaks, Q_Nx, Q_Ny):
 def get_weighted_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, weights):
     """
     Calculates the Bragg vector map from a PointListArray of Bragg peak positions, where
-    the peak positions have not been centered, and weighting the peaks at each scan position
-    according to the array weights.
+    the peak positions have not been centered, and weighting the peaks at each scan
+    position according to the array weights.
 
-    Accepts:
-        braggpeaks          (PointListArray) Must have the coords 'qx','qy','intensity',
-                            the default coordinates from the bragg peak detection fns
-        Q_Nx,Q_Ny           (ints) the size of diffraction space in pixels
-        weights             (2D array) The shape of weights must be (R_Nx,R_Ny)
+    Args:
+        braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
+            the default coordinates from the bragg peak detection fns
+        Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
+        weights (2D array): The shape of weights must be (R_Nx,R_Ny)
 
     Returns:
-        braggvectormap      (2D ndarray, shape (Q_Nx,Q_Ny))
+        (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
     """
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
     assert weights.shape == braggpeaks.shape, "weights must have shape (R_Nx,R_Ny)"
 
     braggvectormap = np.zeros((Q_Nx,Q_Ny))
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
+                           desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
             for i in range(peaks.length):
