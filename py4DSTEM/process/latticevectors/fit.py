@@ -13,8 +13,9 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     Args:
         braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
             Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
-            weighting factor when fitting), 'h','k' (indexing) and 'index_mask' (bool
-            indicating if the peak has been indexed)
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
         x0 (float): x-coord of the origin
         y0 (float): y-coord of the origin
         minNumPeaks (int): if there are fewer than minNumPeaks peaks found in braggpeaks
@@ -32,12 +33,11 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
             * **error**: *(float)* the fit error
     """
     assert isinstance(braggpeaks, PointList)
-    # assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
     assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
     braggpeaks = braggpeaks.copy()
 
     # Remove unindexed peaks
-    if 'index_mask' in braggpeaks.data:
+    if 'index_mask' in braggpeaks.dtype.names:
         deletemask = braggpeaks.data['index_mask'] == False
         braggpeaks.remove_points(deletemask)
 
@@ -76,10 +76,11 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     known (h,k) indexing.
 
     Args:
-        braggpeaks (PointList): A 6 coordinate PointListArray containing the data to fit.
+        braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
             Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
-            weighting factor when fitting), 'h','k' (indexing) and 'index_mask' (bool
-            indicating if the peak has been indexed)
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
         x0 (float): x-coord of the origin
         y0 (float): y-coord of the origin
         minNumPeaks (int): if there are fewer than minNumPeaks peaks found in braggpeaks
@@ -99,7 +100,6 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
               fits
     """
     assert isinstance(braggpeaks, PointListArray)
-    # assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
     assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
 
     # Make RealSlice to contain outputs
@@ -130,10 +130,11 @@ def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
     to a scan position for which mask==True.
 
     Args:
-        braggpeaks (PointList): A 6 coordinate PointListArray containing the data to fit.
+        braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
             Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
-            weighting factor when fitting), 'h','k' (indexing) and 'index_mask' (bool
-            indicating if the peak has been indexed)
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
         mask (boolean array): real space shaped (R_Nx,R_Ny); fit lattice vectors where
             mask is True
         x0 (float): x-coord of the origin
