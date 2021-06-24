@@ -404,8 +404,7 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
         # Further refinement with fourier upsampling
         if subpixel == 'multicorr':
-            if ar_FT is None:
-                ar_FT = np.fft.fft2(ar)
+            ar_FT = cp.conj(ar_FT)
             for ipeak in range(len(maxima['x'])):
                 xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
                 # we actually have to lose some precision and go down to half-pixel
@@ -478,7 +477,7 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     upsampleCenter = globalShift - upsampleFactor*xyShift
 
-    imageCorrUpsample = np.conj(dftUpsample(np.conj(imageCorr), upsampleFactor, upsampleCenter ))
+    imageCorrUpsample = cp.conj(dftUpsample(imageCorr, upsampleFactor, upsampleCenter )).get()
 
     xySubShift = np.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
 
