@@ -368,7 +368,7 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
         ar = gaussian_filter(ar, sigma)
 
     # Get maxima and intensity arrays
-    maxima_bool = (ar > np.roll(ar, -1)) & (ar > np.roll(ar, +1))
+    maxima_bool = np.logical_and((ar > np.roll(ar, -1)) , (ar >= np.roll(ar, +1)))
     x = np.arange(len(ar))[maxima_bool]
     intensity = ar[maxima_bool]
 

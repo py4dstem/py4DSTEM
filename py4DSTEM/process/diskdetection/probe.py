@@ -9,7 +9,7 @@
 # normalizing.
 
 import numpy as np
-from scipy.ndimage.morphology import binary_opening, binary_dilation
+from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt
 from ..utils import get_shifted_ar, get_shift, tqdmnd
 from ..calibration import get_probe_size
 
@@ -41,6 +41,7 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
     Returns:
         (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)): the average probe
     """
+
     probe = datacube.data[0,0,:,:]
     for n in tqdmnd(range(1,datacube.R_N)):
         Rx,Ry = np.unravel_index(n,datacube.data.shape[:2])
@@ -54,10 +55,10 @@ def get_probe_from_vacuum_4Dscan(datacube, mask_threshold=0.2,mask_expansion=12,
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
-
 
 def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=12,
                               mask_opening=3,verbose=False,align=True,DP_mask=1):
@@ -98,7 +99,8 @@ def get_probe_from_4Dscan_ROI(datacube, ROI, mask_threshold=0.2,mask_expansion=1
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
 
@@ -133,7 +135,8 @@ def get_probe_from_vacuum_3Dstack(data, mask_threshold=0.2,
 
     mask = probe > np.max(probe)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return probe*mask
 
@@ -163,7 +166,8 @@ def get_probe_from_vacuum_2Dimage(data, mask_threshold=0.2,
     """
     mask = data > np.max(data)*mask_threshold
     mask = binary_opening(mask, iterations=mask_opening)
-    mask = binary_dilation(mask, iterations=mask_expansion)
+    mask = binary_dilation(mask, iterations=1)
+    mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / mask_expansion, 1))**2
 
     return data*mask
 
@@ -274,7 +278,7 @@ def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
+def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared'):
     """
     Creates a convolution kernel from an average probe, subtracting an annular trench
     about the probe such that the kernel integrates to zero, then shifting the center of
@@ -287,10 +291,13 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
         origin (2-tuple or None): if None (default), finds the origin using
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying the
             origin position
+        type (string): must be 'logistic' or 'sine_squared'
 
     Returns:
         (ndarray): the convolution kernel corresponding to the probe
     """
+    valid_types = ('logistic','sine_squared')
+    assert(type in valid_types), "type must be in {}".format(valid_types)
     Q_Nx, Q_Ny = probe.shape
 
     # Get CoM
@@ -304,9 +311,17 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None):
     qr = np.sqrt((qx-xCoM)**2 + (qy-yCoM)**2)
 
     # Calculate sigmoid
-    r0 = 0.5*(ro+ri)
-    sigma = 0.25*(ro-ri)
-    sigmoid = 1/(1+np.exp((qr-r0)/sigma))
+    if type == 'logistic':
+        r0 = 0.5*(ro+ri)
+        sigma = 0.25*(ro-ri)
+        sigmoid = 1/(1+np.exp((qr-r0)/sigma))
+    elif type == 'sine_squared':
+        sigmoid = (qr - ri) / (ro - ri)
+        sigmoid = np.minimum(np.maximum(sigmoid, 0.0), 1.0)
+        sigmoid = np.cos((np.pi/2)*sigmoid)**2
+    else:
+        raise Exception("type must be in {}".format(valid_types))
+
 
     # Normalize to one, then subtract off logistic annulus, yielding kernel which
     # integrates to zero
