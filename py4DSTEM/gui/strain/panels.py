@@ -208,15 +208,15 @@ class VacuumDCTab(QtWidgets.QWidget):
 			self.lineEdit_LoadFile.setText(fname)
 			# check the load mode and load file:
 			if self.loadRadioAuto.isChecked():
-				self.main_window.strain_window.vac_datacube,_ = read(fname)
+				self.main_window.strain_window.vac_datacube = read(fname)
 				if binning > 1:
 					self.main_window.strain_window.vac_datacube.bin_data_diffraction(binning)
 			elif self.loadRadioMMAP.isChecked():
-				self.main_window.strain_window.vac_datacube,_ = read(fname, load='dmmmap')
+				self.main_window.strain_window.vac_datacube = read(fname, load='dmmmap')
 				if binning > 1:
 					self.main_window.strain_window.vac_datacube.bin_data_mmap(binning)
 			elif self.loadRadioGatan.isChecked():
-				self.main_window.strain_window.vac_datacube,_ = read(fname, load='gatan_bin')
+				self.main_window.strain_window.vac_datacube = read(fname, load='gatan_bin')
 				if binning > 1:
 					self.main_window.strain_window.vac_datacube.bin_data_mmap(binning)
 

@@ -320,9 +320,9 @@ class DataViewer(QtWidgets.QMainWindow):
             if is_py4DSTEM_file(fname):
                 self.datacube = datacube_selector(fname)
             else:
-                self.datacube,_ = read(fname, mem="MEMMAP")
+                self.datacube = read(fname, mem="MEMMAP")
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
-            self.datacube,_ = read(fname, ft='gatan_bin')
+            self.datacube = read(fname, ft='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
