@@ -3,13 +3,16 @@
 # Created on Tue Jan 15 13:06:03 2019
 # @author: percius
 # Edited on 20190409 by bsavitzky and rdhall
-# Edited on 20210611 by sez
+# Edited on 20210628 by sez
 
 import numpy as np
 from pathlib import Path
+from ..datastructure import DataCube
+from ...process.utils import bin2D, tqdmnd
 
+from pdb import set_trace
 
-def read_empad(filename):
+def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Reads the EMPAD file at filename, returning a numpy array.
 
@@ -27,6 +30,9 @@ def read_empad(filename):
         data        (ndarray) the 4D datacube, including the metadata.
                     raw data only can be accessed data[:,:,:128,:]
     """
+
+    assert not metadata, "EMPAD files do not support reading metadata."
+
     row = 130
     col = 128
     fPath = Path(filename)
@@ -41,12 +47,37 @@ def read_empad(filename):
     # Get the scan shape
     shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
     shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
-    kShape = shape0[2:4]  # detector shape
+    # kShape = shape0[2:4]  # detector shape (should always be row x col)
     rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
 
-    # Load the full data set
-    with open(fPath, "rb") as fid:
-        data = np.fromfile(fid, np.float32)
-        data = np.reshape(data, (int(rShape[0]), int(rShape[1]), row, col))
+    data_shape = (int(rShape[0]), int(rShape[1]), row, col)
 
-    return data
+    if (mem, binfactor) == ("RAM", 1):
+        with open(fPath, "rb") as fid:
+            data = np.fromfile(fid, np.float32).reshape(data_shape)[:,:,:128,:]
+
+    elif (mem, binfactor) == ("MEMMAP", 1):
+        data = np.memmap(fPath, dtype=np.float32, mode='r', shape=data_shape)[:,:,:128,:]
+    elif (mem) == ("RAM"):
+        # binned read into RAM
+        memmap = np.memmap(fPath, dtype=np.float32, mode='r', shape=data_shape)[:,:,:128,:]
+        R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
+        Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
+        data = np.zeros((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=np.float32)
+        for Rx,Ry in tqdmnd(R_Nx,R_Ny,desc="Binning data",unit="DP",unit_scale=True):
+            data[Rx, Ry, :, :] = bin2D(
+                memmap[Rx, Ry, :, :,], binfactor, dtype=np.float32
+            )
+    else:
+        # memory mapping + bin-on-load is not supported
+        raise Exception(
+            "Memory mapping and on-load binning together is not supported.  Either set binfactor=1 or mem='RAM'."
+        )
+        return
+
+
+    return DataCube(data=data)
+
+
+
+
