@@ -4,11 +4,11 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..gui_utils import pg_point_roi
-from ...process.diskdetection import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_subtrgaussian
+from ...process.diskdetection.probe import get_probe_from_vacuum_4Dscan, get_probe_kernel, get_probe_kernel_edge_gaussian
 from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
 from ...process.diskdetection import get_bragg_vector_map
 from ...process.fit import fit_2D, plane, parabola
-from ...process.calibration import get_diffraction_shifts, shift_braggpeaks
+from ...process.calibration.origin import get_origin_from_braggpeaks, center_braggpeaks
 from skimage.transform import radon
 from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
 from scipy.ndimage.filters import gaussian_filter
@@ -349,7 +349,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
         DP_mask = np.reshape(DP_mask,(dc.Q_Nx,dc.Q_Ny))
 
         # generate the prpbe kernel and update views
-        self.probe = get_probe_from_4Dscan_ROI(dc,RS_mask,mask_threshold=mask_threshold,\
+        self.probe = get_probe_from_vacuum_4Dscan(dc,RS_mask,mask_threshold=mask_threshold,\
             mask_expansion=mask_expansion,mask_opening=mask_opening,verbose=True, DP_mask=DP_mask)
 
         # get an alias to the probe kernel display pane
@@ -359,7 +359,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
         pkdisplay.probe_kernel_view.autoRange()
 
         if use_gaussian:
-            self.probe_kernel = get_probe_kernel_subtrgaussian(self.probe, sigma_probe_scale=gaussian_scale)
+            self.probe_kernel = get_probe_kernel_edge_gaussian(self.probe, sigma_probe_scale=gaussian_scale)
         else:
             self.probe_kernel = get_probe_kernel(self.probe)
 
@@ -973,7 +973,7 @@ class LatticeVectorTab(QtWidgets.QWidget):
         dc = self.main_window.datacube
 
         if self.main_window.strain_window.bragg_peaks_accepted :
-            xshifts, yshifts, bvm_center = get_diffraction_shifts(self.main_window.strain_window.braggdisks,
+            xshifts, yshifts, bvm_center = get_origin_from_braggpeaks(self.main_window.strain_window.braggdisks,
                 dc.Q_Nx,dc.Q_Ny)
 
             if self.settings_pane.shifts_use_fits_checkbox.isChecked():
@@ -991,7 +991,7 @@ class LatticeVectorTab(QtWidgets.QWidget):
                 xshifts_fit = xshifts
                 yshifts_fit = yshifts
 
-            self.main_window.strain_window.braggdisks_corrected = shift_braggpeaks(self.main_window.strain_window.braggdisks, xshifts_fit, yshifts_fit)
+            self.main_window.strain_window.braggdisks_corrected = center_braggpeaks(self.main_window.strain_window.braggdisks, xshifts_fit, yshifts_fit)
             self.main_window.strain_window.braggdisks_corrected.name = 'braggpeaks_shiftcorrected'
 
             BVM = get_bragg_vector_map(self.main_window.strain_window.braggdisks_corrected,
