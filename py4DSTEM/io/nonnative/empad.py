@@ -79,7 +79,7 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
             R_Nx, R_Ny, desc="Binning data", unit="DP", unit_scale=True
         ):
             data[Rx, Ry, :, :] = bin2D(
-                memmap[Rx, Ry, :, :,], binfactor, dtype=np.float32
+                memmap[Rx, Ry, :, :], binfactor, dtype=np.float32
             )
     else:
         # memory mapping + bin-on-load is not supported
