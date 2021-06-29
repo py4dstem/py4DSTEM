@@ -12,6 +12,7 @@ from ...process.utils import bin2D, tqdmnd
 
 from pdb import set_trace
 
+
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Reads the EMPAD file at filename, returning a numpy array.
@@ -31,7 +32,13 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
                     raw data only can be accessed data[:,:,:128,:]
     """
 
-    assert not metadata, "EMPAD files do not support reading metadata."
+    # fmt: off
+    assert(isinstance(filename, (str, Path))), "Error: filepath fp must be a string or pathlib.Path"
+    assert(mem in ['RAM', 'MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(isinstance(binfactor, int)), "Error: argument binfactor must be an integer"
+    assert(binfactor >= 1), "Error: binfactor must be >= 1"
+    assert(metadata is False), "Error: EMPAD Reader does not support metadata."
+    # fmt: on
 
     row = 130
     col = 128
@@ -54,17 +61,23 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
 
     if (mem, binfactor) == ("RAM", 1):
         with open(fPath, "rb") as fid:
-            data = np.fromfile(fid, np.float32).reshape(data_shape)[:,:,:128,:]
+            data = np.fromfile(fid, np.float32).reshape(data_shape)[:, :, :128, :]
 
     elif (mem, binfactor) == ("MEMMAP", 1):
-        data = np.memmap(fPath, dtype=np.float32, mode='r', shape=data_shape)[:,:,:128,:]
+        data = np.memmap(fPath, dtype=np.float32, mode="r", shape=data_shape)[
+            :, :, :128, :
+        ]
     elif (mem) == ("RAM"):
         # binned read into RAM
-        memmap = np.memmap(fPath, dtype=np.float32, mode='r', shape=data_shape)[:,:,:128,:]
+        memmap = np.memmap(fPath, dtype=np.float32, mode="r", shape=data_shape)[
+            :, :, :128, :
+        ]
         R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
         Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
         data = np.zeros((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=np.float32)
-        for Rx,Ry in tqdmnd(R_Nx,R_Ny,desc="Binning data",unit="DP",unit_scale=True):
+        for Rx, Ry in tqdmnd(
+            R_Nx, R_Ny, desc="Binning data", unit="DP", unit_scale=True
+        ):
             data[Rx, Ry, :, :] = bin2D(
                 memmap[Rx, Ry, :, :,], binfactor, dtype=np.float32
             )
@@ -75,9 +88,4 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
         )
         return
 
-
     return DataCube(data=data)
-
-
-
-
