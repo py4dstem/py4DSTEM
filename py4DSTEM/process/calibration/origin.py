@@ -7,6 +7,7 @@ from scipy.optimize import leastsq
 from ..fit import plane,parabola,bezier_two,fit_2D
 from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
 from ...io.datastructure import PointListArray
+from ..diskdetection.braggvectormap import get_bragg_vector_map
 
 
 ### Functions for finding the origin

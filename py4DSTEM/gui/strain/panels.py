@@ -4,13 +4,13 @@ import pyqtgraph as pg
 from ..dialogs import SectionLabel
 import numpy as np
 from ..gui_utils import pg_point_roi
-from ...process.diskdetection.probe import get_probe_from_vacuum_4Dscan, get_probe_kernel, get_probe_kernel_edge_gaussian
+from ...process.diskdetection.probe import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_edge_gaussian
 from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
 from ...process.diskdetection import get_bragg_vector_map
 from ...process.fit import fit_2D, plane, parabola
 from ...process.calibration.origin import get_origin_from_braggpeaks, center_braggpeaks
 from skimage.transform import radon
-from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice
+from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice, add_indices_to_braggpeaks
 from scipy.ndimage.filters import gaussian_filter
 from ...io.datastructure import PointList
 from .cmaptopg import cmapToColormap
@@ -349,7 +349,7 @@ class ProkeKernelSettings(QtWidgets.QGroupBox):
         DP_mask = np.reshape(DP_mask,(dc.Q_Nx,dc.Q_Ny))
 
         # generate the prpbe kernel and update views
-        self.probe = get_probe_from_vacuum_4Dscan(dc,RS_mask,mask_threshold=mask_threshold,\
+        self.probe = get_probe_from_4Dscan_ROI(dc,RS_mask,mask_threshold=mask_threshold,\
             mask_expansion=mask_expansion,mask_opening=mask_opening,verbose=True, DP_mask=DP_mask)
 
         # get an alias to the probe kernel display pane
@@ -503,7 +503,6 @@ class BraggDiskTab(QtWidgets.QWidget):
                 maxNumPeaks=settings.max_num_peaks_spinBox.value(),
                 subpixel=subpixel,
                 upsample_factor=settings.upsample_factor_spinBox.value(),
-                verbose=True,
                 _qt_progress_bar=self.bragg_disk_control_box.bragg_peak_progressbar)
 
             self.main_window.strain_window.braggdisks.name='braggpeaks_uncorrected'
@@ -828,10 +827,13 @@ class LatticeVectorTab(QtWidgets.QWidget):
         maxPeaksSpacing = self.settings_pane.map_max_peak_spacing_spinBox.value()
         minNumberPeaks = self.settings_pane.map_min_num_peaks_spinBox.value()
 
+        self.main_window.strain_window.braggdisks_corrected = add_indices_to_braggpeaks(
+            self.main_window.strain_window.braggdisks_corrected, self.ideal_lattice,
+            maxPeaksSpacing)
+
         # now generate the uv maps
         self.main_window.strain_window.uv_map = fit_lattice_vectors_all_DPs(
-            self.main_window.strain_window.braggdisks_corrected,
-            self.ideal_lattice, self.x0, self.y0, maxPeaksSpacing, minNumberPeaks)
+            self.main_window.strain_window.braggdisks_corrected, self.x0, self.y0, minNumberPeaks)
 
         self.main_window.strain_window.BVMDS = DiffractionSlice(data=self.main_window.strain_window.BVM)
         self.main_window.strain_window.BVMDS.name = 'braggvectormap'
@@ -1330,7 +1332,7 @@ class StrainMapTab(QtWidgets.QWidget):
             mask[slice_x,slice_y] = True
 
             self.main_window.strain_window.strain_map = get_strain_from_reference_region(
-                mask, self.main_window.strain_window.uv_map)
+                self.main_window.strain_window.uv_map, mask)
 
             sm = self.main_window.strain_window.strain_map
 
