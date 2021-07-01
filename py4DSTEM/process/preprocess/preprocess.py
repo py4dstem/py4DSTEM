@@ -8,7 +8,7 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
-from ..utils import bin2D
+from ..utils import bin2D, tqdmnd
 
 ### Editing datacube shape ###
 
@@ -111,19 +111,17 @@ def bin_data_diffraction(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
-def bin_data_mmap(datacube, bin_factor):
+def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
     """
     Performs diffraction space binning of data by bin_factor.
 
-    Note that this function casts data
     """
     assert type(bin_factor) is int, "Error: binning factor {} is not an int.".format(bin_factor)
     R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny
 
-    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype=np.float64)
-    for Rx in range(datacube.R_Nx):
-        for Ry in range(datacube.R_Ny):
-            data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=np.float64)
+    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype=dtype)
+    for Rx, Ry in tqdmnd(datacube.R_Ny, datacube.R_Ny):
+        data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=dtype)
 
     datacube.data = data
     datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
