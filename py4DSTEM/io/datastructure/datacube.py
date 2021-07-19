@@ -286,8 +286,13 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
         and returns a DataCube.
     """
-    # TODO: add memmapping, binning
-    data = np.array(g['data'])
+    assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
+
+    if (mem, binfactor) == ("RAM", 1):
+        data = np.array(g['data'])
+    elif (mem, binfactor) == ("MEMMAP", 1):
+        data = g['data']
+    
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
 
