@@ -34,11 +34,11 @@ def datacube_selector(fp, data_id=0):
             return names,indices
     if N_dc == 1:
         i = inds[0]
-        dc,_ = read_py4DSTEM(fp, data_id=i)
+        dc = read_py4DSTEM(fp, data_id=i)
         return dc
     elif N_dc > 1:
         assert(data_id in inds), "No datacube found at index {}.".format(data_id)
-        dc,_ = read_py4DSTEM(fp, data_id=data_id)
+        dc = read_py4DSTEM(fp, data_id=data_id)
         return dc
     else:
         print("No datacubes found in this file.")
@@ -55,7 +55,7 @@ def datacube_selector_dialog(fpath,window):
 
     if N_dc == 1:
         ind = inds[0]
-        dc,_ = read_py4DSTEM(fpath, data_id=ind)
+        dc = read_py4DSTEM(fpath, data_id=ind)
     elif N_dc > 1:
         # there is more than one object, so we need to present the user with a chooser
         #indices = (self.dataobject_lookup_arr=='DataCube' | 
