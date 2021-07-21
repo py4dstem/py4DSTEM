@@ -360,7 +360,7 @@ def find_Bragg_disks_serial(datacube, probe,
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
-    assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
+    #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
     # Get the probe kernel FT
     probe_kernel_FT = np.conj(np.fft.fft2(probe))
