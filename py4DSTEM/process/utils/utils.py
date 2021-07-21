@@ -607,3 +607,66 @@ def get_ewpc_filter_function(Q_Nx, Q_Ny):
     h = np.hanning(Q_Nx)[:,np.newaxis] * np.hanning(Q_Ny)[np.newaxis,:]
     return lambda x: np.abs(np.fft.fftshift(np.fft.fft2(h*np.log(np.maximum(x,0.01)))))**2
 
+
+
+def fourier_resample(array, scale, dtype=np.float32):
+    """
+    Resize an array along any dimension, using Fourier interpolation / extrapolation.
+    Note that if you pass in a 4D array, but only provide 1 or 2 
+
+    Args:
+        array (2D/4D numpy array):
+        scale (float): the scaling factor for each dimension
+        dtype (numpy dtype): datatype for binned array. default is single precision float.
+
+    Returns:
+        the resized array (2D/4D numpy array)
+    """
+    scale = np.asarray(scale)
+    array_size = array.shape
+
+    if len(array_size) == 2:
+        # image array
+        new_size = (array_size * scale).astype('int64')
+
+        if scale > 1:
+            array_fft = np.fft.fft2(array)
+
+            array_resize = np.zeros(new_size, dtype=np.complex64)
+
+            array_resize[0:array_size[0]//2, 
+                0:array_size[1]//2] = \
+                array_fft[0:array_size[0]//2,
+                0:array_size[1]//2]
+
+            array_resize[
+                1-array_size[0]//2+new_size[0]:new_size[0], 
+                0:array_size[1]//2]  = \
+                array_fft[1-array_size[0]//2+array_size[0]:array_size[0], 
+                0:array_size[1]//2]
+
+            array_resize[0:array_size[0]//2,
+                1-array_size[1]//2+new_size[1]:new_size[1]] = \
+                array_fft[0:array_size[0]//2, 
+                1-array_size[1]//2+array_size[1]:array_size[1]]
+
+            array_resize[
+                1-array_size[0]//2+new_size[0]:new_size[0], 
+                1-array_size[1]//2+new_size[1]:new_size[1]] = \
+                array_fft[1-array_size[0]//2+array_size[0]:array_size[0], 
+                1-array_size[1]//2+array_size[1]:array_size[1]]
+
+            # Back to real space
+            array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
+
+            if len(scale) == 1:
+                array_resize = array_resize * scale**2
+            elif:
+                array_resize = array_resize * np.prod(scale)
+
+    elif len(array_size) == 4:
+        # four dimensional array
+        new_size = array_size * np.array((1, 1, scale, scale))
+
+
+    return array_resize
