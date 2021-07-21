@@ -281,7 +281,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
             * **error**: *(1D array)* the error - RMSD of the phase gradients compared
               to the CoM - at each iteration step
     """
-    assert isinstance(flip,bool)
+    assert isinstance(flip,(bool,np.bool_))
     assert isinstance(paddingfactor,(int,np.integer))
     assert isinstance(n_iter,(int,np.integer))
 
