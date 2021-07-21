@@ -2,6 +2,7 @@
 
 import numpy as np
 from ...io.datastructure import DataCube
+from ..utils import tqdmnd
 
 def test():
     return True
@@ -23,7 +24,9 @@ def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
-    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax], axis=(2,3))
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
 def get_virtualimage_circ(datacube, x0, y0, R):
@@ -47,7 +50,9 @@ def get_virtualimage_circ(datacube, x0, y0, R):
     x0_s,y0_s = x0-xmin,y0-ymin
     mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
 
-    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax]*mask, axis=(2,3))
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
 def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
@@ -74,7 +79,9 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
     mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
     mask = np.logical_xor(mask_o,mask_i)
 
-    virtual_image = np.sum(datacube.data[:,:,xmin:xmax,ymin:ymax]*mask, axis=(2,3))
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
 
