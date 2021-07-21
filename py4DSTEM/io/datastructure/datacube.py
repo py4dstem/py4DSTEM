@@ -96,8 +96,8 @@ class DataCube(DataObject):
     def bin_data_diffraction(self, bin_factor):
         self = preprocess.bin_data_diffraction(self, bin_factor)
 
-    def bin_data_mmap(self, bin_factor):
-        self = preprocess.bin_data_mmap(self, bin_factor)
+    def bin_data_mmap(self, bin_factor, dtype=np.float32):
+        self = preprocess.bin_data_mmap(self, bin_factor, dtype=dtype)
 
     def bin_data_real(self, bin_factor):
         self = preprocess.bin_data_real(self, bin_factor)
