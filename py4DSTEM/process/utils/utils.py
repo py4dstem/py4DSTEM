@@ -10,9 +10,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
-
 from .multicorr import upsampled_correlation
-from ..utils import tqdmnd
+from .tqdmnd import tqdmnd
 
 try:
     from IPython.display import clear_output
@@ -616,7 +615,8 @@ def fourier_resample(
     scale=None, 
     output_size=None,
     bandlimit_nyquist=None,
-    bandlimit_power=4, 
+    bandlimit_power=2, 
+    force_positivity=True,
     dtype=np.float32):
     """
     Resize an array along any dimension, using Fourier interpolation / extrapolation.
@@ -626,8 +626,9 @@ def fourier_resample(
         array (2D/4D numpy array):
         scale (float): scalar value giving the scaling factor for all dimensions
         output_size (float): two values giving either the (x,y) output size for 2D, or (kx,ky) for 4D
-        bandlimit_nyquist (float): Butterworth filter information limit in Nyquist units (0.5 max)
-        bandlimit_power (float): Butterworth filter power law scaling (lower is smoother)
+        bandlimit_nyquist (float): Gaussian filter information limit in Nyquist units (0.5 max in both directions)
+        bandlimit_power (float): Gaussian filter power law scaling (higher is sharper)
+        force_positivity (bool): Force all outputs to be positive, after filtering
         dtype (numpy dtype): datatype for binned array. default is single precision float
 
     Returns:
@@ -662,7 +663,10 @@ def fourier_resample(
             kx = np.fft.fftfreq(output_size[2])
             ky = np.fft.fftfreq(output_size[3])
         k2 = kx[:,None]**2 + ky[None,:]**2
-        k_filt = 1/(1 + (k2**bandlimit_power)/(bandlimit_nyquist**(2*bandlimit_power)))
+        # Gaussian
+        k_filt = np.exp((k2**(bandlimit_power/2))/(-2*bandlimit_nyquist**bandlimit_power))
+        # Butterworth testing
+        #k_filt = 1/(1 + (k2**bandlimit_power)/(bandlimit_nyquist**(2*bandlimit_power)))
 
 
     if len(input__size) == 2:
@@ -796,7 +800,7 @@ def fourier_resample(
 
         # Band limit if needed
         if bandlimit_nyquist is not None:
-                array_resize *= k_filt
+            array_resize *= k_filt
 
         # Back to real space
         array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
@@ -945,6 +949,9 @@ def fourier_resample(
             # Back to real space
             array_resize[Rx,Ry,:,:] = np.real(np.fft.ifft2(array_output)).astype(dtype)
 
+    # Enforce positivity if needed, after filtering
+    if bandlimit_nyquist is not None and force_positivity == True:
+        array_resize = np.maximum(array_resize,0)
         
     # Normalization
     array_resize = array_resize * scale_output
