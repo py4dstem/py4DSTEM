@@ -611,7 +611,13 @@ def get_ewpc_filter_function(Q_Nx, Q_Ny):
 
 
 
-def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
+def fourier_resample(
+    array, 
+    scale=None, 
+    output_size=None,
+    bandlimit_nyquist=None,
+    bandlimit_power=4, 
+    dtype=np.float32):
     """
     Resize an array along any dimension, using Fourier interpolation / extrapolation.
     For 2D arrays, 
@@ -620,12 +626,15 @@ def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
         array (2D/4D numpy array):
         scale (float): scalar value giving the scaling factor for all dimensions
         output_size (float): two values giving either the (x,y) output size for 2D, or (kx,ky) for 4D
-        dtype (numpy dtype): datatype for binned array. default is single precision float.
+        bandlimit_nyquist (float): Butterworth filter information limit in Nyquist units (0.5 max)
+        bandlimit_power (float): Butterworth filter power law scaling (lower is smoother)
+        dtype (numpy dtype): datatype for binned array. default is single precision float
 
     Returns:
         the resized array (2D/4D numpy array)
     """
     input__size = array.shape
+
 
     if scale is not None:
         assert output_size is None, 'Cannot specify both a scaling factor and output size'
@@ -644,6 +653,16 @@ def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
             output_size = np.array((input__size[0],input__size[1],output_size[0],output_size[1]))
     scale_output = np.prod(output_size) / np.prod(input__size)
 
+
+    if bandlimit_nyquist is not None:
+        if len(input__size) == 2:
+            kx = np.fft.fftfreq(output_size[0])
+            ky = np.fft.fftfreq(output_size[1])
+        if len(input__size) == 4:
+            kx = np.fft.fftfreq(output_size[2])
+            ky = np.fft.fftfreq(output_size[3])
+        k2 = kx[:,None]**2 + ky[None,:]**2
+        k_filt = 1/(1 + (k2**bandlimit_power)/(bandlimit_nyquist**(2*bandlimit_power)))
 
 
     if len(input__size) == 2:
@@ -775,6 +794,9 @@ def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
                 0-output_size[0]//2+input__size[0]:input__size[0], 
                 0-input__size[1]//2+input__size[1]:input__size[1]]
 
+        # Band limit if needed
+        if bandlimit_nyquist is not None:
+                array_resize *= k_filt
 
         # Back to real space
         array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
@@ -916,7 +938,11 @@ def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
                     0-output_size[2]//2+input__size[2]:input__size[2], 
                     0-input__size[3]//2+input__size[3]:input__size[3]]
 
+            # Band limit if needed
+            if bandlimit_nyquist is not None:
+                array_output *= k_filt
 
+            # Back to real space
             array_resize[Rx,Ry,:,:] = np.real(np.fft.ifft2(array_output)).astype(dtype)
 
         
