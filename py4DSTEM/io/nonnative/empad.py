@@ -15,30 +15,25 @@ from pdb import set_trace
 
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
-    Reads the EMPAD file at filename, returning a numpy array.
+    Reads the EMPAD file at filename, returning a DataCube.
 
     EMPAD files are shaped as 130x128 arrays, consisting of 128x128 arrays of data followed by
     two rows of metadata.  For each frame, its position in the scan is embedded in the metadata.
     By extracting the scan position of the first and last frames, the function determines the scan
-    size. Then, the full dataset is loaded.
-
-    Note that the output of this function is a datacube which includes the 2 rows of metadata.
+    size. Then, the full dataset is loaded and cropped to the 128x128 valid region.
 
     Accepts:
-        filename    (str) path to the empad file
+        filename    (str) path to the EMPAD file
 
     Returns:
-        data        (ndarray) the 4D datacube, including the metadata.
-                    raw data only can be accessed data[:,:,:128,:]
+        data        (DataCube) the 4D datacube, excluding the metadata rows.
     """
 
-    # fmt: off
     assert(isinstance(filename, (str, Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM', 'MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor, int)), "Error: argument binfactor must be an integer"
     assert(binfactor >= 1), "Error: binfactor must be >= 1"
     assert(metadata is False), "Error: EMPAD Reader does not support metadata."
-    # fmt: on
 
     row = 130
     col = 128
@@ -54,7 +49,6 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     # Get the scan shape
     shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
     shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
-    # kShape = shape0[2:4]  # detector shape (should always be row x col)
     rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
 
     data_shape = (int(rShape[0]), int(rShape[1]), row, col)
