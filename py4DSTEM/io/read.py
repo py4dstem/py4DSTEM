@@ -142,8 +142,7 @@ def parse_filetype(fp):
             )
     elif fext in [".dm", ".dm3", ".dm4", ".DM", ".DM3", ".DM4"]:
         return "dm"
-    elif fext in [".empad"]:
-        # TK TODO
+    elif fext in [".raw"]:
         return "empad"
     elif fext in [".mrc"]:
         # TK TODO
