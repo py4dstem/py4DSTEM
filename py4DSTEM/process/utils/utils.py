@@ -10,7 +10,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
+
 from .multicorr import upsampled_correlation
+from ..utils import tqdmnd
 
 try:
     from IPython.display import clear_output
@@ -609,64 +611,316 @@ def get_ewpc_filter_function(Q_Nx, Q_Ny):
 
 
 
-def fourier_resample(array, scale, dtype=np.float32):
+def fourier_resample(array, scale=None, output_size=None, dtype=np.float32):
     """
     Resize an array along any dimension, using Fourier interpolation / extrapolation.
-    Note that if you pass in a 4D array, but only provide 1 or 2 
+    For 2D arrays, 
 
     Args:
         array (2D/4D numpy array):
-        scale (float): the scaling factor for each dimension
+        scale (float): scalar value giving the scaling factor for all dimensions
+        output_size (float): two values giving either the (x,y) output size for 2D, or (kx,ky) for 4D
         dtype (numpy dtype): datatype for binned array. default is single precision float.
 
     Returns:
         the resized array (2D/4D numpy array)
     """
-    scale = np.asarray(scale)
-    array_size = array.shape
+    input__size = array.shape
 
-    if len(array_size) == 2:
-        # image array
-        new_size = (array_size * scale).astype('int64')
+    if scale is not None:
+        assert output_size is None, 'Cannot specify both a scaling factor and output size'
+        assert np.size(scale) == 1, 'scale should be a single value'
+        scale = np.asarray(scale)
+        if len(input__size) == 2:
+            output_size = (input__size * scale).astype('intp')
+        elif len(input__size) == 4:
+            output_size = (input__size * np.array((1, 1, scale, scale))).astype('intp')
+    else:
+        assert scale is None, 'Cannot specify both a scaling factor and output size'
+        assert np.size(output_size) == 2, 'output_size must contain two values'
+        if len(input__size) == 2:
+            output_size = np.asarray(output_size)
+        elif len(input__size) == 4:
+            output_size = np.array((input__size[0],input__size[1],output_size[0],output_size[1]))
+    scale_output = np.prod(output_size) / np.prod(input__size)
 
-        if scale > 1:
-            array_fft = np.fft.fft2(array)
 
-            array_resize = np.zeros(new_size, dtype=np.complex64)
 
-            array_resize[0:array_size[0]//2, 
-                0:array_size[1]//2] = \
-                array_fft[0:array_size[0]//2,
-                0:array_size[1]//2]
+    if len(input__size) == 2:
+        # image array        
+        array_resize = np.zeros(output_size, dtype=np.complex64)
+        array_fft = np.fft.fft2(array)
 
+        if output_size[0] > input__size[0] and output_size[1] > input__size[1]:
+            # case 1 - x and y dimensions are increased
+            # upper left
             array_resize[
-                1-array_size[0]//2+new_size[0]:new_size[0], 
-                0:array_size[1]//2]  = \
-                array_fft[1-array_size[0]//2+array_size[0]:array_size[0], 
-                0:array_size[1]//2]
-
-            array_resize[0:array_size[0]//2,
-                1-array_size[1]//2+new_size[1]:new_size[1]] = \
-                array_fft[0:array_size[0]//2, 
-                1-array_size[1]//2+array_size[1]:array_size[1]]
-
+                0:input__size[0]//2, 
+                0:input__size[1]//2] = \
+                array_fft[
+                0:input__size[0]//2,
+                0:input__size[1]//2]
+            # lower left
             array_resize[
-                1-array_size[0]//2+new_size[0]:new_size[0], 
-                1-array_size[1]//2+new_size[1]:new_size[1]] = \
-                array_fft[1-array_size[0]//2+array_size[0]:array_size[0], 
-                1-array_size[1]//2+array_size[1]:array_size[1]]
+                0-input__size[0]//2+output_size[0]:output_size[0], 
+                0:input__size[1]//2]  = \
+                array_fft[
+                0-input__size[0]//2+input__size[0]:input__size[0], 
+                0:input__size[1]//2]
+            # upper right
+            array_resize[
+                0:input__size[0]//2,
+                0-input__size[1]//2+output_size[1]:output_size[1]] = \
+                array_fft[
+                0:input__size[0]//2, 
+                0-input__size[1]//2+input__size[1]:input__size[1]]
+            # lower right
+            array_resize[
+                0-input__size[0]//2+output_size[0]:output_size[0], 
+                0-input__size[1]//2+output_size[1]:output_size[1]] = \
+                array_fft[
+                0-input__size[0]//2+input__size[0]:input__size[0], 
+                0-input__size[1]//2+input__size[1]:input__size[1]]
 
-            # Back to real space
-            array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
+        elif output_size[0] < input__size[0] and output_size[1] < input__size[1]:
+            # case 2 - x and y dimensions are decreased
+            # upper left
+            array_resize[
+                0:output_size[0]//2, 
+                0:output_size[1]//2] = \
+                array_fft[
+                0:output_size[0]//2,
+                0:output_size[1]//2]
+            # lower left
+            array_resize[
+                0-output_size[0]//2:output_size[0], 
+                0:output_size[1]//2]  = \
+                array_fft[
+                0-output_size[0]//2+input__size[0]:input__size[0], 
+                0:output_size[1]//2]
+            # upper right
+            array_resize[
+                0:output_size[0]//2,
+                0-output_size[1]//2:output_size[1]] = \
+                array_fft[
+                0:output_size[0]//2, 
+                0-output_size[1]//2+input__size[1]:input__size[1]]
+            # lower right
+            array_resize[
+                0-output_size[0]//2+output_size[0]:output_size[0], 
+                0-output_size[1]//2:output_size[1]] = \
+                array_fft[
+                0-output_size[0]//2+input__size[0]:input__size[0], 
+                0-output_size[1]//2+input__size[1]:input__size[1]]
 
-            if len(scale) == 1:
-                array_resize = array_resize * scale**2
-            elif:
-                array_resize = array_resize * np.prod(scale)
+        elif output_size[0] > input__size[0] and output_size[1] < input__size[1]:
+            # case 3 - x size increases, y size decreases
+            # upper left
+            array_resize[
+                0:input__size[0]//2, 
+                0:output_size[1]//2] = \
+                array_fft[
+                0:input__size[0]//2,
+                0:output_size[1]//2]
+            # lower left
+            array_resize[
+                0-input__size[0]//2+output_size[0]:output_size[0], 
+                0:output_size[1]//2]  = \
+                array_fft[
+                0-input__size[0]//2+input__size[0]:input__size[0], 
+                0:output_size[1]//2]
+            # upper right
+            array_resize[
+                0:input__size[0]//2,
+                0-output_size[1]//2:output_size[1]] = \
+                array_fft[
+                0:input__size[0]//2, 
+                0-output_size[1]//2+input__size[1]:input__size[1]]
+            # lower right
+            array_resize[
+                0-input__size[0]//2+output_size[0]:output_size[0], 
+                0-output_size[1]//2:output_size[1]] = \
+                array_fft[
+                0-input__size[0]//2+input__size[0]:input__size[0], 
+                0-output_size[1]//2+input__size[1]:input__size[1]]
 
-    elif len(array_size) == 4:
-        # four dimensional array
-        new_size = array_size * np.array((1, 1, scale, scale))
+        elif output_size[0] < input__size[0] and output_size[1] > input__size[1]:
+            # case 4 - x size decreases, y size increases
+            # upper left
+            array_resize[
+                0:output_size[0]//2, 
+                0:input__size[1]//2] = \
+                array_fft[
+                0:output_size[0]//2,
+                0:input__size[1]//2]
+            # lower left
+            array_resize[
+                0-output_size[0]//2:output_size[0], 
+                0:input__size[1]//2]  = \
+                array_fft[
+                0-output_size[0]//2+input__size[0]:input__size[0], 
+                0:input__size[1]//2]
+            # upper right
+            array_resize[
+                0:output_size[0]//2,
+                0-input__size[1]//2+output_size[1]:output_size[1]] = \
+                array_fft[
+                0:output_size[0]//2, 
+                0-input__size[1]//2+input__size[1]:input__size[1]]
+            # lower right
+            array_resize[
+                0-output_size[0]//2+output_size[0]:output_size[0], 
+                0-input__size[1]//2+output_size[1]:output_size[1]] = \
+                array_fft[
+                0-output_size[0]//2+input__size[0]:input__size[0], 
+                0-input__size[1]//2+input__size[1]:input__size[1]]
 
+
+        # Back to real space
+        array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
+
+
+    elif len(input__size) == 4:
+        # This case is the same as the 4D case, but loops over the probe index arrays
+
+        # init arrays
+        array_resize = np.zeros(output_size, dtype)
+        array_fft = np.zeros(input__size[2:], dtype=np.complex64)
+        array_output = np.zeros(output_size[2:], dtype=np.complex64)
+
+        for (Rx,Ry) in tqdmnd(input__size[0],input__size[1],desc='Resampling 4D datacube',unit='DP',unit_scale=True):
+            array_fft[:,:] = np.fft.fft2(array[Rx,Ry,:,:])
+            array_output[:,:] = 0
+
+            if output_size[2] > input__size[2] and output_size[3] > input__size[3]:
+                # case 1 - x and y dimensions are increased
+                # upper left
+                array_output[
+                    0:input__size[2]//2, 
+                    0:input__size[3]//2] = \
+                    array_fft[
+                    0:input__size[2]//2,
+                    0:input__size[3]//2]
+                # lower left
+                array_output[
+                    0-input__size[2]//2+output_size[2]:output_size[2], 
+                    0:input__size[3]//2]  = \
+                    array_fft[
+                    0-input__size[2]//2+input__size[2]:input__size[2], 
+                    0:input__size[3]//2]
+                # upper right
+                array_output[
+                    0:input__size[2]//2,
+                    0-input__size[3]//2+output_size[3]:output_size[3]] = \
+                    array_fft[
+                    0:input__size[2]//2, 
+                    0-input__size[3]//2+input__size[3]:input__size[3]]
+                # lower right
+                array_output[
+                    0-input__size[2]//2+output_size[2]:output_size[2], 
+                    0-input__size[3]//2+output_size[3]:output_size[3]] = \
+                    array_fft[
+                    0-input__size[2]//2+input__size[2]:input__size[2], 
+                    0-input__size[3]//2+input__size[3]:input__size[3]]
+
+            elif output_size[2] < input__size[2] and output_size[3] < input__size[3]:
+                # case 2 - x and y dimensions are decreased
+                # upper left
+                array_output[
+                    0:output_size[2]//2, 
+                    0:output_size[3]//2] = \
+                    array_fft[
+                    0:output_size[2]//2,
+                    0:output_size[3]//2]
+                # lower left
+                array_output[
+                    0-output_size[2]//2:output_size[2], 
+                    0:output_size[3]//2]  = \
+                    array_fft[
+                    0-output_size[2]//2+input__size[2]:input__size[2], 
+                    0:output_size[3]//2]
+                # upper right
+                array_output[
+                    0:output_size[2]//2,
+                    0-output_size[3]//2:output_size[3]] = \
+                    array_fft[
+                    0:output_size[2]//2, 
+                    0-output_size[3]//2+input__size[3]:input__size[3]]
+                # lower right
+                array_output[
+                    0-output_size[2]//2+output_size[2]:output_size[2], 
+                    0-output_size[3]//2:output_size[3]] = \
+                    array_fft[
+                    0-output_size[2]//2+input__size[2]:input__size[2], 
+                    0-output_size[3]//2+input__size[3]:input__size[3]]
+
+            elif output_size[2] > input__size[2] and output_size[3] < input__size[3]:
+                # case 3 - x size increases, y size decreases
+                # upper left
+                array_output[
+                    0:input__size[2]//2, 
+                    0:output_size[3]//2] = \
+                    array_fft[
+                    0:input__size[2]//2,
+                    0:output_size[3]//2]
+                # lower left
+                array_output[
+                    0-input__size[2]//2+output_size[2]:output_size[2], 
+                    0:output_size[3]//2]  = \
+                    array_fft[
+                    0-input__size[2]//2+input__size[2]:input__size[2], 
+                    0:output_size[3]//2]
+                # upper right
+                array_output[
+                    0:input__size[2]//2,
+                    0-output_size[3]//2:output_size[3]] = \
+                    array_fft[
+                    0:input__size[2]//2, 
+                    0-output_size[3]//2+input__size[3]:input__size[3]]
+                # lower right
+                array_output[
+                    0-input__size[2]//2+output_size[2]:output_size[2], 
+                    0-output_size[3]//2:output_size[3]] = \
+                    array_fft[
+                    0-input__size[2]//2+input__size[2]:input__size[2], 
+                    0-output_size[3]//2+input__size[3]:input__size[3]]
+
+            elif output_size[2] < input__size[2] and output_size[3] > input__size[3]:
+                # case 4 - x size decreases, y size increases
+                # upper left
+                array_output[
+                    0:output_size[2]//2, 
+                    0:input__size[3]//2] = \
+                    array_fft[
+                    0:output_size[2]//2,
+                    0:input__size[3]//2]
+                # lower left
+                array_output[
+                    0-output_size[2]//2:output_size[2], 
+                    0:input__size[3]//2]  = \
+                    array_fft[
+                    0-output_size[2]//2+input__size[2]:input__size[2], 
+                    0:input__size[3]//2]
+                # upper right
+                array_output[
+                    0:output_size[2]//2,
+                    0-input__size[3]//2+output_size[3]:output_size[3]] = \
+                    array_fft[
+                    0:output_size[2]//2, 
+                    0-input__size[3]//2+input__size[3]:input__size[3]]
+                # lower right
+                array_output[
+                    0-output_size[2]//2+output_size[2]:output_size[2], 
+                    0-input__size[3]//2+output_size[3]:output_size[3]] = \
+                    array_fft[
+                    0-output_size[2]//2+input__size[2]:input__size[2], 
+                    0-input__size[3]//2+input__size[3]:input__size[3]]
+
+
+            array_resize[Rx,Ry,:,:] = np.real(np.fft.ifft2(array_output)).astype(dtype)
+
+        
+    # Normalization
+    array_resize = array_resize * scale_output
 
     return array_resize
