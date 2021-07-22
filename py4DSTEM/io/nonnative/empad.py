@@ -10,9 +10,6 @@ from pathlib import Path
 from ..datastructure import DataCube
 from ...process.utils import bin2D, tqdmnd
 
-from pdb import set_trace
-
-
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Reads the EMPAD file at filename, returning a DataCube.
@@ -28,7 +25,6 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     Returns:
         data        (DataCube) the 4D datacube, excluding the metadata rows.
     """
-
     assert(isinstance(filename, (str, Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM', 'MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor, int)), "Error: argument binfactor must be an integer"
@@ -50,13 +46,12 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
     shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
     rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
-
     data_shape = (int(rShape[0]), int(rShape[1]), row, col)
 
+    # Load the data
     if (mem, binfactor) == ("RAM", 1):
         with open(fPath, "rb") as fid:
             data = np.fromfile(fid, np.float32).reshape(data_shape)[:, :, :128, :]
-
     elif (mem, binfactor) == ("MEMMAP", 1):
         data = np.memmap(fPath, dtype=np.float32, mode="r", shape=data_shape)[
             :, :, :128, :
