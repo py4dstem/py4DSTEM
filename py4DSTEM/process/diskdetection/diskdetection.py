@@ -19,6 +19,7 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   sigma = 2,
                                   edgeBoundary = 20,
                                   minRelativeIntensity = 0.005,
+                                  minAbsoluteIntensity = 0,
                                   relativeToPeak = 0,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
@@ -64,6 +65,8 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
             relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float): the minimum acceptable spacing between detected peaks
@@ -113,6 +116,7 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
                                                  edgeBoundary=edgeBoundary,
                                                  minRelativeIntensity=minRelativeIntensity,
+                                                 minAbsoluteIntensity = minAbsoluteIntensity,
                                                  relativeToPeak=relativeToPeak,
                                                  minSpacing=minPeakSpacing,
                                                  maxNumPeaks=maxNumPeaks,
@@ -139,6 +143,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                sigma = 2,
                                edgeBoundary = 20,
                                minRelativeIntensity = 0.005,
+                               minAbsoluteIntensity = 0,
                                relativeToPeak = 0,
                                minPeakSpacing = 60,
                                maxNumPeaks = 70,
@@ -162,6 +167,8 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
             relative to the intensity of the brightest peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float): the minimum acceptable spacing between detected peaks
@@ -192,6 +199,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
                                          sigma = sigma,
                                          edgeBoundary = edgeBoundary,
                                          minRelativeIntensity = minRelativeIntensity,
+                                         minAbsoluteIntensity = minAbsoluteIntensity,
                                          relativeToPeak = relativeToPeak,
                                          minPeakSpacing = minPeakSpacing,
                                          maxNumPeaks = maxNumPeaks,
@@ -206,6 +214,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
                               sigma = 2,
                               edgeBoundary = 20,
                               minRelativeIntensity = 0.005,
+                              minAbsoluteIntensity = 0,
                               relativeToPeak = 0,
                               minPeakSpacing = 60,
                               maxNumPeaks = 70,
@@ -230,6 +239,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
             relative to the intensity of the brightest peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float:) the minimum acceptable spacing between detected peaks
@@ -272,7 +283,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         DP = datacube.data[Rx[i],Ry[i],:,:]
         _peaks =  _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
            corrPower=corrPower,sigma=sigma,edgeBoundary=edgeBoundary,
-           minRelativeIntensity=minRelativeIntensity,relativeToPeak=relativeToPeak,
+           minRelativeIntensity=minRelativeIntensity,minAbsoluteIntensity=minAbsoluteIntensity,
+           relativeToPeak=relativeToPeak,
            minPeakSpacing=minPeakSpacing,maxNumPeaks=maxNumPeaks,subpixel=subpixel,
            upsample_factor=upsample_factor,filter_function=filter_function,
            return_cc=return_ccs)
@@ -291,6 +303,7 @@ def find_Bragg_disks_serial(datacube, probe,
                             sigma = 2,
                             edgeBoundary = 20,
                             minRelativeIntensity = 0.005,
+                            minAbsoluteIntensity = 0,
                             relativeToPeak = 0,
                             minPeakSpacing = 60,
                             maxNumPeaks = 70,
@@ -319,6 +332,8 @@ def find_Bragg_disks_serial(datacube, probe,
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
             relative to the intensity of the brightest peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float): the minimum acceptable spacing between detected peaks
@@ -385,6 +400,7 @@ def find_Bragg_disks_serial(datacube, probe,
                                       sigma = sigma,
                                       edgeBoundary = edgeBoundary,
                                       minRelativeIntensity = minRelativeIntensity,
+                                      minAbsoluteIntensity = minAbsoluteIntensity,
                                       relativeToPeak = relativeToPeak,
                                       minPeakSpacing = minPeakSpacing,
                                       maxNumPeaks = maxNumPeaks,
@@ -403,6 +419,7 @@ def find_Bragg_disks(datacube, probe,
                      sigma = 2,
                      edgeBoundary = 20,
                      minRelativeIntensity = 0.005,
+                     minAbsoluteIntensity = 0,
                      relativeToPeak = 0,
                      minPeakSpacing = 60,
                      maxNumPeaks = 70,
@@ -428,6 +445,8 @@ def find_Bragg_disks(datacube, probe,
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
             relative to the intensity of the brightest peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float): the minimum acceptable spacing between detected peaks
@@ -531,6 +550,7 @@ def find_Bragg_disks(datacube, probe,
             sigma=sigma,
             edgeBoundary=edgeBoundary,
             minRelativeIntensity=minRelativeIntensity,
+            minAbsoluteIntensity=minAbsoluteIntensity,
             relativeToPeak=relativeToPeak,
             minPeakSpacing=minPeakSpacing,
             maxNumPeaks=maxNumPeaks,
@@ -552,6 +572,7 @@ def find_Bragg_disks(datacube, probe,
                 sigma=sigma,
                 edgeBoundary=edgeBoundary,
                 minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
                 relativeToPeak=relativeToPeak,
                 minPeakSpacing=minPeakSpacing,
                 maxNumPeaks=maxNumPeaks,
@@ -572,6 +593,7 @@ def find_Bragg_disks(datacube, probe,
                 sigma=sigma,
                 edgeBoundary=edgeBoundary,
                 minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
                 relativeToPeak=relativeToPeak,
                 minPeakSpacing=minPeakSpacing,
                 maxNumPeaks=maxNumPeaks,
