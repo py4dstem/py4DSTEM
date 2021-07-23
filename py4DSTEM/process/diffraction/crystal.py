@@ -22,7 +22,8 @@ class Crystal:
 
     def __init__(self, positions, numbers, cell, **kwargs):
         """
-        Instantiate a Crystal object.
+        Instantiate a Crystal object. 
+        Calculate lattice vectors.
         """
         
         # Initialize Crystal
@@ -65,15 +66,52 @@ class Crystal:
 
 
     def calculate_structure_factors(self, k_max):
-        1+1
+        # Inverse lattice vectors
+        lat_inv = np.linalg.inv(self.lat_real)
+
+        # Find shortest lattice vector direction
+        k_test = np.vstack([
+            lat_inv[0,:],
+            lat_inv[1,:],
+            lat_inv[2,:],
+            lat_inv[0,:] + lat_inv[1,:],
+            lat_inv[0,:] + lat_inv[2,:],
+            lat_inv[1,:] + lat_inv[2,:],
+            lat_inv[0,:] + lat_inv[1,:] + lat_inv[2,:],
+            lat_inv[0,:] - lat_inv[1,:] + lat_inv[2,:],
+            lat_inv[0,:] + lat_inv[1,:] - lat_inv[2,:],
+            lat_inv[0,:] - lat_inv[1,:] - lat_inv[2,:],
+            ])
+        k_leng_min = np.min(np.linalg.norm(k_test, axis=1))
+
+        # Tile lattice vectors
+        num_tile = np.ceil(k_max / k_leng_min)
+        ya,xa,za = np.meshgrid(
+            np.arange(-num_tile, num_tile+1),
+            np.arange(-num_tile, num_tile+1),
+            np.arange(-num_tile, num_tile+1))
+        hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
+        k_vec_all = np.matmul(lat_inv, hkl) 
+
+        # Delete lattice vectors outside of k_max
+        keep = np.linalg.norm(k_vec_all, axis=0) <= k_max
+        self.hkl = hkl[:,keep]
+        self.k_vec_all = k_vec_all[:,keep]
+        self.k_vec_leng = np.linalg.norm(self.k_vec_all, axis=0)
+
+        # Calculate single atom scattering factors
+        f_all = np.zeros((np.size(self.k_vec_leng, 0), self.positions.shape[0]), dtype='complex64')
+        for a0 in range(self.positions.shape[0]):
+            f = single_atom_scatter()
+
+
+        # Calculate structure factors
+        self.struct_factors = np.zeros(np.size(self.k_vec_leng, 0), dtype='complex64')
+        for a0 in range(self.struct_factors.shape[0]):
+            print(a0)
+
+
+        # print(self.k_vec_leng.shape)
 
 
 
-class Dog:
-
-    def __init__(self, name):
-        self.name = name
-        self.tricks = []    # creates a new empty list for each dog
-
-    def add_trick(self, trick):
-        self.tricks.append(trick)
