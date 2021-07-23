@@ -224,8 +224,17 @@ def get_maximal_points(ar):
            (ar > np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
 
 
-def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16):
+def get_maxima_2D(ar,
+                  sigma=0,
+                  edgeBoundary=0,
+                  minSpacing=0,
+                  minRelativeIntensity=0,
+                  minAbsoluteIntensity=0,
+                  relativeToPeak=0,
+                  maxNumPeaks=0,
+                  subpixel='poly',
+                  ar_FT=None,
+                  upsample_factor=16):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -239,6 +248,8 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
             is removed
         minRelativeIntensity (float): maxima dimmer than minRelativeIntensity compared
             to the relativeToPeak'th brightest maximum are removed
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks (int): return only the first maxNumPeaks maxima
         subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
@@ -298,10 +309,15 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                     deletemask[tooClose] = True
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
-        # Remove maxima which are too dim
+        # Remove maxima which are too dim, versus the n-th brightest
         if (minRelativeIntensity > 0) & (len(maxima) > relativeToPeak):
             assert isinstance(relativeToPeak, (int, np.integer))
             deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+
+        # Remove maxima which are too dim, absolute scale
+        if (minAbsoluteIntensity > 0):
+            deletemask = maxima['intensity'] < minAbsoluteIntensity
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
         # Remove maxima in excess of maxNumPeaks
