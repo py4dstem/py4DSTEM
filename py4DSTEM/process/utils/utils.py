@@ -314,12 +314,12 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
         # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
         if subpixel != 'none':
             for i in range(len(maxima)):
-                Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])]
-                Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])]
-                Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])]
-                Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1]
-                Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])]
-                Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1]
+                Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float)
+                Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
+                Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float)
+                Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float)
+                Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
+                Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float)
                 deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
                 deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
                 maxima['x'][i] += deltax

@@ -52,9 +52,10 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
 
     Args:
         DP (ndarray): a diffraction pattern
-        probe_kernel_FT (ndarray): the vacuum probe template, in Fourier space. Related
-            to the real space probe kernel by probe_kernel_FT = F(probe_kernel)*, where F
-            indicates a Fourier Transform and * indicates complex conjugation.
+        probe_kernel_FT (ndarray or None): the vacuum probe template, in Fourier space.
+            Related to the real space probe kernel by probe_kernel_FT = F(probe_kernel)*,
+            where F indicates a Fourier Transform and * indicates complex conjugation.
+            If None, no correlation is performed.
         corrPower (float between 0 and 1, inclusive): the cross correlation power. A
              value of 1 corresponds to a cross correaltion, and 0 corresponds to a phase
              correlation, with intermediate values giving various hybrids.
@@ -96,13 +97,17 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     DP = DP if filter_function is None else filter_function(DP)
 
     # Get the cross correlation
-    if subpixel in ('none','poly'):
-        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-        ccc = None
-    # for multicorr subpixel fitting, we need both the real and complex cross correlation
+    if probe_kernel_FT is not None:
+        if subpixel in ('none','poly'):
+            cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+            ccc = None
+        # for multicorr subpixel fitting, we need both the real and complex cross correlation
+        else:
+            ccc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower, returnval='fourier')
+            cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
     else:
-        ccc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower, returnval='fourier')
-        cc = np.maximum(np.real(np.fft.ifft2(ccc)),0)
+        cc = DP
+        ccc = None
 
     # Find the maxima
     maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
@@ -304,7 +309,8 @@ def find_Bragg_disks_serial(datacube, probe,
 
     Args:
         DP (ndarray): a diffraction pattern
-        probe (ndarray): the vacuum probe template, in real space.
+        probe (ndarray or None): the vacuum probe template, in real space. If None,
+            no correlation is performed.
         corrPower (float between 0 and 1, inclusive): the cross correlation power. A
              value of 1 corresponds to a cross correaltion, and 0 corresponds to a
              phase correlation, with intermediate values giving various hybrids.
@@ -363,7 +369,7 @@ def find_Bragg_disks_serial(datacube, probe,
     #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
     # Get the probe kernel FT
-    probe_kernel_FT = np.conj(np.fft.fft2(probe))
+    probe_kernel_FT = np.conj(np.fft.fft2(probe)) if probe is not None else None
 
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
@@ -412,7 +418,8 @@ def find_Bragg_disks(datacube, probe,
 
     Args:
         DP (ndarray): a diffraction pattern
-        probe (ndarray): the vacuum probe template, in real space.
+        probe (ndarray): the vacuum probe template, in real space. If None, does not
+            perform a cross correlation.
         corrPower (float between 0 and 1, inclusive): the cross correlation power. A
              value of 1 corresponds to a cross correaltion, and 0 corresponds to a
              phase correlation, with intermediate values giving various hybrids.
