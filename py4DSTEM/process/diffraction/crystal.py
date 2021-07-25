@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+# from scipy.interpolate import griddata
+from scipy.special import sph_harm
+
 from .tdesign import tdesign
 
 from ...io.datastructure import PointList, PointListArray
@@ -185,10 +188,6 @@ class Crystal:
             projection='3d',
             elev=el, 
             azim=az)
-        # ax.set_box_aspect((np.ptp(
-        #     self.g_vec_all[0,:]), 
-        #     self.g_vec_all[1,:], 
-        #     self.g_vec_all[2,:]))
 
         ax.scatter(
             xs=self.g_vec_all[0,:], 
@@ -211,16 +210,20 @@ class Crystal:
 
     def spherical_harmonic_transform(
         self, 
-        SHT_order=8,
+        SHT_degree_max=6,
+        SHT_shell_sigma = 0.20,
         tol_distance=1e-3):
         """
         Calculate the (nested) spherical harmonic for a set of 3D structure factors
         
         Args:
-            SHT_order (numpy float):  order of the spherical harmonic transform
+            SHT_degree_max (numpy int):  degree of the spherical harmonic transform
+            SHT_shell_sigma (numpy float):  sigma value for Gaussian interpolation on shells
             tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
         ect
         """
+
+        self.SHT_degree_max = int(SHT_degree_max)
 
         # Determine the spherical shell radiis required
         radii = np.unique(np.round(
@@ -228,23 +231,113 @@ class Crystal:
         # Remove zero beam
         self.SHT_shell_radii = np.delete(radii,0)
 
-        # Get sampling points on spherical surface
-        _,_,self.SHT_verts = tdesign(SHT_order)
+        # Get sampling points on spherical surface - note we use t-design of 2 * max degree
+        self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
+        # Degree and order of all SHT terms
+        v = np.arange(-self.SHT_degree_max,self.SHT_degree_max+1)
+        m, n = np.meshgrid(
+            np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
+            np.arange(0, self.SHT_degree_max+1))
+        keep = np.abs(m) <= n
+        self.SHT_degree_order = np.vstack((
+            n[keep], m[keep])).T
+        num_terms = (self.SHT_degree_max + 1)**2
 
-        # Compute spherical interpolations for all SF peaks
+        # compute Gaussian denominator prefactor for Gaussian KDE on shells
+        pre = -1/(2*SHT_shell_sigma**2)
+
+        # initialize arrays
         self.SHT_shell_values = np.zeros((
-            np.size(self.SHT_verts),
+            self.SHT_verts.shape[0],
             np.size(self.SHT_shell_radii)))
+        self.SHT_basis = np.zeros((
+            num_terms,
+            self.SHT_verts.shape[0]),
+            dtype='complex64')
+        self.SHT_values = np.zeros((
+            num_terms,
+            np.size(self.SHT_shell_radii)),
+            dtype='complex64')
+
+        # Calculate spherical harmonic basis of all orders and degrees
+        for a0 in range(num_terms):
+            self.SHT_basis[a0,:] = sph_harm( \
+                self.SHT_degree_order[a0,1],
+                self.SHT_degree_order[a0,0],
+                self.SHT_azim,
+                self.SHT_elev)
+
+        # Compute spherical interpolations for all SF peaks, and SHTs
         for a0 in range(np.size(self.SHT_shell_radii)):
             sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
-            k = self.k_vec_all[sub,:]
+            g = self.g_vec_all[:,sub]
+            g = g / np.linalg.norm(g, axis=0)
+            intensity = self.struct_factors_int[sub]
+            
+            # interpolate intenties on this shell
+            for a1 in range(g.shape[1]):
+                self.SHT_shell_values[:,a0] += intensity[a1] * \
+                    np.exp(pre*np.sum((self.SHT_verts - g[:,a1])**2,axis=1))
+                    
+            # Calculate SHT for this shell
+            self.SHT_values[:,a0] = np.matmul(self.SHT_basis, self.SHT_shell_values[:,a0])
+        
 
-        print(k)
+        plt.figure(figsize=(16,4))
+        plt.imshow(np.abs(self.SHT_values).T,cmap='gray')
+        plt.show()
+
+        
+
+        # p = np.vstack((self.SHT_azim, self.SHT_elev, self.SHT_verts.T))
+        # print(p.T)
+
+        # plt.figure(figsize=(16,4))
+        # plt.imshow(np.imag(self.SHT_values).T,cmap='gray')
+        # plt.show()
+
+        # imgplot = plt.imshow(
+        #     np.abs(self.SHT_values),
+        #     figsize=((16,8)))
+        # plt.show()
+
+        # plt.figure(figsize=(16,6))
+        # plt.imshow(np.real(self.SHT_values).T,cmap='gray')
+        # # plt.imshow(np.angle(self.SHT_values).T,
+        # #     vmin=-np.pi,vmax=np.pi,cmap='hsv')
+        # plt.show()
 
 
+        # # 3D plotting
+        # fig = plt.figure(figsize=(8,8))
+        # # ax = fig.add_subplot(
+        # #     projection='3d',
+        # #     elev=50.5, 
+        # #     azim=45)
+        # ax = fig.add_subplot(
+        #     projection='3d',
+        #     elev=0, 
+        #     azim=0)
+        # # print(self.SHT_shell_values[:,1])
+        # # print(self.SHT_shell_values[:,0].shape)
 
+        # ax.scatter(
+        #     xs=self.SHT_verts[:,0], 
+        #     ys=self.SHT_verts[:,1], 
+        #     zs=self.SHT_verts[:,2],
+        #     s=self.SHT_shell_values[:,5]*4)
 
-        # print(self.SHT_shell_radii)
+        # # axes limits
+        # # r = 1.05
+        # # ax.axes.set_xlim3d(left=-r, right=r) 
+        # # ax.axes.set_ylim3d(bottom=-r, top=r) 
+        # # ax.axes.set_zlim3d(bottom=-r, top=r) 
+        # ax.set_box_aspect((1,1,1))
+
+        # plt.show()
+
+        # print((self.SHT_verts - g[:,a1])**2
+        # print(g[:,1].shape)
 
 
         #return 1
