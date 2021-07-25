@@ -8,6 +8,7 @@ from matplotlib.axes import Axes
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from ..utils import single_atom_scatter
+from ..utils import electron_wavelength_angstrom
 
 
 
@@ -68,8 +69,7 @@ class Crystal:
             [c*np.cos(beta), c*t, c*np.sqrt(1-np.cos(beta)**2-t**2)]])
 
 
-
-    def calculate_structure_factors(self, k_max, tol_structure_factor=1e-4):
+    def calculate_structure_factors(self, k_max=2, tol_structure_factor=1e-2):
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
         
@@ -106,13 +106,13 @@ class Crystal:
             np.arange(-num_tile, num_tile+1),
             np.arange(-num_tile, num_tile+1))
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
-        k_vec_all = np.matmul(lat_inv, hkl) 
+        g_vec_all = np.matmul(lat_inv, hkl) 
 
         # Delete lattice vectors outside of k_max
-        keep = np.linalg.norm(k_vec_all, axis=0) <= self.k_max
+        keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
         self.hkl = hkl[:,keep]
-        self.k_vec_all = k_vec_all[:,keep]
-        self.k_vec_leng = np.linalg.norm(self.k_vec_all, axis=0)
+        self.g_vec_all = g_vec_all[:,keep]
+        self.k_vec_leng = np.linalg.norm(self.g_vec_all, axis=0)
 
         # Calculate single atom scattering factors
         # Note this can be sped up a ton, but we may want to generalize to allow non-1.0 occupancy in the future.
@@ -140,25 +140,29 @@ class Crystal:
         # Remove structure factors below tolerance level
         keep = np.abs(self.struct_factors) > tol_structure_factor
         self.hkl = self.hkl[:,keep]
-        self.k_vec_all = self.k_vec_all[:,keep]
+        self.g_vec_all = self.g_vec_all[:,keep]
         self.k_vec_leng = self.k_vec_leng[keep]
         self.struct_factors = self.struct_factors[keep]
 
+        # Structure factor intensities
+        self.struct_factors_int = np.abs(self.struct_factors)**2 
 
 
     def plot_structure_factors(
         self,
         proj_dir=[10,30],
         scale_markers=1,
-        figsize=(12,12),
+        figsize=(8,8),
         returnfig=False):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
         Args:
             dir_proj (2 or 3 element numpy array):    projection direction, either [azim elev] or normal vector
+            scale_markers (float):  size scaling for markers
+            figsize (2 element float):  size scaling of figure axes
+            returnfig (bool):   set to True to return figure and axes handles
         """
-
 
         if np.size(proj_dir) == 2:
             el = proj_dir[0]
@@ -181,10 +185,10 @@ class Crystal:
             azim=az)
 
         ax.scatter(
-            xs=self.k_vec_all[0,:], 
-            ys=self.k_vec_all[1,:], 
-            zs=self.k_vec_all[2,:],
-            s=scale_markers*np.abs(self.struct_factors)**2)
+            xs=self.g_vec_all[0,:], 
+            ys=self.g_vec_all[1,:], 
+            zs=self.g_vec_all[2,:],
+            s=scale_markers*self.struct_factors_int)
 
         # axes limits
         r = self.k_max * 1.05
@@ -194,6 +198,149 @@ class Crystal:
 
         plt.show()
 
-
         if returnfig:
             return fig, ax
+
+
+    def generate_diffraction_pattern(
+        self, 
+        accel_voltage = 300e3, 
+        zone_axis = [0,0,1],
+        proj_x_axis = [1,0,0],
+        sigma_excitation_error = 0.02,
+        tol_excitation_error_mult = 3,
+        ):
+        """
+        Generate a single diffraction pattern, return all peaks as a pointlist.
+
+        Args:
+            accel_voltage (numpy float):        kinetic energy of electrons specificed in volts
+        """
+
+        accel_voltage = np.asarray(accel_voltage)
+        zone_axis = np.asarray(zone_axis)
+
+        # Calculate wavelenth
+        wavelength = electron_wavelength_angstrom(accel_voltage)
+
+        # wavevectors
+        K0 = zone_axis / np.linalg.norm(zone_axis) / wavelength;
+        # K0_plus_g = self.g_vec_all + K0[:,None]
+        # cos_alpha = np.sum(K0[:,None] * self.g_vec_all, axis=0) \
+        #     / np.linalg.norm(self.g_vec_all, axis=0) \
+        #     / np.linalg.norm(K0)
+        cos_alpha = np.sum((K0[:,None] + self.g_vec_all) * zone_axis[:,None], axis=0) \
+            / np.linalg.norm(K0[:,None] + self.g_vec_all) \
+            / np.linalg.norm(zone_axis)
+
+
+        # Excitation errors
+        # sg = (-0.5 / wavelength) \
+        #     * np.sum((self.g_vec_all - 2*K0[:,None]) * self.g_vec_all, axis=0) \
+        #     / np.sum((self.g_vec_all + K0[:,None]) * K0[:,None], axis=0)
+        # sg = np.sum((self.g_vec_all - 2*K0[:,None]) * self.g_vec_all, axis=0) \
+        #     / np.linalg.norm(K0)**2
+        sg = (-0.5) * np.sum((2*K0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
+            / (np.linalg.norm(K0[:,None] + self.g_vec_all)) / cos_alpha
+
+        # Threshold for inclusion in diffraction pattern
+        sg_max = sigma_excitation_error * tol_excitation_error_mult
+        keep = (sg <= sg_max)
+        g_diff = self.g_vec_all[:,keep]
+        
+        # Diffracted peak intensities
+        g_int = self.struct_factors_int[keep] \
+            * np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
+
+        # Diffracted peak locations
+        ky_proj = np.cross(zone_axis, proj_x_axis)
+        kx_proj = np.cross(ky_proj, zone_axis)
+        kx_proj = kx_proj / np.linalg.norm(kx_proj)
+        ky_proj = ky_proj / np.linalg.norm(ky_proj)
+        gx_proj = np.sum(g_diff * kx_proj[:,None], axis=0)
+        gy_proj = np.sum(g_diff * ky_proj[:,None], axis=0)
+
+
+# exc = (-1 * g @ ((2 * k0) + g)) / (
+#                     2 * np.linalg.norm(k0 + g) * np.cos(vector_angle(k0 + g, uvw_0))
+#                 )
+
+        # qxyInt = np.array([
+        #     [0,0,10],
+        #     [1,0,30],
+        #     [2,0,20],
+        #     [3,0,25]])
+        # names = [('qx','float64'),('qy','float64'),('intensity','float64')]
+        # p = py4DSTEM.io.PointList(names)
+        # p.add_pointarray(qxyInt)
+
+        bragg_peaks = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
+        bragg_peaks.add_pointarray(np.vstack((gx_proj, gy_proj, g_int)).T)
+        # v = np.vstack((gx_proj, gy_proj, g_int))
+        # print(v.shape)
+        # print(K_plus_g)
+
+        return bragg_peaks
+
+
+
+
+    def new_function(self, args):
+        """
+        Description
+        
+        Args:
+            k_max (numpy float):                max scattering vector to include
+        """
+        ect
+
+
+
+
+
+
+def plot_diffraction_pattern(
+    bragg_peaks,
+    scale_markers=20,
+    power_markers=1,
+    figsize=(8,8),
+    returnfig=False):
+    """
+    2D scatter plot of the Bragg peaks
+
+    Args:
+        scale_markers (float):  size scaling for markers
+        power_markers (float):  power law scaling for marks (default is 1, i.e. amplitude)
+        figsize (2 element float):  size scaling of figure axes
+        returnfig (bool):   set to True to return figure and axes handles
+    """
+
+    # 2D plotting
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot()
+    # ax = fig.add_subplot(
+    #     projection='3d',
+    #     elev=el, 
+    #     azim=az)
+
+    if power_markers == 2:
+        marker_size = scale_markers*bragg_peaks.data['intensity']
+    else:
+        marker_size = scale_markers*(bragg_peaks.data['intensity']**(power_markers/2))
+
+    ax.scatter(
+        bragg_peaks.data['qy'], 
+        bragg_peaks.data['qx'], 
+        s=marker_size)
+
+    ax.invert_yaxis()
+    # # axes limits
+    # r = self.k_max * 1.05
+    # ax.axes.set_xlim3d(left=-r, right=r) 
+    # ax.axes.set_ylim3d(bottom=-r, top=r) 
+    # ax.axes.set_zlim3d(bottom=-r, top=r) 
+
+    plt.show()
+
+    if returnfig:
+        return fig, ax
