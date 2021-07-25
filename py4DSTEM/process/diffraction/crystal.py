@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+from .tdesign import tdesign
+
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from ..utils import single_atom_scatter
@@ -74,7 +76,7 @@ class Crystal:
         Calculate structure factors for all hkl indices up to max scattering vector k_max
         
         Args:
-            k_max (numpy float):                max scattering vector to include
+            k_max (numpy float):                max scattering vector to include (1/Angstroms)
             tol_structure_factor (numpy float): tolerance for removing low-valued structure factors
         """
 
@@ -112,26 +114,26 @@ class Crystal:
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
         self.hkl = hkl[:,keep]
         self.g_vec_all = g_vec_all[:,keep]
-        self.k_vec_leng = np.linalg.norm(self.g_vec_all, axis=0)
+        self.g_vec_leng = np.linalg.norm(self.g_vec_all, axis=0)
 
         # Calculate single atom scattering factors
         # Note this can be sped up a ton, but we may want to generalize to allow non-1.0 occupancy in the future.
-        f_all = np.zeros((np.size(self.k_vec_leng, 0), self.positions.shape[0]), dtype='float_')
+        f_all = np.zeros((np.size(self.g_vec_leng, 0), self.positions.shape[0]), dtype='float_')
         for a0 in range(self.positions.shape[0]):
             atom_sf = single_atom_scatter(
                 [self.numbers[a0]],
                 [1],
-                self.k_vec_leng,
+                self.g_vec_leng,
                 'A')
             atom_sf.get_scattering_factor(
                 [self.numbers[a0]],
                 [1],
-                self.k_vec_leng,
+                self.g_vec_leng,
                 'A')
             f_all[:,a0] = atom_sf.fe
 
         # Calculate structure factors
-        self.struct_factors = np.zeros(np.size(self.k_vec_leng, 0), dtype='complex64')
+        self.struct_factors = np.zeros(np.size(self.g_vec_leng, 0), dtype='complex64')
         for a0 in range(self.positions.shape[0]):
             self.struct_factors += f_all[:,a0] * \
                 np.exp((2j * np.pi) * \
@@ -141,7 +143,7 @@ class Crystal:
         keep = np.abs(self.struct_factors) > tol_structure_factor
         self.hkl = self.hkl[:,keep]
         self.g_vec_all = self.g_vec_all[:,keep]
-        self.k_vec_leng = self.k_vec_leng[keep]
+        self.g_vec_leng = self.g_vec_leng[keep]
         self.struct_factors = self.struct_factors[keep]
 
         # Structure factor intensities
@@ -183,6 +185,10 @@ class Crystal:
             projection='3d',
             elev=el, 
             azim=az)
+        # ax.set_box_aspect((np.ptp(
+        #     self.g_vec_all[0,:]), 
+        #     self.g_vec_all[1,:], 
+        #     self.g_vec_all[2,:]))
 
         ax.scatter(
             xs=self.g_vec_all[0,:], 
@@ -195,11 +201,57 @@ class Crystal:
         ax.axes.set_xlim3d(left=-r, right=r) 
         ax.axes.set_ylim3d(bottom=-r, top=r) 
         ax.axes.set_zlim3d(bottom=-r, top=r) 
+        ax.set_box_aspect((1,1,1))
 
         plt.show()
 
         if returnfig:
             return fig, ax
+
+
+    def spherical_harmonic_transform(
+        self, 
+        SHT_order=8,
+        tol_distance=1e-3):
+        """
+        Calculate the (nested) spherical harmonic for a set of 3D structure factors
+        
+        Args:
+            SHT_order (numpy float):  order of the spherical harmonic transform
+            tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
+        ect
+        """
+
+        # Determine the spherical shell radiis required
+        radii = np.unique(np.round(
+            self.g_vec_leng / tol_distance) * tol_distance)
+        # Remove zero beam
+        self.SHT_shell_radii = np.delete(radii,0)
+
+        # Get sampling points on spherical surface
+        _,_,self.SHT_verts = tdesign(SHT_order)
+
+        # Compute spherical interpolations for all SF peaks
+        self.SHT_shell_values = np.zeros((
+            np.size(self.SHT_verts),
+            np.size(self.SHT_shell_radii)))
+        for a0 in range(np.size(self.SHT_shell_radii)):
+            sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
+            k = self.k_vec_all[sub,:]
+
+        print(k)
+
+
+
+
+        # print(self.SHT_shell_radii)
+
+
+        #return 1
+
+
+
+
 
 
     def generate_diffraction_pattern(
@@ -260,25 +312,9 @@ class Crystal:
         gx_proj = np.sum(g_diff * kx_proj[:,None], axis=0)
         gy_proj = np.sum(g_diff * ky_proj[:,None], axis=0)
 
-
-# exc = (-1 * g @ ((2 * k0) + g)) / (
-#                     2 * np.linalg.norm(k0 + g) * np.cos(vector_angle(k0 + g, uvw_0))
-#                 )
-
-        # qxyInt = np.array([
-        #     [0,0,10],
-        #     [1,0,30],
-        #     [2,0,20],
-        #     [3,0,25]])
-        # names = [('qx','float64'),('qy','float64'),('intensity','float64')]
-        # p = py4DSTEM.io.PointList(names)
-        # p.add_pointarray(qxyInt)
-
+        # Output as PointList
         bragg_peaks = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
         bragg_peaks.add_pointarray(np.vstack((gx_proj, gy_proj, g_int)).T)
-        # v = np.vstack((gx_proj, gy_proj, g_int))
-        # print(v.shape)
-        # print(K_plus_g)
 
         return bragg_peaks
 
@@ -334,6 +370,8 @@ def plot_diffraction_pattern(
         s=marker_size)
 
     ax.invert_yaxis()
+    ax.set_box_aspect(1)
+
     # # axes limits
     # r = self.k_max * 1.05
     # ax.axes.set_xlim3d(left=-r, right=r) 
