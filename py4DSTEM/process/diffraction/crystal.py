@@ -220,7 +220,6 @@ class Crystal:
             SHT_degree_max (numpy int):  degree of the spherical harmonic transform
             SHT_shell_interp_dist (numpy float):  distance value for interpolation on shells
             tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
-        ect
         """
 
         self.SHT_degree_max = int(SHT_degree_max)
@@ -284,22 +283,98 @@ class Crystal:
                 self.SHT_shell_values[:,a0] += intensity[a1] * \
                     np.maximum(self.SHT_shell_interp_dist - \
                     np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
-                # self.SHT_shell_values[:,a0] += intensity[a1] * \
-                #     np.exp(pre*np.sum((self.SHT_verts - g[:,a1])**2,axis=1))
 
-                    
-                    
-            # Calculate SHT for this shell
-            self.SHT_values[:,a0] = np.matmul(self.SHT_basis, self.SHT_shell_values[:,a0])
+            # Calculate SHT for this shell.
+            # Note we take the complex conjugate to use as a reference SHT.
+            self.SHT_values[:,a0] = np.conjugate(np.matmul(
+                self.SHT_basis, self.SHT_shell_values[:,a0]))
         
         # # for testing
         # plt.figure(figsize=(16,4))
         # plt.imshow(np.abs(self.SHT_values).T,cmap='gray')
         # plt.show()
 
+    def spherical_harmonic_correlation_plan(
+        self, 
+        zone_axis_range=np.array([[1,0,1],[1,1,1]]),
+        angle_step_zone_axis=3.0,
+        angle_step_in_plane=6.0):
+        """
+        Calculate the spherical harmonic basis arrays for an SO(3) rotation correlogram.
+        
+        Args:
+            zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
+                                                Note that we always start at [0,0,1] to make z-x-z rotation work.
+            angle_step_zone_axis (numpy float):  approximate angular step size for zone axis [degrees]
+            angle_step_zone_axis (numpy float):  approximate angular step size for in-plane rotation [degrees]
+        """
+
+        self.SHT_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range)))
+
+        # Solve for number of angular steps in zone axis (rads)
+        z_angle_1 = np.arccos(np.sum(self.SHT_zone_axis_range[0,:]*self.SHT_zone_axis_range[1,:]) / \
+            np.linalg.norm(self.SHT_zone_axis_range[0,:])/np.linalg.norm(self.SHT_zone_axis_range[1,:]))
+        z_angle_2 = np.arccos(np.sum(self.SHT_zone_axis_range[0,:]*self.SHT_zone_axis_range[2,:]) / \
+            np.linalg.norm(self.SHT_zone_axis_range[0,:])/np.linalg.norm(self.SHT_zone_axis_range[2,:]))
+        self.SHT_zone_axis_steps = np.round(np.maximum( 
+            (180/np.pi) * z_angle_1 / angle_step_zone_axis,
+            (180/np.pi) * z_angle_2 / angle_step_zone_axis)).astype(np.int)
+
+        # Solve for number of angular steps along in-plane rotation direction
+        self.SHT_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
+
+        # Calculate z-x angular range (rads)
+        x_angle_1 = np.arctan2(self.SHT_zone_axis_range[1,1],self.SHT_zone_axis_range[1,0])
+        x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
+
+        # Calculate z-x angles
+        num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
+        elev = np.zeros(num_zones)
+        azim = np.zeros(num_zones)
+        for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
+            inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+            w_elev = a0 / self.SHT_zone_axis_steps
+            w_azim = np.linspace(0,1,a0+1)
+            elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
+            azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
+
+ 
+        x = np.cos(azim)*np.sin(elev)
+        y = np.sin(azim)*np.sin(elev)
+        z = np.cos(elev)
+
+        # 3D plotting
+        fig = plt.figure(figsize=(8,8))
+        ax = fig.add_subplot(
+            projection='3d',
+            elev=90, 
+            azim=0)
+
+        ax.scatter(
+            xs=x, 
+            ys=y, 
+            zs=z,
+            s=100)
+
+        # axes limits
+        ax.axes.set_xlim3d(left=0, right=1) 
+        ax.axes.set_ylim3d(bottom=0, top=1) 
+        ax.axes.set_zlim3d(bottom=0, top=1) 
+        ax.set_box_aspect((1,1,1))
 
 
+        # fig = plt.figure(figsize=(10,10))
+        # ax = fig.add_subplot()
 
+        # ax.scatter(
+        #     dx_angle*180/np.pi, 
+        #     dz_angle*180/np.pi, 
+        #     s=100)
+        # ax.invert_yaxis()
+
+        # print(v)
+        # print(z_angle_1 * 180/np.pi)
+        # print(z_angle_2 * 180/np.pi)
 
 
 
