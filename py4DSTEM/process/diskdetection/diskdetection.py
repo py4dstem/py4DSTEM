@@ -153,7 +153,8 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
 
     Args:
         DP (ndarray): a diffraction pattern
-        probe_kernel (ndarray): the vacuum probe template, in real space.
+        probe_kernel (ndarray): the vacuum probe template, in real space. If None,
+            no correlation is performed.
         corrPower (float between 0 and 1, inclusive): the cross correlation power. A
              value of 1 corresponds to a cross correaltion, and 0 corresponds to a
              phase correlation, with intermediate values giving various hybrids.
@@ -186,7 +187,7 @@ def find_Bragg_disks_single_DP(DP, probe_kernel,
         (PointList): the Bragg peak positions and correlation intensities
     """
     if filter_function: assert callable(filter_function), "filter_function must be callable"
-    probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
+    probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel)) if probe_kernel is not None else None
     return _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                          corrPower = corrPower,
                                          sigma = sigma,
@@ -219,7 +220,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
 
     Args:
         DP (ndarray): a diffraction pattern
-        probe (ndarray): the vacuum probe template, in real space.
+        probe (ndarray): the vacuum probe template, in real space. If None, no
+            correlation is performed.
         Rx (int or tuple/list of ints): scan position x-coords of DPs of interest
         Ry (int or tuple/list of ints): scan position y-coords of DPs of interest
         corrPower (float between 0 and 1, inclusive): the cross correlation power. A
@@ -261,7 +263,7 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
     peaks = []
 
     # Get probe kernel in Fourier space
-    probe_kernel_FT = np.conj(np.fft.fft2(probe))
+    probe_kernel_FT = np.conj(np.fft.fft2(probe)) if probe is not None else None
 
     n = len(Rx)
     if return_ccs:
