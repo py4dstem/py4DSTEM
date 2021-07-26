@@ -347,19 +347,19 @@ class Crystal:
         fig = plt.figure(figsize=(8,8))
         ax = fig.add_subplot(
             projection='3d',
-            elev=90, 
-            azim=0)
+            elev=54.7, 
+            azim=45)
 
         ax.scatter(
             xs=x, 
             ys=y, 
             zs=z,
-            s=100)
+            s=30)
 
         # axes limits
-        ax.axes.set_xlim3d(left=0, right=1) 
-        ax.axes.set_ylim3d(bottom=0, top=1) 
-        ax.axes.set_zlim3d(bottom=0, top=1) 
+        ax.axes.set_xlim3d(left=-0.05, right=1) 
+        ax.axes.set_ylim3d(bottom=-0.05, top=1) 
+        ax.axes.set_zlim3d(bottom=-0.05, top=1) 
         ax.set_box_aspect((1,1,1))
 
 
