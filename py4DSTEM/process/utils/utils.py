@@ -614,7 +614,7 @@ def fourier_resample(
     array, 
     scale=None, 
     output_size=None,
-    force_nonnegative=True,
+    force_nonnegative=False,
     bandlimit_nyquist=None,
     bandlimit_power=2, 
     dtype=np.float32):
@@ -623,9 +623,9 @@ def fourier_resample(
     For 4D input arrays, only the final two axes can be resized.
 
     The scaling of the array can be specified by passing either `scale`, which sets
-        the scaling factor along both axes to be scaled; or by passing `output_size`, 
-        which specifies the final dimensions of the scaled axes (and allows for different
-        scaling along the x,y or kx,ky axes.)
+    the scaling factor along both axes to be scaled; or by passing `output_size`, 
+    which specifies the final dimensions of the scaled axes (and allows for different
+    scaling along the x,y or kx,ky axes.)
 
     Args:
         array (2D/4D numpy array): Input array, or 4D stack of arrays, to be resized. 
@@ -639,6 +639,13 @@ def fourier_resample(
     Returns:
         the resized array (2D/4D numpy array)
     """
+
+    # Verify input is 2D or 4D
+    if np.size(array.shape) != 2 and np.size(array.shape) != 4:
+        raise Exception('Function does not support arrays with ' \
+         + str(np.size(array.shape)) + ' dimensions')
+
+    # Get input size from last 2 dimensions
     input__size = array.shape[-2:]
 
 
@@ -656,12 +663,8 @@ def fourier_resample(
 
 
     if bandlimit_nyquist is not None:
-        if len(input__size) == 2:
-            kx = np.fft.fftfreq(output_size[0])
-            ky = np.fft.fftfreq(output_size[1])
-        if len(input__size) == 4:
-            kx = np.fft.fftfreq(output_size[2])
-            ky = np.fft.fftfreq(output_size[3])
+        kx = np.fft.fftfreq(output_size[0])
+        ky = np.fft.fftfreq(output_size[1])
         k2 = kx[:,None]**2 + ky[None,:]**2
         # Gaussian filter 
         k_filt = np.exp((k2**(bandlimit_power/2))/(-2*bandlimit_nyquist**bandlimit_power))
@@ -674,31 +677,37 @@ def fourier_resample(
     # x slices
     if output_size[0] > input__size[0]:
         # x dimension increases
-        x_ul_out = slice(0,input__size[0]//2)
-        x_ul_in_ = slice(0,input__size[0]//2)
+        x0 = int((input__size[0]+1)//2)
+        x1 = int( input__size[0]   //2)
 
-        x_ll_out = slice(0-input__size[0]//2+output_size[0], output_size[0])
-        x_ll_in_ = slice(0-input__size[0]//2+input__size[0], input__size[0])
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
 
-        x_ur_out = slice(0, input__size[0]//2)
-        x_ur_in_ = slice(0, input__size[0]//2)
+        x_ll_out = slice(0-x1+output_size[0], output_size[0])
+        x_ll_in_ = slice(0-x1+input__size[0], input__size[0])
 
-        x_lr_out = slice(0-input__size[0]//2+output_size[0], output_size[0])
-        x_lr_in_ = slice(0-input__size[0]//2+input__size[0], input__size[0])
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0-x1+output_size[0], output_size[0])
+        x_lr_in_ = slice(0-x1+input__size[0], input__size[0])
 
     elif output_size[0] < input__size[0]:
         # x dimension decreases
-        x_ul_out = slice(0, output_size[0]//2)
-        x_ul_in_ = slice(0, output_size[0]//2)
+        x0 = int((output_size[0]+1)//2)
+        x1 = int( output_size[0]   //2)
 
-        x_ll_out = slice(0-output_size[0]//2, output_size[0])
-        x_ll_in_ = slice(0-output_size[0]//2+input__size[0], input__size[0])
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
 
-        x_ur_out = slice(0, output_size[0]//2)
-        x_ur_in_ = slice(0, output_size[0]//2)
+        x_ll_out = slice(0-x1+output_size[0], output_size[0])
+        x_ll_in_ = slice(0-x1+input__size[0], input__size[0])
 
-        x_lr_out = slice(0-output_size[0]//2+output_size[0], output_size[0])
-        x_lr_in_ = slice(0-output_size[0]//2+input__size[0], input__size[0])
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0-x1+output_size[0], output_size[0])
+        x_lr_in_ = slice(0-x1+input__size[0], input__size[0])
 
     else:
         # x dimension does not change
@@ -717,31 +726,37 @@ def fourier_resample(
     #y slices
     if output_size[1] > input__size[1]:
         # y increases
-        y_ul_out = slice(0, input__size[1]//2)
-        y_ul_in_ = slice(0, input__size[1]//2)
+        y0 = int((input__size[1]+1)//2)
+        y1 = int( input__size[1]   //2)
 
-        y_ll_out = slice(0, input__size[1]//2)
-        y_ll_in_ = slice(0, input__size[1]//2)
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
 
-        y_ur_out = slice(0-input__size[1]//2+output_size[1], output_size[1])
-        y_ur_in_ = slice(0-input__size[1]//2+input__size[1], input__size[1])
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
 
-        y_lr_out = slice(0-input__size[1]//2+output_size[1], output_size[1])
-        y_lr_in_ = slice(0-input__size[1]//2+input__size[1], input__size[1])
+        y_ur_out = slice(0-y1+output_size[1], output_size[1])
+        y_ur_in_ = slice(0-y1+input__size[1], input__size[1])
+
+        y_lr_out = slice(0-y1+output_size[1], output_size[1])
+        y_lr_in_ = slice(0-y1+input__size[1], input__size[1])
 
     elif output_size[1] < input__size[1]:
         # y decreases
-        y_ul_out = slice(0, output_size[1]//2)
-        y_ul_in_ = slice(0, output_size[1]//2)
+        y0 = int((output_size[1]+1)//2)
+        y1 = int( output_size[1]   //2)
 
-        y_ll_out = slice(0, output_size[1]//2)
-        y_ll_in_ = slice(0, output_size[1]//2)
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
 
-        y_ur_out = slice(0-output_size[1]//2, output_size[1])
-        y_ur_in_ = slice(0-output_size[1]//2+input__size[1], input__size[1])
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
 
-        y_lr_out = slice(0-output_size[1]//2, output_size[1])
-        y_lr_in_ = slice(0-output_size[1]//2+input__size[1], input__size[1])
+        y_ur_out = slice(0-y1+output_size[1], output_size[1])
+        y_ur_in_ = slice(0-y1+input__size[1], input__size[1])
+
+        y_lr_out = slice(0-y1+output_size[1], output_size[1])
+        y_lr_in_ = slice(0-y1+input__size[1], input__size[1])
 
     else:
         # y dimension does not change
@@ -781,8 +796,8 @@ def fourier_resample(
 
         # init arrays
         array_resize = np.zeros((*array.shape[:2], *output_size), dtype)
-        array_fft = np.zeros(input__size[2:], dtype=np.complex64)
-        array_output = np.zeros(output_size[2:], dtype=np.complex64)
+        array_fft = np.zeros(input__size, dtype=np.complex64)
+        array_output = np.zeros(output_size, dtype=np.complex64)
 
         for (Rx,Ry) in tqdmnd(array.shape[0],array.shape[1],desc='Resampling 4D datacube',unit='DP',unit_scale=True):
             array_fft[:,:] = np.fft.fft2(array[Rx,Ry,:,:])
