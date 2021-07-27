@@ -289,10 +289,10 @@ class Crystal:
             self.SHT_values[:,a0] = np.conjugate(np.matmul(
                 self.SHT_basis, self.SHT_shell_values[:,a0]))
         
-        # # for testing
-        # plt.figure(figsize=(16,4))
-        # plt.imshow(np.abs(self.SHT_values).T,cmap='gray')
-        # plt.show()
+        # for testing
+        plt.figure(figsize=(16,4))
+        plt.imshow(np.abs(self.SHT_values).T,cmap='gray')
+        plt.show()
 
     def spherical_harmonic_correlation_plan(
         self, 
@@ -328,9 +328,9 @@ class Crystal:
         x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
 
         # Calculate z-x angles
-        num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
-        elev = np.zeros(num_zones)
-        azim = np.zeros(num_zones)
+        self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
+        elev = np.zeros(self.SHT_num_zones)
+        azim = np.zeros(self.SHT_num_zones)
         for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
             inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
             w_elev = a0 / self.SHT_zone_axis_steps
@@ -338,7 +338,13 @@ class Crystal:
             elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
             azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
 
- 
+        # Calculate -z angles
+        # gamma = 
+
+        # Calculate rotation matrices
+        self.SHT_corr_rotation_matrices = np.zeros((3,3,self.SHT_num_zones,self.SHT_in_plane_steps))
+
+
         x = np.cos(azim)*np.sin(elev)
         y = np.sin(azim)*np.sin(elev)
         z = np.cos(elev)
