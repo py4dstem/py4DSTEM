@@ -375,10 +375,10 @@ class Crystal:
 
                 # Apply coordinate rotation
                 vecs = np.matmul(self.SHT_verts, self.SHT_corr_rotation_matrices[:,:,a0,a1])
-                
+
                 # Convert to spherical coordinates
                 SHT_azim = np.arctan2(vecs[:,1],vecs[:,0])
-                SHT_elev = np.arctan2(vecs[:,2], np.hypot(vecs[:,1], vecs[:,0]))
+                SHT_elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
                 # Calculate SHT basis in rotated coordinates
                 for a2 in range(num_terms): 

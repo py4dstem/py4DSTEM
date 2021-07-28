@@ -39,7 +39,8 @@ def tdesign(degree):
     vecs = _tdesigns[degree-1]
 
     azim = np.arctan2(vecs[:,1],vecs[:,0])
-    elev = np.arctan2(vecs[:,2], np.hypot(vecs[:,1], vecs[:,0]))
+    # elev = np.arctan2(vecs[:,2], np.hypot(vecs[:,1], vecs[:,0]))
+    elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
     return azim, elev, vecs
 
