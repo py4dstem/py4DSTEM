@@ -14,8 +14,7 @@ from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 from ..utils import single_atom_scatter
 from ..utils import electron_wavelength_angstrom
-
-
+from ..utils import tqdmnd
 
 
 class Crystal:
@@ -233,6 +232,7 @@ class Crystal:
 
         # Get sampling points on spherical surface - note we use t-design of 2 * max degree
         self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
+
         # Degree and order of all SHT terms
         v = np.arange(-self.SHT_degree_max,self.SHT_degree_max+1)
         # m, n = np.meshgrid(
@@ -288,11 +288,6 @@ class Crystal:
             # Note we take the complex conjugate to use as a reference SHT.
             self.SHT_values[:,a0] = np.conjugate(np.matmul(
                 self.SHT_basis, self.SHT_shell_values[:,a0]))
-        
-        # for testing
-        plt.figure(figsize=(16,4))
-        plt.imshow(np.abs(self.SHT_values).T,cmap='gray')
-        plt.show()
 
     def spherical_harmonic_correlation_plan(
         self, 
@@ -327,7 +322,7 @@ class Crystal:
         x_angle_1 = np.arctan2(self.SHT_zone_axis_range[1,1],self.SHT_zone_axis_range[1,0])
         x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
 
-        # Calculate z-x angles
+        # Calculate z-x angles (Euler angles 1 and 2)
         self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
         elev = np.zeros(self.SHT_num_zones)
         azim = np.zeros(self.SHT_num_zones)
@@ -338,35 +333,85 @@ class Crystal:
             elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
             azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
 
-        # Calculate -z angles
-        # gamma = 
+
+        # Calculate -z angles (Euler angle 3)
+        gamma = np.linspace(0,2*np.pi,self.SHT_in_plane_steps, endpoint=False)
+
+        # init storage arrays
+        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        self.SHT_corr_rotation_angles = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps,3))
+        self.SHT_corr_rotation_matrices = np.zeros((3,3,self.SHT_num_zones,self.SHT_in_plane_steps))
+        self.SHT_basis_corr = np.zeros((
+            num_terms,
+            self.SHT_verts.shape[0],
+            self.SHT_num_zones,
+            self.SHT_in_plane_steps),
+            dtype='complex64')
 
         # Calculate rotation matrices
-        self.SHT_corr_rotation_matrices = np.zeros((3,3,self.SHT_num_zones,self.SHT_in_plane_steps))
+            # for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+        # for a0 in np.arange(self.SHT_num_zones):
+
+        for a0 in tqdmnd(np.arange(self.SHT_num_zones),desc='Computing spherical harmonic basis',unit=' terms',unit_scale=True):
+            m1z = np.array([
+                [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
+                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                [ 0,                0,                1]])
+            m2x = np.array([
+                [1,  0,                0],
+                [0,  np.cos(elev[a0]), np.sin(elev[a0])],
+                [0, -np.sin(elev[a0]), np.cos(elev[a0])]])
+            m12 = np.matmul(m2x, m1z)
+
+            for a1 in np.arange(self.SHT_in_plane_steps):
+                self.SHT_corr_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
+                
+                # Orientation matrix
+                m3z = np.array([
+                    [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
+                    [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
+                    [ 0,                0,                1]])
+                self.SHT_corr_rotation_matrices[:,:,a0,a1] = np.matmul(m3z, m12)
+
+                # Apply coordinate rotation
+                vecs = np.matmul(self.SHT_verts, self.SHT_corr_rotation_matrices[:,:,a0,a1])
+                
+                # Convert to spherical coordinates
+                SHT_azim = np.arctan2(vecs[:,1],vecs[:,0])
+                SHT_elev = np.arctan2(vecs[:,2], np.hypot(vecs[:,1], vecs[:,0]))
+
+                # Calculate SHT basis in rotated coordinates
+                for a2 in range(num_terms): 
+                    self.SHT_basis_corr[a2,:,a0,a1] = sph_harm( \
+                        self.SHT_degree_order[a2,1],
+                        self.SHT_degree_order[a2,0],
+                        SHT_azim,
+                        SHT_elev)
 
 
-        x = np.cos(azim)*np.sin(elev)
-        y = np.sin(azim)*np.sin(elev)
-        z = np.cos(elev)
+        # # Testing plots
+        # x = np.cos(azim)*np.sin(elev)
+        # y = np.sin(azim)*np.sin(elev)
+        # z = np.cos(elev)
 
-        # 3D plotting
-        fig = plt.figure(figsize=(8,8))
-        ax = fig.add_subplot(
-            projection='3d',
-            elev=54.7, 
-            azim=45)
+        # # 3D plotting
+        # fig = plt.figure(figsize=(8,8))
+        # ax = fig.add_subplot(
+        #     projection='3d',
+        #     elev=54.7, 
+        #     azim=45)
 
-        ax.scatter(
-            xs=x, 
-            ys=y, 
-            zs=z,
-            s=30)
+        # ax.scatter(
+        #     xs=x, 
+        #     ys=y, 
+        #     zs=z,
+        #     s=30)
 
-        # axes limits
-        ax.axes.set_xlim3d(left=-0.05, right=1) 
-        ax.axes.set_ylim3d(bottom=-0.05, top=1) 
-        ax.axes.set_zlim3d(bottom=-0.05, top=1) 
-        ax.set_box_aspect((1,1,1))
+        # # axes limits
+        # ax.set_box_aspect((1,1,1))
+        # ax.axes.set_xlim3d(left=-0.05, right=1) 
+        # ax.axes.set_ylim3d(bottom=-0.05, top=1) 
+        # ax.axes.set_zlim3d(bottom=-0.05, top=1) 
 
 
         # fig = plt.figure(figsize=(10,10))
@@ -397,6 +442,7 @@ class Crystal:
 
         Args:
             accel_voltage (numpy float):        kinetic energy of electrons specificed in volts
+            etc
         """
 
         accel_voltage = np.asarray(accel_voltage)
@@ -406,24 +452,23 @@ class Crystal:
         wavelength = electron_wavelength_angstrom(accel_voltage)
 
         # wavevectors
-        K0 = zone_axis / np.linalg.norm(zone_axis) / wavelength;
-        # K0_plus_g = self.g_vec_all + K0[:,None]
-        # cos_alpha = np.sum(K0[:,None] * self.g_vec_all, axis=0) \
+        k0 = zone_axis / np.linalg.norm(zone_axis) / wavelength;
+        # k0_plus_g = self.g_vec_all + k0[:,None]
+        # cos_alpha = np.sum(k0[:,None] * self.g_vec_all, axis=0) \
         #     / np.linalg.norm(self.g_vec_all, axis=0) \
-        #     / np.linalg.norm(K0)
-        cos_alpha = np.sum((K0[:,None] + self.g_vec_all) * zone_axis[:,None], axis=0) \
-            / np.linalg.norm(K0[:,None] + self.g_vec_all) \
+        #     / np.linalg.norm(k0)
+        cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis[:,None], axis=0) \
+            / np.linalg.norm(k0[:,None] + self.g_vec_all) \
             / np.linalg.norm(zone_axis)
-
 
         # Excitation errors
         # sg = (-0.5 / wavelength) \
-        #     * np.sum((self.g_vec_all - 2*K0[:,None]) * self.g_vec_all, axis=0) \
-        #     / np.sum((self.g_vec_all + K0[:,None]) * K0[:,None], axis=0)
-        # sg = np.sum((self.g_vec_all - 2*K0[:,None]) * self.g_vec_all, axis=0) \
-        #     / np.linalg.norm(K0)**2
-        sg = (-0.5) * np.sum((2*K0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
-            / (np.linalg.norm(K0[:,None] + self.g_vec_all)) / cos_alpha
+        #     * np.sum((self.g_vec_all - 2*k0[:,None]) * self.g_vec_all, axis=0) \
+        #     / np.sum((self.g_vec_all + k0[:,None]) * k0[:,None], axis=0)
+        # sg = np.sum((self.g_vec_all - 2*k0[:,None]) * self.g_vec_all, axis=0) \
+        #     / np.linalg.norm(k0)**2
+        sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
+            / (np.linalg.norm(k0[:,None] + self.g_vec_all)) / cos_alpha
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
@@ -449,6 +494,191 @@ class Crystal:
         return bragg_peaks
 
 
+    def orientation_match(
+        self,
+        bragg_peaks,
+        accel_voltage = 300e3, 
+        flag_plot_corr=False,
+        figsize=(12,12),
+        tol_distance=1e-3,
+        tol_structure_factor=1e-2,
+        ):
+        """
+        Solve for the best fit orientation of a single diffraction pattern
+
+        Args:
+            bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+            accel_voltage (numpy float):        kinetic energy of electrons specificed in volts
+            tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
+
+        """
+
+        accel_voltage = np.asarray(accel_voltage)
+
+        # Calculate wavelenth
+        wavelength = electron_wavelength_angstrom(accel_voltage)
+
+        # Calculate z direction offset for peaks projected onto Ewald sphere
+        k0 = 1 / wavelength;
+        gz = np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2) - k0
+        # 3D Bragg peak data
+        g_vec_all = np.vstack((
+            bragg_peaks.data['qx'],
+            bragg_peaks.data['qy'],
+            gz))
+        intensity_all = bragg_peaks.data['intensity']
+        # Vector lengths
+        g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
+
+        # init shell value array
+        SHT_shell_values = np.zeros((
+            self.SHT_verts.shape[0],
+            np.size(self.SHT_shell_radii)))
+
+
+        # Place 3D coordinates onto spherical shells
+        for a0 in range(np.size(self.SHT_shell_radii)):
+            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
+            g = g_vec_all[:,sub]
+            g = g / np.linalg.norm(g, axis=0)
+            intensity = intensity_all[sub]
+
+            for a1 in range(g.shape[1]):
+                SHT_shell_values[:,a0] += intensity[a1] * \
+                    np.maximum(self.SHT_shell_interp_dist - \
+                    np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
+
+        # Determine number of shells with non-zero intensities
+        # inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)
+        nonzero_inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)[0]
+
+        # Masked spherical harmonic transform for reference structure
+        SHT_values_ref = self.SHT_values[:,nonzero_inds]
+
+        # Temporary array to hold SHT outputs
+        SHT_values = np.zeros((
+            self.SHT_values.shape[0],
+            np.size(nonzero_inds)),
+            dtype='complex64')
+
+        # Correlation values init
+        corr = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps))
+
+        # Loop over all orientations
+        for a0 in np.arange(self.SHT_num_zones):
+            for a1 in np.arange(self.SHT_in_plane_steps):
+
+                for ind, ind_radii in enumerate(nonzero_inds):
+                    SHT_values[:,ind] = np.matmul(
+                        self.SHT_basis_corr[:,:,a0,a1], 
+                        SHT_shell_values[:,ind_radii])
+
+                corr[a0,a1] = np.sum(np.abs(SHT_values * SHT_values_ref))
+
+
+        # Determine the best fit correlation
+
+        # print(corr.shape)
+        # print(self.SHT_num_zones)
+        # print(self.SHT_in_plane_steps)
+
+        # plotting
+        if flag_plot_corr is True:
+
+            plt.figure(figsize=figsize)
+            plt.imshow(corr,cmap='gray')
+            plt.show()
+
+            # fig = plt.figure(figsize=figsize)
+            # ax = fig.add_subplot(
+            #     projection='3d',
+            #     elev=15, 
+            #     azim=45)
+
+            # elev = self.SHT_corr_rotation_angles[:,:,0].ravel()
+            # azim  = self.SHT_corr_rotation_angles[:,:,1].ravel()
+            # gamma = self.SHT_corr_rotation_angles[:,:,2].ravel()
+            # intensity_corr = corr.ravel();
+
+            # intensity_plot = intensity_corr - np.min(intensity_corr) + 1e-3
+            # intensity_plot = (intensity_plot * 0.001)**2
+
+            # r = 0.5*(np.pi - elev)
+            # x = r * np.cos(gamma)
+            # y = r * np.sin(gamma)
+            # z = azim - (np.max(azim) - np.min(azim)) / 2
+
+            # ax.scatter(
+            #     xs=x, 
+            #     ys=y, 
+            #     zs=z,
+            #     s=intensity_plot)
+
+            # # axes limits
+            # rlim = np.max(r) * 1.05
+            # zlim = np.max(z) * 1.05
+            # ax.axes.set_xlim3d(left=-rlim, right=rlim) 
+            # ax.axes.set_ylim3d(bottom=-rlim, top=rlim) 
+            # ax.axes.set_zlim3d(bottom=-zlim, top=zlim) 
+            # # ax.set_box_aspect((1,1,1))
+            # # ax.set_aspect('equal','box')
+            # axisEqual3D(ax)
+
+            # plt.show()
+
+
+
+
+
+
+
+                # for a2 in inds:
+                #     print(a2)
+                # #     # Calculate SHT for this shell.
+                # #     SHT_values[:,a2] = np.matmul(
+                # #         self.SHT_basis, SHT_shell_values[:,a2])
+
+
+        # self.SHT_shell_values = np.zeros((
+        #     self.SHT_verts.shape[0],
+        #     np.size(self.SHT_shell_radii)))
+        # self.SHT_basis = np.zeros((
+        #     num_terms,
+        #     self.SHT_verts.shape[0]),
+        #     dtype='complex64')
+        # self.SHT_values = np.zeros((
+        #     num_terms,
+        #     np.size(self.SHT_shell_radii)),
+        #     dtype='complex64')
+
+        # # Calculate spherical harmonic basis of all orders and degrees
+        # for a0 in range(num_terms):
+        #     self.SHT_basis[a0,:] = sph_harm( \
+        #         self.SHT_degree_order[a0,1],
+        #         self.SHT_degree_order[a0,0],
+        #         self.SHT_azim,
+        #         self.SHT_elev)
+
+        # # Compute spherical interpolations for all SF peaks, and SHTs
+        # for a0 in range(np.size(self.SHT_shell_radii)):
+        #     sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
+        #     g = self.g_vec_all[:,sub]
+        #     g = g / np.linalg.norm(g, axis=0)
+        #     intensity = self.struct_factors_int[sub]
+            
+        #     # interpolate intenties on this shell
+        #     for a1 in range(g.shape[1]):
+        #         self.SHT_shell_values[:,a0] += intensity[a1] * \
+        #             np.maximum(self.SHT_shell_interp_dist - \
+        #             np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
+
+        #     # Calculate SHT for this shell.
+        #     # Note we take the complex conjugate to use as a reference SHT.
+        #     self.SHT_values[:,a0] = np.conjugate(np.matmul(
+        #         self.SHT_basis, self.SHT_shell_values[:,a0]))
+
+
+        return 1
 
 
     def new_function(self, args):
@@ -456,7 +686,7 @@ class Crystal:
         Description
         
         Args:
-            k_max (numpy float):                max scattering vector to include
+            bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         """
         ect
 
@@ -475,6 +705,7 @@ def plot_diffraction_pattern(
     2D scatter plot of the Bragg peaks
 
     Args:
+        bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         scale_markers (float):  size scaling for markers
         power_markers (float):  power law scaling for marks (default is 1, i.e. amplitude)
         figsize (2 element float):  size scaling of figure axes
@@ -512,3 +743,17 @@ def plot_diffraction_pattern(
 
     if returnfig:
         return fig, ax
+
+
+
+
+
+def axisEqual3D(ax):
+    extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+    sz = extents[:,1] - extents[:,0]
+    centers = np.mean(extents, axis=1)
+    maxsize = max(abs(sz))
+    r = maxsize/2
+    for ctr, dim in zip(centers, 'xyz'):
+        getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
+
