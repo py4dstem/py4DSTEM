@@ -211,7 +211,8 @@ class Crystal:
         self, 
         SHT_degree_max=6,
         SHT_shell_interp_dist=0.20,
-        tol_distance=1e-3):
+        tol_distance=1e-3,
+        flag_use_t_design=True):
         """
         Calculate the (nested) spherical harmonic for a set of 3D structure factors
         
@@ -230,8 +231,10 @@ class Crystal:
         # Remove zero beam
         self.SHT_shell_radii = np.delete(radii,0)
 
-        # Get sampling points on spherical surface - note we use t-design of 2 * max degree
-        self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
+        # Get sampling points on spherical surface 
+        if flag_use_t_design is True:
+            # note we use t-design of 2 * max degree
+            self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
         # self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(21)
 
 
@@ -304,9 +307,11 @@ class Crystal:
 
     def spherical_harmonic_correlation_plan(
         self, 
-        zone_axis_range=np.array([[1,0,1],[1,1,1]]),
+        zone_axis_range=np.array([[0,1,1],[1,1,1]]),
         angle_step_zone_axis=3.0,
-        angle_step_in_plane=6.0):
+        angle_step_in_plane=6.0,
+        flag_use_t_design=True,
+        ):
         """
         Calculate the spherical harmonic basis arrays for an SO(3) rotation correlogram.
         
@@ -364,7 +369,6 @@ class Crystal:
         # Calculate rotation matrices
             # for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
         # for a0 in np.arange(self.SHT_num_zones):
-
         for a0 in tqdmnd(np.arange(self.SHT_num_zones),desc='Computing spherical harmonic basis',unit=' terms',unit_scale=True):
             m1z = np.array([
                 [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
@@ -449,13 +453,18 @@ class Crystal:
         proj_x_axis = [1,0,0],
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
+        tol_intensity = 0.01
         ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            accel_voltage (numpy float):        kinetic energy of electrons specificed in volts
-            etc
+            accel_voltage (np float):        kinetic energy of electrons specificed in volts
+            zone_axis (np float vector):     3 element projection direction for sim pattern
+            proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+            sigma_excitation_error (np float): sigma value for Gaussian envelope applied to s_g (excitation errors) in units of Angstroms
+            tol_excitation_error_mult (np float): tolerance in units of sigma for s_g inclusion
+            tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
         """
 
         accel_voltage = np.asarray(accel_voltage)
@@ -492,17 +501,20 @@ class Crystal:
         g_int = self.struct_factors_int[keep] \
             * np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
 
+        # Intensity tolerance
+        keep_int = g_int > tol_intensity
+
         # Diffracted peak locations
         ky_proj = np.cross(zone_axis, proj_x_axis)
         kx_proj = np.cross(ky_proj, zone_axis)
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
-        gx_proj = np.sum(g_diff * kx_proj[:,None], axis=0)
-        gy_proj = np.sum(g_diff * ky_proj[:,None], axis=0)
+        gx_proj = np.sum(g_diff[:,keep_int] * kx_proj[:,None], axis=0)
+        gy_proj = np.sum(g_diff[:,keep_int] * ky_proj[:,None], axis=0)
 
         # Output as PointList
         bragg_peaks = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
-        bragg_peaks.add_pointarray(np.vstack((gx_proj, gy_proj, g_int)).T)
+        bragg_peaks.add_pointarray(np.vstack((gx_proj, gy_proj, g_int[keep_int])).T)
 
         return bragg_peaks
 
@@ -590,8 +602,36 @@ class Crystal:
 
                 corr[a0,a1] = np.sum(np.real(SHT_values * SHT_values_ref))
 
+        # Determine the best fit orientation
+        inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
+        
+        # Sub pixel refinement of zone axis orientation
+        if inds[0] == 0:
+            # Zone axis is (0,0,1)
+            zone_axis_fit = self.SHT_zone_axis_range[0,:]
 
-        # Determine the best fit correlation
+        elif inds[0] == self.SHT_num_zones - self.SHT_zone_axis_steps - 1:
+            # Zone axis is 1st user provided direction
+            zone_axis_fit = self.SHT_zone_axis_range[1,:]
+
+        elif inds[0] == self.SHT_num_zones - 1:
+            # Zone axis is the 2nd user-provided direction
+            zone_axis_fit = self.SHT_zone_axis_range[2,:]
+
+        else:
+            # Subpixel refinement
+            elev = self.SHT_corr_rotation_angles[inds[0],0,0]
+            azim = self.SHT_corr_rotation_angles[inds[0],0,1]
+            zone_axis_fit = np.array((
+                np.cos(azim)*np.sin(elev),
+                np.sin(azim)*np.sin(elev),
+                np.cos(elev)))        
+
+        zone_axis_fit = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        print(zone_axis_fit)
+        # print(self.SHT_zone_axis_steps)
+
+
 
         # print(corr.shape)
         # print(self.SHT_num_zones)
