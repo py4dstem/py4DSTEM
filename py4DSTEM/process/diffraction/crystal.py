@@ -209,7 +209,7 @@ class Crystal:
 
     def spherical_harmonic_transform(
         self, 
-        SHT_degree_max=10,
+        SHT_degree_max=6,
         SHT_shell_interp_dist=0.20,
         tol_distance=1e-3):
         """
@@ -232,20 +232,22 @@ class Crystal:
 
         # Get sampling points on spherical surface - note we use t-design of 2 * max degree
         self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
+        # self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(21)
+
 
         # Degree and order of all SHT terms
         v = np.arange(-self.SHT_degree_max,self.SHT_degree_max+1)
-        # m, n = np.meshgrid(
-        #     np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
-        #     np.arange(0, self.SHT_degree_max+1))
         m, n = np.meshgrid(
-            np.arange(0, self.SHT_degree_max+1),
+            np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
             np.arange(0, self.SHT_degree_max+1))
+        # m, n = np.meshgrid(
+        #     np.arange(0, self.SHT_degree_max+1),
+        #     np.arange(0, self.SHT_degree_max+1))
         keep = np.abs(m) <= n
         self.SHT_degree_order = np.vstack((
             n[keep], m[keep])).T
-        # num_terms = (self.SHT_degree_max + 1)**2
-        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        num_terms = (self.SHT_degree_max + 1)**2
+        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
 
         # compute Gaussian denominator prefactor for Gaussian KDE on shells
         # pre = -1/(2*SHT_shell_sigma**2)
@@ -275,19 +277,30 @@ class Crystal:
         for a0 in range(np.size(self.SHT_shell_radii)):
             sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
             g = self.g_vec_all[:,sub]
-            g = g / np.linalg.norm(g, axis=0)
+            # g = g / np.linalg.norm(g, axis=0)
             intensity = self.struct_factors_int[sub]
             
             # interpolate intenties on this shell
             for a1 in range(g.shape[1]):
+                verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
+
                 self.SHT_shell_values[:,a0] += intensity[a1] * \
                     np.maximum(self.SHT_shell_interp_dist - \
-                    np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
+                    np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1)), 0)
 
             # Calculate SHT for this shell.
             # Note we take the complex conjugate to use as a reference SHT.
             self.SHT_values[:,a0] = np.conjugate(np.matmul(
                 self.SHT_basis, self.SHT_shell_values[:,a0]))
+            # self.SHT_values[:,a0] = (np.matmul(
+            #     self.SHT_basis, self.SHT_shell_values[:,a0]))
+
+        # plt.figure(figsize=(20,20))
+        # plt.imshow(
+        #     np.abs(self.SHT_values)**0.5,
+        #     cmap='gray')
+        # plt.colorbar()
+        # plt.show()
 
     def spherical_harmonic_correlation_plan(
         self, 
@@ -338,11 +351,11 @@ class Crystal:
         gamma = np.linspace(0,2*np.pi,self.SHT_in_plane_steps, endpoint=False)
 
         # init storage arrays
-        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
         self.SHT_corr_rotation_angles = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps,3))
         self.SHT_corr_rotation_matrices = np.zeros((3,3,self.SHT_num_zones,self.SHT_in_plane_steps))
         self.SHT_basis_corr = np.zeros((
-            num_terms,
+            self.SHT_basis.shape[0],
             self.SHT_verts.shape[0],
             self.SHT_num_zones,
             self.SHT_in_plane_steps),
@@ -381,7 +394,7 @@ class Crystal:
                 SHT_elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
                 # Calculate SHT basis in rotated coordinates
-                for a2 in range(num_terms): 
+                for a2 in range(self.SHT_basis.shape[0]): 
                     self.SHT_basis_corr[a2,:,a0,a1] = sph_harm( \
                         self.SHT_degree_order[a2,1],
                         self.SHT_degree_order[a2,0],
@@ -538,15 +551,17 @@ class Crystal:
 
         # Place 3D coordinates onto spherical shells
         for a0 in range(np.size(self.SHT_shell_radii)):
-            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
+            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < self.SHT_shell_interp_dist 
             g = g_vec_all[:,sub]
-            g = g / np.linalg.norm(g, axis=0)
+            # g = g / np.linalg.norm(g, axis=0)
             intensity = intensity_all[sub]
 
             for a1 in range(g.shape[1]):
+                verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
+
                 SHT_shell_values[:,a0] += intensity[a1] * \
                     np.maximum(self.SHT_shell_interp_dist - \
-                    np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
+                    np.sqrt(np.sum((verts_scale- g[:,a1])**2, axis=1)), 0)
 
         # Determine number of shells with non-zero intensities
         # inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)
@@ -573,7 +588,7 @@ class Crystal:
                         self.SHT_basis_corr[:,:,a0,a1], 
                         SHT_shell_values[:,ind_radii])
 
-                corr[a0,a1] = np.sum(np.abs(SHT_values * SHT_values_ref))
+                corr[a0,a1] = np.sum(np.real(SHT_values * SHT_values_ref))
 
 
         # Determine the best fit correlation
@@ -585,15 +600,22 @@ class Crystal:
         # plotting
         if flag_plot_corr is True:
 
+            cmax = np.max(corr)
+
             plt.figure(figsize=figsize)
-            plt.imshow(corr,cmap='gray')
+            plt.imshow(
+                corr,
+                cmap='turbo',
+                vmin=0.0*cmax,
+                vmax=cmax)
+            plt.colorbar()
             plt.show()
 
             # fig = plt.figure(figsize=figsize)
             # ax = fig.add_subplot(
             #     projection='3d',
-            #     elev=15, 
-            #     azim=45)
+            #     elev=90, 
+            #     azim=0)
 
             # elev = self.SHT_corr_rotation_angles[:,:,0].ravel()
             # azim  = self.SHT_corr_rotation_angles[:,:,1].ravel()
@@ -601,7 +623,7 @@ class Crystal:
             # intensity_corr = corr.ravel();
 
             # intensity_plot = intensity_corr - np.min(intensity_corr) + 1e-3
-            # intensity_plot = (intensity_plot * 0.001)**2
+            # intensity_plot = (intensity_plot * 0.0003)**2
 
             # r = 0.5*(np.pi - elev)
             # x = r * np.cos(gamma)
