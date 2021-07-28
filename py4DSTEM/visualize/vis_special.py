@@ -230,18 +230,88 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False
     else:
         return fig,axs
 
-def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=None,
-                bkgrd=True,show_cbars=('exx','eyy','exy','theta'),
-                bordercolor='k',borderwidth=1,
-                titlesize=24,ticklabelsize=16,ticknumber=5,unitlabelsize=24,
-                show_axes=True,axes_x0=0,axes_y0=0,xaxis_x=1,xaxis_y=0,axes_length=10,
-                axes_width=1,axes_color='r',xaxis_space='Q',labelaxes=True,QR_rotation=0,
-                axes_labelsize=12,axes_labelcolor='r',axes_plots=('exx'),cmap='RdBu_r',
-                figsize=(12,12),returnfig=False):
+def show_strain(strainmap,
+                vrange_exx,
+                vrange_theta,
+                vrange_exy=None,
+                vrange_eyy=None,
+                bkgrd=True,
+                show_cbars=('exx','eyy','exy','theta'),
+                bordercolor='k',
+                borderwidth=1,
+                titlesize=24,
+                ticklabelsize=16,
+                ticknumber=5,
+                unitlabelsize=24,
+                show_axes=True,
+                axes_x0=0,
+                axes_y0=0,
+                xaxis_x=1,
+                xaxis_y=0,
+                axes_length=10,
+                axes_width=1,
+                axes_color='r',
+                xaxis_space='Q',
+                labelaxes=True,
+                QR_rotation=0,
+                axes_labelsize=12,
+                axes_labelcolor='r',
+                axes_plots=('exx'),
+                cmap='RdBu_r',
+                layout=0,
+                figsize=(12,12),
+                returnfig=False):
     """
     Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
     masking each image with strainmap.slices['mask'].
+
+    Args:
+        strainmap (RealSlice):
+        vrange_exx (length 2 list or tuple):
+        vrange_theta (length 2 list or tuple):
+        vrange_exy (length 2 list or tuple):
+        vrange_eyy (length 2 list or tuple):
+        bkgrd (bool):
+        show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
+            tuple containing any, all, or none of ('exx','eyy','exy','theta').
+        bordercolor (color):
+        borderwidth (number):
+        titlesize (number):
+        ticklabelsize (number):
+        ticknumber (number): number of ticks on colorbars
+        unitlabelsize (number):
+        show_axes (bool):
+        axes_x0 (number):
+        axes_y0 (number):
+        xaxis_x (number):
+        xaxis_y (number):
+        axes_length (number):
+        axes_width (number):
+        axes_color (color):
+        xaxis_space (string): must be 'Q' or 'R'
+        labelaxes (bool):
+        QR_rotation (number):
+        axes_labelsize (number):
+        axes_labelcolor (color):
+        axes_plots (tuple of strings): controls if coordinate axes showing the
+            orientation of the strain matrices are overlaid over any of the plots.
+            Must be a tuple of strings containing any, all, or none of
+            ('exx','eyy','exy','theta').
+        cmap (colormap):
+        layout=0 (int): determines the layout of the grid which the strain components
+            will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+        figsize (length 2 tuple of numbers):
+        returnfig (bool):
     """
+    # Lookup table for different layouts
+    assert(layout in (0,1,2))
+    layout_lookup = {
+        0:['left','right','left','right'],
+        1:['bottom','bottom','bottom','bottom'],
+        2:['right','right','right','right'],
+    }
+    layout_p = layout_lookup[layout]
+
     # Contrast limits
     if vrange_exy is None:
         vrange_exy = vrange_exx
@@ -261,7 +331,12 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
     theta = np.ma.array(strainmap.slices['theta'],mask=strainmap.slices['mask']==False)
 
     # Plot
-    fig,((ax11,ax12),(ax21,ax22)) = plt.subplots(2,2,figsize=figsize)
+    if layout==0:
+        fig,((ax11,ax12),(ax21,ax22)) = plt.subplots(2,2,figsize=figsize)
+    elif layout==1:
+        fig,(ax11,ax12,ax21,ax22) = plt.subplots(1,4,figsize=figsize)
+    else:
+        fig,(ax11,ax12,ax21,ax22) = plt.subplots(4,1,figsize=figsize)
     cax11 = show(e_xx,figax=(fig,ax11),min=vmin_exx,max=vmax_exx,clipvals='manual',
                  cmap=cmap,returncax=True)
     cax12 = show(e_yy,figax=(fig,ax12),min=vmin_eyy,max=vmax_eyy,clipvals='manual',
@@ -292,25 +367,33 @@ def show_strain(strainmap,vrange_exx,vrange_theta,vrange_exy=None,vrange_eyy=Non
         divider12 = make_axes_locatable(ax12)
         divider21 = make_axes_locatable(ax21)
         divider22 = make_axes_locatable(ax22)
-        cbax11 = divider11.append_axes("left",size="4%",pad=0.15)
-        cbax12 = divider12.append_axes("right",size="4%",pad=0.15)
-        cbax21 = divider21.append_axes("left",size="4%",pad=0.15)
-        cbax22 = divider22.append_axes("right",size="4%",pad=0.15)
+        cbax11 = divider11.append_axes(layout_p[0],size="4%",pad=0.15)
+        cbax12 = divider12.append_axes(layout_p[1],size="4%",pad=0.15)
+        cbax21 = divider21.append_axes(layout_p[2],size="4%",pad=0.15)
+        cbax22 = divider22.append_axes(layout_p[3],size="4%",pad=0.15)
         for (show_cbar,cax,cbax,vmin,vmax,tickside,tickunits) in zip(
                                     show_cbars,
                                     (cax11,cax12,cax21,cax22),
                                     (cbax11,cbax12,cbax21,cbax22),
                                     (vmin_exx,vmin_eyy,vmin_exy,vmin_theta),
                                     (vmax_exx,vmax_eyy,vmax_exy,vmax_theta),
-                                    ('left','right','left','right'),
+                                    (layout_p[0],layout_p[1],layout_p[2],layout_p[3]),
                                     ('% ',' %','% ',r' $^\circ$')):
             if show_cbar:
-                cb = plt.colorbar(cax,cax=cbax,ticks=np.linspace(vmin,vmax,ticknumber,endpoint=True))
-                cb.ax.set_yticklabels(['{}'.format(val) \
-                    for val in np.round(np.linspace(100*vmin,100*vmax,ticknumber,endpoint=True)*100)/100],size=ticklabelsize)
-                cbax.yaxis.set_ticks_position(tickside)
-                cbax.set_ylabel(tickunits,size=unitlabelsize,rotation=0)
-                cbax.yaxis.set_label_position(tickside)
+                ticks = np.linspace(vmin,vmax,ticknumber,endpoint=True)
+                ticklabels = (np.round(np.linspace(100*vmin,100*vmax,ticknumber,endpoint=True)*100)/100).astype(str)
+                if tickside in ('left','right'):
+                    cb = plt.colorbar(cax,cax=cbax,ticks=ticks,orientation='vertical')
+                    cb.ax.set_yticklabels(ticklabels,size=ticklabelsize)
+                    cbax.yaxis.set_ticks_position(tickside)
+                    cbax.set_ylabel(tickunits,size=unitlabelsize,rotation=0)
+                    cbax.yaxis.set_label_position(tickside)
+                else:
+                    cb = plt.colorbar(cax,cax=cbax,ticks=ticks,orientation='horizontal')
+                    cb.ax.set_xticklabels(ticklabels,size=ticklabelsize)
+                    cbax.xaxis.set_ticks_position(tickside)
+                    cbax.set_xlabel(tickunits,size=unitlabelsize,rotation=0)
+                    cbax.xaxis.set_label_position(tickside)
             else:
                 cbax.axis('off')
 
