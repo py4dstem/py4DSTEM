@@ -119,7 +119,7 @@ class Crystal:
         self.g_vec_leng = np.linalg.norm(self.g_vec_all, axis=0)
 
         # Calculate single atom scattering factors
-        # Note this can be sped up a ton, but we may want to generalize to allow non-1.0 occupancy in the future.
+        # Note this can be sped up a lot, but we may want to generalize to allow non-1.0 occupancy in the future.
         f_all = np.zeros((np.size(self.g_vec_leng, 0), self.positions.shape[0]), dtype='float_')
         for a0 in range(self.positions.shape[0]):
             atom_sf = single_atom_scatter(
@@ -235,25 +235,30 @@ class Crystal:
         if flag_use_t_design is True:
             # note we use t-design of 2 * max degree
             self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
+
+        else:
+            self.SHT_azim, self.SHT_elev, self.SHT_verts = cdesign(self.SHT_degree_max)
+
+
         # self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(21)
 
 
         # Degree and order of all SHT terms
         v = np.arange(-self.SHT_degree_max,self.SHT_degree_max+1)
-        m, n = np.meshgrid(
-            np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
-            np.arange(0, self.SHT_degree_max+1))
+        # Full set of SH
         # m, n = np.meshgrid(
-        #     np.arange(0, self.SHT_degree_max+1),
+        #     np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
         #     np.arange(0, self.SHT_degree_max+1))
+        # num_terms = (self.SHT_degree_max + 1)**2
+        # Half space of SH
+        m, n = np.meshgrid(
+            np.arange(0, self.SHT_degree_max+1),
+            np.arange(0, self.SHT_degree_max+1))
+        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        
         keep = np.abs(m) <= n
         self.SHT_degree_order = np.vstack((
             n[keep], m[keep])).T
-        num_terms = (self.SHT_degree_max + 1)**2
-        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
-
-        # compute Gaussian denominator prefactor for Gaussian KDE on shells
-        # pre = -1/(2*SHT_shell_sigma**2)
 
         # initialize arrays
         self.SHT_shell_values = np.zeros((
@@ -275,6 +280,8 @@ class Crystal:
                 self.SHT_degree_order[a0,0],
                 self.SHT_azim,
                 self.SHT_elev)
+            if self.SHT_degree_order[a0,1] > 0:
+                self.SHT_basis[a0,:] = 2*self.SHT_basis[a0,:]
 
         # Compute spherical interpolations for all SF peaks, and SHTs
         for a0 in range(np.size(self.SHT_shell_radii)):
@@ -283,7 +290,7 @@ class Crystal:
             # g = g / np.linalg.norm(g, axis=0)
             intensity = self.struct_factors_int[sub]
             
-            # interpolate intenties on this shell
+            # interpolate intensities on this shell
             for a1 in range(g.shape[1]):
                 verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
 
@@ -523,7 +530,8 @@ class Crystal:
         self,
         bragg_peaks,
         accel_voltage = 300e3, 
-        flag_plot_corr=False,
+        subpixel_tilt=True,
+        plot_corr=False,
         figsize=(12,12),
         tol_distance=1e-3,
         tol_structure_factor=1e-2,
@@ -532,8 +540,11 @@ class Crystal:
         Solve for the best fit orientation of a single diffraction pattern
 
         Args:
-            bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-            accel_voltage (numpy float):        kinetic energy of electrons specificed in volts
+            bragg_peaks (PointList):        numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+            accel_voltage (numpy float):    kinetic energy of electrons specificed in volts
+            subpixel_tilt (bool):           Set to false for faster matching, returning the nearest corr point
+
+
             tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
 
         """
@@ -605,30 +616,36 @@ class Crystal:
         # Determine the best fit orientation
         inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
         
-        # Sub pixel refinement of zone axis orientation
-        if inds[0] == 0:
-            # Zone axis is (0,0,1)
-            zone_axis_fit = self.SHT_zone_axis_range[0,:]
 
-        elif inds[0] == self.SHT_num_zones - self.SHT_zone_axis_steps - 1:
-            # Zone axis is 1st user provided direction
-            zone_axis_fit = self.SHT_zone_axis_range[1,:]
-
-        elif inds[0] == self.SHT_num_zones - 1:
-            # Zone axis is the 2nd user-provided direction
-            zone_axis_fit = self.SHT_zone_axis_range[2,:]
+        if subpixel_tilt is False:
+            elev_azim_gamma = self.SHT_corr_rotation_angles[inds[0],inds[1],:]
+            print(elev_azim_gamma)
 
         else:
-            # Subpixel refinement
-            elev = self.SHT_corr_rotation_angles[inds[0],0,0]
-            azim = self.SHT_corr_rotation_angles[inds[0],0,1]
-            zone_axis_fit = np.array((
-                np.cos(azim)*np.sin(elev),
-                np.sin(azim)*np.sin(elev),
-                np.cos(elev)))        
+            # Sub pixel refinement of zone axis orientation
+            if inds[0] == 0:
+                # Zone axis is (0,0,1)
+                zone_axis_fit = self.SHT_zone_axis_range[0,:]
 
-        zone_axis_fit = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        print(zone_axis_fit)
+            elif inds[0] == self.SHT_num_zones - self.SHT_zone_axis_steps - 1:
+                # Zone axis is 1st user provided direction
+                zone_axis_fit = self.SHT_zone_axis_range[1,:]
+
+            elif inds[0] == self.SHT_num_zones - 1:
+                # Zone axis is the 2nd user-provided direction
+                zone_axis_fit = self.SHT_zone_axis_range[2,:]
+
+            else:
+                # Subpixel refinement
+                elev = self.SHT_corr_rotation_angles[inds[0],0,0]
+                azim = self.SHT_corr_rotation_angles[inds[0],0,1]
+                zone_axis_fit = np.array((
+                    np.cos(azim)*np.sin(elev),
+                    np.sin(azim)*np.sin(elev),
+                    np.cos(elev)))        
+
+        # zone_axis_fit = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        # print(zone_axis_fit)
         # print(self.SHT_zone_axis_steps)
 
 
@@ -638,7 +655,7 @@ class Crystal:
         # print(self.SHT_in_plane_steps)
 
         # plotting
-        if flag_plot_corr is True:
+        if plot_corr is True:
 
             cmax = np.max(corr)
 
@@ -819,3 +836,115 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, 'xyz'):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
+
+
+
+
+def cdesign(degree):
+    """
+    Returns the spherical coordinates of Colin-design.
+
+    Args:
+        degree: int designating the maximum order
+
+    Returns:
+        azim: Nx1, azimuth of each point in the t-design
+        elev: Nx1, elevation of each point in the t-design
+        vecs: Nx3, array of cartesian coordinates for each point
+
+    """
+
+    degree = np.asarray(degree).astype(np.int)
+    steps = degree + 1
+
+    u = np.array((0,0,1))
+    v = np.array((0,1,1)) / np.sqrt(2)
+    w = np.array((1,1,1)) / np.sqrt(3)
+
+    # Calculate points along u and v using the SLERP formula
+    # https://en.wikipedia.org/wiki/Slerp
+    weights = np.linspace(0,1,steps+1)
+    angle_u_v = np.arccos(np.sum(u * v))
+    pv = u[None,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
+         v[None,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
+
+    # Calculate points along u and w using the SLERP formula
+    angle_u_w = np.arccos(np.sum(u * w))
+    pw = u[None,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
+         w[None,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
+
+
+    # Init array to hold all points
+    num_points = ((steps+1)*(steps+2)/2).astype(np.int)
+    vecs = np.zeros((num_points,3))
+    vecs[0,:] = u
+
+    # Calculate points on 1/48th of the unit sphere with another application of SLERP
+    for a0 in np.arange(1,steps+1):
+        inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+
+        p0 = pv[a0,:]
+        p1 = pw[a0,:]
+        angle_p = np.arccos(np.sum(p0 * p1))
+
+        weights = np.linspace(0,1,a0+1)
+        vecs[inds,:] = \
+            p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
+            p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
+
+    # Expand to 1/8 of the sphere
+    vecs = np.vstack((
+        vecs[:,[0,1,2]],
+        vecs[:,[0,2,1]],
+        vecs[:,[1,0,2]],
+        vecs[:,[1,2,0]],
+        vecs[:,[2,0,1]],
+        vecs[:,[2,1,0]],
+        ))
+    # Remove duplicate points
+    vecs = np.unique(vecs, axis=0)
+
+    # Expand to full the sphere
+    vecs = np.vstack((
+        vecs*np.array(( 1, 1, 1)),
+        vecs*np.array((-1, 1, 1)),
+        vecs*np.array(( 1,-1, 1)),
+        vecs*np.array((-1,-1, 1)),
+        vecs*np.array(( 1, 1,-1)),
+        vecs*np.array((-1, 1,-1)),
+        vecs*np.array(( 1,-1,-1)),
+        vecs*np.array((-1,-1,-1)),
+        ))
+    # Remove duplicate points
+    vecs = np.unique(vecs, axis=0)
+
+    # fig = plt.figure(figsize=(12,12))
+    # # ax = fig.add_subplot(
+    # #     projection='3d',
+    # #     elev=54, 
+    # #     azim=45)
+    # ax = fig.add_subplot(
+    #     projection='3d',
+    #     elev=90, 
+    #     azim=0)
+
+    # ax.scatter(
+    #     xs=vecs[:,0], 
+    #     ys=vecs[:,1], 
+    #     zs=vecs[:,2],
+    #     s=50)
+
+    # # axes limits
+    # r = 1.05
+    # ax.axes.set_xlim3d(left=-r, right=r) 
+    # ax.axes.set_ylim3d(bottom=-r, top=r) 
+    # ax.axes.set_zlim3d(bottom=-r, top=r) 
+    # ax.set_box_aspect((1,1,1))
+
+    # plt.show()
+
+
+    azim = np.arctan2(vecs[:,1],vecs[:,0])
+    elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
+
+    return azim, elev, vecs
