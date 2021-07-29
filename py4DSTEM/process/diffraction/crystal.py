@@ -16,6 +16,8 @@ from ..utils import single_atom_scatter
 from ..utils import electron_wavelength_angstrom
 from ..utils import tqdmnd
 
+import time
+
 
 class Crystal:
     """
@@ -212,7 +214,7 @@ class Crystal:
         SHT_degree_max=6,
         SHT_shell_interp_dist=0.20,
         tol_distance=1e-3,
-        flag_use_t_design=True):
+        use_t_design=False):
         """
         Calculate the (nested) spherical harmonic for a set of 3D structure factors
         
@@ -232,10 +234,9 @@ class Crystal:
         self.SHT_shell_radii = np.delete(radii,0)
 
         # Get sampling points on spherical surface 
-        if flag_use_t_design is True:
+        if use_t_design is True:
             # note we use t-design of 2 * max degree
             self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
-
         else:
             self.SHT_azim, self.SHT_elev, self.SHT_verts = cdesign(self.SHT_degree_max)
 
@@ -317,7 +318,7 @@ class Crystal:
         zone_axis_range=np.array([[0,1,1],[1,1,1]]),
         angle_step_zone_axis=3.0,
         angle_step_in_plane=6.0,
-        flag_use_t_design=True,
+        use_t_design=False,
         ):
         """
         Calculate the spherical harmonic basis arrays for an SO(3) rotation correlogram.
@@ -326,38 +327,75 @@ class Crystal:
             zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
             angle_step_zone_axis (numpy float):  approximate angular step size for zone axis [degrees]
-            angle_step_zone_axis (numpy float):  approximate angular step size for in-plane rotation [degrees]
+            angle_step_in_plane (numpy float):  approximate angular step size for in-plane rotation [degrees]
+            use_t_design (np bool):        
         """
 
-        self.SHT_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range)))
+        # Define 3 vectors which span zone axis orientation range, normalize
+        self.SHT_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
+        self.SHT_zone_axis_range[1,:] /= np.linalg.norm(self.SHT_zone_axis_range[1,:])
+        self.SHT_zone_axis_range[2,:] /= np.linalg.norm(self.SHT_zone_axis_range[2,:])
 
         # Solve for number of angular steps in zone axis (rads)
-        z_angle_1 = np.arccos(np.sum(self.SHT_zone_axis_range[0,:]*self.SHT_zone_axis_range[1,:]) / \
-            np.linalg.norm(self.SHT_zone_axis_range[0,:])/np.linalg.norm(self.SHT_zone_axis_range[1,:]))
-        z_angle_2 = np.arccos(np.sum(self.SHT_zone_axis_range[0,:]*self.SHT_zone_axis_range[2,:]) / \
-            np.linalg.norm(self.SHT_zone_axis_range[0,:])/np.linalg.norm(self.SHT_zone_axis_range[2,:]))
+        angle_u_v = np.arccos(np.sum(self.SHT_zone_axis_range[0,:] * self.SHT_zone_axis_range[1,:]))
+        angle_u_w = np.arccos(np.sum(self.SHT_zone_axis_range[0,:] * self.SHT_zone_axis_range[2,:]))
         self.SHT_zone_axis_steps = np.round(np.maximum( 
-            (180/np.pi) * z_angle_1 / angle_step_zone_axis,
-            (180/np.pi) * z_angle_2 / angle_step_zone_axis)).astype(np.int)
+            (180/np.pi) * angle_u_v / angle_step_zone_axis,
+            (180/np.pi) * angle_u_w / angle_step_zone_axis)).astype(np.int)
+
+        # Calculate points along u and v using the SLERP formula
+        # https://en.wikipedia.org/wiki/Slerp
+        weights = np.linspace(0,1,self.SHT_zone_axis_steps+1)
+        pv = self.SHT_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
+             self.SHT_zone_axis_range[1,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
+
+        # Calculate points along u and w using the SLERP formula
+        pw = self.SHT_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
+             self.SHT_zone_axis_range[2,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
+
+        # Init array to hold all points
+        self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
+        vecs = np.zeros((self.SHT_num_zones,3))
+        vecs[0,:] = self.SHT_zone_axis_range[0,:]
+
+        # Calculate zone axis points on the unit sphere with another application of SLERP
+        for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
+            inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+
+            p0 = pv[a0,:]
+            p1 = pw[a0,:]
+            angle_p = np.arccos(np.sum(p0 * p1))
+
+            weights = np.linspace(0,1,a0+1)
+            vecs[inds,:] = \
+                p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
+                p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
+
+        # Convert to spherical coordinates
+        azim = np.arctan2(vecs[:,1],vecs[:,0])
+        elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
+
+
+
+        # # Calculate z-x angular range (rads)
+        # x_angle_1 = np.arctan2(self.SHT_zone_axis_range[1,1],self.SHT_zone_axis_range[1,0])
+        # x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
+
+        # # Calculate z-x angles (Euler angles 1 and 2)
+        # self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
+        # elev = np.zeros(self.SHT_num_zones)
+        # azim = np.zeros(self.SHT_num_zones)
+        # for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
+        #     inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+        #     w_elev = a0 / self.SHT_zone_axis_steps
+        #     w_azim = np.linspace(0,1,a0+1)
+        #     elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
+        #     azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
+
+
 
         # Solve for number of angular steps along in-plane rotation direction
         self.SHT_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
-
-        # Calculate z-x angular range (rads)
-        x_angle_1 = np.arctan2(self.SHT_zone_axis_range[1,1],self.SHT_zone_axis_range[1,0])
-        x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
-
-        # Calculate z-x angles (Euler angles 1 and 2)
-        self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
-        elev = np.zeros(self.SHT_num_zones)
-        azim = np.zeros(self.SHT_num_zones)
-        for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
-            inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-            w_elev = a0 / self.SHT_zone_axis_steps
-            w_azim = np.linspace(0,1,a0+1)
-            elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
-            azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
-
 
         # Calculate -z angles (Euler angle 3)
         gamma = np.linspace(0,2*np.pi,self.SHT_in_plane_steps, endpoint=False)
@@ -599,6 +637,41 @@ class Crystal:
             np.size(nonzero_inds)),
             dtype='complex64')
 
+
+        # # Compute correlogram
+        # corr = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps))
+        # for ind, ind_radii in enumerate(nonzero_inds):
+        #     s = SHT_shell_values[:,ind_radii]
+        #     s_ref = self.SHT_values[:,ind];
+        #     corr += np.real(np.sum( \
+        #         (self.SHT_basis_corr * s[None,:,None,None]) * s_ref[:,None,None,None], axis=(0,1)))
+
+        # print(SHT_values_ref.shape)
+        # print((self.SHT_basis_corr * s[None,:,None,None]).shape)
+
+        # # # Compute correlogram
+        # SHT_shell_values_sub = SHT_shell_values[:,nonzero_inds]
+        # # corr = np.sum(np.real( \
+        # #     self.SHT_basis_corr[:,:,:,:,None] * \
+        # #     SHT_shell_values_sub[None,:,None,None,:]), axis=(0,1,4))
+        # corr_temp =  \
+        #     self.SHT_basis_corr[:,:,:,:,None] * \
+        #     SHT_shell_values_sub[None,:,None,None,:]
+        # print(corr_temp.shape)
+
+
+        # t = time.time()
+        # elapsed = time.time() - t
+        # print(elapsed)
+
+        # t = time.time()
+
+        # # print(corr.shape)
+
+        # # print(SHT_shell_values.shape)
+        # # print(SHT_shell_values[:,nonzero_inds].shape)
+        # # corr_temp = self.SHT_basis_corr * numpy.expand_dims(SHT_shell_values[:,ind_radii], axis=[0,])
+
         # Correlation values init
         corr = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps))
 
@@ -612,6 +685,7 @@ class Crystal:
                         SHT_shell_values[:,ind_radii])
 
                 corr[a0,a1] = np.sum(np.real(SHT_values * SHT_values_ref))
+
 
         # Determine the best fit orientation
         inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
@@ -855,7 +929,7 @@ def cdesign(degree):
     """
 
     degree = np.asarray(degree).astype(np.int)
-    steps = degree + 1
+    steps = (degree // 4) + 1
 
     u = np.array((0,0,1))
     v = np.array((0,1,1)) / np.sqrt(2)
@@ -918,32 +992,7 @@ def cdesign(degree):
     # Remove duplicate points
     vecs = np.unique(vecs, axis=0)
 
-    # fig = plt.figure(figsize=(12,12))
-    # # ax = fig.add_subplot(
-    # #     projection='3d',
-    # #     elev=54, 
-    # #     azim=45)
-    # ax = fig.add_subplot(
-    #     projection='3d',
-    #     elev=90, 
-    #     azim=0)
-
-    # ax.scatter(
-    #     xs=vecs[:,0], 
-    #     ys=vecs[:,1], 
-    #     zs=vecs[:,2],
-    #     s=50)
-
-    # # axes limits
-    # r = 1.05
-    # ax.axes.set_xlim3d(left=-r, right=r) 
-    # ax.axes.set_ylim3d(bottom=-r, top=r) 
-    # ax.axes.set_zlim3d(bottom=-r, top=r) 
-    # ax.set_box_aspect((1,1,1))
-
-    # plt.show()
-
-
+    # Spherical coordinates
     azim = np.arctan2(vecs[:,1],vecs[:,0])
     elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
