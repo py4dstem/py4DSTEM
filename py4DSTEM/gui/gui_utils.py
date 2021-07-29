@@ -41,6 +41,7 @@ def datacube_selector(fp, data_id=0):
     else:
         raise Exception("This EMD file version is not supported by the GUI.")
 
+    print(f"Reading py4DSTEM EMD version {version_major}.{version_minor}.{version_release}")
     info = get_py4DSTEM_dataobject_info(fp,topgroup)
     inds = nonzero(info['type']=='DataCube')[0]
     N_dc = len(inds)
