@@ -31,7 +31,12 @@ class Crystal:
                                               If only [a] is provided, we assume b = c = a.
     """
 
-    def __init__(self, positions, numbers, cell, **kwargs):
+    def __init__(
+        self, 
+        positions, 
+        numbers, 
+        cell, 
+        **kwargs):
         """
         Instantiate a Crystal object. 
         Calculate lattice vectors.
@@ -75,7 +80,10 @@ class Crystal:
             [c*np.cos(beta), c*t, c*np.sqrt(1-np.cos(beta)**2-t**2)]])
 
 
-    def calculate_structure_factors(self, k_max=2, tol_structure_factor=1e-2):
+    def calculate_structure_factors(
+        self, 
+        k_max=2, 
+        tol_structure_factor=1e-2):
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
         
@@ -212,15 +220,15 @@ class Crystal:
     def spherical_harmonic_transform(
         self, 
         SHT_degree_max=6,
-        SHT_shell_interp_dist=0.20,
+        SHT_shell_interp_dist=0.10,
         tol_distance=1e-3,
-        use_t_design=False):
+        use_t_design=True):
         """
         Calculate the (nested) spherical harmonic for a set of 3D structure factors
         
         Args:
             SHT_degree_max (numpy int):  degree of the spherical harmonic transform
-            SHT_shell_interp_dist (numpy float):  distance value for interpolation on shells
+            SHT_shell_interp_dist (numpy float):  distance value for interpolation on shells on the unit sphere
             tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
         """
 
@@ -245,17 +253,16 @@ class Crystal:
 
 
         # Degree and order of all SHT terms
-        v = np.arange(-self.SHT_degree_max,self.SHT_degree_max+1)
         # Full set of SH
-        # m, n = np.meshgrid(
-        #     np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
-        #     np.arange(0, self.SHT_degree_max+1))
-        # num_terms = (self.SHT_degree_max + 1)**2
-        # Half space of SH
         m, n = np.meshgrid(
-            np.arange(0, self.SHT_degree_max+1),
+            np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
             np.arange(0, self.SHT_degree_max+1))
-        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        num_terms = (self.SHT_degree_max + 1)**2
+        # # Half space of SH
+        # m, n = np.meshgrid(
+        #     np.arange(0, self.SHT_degree_max+1),
+        #     np.arange(0, self.SHT_degree_max+1))
+        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
         
         keep = np.abs(m) <= n
         self.SHT_degree_order = np.vstack((
@@ -281,23 +288,22 @@ class Crystal:
                 self.SHT_degree_order[a0,0],
                 self.SHT_azim,
                 self.SHT_elev)
-            if self.SHT_degree_order[a0,1] > 0:
-                self.SHT_basis[a0,:] = 2*self.SHT_basis[a0,:]
+            # if self.SHT_degree_order[a0,1] > 0:
+            #     self.SHT_basis[a0,:] = 2*self.SHT_basis[a0,:]
 
         # Compute spherical interpolations for all SF peaks, and SHTs
         for a0 in range(np.size(self.SHT_shell_radii)):
             sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
             g = self.g_vec_all[:,sub]
-            # g = g / np.linalg.norm(g, axis=0)
             intensity = self.struct_factors_int[sub]
             
             # interpolate intensities on this shell
             for a1 in range(g.shape[1]):
-                verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
+                g_scale = g[:,a1]/self.SHT_shell_radii[a0]
 
                 self.SHT_shell_values[:,a0] += intensity[a1] * \
                     np.maximum(self.SHT_shell_interp_dist - \
-                    np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1)), 0)
+                    np.sqrt(np.sum((self.SHT_verts - g_scale)**2, axis=1)), 0)
 
             # Calculate SHT for this shell.
             # Note we take the complex conjugate to use as a reference SHT.
@@ -318,7 +324,7 @@ class Crystal:
         zone_axis_range=np.array([[0,1,1],[1,1,1]]),
         angle_step_zone_axis=3.0,
         angle_step_in_plane=6.0,
-        use_t_design=False,
+        use_t_design=True,
         ):
         """
         Calculate the spherical harmonic basis arrays for an SO(3) rotation correlogram.
@@ -428,7 +434,7 @@ class Crystal:
             for a1 in np.arange(self.SHT_in_plane_steps):
                 self.SHT_corr_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
                 
-                # Orientation matrix
+                # orientation matrix
                 m3z = np.array([
                     [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
                     [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
@@ -450,6 +456,9 @@ class Crystal:
                         SHT_azim,
                         SHT_elev)
 
+        # Warn user it SHT_degree_max is too low
+        if self.SHT_degree_max < 6:
+            print('Warning - we strongly recommend using spherical harmonics of order >= 6')
 
         # # Testing plots
         # x = np.cos(azim)*np.sin(elev)
@@ -570,20 +579,20 @@ class Crystal:
         accel_voltage = 300e3, 
         subpixel_tilt=True,
         plot_corr=False,
-        figsize=(12,12),
-        tol_distance=1e-3,
-        tol_structure_factor=1e-2,
+        figsize=(12,6),
+        tol_shell_distance=0.05,
+        tol_structure_factor=1e-3,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern
 
         Args:
-            bragg_peaks (PointList):        numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-            accel_voltage (numpy float):    kinetic energy of electrons specificed in volts
-            subpixel_tilt (bool):           Set to false for faster matching, returning the nearest corr point
-
-
-            tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
+            bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+            accel_voltage (np float):           kinetic energy of electrons specificed in volts
+            subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
+            plot_corr (bool):                   set to true to plot the resulting correlogram
+            tol_shell_distance (np float):      tolerance for point inclusion in a given Shell (1/Angstroms)
+            tol_structure_factor (np float):    tolerance of structure factor intensity to include on shell
 
         """
 
@@ -609,20 +618,23 @@ class Crystal:
             self.SHT_verts.shape[0],
             np.size(self.SHT_shell_radii)))
 
-
         # Place 3D coordinates onto spherical shells
+        # print(self.SHT_shell_radii)
         for a0 in range(np.size(self.SHT_shell_radii)):
-            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < self.SHT_shell_interp_dist 
-            g = g_vec_all[:,sub]
-            # g = g / np.linalg.norm(g, axis=0)
-            intensity = intensity_all[sub]
+            # verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
+            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < tol_shell_distance
 
-            for a1 in range(g.shape[1]):
-                verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
+            if np.sum(sub) > 0:
+                g_scale = g_vec_all[:,sub] / self.SHT_shell_radii[a0]
+                intensity = intensity_all[sub]
 
-                SHT_shell_values[:,a0] += intensity[a1] * \
-                    np.maximum(self.SHT_shell_interp_dist - \
-                    np.sqrt(np.sum((verts_scale- g[:,a1])**2, axis=1)), 0)
+                for a1 in range(g_scale.shape[1]):
+                    # print(np.min(np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1))))
+                    # print(np.min(np.sqrt(np.sum((self.SHT_verts - g_scale[:,a1])**2, axis=1))))
+
+                    SHT_shell_values[:,a0] += intensity[a1] * \
+                        np.maximum(self.SHT_shell_interp_dist - \
+                        np.sqrt(np.sum((self.SHT_verts - g_scale[:,a1])**2, axis=1)), 0)
 
         # Determine number of shells with non-zero intensities
         # inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)
@@ -731,16 +743,71 @@ class Crystal:
         # plotting
         if plot_corr is True:
 
-            cmax = np.max(corr)
+            # 2D correlation slice
+            sig_zone_axis = np.max(corr,axis=1)
+            im_corr_zone_axis = np.zeros((self.SHT_zone_axis_steps+1, self.SHT_zone_axis_steps+1))
+            for a0 in np.arange(self.SHT_zone_axis_steps+1):
+                inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+                im_corr_zone_axis[a0,range(a0+1)] = sig_zone_axis[inds_val]
 
-            plt.figure(figsize=figsize)
-            plt.imshow(
-                corr,
+
+            # Zone axis
+            fig, ax = plt.subplots(1, 2, figsize=figsize)
+            cmin = np.min(sig_zone_axis)
+            cmax = np.max(sig_zone_axis)
+
+            ax[0].imshow(
+                im_corr_zone_axis - cmin,
                 cmap='turbo',
-                vmin=0.0*cmax,
-                vmax=cmax)
-            plt.colorbar()
+                vmin=0.0*(cmax-cmin),
+                vmax=1.0*(cmax-cmin))
+            # im_handle = 
+            # fig.colorbar(im_handle, ax=axs[0])
+
+
+            label_0 = self.SHT_zone_axis_range[0,:]
+            label_0 = np.round(label_0 * 1e3) * 1e-3
+            label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+
+            label_1 = self.SHT_zone_axis_range[1,:]
+            label_1 = np.round(label_1 * 1e3) * 1e-3
+            label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+
+            label_2 = self.SHT_zone_axis_range[2,:]
+            label_2 = np.round(label_2 * 1e3) * 1e-3
+            label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+
+            ax[0].set_yticks([0])
+            ax[0].set_yticklabels([
+                str(label_0)])
+
+            ax[0].set_xticks([0, self.SHT_zone_axis_steps])
+            ax[0].set_xticklabels([
+                str(label_1),
+                str(label_2)])
+
+            # In-plane rotation
+            ax[1].plot(
+                self.SHT_corr_rotation_angles[inds[0],:,2] * 180/np.pi, 
+                (corr[inds[0],:] - cmin)/(cmax - cmin));
+            ax[1].set_xlabel('In-plane rotation angle [deg]')
+            ax[1].set_ylabel('Correlation Signal for maximum zone axis')
+
+
             plt.show()
+
+
+            # cmin = np.min(corr)
+            # cmax = np.max(corr)
+
+            # plt.figure(figsize=figsize)
+            # plt.imshow(
+            #     corr - cmin,
+            #     cmap='turbo',
+            #     vmin=0.0*(cmax-cmin),
+            #     vmax=1.0*(cmax-cmin))
+            # plt.colorbar()
+            # plt.show()
 
             # fig = plt.figure(figsize=figsize)
             # ax = fig.add_subplot(
