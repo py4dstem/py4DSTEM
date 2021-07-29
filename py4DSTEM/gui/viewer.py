@@ -90,6 +90,8 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.normRadioChanged()
 
         if len(argv) > 1:
+            from PyQt5.QtWidgets import QApplication
+            QApplication.processEvents()
             path = os.path.abspath(argv[1])
             try:
                 self.settings.data_filename.val = path
