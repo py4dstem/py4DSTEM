@@ -52,7 +52,7 @@ def datacube_selector(fp, data_id=0):
             indices.appen(info[i]['index'])
             return names,indices
     if N_dc == 1:
-        i = inds[0]
+        i = int(inds[0])
         dc = read_py4DSTEM(fp, data_id=i)
         return dc
     elif N_dc > 1:
