@@ -114,7 +114,7 @@ def print_py4DSTEM_file(fp,tg):
     """
     info = get_py4DSTEM_dataobject_info(fp,tg)
 
-    version = get_py4DSTEM_version(filepath, tg)
+    version = get_py4DSTEM_version(fp, tg)
     print(f"py4DSTEM file version {version[0]}.{version[1]}.{version[2]}")
 
     print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
@@ -250,9 +250,9 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
 
     if (mem, binfactor) == ("RAM", 1):
-        data = np.array(g['data'])
+        data = np.array(g['datacube'])
     elif (mem, binfactor) == ("MEMMAP", 1):
-        data = g['data']
+        data = g['datacube']
     
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
