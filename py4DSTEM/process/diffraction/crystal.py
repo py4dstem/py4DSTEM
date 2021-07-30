@@ -5,18 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
-# from scipy.interpolate import griddata
-from scipy.special import sph_harm
-
-from .tdesign import tdesign
-
 from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd
-from ..utils import single_atom_scatter
-from ..utils import electron_wavelength_angstrom
-from ..utils import tqdmnd
-
-import time
+from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
 
 class Crystal:
@@ -120,7 +110,7 @@ class Crystal:
             np.arange(-num_tile, num_tile+1),
             np.arange(-num_tile, num_tile+1))
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
-        g_vec_all = np.matmul(lat_inv, hkl) 
+        g_vec_all = lat_inv @ hkl
 
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
@@ -217,156 +207,53 @@ class Crystal:
             return fig, ax
 
 
-    def spherical_harmonic_transform(
-        self, 
-        SHT_degree_max=6,
-        SHT_shell_interp_dist=0.10,
-        tol_distance=1e-3,
-        use_t_design=True):
-        """
-        Calculate the (nested) spherical harmonic for a set of 3D structure factors
-        
-        Args:
-            SHT_degree_max (numpy int):  degree of the spherical harmonic transform
-            SHT_shell_interp_dist (numpy float):  distance value for interpolation on shells on the unit sphere
-            tol_distance (numpy float): tolerance for point distance tests (1/Angstroms)
-        """
-
-        self.SHT_degree_max = int(SHT_degree_max)
-        self.SHT_shell_interp_dist = np.array(SHT_shell_interp_dist)
-
-        # Determine the spherical shell radiis required
-        radii = np.unique(np.round(
-            self.g_vec_leng / tol_distance) * tol_distance)
-        # Remove zero beam
-        self.SHT_shell_radii = np.delete(radii,0)
-
-        # Get sampling points on spherical surface 
-        if use_t_design is True:
-            # note we use t-design of 2 * max degree
-            self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(2*self.SHT_degree_max)
-        else:
-            self.SHT_azim, self.SHT_elev, self.SHT_verts = cdesign(self.SHT_degree_max)
-
-
-        # self.SHT_azim, self.SHT_elev, self.SHT_verts = tdesign(21)
-
-
-        # Degree and order of all SHT terms
-        # Full set of SH
-        # m, n = np.meshgrid(
-        #     np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
-        #     np.arange(0, self.SHT_degree_max+1))
-        # num_terms = (self.SHT_degree_max + 1)**2
-        # # Half space of SH
-        m, n = np.meshgrid(
-            np.arange(0, self.SHT_degree_max+1),
-            np.arange(0, self.SHT_degree_max+1))
-        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
-        
-        keep = np.abs(m) <= n
-        self.SHT_degree_order = np.vstack((
-            n[keep], m[keep])).T
-
-        # initialize arrays
-        self.SHT_shell_values = np.zeros((
-            self.SHT_verts.shape[0],
-            np.size(self.SHT_shell_radii)))
-        self.SHT_basis = np.zeros((
-            num_terms,
-            self.SHT_verts.shape[0]),
-            dtype='complex64')
-        self.SHT_values = np.zeros((
-            num_terms,
-            np.size(self.SHT_shell_radii)),
-            dtype='complex64')
-
-        # Calculate spherical harmonic basis of all orders and degrees
-        for a0 in range(num_terms):
-            self.SHT_basis[a0,:] = sph_harm( \
-                self.SHT_degree_order[a0,1],
-                self.SHT_degree_order[a0,0],
-                self.SHT_azim,
-                self.SHT_elev)
-            # if self.SHT_degree_order[a0,1] > 0:
-            #     self.SHT_basis[a0,:] = 2*self.SHT_basis[a0,:]
-
-        # Compute spherical interpolations for all SF peaks, and SHTs
-        for a0 in range(np.size(self.SHT_shell_radii)):
-            sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
-            g = self.g_vec_all[:,sub]
-            intensity = self.struct_factors_int[sub]
-            
-            # interpolate intensities on this shell
-            for a1 in range(g.shape[1]):
-                g_scale = g[:,a1]/self.SHT_shell_radii[a0]
-
-                self.SHT_shell_values[:,a0] += intensity[a1] * \
-                    np.maximum(self.SHT_shell_interp_dist - \
-                    np.sqrt(np.sum((self.SHT_verts - g_scale)**2, axis=1)), 0)
-
-            # Calculate SHT for this shell.
-            # Note we take the complex conjugate to use as a reference SHT.
-            # self.SHT_values[:,a0] = np.conjugate(np.matmul(
-            #     self.SHT_basis, self.SHT_shell_values[:,a0]))
-            # self.SHT_values[:,a0] = (np.matmul(
-            #     self.SHT_basis, self.SHT_shell_values[:,a0]))
-            self.SHT_values[:,a0] = np.conjugate(self.SHT_basis @ self.SHT_shell_values[:,a0])
-
-        # plt.figure(figsize=(20,20))
-        # plt.imshow(
-        #     np.abs(self.SHT_values)**0.5,
-        #     cmap='gray')
-        # plt.colorbar()
-        # plt.show()
-
-    def spherical_harmonic_correlation_plan(
+    def orientation_plan(
         self, 
         zone_axis_range=np.array([[0,1,1],[1,1,1]]),
         angle_step_zone_axis=3.0,
         angle_step_in_plane=6.0,
-        use_t_design=True,
+        tol_distance = 0.01,
         ):
         """
-        Calculate the spherical harmonic basis arrays for an SO(3) rotation correlogram.
+        Calculate the rotation basis arrays for an SO(3) rotation correlogram.
         
         Args:
             zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
-            angle_step_zone_axis (numpy float):  approximate angular step size for zone axis [degrees]
-            angle_step_in_plane (numpy float):  approximate angular step size for in-plane rotation [degrees]
-            use_t_design (np bool):        
+            angle_step_zone_axis (numpy float): Approximate angular step size for zone axis [degrees]
+            angle_step_in_plane (numpy float):  Approximate angular step size for in-plane rotation [degrees]
+            tol_distance (numpy float):         Distance tolerance for radial shell assignment [1/Angstroms]
         """
 
         # Define 3 vectors which span zone axis orientation range, normalize
-        self.SHT_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
-        self.SHT_zone_axis_range[1,:] /= np.linalg.norm(self.SHT_zone_axis_range[1,:])
-        self.SHT_zone_axis_range[2,:] /= np.linalg.norm(self.SHT_zone_axis_range[2,:])
+        self.orientation_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
+        self.orientation_zone_axis_range[1,:] /= np.linalg.norm(self.orientation_zone_axis_range[1,:])
+        self.orientation_zone_axis_range[2,:] /= np.linalg.norm(self.orientation_zone_axis_range[2,:])
 
         # Solve for number of angular steps in zone axis (rads)
-        angle_u_v = np.arccos(np.sum(self.SHT_zone_axis_range[0,:] * self.SHT_zone_axis_range[1,:]))
-        angle_u_w = np.arccos(np.sum(self.SHT_zone_axis_range[0,:] * self.SHT_zone_axis_range[2,:]))
-        self.SHT_zone_axis_steps = np.round(np.maximum( 
+        angle_u_v = np.arccos(np.sum(self.orientation_zone_axis_range[0,:] * self.orientation_zone_axis_range[1,:]))
+        angle_u_w = np.arccos(np.sum(self.orientation_zone_axis_range[0,:] * self.orientation_zone_axis_range[2,:]))
+        self.orientation_zone_axis_steps = np.round(np.maximum( 
             (180/np.pi) * angle_u_v / angle_step_zone_axis,
             (180/np.pi) * angle_u_w / angle_step_zone_axis)).astype(np.int)
 
         # Calculate points along u and v using the SLERP formula
         # https://en.wikipedia.org/wiki/Slerp
-        weights = np.linspace(0,1,self.SHT_zone_axis_steps+1)
-        pv = self.SHT_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
-             self.SHT_zone_axis_range[1,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
+        weights = np.linspace(0,1,self.orientation_zone_axis_steps+1)
+        pv = self.orientation_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
+             self.orientation_zone_axis_range[1,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
 
         # Calculate points along u and w using the SLERP formula
-        pw = self.SHT_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
-             self.SHT_zone_axis_range[2,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
+        pw = self.orientation_zone_axis_range[0,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
+             self.orientation_zone_axis_range[2,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
 
         # Init array to hold all points
-        self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
-        vecs = np.zeros((self.SHT_num_zones,3))
-        vecs[0,:] = self.SHT_zone_axis_range[0,:]
+        self.orientation_num_zones = ((self.orientation_zone_axis_steps+1)*(self.orientation_zone_axis_steps+2)/2).astype(np.int)
+        vecs = np.zeros((self.orientation_num_zones,3))
+        vecs[0,:] = self.orientation_zone_axis_range[0,:]
 
         # Calculate zone axis points on the unit sphere with another application of SLERP
-        for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
+        for a0 in np.arange(1,self.orientation_zone_axis_steps+1):
             inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
 
             p0 = pv[a0,:]
@@ -382,46 +269,19 @@ class Crystal:
         azim = np.arctan2(vecs[:,1],vecs[:,0])
         elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
-
-
-        # # Calculate z-x angular range (rads)
-        # x_angle_1 = np.arctan2(self.SHT_zone_axis_range[1,1],self.SHT_zone_axis_range[1,0])
-        # x_angle_2 = np.arctan2(self.SHT_zone_axis_range[2,1],self.SHT_zone_axis_range[2,0])
-
-        # # Calculate z-x angles (Euler angles 1 and 2)
-        # self.SHT_num_zones = ((self.SHT_zone_axis_steps+1)*(self.SHT_zone_axis_steps+2)/2).astype(np.int)
-        # elev = np.zeros(self.SHT_num_zones)
-        # azim = np.zeros(self.SHT_num_zones)
-        # for a0 in np.arange(1,self.SHT_zone_axis_steps+1):
-        #     inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-        #     w_elev = a0 / self.SHT_zone_axis_steps
-        #     w_azim = np.linspace(0,1,a0+1)
-        #     elev[inds] =  w_elev*((1-w_azim)*z_angle_1 + w_azim*z_angle_2)
-        #     azim[inds] = (1-w_azim)*x_angle_1 + w_azim*x_angle_2
-
-
-
         # Solve for number of angular steps along in-plane rotation direction
-        self.SHT_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
+        self.orientation_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
 
         # Calculate -z angles (Euler angle 3)
-        gamma = np.linspace(0,2*np.pi,self.SHT_in_plane_steps, endpoint=False)
+        gamma = np.linspace(0,2*np.pi,self.orientation_in_plane_steps, endpoint=False)
 
         # init storage arrays
-        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
-        self.SHT_corr_rotation_angles = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps,3))
-        self.SHT_corr_rotation_matrices = np.zeros((3,3,self.SHT_num_zones,self.SHT_in_plane_steps))
-        self.SHT_basis_corr = np.zeros((
-            self.SHT_basis.shape[0],
-            self.SHT_verts.shape[0],
-            self.SHT_num_zones,
-            self.SHT_in_plane_steps),
-            dtype='complex64')
+        self.orientation_rotation_angles = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps,3))
+        self.orientation_rotation_matrices = np.zeros((
+            3,3,self.orientation_num_zones,self.orientation_in_plane_steps))
 
         # Calculate rotation matrices
-            # for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
-        # for a0 in np.arange(self.SHT_num_zones):
-        for a0 in tqdmnd(np.arange(self.SHT_num_zones),desc='Computing spherical harmonic basis',unit=' terms',unit_scale=True):
+        for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
             m1z = np.array([
                 [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
                 [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
@@ -433,74 +293,29 @@ class Crystal:
             # m12 = np.matmul(m2x, m1z)
             m12 = m2x @ m1z
 
-            for a1 in np.arange(self.SHT_in_plane_steps):
-                self.SHT_corr_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
+            for a1 in np.arange(self.orientation_in_plane_steps):
+                self.orientation_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
                 
                 # orientation matrix
                 m3z = np.array([
                     [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
                     [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
                     [ 0,                0,                1]])
-                self.SHT_corr_rotation_matrices[:,:,a0,a1] = m3z @ m12
+                self.orientation_rotation_matrices[:,:,a0,a1] = m3z @ m12
 
-                # Apply coordinate rotation
-                vecs = self.SHT_verts @ self.SHT_corr_rotation_matrices[:,:,a0,a1]
+        # Determine the radii of all spherical shells
+        radii = np.unique(np.round(
+            self.g_vec_leng / tol_distance) * tol_distance)
+        # Remove zero beam
+        keep = np.abs(radii) > tol_distance 
+        self.orientation_shell_radii = radii[keep]
 
-                # Convert to spherical coordinates
-                SHT_azim = np.arctan2(vecs[:,1],vecs[:,0])
-                SHT_elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
-
-                # Calculate SHT basis in rotated coordinates
-                for a2 in range(self.SHT_basis.shape[0]): 
-                    self.SHT_basis_corr[a2,:,a0,a1] = sph_harm( \
-                        self.SHT_degree_order[a2,1],
-                        self.SHT_degree_order[a2,0],
-                        SHT_azim,
-                        SHT_elev)
-
-        # Warn user it SHT_degree_max is too low
-        if self.SHT_degree_max < 6:
-            print('Warning - we strongly recommend using spherical harmonics of order >= 6')
-
-        # # Testing plots
-        # x = np.cos(azim)*np.sin(elev)
-        # y = np.sin(azim)*np.sin(elev)
-        # z = np.cos(elev)
-
-        # # 3D plotting
-        # fig = plt.figure(figsize=(8,8))
-        # ax = fig.add_subplot(
-        #     projection='3d',
-        #     elev=54.7, 
-        #     azim=45)
-
-        # ax.scatter(
-        #     xs=x, 
-        #     ys=y, 
-        #     zs=z,
-        #     s=30)
-
-        # # axes limits
-        # ax.set_box_aspect((1,1,1))
-        # ax.axes.set_xlim3d(left=-0.05, right=1) 
-        # ax.axes.set_ylim3d(bottom=-0.05, top=1) 
-        # ax.axes.set_zlim3d(bottom=-0.05, top=1) 
-
-
-        # fig = plt.figure(figsize=(10,10))
-        # ax = fig.add_subplot()
-
-        # ax.scatter(
-        #     dx_angle*180/np.pi, 
-        #     dz_angle*180/np.pi, 
-        #     s=100)
-        # ax.invert_yaxis()
-
-        # print(v)
-        # print(z_angle_1 * 180/np.pi)
-        # print(z_angle_2 * 180/np.pi)
-
-
+        # Assign each structure factor point to a radial shell
+        self.orientation_shell_index = -1*np.ones(self.g_vec_all.shape[1])
+        for a0 in range(self.orientation_shell_radii.size):
+            self.orientation_shell_index[ \
+                np.abs(self.orientation_shell_radii[a0] - \
+                    self.g_vec_leng) < tol_distance] = a0
 
     def generate_diffraction_pattern(
         self, 
@@ -509,7 +324,7 @@ class Crystal:
         proj_x_axis = None,
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
-        tol_intensity = 0.01
+        tol_intensity = 0.5
         ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -548,11 +363,6 @@ class Crystal:
             / np.linalg.norm(zone_axis)
 
         # Excitation errors
-        # sg = (-0.5 / wavelength) \
-        #     * np.sum((self.g_vec_all - 2*k0[:,None]) * self.g_vec_all, axis=0) \
-        #     / np.sum((self.g_vec_all + k0[:,None]) * k0[:,None], axis=0)
-        # sg = np.sum((self.g_vec_all - 2*k0[:,None]) * self.g_vec_all, axis=0) \
-        #     / np.linalg.norm(k0)**2
         sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
             / (np.linalg.norm(k0[:,None] + self.g_vec_all)) / cos_alpha
 
@@ -590,18 +400,18 @@ class Crystal:
         subpixel_tilt=True,
         plot_corr=False,
         figsize=(12,6),
-        tol_shell_distance=0.05,
+        corr_kernel_size=0.10,
         tol_structure_factor=0.01,
         ):
         """
-        Solve for the best fit orientation of a single diffraction pattern
+        Solve for the best fit orientation of a single diffraction pattern.
 
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             accel_voltage (np float):           kinetic energy of electrons specificed in volts
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
-            tol_shell_distance (np float):      tolerance for point inclusion in a given Shell (1/Angstroms)
+            corr_kernel_size (np float):    correlation kernel size length in Angstroms
             tol_structure_factor (np float):    tolerance of structure factor intensity to include on shell
 
         """
@@ -624,88 +434,119 @@ class Crystal:
         # Vector lengths
         g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
-        # init shell value array
-        SHT_shell_values = np.zeros((
-            self.SHT_verts.shape[0],
-            np.size(self.SHT_shell_radii)))
+        # init arrays
+        shell_index = np.zeros(g_vec_all.shape[1])
+        shell_ref_check = np.zeros(self.orientation_shell_radii.size,dtype=bool)
 
-        # Place 3D coordinates onto spherical shells
-        # print(self.SHT_shell_radii)
-        for a0 in range(np.size(self.SHT_shell_radii)):
-            # verts_scale = self.SHT_verts * self.SHT_shell_radii[a0]
-            sub = np.abs(g_vec_leng - self.SHT_shell_radii[a0]) < tol_shell_distance
-
+        # Assign each Bragg peak to nearest shell from reference
+        for a0 in range(self.orientation_shell_radii.size):
+            sub = np.abs(self.orientation_shell_radii[a0] - g_vec_leng) < corr_kernel_size
+            shell_index[sub] = a0
             if np.sum(sub) > 0:
-                g_scale = g_vec_all[:,sub] / self.SHT_shell_radii[a0]
-                intensity = intensity_all[sub]
+                shell_ref_check[a0] = True
+        shell_ref_inds = np.where(shell_ref_check)
 
-                for a1 in range(g_scale.shape[1]):
-                    # print(np.min(np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1))))
-                    # print(np.min(np.sqrt(np.sum((self.SHT_verts - g_scale[:,a1])**2, axis=1))))
+        # init correlogram
+        corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
 
-                    SHT_shell_values[:,a0] += intensity[a1] * \
-                        np.maximum(self.SHT_shell_interp_dist - \
-                        np.sqrt(np.sum((self.SHT_verts - g_scale[:,a1])**2, axis=1)), 0)
+        # compute correlogram
+        for ind_shell in np.nditer(shell_ref_inds):
+            g_ref = self.g_vec_all[:,self.orientation_shell_index == ind_shell]
 
-        # Determine number of shells with non-zero intensities
-        # inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)
-        nonzero_inds = np.nonzero(np.sum(SHT_shell_values, axis=0) > tol_structure_factor)[0]
+            sub = shell_index == ind_shell
+            g_test = g_vec_all[:,sub]
+            intensity_test = intensity_all[sub]
 
-        # Masked spherical harmonic transform for reference structure
-        SHT_values_ref = self.SHT_values[:,nonzero_inds]
-
-        # Temporary array to hold SHT outputs
-        SHT_values = np.zeros((
-            self.SHT_values.shape[0],
-            np.size(nonzero_inds)),
-            dtype='complex64')
+            for a0 in range(g_test.shape[1]):
+                corr += np.maximum(corr_kernel_size 
+                    - np.sqrt(np.min(np.sum((
+                    np.tensordot(g_test[:,a0],
+                    self.orientation_rotation_matrices,axes=1)[:,:,:,None] 
+                    - g_ref[:,None,None,:])**2, axis=0), axis=2)), 0)
 
 
-        # # Compute correlogram
-        # corr = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps))
-        # for ind, ind_radii in enumerate(nonzero_inds):
-        #     s = SHT_shell_values[:,ind_radii]
-        #     s_ref = self.SHT_values[:,ind];
-        #     corr += np.real(np.sum( \
-        #         (self.SHT_basis_corr * s[None,:,None,None]) * s_ref[:,None,None,None], axis=(0,1)))
+        # # init shell value array
+        # orientation_shell_values = np.zeros((
+        #     self.orientation_verts.shape[0],
+        #     np.size(self.orientation_shell_radii)))
 
-        # print(SHT_values_ref.shape)
-        # print((self.SHT_basis_corr * s[None,:,None,None]).shape)
+        # # Place 3D coordinates onto spherical shells
+        # # print(self.orientation_shell_radii)
+        # for a0 in range(np.size(self.orientation_shell_radii)):
+        #     # verts_scale = self.orientation_verts * self.orientation_shell_radii[a0]
+        #     sub = np.abs(g_vec_leng - self.orientation_shell_radii[a0]) < tol_shell_distance
+
+        #     if np.sum(sub) > 0:
+        #         g_scale = g_vec_all[:,sub] / self.orientation_shell_radii[a0]
+        #         intensity = intensity_all[sub]
+
+        #         for a1 in range(g_scale.shape[1]):
+        #             # print(np.min(np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1))))
+        #             # print(np.min(np.sqrt(np.sum((self.orientation_verts - g_scale[:,a1])**2, axis=1))))
+
+        #             orientation_shell_values[:,a0] += intensity[a1] * \
+        #                 np.maximum(self.orientation_shell_interp_dist - \
+        #                 np.sqrt(np.sum((self.orientation_verts - g_scale[:,a1])**2, axis=1)), 0)
+
+        # # Determine number of shells with non-zero intensities
+        # # inds = np.nonzero(np.sum(orientation_shell_values, axis=0) > tol_structure_factor)
+        # nonzero_inds = np.nonzero(np.sum(orientation_shell_values, axis=0) > tol_structure_factor)[0]
+
+        # # Masked spherical harmonic transform for reference structure
+        # orientation_values_ref = self.orientation_values[:,nonzero_inds]
+
+        # # Temporary array to hold SHT outputs
+        # orientation_values = np.zeros((
+        #     self.orientation_values.shape[0],
+        #     np.size(nonzero_inds)),
+        #     dtype='complex64')
+
 
         # # # Compute correlogram
-        # SHT_shell_values_sub = SHT_shell_values[:,nonzero_inds]
-        # # corr = np.sum(np.real( \
-        # #     self.SHT_basis_corr[:,:,:,:,None] * \
-        # #     SHT_shell_values_sub[None,:,None,None,:]), axis=(0,1,4))
-        # corr_temp =  \
-        #     self.SHT_basis_corr[:,:,:,:,None] * \
-        #     SHT_shell_values_sub[None,:,None,None,:]
-        # print(corr_temp.shape)
+        # # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
+        # # for ind, ind_radii in enumerate(nonzero_inds):
+        # #     s = orientation_shell_values[:,ind_radii]
+        # #     s_ref = self.orientation_values[:,ind];
+        # #     corr += np.real(np.sum( \
+        # #         (self.orientation_basis_corr * s[None,:,None,None]) * s_ref[:,None,None,None], axis=(0,1)))
+
+        # # print(orientation_values_ref.shape)
+        # # print((self.orientation_basis_corr * s[None,:,None,None]).shape)
+
+        # # # # Compute correlogram
+        # # orientation_shell_values_sub = orientation_shell_values[:,nonzero_inds]
+        # # # corr = np.sum(np.real( \
+        # # #     self.orientation_basis_corr[:,:,:,:,None] * \
+        # # #     orientation_shell_values_sub[None,:,None,None,:]), axis=(0,1,4))
+        # # corr_temp =  \
+        # #     self.orientation_basis_corr[:,:,:,:,None] * \
+        # #     orientation_shell_values_sub[None,:,None,None,:]
+        # # print(corr_temp.shape)
 
 
-        # t = time.time()
-        # elapsed = time.time() - t
-        # print(elapsed)
+        # # t = time.time()
+        # # elapsed = time.time() - t
+        # # print(elapsed)
 
-        # t = time.time()
+        # # t = time.time()
 
-        # # print(corr.shape)
+        # # # print(corr.shape)
 
-        # # print(SHT_shell_values.shape)
-        # # print(SHT_shell_values[:,nonzero_inds].shape)
-        # # corr_temp = self.SHT_basis_corr * numpy.expand_dims(SHT_shell_values[:,ind_radii], axis=[0,])
+        # # # print(orientation_shell_values.shape)
+        # # # print(orientation_shell_values[:,nonzero_inds].shape)
+        # # # corr_temp = self.orientation_basis_corr * numpy.expand_dims(orientation_shell_values[:,ind_radii], axis=[0,])
 
-        # Correlation values init
-        corr = np.zeros((self.SHT_num_zones,self.SHT_in_plane_steps))
+        # # Correlation values init
+        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
 
-        # Loop over all orientations
-        for a0 in np.arange(self.SHT_num_zones):
-            for a1 in np.arange(self.SHT_in_plane_steps):
+        # # Loop over all orientations
+        # for a0 in np.arange(self.orientation_num_zones):
+        #     for a1 in np.arange(self.orientation_in_plane_steps):
 
-                for ind, ind_radii in enumerate(nonzero_inds):
-                    SHT_values[:,ind] = self.SHT_basis_corr[:,:,a0,a1] @ SHT_shell_values[:,ind_radii]
+        #         for ind, ind_radii in enumerate(nonzero_inds):
+        #             orientation_values[:,ind] = self.orientation_basis_corr[:,:,a0,a1] @ orientation_shell_values[:,ind_radii]
 
-                corr[a0,a1] = np.sum(np.real(SHT_values * SHT_values_ref))
+        #         corr[a0,a1] = np.sum(np.real(orientation_values * orientation_values_ref))
 
 
         # Determine the best fit orientation
@@ -713,51 +554,45 @@ class Crystal:
         
 
         if subpixel_tilt is False:
-            elev_azim_gamma = self.SHT_corr_rotation_angles[inds[0],inds[1],:]
+            elev_azim_gamma = self.orientation_rotation_angles[inds[0],inds[1],:]
             print(elev_azim_gamma)
 
         else:
             # Sub pixel refinement of zone axis orientation
             if inds[0] == 0:
                 # Zone axis is (0,0,1)
-                zone_axis_fit = self.SHT_zone_axis_range[0,:]
+                zone_axis_fit = self.orientation_zone_axis_range[0,:]
 
-            elif inds[0] == self.SHT_num_zones - self.SHT_zone_axis_steps - 1:
+            elif inds[0] == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
                 # Zone axis is 1st user provided direction
-                zone_axis_fit = self.SHT_zone_axis_range[1,:]
+                zone_axis_fit = self.orientation_zone_axis_range[1,:]
 
-            elif inds[0] == self.SHT_num_zones - 1:
+            elif inds[0] == self.orientation_num_zones - 1:
                 # Zone axis is the 2nd user-provided direction
-                zone_axis_fit = self.SHT_zone_axis_range[2,:]
+                zone_axis_fit = self.orientation_zone_axis_range[2,:]
 
             else:
                 # Subpixel refinement
-                elev = self.SHT_corr_rotation_angles[inds[0],0,0]
-                azim = self.SHT_corr_rotation_angles[inds[0],0,1]
+                elev = self.orientation_rotation_angles[inds[0],0,0]
+                azim = self.orientation_rotation_angles[inds[0],0,1]
                 zone_axis_fit = np.array((
                     np.cos(azim)*np.sin(elev),
                     np.sin(azim)*np.sin(elev),
                     np.cos(elev)))        
 
-        temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        temp = np.round(temp * 1e3) / 1e3
-        temp /= np.min(np.abs(temp[np.abs(temp)>0]))
-        print('Highest corr point @ (' + str(temp) + ')')
-        # print(self.SHT_zone_axis_steps)
-
-
-
-        # print(corr.shape)
-        # print(self.SHT_num_zones)
-        # print(self.SHT_in_plane_steps)
+        # temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        # temp = np.round(temp * 1e3) / 1e3
+        # temp /= np.min(np.abs(temp[np.abs(temp)>0]))
+        # print('Highest corr point @ (' + str(temp) + ')')
+        
 
         # plotting
         if plot_corr is True:
 
             # 2D correlation slice
             sig_zone_axis = np.max(corr,axis=1)
-            im_corr_zone_axis = np.zeros((self.SHT_zone_axis_steps+1, self.SHT_zone_axis_steps+1))
-            for a0 in np.arange(self.SHT_zone_axis_steps+1):
+            im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
+            for a0 in np.arange(self.orientation_zone_axis_steps+1):
                 inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
                 im_corr_zone_axis[a0,range(a0+1)] = sig_zone_axis[inds_val]
 
@@ -777,15 +612,15 @@ class Crystal:
             # fig.colorbar(im_handle, ax=axs[0])
 
 
-            label_0 = self.SHT_zone_axis_range[0,:]
+            label_0 = self.orientation_zone_axis_range[0,:]
             label_0 = np.round(label_0 * 1e3) * 1e-3
             label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
 
-            label_1 = self.SHT_zone_axis_range[1,:]
+            label_1 = self.orientation_zone_axis_range[1,:]
             label_1 = np.round(label_1 * 1e3) * 1e-3
             label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
 
-            label_2 = self.SHT_zone_axis_range[2,:]
+            label_2 = self.orientation_zone_axis_range[2,:]
             label_2 = np.round(label_2 * 1e3) * 1e-3
             label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
 
@@ -793,14 +628,14 @@ class Crystal:
             ax[0].set_yticklabels([
                 str(label_0)])
 
-            ax[0].set_xticks([0, self.SHT_zone_axis_steps])
+            ax[0].set_xticks([0, self.orientation_zone_axis_steps])
             ax[0].set_xticklabels([
                 str(label_1),
                 str(label_2)])
 
             # In-plane rotation
             ax[1].plot(
-                self.SHT_corr_rotation_angles[inds[0],:,2] * 180/np.pi, 
+                self.orientation_rotation_angles[inds[0],:,2] * 180/np.pi, 
                 (corr[inds[0],:] - cmin)/(cmax - cmin));
             ax[1].set_xlabel('In-plane rotation angle [deg]')
             ax[1].set_ylabel('Correlation Signal for maximum zone axis')
@@ -827,9 +662,9 @@ class Crystal:
             #     elev=90, 
             #     azim=0)
 
-            # elev = self.SHT_corr_rotation_angles[:,:,0].ravel()
-            # azim  = self.SHT_corr_rotation_angles[:,:,1].ravel()
-            # gamma = self.SHT_corr_rotation_angles[:,:,2].ravel()
+            # elev = self.orientation_rotation_angles[:,:,0].ravel()
+            # azim  = self.orientation_rotation_angles[:,:,1].ravel()
+            # gamma = self.orientation_rotation_angles[:,:,2].ravel()
             # intensity_corr = corr.ravel();
 
             # intensity_plot = intensity_corr - np.min(intensity_corr) + 1e-3
@@ -867,60 +702,52 @@ class Crystal:
                 # for a2 in inds:
                 #     print(a2)
                 # #     # Calculate SHT for this shell.
-                # #     SHT_values[:,a2] = np.matmul(
-                # #         self.SHT_basis, SHT_shell_values[:,a2])
+                # #     orientation_values[:,a2] = np.matmul(
+                # #         self.orientation_basis, orientation_shell_values[:,a2])
 
 
-        # self.SHT_shell_values = np.zeros((
-        #     self.SHT_verts.shape[0],
-        #     np.size(self.SHT_shell_radii)))
-        # self.SHT_basis = np.zeros((
+        # self.orientation_shell_values = np.zeros((
+        #     self.orientation_verts.shape[0],
+        #     np.size(self.orientation_shell_radii)))
+        # self.orientation_basis = np.zeros((
         #     num_terms,
-        #     self.SHT_verts.shape[0]),
+        #     self.orientation_verts.shape[0]),
         #     dtype='complex64')
-        # self.SHT_values = np.zeros((
+        # self.orientation_values = np.zeros((
         #     num_terms,
-        #     np.size(self.SHT_shell_radii)),
+        #     np.size(self.orientation_shell_radii)),
         #     dtype='complex64')
 
         # # Calculate spherical harmonic basis of all orders and degrees
         # for a0 in range(num_terms):
-        #     self.SHT_basis[a0,:] = sph_harm( \
-        #         self.SHT_degree_order[a0,1],
-        #         self.SHT_degree_order[a0,0],
-        #         self.SHT_azim,
-        #         self.SHT_elev)
+        #     self.orientation_basis[a0,:] = sph_harm( \
+        #         self.orientation_degree_order[a0,1],
+        #         self.orientation_degree_order[a0,0],
+        #         self.orientation_azim,
+        #         self.orientation_elev)
 
         # # Compute spherical interpolations for all SF peaks, and SHTs
-        # for a0 in range(np.size(self.SHT_shell_radii)):
-        #     sub = np.abs(self.g_vec_leng - self.SHT_shell_radii[a0]) < tol_distance
+        # for a0 in range(np.size(self.orientation_shell_radii)):
+        #     sub = np.abs(self.g_vec_leng - self.orientation_shell_radii[a0]) < tol_distance
         #     g = self.g_vec_all[:,sub]
         #     g = g / np.linalg.norm(g, axis=0)
         #     intensity = self.struct_factors_int[sub]
             
         #     # interpolate intenties on this shell
         #     for a1 in range(g.shape[1]):
-        #         self.SHT_shell_values[:,a0] += intensity[a1] * \
-        #             np.maximum(self.SHT_shell_interp_dist - \
-        #             np.sqrt(np.sum((self.SHT_verts - g[:,a1])**2, axis=1)), 0)
+        #         self.orientation_shell_values[:,a0] += intensity[a1] * \
+        #             np.maximum(self.orientation_shell_interp_dist - \
+        #             np.sqrt(np.sum((self.orientation_verts - g[:,a1])**2, axis=1)), 0)
 
         #     # Calculate SHT for this shell.
         #     # Note we take the complex conjugate to use as a reference SHT.
-        #     self.SHT_values[:,a0] = np.conjugate(np.matmul(
-        #         self.SHT_basis, self.SHT_shell_values[:,a0]))
+        #     self.orientation_values[:,a0] = np.conjugate(np.matmul(
+        #         self.orientation_basis, self.orientation_shell_values[:,a0]))
 
 
         return 1
 
 
-    def new_function(self, args):
-        """
-        Description
-        
-        Args:
-            bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-        """
-        ect
 
 
 
@@ -993,86 +820,86 @@ def axisEqual3D(ax):
 
 
 
-def cdesign(degree):
-    """
-    Returns the spherical coordinates of Colin-design.
+# def cdesign(degree):
+#     """
+#     Returns the spherical coordinates of Colin-design.
 
-    Args:
-        degree: int designating the maximum order
+#     Args:
+#         degree: int designating the maximum order
 
-    Returns:
-        azim: Nx1, azimuth of each point in the t-design
-        elev: Nx1, elevation of each point in the t-design
-        vecs: Nx3, array of cartesian coordinates for each point
+#     Returns:
+#         azim: Nx1, azimuth of each point in the t-design
+#         elev: Nx1, elevation of each point in the t-design
+#         vecs: Nx3, array of cartesian coordinates for each point
 
-    """
+#     """
 
-    degree = np.asarray(degree).astype(np.int)
-    steps = (degree // 4) + 1
+#     degree = np.asarray(degree).astype(np.int)
+#     steps = (degree // 4) + 1
 
-    u = np.array((0,0,1))
-    v = np.array((0,1,1)) / np.sqrt(2)
-    w = np.array((1,1,1)) / np.sqrt(3)
+#     u = np.array((0,0,1))
+#     v = np.array((0,1,1)) / np.sqrt(2)
+#     w = np.array((1,1,1)) / np.sqrt(3)
 
-    # Calculate points along u and v using the SLERP formula
-    # https://en.wikipedia.org/wiki/Slerp
-    weights = np.linspace(0,1,steps+1)
-    angle_u_v = np.arccos(np.sum(u * v))
-    pv = u[None,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
-         v[None,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
+#     # Calculate points along u and v using the SLERP formula
+#     # https://en.wikipedia.org/wiki/Slerp
+#     weights = np.linspace(0,1,steps+1)
+#     angle_u_v = np.arccos(np.sum(u * v))
+#     pv = u[None,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
+#          v[None,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
 
-    # Calculate points along u and w using the SLERP formula
-    angle_u_w = np.arccos(np.sum(u * w))
-    pw = u[None,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
-         w[None,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
+#     # Calculate points along u and w using the SLERP formula
+#     angle_u_w = np.arccos(np.sum(u * w))
+#     pw = u[None,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
+#          w[None,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
 
 
-    # Init array to hold all points
-    num_points = ((steps+1)*(steps+2)/2).astype(np.int)
-    vecs = np.zeros((num_points,3))
-    vecs[0,:] = u
+#     # Init array to hold all points
+#     num_points = ((steps+1)*(steps+2)/2).astype(np.int)
+#     vecs = np.zeros((num_points,3))
+#     vecs[0,:] = u
 
-    # Calculate points on 1/48th of the unit sphere with another application of SLERP
-    for a0 in np.arange(1,steps+1):
-        inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+#     # Calculate points on 1/48th of the unit sphere with another application of SLERP
+#     for a0 in np.arange(1,steps+1):
+#         inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
 
-        p0 = pv[a0,:]
-        p1 = pw[a0,:]
-        angle_p = np.arccos(np.sum(p0 * p1))
+#         p0 = pv[a0,:]
+#         p1 = pw[a0,:]
+#         angle_p = np.arccos(np.sum(p0 * p1))
 
-        weights = np.linspace(0,1,a0+1)
-        vecs[inds,:] = \
-            p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
-            p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
+#         weights = np.linspace(0,1,a0+1)
+#         vecs[inds,:] = \
+#             p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
+#             p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
 
-    # Expand to 1/8 of the sphere
-    vecs = np.vstack((
-        vecs[:,[0,1,2]],
-        vecs[:,[0,2,1]],
-        vecs[:,[1,0,2]],
-        vecs[:,[1,2,0]],
-        vecs[:,[2,0,1]],
-        vecs[:,[2,1,0]],
-        ))
-    # Remove duplicate points
-    vecs = np.unique(vecs, axis=0)
+#     # Expand to 1/8 of the sphere
+#     vecs = np.vstack((
+#         vecs[:,[0,1,2]],
+#         vecs[:,[0,2,1]],
+#         vecs[:,[1,0,2]],
+#         vecs[:,[1,2,0]],
+#         vecs[:,[2,0,1]],
+#         vecs[:,[2,1,0]],
+#         ))
+#     # Remove duplicate points
+#     vecs = np.unique(vecs, axis=0)
 
-    # Expand to full the sphere
-    vecs = np.vstack((
-        vecs*np.array(( 1, 1, 1)),
-        vecs*np.array((-1, 1, 1)),
-        vecs*np.array(( 1,-1, 1)),
-        vecs*np.array((-1,-1, 1)),
-        vecs*np.array(( 1, 1,-1)),
-        vecs*np.array((-1, 1,-1)),
-        vecs*np.array(( 1,-1,-1)),
-        vecs*np.array((-1,-1,-1)),
-        ))
-    # Remove duplicate points
-    vecs = np.unique(vecs, axis=0)
+#     # Expand to full the sphere
+#     vecs = np.vstack((
+#         vecs*np.array(( 1, 1, 1)),
+#         vecs*np.array((-1, 1, 1)),
+#         vecs*np.array(( 1,-1, 1)),
+#         vecs*np.array((-1,-1, 1)),
+#         vecs*np.array(( 1, 1,-1)),
+#         vecs*np.array((-1, 1,-1)),
+#         vecs*np.array(( 1,-1,-1)),
+#         vecs*np.array((-1,-1,-1)),
+#         ))
+#     # Remove duplicate points
+#     vecs = np.unique(vecs, axis=0)
 
-    # Spherical coordinates
-    azim = np.arctan2(vecs[:,1],vecs[:,0])
-    elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
+#     # Spherical coordinates
+#     azim = np.arctan2(vecs[:,1],vecs[:,0])
+#     elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
 
-    return azim, elev, vecs
+#     return azim, elev, vecs
