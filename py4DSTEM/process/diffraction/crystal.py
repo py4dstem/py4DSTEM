@@ -254,15 +254,15 @@ class Crystal:
 
         # Degree and order of all SHT terms
         # Full set of SH
-        m, n = np.meshgrid(
-            np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
-            np.arange(0, self.SHT_degree_max+1))
-        num_terms = (self.SHT_degree_max + 1)**2
-        # # Half space of SH
         # m, n = np.meshgrid(
-        #     np.arange(0, self.SHT_degree_max+1),
+        #     np.arange(-self.SHT_degree_max, self.SHT_degree_max+1),
         #     np.arange(0, self.SHT_degree_max+1))
-        # num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
+        # num_terms = (self.SHT_degree_max + 1)**2
+        # # Half space of SH
+        m, n = np.meshgrid(
+            np.arange(0, self.SHT_degree_max+1),
+            np.arange(0, self.SHT_degree_max+1))
+        num_terms = int(self.SHT_degree_max*(self.SHT_degree_max + 1)/2)
         
         keep = np.abs(m) <= n
         self.SHT_degree_order = np.vstack((
@@ -307,10 +307,11 @@ class Crystal:
 
             # Calculate SHT for this shell.
             # Note we take the complex conjugate to use as a reference SHT.
-            self.SHT_values[:,a0] = np.conjugate(np.matmul(
-                self.SHT_basis, self.SHT_shell_values[:,a0]))
+            # self.SHT_values[:,a0] = np.conjugate(np.matmul(
+            #     self.SHT_basis, self.SHT_shell_values[:,a0]))
             # self.SHT_values[:,a0] = (np.matmul(
             #     self.SHT_basis, self.SHT_shell_values[:,a0]))
+            self.SHT_values[:,a0] = np.conjugate(self.SHT_basis @ self.SHT_shell_values[:,a0])
 
         # plt.figure(figsize=(20,20))
         # plt.imshow(
@@ -429,7 +430,8 @@ class Crystal:
                 [1,  0,                0],
                 [0,  np.cos(elev[a0]), np.sin(elev[a0])],
                 [0, -np.sin(elev[a0]), np.cos(elev[a0])]])
-            m12 = np.matmul(m2x, m1z)
+            # m12 = np.matmul(m2x, m1z)
+            m12 = m2x @ m1z
 
             for a1 in np.arange(self.SHT_in_plane_steps):
                 self.SHT_corr_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
@@ -439,10 +441,10 @@ class Crystal:
                     [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
                     [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
                     [ 0,                0,                1]])
-                self.SHT_corr_rotation_matrices[:,:,a0,a1] = np.matmul(m3z, m12)
+                self.SHT_corr_rotation_matrices[:,:,a0,a1] = m3z @ m12
 
                 # Apply coordinate rotation
-                vecs = np.matmul(self.SHT_verts, self.SHT_corr_rotation_matrices[:,:,a0,a1])
+                vecs = self.SHT_verts @ self.SHT_corr_rotation_matrices[:,:,a0,a1]
 
                 # Convert to spherical coordinates
                 SHT_azim = np.arctan2(vecs[:,1],vecs[:,0])
@@ -504,7 +506,7 @@ class Crystal:
         self, 
         accel_voltage = 300e3, 
         zone_axis = [0,0,1],
-        proj_x_axis = [1,0,0],
+        proj_x_axis = None,
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
         tol_intensity = 0.01
@@ -523,6 +525,14 @@ class Crystal:
 
         accel_voltage = np.asarray(accel_voltage)
         zone_axis = np.asarray(zone_axis)
+
+        if proj_x_axis is None:
+            if (zone_axis == np.array([1,0,0])).all:
+                proj_x_axis = np.array([0,1,0])
+            else:
+                proj_x_axis = np.array([1,0,0])
+
+
 
         # Calculate wavelenth
         wavelength = electron_wavelength_angstrom(accel_voltage)
@@ -581,7 +591,7 @@ class Crystal:
         plot_corr=False,
         figsize=(12,6),
         tol_shell_distance=0.05,
-        tol_structure_factor=1e-3,
+        tol_structure_factor=0.01,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern
@@ -603,7 +613,8 @@ class Crystal:
 
         # Calculate z direction offset for peaks projected onto Ewald sphere
         k0 = 1 / wavelength;
-        gz = np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2) - k0
+        gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
+
         # 3D Bragg peak data
         g_vec_all = np.vstack((
             bragg_peaks.data['qx'],
@@ -692,9 +703,7 @@ class Crystal:
             for a1 in np.arange(self.SHT_in_plane_steps):
 
                 for ind, ind_radii in enumerate(nonzero_inds):
-                    SHT_values[:,ind] = np.matmul(
-                        self.SHT_basis_corr[:,:,a0,a1], 
-                        SHT_shell_values[:,ind_radii])
+                    SHT_values[:,ind] = self.SHT_basis_corr[:,:,a0,a1] @ SHT_shell_values[:,ind_radii]
 
                 corr[a0,a1] = np.sum(np.real(SHT_values * SHT_values_ref))
 
@@ -730,8 +739,10 @@ class Crystal:
                     np.sin(azim)*np.sin(elev),
                     np.cos(elev)))        
 
-        # zone_axis_fit = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        # print(zone_axis_fit)
+        temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        temp = np.round(temp * 1e3) / 1e3
+        temp /= np.min(np.abs(temp[np.abs(temp)>0]))
+        print('Highest corr point @ (' + str(temp) + ')')
         # print(self.SHT_zone_axis_steps)
 
 
@@ -750,17 +761,18 @@ class Crystal:
                 inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
                 im_corr_zone_axis[a0,range(a0+1)] = sig_zone_axis[inds_val]
 
-
             # Zone axis
             fig, ax = plt.subplots(1, 2, figsize=figsize)
             cmin = np.min(sig_zone_axis)
             cmax = np.max(sig_zone_axis)
 
+            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+
             ax[0].imshow(
-                im_corr_zone_axis - cmin,
+                im_plot,
                 cmap='turbo',
-                vmin=0.0*(cmax-cmin),
-                vmax=1.0*(cmax-cmin))
+                vmin=0.0,
+                vmax=1.0)
             # im_handle = 
             # fig.colorbar(im_handle, ax=axs[0])
 
