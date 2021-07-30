@@ -382,11 +382,13 @@ class Crystal:
 
         # compute correlogram
         for ind_shell in np.nditer(shell_ref_inds):
-            g_ref = self.g_vec_all[:,self.orientation_shell_index == ind_shell]
+            sub_ref = self.orientation_shell_index == ind_shell
+            g_ref = self.g_vec_all[:,sub_ref]
+            intensity_ref = intensity_all[sub_ref]
 
-            sub = shell_index == ind_shell
-            g_test = g_vec_all[:,sub]
-            intensity_test = intensity_all[sub]
+            sub_test = shell_index == ind_shell
+            g_test = g_vec_all[:,sub_test]
+            intensity_test = intensity_all[sub_test]
 
             # for a0 in range(g_test.shape[1]):
             #     # corr += intensity_test[a0] * np.maximum(corr_kernel_size 
