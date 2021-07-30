@@ -465,90 +465,6 @@ class Crystal:
                     - g_ref[:,None,None,:])**2, axis=0), axis=2)), 0)
 
 
-        # # init shell value array
-        # orientation_shell_values = np.zeros((
-        #     self.orientation_verts.shape[0],
-        #     np.size(self.orientation_shell_radii)))
-
-        # # Place 3D coordinates onto spherical shells
-        # # print(self.orientation_shell_radii)
-        # for a0 in range(np.size(self.orientation_shell_radii)):
-        #     # verts_scale = self.orientation_verts * self.orientation_shell_radii[a0]
-        #     sub = np.abs(g_vec_leng - self.orientation_shell_radii[a0]) < tol_shell_distance
-
-        #     if np.sum(sub) > 0:
-        #         g_scale = g_vec_all[:,sub] / self.orientation_shell_radii[a0]
-        #         intensity = intensity_all[sub]
-
-        #         for a1 in range(g_scale.shape[1]):
-        #             # print(np.min(np.sqrt(np.sum((verts_scale - g[:,a1])**2, axis=1))))
-        #             # print(np.min(np.sqrt(np.sum((self.orientation_verts - g_scale[:,a1])**2, axis=1))))
-
-        #             orientation_shell_values[:,a0] += intensity[a1] * \
-        #                 np.maximum(self.orientation_shell_interp_dist - \
-        #                 np.sqrt(np.sum((self.orientation_verts - g_scale[:,a1])**2, axis=1)), 0)
-
-        # # Determine number of shells with non-zero intensities
-        # # inds = np.nonzero(np.sum(orientation_shell_values, axis=0) > tol_structure_factor)
-        # nonzero_inds = np.nonzero(np.sum(orientation_shell_values, axis=0) > tol_structure_factor)[0]
-
-        # # Masked spherical harmonic transform for reference structure
-        # orientation_values_ref = self.orientation_values[:,nonzero_inds]
-
-        # # Temporary array to hold SHT outputs
-        # orientation_values = np.zeros((
-        #     self.orientation_values.shape[0],
-        #     np.size(nonzero_inds)),
-        #     dtype='complex64')
-
-
-        # # # Compute correlogram
-        # # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
-        # # for ind, ind_radii in enumerate(nonzero_inds):
-        # #     s = orientation_shell_values[:,ind_radii]
-        # #     s_ref = self.orientation_values[:,ind];
-        # #     corr += np.real(np.sum( \
-        # #         (self.orientation_basis_corr * s[None,:,None,None]) * s_ref[:,None,None,None], axis=(0,1)))
-
-        # # print(orientation_values_ref.shape)
-        # # print((self.orientation_basis_corr * s[None,:,None,None]).shape)
-
-        # # # # Compute correlogram
-        # # orientation_shell_values_sub = orientation_shell_values[:,nonzero_inds]
-        # # # corr = np.sum(np.real( \
-        # # #     self.orientation_basis_corr[:,:,:,:,None] * \
-        # # #     orientation_shell_values_sub[None,:,None,None,:]), axis=(0,1,4))
-        # # corr_temp =  \
-        # #     self.orientation_basis_corr[:,:,:,:,None] * \
-        # #     orientation_shell_values_sub[None,:,None,None,:]
-        # # print(corr_temp.shape)
-
-
-        # # t = time.time()
-        # # elapsed = time.time() - t
-        # # print(elapsed)
-
-        # # t = time.time()
-
-        # # # print(corr.shape)
-
-        # # # print(orientation_shell_values.shape)
-        # # # print(orientation_shell_values[:,nonzero_inds].shape)
-        # # # corr_temp = self.orientation_basis_corr * numpy.expand_dims(orientation_shell_values[:,ind_radii], axis=[0,])
-
-        # # Correlation values init
-        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
-
-        # # Loop over all orientations
-        # for a0 in np.arange(self.orientation_num_zones):
-        #     for a1 in np.arange(self.orientation_in_plane_steps):
-
-        #         for ind, ind_radii in enumerate(nonzero_inds):
-        #             orientation_values[:,ind] = self.orientation_basis_corr[:,:,a0,a1] @ orientation_shell_values[:,ind_radii]
-
-        #         corr[a0,a1] = np.sum(np.real(orientation_values * orientation_values_ref))
-
-
         # Determine the best fit orientation
         inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
         
@@ -584,7 +500,7 @@ class Crystal:
         # temp = np.round(temp * 1e3) / 1e3
         # temp /= np.min(np.abs(temp[np.abs(temp)>0]))
         # print('Highest corr point @ (' + str(temp) + ')')
-        
+
 
         # plotting
         if plot_corr is True:
@@ -643,109 +559,7 @@ class Crystal:
 
             plt.show()
 
-
-            # cmin = np.min(corr)
-            # cmax = np.max(corr)
-
-            # plt.figure(figsize=figsize)
-            # plt.imshow(
-            #     corr - cmin,
-            #     cmap='turbo',
-            #     vmin=0.0*(cmax-cmin),
-            #     vmax=1.0*(cmax-cmin))
-            # plt.colorbar()
-            # plt.show()
-
-            # fig = plt.figure(figsize=figsize)
-            # ax = fig.add_subplot(
-            #     projection='3d',
-            #     elev=90, 
-            #     azim=0)
-
-            # elev = self.orientation_rotation_angles[:,:,0].ravel()
-            # azim  = self.orientation_rotation_angles[:,:,1].ravel()
-            # gamma = self.orientation_rotation_angles[:,:,2].ravel()
-            # intensity_corr = corr.ravel();
-
-            # intensity_plot = intensity_corr - np.min(intensity_corr) + 1e-3
-            # intensity_plot = (intensity_plot * 0.0003)**2
-
-            # r = 0.5*(np.pi - elev)
-            # x = r * np.cos(gamma)
-            # y = r * np.sin(gamma)
-            # z = azim - (np.max(azim) - np.min(azim)) / 2
-
-            # ax.scatter(
-            #     xs=x, 
-            #     ys=y, 
-            #     zs=z,
-            #     s=intensity_plot)
-
-            # # axes limits
-            # rlim = np.max(r) * 1.05
-            # zlim = np.max(z) * 1.05
-            # ax.axes.set_xlim3d(left=-rlim, right=rlim) 
-            # ax.axes.set_ylim3d(bottom=-rlim, top=rlim) 
-            # ax.axes.set_zlim3d(bottom=-zlim, top=zlim) 
-            # # ax.set_box_aspect((1,1,1))
-            # # ax.set_aspect('equal','box')
-            # axisEqual3D(ax)
-
-            # plt.show()
-
-
-
-
-
-
-
-                # for a2 in inds:
-                #     print(a2)
-                # #     # Calculate SHT for this shell.
-                # #     orientation_values[:,a2] = np.matmul(
-                # #         self.orientation_basis, orientation_shell_values[:,a2])
-
-
-        # self.orientation_shell_values = np.zeros((
-        #     self.orientation_verts.shape[0],
-        #     np.size(self.orientation_shell_radii)))
-        # self.orientation_basis = np.zeros((
-        #     num_terms,
-        #     self.orientation_verts.shape[0]),
-        #     dtype='complex64')
-        # self.orientation_values = np.zeros((
-        #     num_terms,
-        #     np.size(self.orientation_shell_radii)),
-        #     dtype='complex64')
-
-        # # Calculate spherical harmonic basis of all orders and degrees
-        # for a0 in range(num_terms):
-        #     self.orientation_basis[a0,:] = sph_harm( \
-        #         self.orientation_degree_order[a0,1],
-        #         self.orientation_degree_order[a0,0],
-        #         self.orientation_azim,
-        #         self.orientation_elev)
-
-        # # Compute spherical interpolations for all SF peaks, and SHTs
-        # for a0 in range(np.size(self.orientation_shell_radii)):
-        #     sub = np.abs(self.g_vec_leng - self.orientation_shell_radii[a0]) < tol_distance
-        #     g = self.g_vec_all[:,sub]
-        #     g = g / np.linalg.norm(g, axis=0)
-        #     intensity = self.struct_factors_int[sub]
-            
-        #     # interpolate intenties on this shell
-        #     for a1 in range(g.shape[1]):
-        #         self.orientation_shell_values[:,a0] += intensity[a1] * \
-        #             np.maximum(self.orientation_shell_interp_dist - \
-        #             np.sqrt(np.sum((self.orientation_verts - g[:,a1])**2, axis=1)), 0)
-
-        #     # Calculate SHT for this shell.
-        #     # Note we take the complex conjugate to use as a reference SHT.
-        #     self.orientation_values[:,a0] = np.conjugate(np.matmul(
-        #         self.orientation_basis, self.orientation_shell_values[:,a0]))
-
-
-        return 1
+        return corr
 
 
 
