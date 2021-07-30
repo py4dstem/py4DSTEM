@@ -458,7 +458,7 @@ class Crystal:
             intensity_test = intensity_all[sub]
 
             for a0 in range(g_test.shape[1]):
-                corr += np.maximum(corr_kernel_size 
+                corr += intensity_test[a0] * np.maximum(corr_kernel_size 
                     - np.sqrt(np.min(np.sum((
                     np.tensordot(g_test[:,a0],
                     self.orientation_rotation_matrices,axes=1)[:,:,:,None] 
@@ -521,8 +521,8 @@ class Crystal:
 
             ax[0].imshow(
                 im_plot,
-                cmap='turbo',
-                vmin=0.0,
+                cmap='viridis',
+                vmin=0.99,
                 vmax=1.0)
             # im_handle = 
             # fig.colorbar(im_handle, ax=axs[0])
