@@ -63,8 +63,6 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 
 ## Running the GUI
 
-**WARNING: the GUI is currently down. Thanks for you patience as we work through various bugs!**
-
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyses through the GUI eventually.
 At present the primary utility of the GUI is for browsing and visualizing 4DSTEM data.
@@ -76,7 +74,11 @@ conda activate py4dstem
 py4dstem
 ```
 
-
+A filename can be passed as a command line argument to the GUI to open that file immediately:
+```
+conda activate py4dstem
+py4dstem path/to/data/file.h5
+```
 
 ## Running the code
 
