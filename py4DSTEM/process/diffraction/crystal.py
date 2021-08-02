@@ -494,12 +494,12 @@ class Crystal:
                 str(label_1),
                 str(label_2)])
 
-            # # In-plane rotation
-            # ax[1].plot(
-            #     self.orientation_rotation_angles[inds[0],:,2] * 180/np.pi, 
-            #     (corr[inds[0],:] - cmin)/(cmax - cmin));
-            # ax[1].set_xlabel('In-plane rotation angle [deg]')
-            # ax[1].set_ylabel('Correlation Signal for maximum zone axis')
+            # In-plane rotation
+            ax[1].plot(
+                self.orientation_rotation_angles[inds[0],:,2] * 180/np.pi, 
+                (corr[inds[0],:] - cmin)/(cmax - cmin));
+            ax[1].set_xlabel('In-plane rotation angle [deg]')
+            ax[1].set_ylabel('Correlation Signal for maximum zone axis')
 
 
             plt.show()
