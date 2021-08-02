@@ -354,7 +354,7 @@ class Crystal:
 
         # Calculate z direction offset for peaks projected onto Ewald sphere
         k0 = 1 / wavelength;
-        gz = 0*(k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2))
+        gz = (k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2))
 
         # 3D Bragg peak data
         g_vec_all = np.vstack((
@@ -405,8 +405,12 @@ class Crystal:
                 #     corr_kernel_size - np.sqrt(np.min(np.sum(((
                 #     self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
                 #     - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
-                corr += (self.orientation_shell_radii[ind_shell] * intensity_test[a0]) * np.maximum(
-                    corr_kernel_size - np.sqrt(np.min(np.sum(((
+                # corr += (self.orientation_shell_radii[ind_shell] * intensity_test[a0] ) * np.maximum(
+                #     corr_kernel_size - np.sqrt(np.min(np.sum(((
+                #     self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
+                #     - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
+                corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
+                    * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
                     self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
                     - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
@@ -529,7 +533,7 @@ class Crystal:
         proj_x_axis = None,
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
-        tol_intensity = 0.5
+        tol_intensity = 1.0
         ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -552,29 +556,24 @@ class Crystal:
             else:
                 proj_x_axis = np.array([1,0,0])
 
-
-
         # Calculate wavelenth
         wavelength = electron_wavelength_angstrom(accel_voltage)
 
-        # wavevectors
-        k0 = zone_axis / np.linalg.norm(zone_axis) / wavelength;
-        # k0_plus_g = self.g_vec_all + k0[:,None]
-        # cos_alpha = np.sum(k0[:,None] * self.g_vec_all, axis=0) \
-        #     / np.linalg.norm(self.g_vec_all, axis=0) \
-        #     / np.linalg.norm(k0)
-        cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis[:,None], axis=0) \
-            / np.linalg.norm(k0[:,None] + self.g_vec_all) \
-            / np.linalg.norm(zone_axis)
+        # wavevector
+        uvw = zone_axis / np.linalg.norm(zone_axis)
+        k0 = uvw / wavelength;
 
         # Excitation errors
+        cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * uvw[:,None], axis=0) \
+            / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
-            / (np.linalg.norm(k0[:,None] + self.g_vec_all)) / cos_alpha
+            / (np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)) / cos_alpha
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
         keep = (sg <= sg_max)
         g_diff = self.g_vec_all[:,keep]
+
         
         # Diffracted peak intensities
         g_int = self.struct_factors_int[keep] \
@@ -603,7 +602,7 @@ class Crystal:
 
 def plot_diffraction_pattern(
     bragg_peaks,
-    scale_markers=20,
+    scale_markers=10,
     power_markers=1,
     figsize=(8,8),
     returnfig=False):
