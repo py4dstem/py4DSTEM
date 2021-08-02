@@ -391,34 +391,17 @@ class Crystal:
             g_test = g_vec_all[:,sub_test]
             intensity_test = intensity_all[sub_test]
 
-            for a0 in range(g_test.shape[1]):
-                # corr += intensity_test[a0] * np.maximum(corr_kernel_size 
-                #     - np.sqrt(np.min(np.sum((
-                #     np.tensordot(g_test[:,a0],
-                #     self.orientation_rotation_matrices,axes=1)[:,:,:,None] 
-                #     - g_ref[:,None,None,:])**2, axis=0), axis=2)), 0)
-                # corr += intensity_test[a0] * np.maximum(corr_kernel_size 
-                #     - np.sqrt(np.min(np.sum((np.tensordot( \
-                #     self.orientation_rotation_matrices,
-                #     g_test[:,a0], axes=1)[:,:,:,None] - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
-                # corr += (intensity_test[a0] / intensity_ref) * np.maximum(
-                #     corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #     self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
-                #     - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
-                # corr += (self.orientation_shell_radii[ind_shell] * intensity_test[a0] ) * np.maximum(
-                #     corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #     self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
-                #     - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
-                corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
-                    * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
-                    self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
-                    - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
+            # for a0 in range(g_test.shape[1]):
+            #     corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
+            #         * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
+            #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
+            #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
-            # corr += np.sum(
-            #     intensity_test * np.maximum(corr_kernel_size 
-            #     - np.sqrt(np.min(np.sum(((
-            #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-            #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+            corr += np.sum(
+                self.orientation_shell_radii[ind_shell] * intensity_test * np.maximum(
+                corr_kernel_size  - np.sqrt(np.min(np.sum(((
+                self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
         # print(corr)
         # print(corr_test.shape)
@@ -530,6 +513,7 @@ class Crystal:
         self, 
         accel_voltage = 300e3, 
         zone_axis = [0,0,1],
+        foil_normal = None,
         proj_x_axis = None,
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
@@ -541,6 +525,7 @@ class Crystal:
         Args:
             accel_voltage (np float):        kinetic energy of electrons specificed in volts
             zone_axis (np float vector):     3 element projection direction for sim pattern
+            foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
             sigma_excitation_error (np float): sigma value for Gaussian envelope applied to s_g (excitation errors) in units of Angstroms
             tol_excitation_error_mult (np float): tolerance in units of sigma for s_g inclusion
@@ -550,6 +535,14 @@ class Crystal:
         accel_voltage = np.asarray(accel_voltage)
         zone_axis = np.asarray(zone_axis)
 
+        # Foil normal
+        if foil_normal is None:
+            foil_normal = zone_axis
+        else:
+            foil_normal = np.asarray(foil_normal)
+        foil_normal = foil_normal / np.linalg.norm(foil_normal)
+
+        # Logic to set x axis for projected images
         if proj_x_axis is None:
             if (zone_axis == np.array([1,0,0])).all:
                 proj_x_axis = np.array([0,1,0])
@@ -560,11 +553,13 @@ class Crystal:
         wavelength = electron_wavelength_angstrom(accel_voltage)
 
         # wavevector
-        uvw = zone_axis / np.linalg.norm(zone_axis)
-        k0 = uvw / wavelength;
+        zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
+        k0 = zone_axis_norm / wavelength;
 
         # Excitation errors
-        cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * uvw[:,None], axis=0) \
+        # cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis_norm[:,None], axis=0) \
+        #     / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
+        cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * foil_normal[:,None], axis=0) \
             / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
             / (np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)) / cos_alpha
@@ -573,11 +568,20 @@ class Crystal:
         sg_max = sigma_excitation_error * tol_excitation_error_mult
         keep = (sg <= sg_max)
         g_diff = self.g_vec_all[:,keep]
-
         
         # Diffracted peak intensities
         g_int = self.struct_factors_int[keep] \
             * np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
+
+        # Scale location of output peaks by diffraction angle
+        angle_ideal = np.arccos(np.minimum(np.sum( \
+            (k0[:,None] + g_diff) * zone_axis_norm[:,None], axis=0) \
+            / np.linalg.norm(k0[:,None] + g_diff, axis=0), 1))
+        angle_real = np.arccos(np.minimum(np.sum( \
+            (k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None]) * zone_axis_norm[:,None], axis=0)
+            / np.linalg.norm(k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None], axis=0), 1))
+        angle_nonzero = angle_real > 0
+        g_diff[:,angle_nonzero] = g_diff[:,angle_nonzero] * angle_real[angle_nonzero] / angle_ideal[angle_nonzero]
 
         # Intensity tolerance
         keep_int = g_int > tol_intensity
