@@ -314,12 +314,23 @@ class Crystal:
         keep = np.abs(radii) > tol_distance 
         self.orientation_shell_radii = radii[keep]
 
-        # Assign each structure factor point to a radial shell
+        # init
         self.orientation_shell_index = -1*np.ones(self.g_vec_all.shape[1])
+        self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
+        self.orientation_shell_weight = np.zeros(self.orientation_shell_radii.size)
+
+        # Assign each structure factor point to a radial shell
         for a0 in range(self.orientation_shell_radii.size):
-            self.orientation_shell_index[ \
-                np.abs(self.orientation_shell_radii[a0] - \
-                    self.g_vec_leng) < tol_distance] = a0
+            sub = np.abs(self.orientation_shell_radii[a0] - \
+                    self.g_vec_leng) < tol_distance
+
+            self.orientation_shell_index[sub] = a0
+            self.orientation_shell_count[a0] = np.sum(sub)
+
+            self.orientation_shell_weight[a0] = \
+                self.orientation_shell_radii[a0] 
+                # / np.mean(self.struct_factors_int[sub])
+                # / self.orientation_shell_count[a0] 
 
 
 
@@ -332,7 +343,6 @@ class Crystal:
         plot_corr=False,
         figsize=(12,6),
         corr_kernel_size=0.05,
-        tol_structure_factor=0.2,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern.
@@ -343,7 +353,6 @@ class Crystal:
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
             corr_kernel_size (np float):    correlation kernel size length in Angstroms
-            tol_structure_factor (np float):    tolerance of structure factor intensity to include on shell
 
         """
 
@@ -388,20 +397,21 @@ class Crystal:
             # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
 
             sub_test = shell_index == ind_shell
-            g_test = g_vec_all[:,sub_test]
-            intensity_test = intensity_all[sub_test]
+            if np.sum(sub_test) > 0:
+                g_test = g_vec_all[:,sub_test]
+                amplitude_test = np.sqrt(intensity_all[sub_test])
 
-            # for a0 in range(g_test.shape[1]):
-            #     corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
-            #         * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
-            #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
-            #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
+                # for a0 in range(g_test.shape[1]):
+                #     corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
+                #         * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
+                #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
+                #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
-            corr += np.sum(
-                self.orientation_shell_radii[ind_shell] * intensity_test * np.maximum(
-                corr_kernel_size  - np.sqrt(np.min(np.sum(((
-                self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+                corr += self.orientation_shell_weight[ind_shell] * np.sum(
+                    amplitude_test * np.maximum(
+                    corr_kernel_size  - np.sqrt(np.min(np.sum(((
+                    self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
         # print(corr)
         # print(corr_test.shape)
@@ -438,7 +448,7 @@ class Crystal:
                     np.cos(elev)))        
 
         temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        temp /= np.min(np.abs(temp[np.abs(temp)>0.01]))
+        temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
         temp = np.round(temp * 1e3) / 1e3
         print('Highest corr point @ (' + str(temp) + ')')
 
