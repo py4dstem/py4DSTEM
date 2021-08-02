@@ -341,6 +341,7 @@ class Crystal:
         accel_voltage = 300e3, 
         subpixel_tilt=True,
         plot_corr=False,
+        plot_corr_3D=False,
         figsize=(12,6),
         corr_kernel_size=0.05,
         ):
@@ -361,9 +362,9 @@ class Crystal:
         # Calculate wavelenth
         wavelength = electron_wavelength_angstrom(accel_voltage)
 
-        # Calculate z direction offset for peaks projected onto Ewald sphere
+        # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
         k0 = 1 / wavelength;
-        gz = (k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2))
+        gz = np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2) - k0
 
         # 3D Bragg peak data
         g_vec_all = np.vstack((
@@ -407,7 +408,7 @@ class Crystal:
                 #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
                 #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
-                corr += self.orientation_shell_weight[ind_shell] * np.sum(
+                corr += (self.orientation_shell_weight[ind_shell]) * np.sum(
                     amplitude_test * np.maximum(
                     corr_kernel_size  - np.sqrt(np.min(np.sum(((
                     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
@@ -511,8 +512,76 @@ class Crystal:
             ax[1].set_xlabel('In-plane rotation angle [deg]')
             ax[1].set_ylabel('Correlation Signal for maximum zone axis')
 
+            plt.show()
+
+        if plot_corr_3D is True:
+                    # 3D plotting
+
+            fig = plt.figure(figsize=[figsize[0],figsize[0]])
+            ax = fig.add_subplot(
+                projection='3d',
+                elev=90, 
+                azim=0)
+
+            sig_zone_axis = np.max(corr,axis=1)
+
+            el = self.orientation_rotation_angles[:,0,0]
+            az = self.orientation_rotation_angles[:,0,1]
+            x = np.cos(az)*np.sin(el)
+            y = np.sin(az)*np.sin(el)
+            z =            np.cos(el)
+
+            v = np.vstack((x.ravel(),y.ravel(),z.ravel()))
+
+            v_order = np.array([
+                [0,1,2],
+                [0,2,1],
+                [1,0,2],
+                [1,2,0],
+                [2,0,1],
+                [2,1,0],
+                ])
+            d_sign = np.array([
+                [ 1, 1, 1],
+                [-1, 1, 1],
+                [ 1,-1, 1],
+                [-1,-1, 1],
+                # [ 1, 1,-1],
+                # [-1, 1,-1],
+                # [ 1,-1,-1],
+                # [-1,-1,-1],
+                ])
+
+            for a1 in range(d_sign.shape[0]):
+                for a0 in range(v_order.shape[0]):
+                    ax.scatter(
+                        xs=v[v_order[a0,0]] * d_sign[a1,0], 
+                        ys=v[v_order[a0,1]] * d_sign[a1,1], 
+                        zs=v[v_order[a0,2]] * d_sign[a1,2],
+                        s=30,
+                        c=sig_zone_axis.ravel(),
+                        edgecolors=None)
+
+
+            # v = np.array([])
+
+
+            # ax.scatter(
+            #     xs=x, 
+            #     ys=y, 
+            #     zs=z,
+            #     s=10)
+            # # axes limits
+            r = 1.05
+            ax.axes.set_xlim3d(left=-r, right=r) 
+            ax.axes.set_ylim3d(bottom=-r, top=r) 
+            ax.axes.set_zlim3d(bottom=-r, top=r) 
+            axisEqual3D(ax)
+
 
             plt.show()
+
+
 
         return corr
 
@@ -527,7 +596,7 @@ class Crystal:
         proj_x_axis = None,
         sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
-        tol_intensity = 1.0
+        tol_intensity = 0.1
         ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -564,19 +633,19 @@ class Crystal:
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = zone_axis_norm / wavelength;
+        k0 = zone_axis_norm / wavelength
 
         # Excitation errors
         # cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis_norm[:,None], axis=0) \
         #     / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * foil_normal[:,None], axis=0) \
             / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
-        sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
-            / (np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)) / cos_alpha
+        sg = (-0.5) * np.sum((2*k0[:,None] - self.g_vec_all) * self.g_vec_all, axis=0) \
+            / (np.linalg.norm(k0[:,None] - self.g_vec_all, axis=0)) / cos_alpha
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
-        keep = (sg <= sg_max)
+        keep = np.abs(sg) <= sg_max
         g_diff = self.g_vec_all[:,keep]
         
         # Diffracted peak intensities
@@ -584,14 +653,14 @@ class Crystal:
             * np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
 
         # Scale location of output peaks by diffraction angle
-        angle_ideal = np.arccos(np.minimum(np.sum( \
-            (k0[:,None] + g_diff) * zone_axis_norm[:,None], axis=0) \
-            / np.linalg.norm(k0[:,None] + g_diff, axis=0), 1))
-        angle_real = np.arccos(np.minimum(np.sum( \
-            (k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None]) * zone_axis_norm[:,None], axis=0)
-            / np.linalg.norm(k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None], axis=0), 1))
-        angle_nonzero = angle_real > 0
-        g_diff[:,angle_nonzero] = g_diff[:,angle_nonzero] * angle_real[angle_nonzero] / angle_ideal[angle_nonzero]
+        # angle_ideal = np.arccos(np.minimum(np.sum( \
+        #     (k0[:,None] + g_diff) * zone_axis_norm[:,None], axis=0) \
+        #     / np.linalg.norm(k0[:,None] + g_diff, axis=0), 1))
+        # angle_real = np.arccos(np.minimum(np.sum( \
+        #     (k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None]) * zone_axis_norm[:,None], axis=0)
+        #     / np.linalg.norm(k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None], axis=0), 1))
+        # angle_nonzero = angle_real > 0
+        # g_diff[:,angle_nonzero] = g_diff[:,angle_nonzero] * angle_real[angle_nonzero] / angle_ideal[angle_nonzero]
 
         # Intensity tolerance
         keep_int = g_int > tol_intensity
