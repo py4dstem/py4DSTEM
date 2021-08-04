@@ -151,7 +151,6 @@ class Crystal:
         # Structure factor intensities
         self.struct_factors_int = np.abs(self.struct_factors)**2 
 
-
     def plot_structure_factors(
         self,
         proj_dir=[10,30],
@@ -199,9 +198,9 @@ class Crystal:
         ax.axes.set_xlim3d(left=-r, right=r) 
         ax.axes.set_ylim3d(bottom=-r, top=r) 
         ax.axes.set_zlim3d(bottom=-r, top=r) 
-        ax.set_box_aspect((1,1,1))
+        ax.set_box_aspect((1,1,1));
 
-        plt.show()
+        plt.show();
 
         if returnfig:
             return fig, ax
@@ -212,6 +211,7 @@ class Crystal:
         zone_axis_range=np.array([[0,1,1],[1,1,1]]),
         angle_step_zone_axis=3.0,
         angle_step_in_plane=6.0,
+        corr_kernel_size=0.05,
         tol_distance = 0.01,
         ):
         """
@@ -222,6 +222,7 @@ class Crystal:
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
             angle_step_zone_axis (numpy float): Approximate angular step size for zone axis [degrees]
             angle_step_in_plane (numpy float):  Approximate angular step size for in-plane rotation [degrees]
+            corr_kernel_size (np float):        Correlation kernel size length in Angstroms
             tol_distance (numpy float):         Distance tolerance for radial shell assignment [1/Angstroms]
         """
 
@@ -308,31 +309,51 @@ class Crystal:
                 self.orientation_rotation_matrices[a0,a1,:,:] = m12 @ m3z     
 
         # Determine the radii of all spherical shells
-        radii = np.unique(np.round(
-            self.g_vec_leng / tol_distance) * tol_distance)
+        radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
+        radii = np.unique(radii_test)
         # Remove zero beam
         keep = np.abs(radii) > tol_distance 
         self.orientation_shell_radii = radii[keep]
 
         # init
-        self.orientation_shell_index = -1*np.ones(self.g_vec_all.shape[1])
+        self.orientation_shell_index = -1*np.ones(self.g_vec_all.shape[1], dtype='int')
         self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
-        self.orientation_shell_weight = np.zeros(self.orientation_shell_radii.size)
+        # self.orientation_shell_weight = np.zeros(self.orientation_shell_radii.size)
 
         # Assign each structure factor point to a radial shell
         for a0 in range(self.orientation_shell_radii.size):
-            sub = np.abs(self.orientation_shell_radii[a0] - \
-                    self.g_vec_leng) < tol_distance
+            sub = np.abs(self.orientation_shell_radii[a0] - radii_test) <= tol_distance / 2
 
             self.orientation_shell_index[sub] = a0
             self.orientation_shell_count[a0] = np.sum(sub)
 
-            self.orientation_shell_weight[a0] = \
-                self.orientation_shell_radii[a0] 
+            # update the radii
+            # print(self.orientation_shell_radii[a0])
+
+            self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
+            # print(self.orientation_shell_radii[a0])
+
+            # self.orientation_shell_weight[a0] = \
+            #     self.orientation_shell_radii[a0] 
                 # / np.mean(self.struct_factors_int[sub])
                 # / self.orientation_shell_count[a0] 
 
+        # for a0 in range(self.orientation_shell_index.size):
+        #     print(self.orientation_shell_index[a0])
 
+        # normalization
+        self.orientation_corr_kernel_size = np.array(corr_kernel_size)
+        self.orientation_corr_norm = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
+
+
+        # # Test plotting
+        # fig = plt.figure(figsize=(16,8))
+        # ax = fig.add_subplot()
+        # ax.scatter(
+        #     self.g_vec_leng, 
+        #     self.orientation_shell_index, 
+        #     s=5)
+        # plt.show()
 
 
     def orientation_match(
@@ -343,7 +364,6 @@ class Crystal:
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
-        corr_kernel_size=0.05,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern.
@@ -353,7 +373,6 @@ class Crystal:
             accel_voltage (np float):           kinetic energy of electrons specificed in volts
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
-            corr_kernel_size (np float):    correlation kernel size length in Angstroms
 
         """
 
@@ -375,33 +394,54 @@ class Crystal:
         # Vector lengths
         g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
-        # init arrays
-        shell_index = np.zeros(g_vec_all.shape[1])
-        shell_ref_check = np.zeros(self.orientation_shell_radii.size,dtype=bool)
+        # # init arrays
+        # shell_index = np.zeros(g_vec_all.shape[1])
+        # shell_ref_check = np.zeros(self.orientation_shell_radii.size,dtype=bool)
 
-        # Assign each Bragg peak to nearest shell from reference
-        for a0 in range(self.orientation_shell_radii.size):
-            sub = np.abs(self.orientation_shell_radii[a0] - g_vec_leng) < corr_kernel_size
-            shell_index[sub] = a0
-            if np.sum(sub) > 0:
-                shell_ref_check[a0] = True
-        shell_ref_inds = np.where(shell_ref_check)
+        # # Assign each Bragg peak to nearest shell from reference
+        # for a0 in range(self.orientation_shell_radii.size):
+        #     sub = np.abs(self.orientation_shell_radii[a0] - g_vec_leng) < self.orientation_corr_kernel_size
+        #     shell_index[sub] = a0
+        #     if np.sum(sub) > 0:
+        #         shell_ref_check[a0] = True
+        # shell_ref_inds = np.where(shell_ref_check)
 
         # init correlogram
         corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
 
         # compute correlogram
-        for ind_shell in np.nditer(shell_ref_inds):
+        # for ind_shell in np.nditer(shell_ref_inds):
+
+        for ind_shell in range(self.orientation_shell_radii.size):
             sub_ref = self.orientation_shell_index == ind_shell
             g_ref = self.g_vec_all[:,sub_ref]
             # intensity_ref = self.struct_factors_int[sub_ref]            
             intensity_ref = np.mean(self.struct_factors_int[sub_ref])
             # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
 
-            sub_test = shell_index == ind_shell
+
+            # Determine with experimental points may fall on this shell
+            sub_test = np.abs(g_vec_leng - self.orientation_shell_radii[ind_shell]) \
+                < self.orientation_corr_kernel_size
+
+            # sub_test = shell_index == ind_shell
             if np.sum(sub_test) > 0:
                 g_test = g_vec_all[:,sub_test]
                 intensity_test = intensity_all[sub_test]
+
+
+                corr += np.mean(intensity_test * np.maximum(
+                    self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+                        self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
+
+
+                # corr += intensity_ref * np.sum(intensity_test * np.maximum(
+                #     self.orientation_corr_kernel_size  - np.sqrt(np.min(np.sum(((
+                #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
                 # amplitude_test = np.sqrt(intensity_all[sub_test])
 
                 # for a0 in range(g_test.shape[1]):
@@ -410,11 +450,11 @@ class Crystal:
                 #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
                 #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
-                corr += (self.orientation_shell_weight[ind_shell] * intensity_ref) \
-                    * np.mean(intensity_test * np.maximum(
-                    corr_kernel_size  - np.sqrt(np.min(np.sum(((
-                    self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+                # corr += (self.orientation_shell_weight[ind_shell] * intensity_ref) \
+                #     * np.mean(intensity_test * np.maximum(
+                #     self.corr_kernel_size  - np.sqrt(np.min(np.sum(((
+                #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
         # print(corr)
         # print(corr_test.shape)
@@ -451,7 +491,7 @@ class Crystal:
                     np.cos(elev)))        
 
         temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
+        # temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
         temp = np.round(temp * 1e3) / 1e3
         print('Highest corr point @ (' + str(temp) + ')')
 
@@ -596,7 +636,7 @@ class Crystal:
         zone_axis = [0,0,1],
         foil_normal = None,
         proj_x_axis = None,
-        sigma_excitation_error = 0.02,
+        sigma_excitation_error = 0.01,
         tol_excitation_error_mult = 3,
         tol_intensity = 0.1
         ):
