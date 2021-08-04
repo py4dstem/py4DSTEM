@@ -364,7 +364,7 @@ class Crystal:
 
         # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
         k0 = 1 / wavelength;
-        gz = np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2) - k0
+        gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
 
         # 3D Bragg peak data
         g_vec_all = np.vstack((
@@ -395,12 +395,14 @@ class Crystal:
             sub_ref = self.orientation_shell_index == ind_shell
             g_ref = self.g_vec_all[:,sub_ref]
             # intensity_ref = self.struct_factors_int[sub_ref]            
-            # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
+            intensity_ref = np.mean(self.struct_factors_int[sub_ref])
+            # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
 
             sub_test = shell_index == ind_shell
             if np.sum(sub_test) > 0:
                 g_test = g_vec_all[:,sub_test]
-                amplitude_test = np.sqrt(intensity_all[sub_test])
+                intensity_test = intensity_all[sub_test]
+                # amplitude_test = np.sqrt(intensity_all[sub_test])
 
                 # for a0 in range(g_test.shape[1]):
                 #     corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
@@ -408,8 +410,8 @@ class Crystal:
                 #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
                 #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
 
-                corr += (self.orientation_shell_weight[ind_shell]) * np.sum(
-                    amplitude_test * np.maximum(
+                corr += (self.orientation_shell_weight[ind_shell] * intensity_ref) \
+                    * np.mean(intensity_test * np.maximum(
                     corr_kernel_size  - np.sqrt(np.min(np.sum(((
                     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
                     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
