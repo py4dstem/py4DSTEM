@@ -1,5 +1,5 @@
-# YAML 1.2
----
+cff-version: 1.1.0
+message: "If you use this software, please cite the accompanying paper."
 abstract: "Scanning transmission electron microscopy (STEM) allows for imaging, diffraction, and spectroscopy of materials on length scales ranging from microns to atoms. By using a high-speed, direct electron detector, it is now possible to record a full two-dimensional (2D) image of the diffracted electron beam at each probe position, typically a 2D grid of probe positions. These 4D-STEM datasets are rich in information, including signatures of the local structure, orientation, deformation, electromagnetic fields, and other sample-dependent properties. However, extracting this information requires complex analysis pipelines that include data wrangling, calibration, analysis, and visualization, all while maintaining robustness against imaging distortions and artifacts. In this paper, we present py4DSTEM, an analysis toolkit for measuring material properties from 4D-STEM datasets, written in the Python language and released with an open-source license. We describe the algorithmic steps for dataset calibration and various 4D-STEM property measurements in detail and present results from several experimental datasets. We also implement a simple and universal file format appropriate for electron microscopy data in py4DSTEM, which uses the open-source HDF5 standard. We hope this tool will benefit the research community and help improve the standards for data and computational methods in electron microscopy, and we invite the community to contribute to this ongoing project."
 authors: 
   -
@@ -98,9 +98,7 @@ authors:
     affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
     family-names: Ophus
     given-names: Colin
-cff-version: "1.1.0"
-date-released: 2021-05-21
-doi: "10.1017/S1431927621000477"
-message: "If you use this software, please cite it using these metadata."
 title: "py4DSTEM: A Software Package for Four-Dimensional Scanning Transmission Electron Microscopy Data Analysis"
-...
+version: 0.12.6
+doi: 10.1017/S1431927621000477
+date-released: 2021-05-21
