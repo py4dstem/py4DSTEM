@@ -208,11 +208,14 @@ class Crystal:
 
     def orientation_plan(
         self, 
-        zone_axis_range=np.array([[0,1,1],[1,1,1]]),
-        angle_step_zone_axis=3.0,
-        angle_step_in_plane=6.0,
-        corr_kernel_size=0.05,
+        zone_axis_range = np.array([[0,1,1],[1,1,1]]),
+        angle_step_zone_axis = 3.0,
+        angle_step_in_plane = 6.0,
+        accel_voltage = 300e3, 
+        corr_kernel_size = 0.05,
         tol_distance = 0.01,
+        plot_corr_norm = False,
+        figsize = (6,6),
         ):
         """
         Calculate the rotation basis arrays for an SO(3) rotation correlogram.
@@ -222,9 +225,16 @@ class Crystal:
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
             angle_step_zone_axis (numpy float): Approximate angular step size for zone axis [degrees]
             angle_step_in_plane (numpy float):  Approximate angular step size for in-plane rotation [degrees]
+            accel_voltage (numpy float):        Accelerating voltage for electrons [Volts]
             corr_kernel_size (np float):        Correlation kernel size length in Angstroms
             tol_distance (numpy float):         Distance tolerance for radial shell assignment [1/Angstroms]
         """
+
+        # Accelerating voltage
+        self.accel_voltage = np.asarray(accel_voltage)
+
+        # Calculate wavelenth
+        self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         # Define 3 vectors which span zone axis orientation range, normalize
         self.orientation_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
@@ -326,24 +336,119 @@ class Crystal:
 
             self.orientation_shell_index[sub] = a0
             self.orientation_shell_count[a0] = np.sum(sub)
-
-            # update the radii
-            # print(self.orientation_shell_radii[a0])
-
             self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
-            # print(self.orientation_shell_radii[a0])
-
-            # self.orientation_shell_weight[a0] = \
-            #     self.orientation_shell_radii[a0] 
-                # / np.mean(self.struct_factors_int[sub])
-                # / self.orientation_shell_count[a0] 
-
-        # for a0 in range(self.orientation_shell_index.size):
-        #     print(self.orientation_shell_index[a0])
 
         # normalization
         self.orientation_corr_kernel_size = np.array(corr_kernel_size)
-        self.orientation_corr_norm = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
+        self.orientation_corr_norm = np.zeros((self.orientation_num_zones))
+
+        mat = np.zeros((self.orientation_num_zones,3,3))
+        for a0 in range(self.orientation_num_zones):
+            # mat[a0,:,:] = np.transpose(self.orientation_rotation_matrices[a0,0,:,:],(1,0))
+            mat[a0,:,:] = np.linalg.inv(self.orientation_rotation_matrices[a0,0,:,:])
+
+        knorm = np.array([0,0,1])
+        k0 = knorm / self.wavelength
+
+        for a0 in range(self.orientation_shell_radii.size):
+            sub = self.orientation_shell_index == a0
+            g_proj = mat @ self.g_vec_all[:,sub]
+
+            # Calculate s_g
+            cos_alpha = np.sum((k0[None,:,None] + g_proj) * knorm[None,:,None], axis=1) \
+                / np.linalg.norm(k0[None,:,None] + g_proj, axis=1)
+            sg = (-0.5) * np.sum((2*k0[None,:,None] + g_proj) * g_proj, axis=1) \
+                / (np.linalg.norm(k0[None,:,None] + g_proj, axis=1)) / cos_alpha
+
+            # Add into normalization output
+            self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0)**2, axis=1)
+
+
+            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
+            #     * np.maximum(1 - 0.25*np.abs(sg) / corr_kernel_size, 0), axis=1)
+            # self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
+
+            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
+            #     * np.maximum(1 - 0.5 * np.abs(sg) / corr_kernel_size, 0)**2, axis=1)
+
+        self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
+
+            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
+            #     * np.maximum(corr_kernel_size - np.abs(sg), 0), axis=1)
+            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
+            #     * (np.maximum(1 - np.abs(sg) / corr_kernel_size, 0))**2, axis=1)
+            # self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)**2
+
+        # plot the correlation normalization
+        if plot_corr_norm is True:
+            
+            # 2D correlation slice
+            im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
+            for a0 in np.arange(self.orientation_zone_axis_steps+1):
+                inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
+                im_corr_zone_axis[a0,range(a0+1)] = self.orientation_corr_norm[inds_val]
+
+            # Zone axis
+            fig, ax = plt.subplots(figsize=figsize)
+            # cmin = np.min(self.orientation_corr_norm)
+            cmax = np.max(self.orientation_corr_norm)
+
+            # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+            im_plot = im_corr_zone_axis / cmax 
+
+            im = ax.imshow(
+                im_plot,
+                cmap='viridis',
+                vmin=0.0,
+                vmax=1.0)
+            fig.colorbar(im)
+
+            label_0 = self.orientation_zone_axis_range[0,:]
+            label_0 = np.round(label_0 * 1e3) * 1e-3
+            label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+
+            label_1 = self.orientation_zone_axis_range[1,:]
+            label_1 = np.round(label_1 * 1e3) * 1e-3
+            label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+
+            label_2 = self.orientation_zone_axis_range[2,:]
+            label_2 = np.round(label_2 * 1e3) * 1e-3
+            label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+
+            ax.set_yticks([0])
+            ax.set_yticklabels([
+                str(label_0)])
+
+            ax.set_xticks([0, self.orientation_zone_axis_steps])
+            ax.set_xticklabels([
+                str(label_1),
+                str(label_2)])
+
+            plt.show()  
+
+
+        # ind = 1;
+        # x = g_proj[ind,0,:]
+        # y = g_proj[ind,1,:]
+        # z = g_proj[ind,2,:]
+
+        # fig = plt.figure(figsize=(8,8))
+        # ax = fig.add_subplot(
+        #     projection='3d',
+        #     elev=0, 
+        #     azim=0)
+        # ax.scatter(
+        #     xs=x, 
+        #     ys=y, 
+        #     zs=z,
+        #     s=30,
+        #     edgecolors=None)
+        # r = 2.1
+        # ax.axes.set_xlim3d(left=-r, right=r) 
+        # ax.axes.set_ylim3d(bottom=-r, top=r) 
+        # ax.axes.set_zlim3d(bottom=-r, top=r) 
+        # axisEqual3D(ax)
+        # plt.show()
 
 
         # # Test plotting
@@ -359,7 +464,6 @@ class Crystal:
     def orientation_match(
         self,
         bragg_peaks,
-        accel_voltage = 300e3, 
         subpixel_tilt=True,
         plot_corr=False,
         plot_corr_3D=False,
@@ -370,19 +474,13 @@ class Crystal:
 
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-            accel_voltage (np float):           kinetic energy of electrons specificed in volts
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
         """
 
-        accel_voltage = np.asarray(accel_voltage)
-
-        # Calculate wavelenth
-        wavelength = electron_wavelength_angstrom(accel_voltage)
-
         # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
-        k0 = 1 / wavelength;
+        k0 = 1 / self.wavelength
         gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
 
         # 3D Bragg peak data
@@ -416,7 +514,7 @@ class Crystal:
             sub_ref = self.orientation_shell_index == ind_shell
             g_ref = self.g_vec_all[:,sub_ref]
             # intensity_ref = self.struct_factors_int[sub_ref]            
-            intensity_ref = np.mean(self.struct_factors_int[sub_ref])
+            # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
             # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
 
 
@@ -427,14 +525,21 @@ class Crystal:
             # sub_test = shell_index == ind_shell
             if np.sum(sub_test) > 0:
                 g_test = g_vec_all[:,sub_test]
-                intensity_test = intensity_all[sub_test]
+                # intensity_test = intensity_all[sub_test]
+                amplitude_test = intensity_all[sub_test]
 
-
-                corr += np.mean(intensity_test * np.maximum(
+                corr += np.mean(amplitude_test * np.maximum(
                     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
                         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
                     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
+                # corr += intensity_ref * np.mean(intensity_test * np.maximum(
+                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
+        # normalization
+        corr = corr / self.orientation_corr_norm[:,None]
 
 
                 # corr += intensity_ref * np.sum(intensity_test * np.maximum(
@@ -521,10 +626,6 @@ class Crystal:
 
             inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
             ax[0].scatter(inds_plot[1],inds_plot[0], s=120, linewidth = 2, facecolors='none', edgecolors='r')
-
-            # im_handle = 
-            # fig.colorbar(im_handle, ax=axs[0])
-
 
             label_0 = self.orientation_zone_axis_range[0,:]
             label_0 = np.round(label_0 * 1e3) * 1e-3
@@ -632,7 +733,6 @@ class Crystal:
 
     def generate_diffraction_pattern(
         self, 
-        accel_voltage = 300e3, 
         zone_axis = [0,0,1],
         foil_normal = None,
         proj_x_axis = None,
@@ -644,7 +744,6 @@ class Crystal:
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            accel_voltage (np float):        kinetic energy of electrons specificed in volts
             zone_axis (np float vector):     3 element projection direction for sim pattern
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
@@ -653,7 +752,6 @@ class Crystal:
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
         """
 
-        accel_voltage = np.asarray(accel_voltage)
         zone_axis = np.asarray(zone_axis)
 
         # Foil normal
@@ -670,20 +768,17 @@ class Crystal:
             else:
                 proj_x_axis = np.array([1,0,0])
 
-        # Calculate wavelenth
-        wavelength = electron_wavelength_angstrom(accel_voltage)
-
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = zone_axis_norm / wavelength
+        k0 = zone_axis_norm / self.wavelength
 
         # Excitation errors
         # cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis_norm[:,None], axis=0) \
         #     / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * foil_normal[:,None], axis=0) \
             / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
-        sg = (-0.5) * np.sum((2*k0[:,None] - self.g_vec_all) * self.g_vec_all, axis=0) \
-            / (np.linalg.norm(k0[:,None] - self.g_vec_all, axis=0)) / cos_alpha
+        sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
+            / (np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)) / cos_alpha
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
