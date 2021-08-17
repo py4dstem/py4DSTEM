@@ -460,14 +460,35 @@ class Crystal:
         #     s=5)
         # plt.show()
 
+    def match_orientations(
+                           self,
+                           bragg_peaks_array,
+                           subpixel_tilt=True,
+                           ):
 
-    def orientation_match(
+        orientations = np.zeros((*bragg_peaks_array.shape, 3),dtype=np.float64)
+
+        for rx,ry in tqdmnd(*bragg_peaks_array.shape, desc="Matching Orientations", unit="PointList"):
+            bragg_peaks = bragg_peaks_array.get_pointlist(rx,ry)
+            orientations[rx,ry,:] = self.match_single_pattern(bragg_peaks,
+                                                              subpixel_tilt=subpixel_tilt,
+                                                              plot_corr=False,
+                                                              plot_corr_3D=False,
+                                                              return_corr=False,
+                                                              verbose=False,
+                                                              )
+
+        return orientations
+
+    def match_single_pattern(
         self,
         bragg_peaks,
         subpixel_tilt=True,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
+        return_corr=False,
+        verbose=True,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern.
@@ -598,7 +619,8 @@ class Crystal:
         temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
         # temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
         temp = np.round(temp * 1e3) / 1e3
-        print('Highest corr point @ (' + str(temp) + ')')
+        if verbose:
+            print('Highest corr point @ (' + str(temp) + ')')
 
 
         # plotting
@@ -725,8 +747,7 @@ class Crystal:
             plt.show()
 
 
-
-        return corr
+        return (zone_axis_fit, corr) if return_corr else zone_axis_fit
 
 
 
