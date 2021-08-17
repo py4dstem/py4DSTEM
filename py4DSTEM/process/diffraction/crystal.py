@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+try:
+    import pymatgen as mg
+except Exception:
+    print(r"pymatgen not found... kinematic module won't work ¯\\_(ツ)_/¯")
+
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
@@ -14,61 +19,46 @@ class Crystal:
     A class storing a single crystal structure, and associated diffraction data.
 
     Args:
-        positions ((n,3) numpy array):      fractional atomic coordinates 
-        numbers ((n,) numpy array or scalar): atomic numbers 
-        cell (3 or 6 element numpy array):    [a, b, c, alpha, beta, gamma], where angles (alpha,beta,gamma) are in degrees.
-                                              If only [a, b, c] are provided, we assume 90 degree cell edges.
-                                              If only [a] is provided, we assume b = c = a.
+        structure       a pymatgen Structure object for the material
+                        or a string containing the Materials Project ID for the 
+                        structure (requires API key in config file, see:
+                        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
     """
 
     def __init__(
         self, 
-        positions, 
-        numbers, 
-        cell, 
+        structure,
+        conventional_standard_structure=True,
         **kwargs):
         """
         Instantiate a Crystal object. 
         Calculate lattice vectors.
         """
         
+        if isinstance(structure, str):
+            structure = mg.get_structure_from_mp(structure)
+
+        assert isinstance(
+            structure, mg.core.Structure
+        ), "structure must be pymatgen Structure object"
+
+
+        self.structure = (
+            mg.symmetry.analyzer.SpacegroupAnalyzer(
+                structure
+            ).get_conventional_standard_structure()
+            if conventional_standard_structure
+            else structure
+        )
+        self.struc_dict = self.structure.as_dict()
+        self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix.T
+        self.lat_real = self.structure.lattice.matrix
+
         # Initialize Crystal
-        self.positions = np.asarray(positions)   #: fractional atomic coordinates
+        self.positions = self.structure.frac_coords   #: fractional atomic coordinates
 
         #: atomic numbers - if only one value is provided, assume all atoms are same species
-        numbers = np.asarray(numbers, dtype='intp')
-        if np.size(numbers) == 1:
-            self.numbers = np.ones(positions.shape[0], dtype='intp') * numbers
-        elif np.size(numbers) == positions.shape[0]:
-            self.numbers = numbers
-        else:
-            raise Exception('Number of positions and atomic numbers do not match')
-
-
-        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma] 
-        cell = np.asarray(cell, dtype='float_')      
-        if np.size(cell) == 1:
-            self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
-        elif np.size(cell) == 3:
-            self.cell = np.hstack([cell, 90, 90, 90])
-        elif np.size(cell) == 6:  
-            self.cell = cell   			 
-        else:
-            raise Exception('Cell cannot contain ' + np.size(cell) + ' elements')
-
-        # calculate unit cell lattice vectors
-        a = self.cell[0]
-        b = self.cell[1]
-        c = self.cell[2]
-        alpha = self.cell[3] * np.pi/180
-        beta  = self.cell[4] * np.pi/180
-        gamma = self.cell[5] * np.pi/180
-        t = (np.cos(alpha)-np.cos(beta)*np.cos(gamma))/np.sin(gamma)
-        self.lat_real = np.array([ \
-            [a, 0, 0],
-            [b*np.cos(gamma), b*np.sin(gamma), 0],
-            [c*np.cos(beta), c*t, c*np.sqrt(1-np.cos(beta)**2-t**2)]])
-
+        self.numbers = np.array([s.Z for s in self.structure.species], dtype=np.intp)
 
     def calculate_structure_factors(
         self, 
