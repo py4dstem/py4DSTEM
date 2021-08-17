@@ -7,6 +7,7 @@ from matplotlib.axes import Axes
 
 try:
     import pymatgen as mg
+    from pymatgen.ext.matproj import MPRester
 except Exception:
     print(r"pymatgen not found... kinematic module won't work ¯\\_(ツ)_/¯")
 
@@ -36,7 +37,8 @@ class Crystal:
         """
         
         if isinstance(structure, str):
-            structure = mg.get_structure_from_mp(structure)
+            with MPRester() as m:
+                structure = m.get_structure_by_material_id(structure)
 
         assert isinstance(
             structure, mg.core.Structure
