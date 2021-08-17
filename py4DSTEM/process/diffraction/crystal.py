@@ -528,7 +528,7 @@ class Crystal:
                 # intensity_test = intensity_all[sub_test]
                 amplitude_test = intensity_all[sub_test]
 
-                corr += np.mean(amplitude_test * np.maximum(
+                corr += np.sum(amplitude_test * np.maximum(
                     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
                         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
                     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
@@ -539,7 +539,7 @@ class Crystal:
                 #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
         # normalization
-        corr = corr / self.orientation_corr_norm[:,None]
+        # corr = corr / self.orientation_corr_norm[:,None]
 
 
                 # corr += intensity_ref * np.sum(intensity_test * np.maximum(
