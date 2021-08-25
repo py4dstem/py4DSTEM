@@ -166,6 +166,7 @@ class PointList(DataObject):
     def remove_points(self, deletemask):
         """ Rms points wherever deletemask==True
         """
+        assert np.atleast_1d(deletemask).shape[0] == self.length, "deletemask must be same length as the data"
         self.data = np.delete(self.data, deletemask.nonzero()[0])
         self.length -= len(deletemask.nonzero()[0])
 
