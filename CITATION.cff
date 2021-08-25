@@ -1,0 +1,104 @@
+cff-version: 1.1.0
+message: "If you use this software, please cite the accompanying paper."
+abstract: "Scanning transmission electron microscopy (STEM) allows for imaging, diffraction, and spectroscopy of materials on length scales ranging from microns to atoms. By using a high-speed, direct electron detector, it is now possible to record a full two-dimensional (2D) image of the diffracted electron beam at each probe position, typically a 2D grid of probe positions. These 4D-STEM datasets are rich in information, including signatures of the local structure, orientation, deformation, electromagnetic fields, and other sample-dependent properties. However, extracting this information requires complex analysis pipelines that include data wrangling, calibration, analysis, and visualization, all while maintaining robustness against imaging distortions and artifacts. In this paper, we present py4DSTEM, an analysis toolkit for measuring material properties from 4D-STEM datasets, written in the Python language and released with an open-source license. We describe the algorithmic steps for dataset calibration and various 4D-STEM property measurements in detail and present results from several experimental datasets. We also implement a simple and universal file format appropriate for electron microscopy data in py4DSTEM, which uses the open-source HDF5 standard. We hope this tool will benefit the research community and help improve the standards for data and computational methods in electron microscopy, and we invite the community to contribute to this ongoing project."
+authors: 
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Savitzky
+    given-names: "Benjamin H."
+  -
+    affiliation: "Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Zeltmann
+    given-names: "Steven E. "
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Hughes
+    given-names: "Lauren A."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Brown
+    given-names: "Hamish G."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA and Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Zhao
+    given-names: Shiteng
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA and Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Pelz
+    given-names: "Philipp M."
+  -
+    affiliation: "Institut für Physik, Humboldt-Universität zu Berlin, Newtonstraße 15, 12489 Berlin, Germany"
+    family-names: Pekin
+    given-names: "Thomas C."
+  -
+    affiliation: "Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Barnard
+    given-names: "Edward S."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Donohue
+    given-names: Jennifer
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: "Rangel DaCosta"
+    given-names: Luis
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Kennedy
+    given-names: Ellis
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Xie
+    given-names: Yujun
+  -
+    affiliation: "Los Alamos National Laboratory, Los Alamos, NM 87545, USA"
+    family-names: Janish
+    given-names: "Matthew T."
+  -
+    affiliation: "Los Alamos National Laboratory, Los Alamos, NM 87545, USA"
+    family-names: Schneider
+    given-names: "Matthew M."
+  -
+    affiliation: "Toyota Research Institute, Los Altos, CA 94022, USA"
+    family-names: Herring
+    given-names: Patrick
+  -
+    affiliation: "Toyota Research Institute, Los Altos, CA 94022, USA"
+    family-names: Gopal
+    given-names: Chirranjeevi
+  -
+    affiliation: "Toyota Research Institute, Los Altos, CA 94022, USA"
+    family-names: Anapolsky
+    given-names: Abraham
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Dhall
+    given-names: Rohan
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Bustillo
+    given-names: "Karen C."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Ercius
+    given-names: Peter
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Scott
+    given-names: "Mary C."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Ciston
+    given-names: Jim
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA Department of Materials Science and Engineering, University of California, Berkeley, CA 94720, USA"
+    family-names: Minor
+    given-names: "Andrew M."
+  -
+    affiliation: "National Center for Electron Microscopy, Molecular Foundry, Lawrence Berkeley National Laboratory, 1 Cyclotron Road, Berkeley, CA 94720, USA"
+    family-names: Ophus
+    given-names: Colin
+title: "py4DSTEM: A Software Package for Four-Dimensional Scanning Transmission Electron Microscopy Data Analysis"
+version: 0.12.6
+doi: 10.1017/S1431927621000477
+date-released: 2021-05-21
