@@ -7,7 +7,7 @@ from ..utils import tqdmnd
 def test():
     return True
 
-def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
+def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -25,11 +25,11 @@ def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax):
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny,disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
-def get_virtualimage_circ(datacube, x0, y0, R):
+def get_virtualimage_circ(datacube, x0, y0, R, verbose=True):
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
@@ -51,11 +51,11 @@ def get_virtualimage_circ(datacube, x0, y0, R):
     mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
 
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
-def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
+def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -80,7 +80,7 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro):
     mask = np.logical_xor(mask_o,mask_i)
 
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx,datacube.R_Ny):
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 

@@ -87,7 +87,7 @@ class PointList(DataObject):
         """
         assert self.dtype==data.dtype, "Error: dtypes must agree"
         self.data = np.append(self.data, data)
-        self.length += len(data)
+        self.length += np.atleast_1d(data).shape[0]
 
     def add_unstructured_dataarray(self, data):
         """
@@ -166,6 +166,7 @@ class PointList(DataObject):
     def remove_points(self, deletemask):
         """ Rms points wherever deletemask==True
         """
+        assert np.atleast_1d(deletemask).shape[0] == self.length, "deletemask must be same length as the data"
         self.data = np.delete(self.data, deletemask.nonzero()[0])
         self.length -= len(deletemask.nonzero()[0])
 
