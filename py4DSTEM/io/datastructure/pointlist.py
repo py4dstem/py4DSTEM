@@ -87,7 +87,7 @@ class PointList(DataObject):
         """
         assert self.dtype==data.dtype, "Error: dtypes must agree"
         self.data = np.append(self.data, data)
-        self.length += len(data)
+        self.length += np.atleast_1d(data).shape[0]
 
     def add_unstructured_dataarray(self, data):
         """
