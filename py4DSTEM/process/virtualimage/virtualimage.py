@@ -276,21 +276,21 @@ def make_virtual_image_BF_numba(datacube, mask, xmin,xmax,ymin,ymax):
     return out
 
 # Not as good way to do it, have to specify types etc. Leaving in for now incase I want to use something similar elsewhere 
-@nb.guvectorize(signature='(i,j),(i,j)->()', ftylist=[(nb.uint[:,:], nb.boolean[:,:], nb.uint)], nopython=True, target='parallel')
-def make_vitual_image_numba(array, mask, out):
-    """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
-    in the diffraction plane.
-    Args:
-        datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
-    Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
-    out = np.sum(array * mask)
+# @nb.guvectorize(signature='(i,j),(i,j)->()', ftylist=[(nb.uint[:,:], nb.boolean[:,:], nb.uint)], nopython=True, target='parallel')
+# def make_vitual_image_numba(array, mask, out):
+#     """
+#     Make a circular boolean mask centered at (x0,y0) and with radius R
+#     in the diffraction plane.
+#     Args:
+#         datacube (DataCube):
+#         x0,y0 (numbers): center of detector
+#         R (number): radius of detector
+#         return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+#     Returns:
+#         (2D array): Boolean mask
+#         (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
+#     """
+#     out = np.sum(array * mask)
 
 
 
