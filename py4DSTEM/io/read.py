@@ -72,7 +72,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     """
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(exists(fp)), "Error: specified filepath does not exist."
-    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(mem in ['RAM','MEMMAP', 'DASK']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     if binfactor > 1:
