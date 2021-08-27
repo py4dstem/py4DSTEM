@@ -189,9 +189,11 @@ def combine_masks(masks, operator='or'):
     else: 
         print('specified operator not supported, must be "or" or "xor"')
 
+#TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections
+#TODO Add multiple mask maker, e.g. give list of coordinate tuples 
 
 #### In memory functions ####
-
+#TODO Pick the prefered style  
 @nb.jit(nopython=True, parallel=True, fastmath=True)
 def make_virtual_image_numba(datacube, mask, out):
     """
@@ -210,8 +212,9 @@ def make_virtual_image_numba(datacube, mask, out):
         out[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
     return out
 
+# I can't get this to work quicker than you're brightfield function for some unknown reason.
 @nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
-def make_virtual_image_BF_numba(datacube, mask, xmin,xmax,ymin,ymax,out):
+def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out):
     """
     Make a circular boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane.
