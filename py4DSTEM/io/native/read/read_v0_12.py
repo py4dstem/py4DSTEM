@@ -93,7 +93,7 @@ def read_v0_12(fp, **kwargs):
         # Parse optional arguments
         if 'mem' in kwargs.keys():
             mem = kwargs['mem']
-            assert(mem in ('RAM','MEMMAP'))
+            assert(mem in ('RAM','MEMMAP', 'DASK'))
         else:
             mem='RAM'
         if 'binfactor' in kwargs.keys():
@@ -157,6 +157,12 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+    # ADDING STUFF IN HERE,
+    # I need to change datacube and counted datacube 
+    elif mem == "DASK":
+        f = h5py.File(filepath, 'r')
+        grp_data = f[group_name]
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
 
@@ -198,6 +204,10 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
             data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     if mem == "MEMMAP":
+        f = h5py.File(filepath,'r')
+        grp_data = f[group_name]
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+    elif mem == 'DASK':
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
