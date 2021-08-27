@@ -33,8 +33,9 @@ class DataCube(DataObject):
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)
         self.data = data   #: the 4D dataset
-        # set h5 stack pointer, init without a pointer only passsed if dask dataset loaded
         
+        # Set h5 stack pointer, init without a pointer only passsed if dask dataset loaded
+        # Should this be moved to DataObject class?  
         if "stack_pointer" in kwargs:
             self.stack_pointer = kwargs["stack_pointer"]
         else:
