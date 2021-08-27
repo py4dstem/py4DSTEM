@@ -34,7 +34,11 @@ class DataCube(DataObject):
         DataObject.__init__(self, **kwargs)
         self.data = data   #: the 4D dataset
         # set h5 stack pointer, init without a pointer only passsed if dask dataset loaded
-        self.stack_pointer = None 
+        
+        if "stack_pointer" in kwargs:
+            self.stack_pointer = kwargs["stack_pointer"]
+        else:
+            self.stack_pointer = None 
         # Set shape
         assert (len(data.shape)==3 or len(data.shape)==4)
         if len(data.shape)==3:
