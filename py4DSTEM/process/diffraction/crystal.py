@@ -9,7 +9,7 @@ try:
     import pymatgen as mg
     from pymatgen.ext.matproj import MPRester
 except Exception:
-    print(r"pymatgen not found... kinematic module won't work ¯\\_(ツ)_/¯")
+    print(r"pymatgen not found... kinematic module won't work ¯\_(ツ)_/¯")
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
@@ -308,7 +308,7 @@ class Crystal:
                     [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
                     [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
                     [ 0,                 0,                 1]])
-                self.orientation_rotation_matrices[a0,a1,:,:] = m12 @ m3z     
+                self.orientation_rotation_matrices[a0,a1,:,:] = m12 @ m3z    
 
         # Determine the radii of all spherical shells
         radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
@@ -334,6 +334,25 @@ class Crystal:
         self.orientation_corr_kernel_size = np.array(corr_kernel_size)
         self.orientation_corr_norm = np.zeros((self.orientation_num_zones))
 
+        # # # Testing
+        # vec = np.arange(
+        #     -self.k_max,
+        #     self.k_max+corr_kernel_size,
+        #     corr_kernel_size)
+        # ya, xa = np.meshgrid(vec, vec)
+        # keep = xa**2 + ya**2 <= (self.k_max+corr_kernel_size/2)**2
+
+        # bragg_peaks_test = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
+        # bragg_peaks_test.add_pointarray(np.vstack((
+        #     xa[keep], 
+        #     ya[keep], 
+        #     np.ones(np.sum(keep)))).T)
+
+        # orient = self.match_single_pattern(
+        #     bragg_peaks_test,
+        #     plot_corr=True,
+        # )
+
         mat = np.zeros((self.orientation_num_zones,3,3))
         for a0 in range(self.orientation_num_zones):
             # mat[a0,:,:] = np.transpose(self.orientation_rotation_matrices[a0,0,:,:],(1,0))
@@ -345,6 +364,7 @@ class Crystal:
         for a0 in range(self.orientation_shell_radii.size):
             sub = self.orientation_shell_index == a0
             g_proj = mat @ self.g_vec_all[:,sub]
+            intensity_ref = np.mean(self.struct_factors_int[sub])
 
             # Calculate s_g
             cos_alpha = np.sum((k0[None,:,None] + g_proj) * knorm[None,:,None], axis=1) \
@@ -353,8 +373,16 @@ class Crystal:
                 / (np.linalg.norm(k0[None,:,None] + g_proj, axis=1)) / cos_alpha
 
             # Add into normalization output
-            self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0)**2, axis=1)
+            # self.orientation_corr_norm += intensity_ref * np.mean(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
+            self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
 
+        # self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
+        # self.orientation_corr_norm =self.orientation_corr_norm**2
+
+            # sub_ref = self.orientation_shell_index == ind_shell
+            # g_ref = self.g_vec_all[:,sub_ref]
+            # # intensity_ref = self.struct_factors_int[sub_ref]            
+            # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
 
             # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
             #     * np.maximum(1 - 0.25*np.abs(sg) / corr_kernel_size, 0), axis=1)
@@ -363,7 +391,7 @@ class Crystal:
             # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
             #     * np.maximum(1 - 0.5 * np.abs(sg) / corr_kernel_size, 0)**2, axis=1)
 
-        self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
+        # self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
 
             # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
             #     * np.maximum(corr_kernel_size - np.abs(sg), 0), axis=1)
@@ -476,6 +504,7 @@ class Crystal:
         self,
         bragg_peaks,
         subpixel_tilt=True,
+        normalize_corr=True,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
@@ -488,6 +517,7 @@ class Crystal:
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
+            normalize_corr (bool):              set to true to use normalization
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
         """
@@ -528,8 +558,7 @@ class Crystal:
             g_ref = self.g_vec_all[:,sub_ref]
             # intensity_ref = self.struct_factors_int[sub_ref]            
             # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
-            # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
-
+            amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
 
             # Determine with experimental points may fall on this shell
             sub_test = np.abs(g_vec_leng - self.orientation_shell_radii[ind_shell]) \
@@ -539,20 +568,32 @@ class Crystal:
             if np.sum(sub_test) > 0:
                 g_test = g_vec_all[:,sub_test]
                 # intensity_test = intensity_all[sub_test]
-                amplitude_test = intensity_all[sub_test]
+                amplitude_test = np.sqrt(intensity_all[sub_test])
 
-                corr += np.sum(amplitude_test * np.maximum(
-                    self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-                        self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
+                # corr += np.sum(np.maximum(
+                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
+                # corr += np.sum(intensity_test * np.maximum(
+                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
                 # corr += intensity_ref * np.mean(intensity_test * np.maximum(
                 #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
                 #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
                 #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
+                corr += amplitude_ref * np.sum(amplitude_test * np.maximum(
+                    self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+                        self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+
         # normalization
-        # corr = corr / self.orientation_corr_norm[:,None]
+        if normalize_corr is True:
+                corr = corr / self.orientation_corr_norm[:,None]
 
 
                 # corr += intensity_ref * np.sum(intensity_test * np.maximum(
