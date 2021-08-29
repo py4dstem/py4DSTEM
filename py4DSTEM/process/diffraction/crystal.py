@@ -254,6 +254,8 @@ class Crystal:
         self.orientation_num_zones = ((self.orientation_zone_axis_steps+1)*(self.orientation_zone_axis_steps+2)/2).astype(np.int)
         vecs = np.zeros((self.orientation_num_zones,3))
         vecs[0,:] = self.orientation_zone_axis_range[0,:]
+        # Keep
+        self.vecs = vecs
 
         # Calculate zone axis points on the unit sphere with another application of SLERP
         for a0 in np.arange(1,self.orientation_zone_axis_steps+1):
@@ -362,9 +364,13 @@ class Crystal:
         k0 = knorm / self.wavelength
 
         for a0 in range(self.orientation_shell_radii.size):
+            k_shell = self.orientation_shell_radii[a0]
+
             sub = self.orientation_shell_index == a0
             g_proj = mat @ self.g_vec_all[:,sub]
-            intensity_ref = np.mean(self.struct_factors_int[sub])
+            # intensity_ref = np.mean(self.struct_factors_int[sub])
+            # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub]))
+            # amplitude_ref = np.sqrt(self.struct_factors_int[sub])
 
             # Calculate s_g
             cos_alpha = np.sum((k0[None,:,None] + g_proj) * knorm[None,:,None], axis=1) \
@@ -373,8 +379,17 @@ class Crystal:
                 / (np.linalg.norm(k0[None,:,None] + g_proj, axis=1)) / cos_alpha
 
             # Add into normalization output
-            # self.orientation_corr_norm += intensity_ref * np.mean(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
-            self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            # self.orientation_corr_norm += np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            # self.orientation_corr_norm += np.sum(amplitude_ref * np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            # self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
+            # self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            # self.orientation_corr_norm += amplitude_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            self.orientation_corr_norm += k_shell * np.sum(
+                self.struct_factors_int[sub] * 
+                np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+            # self.orientation_corr_norm += k_shell * np.sum(
+            #     np.sqrt(self.struct_factors_int[sub]) * 
+            #     np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
 
         # self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
         # self.orientation_corr_norm =self.orientation_corr_norm**2
@@ -593,7 +608,7 @@ class Crystal:
 
         # normalization
         if normalize_corr is True:
-                corr = corr / self.orientation_corr_norm[:,None]
+            corr = corr / self.orientation_corr_norm[:,None]
 
 
                 # corr += intensity_ref * np.sum(intensity_test * np.maximum(
@@ -790,7 +805,7 @@ class Crystal:
         zone_axis = [0,0,1],
         foil_normal = None,
         proj_x_axis = None,
-        sigma_excitation_error = 0.01,
+        sigma_excitation_error = 0.02,
         tol_excitation_error_mult = 3,
         tol_intensity = 0.1
         ):
@@ -801,7 +816,7 @@ class Crystal:
             zone_axis (np float vector):     3 element projection direction for sim pattern
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (np float): sigma value for Gaussian envelope applied to s_g (excitation errors) in units of Angstroms
+            sigma_excitation_error (np float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
             tol_excitation_error_mult (np float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
         """
