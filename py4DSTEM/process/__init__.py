@@ -8,4 +8,3 @@ from . import classification
 from . import dpc
 from . import rdf
 from . import virtualimage
-from .diskdetection.new_diskdetection_parallel_new import beta_parallel_disk_detection
