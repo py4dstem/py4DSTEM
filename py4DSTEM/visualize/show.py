@@ -274,7 +274,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             max = np.power(max,power)
     else:
         raise Exception
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
+    
+    _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -305,6 +306,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
+    # Create the masked array applying the user mask (this is done after the 
+    # vmin and vmax are determined so the mask doesn't affect those)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
+    
     # Create colormap with mask_color for bad values
     cm = copy(plt.cm.get_cmap(cmap))
     cm.set_bad(color=mask_color)
