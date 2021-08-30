@@ -255,6 +255,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
+        _ar[~_mask] = -np.inf
         if min != None:
             if min > 0:
                 min = np.log(min)
@@ -266,6 +267,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _mask = ar>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar[_mask],power)
+        _ar[~_mask] = -np.inf
         if min != None:
             min = np.power(min,power)
         if max != None:
@@ -310,9 +312,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Plot the image
     if not hist:
         cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cm,**kwargs)
-        if np.any(_ar.mask==True):
+        if np.any(_ar.mask):
             mask_display = np.ma.array(data=_ar.data,mask=~_ar.mask)
-            ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha)
+            ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha,vmin=vmin,vmax=vmax)
     # ...or, plot its histogram
     else:
         hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
