@@ -1,3 +1,7 @@
+from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
+from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
+from ..io.datastructure import Coordinates
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -6,14 +10,12 @@ from matplotlib.colors import is_color_like,ListedColormap
 from numpy.ma import MaskedArray
 from numbers import Number
 from math import log
-from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
-from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from ..io.datastructure import Coordinates
+from copy import copy
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
          min=None,max=None,power=1,bordercolor=None,borderwidth=5,
          returnclipvals=False,returncax=False,returnfig=False,figax=None,
-         hist=False,n_bins=256,mask=None,mask_color='k',
+         hist=False,n_bins=256,mask=None,mask_color='k',mask_alpha=0.,
          rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
          cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
          coordinates=None,rx=None,ry=None,space='Q',
@@ -81,7 +83,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         the data array may be passed to the ``mask`` argument, and these pixels will be
         masked.  Masked pixels are displayed as a single uniform color, black by default,
         and which can be specified with the ``mask_color`` argument.  Masked pixels
-        are excluded when displaying the histogram or computing clip values.
+        are excluded when displaying the histogram or computing clip values. The mask
+        can also be blended with the hidden data by setting the ``mask_alpha`` argument.
 
     Overlays (geometric):
         The function natively supports overlaying points, circles, rectangles, annuli,
@@ -219,8 +222,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         mask (None or boolean array): if not None, must have the same shape as 'ar'.
             Wherever mask==True, plot the pixel normally, and where ``mask==False``,
             pixel values are set to mask_color. If hist==True, ignore these values in the
-            histogram
+            histogram. If ``mask_alpha`` is specified, the mask is blended with the array
+            underneath, with 0 yielding an opaque mask and 1 yielding a fully transparent mask. 
         mask_color (color): see 'mask'
+        mask_alpha (float): see 'mask'
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -233,9 +238,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         assert mask.shape == ar.shape
         assert is_color_like(mask_color)
         if isinstance(ar,np.ma.masked_array):
-            ar = np.ma.array(data=ar.data,mask=mask==False)
+            ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=mask==False)
+            ar = np.ma.array(data=ar,mask=~mask)
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
@@ -247,7 +252,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _ar = ar.copy()
         _mask = np.ones_like(_ar.data,dtype=bool)
     elif scaling == 'log':
-        _mask = ar>0
+        _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar[_mask])
         if min != None:
@@ -267,7 +272,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             max = np.power(max,power)
     else:
         raise Exception
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_and(ar.mask==False,_mask)==False)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -298,13 +303,16 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
+    # Create colormap with mask_color for bad values
+    cm = copy(plt.cm.get_cmap(cmap))
+    cm.set_bad(color=mask_color)
+
     # Plot the image
     if not hist:
-        cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cmap,**kwargs)
+        cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cm,**kwargs)
         if np.any(_ar.mask==True):
-            mask_display = np.ma.array(data=_ar.mask,mask=_ar.mask==False)
-            cmap = ListedColormap([mask_color,'w'])
-            ax.matshow(mask_display,cmap=cmap)
+            mask_display = np.ma.array(data=_ar.data,mask=~_ar.mask)
+            ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha)
     # ...or, plot its histogram
     else:
         hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
