@@ -389,7 +389,8 @@ class Crystal:
 
 
         # Fourier domain along angular axis
-        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+        self.orientation_ref = np.fft.fft(self.orientation_ref)
+        # self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
         # plot the correlation normalization
