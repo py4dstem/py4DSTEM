@@ -222,8 +222,9 @@ class Crystal:
             tol_distance (numpy float):         Distance tolerance for radial shell assignment [1/Angstroms]
         """
 
-        # Accelerating voltage
+        # Store inputs
         self.accel_voltage = np.asarray(accel_voltage)
+        self.orientation_kernel_size = np.asarray(corr_kernel_size)
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
@@ -252,10 +253,9 @@ class Crystal:
 
         # Init array to hold all points
         self.orientation_num_zones = ((self.orientation_zone_axis_steps+1)*(self.orientation_zone_axis_steps+2)/2).astype(np.int)
-        vecs = np.zeros((self.orientation_num_zones,3))
-        vecs[0,:] = self.orientation_zone_axis_range[0,:]
-        # Keep
-        self.vecs = vecs
+        self.orientation_vecs = np.zeros((self.orientation_num_zones,3))
+        self.orientation_vecs[0,:] = self.orientation_zone_axis_range[0,:]
+
 
         # Calculate zone axis points on the unit sphere with another application of SLERP
         for a0 in np.arange(1,self.orientation_zone_axis_steps+1):
@@ -266,51 +266,24 @@ class Crystal:
             angle_p = np.arccos(np.sum(p0 * p1))
 
             weights = np.linspace(0,1,a0+1)
-            vecs[inds,:] = \
+            self.orientation_vecs[inds,:] = \
                 p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
                 p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
 
         # Convert to spherical coordinates
-        azim = np.arctan2(vecs[:,1],vecs[:,0])
-        elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
+        azim = np.arctan2(
+            self.orientation_vecs[:,1],
+            self.orientation_vecs[:,0])
+        elev = np.arctan2(np.hypot(
+            self.orientation_vecs[:,1], 
+            self.orientation_vecs[:,0]), 
+            self.orientation_vecs[:,2])
 
         # Solve for number of angular steps along in-plane rotation direction
         self.orientation_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
 
         # Calculate -z angles (Euler angle 3)
-        gamma = np.linspace(0,2*np.pi,self.orientation_in_plane_steps, endpoint=False)
-
-        # init storage arrays
-        self.orientation_rotation_angles = np.zeros((
-            self.orientation_num_zones,
-            self.orientation_in_plane_steps,3))
-        self.orientation_rotation_matrices = np.zeros((
-            self.orientation_num_zones,
-            self.orientation_in_plane_steps,
-            3,3))
-
-        # Calculate rotation matrices
-        for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
-            m1z = np.array([
-                [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
-                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
-                [ 0,                0,                1]])
-            m2x = np.array([
-                [1,  0,                0],
-                [0,  np.cos(elev[a0]), np.sin(elev[a0])],
-                [0, -np.sin(elev[a0]), np.cos(elev[a0])]])
-            # m12 = np.matmul(m2x, m1z)
-            m12 = m1z @ m2x 
-
-            for a1 in np.arange(self.orientation_in_plane_steps):
-                self.orientation_rotation_angles[a0,a1,:] = [elev[a0], azim[a0], gamma[a1]]
-                
-                # orientation matrix
-                m3z = np.array([
-                    [ np.cos(gamma[a1]), np.sin(gamma[a1]), 0],
-                    [-np.sin(gamma[a1]), np.cos(gamma[a1]), 0],
-                    [ 0,                 0,                 1]])
-                self.orientation_rotation_matrices[a0,a1,:,:] = m12 @ m3z    
+        self.orientation_gamma = np.linspace(0,2*np.pi,self.orientation_in_plane_steps, endpoint=False)
 
         # Determine the radii of all spherical shells
         radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
@@ -322,7 +295,6 @@ class Crystal:
         # init
         self.orientation_shell_index = -1*np.ones(self.g_vec_all.shape[1], dtype='int')
         self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
-        # self.orientation_shell_weight = np.zeros(self.orientation_shell_radii.size)
 
         # Assign each structure factor point to a radial shell
         for a0 in range(self.orientation_shell_radii.size):
@@ -332,91 +304,71 @@ class Crystal:
             self.orientation_shell_count[a0] = np.sum(sub)
             self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
 
-        # normalization
-        self.orientation_corr_kernel_size = np.array(corr_kernel_size)
-        self.orientation_corr_norm = np.zeros((self.orientation_num_zones))
+        # init storage arrays
+        self.orientation_rotation_angles = np.zeros((self.orientation_num_zones,2))
+        self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones,3,3))
+        self.orientation_ref = np.zeros((
+            self.orientation_num_zones,
+            np.size(self.orientation_shell_radii),
+            self.orientation_in_plane_steps),
+            dtype='complex64')
 
-        # # # Testing
-        # vec = np.arange(
-        #     -self.k_max,
-        #     self.k_max+corr_kernel_size,
-        #     corr_kernel_size)
-        # ya, xa = np.meshgrid(vec, vec)
-        # keep = xa**2 + ya**2 <= (self.k_max+corr_kernel_size/2)**2
+        # Calculate rotation matrices for zone axes
+        # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
+        for a0 in np.arange(self.orientation_num_zones):
+            m1z = np.array([
+                [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
+                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                [ 0,                0,                1]])
+            m2x = np.array([
+                [1,  0,                0],
+                [0,  np.cos(elev[a0]),  np.sin(elev[a0])],
+                [0, -np.sin(elev[a0]),  np.cos(elev[a0])]])
+            self.orientation_rotation_matrices[a0,:,:] = m1z @ m2x
+            # self.orientation_rotation_matrices[a0,:,:] = m2x @ m1z
+            self.orientation_rotation_angles[a0,:] = [elev[a0], azim[a0]]
 
-        # bragg_peaks_test = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
-        # bragg_peaks_test.add_pointarray(np.vstack((
-        #     xa[keep], 
-        #     ya[keep], 
-        #     np.ones(np.sum(keep)))).T)
+        # init
+        k0 = np.array([0, 0, 1]) / self.wavelength
+        dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
 
-        # orient = self.match_single_pattern(
-        #     bragg_peaks_test,
-        #     plot_corr=True,
-        # )
+        # Calculate reference arrays for all orientations
+        # for a0 in np.arange(self.orientation_num_zones):
+        for a0 in tqdmnd(np.arange(self.orientation_num_zones), desc="Orientation plan", unit=" zone axes"):
+            p = np.linalg.inv(self.orientation_rotation_matrices[a0,:,:]) @ self.g_vec_all
+            # p = self.orientation_rotation_matrices[a0,:,:] @ self.g_vec_all
 
-        mat = np.zeros((self.orientation_num_zones,3,3))
-        for a0 in range(self.orientation_num_zones):
-            # mat[a0,:,:] = np.transpose(self.orientation_rotation_matrices[a0,0,:,:],(1,0))
-            mat[a0,:,:] = np.linalg.inv(self.orientation_rotation_matrices[a0,0,:,:])
+            # Excitation errors
+            cos_alpha = (k0[2,None] + p[2,:]) \
+                / np.linalg.norm(k0[:,None] + p, axis=0)
+            sg = (-0.5) * np.sum((2*k0[:,None] + p) * p, axis=0) \
+                / (np.linalg.norm(k0[:,None] + p, axis=0)) / cos_alpha
 
-        knorm = np.array([0,0,1])
-        k0 = knorm / self.wavelength
+            # in-plane rotation angle
+            phi = np.arctan2(p[1,:],p[0,:])
 
-        for a0 in range(self.orientation_shell_radii.size):
-            k_shell = self.orientation_shell_radii[a0]
+            for a1 in np.arange(self.g_vec_all.shape[1]):
+                ind_radial = self.orientation_shell_index[a1]
 
-            sub = self.orientation_shell_index == a0
-            g_proj = mat @ self.g_vec_all[:,sub]
-            # intensity_ref = np.mean(self.struct_factors_int[sub])
-            # amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub]))
-            # amplitude_ref = np.sqrt(self.struct_factors_int[sub])
+                if ind_radial >= 0:
+                    self.orientation_ref[a0,ind_radial,:] += \
+                        self.orientation_shell_radii[ind_radial] * self.struct_factors_int[a1] * \
+                        np.maximum(1 - np.sqrt(sg[a1]**2 + \
+                        ((np.mod(self.orientation_gamma - phi[a1] + np.pi, 2*np.pi) - np.pi) * \
+                        self.orientation_shell_radii[ind_radial])**2) / self.orientation_kernel_size, 0)
 
-            # Calculate s_g
-            cos_alpha = np.sum((k0[None,:,None] + g_proj) * knorm[None,:,None], axis=1) \
-                / np.linalg.norm(k0[None,:,None] + g_proj, axis=1)
-            sg = (-0.5) * np.sum((2*k0[None,:,None] + g_proj) * g_proj, axis=1) \
-                / (np.linalg.norm(k0[None,:,None] + g_proj, axis=1)) / cos_alpha
+            # Normalization
+            self.orientation_ref[a0,:,:] /= \
+                np.sqrt(np.sum(self.orientation_ref[a0,:,:]**2))
+            # self.orientation_ref[a0,:,:] /= \
+            #     np.sqrt(np.sum(np.abs(np.fft.fft(self.orientation_ref[a0,:,:]))**2))
 
-            # Add into normalization output
-            # self.orientation_corr_norm += np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
-            # self.orientation_corr_norm += np.sum(amplitude_ref * np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
-            # self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
-            # self.orientation_corr_norm += intensity_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
-            # self.orientation_corr_norm += amplitude_ref * np.sum(np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
-            self.orientation_corr_norm += k_shell * np.sum(
-                self.struct_factors_int[sub] * 
-                np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
-            # self.orientation_corr_norm += k_shell * np.sum(
-            #     np.sqrt(self.struct_factors_int[sub]) * 
-            #     np.maximum(1 - sg**2 / (4*corr_kernel_size**2), 0), axis=1)
+        # Fourier domain along angular axis
+        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
-        # self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
-        # self.orientation_corr_norm =self.orientation_corr_norm**2
-
-            # sub_ref = self.orientation_shell_index == ind_shell
-            # g_ref = self.g_vec_all[:,sub_ref]
-            # # intensity_ref = self.struct_factors_int[sub_ref]            
-            # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
-
-            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
-            #     * np.maximum(1 - 0.25*np.abs(sg) / corr_kernel_size, 0), axis=1)
-            # self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)
-
-            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
-            #     * np.maximum(1 - 0.5 * np.abs(sg) / corr_kernel_size, 0)**2, axis=1)
-
-        # self.orientation_corr_norm = np.sqrt(self.orientation_corr_norm)
-
-            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
-            #     * np.maximum(corr_kernel_size - np.abs(sg), 0), axis=1)
-            # self.orientation_corr_norm += np.sum(self.struct_factors_int[None,sub] \
-            #     * (np.maximum(1 - np.abs(sg) / corr_kernel_size, 0))**2, axis=1)
-            # self.orientation_corr_norm += np.sum(np.maximum(1 - np.abs(sg) / corr_kernel_size, 0), axis=1)**2
 
         # plot the correlation normalization
         if plot_corr_norm is True:
-            
             # 2D correlation slice
             im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
             for a0 in np.arange(self.orientation_zone_axis_steps+1):
@@ -518,13 +470,13 @@ class Crystal:
     def match_single_pattern(
         self,
         bragg_peaks,
-        subpixel_tilt=True,
+        subpixel_tilt=False,
         normalize_corr=True,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
         return_corr=False,
-        verbose=True,
+        verbose=False,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern.
@@ -535,20 +487,132 @@ class Crystal:
             normalize_corr (bool):              set to true to use normalization
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
+        Returns:
+            orientation_matrix (3x3 float)      orienation matrix where zone axis is the 3rd column
+            corr_value (float):                 (optional) return correlation values
         """
 
-        # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
-        k0 = 1 / self.wavelength
-        gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
-
-        # 3D Bragg peak data
-        g_vec_all = np.vstack((
-            bragg_peaks.data['qx'],
+        # Convert Bragg peaks to polar coordinates
+        qr = np.sqrt(
+            bragg_peaks.data['qx']**2 +
+            bragg_peaks.data['qy']**2)
+        qphi = np.arctan2(
             bragg_peaks.data['qy'],
-            gz))
-        intensity_all = bragg_peaks.data['intensity']
-        # Vector lengths
-        g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
+            bragg_peaks.data['qx'])
+
+        # Calculate polar Bragg peak image
+        im_polar = np.zeros((
+            np.size(self.orientation_shell_radii),
+            self.orientation_in_plane_steps),
+            dtype='complex64')
+
+        for ind_radial, radius in enumerate(self.orientation_shell_radii):
+            dqr = np.abs(qr - radius)
+            sub = dqr < self.orientation_kernel_size
+
+            if np.sum(sub) > 0:
+                im_polar[ind_radial,:] = np.sum(
+                    bragg_peaks.data['intensity'][sub,None] * np.maximum(1 - np.sqrt(dqr[sub,None]**2 + \
+                    ((np.mod(self.orientation_gamma[None,:] - qphi[sub,None] + np.pi, 2*np.pi) - np.pi) * \
+                    radius)**2) / self.orientation_kernel_size, 0), axis=0)
+
+        # Calculate orientation correlogram
+        corr_full = np.sum(np.real(np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None,:,:]))), axis=1)
+        # Find best match for each zone axis
+        ind_phi = np.argmax(corr_full, axis=1)
+        corr_value = np.zeros(self.orientation_num_zones)
+        corr_in_plane_angle = np.zeros(self.orientation_num_zones)
+        dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
+
+        for a0 in range(self.orientation_num_zones):
+            inds = np.mod(ind_phi[a0] + np.arange(-1,2), self.orientation_gamma.size).astype('int')
+            c = corr_full[a0,inds]
+
+            if np.max(c) > 0:
+                corr_value[a0] = c[1] + (c[0]-c[2])**2 / (4*(2*c[1]-c[0]-c[2])**2)
+
+                dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                corr_in_plane_angle[a0] = self.orientation_gamma[ind_phi[a0]] + dc*dphi
+
+        # Determine the best fit orientation
+        ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)
+
+        # Get orientation matrix
+        if subpixel_tilt is False:
+            orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+
+        else:
+            # Sub pixel refinement of zone axis orientation
+            if ind_best_fit == 0:
+                # Zone axis is (0,0,1)
+                zone_axis_fit = self.orientation_zone_axis_range[0,:]
+
+            elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
+                # Zone axis is 1st user provided direction
+                zone_axis_fit = self.orientation_zone_axis_range[1,:]
+
+            elif ind_best_fit == self.orientation_num_zones - 1:
+                # Zone axis is the 2nd user-provided direction
+                zone_axis_fit = self.orientation_zone_axis_range[2,:]
+
+            else:
+                # Subpixel refinement
+                elev = self.orientation_rotation_angles[inds[0],inds[1],0]
+                azim = self.orientation_rotation_angles[inds[0],inds[1],1]
+                zone_axis_fit = np.array((
+                    np.cos(azim)*np.sin(elev),
+                    np.sin(azim)*np.sin(elev),
+                    np.cos(elev)))        
+
+
+        # apply in-plane rotation
+        phi = corr_in_plane_angle[ind_best_fit]
+        m3z = np.array([
+                [ np.cos(phi), np.sin(phi), 0],
+                [-np.sin(phi), np.cos(phi), 0],
+                [ 0,           0,           1]])
+        orientation_matrix = orientation_matrix @ m3z
+
+
+        #    # # Invert orientation matrix, so the it rotates experiment to reference frame
+        #    # orientation_matrix = np.linalg.inv(orientation_matrix)
+        print(np.round(orientation_matrix * 1e3) / 1e3 )
+
+        if verbose:
+            zone_axis_fit = orientation_matrix[:,2]
+            temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+            temp = np.round(temp * 1e3) / 1e3
+            print('Highest corr point @ (' + str(temp) + ')')
+
+
+
+
+
+        # print(self.orientation_ref.shape)
+        # print(orientation_map.shape)
+
+
+
+
+
+        # test = self.orientation_ref * orientation_map
+        # print(test.shape)
+
+        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
+        # corr[0,0] = 1
+
+        # # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
+        # k0 = 1 / self.wavelength
+        # gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
+
+        # # 3D Bragg peak data
+        # g_vec_all = np.vstack((
+        #     bragg_peaks.data['qx'],
+        #     bragg_peaks.data['qy'],
+        #     gz))
+        # intensity_all = bragg_peaks.data['intensity']
+        # # Vector lengths
+        # g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
         # # init arrays
         # shell_index = np.zeros(g_vec_all.shape[1])
@@ -562,53 +626,53 @@ class Crystal:
         #         shell_ref_check[a0] = True
         # shell_ref_inds = np.where(shell_ref_check)
 
-        # init correlogram
-        corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
+        # # init correlogram
+        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
 
-        # compute correlogram
-        # for ind_shell in np.nditer(shell_ref_inds):
+        # # compute correlogram
+        # # for ind_shell in np.nditer(shell_ref_inds):
 
-        for ind_shell in range(self.orientation_shell_radii.size):
-            sub_ref = self.orientation_shell_index == ind_shell
-            g_ref = self.g_vec_all[:,sub_ref]
-            # intensity_ref = self.struct_factors_int[sub_ref]            
-            # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
-            amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
+        # for ind_shell in range(self.orientation_shell_radii.size):
+        #     sub_ref = self.orientation_shell_index == ind_shell
+        #     g_ref = self.g_vec_all[:,sub_ref]
+        #     # intensity_ref = self.struct_factors_int[sub_ref]            
+        #     # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
+        #     amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
 
-            # Determine with experimental points may fall on this shell
-            sub_test = np.abs(g_vec_leng - self.orientation_shell_radii[ind_shell]) \
-                < self.orientation_corr_kernel_size
+        #     # Determine with experimental points may fall on this shell
+        #     sub_test = np.abs(g_vec_leng - self.orientation_shell_radii[ind_shell]) \
+        #         < self.orientation_corr_kernel_size
 
-            # sub_test = shell_index == ind_shell
-            if np.sum(sub_test) > 0:
-                g_test = g_vec_all[:,sub_test]
-                # intensity_test = intensity_all[sub_test]
-                amplitude_test = np.sqrt(intensity_all[sub_test])
+        #     # sub_test = shell_index == ind_shell
+        #     if np.sum(sub_test) > 0:
+        #         g_test = g_vec_all[:,sub_test]
+        #         # intensity_test = intensity_all[sub_test]
+        #         amplitude_test = np.sqrt(intensity_all[sub_test])
 
 
-                # corr += np.sum(np.maximum(
-                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+        #         # corr += np.sum(np.maximum(
+        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
-                # corr += np.sum(intensity_test * np.maximum(
-                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+        #         # corr += np.sum(intensity_test * np.maximum(
+        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
-                # corr += intensity_ref * np.mean(intensity_test * np.maximum(
-                #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+        #         # corr += intensity_ref * np.mean(intensity_test * np.maximum(
+        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
-                corr += amplitude_ref * np.sum(amplitude_test * np.maximum(
-                    self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-                        self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                    - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
+        #         corr += amplitude_ref * np.sum(amplitude_test * np.maximum(
+        #             self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
+        #                 self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
+        #             - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
-        # normalization
-        if normalize_corr is True:
-            corr = corr / self.orientation_corr_norm[:,None]
+        # # normalization
+        # if normalize_corr is True:
+        #     corr = corr / self.orientation_corr_norm[:,None]
 
 
                 # corr += intensity_ref * np.sum(intensity_test * np.maximum(
@@ -626,65 +690,64 @@ class Crystal:
 
                 # corr += (self.orientation_shell_weight[ind_shell] * intensity_ref) \
                 #     * np.mean(intensity_test * np.maximum(
-                #     self.corr_kernel_size  - np.sqrt(np.min(np.sum(((
+                #     self.orientation_kernel_size  - np.sqrt(np.min(np.sum(((
                 #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
                 #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
 
         # print(corr)
         # print(corr_test.shape)
 
-        # Determine the best fit orientation
-        inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
+        # # Determine the best fit orientation
+        # inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
         
 
-        if subpixel_tilt is False:
-            elev_azim_gamma = self.orientation_rotation_angles[inds[0],inds[1],:]
-            print(elev_azim_gamma)
+        # if subpixel_tilt is False:
+        #     elev_azim_gamma = self.orientation_rotation_angles[inds[0],inds[1],:]
+        #     print(elev_azim_gamma)
 
-        else:
-            # Sub pixel refinement of zone axis orientation
-            if inds[0] == 0:
-                # Zone axis is (0,0,1)
-                zone_axis_fit = self.orientation_zone_axis_range[0,:]
+        # else:
+        #     # Sub pixel refinement of zone axis orientation
+        #     if inds[0] == 0:
+        #         # Zone axis is (0,0,1)
+        #         zone_axis_fit = self.orientation_zone_axis_range[0,:]
 
-            elif inds[0] == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
-                # Zone axis is 1st user provided direction
-                zone_axis_fit = self.orientation_zone_axis_range[1,:]
+        #     elif inds[0] == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
+        #         # Zone axis is 1st user provided direction
+        #         zone_axis_fit = self.orientation_zone_axis_range[1,:]
 
-            elif inds[0] == self.orientation_num_zones - 1:
-                # Zone axis is the 2nd user-provided direction
-                zone_axis_fit = self.orientation_zone_axis_range[2,:]
+        #     elif inds[0] == self.orientation_num_zones - 1:
+        #         # Zone axis is the 2nd user-provided direction
+        #         zone_axis_fit = self.orientation_zone_axis_range[2,:]
 
-            else:
-                # Subpixel refinement
-                elev = self.orientation_rotation_angles[inds[0],inds[1],0]
-                azim = self.orientation_rotation_angles[inds[0],inds[1],1]
-                zone_axis_fit = np.array((
-                    np.cos(azim)*np.sin(elev),
-                    np.sin(azim)*np.sin(elev),
-                    np.cos(elev)))        
+        #     else:
+        #         # Subpixel refinement
+        #         elev = self.orientation_rotation_angles[inds[0],inds[1],0]
+        #         azim = self.orientation_rotation_angles[inds[0],inds[1],1]
+        #         zone_axis_fit = np.array((
+        #             np.cos(azim)*np.sin(elev),
+        #             np.sin(azim)*np.sin(elev),
+        #             np.cos(elev)))        
 
-        temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        # temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
-        temp = np.round(temp * 1e3) / 1e3
-        if verbose:
-            print('Highest corr point @ (' + str(temp) + ')')
+        # temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        # # temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
+        # temp = np.round(temp * 1e3) / 1e3
+        # if verbose:
+        #     print('Highest corr point @ (' + str(temp) + ')')
 
 
         # plotting
         if plot_corr is True:
 
             # 2D correlation slice
-            sig_zone_axis = np.max(corr,axis=1)
             im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
             for a0 in np.arange(self.orientation_zone_axis_steps+1):
                 inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-                im_corr_zone_axis[a0,range(a0+1)] = sig_zone_axis[inds_val]
+                im_corr_zone_axis[a0,range(a0+1)] = corr_value[inds_val]
 
             # Zone axis
             fig, ax = plt.subplots(1, 2, figsize=figsize)
-            cmin = np.min(sig_zone_axis)
-            cmax = np.max(sig_zone_axis)
+            cmin = np.min(corr_value)
+            cmax = np.max(corr_value)
 
             im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
 
@@ -720,10 +783,11 @@ class Crystal:
 
             # In-plane rotation
             ax[1].plot(
-                self.orientation_rotation_angles[inds[0],:,2] * 180/np.pi, 
-                (corr[inds[0],:] - cmin)/(cmax - cmin));
+                self.orientation_gamma * 180/np.pi, 
+                (np.squeeze(corr_full[ind_best_fit,:]) - cmin)/(cmax - cmin));
             ax[1].set_xlabel('In-plane rotation angle [deg]')
             ax[1].set_ylabel('Correlation Signal for maximum zone axis')
+            ax[1].set_ylim([0.99,1.01])
 
             plt.show()
 
@@ -795,7 +859,7 @@ class Crystal:
             plt.show()
 
 
-        return (zone_axis_fit, corr) if return_corr else zone_axis_fit
+        return (orientation_matrix, corr_value) if return_corr else orientation_matrix
 
 
 
