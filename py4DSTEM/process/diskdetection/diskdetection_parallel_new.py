@@ -147,6 +147,8 @@ def beta_parallel_disk_detection(dataset,
         # delayed_probe_kernel_FT = delayed(probe_kernel_FT)
     else:
         probe_kernel_FT = probe
+        dask_probe_array = da.from_array(probe_kernel_FT, chunks=(dataset.Q_Nx, dataset.Q_Ny))
+        dask_probe_delayed = dask_probe_array.to_delayed()
 
     # GET DATA 
 
