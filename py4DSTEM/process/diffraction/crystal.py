@@ -352,7 +352,7 @@ class Crystal:
 
                 if ind_radial >= 0:
                     self.orientation_ref[a0,ind_radial,:] += \
-                        self.orientation_shell_radii[ind_radial] * self.struct_factors_int[a1] * \
+                        self.orientation_shell_radii[ind_radial] * np.sqrt(self.struct_factors_int[a1]) * \
                         np.maximum(1 - np.sqrt(sg[a1]**2 + \
                         ((np.mod(self.orientation_gamma - phi[a1] + np.pi, 2*np.pi) - np.pi) * \
                         self.orientation_shell_radii[ind_radial])**2) / self.orientation_kernel_size, 0)
@@ -362,6 +362,31 @@ class Crystal:
                 np.sqrt(np.sum(self.orientation_ref[a0,:,:]**2))
             # self.orientation_ref[a0,:,:] /= \
             #     np.sqrt(np.sum(np.abs(np.fft.fft(self.orientation_ref[a0,:,:]))**2))
+
+
+
+        # s = np.hstack((
+        #     np.round(self.orientation_rotation_angles * 180/np.pi*100)/100,
+        #     np.round(self.orientation_vecs*100)/100))
+        # print(s)
+        # print(np.round(self.orientation_vecs*100)/100)
+
+        # ind = 36
+        # print(np.round(self.orientation_vecs[ind,:]*100)/100)
+
+
+        # fig, ax = plt.subplots(figsize=(20,8))
+        # im_plot = np.real(self.orientation_ref[36,:,:]).astype('float')
+        # cmax = np.max(im_plot)
+        # im_plot = im_plot / cmax 
+
+        # im = ax.imshow(
+        #     im_plot,
+        #     cmap='viridis',
+        #     vmin=0.0,
+        #     vmax=1.0)
+        # fig.colorbar(im)
+
 
         # Fourier domain along angular axis
         self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
@@ -504,7 +529,7 @@ class Crystal:
         im_polar = np.zeros((
             np.size(self.orientation_shell_radii),
             self.orientation_in_plane_steps),
-            dtype='complex64')
+            dtype='float')
 
         for ind_radial, radius in enumerate(self.orientation_shell_radii):
             dqr = np.abs(qr - radius)
@@ -512,7 +537,8 @@ class Crystal:
 
             if np.sum(sub) > 0:
                 im_polar[ind_radial,:] = np.sum(
-                    bragg_peaks.data['intensity'][sub,None] * np.maximum(1 - np.sqrt(dqr[sub,None]**2 + \
+                    radius * np.sqrt(bragg_peaks.data['intensity'][sub,None]) 
+                    * np.maximum(1 - np.sqrt(dqr[sub,None]**2 + \
                     ((np.mod(self.orientation_gamma[None,:] - qphi[sub,None] + np.pi, 2*np.pi) - np.pi) * \
                     radius)**2) / self.orientation_kernel_size, 0), axis=0)
 
