@@ -254,7 +254,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     elif scaling == 'log':
         _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
-        _ar[_mask] = np.log(ar[_mask])
+        _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = -np.inf
         if min != None:
             if min > 0:
@@ -264,9 +264,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if max != None:
             max = np.log(max)
     elif scaling == 'power':
-        _mask = ar>0
+        _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
-        _ar[_mask] = np.power(ar[_mask],power)
+        _ar[_mask] = np.power(ar.data[_mask],power)
         _ar[~_mask] = -np.inf
         if min != None:
             min = np.power(min,power)
