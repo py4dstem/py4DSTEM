@@ -813,7 +813,8 @@ class Crystal:
                 (np.squeeze(corr_full[ind_best_fit,:]) - cmin)/(cmax - cmin));
             ax[1].set_xlabel('In-plane rotation angle [deg]')
             ax[1].set_ylabel('Correlation Signal for maximum zone axis')
-            ax[1].set_ylim([0.99,1.01])
+            ax[1].set_ylim([0,1.01])
+            # ax[1].set_ylim([0.99,1.01])
 
             plt.show()
 
