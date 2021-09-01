@@ -271,13 +271,17 @@ class Crystal:
                 p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
 
         # Convert to spherical coordinates
-        azim = np.arctan2(
+        # azim = np.arctan2(
+        #     self.orientation_vecs[:,1],
+        #     self.orientation_vecs[:,0])
+        elev = np.arctan2(np.hypot(
+            self.orientation_vecs[:,0], 
+            self.orientation_vecs[:,1]), 
+            self.orientation_vecs[:,2])
+        azim = -np.pi/2 + np.arctan2(
             self.orientation_vecs[:,1],
             self.orientation_vecs[:,0])
-        elev = np.arctan2(np.hypot(
-            self.orientation_vecs[:,1], 
-            self.orientation_vecs[:,0]), 
-            self.orientation_vecs[:,2])
+
 
         # Solve for number of angular steps along in-plane rotation direction
         self.orientation_in_plane_steps = np.round(360/angle_step_in_plane).astype(np.int)
@@ -317,23 +321,28 @@ class Crystal:
         # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
         for a0 in np.arange(self.orientation_num_zones):
             m1z = np.array([
-                [ np.cos(azim[a0]), np.sin(azim[a0]), 0],
-                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
-                [ 0,                0,                1]])
+                [ np.cos(azim[a0]), -np.sin(azim[a0]), 0],
+                [ np.sin(azim[a0]),  np.cos(azim[a0]), 0],
+                [ 0,                 0,                1]])
             m2x = np.array([
                 [1,  0,                0],
-                [0,  np.cos(elev[a0]),  np.sin(elev[a0])],
+                [0,  np.cos(elev[a0]), np.sin(elev[a0])],
                 [0, -np.sin(elev[a0]),  np.cos(elev[a0])]])
             self.orientation_rotation_matrices[a0,:,:] = m1z @ m2x
+            # m2y = np.array([
+            #     [np.cos(elev[a0]),     0,  np.sin(elev[a0])],
+            #     [0,                    1,   0],
+            #     [-np.sin(elev[a0]),     0,   np.cos(elev[a0])]])
+            # self.orientation_rotation_matrices[a0,:,:] = m1z @ m2y
             # self.orientation_rotation_matrices[a0,:,:] = m2x @ m1z
-            self.orientation_rotation_angles[a0,:] = [elev[a0], azim[a0]]
+            # print(np.round(self.orientation_rotation_matrices[a0,:,:]*100)/100)
+            self.orientation_rotation_angles[a0,:] = [azim[a0], elev[a0]]
 
         # init
         k0 = np.array([0, 0, 1]) / self.wavelength
         dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
 
         # Calculate reference arrays for all orientations
-        # for a0 in np.arange(self.orientation_num_zones):
         for a0 in tqdmnd(np.arange(self.orientation_num_zones), desc="Orientation plan", unit=" zone axes"):
             p = np.linalg.inv(self.orientation_rotation_matrices[a0,:,:]) @ self.g_vec_all
             # p = self.orientation_rotation_matrices[a0,:,:] @ self.g_vec_all
@@ -375,8 +384,8 @@ class Crystal:
         # print(np.round(self.orientation_vecs[ind,:]*100)/100)
 
 
-        # fig, ax = plt.subplots(figsize=(20,8))
-        # im_plot = np.real(self.orientation_ref[36,:,:]).astype('float')
+        # fig, ax = plt.subplots(figsize=(32,8))
+        # im_plot = np.real(self.orientation_ref[ind,:,:]).astype('float')
         # cmax = np.max(im_plot)
         # im_plot = im_plot / cmax 
 
@@ -389,8 +398,8 @@ class Crystal:
 
 
         # Fourier domain along angular axis
-        self.orientation_ref = np.fft.fft(self.orientation_ref)
-        # self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+        # self.orientation_ref = np.fft.fft(self.orientation_ref)
+        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
         # plot the correlation normalization
@@ -593,13 +602,12 @@ class Crystal:
 
 
         # apply in-plane rotation
-        phi = corr_in_plane_angle[ind_best_fit]
+        phi = corr_in_plane_angle[ind_best_fit] - np.pi/2
         m3z = np.array([
                 [ np.cos(phi), np.sin(phi), 0],
                 [-np.sin(phi), np.cos(phi), 0],
                 [ 0,           0,           1]])
         orientation_matrix = orientation_matrix @ m3z
-
 
         #    # # Invert orientation matrix, so the it rotates experiment to reference frame
         #    # orientation_matrix = np.linalg.inv(orientation_matrix)
