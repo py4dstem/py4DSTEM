@@ -488,19 +488,20 @@ class Crystal:
                            subpixel_tilt=True,
                            ):
 
-        orientations = np.zeros((*bragg_peaks_array.shape, 3),dtype=np.float64)
+        orientation_matrices = np.zeros((*bragg_peaks_array.shape, 3, 3),dtype=np.float64)
 
-        for rx,ry in tqdmnd(*bragg_peaks_array.shape, desc="Matching Orientations", unit="PointList"):
+        for rx,ry in tqdmnd(*bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList"):
             bragg_peaks = bragg_peaks_array.get_pointlist(rx,ry)
-            orientations[rx,ry,:] = self.match_single_pattern(bragg_peaks,
-                                                              subpixel_tilt=subpixel_tilt,
-                                                              plot_corr=False,
-                                                              plot_corr_3D=False,
-                                                              return_corr=False,
-                                                              verbose=False,
-                                                              )
+            orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
+                bragg_peaks,
+                subpixel_tilt=subpixel_tilt,
+                plot_corr=False,
+                plot_corr_3D=False,
+                return_corr=False,
+                verbose=False,
+                )
 
-        return orientations
+        return orientation_matrices
 
     def match_single_pattern(
         self,
@@ -573,32 +574,34 @@ class Crystal:
         # Determine the best fit orientation
         ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)
 
-        # Get orientation matrix
-        if subpixel_tilt is False:
-            orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+        orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-        else:
-            # Sub pixel refinement of zone axis orientation
-            if ind_best_fit == 0:
-                # Zone axis is (0,0,1)
-                zone_axis_fit = self.orientation_zone_axis_range[0,:]
+        # # Get orientation matrix
+        # if subpixel_tilt is False:
+        #     orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-            elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
-                # Zone axis is 1st user provided direction
-                zone_axis_fit = self.orientation_zone_axis_range[1,:]
+        # else:
+        #     # Sub pixel refinement of zone axis orientation
+        #     if ind_best_fit == 0:
+        #         # Zone axis is (0,0,1)
+        #         zone_axis_fit = self.orientation_zone_axis_range[0,:]
 
-            elif ind_best_fit == self.orientation_num_zones - 1:
-                # Zone axis is the 2nd user-provided direction
-                zone_axis_fit = self.orientation_zone_axis_range[2,:]
+        #     elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
+        #         # Zone axis is 1st user provided direction
+        #         zone_axis_fit = self.orientation_zone_axis_range[1,:]
 
-            else:
-                # Subpixel refinement
-                elev = self.orientation_rotation_angles[inds[0],inds[1],0]
-                azim = self.orientation_rotation_angles[inds[0],inds[1],1]
-                zone_axis_fit = np.array((
-                    np.cos(azim)*np.sin(elev),
-                    np.sin(azim)*np.sin(elev),
-                    np.cos(elev)))        
+        #     elif ind_best_fit == self.orientation_num_zones - 1:
+        #         # Zone axis is the 2nd user-provided direction
+        #         zone_axis_fit = self.orientation_zone_axis_range[2,:]
+
+        #     else:
+        #         # Subpixel refinement
+        #         elev = self.orientation_rotation_angles[inds[0],inds[1],0]
+        #         azim = self.orientation_rotation_angles[inds[0],inds[1],1]
+        #         zone_axis_fit = np.array((
+        #             np.cos(azim)*np.sin(elev),
+        #             np.sin(azim)*np.sin(elev),
+        #             np.cos(elev)))        
 
 
         # apply in-plane rotation
@@ -611,7 +614,7 @@ class Crystal:
 
         #    # # Invert orientation matrix, so the it rotates experiment to reference frame
         #    # orientation_matrix = np.linalg.inv(orientation_matrix)
-        print(np.round(orientation_matrix * 1e3) / 1e3 )
+        # print(np.round(orientation_matrix * 1e3) / 1e3 )
 
         if verbose:
             zone_axis_fit = orientation_matrix[:,2]
