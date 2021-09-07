@@ -507,7 +507,6 @@ class Crystal:
         self,
         bragg_peaks,
         subpixel_tilt=False,
-        normalize_corr=True,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
@@ -520,7 +519,6 @@ class Crystal:
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
-            normalize_corr (bool):              set to true to use normalization
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
         Returns:
@@ -605,7 +603,7 @@ class Crystal:
 
 
         # apply in-plane rotation
-        phi = corr_in_plane_angle[ind_best_fit] - np.pi/2
+        phi = corr_in_plane_angle[ind_best_fit] + np.pi
         m3z = np.array([
                 [ np.cos(phi), np.sin(phi), 0],
                 [-np.sin(phi), np.cos(phi), 0],
@@ -917,6 +915,7 @@ class Crystal:
 
         Args:
             zone_axis (np float vector):     3 element projection direction for sim pattern
+                                             Can also be a 3x3 orientation matrix (zone axis 3rd column)
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
             sigma_excitation_error (np float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
@@ -927,7 +926,11 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
-        zone_axis = np.asarray(zone_axis)
+        if zone_axis.shape == (3,3):
+            proj_x_axis = zone_axis[:,0]
+            zone_axis = zone_axis[:,2]
+        else:
+            zone_axis = np.asarray(zone_axis)
 
         # Foil normal
         if foil_normal is None:
@@ -1001,41 +1004,62 @@ class Crystal:
 
 def plot_diffraction_pattern(
     bragg_peaks,
+    bragg_peaks_compare=None,
     scale_markers=10,
     power_markers=1,
     add_labels=True,
+    min_marker_size = 1e-6,
     figsize=(8,8),
     returnfig=False):
     """
     2D scatter plot of the Bragg peaks
 
     Args:
-        bragg_peaks (PointList):    numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-        scale_markers (float):      size scaling for markers
-        power_markers (float):      power law scaling for marks (default is 1, i.e. amplitude)
-        add_labels (bool):          flag to add hkl labels to peaks
-        figsize (2 element float):  size scaling of figure axes
-        returnfig (bool):           set to True to return figure and axes handles
+        bragg_peaks (PointList):        numpy array containing ('qx', 'qy', 'intensity', 'h', 'k', 'l')
+        bragg_peaks_compare(PointList): numpy array containing ('qx', 'qy', 'intensity')
+        scale_markers (float):          size scaling for markers
+        power_markers (float):          power law scaling for marks (default is 1, i.e. amplitude)
+        add_labels (bool):              flag to add hkl labels to peaks
+        min_marker_size (float):        minimum marker size for the comparison peaks
+        figsize (2 element float):      size scaling of figure axes
+        returnfig (bool):               set to True to return figure and axes handles
     """
 
     # 2D plotting
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot()
-    # ax = fig.add_subplot(
-    #     projection='3d',
-    #     elev=el, 
-    #     azim=az)
 
     if power_markers == 2:
         marker_size = scale_markers*bragg_peaks.data['intensity']
     else:
         marker_size = scale_markers*(bragg_peaks.data['intensity']**(power_markers/2))
 
-    ax.scatter(
-        bragg_peaks.data['qy'], 
-        bragg_peaks.data['qx'], 
-        s=marker_size,
-        facecolor='k')
+    if bragg_peaks_compare is None:
+        ax.scatter(
+            bragg_peaks.data['qy'], 
+            bragg_peaks.data['qx'], 
+            s=marker_size,
+            facecolor='k')
+    else:
+        if power_markers == 2:
+            marker_size_compare = np.maximum(
+                scale_markers*bragg_peaks_compare.data['intensity'], min_marker_size)
+        else:
+            marker_size_compare = np.maximum(
+                scale_markers*(bragg_peaks_compare.data['intensity']**(power_markers/2)), min_marker_size)
+
+        ax.scatter(
+            bragg_peaks_compare.data['qy'], 
+            bragg_peaks_compare.data['qx'], 
+            s=marker_size_compare,
+            marker='o',
+            facecolor=[0.0,0.7,1.0])
+        ax.scatter(
+            bragg_peaks.data['qy'], 
+            bragg_peaks.data['qx'], 
+            s=marker_size,
+            marker='+',
+            facecolor='k')
 
     ax.invert_yaxis()
     ax.set_box_aspect(1)
@@ -1052,16 +1076,24 @@ def plot_diffraction_pattern(
             'color': 'r',
             'size': 10}
 
-        # print(u'str(4)\u0305')
-
-        # # def over(character):
-        # #     return "_\n"+character
-        # print("_\n"+str(3))
+        # def overline(x):
+        #     return str(x) if np.abs(x) >= 0 else '$\overline{" + str(np.abs(x)) + "}$'
+        # def overline(x):
+        #     if np.abs(x) >= 0:
+        #         return str(x) 
+        #     else:
+        #         return '$\overline{" + str(np.abs(x)) + "}$'
 
         for a0 in np.arange(bragg_peaks.data.shape[0]):
             h = bragg_peaks.data['h'][a0]
             k = bragg_peaks.data['k'][a0]
             l = bragg_peaks.data['l'][a0]
+
+            # plt.text( \
+                # bragg_peaks.data['qy'][a0],
+                # bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                # f'{overline(h)}{overline(k)}{overline(l)}',
+                # **text_params)  
 
 
             if h >= 0:
