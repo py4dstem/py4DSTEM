@@ -201,8 +201,8 @@ class Crystal:
     def orientation_plan(
         self, 
         zone_axis_range = np.array([[0,1,1],[1,1,1]]),
-        angle_step_zone_axis = 3.0,
-        angle_step_in_plane = 6.0,
+        angle_step_zone_axis = 1.0,
+        angle_step_in_plane = 2.0,
         accel_voltage = 300e3, 
         corr_kernel_size = 0.05,
         tol_distance = 0.01,
@@ -922,6 +922,9 @@ class Crystal:
             sigma_excitation_error (np float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
             tol_excitation_error_mult (np float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+
+        Returns:
+            bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
         zone_axis = np.asarray(zone_axis)
@@ -935,18 +938,16 @@ class Crystal:
 
         # Logic to set x axis for projected images
         if proj_x_axis is None:
-            if (zone_axis == np.array([1,0,0])).all:
-                proj_x_axis = np.array([0,1,0])
+            if (zone_axis == np.array([-1,0,0])).all:
+                proj_x_axis = np.array([0,-1,0])
             else:
-                proj_x_axis = np.array([1,0,0])
+                proj_x_axis = np.array([-1,0,0])
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
         k0 = zone_axis_norm / self.wavelength
 
         # Excitation errors
-        # cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * zone_axis_norm[:,None], axis=0) \
-        #     / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         cos_alpha = np.sum((k0[:,None] + self.g_vec_all) * foil_normal[:,None], axis=0) \
             / np.linalg.norm(k0[:,None] + self.g_vec_all, axis=0)
         sg = (-0.5) * np.sum((2*k0[:,None] + self.g_vec_all) * self.g_vec_all, axis=0) \
@@ -957,19 +958,10 @@ class Crystal:
         keep = np.abs(sg) <= sg_max
         g_diff = self.g_vec_all[:,keep]
         
-        # Diffracted peak intensities
+        # Diffracted peak intensities and labels
         g_int = self.struct_factors_int[keep] \
             * np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
-
-        # Scale location of output peaks by diffraction angle
-        # angle_ideal = np.arccos(np.minimum(np.sum( \
-        #     (k0[:,None] + g_diff) * zone_axis_norm[:,None], axis=0) \
-        #     / np.linalg.norm(k0[:,None] + g_diff, axis=0), 1))
-        # angle_real = np.arccos(np.minimum(np.sum( \
-        #     (k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None]) * zone_axis_norm[:,None], axis=0)
-        #     / np.linalg.norm(k0[:,None] + g_diff + sg[keep]*zone_axis_norm[:,None], axis=0), 1))
-        # angle_nonzero = angle_real > 0
-        # g_diff[:,angle_nonzero] = g_diff[:,angle_nonzero] * angle_real[angle_nonzero] / angle_ideal[angle_nonzero]
+        hkl = self.hkl[:, keep]
 
         # Intensity tolerance
         keep_int = g_int > tol_intensity
@@ -982,13 +974,28 @@ class Crystal:
         gx_proj = np.sum(g_diff[:,keep_int] * kx_proj[:,None], axis=0)
         gy_proj = np.sum(g_diff[:,keep_int] * ky_proj[:,None], axis=0)
 
+        # Diffracted peak labels
+        h = hkl[0, keep_int]
+        k = hkl[1, keep_int]
+        l = hkl[2, keep_int]
+
         # Output as PointList
-        bragg_peaks = PointList([('qx','float64'),('qy','float64'),('intensity','float64')])
-        bragg_peaks.add_pointarray(np.vstack((gx_proj, gy_proj, g_int[keep_int])).T)
+        bragg_peaks = PointList([
+            ('qx','float64'),
+            ('qy','float64'),
+            ('intensity','float64'),
+            ('h','int'),
+            ('k','int'),
+            ('l','int')])
+        bragg_peaks.add_pointarray(np.vstack((
+            gx_proj, 
+            gy_proj, 
+            g_int[keep_int],
+            h,
+            k,
+            l)).T)
 
         return bragg_peaks
-
-
 
 
 
@@ -996,17 +1003,19 @@ def plot_diffraction_pattern(
     bragg_peaks,
     scale_markers=10,
     power_markers=1,
+    add_labels=True,
     figsize=(8,8),
     returnfig=False):
     """
     2D scatter plot of the Bragg peaks
 
     Args:
-        bragg_peaks (PointList): numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-        scale_markers (float):  size scaling for markers
-        power_markers (float):  power law scaling for marks (default is 1, i.e. amplitude)
+        bragg_peaks (PointList):    numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+        scale_markers (float):      size scaling for markers
+        power_markers (float):      power law scaling for marks (default is 1, i.e. amplitude)
+        add_labels (bool):          flag to add hkl labels to peaks
         figsize (2 element float):  size scaling of figure axes
-        returnfig (bool):   set to True to return figure and axes handles
+        returnfig (bool):           set to True to return figure and axes handles
     """
 
     # 2D plotting
@@ -1025,10 +1034,106 @@ def plot_diffraction_pattern(
     ax.scatter(
         bragg_peaks.data['qy'], 
         bragg_peaks.data['qx'], 
-        s=marker_size)
+        s=marker_size,
+        facecolor='k')
 
     ax.invert_yaxis()
     ax.set_box_aspect(1)
+
+    # Labels for all peaks
+    if add_labels is True:
+        shift_labels = 0.08
+        shift_marker = 0.005
+        text_params = {
+            'ha': 'center',
+            'va': 'center',
+            'family': 'sans-serif',
+            'fontweight': 'normal',
+            'color': 'r',
+            'size': 10}
+
+        # print(u'str(4)\u0305')
+
+        # # def over(character):
+        # #     return "_\n"+character
+        # print("_\n"+str(3))
+
+        for a0 in np.arange(bragg_peaks.data.shape[0]):
+            h = bragg_peaks.data['h'][a0]
+            k = bragg_peaks.data['k'][a0]
+            l = bragg_peaks.data['l'][a0]
+
+
+            if h >= 0:
+                if k >= 0:
+                    if l >= 0:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            str(h) + ' ' + str(k) + ' ' + str(l),
+                            **text_params)  
+                    else:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            str(h) + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
+                            **text_params)  
+                else:
+                    if l >= 0:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
+                            **text_params)  
+                    else:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
+                            **text_params)  
+            else:
+                if k >= 0:
+                    if l >= 0:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + str(l),
+                            **text_params)  
+                    else:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
+                            **text_params)  
+                else:
+                    if l >= 0:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
+                            **text_params)  
+                    else:
+                        plt.text( \
+                            bragg_peaks.data['qy'][a0],
+                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
+                            **text_params) 
+
+            # if bragg_peaks.data['h'][a0] >= 0:
+            #     t1 = str(bragg_peaks.data['h'][a0])
+            # # else:
+            # #     t1 = u'str(bragg_peaks.data['h'][a0])\u0305'
+
+            # t = t1 + ' ' + \
+            #     str(bragg_peaks.data['k'][a0]) + ' ' + \
+            #     str(bragg_peaks.data['l'][a0])
+
+
+            # plt.text( \
+            #     bragg_peaks.data['qy'][a0],
+            #     bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+            #     t,
+            #     **text_params)      
 
     # # axes limits
     # r = self.k_max * 1.05
