@@ -506,7 +506,7 @@ class Crystal:
     def match_single_pattern(
         self,
         bragg_peaks,
-        subpixel_tilt=False,
+        subpixel_tilt=True,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
@@ -565,45 +565,79 @@ class Crystal:
 
             if np.max(c) > 0:
                 corr_value[a0] = c[1] + (c[0]-c[2])**2 / (4*(2*c[1]-c[0]-c[2])**2)
-
                 dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
                 corr_in_plane_angle[a0] = self.orientation_gamma[ind_phi[a0]] + dc*dphi
 
         # Determine the best fit orientation
-        ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)
+        ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
 
-        orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+        # If sub
+        # orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
         # # Get orientation matrix
-        # if subpixel_tilt is False:
-        #     orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+        if subpixel_tilt is False:
+            orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-        # else:
-        #     # Sub pixel refinement of zone axis orientation
-        #     if ind_best_fit == 0:
-        #         # Zone axis is (0,0,1)
-        #         zone_axis_fit = self.orientation_zone_axis_range[0,:]
+        else:
+            def ind_to_sub(ind):
+                ind_x = np.floor(0.5*np.sqrt(8.0*ind+1) - 0.5).astype('int')
+                ind_y = ind_best_fit - np.floor(ind_x*(ind_x+1)/2).astype('int')
+                return ind_x, ind_y
+            def sub_to_ind(ind_x, ind_y):
+                return (np.floor(ind_x*(ind_x+1)/2) + ind_y).astype('int')
 
-        #     elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
-        #         # Zone axis is 1st user provided direction
-        #         zone_axis_fit = self.orientation_zone_axis_range[1,:]
 
-        #     elif ind_best_fit == self.orientation_num_zones - 1:
-        #         # Zone axis is the 2nd user-provided direction
-        #         zone_axis_fit = self.orientation_zone_axis_range[2,:]
+            # Sub pixel refinement of zone axis orientation
+            if ind_best_fit == 0:
+                # Zone axis is (0,0,1)
+                orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-        #     else:
-        #         # Subpixel refinement
-        #         elev = self.orientation_rotation_angles[inds[0],inds[1],0]
-        #         azim = self.orientation_rotation_angles[inds[0],inds[1],1]
-        #         zone_axis_fit = np.array((
-        #             np.cos(azim)*np.sin(elev),
-        #             np.sin(azim)*np.sin(elev),
-        #             np.cos(elev)))        
+            elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
+                # Zone axis is 1st user provided direction
+                orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+
+            elif ind_best_fit == self.orientation_num_zones - 1:
+                # Zone axis is the 2nd user-provided direction
+                orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+
+            else:
+                # ind_x = np.floor(0.5*np.sqrt(8.0*ind_best_fit+1) - 0.5).astype('int')
+                # ind_y = ind_best_fit - np.floor(ind_x*(ind_x+1)/2).astype('int')
+                ind_x, ind_y = ind_to_sub(ind_best_fit)
+                # print(ind_x,ind_y)
+
+                if ind_y == 0:
+                    ind_x_prev = sub_to_ind(ind_x - 1, 0)
+                    ind_x_post = sub_to_ind(ind_x + 1, 0)
+
+                    c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
+                    dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                    if dc > 0:
+                        orientation_matrix = \
+                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
+                            np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
+                    else:
+                        orientation_matrix = \
+                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
+                            np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
+
+
+
+                    # orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+
+
+
+                # # Subpixel refinement
+                # elev = self.orientation_rotation_angles[inds[0],inds[1],0]
+                # azim = self.orientation_rotation_angles[inds[0],inds[1],1]
+                # zone_axis_fit = np.array((
+                #     np.cos(azim)*np.sin(elev),
+                #     np.sin(azim)*np.sin(elev),
+                #     np.cos(elev)))        
 
 
         # apply in-plane rotation
-        phi = corr_in_plane_angle[ind_best_fit] + np.pi
+        phi = corr_in_plane_angle[ind_best_fit] # + np.pi
         m3z = np.array([
                 [ np.cos(phi), np.sin(phi), 0],
                 [-np.sin(phi), np.cos(phi), 0],
@@ -618,7 +652,7 @@ class Crystal:
             zone_axis_fit = orientation_matrix[:,2]
             temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
             temp = np.round(temp * 1e3) / 1e3
-            print('Highest corr point @ (' + str(temp) + ')')
+            print('Best fit zone axis =  (' + str(temp) + ')')
 
 
 
