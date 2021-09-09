@@ -274,6 +274,7 @@ class Crystal:
         self.orientation_num_zones = ((self.orientation_zone_axis_steps+1)*(self.orientation_zone_axis_steps+2)/2).astype(np.int)
         self.orientation_vecs = np.zeros((self.orientation_num_zones,3))
         self.orientation_vecs[0,:] = self.orientation_zone_axis_range[0,:]
+        self.orientation_inds = np.zeros((self.orientation_num_zones,3), dtype='int')
 
 
         # Calculate zone axis points on the unit sphere with another application of SLERP
@@ -287,12 +288,16 @@ class Crystal:
             weights = np.linspace(0,1,a0+1)
             self.orientation_vecs[inds,:] = \
                 p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
-                p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
+                p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p)
+
+            self.orientation_inds[inds,0] = a0
+            self.orientation_inds[inds,1] = np.arange(a0+1)
 
 
         # expand to quarter sphere if needed
         if self.orientation_half or self.orientation_full:
             vec_new = np.copy(self.orientation_vecs) * np.array([-1,1,1])
+            orientation_sector = np.zeros(vec_new.shape[0], dtype='int')
 
             keep = np.zeros(vec_new.shape[0],dtype='bool')
             for a0 in range(keep.size):
@@ -301,6 +306,16 @@ class Crystal:
 
             self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep,:]))
             self.orientation_num_zones = self.orientation_vecs.shape[0]
+            # self.orientation_sector = np.hstack((
+            #     orientation_sector,
+            #     np.ones(np.sum(keep), dtype='int')))
+            self.orientation_inds = np.vstack((
+                self.orientation_inds, 
+                self.orientation_inds[keep,:])).astype('int')
+            self.orientation_inds[:,2] = np.hstack((
+                orientation_sector,
+                np.ones(np.sum(keep), dtype='int')))
+
 
         # expand to hemisphere if needed
         if self.orientation_full:
@@ -315,6 +330,16 @@ class Crystal:
             self.orientation_num_zones = self.orientation_vecs.shape[0]
 
 
+            # self.orientation_sector = np.hstack((
+            #     self.orientation_sector,
+            #     self.orientation_sector[keep]+2))
+            orientation_sector = np.hstack((
+                self.orientation_inds[:,2],
+                self.orientation_inds[keep,2] + 2))
+            self.orientation_inds = np.vstack((
+                self.orientation_inds, 
+                self.orientation_inds[keep,:])).astype('int')
+            self.orientation_inds[:,2] = orientation_sector
 
 
         # Convert to spherical coordinates
@@ -707,56 +732,6 @@ class Crystal:
                     ind_4 = sub_to_ind(ind_x  , ind_y+1)
                     ind_5 = sub_to_ind(ind_x+1, ind_y  )
                     ind_6 = sub_to_ind(ind_x+1, ind_y+1)
-                    # inds_all = np.array([ind_1,ind_2,ind_3,ind_4,ind_5,ind_6])
-
-                    # c = np.array([
-                    #     corr_value[ind_1],
-                    #     corr_value[ind_2],
-                    #     corr_value[ind_3],
-                    #     corr_value[ind_4],
-                    #     corr_value[ind_5],
-                    #     corr_value[ind_6],
-                    #     ])
-                    # ind_max_1 = np.argmax(c)
-                    # if ind_max_1 == 0:
-                    #     c[np.array([0,3,4,5])] = 0
-                    # elif ind_max_1 == 1:
-                    #     c[np.array([1,2,4,5])] = 0
-                    # elif ind_max_1 == 2:
-                    #     c[np.array([2,1,3,5])] = 0
-                    # elif ind_max_1 == 3:
-                    #     c[np.array([3,0,2,4])] = 0
-                    # elif ind_max_1 == 4:
-                    #     c[np.array([4,0,1,3])] = 0
-                    # elif ind_max_1 == 5:
-                    #     c[np.array([5,0,1,2])] = 0
-                    # ind_max_2 = np.argmax(c)
-
-                    # inds = np.array([ind_best_fit, inds_all[ind_max_1], inds_all[ind_max_2]])
-                    # vals = np.array([corr_value[inds[0]], corr_value[inds[1]], corr_value[inds[2]]])
-                    # print(vals)
-
-                    # xy = np.array([
-                    #     [0,             0  ],
-                    #     [-np.sqrt(3)/2,-1/2],
-                    #     [-np.sqrt(3)/2, 1/2],
-                    #     [ 0,           -1  ],
-                    #     [ 0,            1  ],
-                    #     [ np.sqrt(3)/2,-1/2],
-                    #     [ np.sqrt(3)/2, 1/2],
-                    #     ])
-                    # A = np.vstack(np.ones((7,1)))
-                    # obs = np.array([
-                    #     corr_value[ind_best_fit],
-                    #     corr_value[ind_1],
-                    #     corr_value[ind_2],
-                    #     corr_value[ind_3],
-                    #     corr_value[ind_4],
-                    #     corr_value[ind_5],
-                    #     corr_value[ind_6],
-                    #     ])
-
-                    # print(A)
 
                     c = np.array([ \
                         (corr_value[ind_1]+corr_value[ind_2])/2, 
@@ -790,20 +765,6 @@ class Crystal:
                                 np.squeeze(self.orientation_rotation_matrices[ind_3,:,:])       *(1+dx)*( -dy) + \
                                 np.squeeze(self.orientation_rotation_matrices[ind_1,:,:])       *-dx
 
-
-                    # orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
-
-
-
-                # # Subpixel refinement
-                # elev = self.orientation_rotation_angles[inds[0],inds[1],0]
-                # azim = self.orientation_rotation_angles[inds[0],inds[1],1]
-                # zone_axis_fit = np.array((
-                #     np.cos(azim)*np.sin(elev),
-                #     np.sin(azim)*np.sin(elev),
-                #     np.cos(elev)))        
-
-
         # apply in-plane rotation
         phi = corr_in_plane_angle[ind_best_fit] # + np.pi
         m3z = np.array([
@@ -825,199 +786,99 @@ class Crystal:
 
 
 
-
-        # print(self.orientation_ref.shape)
-        # print(orientation_map.shape)
-
-
-
-
-
-        # test = self.orientation_ref * orientation_map
-        # print(test.shape)
-
-        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
-        # corr[0,0] = 1
-
-        # # Calculate z direction offset for peaks projected onto Ewald sphere (downwards direction)
-        # k0 = 1 / self.wavelength
-        # gz = k0 - np.sqrt(k0**2 - bragg_peaks.data['qx']**2 - bragg_peaks.data['qy']**2)
-
-        # # 3D Bragg peak data
-        # g_vec_all = np.vstack((
-        #     bragg_peaks.data['qx'],
-        #     bragg_peaks.data['qy'],
-        #     gz))
-        # intensity_all = bragg_peaks.data['intensity']
-        # # Vector lengths
-        # g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
-
-        # # init arrays
-        # shell_index = np.zeros(g_vec_all.shape[1])
-        # shell_ref_check = np.zeros(self.orientation_shell_radii.size,dtype=bool)
-
-        # # Assign each Bragg peak to nearest shell from reference
-        # for a0 in range(self.orientation_shell_radii.size):
-        #     sub = np.abs(self.orientation_shell_radii[a0] - g_vec_leng) < self.orientation_corr_kernel_size
-        #     shell_index[sub] = a0
-        #     if np.sum(sub) > 0:
-        #         shell_ref_check[a0] = True
-        # shell_ref_inds = np.where(shell_ref_check)
-
-        # # init correlogram
-        # corr = np.zeros((self.orientation_num_zones,self.orientation_in_plane_steps))
-
-        # # compute correlogram
-        # # for ind_shell in np.nditer(shell_ref_inds):
-
-        # for ind_shell in range(self.orientation_shell_radii.size):
-        #     sub_ref = self.orientation_shell_index == ind_shell
-        #     g_ref = self.g_vec_all[:,sub_ref]
-        #     # intensity_ref = self.struct_factors_int[sub_ref]            
-        #     # intensity_ref = np.mean(self.struct_factors_int[sub_ref])
-        #     amplitude_ref = np.sqrt(np.mean(self.struct_factors_int[sub_ref]))
-
-        #     # Determine with experimental points may fall on this shell
-        #     sub_test = np.abs(g_vec_leng - self.orientation_shell_radii[ind_shell]) \
-        #         < self.orientation_corr_kernel_size
-
-        #     # sub_test = shell_index == ind_shell
-        #     if np.sum(sub_test) > 0:
-        #         g_test = g_vec_all[:,sub_test]
-        #         # intensity_test = intensity_all[sub_test]
-        #         amplitude_test = np.sqrt(intensity_all[sub_test])
-
-
-        #         # corr += np.sum(np.maximum(
-        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-        #         # corr += np.sum(intensity_test * np.maximum(
-        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-        #         # corr += intensity_ref * np.mean(intensity_test * np.maximum(
-        #         #     self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-        #         #         self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-        #         #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-        #         corr += amplitude_ref * np.sum(amplitude_test * np.maximum(
-        #             self.orientation_corr_kernel_size - np.sqrt(np.min(np.sum(((
-        #                 self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-        #             - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-        # # normalization
-        # if normalize_corr is True:
-        #     corr = corr / self.orientation_corr_norm[:,None]
-
-
-                # corr += intensity_ref * np.sum(intensity_test * np.maximum(
-                #     self.orientation_corr_kernel_size  - np.sqrt(np.min(np.sum(((
-                #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-                # amplitude_test = np.sqrt(intensity_all[sub_test])
-
-                # for a0 in range(g_test.shape[1]):
-                #     corr +=(self.orientation_shell_radii[ind_shell] *  intensity_test[a0]) \
-                #         * np.maximum(corr_kernel_size - np.sqrt(np.min(np.sum(((
-                #         self.orientation_rotation_matrices @ g_test[:,a0])[:,:,:,None]
-                #         - g_ref[None,None,:,:])**2, axis=2), axis=2)), 0)
-
-                # corr += (self.orientation_shell_weight[ind_shell] * intensity_ref) \
-                #     * np.mean(intensity_test * np.maximum(
-                #     self.orientation_kernel_size  - np.sqrt(np.min(np.sum(((
-                #     self.orientation_rotation_matrices @ g_test)[:,:,:,:,None] 
-                #     - g_ref[None,None,:,None,:])**2, axis=2), axis=3)), 0), axis=2)
-
-        # print(corr)
-        # print(corr_test.shape)
-
-        # # Determine the best fit orientation
-        # inds = np.unravel_index(np.argmax(corr, axis=None), corr.shape)
-        
-
-        # if subpixel_tilt is False:
-        #     elev_azim_gamma = self.orientation_rotation_angles[inds[0],inds[1],:]
-        #     print(elev_azim_gamma)
-
-        # else:
-        #     # Sub pixel refinement of zone axis orientation
-        #     if inds[0] == 0:
-        #         # Zone axis is (0,0,1)
-        #         zone_axis_fit = self.orientation_zone_axis_range[0,:]
-
-        #     elif inds[0] == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
-        #         # Zone axis is 1st user provided direction
-        #         zone_axis_fit = self.orientation_zone_axis_range[1,:]
-
-        #     elif inds[0] == self.orientation_num_zones - 1:
-        #         # Zone axis is the 2nd user-provided direction
-        #         zone_axis_fit = self.orientation_zone_axis_range[2,:]
-
-        #     else:
-        #         # Subpixel refinement
-        #         elev = self.orientation_rotation_angles[inds[0],inds[1],0]
-        #         azim = self.orientation_rotation_angles[inds[0],inds[1],1]
-        #         zone_axis_fit = np.array((
-        #             np.cos(azim)*np.sin(elev),
-        #             np.sin(azim)*np.sin(elev),
-        #             np.cos(elev)))        
-
-        # temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-        # # temp /= np.min(np.abs(temp[np.abs(temp)>0.11]))
-        # temp = np.round(temp * 1e3) / 1e3
-        # if verbose:
-        #     print('Highest corr point @ (' + str(temp) + ')')
-
-
-        # plotting
+        # plotting correlation image
         if plot_corr is True:
 
-            # 2D correlation slice
-            im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
-            for a0 in np.arange(self.orientation_zone_axis_steps+1):
-                inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-                im_corr_zone_axis[a0,range(a0+1)] = corr_value[inds_val]
 
-            # Zone axis
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            cmin = np.min(corr_value)
-            cmax = np.max(corr_value)
+            if self.orientation_full:
+                1+1
 
-            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
 
-            ax[0].imshow(
-                im_plot,
-                cmap='viridis',
-                vmin=0.0,
-                vmax=1.0)
+            elif self.orientation_half:
+                fig, ax = plt.subplots(1, 2, figsize=figsize*np.array([2,1]))
+                cmin = np.min(corr_value)
+                cmax = np.max(corr_value)
 
-            inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
-            ax[0].scatter(inds_plot[1],inds_plot[0], s=120, linewidth = 2, facecolors='none', edgecolors='r')
+                # im_corr_zone_axis = np.zeros((
+                #     self.orientation_zone_axis_steps+1, 
+                #     self.orientation_zone_axis_steps*2+1))
+               
+                # # right side
+                # for a0 in np.arange(self.orientation_zone_axis_steps+1):
+                #     y_inds = np.arange(a0+1)
+                #     x_inds = a0 - y_inds
+                #     y_inds = y_inds + self.orientation_zone_axis_steps
+                #     inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
 
-            label_0 = self.orientation_zone_axis_range[0,:]
-            label_0 = np.round(label_0 * 1e3) * 1e-3
-            label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+                #     inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
 
-            label_1 = self.orientation_zone_axis_range[1,:]
-            label_1 = np.round(label_1 * 1e3) * 1e-3
-            label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+                #     im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val]
+                
+                # # left size
+                # for a0 in np.arange(self.orientation_zone_axis_steps):
+                #     y_inds = np.arange(a0+1)
+                #     x_inds = a0 - y_inds
+                #     y_inds = self.orientation_zone_axis_steps - 1 - y_inds
+                #     inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
 
-            label_2 = self.orientation_zone_axis_range[2,:]
-            label_2 = np.round(label_2 * 1e3) * 1e-3
-            label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+                #     inds_val = (np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1) 
+                #         + np.sum(self.orientation_sector<1)).astype(np.int)
 
-            ax[0].set_yticks([0])
-            ax[0].set_yticklabels([
-                str(label_0)])
+                #     im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val[::-1]]
+                #     # im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val]
 
-            ax[0].set_xticks([0, self.orientation_zone_axis_steps])
-            ax[0].set_xticklabels([
-                str(label_1),
-                str(label_2)])
+                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+
+                # ax[0].imshow(
+                #     im_plot,
+                #     cmap='viridis',
+                #     vmin=0.0,
+                #     vmax=1.0)
+
+
+            else:
+                fig, ax = plt.subplots(1, 2, figsize=figsize)
+                cmin = np.min(corr_value)
+                cmax = np.max(corr_value)
+
+                im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
+                x_inds = (self.orientation_inds[:,0] - self.orientation_inds[:,1]).astype('int')
+                y_inds = self.orientation_inds[:,1].astype('int')
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+
+                ax[0].imshow(
+                    im_plot,
+                    cmap='viridis',
+                    vmin=0.0,
+                    vmax=1.0)
+
+                inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
+                ax[0].scatter(inds_plot[1],inds_plot[0], s=120, linewidth = 2, facecolors='none', edgecolors='r')
+
+                label_0 = self.orientation_zone_axis_range[0,:]
+                label_0 = np.round(label_0 * 1e3) * 1e-3
+                label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+
+                label_1 = self.orientation_zone_axis_range[1,:]
+                label_1 = np.round(label_1 * 1e3) * 1e-3
+                label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+
+                label_2 = self.orientation_zone_axis_range[2,:]
+                label_2 = np.round(label_2 * 1e3) * 1e-3
+                label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+
+                ax[0].set_xticks([0, self.orientation_zone_axis_steps])
+                ax[0].set_xticklabels([
+                    str(label_0),
+                    str(label_2)])
+                ax[0].xaxis.tick_top()
+
+                ax[0].set_yticks([self.orientation_zone_axis_steps])
+                ax[0].set_yticklabels([
+                    str(label_1)])
 
             # In-plane rotation
             ax[1].plot(
@@ -1143,10 +1004,17 @@ class Crystal:
 
         # Logic to set x axis for projected images
         if proj_x_axis is None:
+            # if (zone_axis == np.array([-1,0,0])).all:
+            #     proj_x_axis = np.array([0,-1,0])
+            # else:
+            #     proj_x_axis = np.array([-1,0,0])
             if (zone_axis == np.array([-1,0,0])).all:
                 proj_x_axis = np.array([0,-1,0])
+            elif (zone_axis == np.array([1,0,0])).all:
+                proj_x_axis = np.array([0,1,0])
             else:
                 proj_x_axis = np.array([-1,0,0])
+
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
