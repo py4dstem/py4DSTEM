@@ -215,6 +215,7 @@ class Crystal:
         Args:
             zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
+                                                Setting this to 'full' as a string will use a hemispherical range.
             angle_step_zone_axis (numpy float): Approximate angular step size for zone axis [degrees]
             angle_step_in_plane (numpy float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (numpy float):        Accelerating voltage for electrons [Volts]
@@ -229,10 +230,28 @@ class Crystal:
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
-        # Define 3 vectors which span zone axis orientation range, normalize
-        self.orientation_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
-        self.orientation_zone_axis_range[1,:] /= np.linalg.norm(self.orientation_zone_axis_range[1,:])
-        self.orientation_zone_axis_range[2,:] /= np.linalg.norm(self.orientation_zone_axis_range[2,:])
+        if isinstance(zone_axis_range, str):
+            self.orientation_zone_axis_range = np.array([
+                [0,0,1],
+                [0,1,0],
+                [1,0,0]])
+
+            if zone_axis_range == 'full':
+                self.orientation_full = True
+                self.orientation_half = False
+            elif zone_axis_range == 'half':
+                self.orientation_full = False
+                self.orientation_half = True
+
+        else:
+            # Define 3 vectors which span zone axis orientation range, normalize
+            self.orientation_zone_axis_range = np.vstack((np.array([0,0,1]),np.array(zone_axis_range))).astype('float')
+            self.orientation_zone_axis_range[1,:] /= np.linalg.norm(self.orientation_zone_axis_range[1,:])
+            self.orientation_zone_axis_range[2,:] /= np.linalg.norm(self.orientation_zone_axis_range[2,:])
+
+            self.orientation_full = False
+            self.orientation_half = False
+
 
         # Solve for number of angular steps in zone axis (rads)
         angle_u_v = np.arccos(np.sum(self.orientation_zone_axis_range[0,:] * self.orientation_zone_axis_range[1,:]))
@@ -269,6 +288,34 @@ class Crystal:
             self.orientation_vecs[inds,:] = \
                 p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
                 p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
+
+
+        # expand to quarter sphere if needed
+        if self.orientation_half or self.orientation_full:
+            vec_new = np.copy(self.orientation_vecs) * np.array([-1,1,1])
+
+            keep = np.zeros(vec_new.shape[0],dtype='bool')
+            for a0 in range(keep.size):
+                if np.sqrt(np.min(np.sum((self.orientation_vecs - vec_new[a0,:])**2,axis=1))) > tol_distance:
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep,:]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+        # expand to hemisphere if needed
+        if self.orientation_full:
+            vec_new = np.copy(self.orientation_vecs) * np.array([1,-1,1])
+
+            keep = np.zeros(vec_new.shape[0],dtype='bool')
+            for a0 in range(keep.size):
+                if np.sqrt(np.min(np.sum((self.orientation_vecs - vec_new[a0,:])**2,axis=1))) > tol_distance:
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep,:]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+
+
 
         # Convert to spherical coordinates
         # azim = np.arctan2(
@@ -571,7 +618,7 @@ class Crystal:
         # Determine the best fit orientation
         ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
 
-        # # Get orientation matrix
+        # Get orientation matrix
         if subpixel_tilt is False:
             orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
