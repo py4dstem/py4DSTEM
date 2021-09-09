@@ -3,6 +3,11 @@ from math import *
 import math as m
 import cmath as cm
 from numba import cuda
+import torch as th
+import torch.nn as nn
+import numpy as np
+from PIL import Image
+
 
 @cuda.jit
 def single_sideband_kernel(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrations,
@@ -149,6 +154,141 @@ def single_sideband_kernel(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberratio
             cuda.atomic.add(Ψ_Qp_left_sb.imag, (iqy, iqx), val.imag)
         if double_overlap2:
             val = G[iqy, iqx, iky, ikx]
+            cuda.atomic.add(Ψ_Qp_right_sb.real, (iqy, iqx), val.real)
+            cuda.atomic.add(Ψ_Qp_right_sb.imag, (iqy, iqx), val.imag)
+        if iqx == 0 and iqy == 0:
+            val = abs(G[iqy, iqx, iky, ikx]) + 1j * 0
+            cuda.atomic.add(Ψ_Qp.real, (iqy, iqx), val.real)
+            cuda.atomic.add(Ψ_Qp_left_sb.real, (iqy, iqx), val.real)
+            cuda.atomic.add(Ψ_Qp_right_sb.real, (iqy, iqx), val.real)
+
+@cuda.jit
+def single_sideband_kernel_cartesian(G, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrations, theta_rot, alpha,
+                           Ψ_Qp, Ψ_Qp_left_sb, Ψ_Qp_right_sb, eps, lam, scale):
+    def aperture2(qx, qy, lam, alpha_max, scale):
+        qx2 = qx ** 2
+        qy2 = qy ** 2
+        q = m.sqrt(qx2 + qy2)
+        ktheta = m.asin(q * lam)
+        return (ktheta < alpha_max) * scale
+
+    def chi3(qy, qx, lam, C):
+        """
+        Zernike polynomials in the cartesian coordinate system
+        :param qx:
+        :param qy:
+        :param lam: wavelength in Angstrom
+        :param C:   (12 ,)
+        :return:
+        """
+
+        u = qx * lam
+        v = qy * lam
+        u2 = u ** 2
+        u3 = u ** 3
+        u4 = u ** 4
+        # u5 = u ** 5
+
+        v2 = v ** 2
+        v3 = v ** 3
+        v4 = v ** 4
+        # v5 = v ** 5
+
+        # aberr = Param()
+        # aberr.C1 = C[0]
+        # aberr.C12a = C[1]
+        # aberr.C12b = C[2]
+        # aberr.C21a = C[3]
+        # aberr.C21b = C[4]
+        # aberr.C23a = C[5]
+        # aberr.C23b = C[6]
+        # aberr.C3 = C[7]
+        # aberr.C32a = C[8]
+        # aberr.C32b = C[9]
+        # aberr.C34a = C[10]
+        # aberr.C34b = C[11]
+
+        chi = 0
+
+        # r-2 = x-2 +y-2.
+        chi += 1 / 2 * C[0] * (u2 + v2)  # r^2
+        # r-2 cos(2*phi) = x"2 -y-2.
+        # r-2 sin(2*phi) = 2*x*y.
+        chi += 1 / 2 * (C[1] * (u2 - v2) + 2 * C[2] * u * v)  # r^2 cos(2 phi) + r^2 sin(2 phi)
+        # r-3 cos(3*phi) = x-3 -3*x*y'2. r"3 sin(3*phi) = 3*y*x-2 -y-3.
+        chi += 1 / 3 * (C[5] * (u3 - 3 * u * v2) + C[6] * (3 * u2 * v - v3))  # r^3 cos(3phi) + r^3 sin(3 phi)
+        # r-3 cos(phi) = x-3 +x*y-2.
+        # r-3 sin(phi) = y*x-2 +y-3.
+        chi += 1 / 3 * (C[3] * (u3 + u * v2) + C[4] * (v3 + u2 * v))  # r^3 cos(phi) + r^3 sin(phi)
+        # r-4 = x-4 +2*x-2*y-2 +y-4.
+        chi += 1 / 4 * C[7] * (u4 + v4 + 2 * u2 * v2)  # r^4
+        # r-4 cos(4*phi) = x-4 -6*x-2*y-2 +y-4.
+        chi += 1 / 4 * C[10] * (u4 - 6 * u2 * v2 + v4)  # r^4 cos(4 phi)
+        # r-4 sin(4*phi) = 4*x-3*y -4*x*y-3.
+        chi += 1 / 4 * C[11] * (4 * u3 * v - 4 * u * v3)  # r^4 sin(4 phi)
+        # r-4 cos(2*phi) = x-4 -y-4.
+        chi += 1 / 4 * C[8] * (u4 - v4)
+        # r-4 sin(2*phi) = 2*x-3*y +2*x*y-3.
+        chi += 1 / 4 * C[9] * (2 * u3 * v + 2 * u * v3)
+        # r-5 cos(phi) = x-5 +2*x-3*y-2 +x*y-4.
+        # r-5 sin(phi) = y*x"4 +2*x-2*y-3 +y-5.
+        # r-5 cos(3*phi) = x-5 -2*x-3*y-2 -3*x*y-4.
+        # r-5 sin(3*phi) = 3*y*x-4 +2*x-2*y-3 -y-5.
+        # r-5 cos(5*phi) = x-5 -10*x-3*y-2 +5*x*y-4.
+        # r-5 sin(5*phi) = 5*y*x-4 -10*x-2*y-3 +y-5.
+
+        chi *= 2 * np.pi / lam
+
+        return chi
+
+    gs = G.shape
+    N = gs[0] * gs[1] * gs[2] * gs[3]
+    n = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+    iqy = n // strides[0]
+    iqx = (n - iqy * strides[0]) // strides[1]
+    iky = (n - (iqy * strides[0] + iqx * strides[1])) // strides[2]
+    ikx = (n - (iqy * strides[0] + iqx * strides[1] + iky * strides[2])) // strides[3]
+
+    if n < N:
+
+        Qx = Qx_all[iqx]
+        Qy = Qy_all[iqy]
+        Kx = Kx_all[ikx]
+        Ky = Ky_all[iky]
+
+        Qx_rot = Qx * m.cos(theta_rot) - Qy * m.sin(theta_rot)
+        Qy_rot = Qx * m.sin(theta_rot) + Qy * m.cos(theta_rot)
+
+        Qx = Qx_rot
+        Qy = Qy_rot
+
+        A = aperture2(Ky, Kx, lam, alpha, scale) * cm.exp(-1j * chi3(Ky, Kx, lam, aberrations))
+        chi_KplusQ = chi3(Ky + Qy, Kx + Qx, lam, aberrations)
+        A_KplusQ = aperture2(Ky + Qy, Kx + Qx, lam, alpha, scale) * cm.exp(-1j * chi_KplusQ)
+        chi_KminusQ = chi3(Ky - Qy, Kx - Qx, lam, aberrations)
+        A_KminusQ = aperture2(Ky - Qy, Kx - Qx, lam, alpha, scale) * cm.exp(-1j * chi_KminusQ)
+
+        Γ = A.conjugate() * A_KminusQ - A * A_KplusQ.conjugate()
+
+        Kplus = sqrt((Kx + Qx) ** 2 + (Ky + Qy) ** 2)
+        Kminus = sqrt((Kx - Qx) ** 2 + (Ky - Qy) ** 2)
+        K = sqrt(Kx ** 2 + Ky ** 2)
+        bright_field = K < alpha / lam
+        double_overlap1 = (Kplus < alpha / lam) * bright_field * (Kminus > alpha / lam)
+        double_overlap2 = (Kplus > alpha / lam) * bright_field * (Kminus < alpha / lam)
+
+        Γ_abs = abs(Γ)
+        take = Γ_abs > eps and bright_field
+        if take:
+            val = G[iqy, iqx, iky, ikx] * Γ.conjugate()
+            cuda.atomic.add(Ψ_Qp.real, (iqy, iqx), val.real)
+            cuda.atomic.add(Ψ_Qp.imag, (iqy, iqx), val.imag)
+        if double_overlap1:
+            val = G[iqy, iqx, iky, ikx] * Γ.conjugate()
+            cuda.atomic.add(Ψ_Qp_left_sb.real, (iqy, iqx), val.real)
+            cuda.atomic.add(Ψ_Qp_left_sb.imag, (iqy, iqx), val.imag)
+        if double_overlap2:
+            val = G[iqy, iqx, iky, ikx] * Γ.conjugate()
             cuda.atomic.add(Ψ_Qp_right_sb.real, (iqy, iqx), val.real)
             cuda.atomic.add(Ψ_Qp_right_sb.imag, (iqy, iqx), val.imag)
         if iqx == 0 and iqy == 0:
