@@ -791,49 +791,79 @@ class Crystal:
 
 
             if self.orientation_full:
-                1+1
+                fig, ax = plt.subplots(1, 2, figsize=figsize*np.array([2,2]))
+                cmin = np.min(corr_value)
+                cmax = np.max(corr_value)
 
+                im_corr_zone_axis = np.zeros((
+                    2*self.orientation_zone_axis_steps+1, 
+                    2*self.orientation_zone_axis_steps+1))
+                
+                sub = self.orientation_inds[:,2] == 0
+                x_inds = (self.orientation_inds[sub,0] - self.orientation_inds[sub,1]).astype('int') \
+                    + self.orientation_zone_axis_steps
+                y_inds = self.orientation_inds[sub,1].astype('int') \
+                    + self.orientation_zone_axis_steps
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
+
+                sub = self.orientation_inds[:,2] == 1
+                x_inds = (self.orientation_inds[sub,0] - self.orientation_inds[sub,1]).astype('int') \
+                    + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[sub,1].astype('int') 
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
+
+                sub = self.orientation_inds[:,2] == 2
+                x_inds = (self.orientation_inds[sub,1] - self.orientation_inds[sub,0]).astype('int') \
+                    + self.orientation_zone_axis_steps
+                y_inds = self.orientation_inds[sub,1].astype('int') \
+                    + self.orientation_zone_axis_steps
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
+
+                sub = self.orientation_inds[:,2] == 3
+                x_inds = (self.orientation_inds[sub,1] - self.orientation_inds[sub,0]).astype('int') \
+                    + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[sub,1].astype('int') 
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
+
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(
+                    im_plot,
+                    cmap='viridis',
+                    vmin=0.0,
+                    vmax=1.0)
 
             elif self.orientation_half:
                 fig, ax = plt.subplots(1, 2, figsize=figsize*np.array([2,1]))
                 cmin = np.min(corr_value)
                 cmax = np.max(corr_value)
 
-                # im_corr_zone_axis = np.zeros((
-                #     self.orientation_zone_axis_steps+1, 
-                #     self.orientation_zone_axis_steps*2+1))
-               
-                # # right side
-                # for a0 in np.arange(self.orientation_zone_axis_steps+1):
-                #     y_inds = np.arange(a0+1)
-                #     x_inds = a0 - y_inds
-                #     y_inds = y_inds + self.orientation_zone_axis_steps
-                #     inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-
-                #     inds_val = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-
-                #     im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val]
+                im_corr_zone_axis = np.zeros((
+                    self.orientation_zone_axis_steps+1, 
+                    self.orientation_zone_axis_steps*2+1))
                 
-                # # left size
-                # for a0 in np.arange(self.orientation_zone_axis_steps):
-                #     y_inds = np.arange(a0+1)
-                #     x_inds = a0 - y_inds
-                #     y_inds = self.orientation_zone_axis_steps - 1 - y_inds
-                #     inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                sub = self.orientation_inds[:,2] == 0
+                x_inds = (self.orientation_inds[sub,0] - self.orientation_inds[sub,1]).astype('int')
+                y_inds = self.orientation_inds[sub,1].astype('int') + self.orientation_zone_axis_steps
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
 
-                #     inds_val = (np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1) 
-                #         + np.sum(self.orientation_sector<1)).astype(np.int)
+                sub = self.orientation_inds[:,2] == 1
+                x_inds = (self.orientation_inds[sub,0] - self.orientation_inds[sub,1]).astype('int')
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[sub,1].astype('int') 
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
 
-                #     im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val[::-1]]
-                #     # im_corr_zone_axis.ravel()[inds_1D] = corr_value[inds_val]
-
-                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-
-                # ax[0].imshow(
-                #     im_plot,
-                #     cmap='viridis',
-                #     vmin=0.0,
-                #     vmax=1.0)
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(
+                    im_plot,
+                    cmap='viridis',
+                    vmin=0.0,
+                    vmax=1.0)
 
 
             else:
@@ -848,7 +878,6 @@ class Crystal:
                 im_corr_zone_axis.ravel()[inds_1D] = corr_value
 
                 im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-
                 ax[0].imshow(
                     im_plot,
                     cmap='viridis',
