@@ -54,7 +54,7 @@ class Crystal:
         )
         self.struc_dict = self.structure.as_dict()
         self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix.T
-        self.lat_real = self.structure.lattice.matrix
+        self.lat_real = self.structure.lattice.matrix.T
 
         # Initialize Crystal
         self.positions = self.structure.frac_coords   #: fractional atomic coordinates
@@ -578,6 +578,8 @@ class Crystal:
     def match_single_pattern(
         self,
         bragg_peaks,
+        num_matches_return = 1,
+        tol_peak_delete = 0.1,
         subpixel_tilt=False,
         plot_corr=False,
         plot_corr_3D=False,
@@ -590,200 +592,244 @@ class Crystal:
 
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+            num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
         Returns:
-            orientation_matrix (3x3 float)      orienation matrix where zone axis is the 3rd column
+            orientation_output (3x3xN float)    orienation matrix where zone axis is the 3rd column, 3rd dim for multiple matches
             corr_value (float):                 (optional) return correlation values
         """
 
-        # Convert Bragg peaks to polar coordinates
-        qr = np.sqrt(
-            bragg_peaks.data['qx']**2 +
-            bragg_peaks.data['qy']**2)
-        qphi = np.arctan2(
-            bragg_peaks.data['qy'],
-            bragg_peaks.data['qx'])
+        # get bragg peak data
+        qx = bragg_peaks.data['qx']
+        qy = bragg_peaks.data['qy']
+        intensity = bragg_peaks.data['intensity']
 
-        # Calculate polar Bragg peak image
-        im_polar = np.zeros((
-            np.size(self.orientation_shell_radii),
-            self.orientation_in_plane_steps),
-            dtype='float')
 
-        for ind_radial, radius in enumerate(self.orientation_shell_radii):
-            dqr = np.abs(qr - radius)
-            sub = dqr < self.orientation_kernel_size
-
-            if np.sum(sub) > 0:
-                im_polar[ind_radial,:] = np.sum(
-                    radius * np.sqrt(bragg_peaks.data['intensity'][sub,None]) 
-                    * np.maximum(1 - np.sqrt(dqr[sub,None]**2 + \
-                    ((np.mod(self.orientation_gamma[None,:] - qphi[sub,None] + np.pi, 2*np.pi) - np.pi) * \
-                    radius)**2) / self.orientation_kernel_size, 0), axis=0)
-
-        # Calculate orientation correlogram
-        corr_full = np.sum(np.real(np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None,:,:]))), axis=1)
-        # Find best match for each zone axis
-        ind_phi = np.argmax(corr_full, axis=1)
-        corr_value = np.zeros(self.orientation_num_zones)
-        corr_in_plane_angle = np.zeros(self.orientation_num_zones)
-        dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-
-        for a0 in range(self.orientation_num_zones):
-            inds = np.mod(ind_phi[a0] + np.arange(-1,2), self.orientation_gamma.size).astype('int')
-            c = corr_full[a0,inds]
-
-            if np.max(c) > 0:
-                corr_value[a0] = c[1] + (c[0]-c[2])**2 / (4*(2*c[1]-c[0]-c[2])**2)
-                dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
-                corr_in_plane_angle[a0] = self.orientation_gamma[ind_phi[a0]] + dc*dphi
-
-        # Determine the best fit orientation
-        ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
-
-        # Get orientation matrix
-        if subpixel_tilt is False:
-            orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
-
+        # init orientation output, delete distance threshold squared
+        if num_matches_return == 1:
+            orientation_output = np.zeros((3,3))
         else:
-            def ind_to_sub(ind):
-                ind_x = np.floor(0.5*np.sqrt(8.0*ind+1) - 0.5).astype('int')
-                ind_y = ind - np.floor(ind_x*(ind_x+1)/2).astype('int')
-                return ind_x, ind_y
-            def sub_to_ind(ind_x, ind_y):
-                return (np.floor(ind_x*(ind_x+1)/2) + ind_y).astype('int')
+            orientation_output = np.zeros((3,3,num_matches_return))
+            r_del_2 = tol_peak_delete**2
 
-            # Sub pixel refinement of zone axis orientation
-            if ind_best_fit == 0:
-                # Zone axis is (0,0,1)
-                orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+        # loop over the number of matches to return
+        for match_ind in range(num_matches_return):
+            # Convert Bragg peaks to polar coordinates
+            qr = np.sqrt(qx**2 + qy**2)
+            qphi = np.arctan2(qy, qx)
 
-            elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
-                # Zone axis is 1st user provided direction
-                orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
+            # Calculate polar Bragg peak image
+            im_polar = np.zeros((
+                np.size(self.orientation_shell_radii),
+                self.orientation_in_plane_steps),
+                dtype='float')
 
-            elif ind_best_fit == self.orientation_num_zones - 1:
-                # Zone axis is the 2nd user-provided direction
+            for ind_radial, radius in enumerate(self.orientation_shell_radii):
+                dqr = np.abs(qr - radius)
+                sub = dqr < self.orientation_kernel_size
+
+                if np.sum(sub) > 0:
+                    im_polar[ind_radial,:] = np.sum(
+                        radius * np.sqrt(intensity[sub,None]) 
+                        * np.maximum(1 - np.sqrt(dqr[sub,None]**2 + \
+                        ((np.mod(self.orientation_gamma[None,:] - qphi[sub,None] + np.pi, 2*np.pi) - np.pi) * \
+                        radius)**2) / self.orientation_kernel_size, 0), axis=0)
+
+            # Calculate orientation correlogram
+            corr_full = np.sum(np.real(np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None,:,:]))), axis=1)
+            # Find best match for each zone axis
+            ind_phi = np.argmax(corr_full, axis=1)
+            corr_value = np.zeros(self.orientation_num_zones)
+            corr_in_plane_angle = np.zeros(self.orientation_num_zones)
+            dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
+
+            for a0 in range(self.orientation_num_zones):
+                inds = np.mod(ind_phi[a0] + np.arange(-1,2), self.orientation_gamma.size).astype('int')
+                c = corr_full[a0,inds]
+
+                if np.max(c) > 0:
+                    corr_value[a0] = c[1] + (c[0]-c[2])**2 / (4*(2*c[1]-c[0]-c[2])**2)
+                    dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                    corr_in_plane_angle[a0] = self.orientation_gamma[ind_phi[a0]] + dc*dphi
+
+            # Determine the best fit orientation
+            ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
+
+            # Get orientation matrix
+            if subpixel_tilt is False:
                 orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
             else:
-                ind_x, ind_y = ind_to_sub(ind_best_fit)
-                max_x, max_y = ind_to_sub(self.orientation_num_zones-1)
-                # print(self.orientation_num_zones)
-                # print(ind_x, ind_y)
-                # print(max_x, max_y)
+                def ind_to_sub(ind):
+                    ind_x = np.floor(0.5*np.sqrt(8.0*ind+1) - 0.5).astype('int')
+                    ind_y = ind - np.floor(ind_x*(ind_x+1)/2).astype('int')
+                    return ind_x, ind_y
+                def sub_to_ind(ind_x, ind_y):
+                    return (np.floor(ind_x*(ind_x+1)/2) + ind_y).astype('int')
 
-                if ind_y == 0:
-                    ind_x_prev = sub_to_ind(ind_x-1, 0)
-                    ind_x_post = sub_to_ind(ind_x+1, 0)
+                # Sub pixel refinement of zone axis orientation
+                if ind_best_fit == 0:
+                    # Zone axis is (0,0,1)
+                    orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-                    c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
-                    dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                elif ind_best_fit == self.orientation_num_zones - self.orientation_zone_axis_steps - 1:
+                    # Zone axis is 1st user provided direction
+                    orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
-                    if dc > 0:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
-                    else:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
-
-                elif ind_x == max_x:
-                    ind_x_prev = sub_to_ind(max_x, ind_y-1)
-                    ind_x_post = sub_to_ind(max_x, ind_y+1)
-
-                    c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
-                    dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
-                    
-                    if dc > 0:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
-                    else:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
-
-
-                elif ind_x == ind_y:
-                    ind_x_prev = sub_to_ind(ind_x-1, ind_y-1)
-                    ind_x_post = sub_to_ind(ind_x+1, ind_y+1)
-
-                    c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
-                    dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
-
-                    if dc > 0:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
-                    else:
-                        orientation_matrix = \
-                            np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
-                            np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
+                elif ind_best_fit == self.orientation_num_zones - 1:
+                    # Zone axis is the 2nd user-provided direction
+                    orientation_matrix = np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])
 
                 else:
-                    # # best fit point is not on any of the corners or edges
-                    ind_1 = sub_to_ind(ind_x-1, ind_y-1)
-                    ind_2 = sub_to_ind(ind_x-1, ind_y  )
-                    ind_3 = sub_to_ind(ind_x  , ind_y-1)
-                    ind_4 = sub_to_ind(ind_x  , ind_y+1)
-                    ind_5 = sub_to_ind(ind_x+1, ind_y  )
-                    ind_6 = sub_to_ind(ind_x+1, ind_y+1)
+                    ind_x, ind_y = ind_to_sub(ind_best_fit)
+                    max_x, max_y = ind_to_sub(self.orientation_num_zones-1)
+                    # print(self.orientation_num_zones)
+                    # print(ind_x, ind_y)
+                    # print(max_x, max_y)
 
-                    c = np.array([ \
-                        (corr_value[ind_1]+corr_value[ind_2])/2, 
-                        corr_value[ind_best_fit], 
-                        (corr_value[ind_5]+corr_value[ind_6])/2])
-                    dx = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                    if ind_y == 0:
+                        ind_x_prev = sub_to_ind(ind_x-1, 0)
+                        ind_x_post = sub_to_ind(ind_x+1, 0)
 
-                    c = np.array([corr_value[ind_3], corr_value[ind_best_fit], corr_value[ind_4]])
-                    dy = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
+                        dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
 
-                    if dx > 0:
-                        if dy > 0:
+                        if dc > 0:
                             orientation_matrix = \
-                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dx)*(1-dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_4,:,:])       *(1-dx)*(  dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_6,:,:])       *dx
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
                         else:
                             orientation_matrix = \
-                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dx)*(1+dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_3,:,:])       *(1-dx)*( -dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_5,:,:])       *dx
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
+
+                    elif ind_x == max_x:
+                        ind_x_prev = sub_to_ind(max_x, ind_y-1)
+                        ind_x_post = sub_to_ind(max_x, ind_y+1)
+
+                        c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
+                        dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        
+                        if dc > 0:
+                            orientation_matrix = \
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
+                        else:
+                            orientation_matrix = \
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
+
+
+                    elif ind_x == ind_y:
+                        ind_x_prev = sub_to_ind(ind_x-1, ind_y-1)
+                        ind_x_post = sub_to_ind(ind_x+1, ind_y+1)
+
+                        c = np.array([corr_value[ind_x_prev], corr_value[ind_best_fit], corr_value[ind_x_post]])
+                        dc = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+
+                        if dc > 0:
+                            orientation_matrix = \
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_post,:,:])*dc
+                        else:
+                            orientation_matrix = \
+                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dc) + \
+                                np.squeeze(self.orientation_rotation_matrices[ind_x_prev,:,:])*-dc
+
                     else:
-                        if dy > 0:
-                            orientation_matrix = \
-                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dx)*(1-dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_4,:,:])       *(1+dx)*(  dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_2,:,:])       *-dx
+                        # # best fit point is not on any of the corners or edges
+                        ind_1 = sub_to_ind(ind_x-1, ind_y-1)
+                        ind_2 = sub_to_ind(ind_x-1, ind_y  )
+                        ind_3 = sub_to_ind(ind_x  , ind_y-1)
+                        ind_4 = sub_to_ind(ind_x  , ind_y+1)
+                        ind_5 = sub_to_ind(ind_x+1, ind_y  )
+                        ind_6 = sub_to_ind(ind_x+1, ind_y+1)
+
+                        c = np.array([ \
+                            (corr_value[ind_1]+corr_value[ind_2])/2, 
+                            corr_value[ind_best_fit], 
+                            (corr_value[ind_5]+corr_value[ind_6])/2])
+                        dx = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+
+                        c = np.array([corr_value[ind_3], corr_value[ind_best_fit], corr_value[ind_4]])
+                        dy = (c[2]-c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+
+                        if dx > 0:
+                            if dy > 0:
+                                orientation_matrix = \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dx)*(1-dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_4,:,:])       *(1-dx)*(  dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_6,:,:])       *dx
+                            else:
+                                orientation_matrix = \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1-dx)*(1+dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_3,:,:])       *(1-dx)*( -dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_5,:,:])       *dx
                         else:
-                            orientation_matrix = \
-                                np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dx)*(1+dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_3,:,:])       *(1+dx)*( -dy) + \
-                                np.squeeze(self.orientation_rotation_matrices[ind_1,:,:])       *-dx
+                            if dy > 0:
+                                orientation_matrix = \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dx)*(1-dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_4,:,:])       *(1+dx)*(  dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_2,:,:])       *-dx
+                            else:
+                                orientation_matrix = \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_best_fit,:,:])*(1+dx)*(1+dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_3,:,:])       *(1+dx)*( -dy) + \
+                                    np.squeeze(self.orientation_rotation_matrices[ind_1,:,:])       *-dx
 
-        # apply in-plane rotation
-        phi = corr_in_plane_angle[ind_best_fit] # + np.pi
-        m3z = np.array([
-                [ np.cos(phi), np.sin(phi), 0],
-                [-np.sin(phi), np.cos(phi), 0],
-                [ 0,           0,           1]])
-        orientation_matrix = orientation_matrix @ m3z
+            # apply in-plane rotation
+            phi = corr_in_plane_angle[ind_best_fit] # + np.pi
+            m3z = np.array([
+                    [ np.cos(phi), np.sin(phi), 0],
+                    [-np.sin(phi), np.cos(phi), 0],
+                    [ 0,           0,           1]])
+            orientation_matrix = orientation_matrix @ m3z
 
-        #    # # Invert orientation matrix, so the it rotates experiment to reference frame
-        #    # orientation_matrix = np.linalg.inv(orientation_matrix)
-        # print(np.round(orientation_matrix * 1e3) / 1e3 )
+            # Output the orientation matrix
+            if num_matches_return == 1:
+                orientation_output = orientation_matrix
+            else:
+                orientation_output[:,:,match_ind] = orientation_matrix
 
-        if verbose:
-            zone_axis_fit = orientation_matrix[:,2]
-            temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-            temp = np.round(temp * 1e3) / 1e3
-            print('Best fit zone axis =  (' + str(temp) + ')')
+            if verbose:
+                zone_axis_fit = orientation_matrix[:,2]
+                temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+                temp = np.round(temp * 1e3) / 1e3
+                print('Best fit zone axis =  (' + str(temp) + ')')
 
+            # if needed, delete peaks for next iteration
+            if num_matches_return > 1:
+                bragg_peaks_fit = self.generate_diffraction_pattern(
+                    orientation_matrix,
+                    sigma_excitation_error=self.orientation_kernel_size)
 
+                # qr_fit = np.sqrt(
+                #     bragg_peaks_fit.data['qx']**2 +
+                #     bragg_peaks_fit.data['qy']**2)
+                # qphi_fit = np.arctan2(
+                #     bragg_peaks_fit.data['qy'],
+                #     bragg_peaks_fit.data['qx'])
+                # qx = bragg_peaks.data['qx']
+                # qy = bragg_peaks.data['qy']
+                # qr = np.sqrt(qx**2 + qy**2)
+                # qphi = np.arctan2(qy, qx)
+
+                remove = np.zeros_like(qx,dtype='bool')
+                for a0 in np.arange(qx.size):
+                    d_2 = (bragg_peaks_fit.data['qx'] - qx[a0])**2 \
+                        + (bragg_peaks_fit.data['qy'] - qy[a0])**2
+                    if np.min(d_2) < r_del_2:
+                        remove[a0] = True
+
+                # qx = qx[~np.isin(qx, remove)]
+                # qy = qy[~np.isin(qy, remove)]
+                # qr = qr[~np.isin(qr, remove)]
+                # qphi = qphi[~np.isin(qphi, remove)]
+                qx = qx[~remove]
+                qy = qy[~remove]
+                intensity = intensity[~remove]
 
 
         # plotting correlation image
@@ -988,7 +1034,7 @@ class Crystal:
             plt.show()
 
 
-        return (orientation_matrix, corr_value) if return_corr else orientation_matrix
+        return (orientation_output, corr_value) if return_corr else orientation_output
 
 
 
@@ -1018,11 +1064,14 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
+        if zone_axis.shape == (3,):
+            zone_axis = np.asarray(zone_axis)
         if zone_axis.shape == (3,3):
             proj_x_axis = zone_axis[:,0]
             zone_axis = zone_axis[:,2]
         else:
-            zone_axis = np.asarray(zone_axis)
+            proj_x_axis = zone_axis[:,0,0]
+            zone_axis = zone_axis[:,2,0]
 
         # Foil normal
         if foil_normal is None:
@@ -1037,9 +1086,10 @@ class Crystal:
             #     proj_x_axis = np.array([0,-1,0])
             # else:
             #     proj_x_axis = np.array([-1,0,0])
-            if (zone_axis == np.array([-1,0,0])).all:
+
+            if np.all(zone_axis == np.array([-1,0,0])):
                 proj_x_axis = np.array([0,-1,0])
-            elif (zone_axis == np.array([1,0,0])).all:
+            elif np.all(zone_axis == np.array([1,0,0])):
                 proj_x_axis = np.array([0,1,0])
             else:
                 proj_x_axis = np.array([-1,0,0])
@@ -1071,6 +1121,7 @@ class Crystal:
         # Diffracted peak locations
         ky_proj = np.cross(zone_axis, proj_x_axis)
         kx_proj = np.cross(ky_proj, zone_axis)
+
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
         gx_proj = np.sum(g_diff[:,keep_int] * kx_proj[:,None], axis=0)
@@ -1107,6 +1158,8 @@ def plot_diffraction_pattern(
     scale_markers=10,
     power_markers=1,
     add_labels=True,
+    shift_labels=0.08,
+    shift_marker = 0.005,
     min_marker_size = 1e-6,
     figsize=(8,8),
     returnfig=False):
@@ -1165,8 +1218,8 @@ def plot_diffraction_pattern(
 
     # Labels for all peaks
     if add_labels is True:
-        shift_labels = 0.08
-        shift_marker = 0.005
+        # shift_labels = 0.08
+        # shift_marker = 0.005
         text_params = {
             'ha': 'center',
             'va': 'center',
