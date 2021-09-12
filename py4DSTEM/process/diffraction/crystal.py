@@ -1064,9 +1064,9 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
-        if zone_axis.shape == (3,):
+        if zone_axis.ndim == 1:
             zone_axis = np.asarray(zone_axis)
-        if zone_axis.shape == (3,3):
+        elif zone_axis.shape == (3,3):
             proj_x_axis = zone_axis[:,0]
             zone_axis = zone_axis[:,2]
         else:
