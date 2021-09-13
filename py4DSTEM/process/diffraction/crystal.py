@@ -557,34 +557,78 @@ class Crystal:
     def match_orientations(
                            self,
                            bragg_peaks_array,
+                           num_matches_return = 1,
+                           return_corr=False,
                            subpixel_tilt=False,
                            ):
 
-        orientation_matrices = np.zeros((*bragg_peaks_array.shape, 3, 3),dtype=np.float64)
+        if num_matches_return == 1:
+            orientation_matrices = np.zeros((*bragg_peaks_array.shape, 3, 3),dtype=np.float64)
+            if return_corr:
+                corr_all = np.zeros(bragg_peaks_array.shape,dtype=np.float64)
+        else:
+            orientation_matrices = np.zeros((*bragg_peaks_array.shape, 3, 3, num_matches_return),dtype=np.float64)
+            if return_corr:
+                corr_all = np.zeros((*bragg_peaks_array.shape, num_matches_return),dtype=np.float64)
+
 
         for rx,ry in tqdmnd(*bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList"):
             bragg_peaks = bragg_peaks_array.get_pointlist(rx,ry)
-            orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
-                bragg_peaks,
-                subpixel_tilt=subpixel_tilt,
-                plot_corr=False,
-                plot_corr_3D=False,
-                return_corr=False,
-                verbose=False,
-                )
 
-        return orientation_matrices
+            if num_matches_return == 1:
+                if return_corr:
+                    orientation_matrices[rx,ry,:,:], corr_all[rx,ry] = self.match_single_pattern(
+                        bragg_peaks,
+                        subpixel_tilt=subpixel_tilt,
+                        plot_corr=False,
+                        plot_corr_3D=False,
+                        return_corr=True,
+                        verbose=False,
+                        )
+                else:
+                    orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
+                        bragg_peaks,
+                        subpixel_tilt=subpixel_tilt,
+                        plot_corr=False,
+                        plot_corr_3D=False,
+                        return_corr=False,
+                        verbose=False,
+                        )
+            else:
+                if return_corr:
+                    orientation_matrices[rx,ry,:,:,:], corr_all[rx,ry,:] = self.match_single_pattern(
+                        bragg_peaks,
+                        subpixel_tilt=subpixel_tilt,
+                        plot_corr=False,
+                        plot_corr_3D=False,
+                        return_corr=True,
+                        verbose=False,
+                        )
+                else:
+                    orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
+                        bragg_peaks,
+                        subpixel_tilt=subpixel_tilt,
+                        plot_corr=False,
+                        plot_corr_3D=False,
+                        return_corr=False,
+                        verbose=False,
+                        )
+
+        if return_corr:
+            return orientation_matrices, corr_all
+        else:
+            return orientation_matrices
 
     def match_single_pattern(
         self,
         bragg_peaks,
+        return_corr=False,
         num_matches_return = 1,
         tol_peak_delete = 0.1,
         subpixel_tilt=False,
         plot_corr=False,
         plot_corr_3D=False,
         figsize=(12,6),
-        return_corr=False,
         verbose=False,
         ):
         """
@@ -613,6 +657,7 @@ class Crystal:
         else:
             orientation_output = np.zeros((3,3,num_matches_return))
             r_del_2 = tol_peak_delete**2
+            corr_output = np.zeros((num_matches_return))
 
         # loop over the number of matches to return
         for match_ind in range(num_matches_return):
@@ -790,14 +835,20 @@ class Crystal:
             # Output the orientation matrix
             if num_matches_return == 1:
                 orientation_output = orientation_matrix
+                corr_output = corr_value[ind_best_fit]
+
             else:
                 orientation_output[:,:,match_ind] = orientation_matrix
+                corr_output[match_ind] = corr_value[ind_best_fit]
 
             if verbose:
                 zone_axis_fit = orientation_matrix[:,2]
                 temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
                 temp = np.round(temp * 1e3) / 1e3
-                print('Best fit zone axis =  (' + str(temp) + ')')
+                print('Best fit zone axis = (' 
+                    + str(temp) + ')' 
+                    + ' for corr value = ' 
+                    + str(np.round(corr_value[ind_best_fit] * 1e3) / 1e3))
 
             # if needed, delete peaks for next iteration
             if num_matches_return > 1:
@@ -1034,7 +1085,7 @@ class Crystal:
             plt.show()
 
 
-        return (orientation_output, corr_value) if return_corr else orientation_output
+        return (orientation_output, corr_output) if return_corr else orientation_output
 
 
 
@@ -1152,11 +1203,225 @@ class Crystal:
 
 
 
+    def plot_orientation_maps(
+        self,
+        orientation_matrices,
+        corr_all=None,
+        corr_range=np.array([0, 5]),
+        corr_normalize=True,
+        figsize=(20,5),
+        returnfig=False):
+        """
+        Generate and plot the orientation maps
+
+        Args:
+            orientation_zone_axis_range(float):     numpy array (3,3) where the 3 rows are the basis vectors for the orientation triangle
+            orientation_matrices (float):   numpy array containing orientations, with size (Rx, Ry, 3, 3) or (Rx, Ry, 3, 3, num_matches)
+            corr_all(float):                numpy array containing the correlation values to use as a mask
+            
+            returnfig (bool):               set to True to return figure and axes handles
+
+        Returns:
+            images_orientation (int):       RGB images 
+            fig, axs (handles):             Figure and axes handes for the 
+        
+        NOTE:
+            Currently, no symmetry reduction.  Therefore the x and y orientations
+            are going to be correct only for [001][011][111] orientation triangle.
+
+        """
+
+
+        # Inputs
+        # Legend size
+        leg_size = np.array([300,300],dtype='int')
+
+        # Color of the 3 corners
+        color_basis = np.array([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.7, 0.0],
+            [0.0, 0.3, 1.0],
+            ])
+
+        # Basis for fitting
+        A = self.orientation_zone_axis_range.T
+
+        # initalize image arrays
+        images_orientation = np.zeros((
+            orientation_matrices.shape[0],
+            orientation_matrices.shape[1],
+            3,3))
+
+
+        # loop over all pixels and calculate weights
+        for ax in range(orientation_matrices.shape[0]):
+            for ay in range(orientation_matrices.shape[1]):
+                orient = orientation_matrices[ax,ay,:,:]
+
+                for a0 in range(3):
+                    # w = np.linalg.solve(A,orient[:,a0])
+                    w = np.linalg.solve(
+                        A,
+                        np.sort(np.abs(orient[:,a0])))
+                    w = w / (1 - np.exp(-np.max(w)))
+                    # np.max(w)
+
+                    rgb = color_basis[0,:] * w[0] \
+                        + color_basis[1,:] * w[1] \
+                        + color_basis[2,:] * w[2]
+
+                    images_orientation[ax,ay,:,a0] = rgb
+
+        # clip range
+        images_orientation = np.clip(images_orientation,0,1)
+
+
+        # Masking
+        if corr_all is not None:
+            if corr_normalize:
+                mask = corr_all / np.mean(corr_all)
+            else:
+                mask = corr_all
+
+            mask = (mask - corr_range[0]) / (corr_range[1] - corr_range[0])
+            mask = np.clip(mask,0,1)
+
+            for a0 in range(3):
+                for a1 in range(3):
+                    images_orientation[:,:,a0,a1] *=  mask
+
+            # images_orientation *= mask
+                # vec = np.array([1,-1,1])
+                # vec = vec / np.linalg.norm(vec)
+                # wz = np.linalg.solve(A, np.sort(np.abs(vec)))
+                # print(np.round(wz*1e3)/1e3)
+
+        # print(self.orientation_zone_axis_range)
+
+
+
+
+        # Draw legend
+        x = np.linspace(0,1,leg_size[0])
+        y = np.linspace(0,1,leg_size[1])
+        ya,xa=np.meshgrid(y,x)
+        mask_legend = np.logical_and(2*xa > ya, 2*xa < 2-ya) 
+        w0 = 1-xa - 0.5*ya
+        w1 = xa - 0.5*ya
+        w2 = ya
+
+        w_scale = np.maximum(np.maximum(w0,w1),w2)
+        w_scale = 1 - np.exp(-w_scale)
+        w0 = w0 / w_scale # * mask_legend
+        w1 = w1 / w_scale # * mask_legend
+        w2 = w2 / w_scale # * mask_legend
+        
+        im_legend = np.zeros((
+            leg_size[0],
+            leg_size[1],
+            3))
+        for a0 in range(3):
+            im_legend[:,:,a0] = \
+                w0*color_basis[0,a0] + \
+                w1*color_basis[1,a0] + \
+                w2*color_basis[2,a0]
+            im_legend[:,:,a0] *= mask_legend
+            im_legend[:,:,a0] += 1-mask_legend
+        im_legend = np.clip(im_legend,0,1)
+
+        # plotting
+        fig, ax = plt.subplots(1, 4, figsize=figsize)
+
+        ax[0].imshow(images_orientation[:,:,:,0])
+        ax[1].imshow(images_orientation[:,:,:,1])
+        ax[2].imshow(images_orientation[:,:,:,2])
+
+        ax[0].set_title(
+            'Orientation of x-axis',
+            size=20)
+        ax[1].set_title(
+            'Orientation of y-axis',
+            size=20)
+        ax[2].set_title(
+            'Zone Axis',
+            size=20) 
+        ax[0].xaxis.tick_top()
+        ax[1].xaxis.tick_top()
+        ax[2].xaxis.tick_top()
+
+        # Legend
+        ax[3].imshow(im_legend,
+            aspect='auto')
+
+        label_0 = self.orientation_zone_axis_range[0,:]
+        label_0 = np.round(label_0 * 1e3) * 1e-3
+        label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+
+        label_1 = self.orientation_zone_axis_range[1,:]
+        label_1 = np.round(label_1 * 1e3) * 1e-3
+        label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+
+        label_2 = self.orientation_zone_axis_range[2,:]
+        label_2 = np.round(label_2 * 1e3) * 1e-3
+        label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+        
+
+        # ax[3].set_xticks([0])
+        # ax[3].set_xticklabels([
+        #     str(label_0)])
+        # ax[3].xaxis.tick_top()
+
+        # ax[3].axis.set_label_position("right")
+        ax[3].yaxis.tick_right()
+        ax[3].set_yticks([(leg_size[0]-1)/2])
+        ax[3].set_yticklabels([
+            str(label_2)])
+
+        ax3a = ax[3].twiny()
+        ax3b = ax[3].twiny()
+
+        ax3a.set_xticks([0])
+        ax3a.set_xticklabels([
+            str(label_0)])
+        ax3a.xaxis.tick_top()
+        ax3b.set_xticks([0])
+        ax3b.set_xticklabels([
+            str(label_1)])
+        ax3b.xaxis.tick_bottom()
+        ax[3].set_xticks([])
+
+        # ax[3].xaxis.label.set_color('none')
+        ax[3].spines['left'].set_color('none')
+        ax[3].spines['right'].set_color('none')
+        ax[3].spines['top'].set_color('none')
+        ax[3].spines['bottom'].set_color('none')
+        
+        ax3a.spines['left'].set_color('none')
+        ax3a.spines['right'].set_color('none')
+        ax3a.spines['top'].set_color('none')
+        ax3a.spines['bottom'].set_color('none')
+        
+        ax3b.spines['left'].set_color('none')
+        ax3b.spines['right'].set_color('none')
+        ax3b.spines['top'].set_color('none')
+        ax3b.spines['bottom'].set_color('none')
+        
+        ax[3].tick_params(labelsize=16)
+        ax3a.tick_params(labelsize=16)
+        ax3b.tick_params(labelsize=16)
+
+        if returnfig:
+            return images_orientation, fig, ax
+        else:
+            return images_orientation
+
+
 def plot_diffraction_pattern(
     bragg_peaks,
     bragg_peaks_compare=None,
     scale_markers=10,
     power_markers=1,
+    plot_range_kx_ky=None,
     add_labels=True,
     shift_labels=0.08,
     shift_marker = 0.005,
@@ -1171,6 +1436,7 @@ def plot_diffraction_pattern(
         bragg_peaks_compare(PointList): numpy array containing ('qx', 'qy', 'intensity')
         scale_markers (float):          size scaling for markers
         power_markers (float):          power law scaling for marks (default is 1, i.e. amplitude)
+        plot_range_kx_ky (float):       2 element numpy vector giving the plot range
         add_labels (bool):              flag to add hkl labels to peaks
         min_marker_size (float):        minimum marker size for the comparison peaks
         figsize (2 element float):      size scaling of figure axes
@@ -1212,6 +1478,11 @@ def plot_diffraction_pattern(
             s=marker_size,
             marker='+',
             facecolor='k')
+
+
+    if plot_range_kx_ky is not None:
+        ax.set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
+        ax.set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
 
     ax.invert_yaxis()
     ax.set_box_aspect(1)
