@@ -1311,6 +1311,8 @@ class Crystal:
         w2 = ya
 
         w_scale = np.maximum(np.maximum(w0,w1),w2)
+        # w_scale = w0 + w1 + w2
+        # w_scale = (w0**4 + w1**4 + w2**4)**0.25
         w_scale = 1 - np.exp(-w_scale)
         w0 = w0 / w_scale # * mask_legend
         w1 = w1 / w_scale # * mask_legend
