@@ -201,7 +201,7 @@ class Crystal:
     def orientation_plan(
         self, 
         zone_axis_range = np.array([[0,1,1],[1,1,1]]),
-        angle_step_zone_axis = 1.0,
+        angle_step_zone_axis = 2.0,
         angle_step_in_plane = 2.0,
         accel_voltage = 300e3, 
         corr_kernel_size = 0.05,
@@ -1422,6 +1422,7 @@ def plot_diffraction_pattern(
     bragg_peaks,
     bragg_peaks_compare=None,
     scale_markers=10,
+    scale_markers_compare=None,
     power_markers=1,
     plot_range_kx_ky=None,
     add_labels=True,
@@ -1437,6 +1438,7 @@ def plot_diffraction_pattern(
         bragg_peaks (PointList):        numpy array containing ('qx', 'qy', 'intensity', 'h', 'k', 'l')
         bragg_peaks_compare(PointList): numpy array containing ('qx', 'qy', 'intensity')
         scale_markers (float):          size scaling for markers
+        scale_markers_compare (float):  size scaling for markers of comparison
         power_markers (float):          power law scaling for marks (default is 1, i.e. amplitude)
         plot_range_kx_ky (float):       2 element numpy vector giving the plot range
         add_labels (bool):              flag to add hkl labels to peaks
@@ -1461,12 +1463,15 @@ def plot_diffraction_pattern(
             s=marker_size,
             facecolor='k')
     else:
+        if scale_markers_compare is None:
+            scale_markers_compare = scale_markers
+
         if power_markers == 2:
             marker_size_compare = np.maximum(
-                scale_markers*bragg_peaks_compare.data['intensity'], min_marker_size)
+                scale_markers_compare*bragg_peaks_compare.data['intensity'], min_marker_size)
         else:
             marker_size_compare = np.maximum(
-                scale_markers*(bragg_peaks_compare.data['intensity']**(power_markers/2)), min_marker_size)
+                scale_markers_compare*(bragg_peaks_compare.data['intensity']**(power_markers/2)), min_marker_size)
 
         ax.scatter(
             bragg_peaks_compare.data['qy'], 
