@@ -1208,6 +1208,7 @@ class Crystal:
         orientation_matrices,
         corr_all=None,
         corr_range=np.array([0, 5]),
+        scale_legend = None,
         corr_normalize=True,
         figsize=(20,5),
         returnfig=False):
@@ -1218,7 +1219,7 @@ class Crystal:
             orientation_zone_axis_range(float):     numpy array (3,3) where the 3 rows are the basis vectors for the orientation triangle
             orientation_matrices (float):   numpy array containing orientations, with size (Rx, Ry, 3, 3) or (Rx, Ry, 3, 3, num_matches)
             corr_all(float):                numpy array containing the correlation values to use as a mask
-            
+            scale_legend (float):           2 elements, x and y scaling of legend panel
             returnfig (bool):               set to True to return figure and axes handles
 
         Returns:
@@ -1411,6 +1412,22 @@ class Crystal:
         ax[3].tick_params(labelsize=16)
         ax3a.tick_params(labelsize=16)
         ax3b.tick_params(labelsize=16)
+
+
+        if scale_legend is not None:
+            if scale_legend[0] != 1:
+                x_range = ax[3].get_xlim()
+                x_range_new = np.array([
+                    xRange[0],
+                    xRange[1] / scale_legend[0],
+                    ])                
+                ax[3].set_xlim(x_range_new)
+                ax3a.set_xlim(x_range_new)
+                ax3b.set_xlim(x_range_new)
+
+            # y_range = ax[3].get_xlim()
+
+?            print(y_range)            
 
         if returnfig:
             return images_orientation, fig, ax
