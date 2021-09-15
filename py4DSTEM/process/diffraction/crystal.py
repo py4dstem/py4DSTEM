@@ -598,6 +598,7 @@ class Crystal:
                 if return_corr:
                     orientation_matrices[rx,ry,:,:,:], corr_all[rx,ry,:] = self.match_single_pattern(
                         bragg_peaks,
+                        num_matches_return = num_matches_return,
                         subpixel_tilt=subpixel_tilt,
                         plot_corr=False,
                         plot_corr_3D=False,
@@ -605,8 +606,9 @@ class Crystal:
                         verbose=False,
                         )
                 else:
-                    orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
+                    orientation_matrices[rx,ry,:,:,:] = self.match_single_pattern(
                         bragg_peaks,
+                        num_matches_return = num_matches_return,
                         subpixel_tilt=subpixel_tilt,
                         plot_corr=False,
                         plot_corr_3D=False,
@@ -1208,6 +1210,7 @@ class Crystal:
         orientation_matrices,
         corr_all=None,
         corr_range=np.array([0, 5]),
+        orientation_index_plot = 0,
         scale_legend = None,
         corr_normalize=True,
         figsize=(20,5),
@@ -1219,6 +1222,7 @@ class Crystal:
             orientation_zone_axis_range(float):     numpy array (3,3) where the 3 rows are the basis vectors for the orientation triangle
             orientation_matrices (float):   numpy array containing orientations, with size (Rx, Ry, 3, 3) or (Rx, Ry, 3, 3, num_matches)
             corr_all(float):                numpy array containing the correlation values to use as a mask
+            orientation_index_plot (int):   index of orientations to plot
             scale_legend (float):           2 elements, x and y scaling of legend panel
             returnfig (bool):               set to True to return figure and axes handles
 
@@ -1257,7 +1261,11 @@ class Crystal:
         # loop over all pixels and calculate weights
         for ax in range(orientation_matrices.shape[0]):
             for ay in range(orientation_matrices.shape[1]):
-                orient = orientation_matrices[ax,ay,:,:]
+                if orientation_matrices.ndim == 4:
+                    orient = orientation_matrices[ax,ay,:,:]
+                else:
+                    orient = orientation_matrices[ax,ay,:,:,orientation_index_plot]
+
 
                 for a0 in range(3):
                     # w = np.linalg.solve(A,orient[:,a0])
@@ -1279,10 +1287,17 @@ class Crystal:
 
         # Masking
         if corr_all is not None:
-            if corr_normalize:
-                mask = corr_all / np.mean(corr_all)
+            if orientation_matrices.ndim == 4:
+                if corr_normalize:
+                    mask = corr_all / np.mean(corr_all)
+                else:
+                    mask = corr_all
             else:
-                mask = corr_all
+                if corr_normalize:
+                    mask = corr_all[:,:,orientation_index_plot] / np.mean(corr_all[:,:,orientation_index_plot])
+                else:
+                    mask = corr_all[:,:,orientation_index_plot]
+                
 
             mask = (mask - corr_range[0]) / (corr_range[1] - corr_range[0])
             mask = np.clip(mask,0,1)
@@ -1415,19 +1430,27 @@ class Crystal:
 
 
         if scale_legend is not None:
-            if scale_legend[0] != 1:
-                x_range = ax[3].get_xlim()
-                x_range_new = np.array([
-                    xRange[0],
-                    xRange[1] / scale_legend[0],
-                    ])                
-                ax[3].set_xlim(x_range_new)
-                ax3a.set_xlim(x_range_new)
-                ax3b.set_xlim(x_range_new)
+            pos = ax[3].get_position()
+            pos_new = [
+                pos.x0, 
+                pos.y0 + pos.height*(1 - scale_legend[1])/2,
+                pos.width*scale_legend[0], 
+                pos.height*scale_legend[1],
+                ] 
+            ax[3].set_position(pos_new) 
+        #     if scale_legend[0] != 1:
+        #         x_range = ax[3].get_xlim()
+        #         x_range_new = np.array([
+        #             x_range[0],
+        #             x_range[1] / scale_legend[0],
+        #             ])                
+        #         ax[3].set_xlim(x_range_new)
+        #         ax3a.set_xlim(x_range_new)
+        #         ax3b.set_xlim(x_range_new)
 
-            # y_range = ax[3].get_xlim()
+        #         # y_range = ax[3].get_xlim()
 
-?            print(y_range)            
+        #         # print(y_range)            
 
         if returnfig:
             return images_orientation, fig, ax
