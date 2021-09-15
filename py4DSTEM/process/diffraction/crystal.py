@@ -1214,6 +1214,7 @@ class Crystal:
         scale_legend = None,
         corr_normalize=True,
         figsize=(20,5),
+        figlayout = np.array([1,4]),
         returnfig=False):
         """
         Generate and plot the orientation maps
@@ -1224,6 +1225,8 @@ class Crystal:
             corr_all(float):                numpy array containing the correlation values to use as a mask
             orientation_index_plot (int):   index of orientations to plot
             scale_legend (float):           2 elements, x and y scaling of legend panel
+            figlayout (int)                 2 elements giving the # of rows and columns for the figure.  
+                                            Must be [1, 4], [2, 2] or [4,1] currently.
             returnfig (bool):               set to True to return figure and axes handles
 
         Returns:
@@ -1348,7 +1351,19 @@ class Crystal:
         im_legend = np.clip(im_legend,0,1)
 
         # plotting
-        fig, ax = plt.subplots(1, 4, figsize=figsize)
+        if figlayout[0] == 1 and figlayout[1] == 4:
+            fig, ax = plt.subplots(1, 4, figsize=figsize)
+        elif figlayout[0] == 2 and figlayout[1] == 2:
+            fig, ax = plt.subplots(2, 2, figsize=figsize)
+            ax = np.array([
+                ax[0,0],
+                ax[0,1],
+                ax[1,0],
+                ax[1,1],
+                ])
+        elif figlayout[0] == 4 and figlayout[1] == 1:
+            fig, ax = plt.subplots(4, 1, figsize=figsize)
+
 
         ax[0].imshow(images_orientation[:,:,:,0])
         ax[1].imshow(images_orientation[:,:,:,1])
