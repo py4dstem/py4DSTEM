@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+import warnings
 
 try:
     import pymatgen as mg
@@ -147,16 +148,21 @@ class Crystal:
         self,
         proj_dir=[10,30],
         scale_markers=1,
+        plot_limit=None,
         figsize=(8,8),
         returnfig=False):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
         Args:
-            dir_proj (2 or 3 element numpy array):    projection direction, either [azim elev] or normal vector
-            scale_markers (float):  size scaling for markers
+            dir_proj (float):           projection direction, either [azim elev] or normal vector
+            scale_markers (float):      size scaling for markers
+            plot_limit (float):         x y z plot limits, defaul is [-1 1]*self.k_max
             figsize (2 element float):  size scaling of figure axes
-            returnfig (bool):   set to True to return figure and axes handles
+            returnfig (bool):           set to True to return figure and axes handles
+
+        Returns:
+            fig, ax                     (optional) figure and axes handles
         """
 
         if np.size(proj_dir) == 2:
@@ -186,16 +192,25 @@ class Crystal:
             s=scale_markers*self.struct_factors_int)
 
         # axes limits
-        r = self.k_max * 1.05
-        ax.axes.set_xlim3d(left=-r, right=r) 
-        ax.axes.set_ylim3d(bottom=-r, top=r) 
-        ax.axes.set_zlim3d(bottom=-r, top=r) 
+        if plot_limit is None:
+            plot_limit = self.k_max * 1.05
+
+        ax.axes.set_xlim3d(left=-plot_limit, right=plot_limit) 
+        ax.axes.set_ylim3d(bottom=-plot_limit, top=plot_limit) 
+        ax.axes.set_zlim3d(bottom=-plot_limit, top=plot_limit) 
         ax.set_box_aspect((1,1,1));
+        # ax.set_axis_off()
+        # ax.setxticklabels([])
+        # fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+
+
 
         plt.show();
 
         if returnfig:
             return fig, ax
+
+
 
 
     def orientation_plan(
@@ -553,6 +568,250 @@ class Crystal:
         #     self.orientation_shell_index, 
         #     s=5)
         # plt.show()
+
+
+
+
+    def plot_orientation_zones(
+        self,
+        proj_dir=None,
+        marker_size=20,
+        plot_limit=np.array([-1.1, 1.1]),
+        figsize=(8,8),
+        returnfig=False):
+        """
+        3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
+
+        Args:
+            dir_proj (float):           projection direction, either [azim elev] or normal vector
+                                        Default is mean vector of self.orientation_zone_axis_range rows
+            marker_size (float):        size of markers
+            plot_limit (float):         x y z plot limits, default is [0, 1.05]
+            figsize (2 element float):  size scaling of figure axes
+            returnfig (bool):           set to True to return figure and axes handles
+
+        Returns:
+            fig, ax                     (optional) figure and axes handles
+        """
+
+        if proj_dir is None:
+            proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
+
+        if np.size(proj_dir) == 2:
+            el = proj_dir[0]
+            az = proj_dir[1]
+        elif np.size(proj_dir) == 3:
+            if proj_dir[0] == 0 and proj_dir[1] == 0:
+                el = 90 * np.sign(proj_dir[2])
+            else:
+                el = np.arctan(proj_dir[2]/np.sqrt(proj_dir[0]**2 + proj_dir[1]**2)) * 180/np.pi
+            az = np.arctan2(proj_dir[1],proj_dir[0]) * 180/np.pi
+        else:
+            raise Exception('Projection direction cannot contain ' + np.size(proj_dir) + ' elements')
+
+
+        # 3D plotting
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(
+            projection='3d',
+            elev=el, 
+            azim=90-az)
+
+
+        # Sphere
+        # Make data
+        u = np.linspace(0, 2 * np.pi, 100)
+        v = np.linspace(0, np.pi, 100)
+        r = 0.95
+        x = r * np.outer(np.cos(u), np.sin(v))
+        y = r * np.outer(np.sin(u), np.sin(v))
+        z = r * np.outer(np.ones(np.size(u)), np.cos(v))
+        # Plot the surface
+        ax.plot_surface(
+            x, 
+            y, 
+            z,
+            edgecolor=None,
+            color=np.array([1.0,0.8,0.0]),
+            alpha=0.4,
+            antialiased=True,
+            )
+
+        # Lines
+        r = 0.951
+        t = np.linspace(0, 2 * np.pi, 181)
+        t0 = np.zeros((181,))
+        # z = np.linspace(-2, 2, 100)
+        # r = z**2 + 1
+        # x = r * np.sin(theta)
+        # y = r * np.cos(theta)
+
+        warnings.filterwarnings( "ignore", module = "matplotlib\..*" )
+        line_params = {
+            'linewidth': 2,
+            'alpha': 0.1,
+            'c': 'k'}
+        for phi in np.arange(0,180,5):
+            ax.plot3D(
+                np.sin(phi*np.pi/180)*np.cos(t)*r, 
+                np.sin(phi*np.pi/180)*np.sin(t)*r, 
+                np.cos(phi*np.pi/180)*r, **line_params)
+
+        # plot zone axes
+        ax.scatter(
+            xs=self.orientation_vecs[:,1], 
+            ys=self.orientation_vecs[:,0], 
+            zs=self.orientation_vecs[:,2],
+            s=marker_size)
+
+        # zone axis range labels
+        label_0 = self.orientation_zone_axis_range[0,:]
+        label_0 = np.round(label_0 * 1e3) * 1e-3
+        label_0 /= np.min(np.abs(label_0[np.abs(label_0)>0]))
+
+        label_1 = self.orientation_zone_axis_range[1,:]
+        label_1 = np.round(label_1 * 1e3) * 1e-3
+        label_1 /= np.min(np.abs(label_1[np.abs(label_1)>0]))
+
+        label_2 = self.orientation_zone_axis_range[2,:]
+        label_2 = np.round(label_2 * 1e3) * 1e-3
+        label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
+
+        inds = np.array([0,
+            self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
+            self.orientation_num_zones - 1])
+
+        ax.scatter(
+            xs=self.orientation_vecs[inds,1]*1.02, 
+            ys=self.orientation_vecs[inds,0]*1.02, 
+            zs=self.orientation_vecs[inds,2]*1.02,
+            s=marker_size*8,
+            linewidth=2,
+            marker='o',
+            edgecolors='r',
+            alpha=1,
+            zorder=10)
+
+        text_scale_pos = 1.2
+        text_params = {
+            'va': 'center',
+            'family': 'sans-serif',
+            'fontweight': 'normal',
+            'color': 'k',
+            'size': 20}
+        # 'ha': 'center',
+
+        ax.text(
+            self.orientation_vecs[inds[0],1]*text_scale_pos, 
+            self.orientation_vecs[inds[0],0]*text_scale_pos, 
+            self.orientation_vecs[inds[0],2]*text_scale_pos, 
+            label_0, 
+            None,
+            zorder=11,
+            ha='center',
+            **text_params)
+        ax.text(
+            self.orientation_vecs[inds[1],1]*text_scale_pos, 
+            self.orientation_vecs[inds[1],0]*text_scale_pos, 
+            self.orientation_vecs[inds[1],2]*text_scale_pos, 
+            label_1, 
+            None,
+            zorder=12,
+            ha='right',
+            **text_params)
+        ax.text(
+            self.orientation_vecs[inds[2],1]*text_scale_pos, 
+            self.orientation_vecs[inds[2],0]*text_scale_pos, 
+            self.orientation_vecs[inds[2],2]*text_scale_pos, 
+            label_2, 
+            None,
+            zorder=13,
+            ha='left',
+            **text_params)
+
+        # ax.scatter(
+        #     xs=self.g_vec_all[0,:], 
+        #     ys=self.g_vec_all[1,:], 
+        #     zs=self.g_vec_all[2,:],
+        #     s=scale_markers*self.struct_factors_int)
+
+        # axes limits
+        ax.axes.set_xlim3d(left=plot_limit[0], right=plot_limit[1]) 
+        ax.axes.set_ylim3d(bottom=plot_limit[0], top=plot_limit[1]) 
+        ax.axes.set_zlim3d(bottom=plot_limit[0], top=plot_limit[1]) 
+        ax.set_box_aspect((1,1,1));
+        ax.set_axis_off()
+        # ax.setxticklabels([])
+        # fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        # plt.gca().invert_yaxis()
+        ax.view_init(elev=el, azim=90-az)
+
+        plt.show();
+
+        if returnfig:
+            return fig, ax
+
+
+    def plot_orientation_plan(
+        self,
+        index_plot=0,
+        figsize=(10,5),
+        returnfig=False):
+        """
+        3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
+
+        Args:
+            index_plot (int):           which zone axis slice to plot
+            figsize (2 element float):  size scaling of figure axes
+            returnfig (bool):           set to True to return figure and axes handles
+
+        Returns:
+            fig, ax                     (optional) figure and axes handles
+        """
+
+        fig, ax = plt.subplots(1,2,figsize=figsize)
+
+        # Generate and plot diffraction pattern
+        bragg_peaks = self.generate_diffraction_pattern(
+            zone_axis = self.orientation_vecs[index_plot,:],
+            sigma_excitation_error=0.02)
+        plot_diffraction_pattern(
+            bragg_peaks,
+            figsize=(figsize[1],figsize[1]),
+            plot_range_kx_ky=np.array([-1,1])*self.k_max*1.2,
+            scale_markers=4,
+            shift_labels=0.10,
+            input_fig_handle=[fig, ax])
+
+
+        # Plot orientation plan
+        im_plot = np.real(np.fft.ifft(self.orientation_ref[index_plot,:,:],axis=1)).astype('float')
+        cmax = np.max(im_plot)
+        im_plot = im_plot / cmax 
+
+        # coordinates
+        x = self.orientation_gamma * 180 / np.pi
+        y = np.arange(np.size(self.orientation_shell_radii))
+        dx = (x[1]-x[0])/2.
+        dy = (y[1]-y[0])/2.
+        extent = [x[0]-dx, x[-1]+dx, y[-1]+dy, y[0]-dy]
+
+        im = ax[1].imshow(
+            im_plot,
+            cmap='viridis',
+            vmin=0.0,
+            vmax=1.0,
+            extent=extent,
+            aspect='auto',
+            interpolation='none')
+        # fig.colorbar(im)
+
+        # plt.tight_layout()
+        plt.show();
+
+        if returnfig:
+            return fig, ax
+
 
     def match_orientations(
                            self,
@@ -1485,7 +1744,8 @@ def plot_diffraction_pattern(
     shift_marker = 0.005,
     min_marker_size = 1e-6,
     figsize=(8,8),
-    returnfig=False):
+    returnfig=False,
+    input_fig_handle=None):
     """
     2D scatter plot of the Bragg peaks
 
@@ -1503,8 +1763,14 @@ def plot_diffraction_pattern(
     """
 
     # 2D plotting
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot()
+    if input_fig_handle is None:
+        # fig = plt.figure(figsize=figsize)
+        # ax = fig.add_subplot()
+        fig, ax = plt.subplots(1,1,figsize=figsize)
+    else:
+        fig = input_fig_handle[0]
+        ax = input_fig_handle[1]
+        print(ax)
 
     if power_markers == 2:
         marker_size = scale_markers*bragg_peaks.data['intensity']
@@ -1512,7 +1778,7 @@ def plot_diffraction_pattern(
         marker_size = scale_markers*(bragg_peaks.data['intensity']**(power_markers/2))
 
     if bragg_peaks_compare is None:
-        ax.scatter(
+        ax[0].scatter(
             bragg_peaks.data['qy'], 
             bragg_peaks.data['qx'], 
             s=marker_size,
@@ -1528,13 +1794,13 @@ def plot_diffraction_pattern(
             marker_size_compare = np.maximum(
                 scale_markers_compare*(bragg_peaks_compare.data['intensity']**(power_markers/2)), min_marker_size)
 
-        ax.scatter(
+        ax[0].scatter(
             bragg_peaks_compare.data['qy'], 
             bragg_peaks_compare.data['qx'], 
             s=marker_size_compare,
             marker='o',
             facecolor=[0.0,0.7,1.0])
-        ax.scatter(
+        ax[0].scatter(
             bragg_peaks.data['qy'], 
             bragg_peaks.data['qx'], 
             s=marker_size,
@@ -1543,11 +1809,11 @@ def plot_diffraction_pattern(
 
 
     if plot_range_kx_ky is not None:
-        ax.set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
-        ax.set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
+        ax[0].set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
+        ax[0].set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
 
-    ax.invert_yaxis()
-    ax.set_box_aspect(1)
+    ax[0].invert_yaxis()
+    ax[0].set_box_aspect(1)
 
     # Labels for all peaks
     if add_labels is True:
@@ -1584,26 +1850,26 @@ def plot_diffraction_pattern(
             if h >= 0:
                 if k >= 0:
                     if l >= 0:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + str(k) + ' ' + str(l),
                             **text_params)  
                     else:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
                             **text_params)  
                 else:
                     if l >= 0:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
                             **text_params)  
                     else:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
@@ -1611,26 +1877,26 @@ def plot_diffraction_pattern(
             else:
                 if k >= 0:
                     if l >= 0:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + str(l),
                             **text_params)  
                     else:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
                             **text_params)  
                 else:
                     if l >= 0:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
                             **text_params)  
                     else:
-                        plt.text( \
+                        ax[0].text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
@@ -1658,7 +1924,8 @@ def plot_diffraction_pattern(
     # ax.axes.set_ylim3d(bottom=-r, top=r) 
     # ax.axes.set_zlim3d(bottom=-r, top=r) 
 
-    plt.show()
+    if input_fig_handle is None:
+        plt.show()
 
     if returnfig:
         return fig, ax
