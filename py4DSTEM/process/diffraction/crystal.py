@@ -219,7 +219,7 @@ class Crystal:
         angle_step_zone_axis = 2.0,
         angle_step_in_plane = 2.0,
         accel_voltage = 300e3, 
-        corr_kernel_size = 0.05,
+        corr_kernel_size = 0.08,
         tol_distance = 0.01,
         plot_corr_norm = False,
         figsize = (6,6),
