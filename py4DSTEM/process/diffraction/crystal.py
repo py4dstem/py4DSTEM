@@ -483,6 +483,8 @@ class Crystal:
         #     vmax=1.0)
         # fig.colorbar(im)
 
+        # Maximum value
+        self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
         # Fourier domain along angular axis
         # self.orientation_ref = np.fft.fft(self.orientation_ref)
@@ -755,8 +757,9 @@ class Crystal:
     def plot_orientation_plan(
         self,
         index_plot=0,
-        figsize=(10,5),
-        returnfig=False):
+        figsize=(14,6),
+        returnfig=False
+        ):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
@@ -772,22 +775,21 @@ class Crystal:
         fig, ax = plt.subplots(1,2,figsize=figsize)
 
         # Generate and plot diffraction pattern
+        k_x_y_range = np.array([1,1])*self.k_max*1.2
         bragg_peaks = self.generate_diffraction_pattern(
             zone_axis = self.orientation_vecs[index_plot,:],
-            sigma_excitation_error=0.02)
+            sigma_excitation_error=self.orientation_kernel_size/3)
         plot_diffraction_pattern(
             bragg_peaks,
             figsize=(figsize[1],figsize[1]),
-            plot_range_kx_ky=np.array([-1,1])*self.k_max*1.2,
-            scale_markers=4,
+            plot_range_kx_ky=k_x_y_range,
+            scale_markers=10,
             shift_labels=0.10,
             input_fig_handle=[fig, ax])
 
-
         # Plot orientation plan
         im_plot = np.real(np.fft.ifft(self.orientation_ref[index_plot,:,:],axis=1)).astype('float')
-        cmax = np.max(im_plot)
-        im_plot = im_plot / cmax 
+        im_plot = im_plot / self.orientation_ref_max
 
         # coordinates
         x = self.orientation_gamma * 180 / np.pi
@@ -798,16 +800,41 @@ class Crystal:
 
         im = ax[1].imshow(
             im_plot,
-            cmap='viridis',
+            cmap='inferno',
             vmin=0.0,
-            vmax=1.0,
+            vmax=0.5,
             extent=extent,
             aspect='auto',
             interpolation='none')
-        # fig.colorbar(im)
+        fig.colorbar(im)
+        ax[1].xaxis.tick_top()
+        ax[1].set_xticks(np.arange(0,360+90,90))
+        ax[1].set_ylabel(
+            'Radial Index',
+            size=20)
+
+        # Add text label 
+        zone_axis_fit = self.orientation_vecs[index_plot,:]
+        zone_axis_fit = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+        sub = np.abs(zone_axis_fit) > 0
+        scale = np.min(np.abs(zone_axis_fit[sub]))
+        if scale > 0.14:
+            zone_axis_fit = zone_axis_fit \
+                / scale
+
+        temp = np.round(zone_axis_fit * 1e2) / 1e2
+        ax[0].text( \
+            -k_x_y_range[0]*0.95,
+            -k_x_y_range[1]*0.95,
+            '[' + 
+            str(temp[0]) + ', ' +
+            str(temp[1]) + ', ' +
+            str(temp[2]) + ']',
+            size=18,
+            va='top') 
 
         # plt.tight_layout()
-        plt.show();
+        plt.show()
 
         if returnfig:
             return fig, ax
@@ -883,13 +910,14 @@ class Crystal:
     def match_single_pattern(
         self,
         bragg_peaks,
-        return_corr=False,
         num_matches_return = 1,
         tol_peak_delete = 0.1,
         subpixel_tilt=False,
         plot_corr=False,
         plot_corr_3D=False,
-        figsize=(12,6),
+        return_corr=False,
+        returnfig=False,
+        figsize=(12,4),
         verbose=False,
         ):
         """
@@ -1108,7 +1136,7 @@ class Crystal:
                 temp = np.round(temp * 1e3) / 1e3
                 print('Best fit zone axis = (' 
                     + str(temp) + ')' 
-                    + ' for corr value = ' 
+                    + ' with corr value = ' 
                     + str(np.round(corr_value[ind_best_fit] * 1e3) / 1e3))
 
             # if needed, delete peaks for next iteration
@@ -1187,7 +1215,6 @@ class Crystal:
                 inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
                 im_corr_zone_axis.ravel()[inds_1D] = corr_value[sub]
 
-
                 im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
                 ax[0].imshow(
                     im_plot,
@@ -1230,17 +1257,43 @@ class Crystal:
                 cmax = np.max(corr_value)
 
                 im_corr_zone_axis = np.zeros((self.orientation_zone_axis_steps+1, self.orientation_zone_axis_steps+1))
+                im_mask = np.ones((
+                    self.orientation_zone_axis_steps+1, 
+                    self.orientation_zone_axis_steps+1),
+                    dtype='bool')
+
+
                 x_inds = (self.orientation_inds[:,0] - self.orientation_inds[:,1]).astype('int')
                 y_inds = self.orientation_inds[:,1].astype('int')
                 inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
                 im_corr_zone_axis.ravel()[inds_1D] = corr_value
+                im_mask.ravel()[inds_1D] = False
 
-                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                # im_plot = np.ma.masked_where(
+                #     (im_corr_zone_axis - cmin) / (cmax - cmin).
+                #     im_mask)
+                im_plot = np.ma.masked_array(
+                     (im_corr_zone_axis - cmin) / (cmax - cmin),
+                     mask=im_mask)
+
                 ax[0].imshow(
                     im_plot,
                     cmap='viridis',
                     vmin=0.0,
                     vmax=1.0)
+                ax[0].spines['left'].set_color('none')
+                ax[0].spines['right'].set_color('none')
+                ax[0].spines['top'].set_color('none')
+                ax[0].spines['bottom'].set_color('none')
+
+
+                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                # ax[0].imshow(
+                #     im_plot,
+                #     cmap='viridis',
+                #     vmin=0.0,
+                #     vmax=1.0)
 
                 inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
                 ax[0].scatter(inds_plot[1],inds_plot[0], s=120, linewidth = 2, facecolors='none', edgecolors='r')
@@ -1260,19 +1313,23 @@ class Crystal:
                 ax[0].set_xticks([0, self.orientation_zone_axis_steps])
                 ax[0].set_xticklabels([
                     str(label_0),
-                    str(label_2)])
+                    str(label_2)],
+                    size=14)
                 ax[0].xaxis.tick_top()
 
                 ax[0].set_yticks([self.orientation_zone_axis_steps])
                 ax[0].set_yticklabels([
-                    str(label_1)])
+                    str(label_1)],
+                    size=14)
 
             # In-plane rotation
             ax[1].plot(
                 self.orientation_gamma * 180/np.pi, 
                 (np.squeeze(corr_full[ind_best_fit,:]) - cmin)/(cmax - cmin));
-            ax[1].set_xlabel('In-plane rotation angle [deg]')
-            ax[1].set_ylabel('Correlation Signal for maximum zone axis')
+            ax[1].set_xlabel('In-plane rotation angle [deg]',
+                size=16)
+            ax[1].set_ylabel('Corr. of Best Fit Zone Axis',
+                size=16)
             ax[1].set_ylim([0,1.01])
             # ax[1].set_ylim([0.99,1.01])
 
@@ -1346,7 +1403,19 @@ class Crystal:
             plt.show()
 
 
-        return (orientation_output, corr_output) if return_corr else orientation_output
+        if return_corr:
+            if returnfig:
+                return orientation_output, corr_output, fig, ax
+            else:
+                return orientation_output, corr_output
+        else:
+            if returnfig:
+                return orientation_output, fig, ax
+            else:
+                return orientation_output
+
+        returnfig
+        # return (orientation_output, corr_output) if return_corr else orientation_output
 
 
 
@@ -1769,8 +1838,8 @@ def plot_diffraction_pattern(
         fig, ax = plt.subplots(1,1,figsize=figsize)
     else:
         fig = input_fig_handle[0]
-        ax = input_fig_handle[1]
-        print(ax)
+        ax_parent = input_fig_handle[1]
+        ax = ax_parent[0]
 
     if power_markers == 2:
         marker_size = scale_markers*bragg_peaks.data['intensity']
@@ -1778,7 +1847,7 @@ def plot_diffraction_pattern(
         marker_size = scale_markers*(bragg_peaks.data['intensity']**(power_markers/2))
 
     if bragg_peaks_compare is None:
-        ax[0].scatter(
+        ax.scatter(
             bragg_peaks.data['qy'], 
             bragg_peaks.data['qx'], 
             s=marker_size,
@@ -1794,13 +1863,13 @@ def plot_diffraction_pattern(
             marker_size_compare = np.maximum(
                 scale_markers_compare*(bragg_peaks_compare.data['intensity']**(power_markers/2)), min_marker_size)
 
-        ax[0].scatter(
+        ax.scatter(
             bragg_peaks_compare.data['qy'], 
             bragg_peaks_compare.data['qx'], 
             s=marker_size_compare,
             marker='o',
             facecolor=[0.0,0.7,1.0])
-        ax[0].scatter(
+        ax.scatter(
             bragg_peaks.data['qy'], 
             bragg_peaks.data['qx'], 
             s=marker_size,
@@ -1809,11 +1878,14 @@ def plot_diffraction_pattern(
 
 
     if plot_range_kx_ky is not None:
-        ax[0].set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
-        ax[0].set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
+        ax.set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
+        ax.set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
 
-    ax[0].invert_yaxis()
-    ax[0].set_box_aspect(1)
+    # ax[0].axis["x"].set_axislabel_direction("+")
+    # ax[0].invert_xaxis()
+    ax.invert_yaxis()
+    ax.set_box_aspect(1)
+    ax.xaxis.tick_top()
 
     # Labels for all peaks
     if add_labels is True:
@@ -1850,26 +1922,26 @@ def plot_diffraction_pattern(
             if h >= 0:
                 if k >= 0:
                     if l >= 0:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + str(k) + ' ' + str(l),
                             **text_params)  
                     else:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
                             **text_params)  
                 else:
                     if l >= 0:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
                             **text_params)  
                     else:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
@@ -1877,26 +1949,26 @@ def plot_diffraction_pattern(
             else:
                 if k >= 0:
                     if l >= 0:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + str(l),
                             **text_params)  
                     else:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
                             **text_params)  
                 else:
                     if l >= 0:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
                             **text_params)  
                     else:
-                        ax[0].text( \
+                        ax.text( \
                             bragg_peaks.data['qy'][a0],
                             bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
                             '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
