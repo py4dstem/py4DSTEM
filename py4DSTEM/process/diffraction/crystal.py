@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from mpl_toolkits.mplot3d import Axes3D, art3d
 import warnings
 
 try:
@@ -54,8 +55,8 @@ class Crystal:
             else structure
         )
         self.struc_dict = self.structure.as_dict()
-        self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix.T
-        self.lat_real = self.structure.lattice.matrix.T
+        self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix
+        self.lat_real = self.structure.lattice.matrix
 
         # Initialize Crystal
         self.positions = self.structure.frac_coords   #: fractional atomic coordinates
@@ -144,6 +145,144 @@ class Crystal:
         # Structure factor intensities
         self.struct_factors_int = np.abs(self.struct_factors)**2 
 
+
+
+
+    def plot_structure(
+        self,
+        proj_dir=[10,30],
+        size_marker=400,
+        tol_distance=0.001,
+        plot_limit=None,
+        figsize=(8,8),
+        returnfig=False):
+        """
+        Quick 3D plot of the atomic structure
+
+        Args:
+            proj_dir (float):           projection direction, either [azim elev] or normal vector
+            scale_markers (float):      size scaling for markers
+            tol_distance (float):       tolerance for repeating atoms on edges on cell boundaries
+            plot_limit (float):         3x2 numpy array containing x y z plot limits in rows.
+                                        Default is 1.1* unit cell dimensions
+            figsize (2 element float):  size scaling of figure axes
+            returnfig (bool):           set to True to return figure and axes handles
+
+        Returns:
+            fig, ax                     (optional) figure and axes handles
+        """
+
+
+        # unit cell vectors
+        u = self.lat_real[0,:]
+        v = self.lat_real[1,:]
+        w = self.lat_real[2,:]
+
+        # atomic identities
+        ID = self.numbers
+
+        # Fractional atomic coordinates
+        pos = self.positions
+        # x tile
+        sub = pos[:,0] < tol_distance
+        pos = np.vstack([pos,pos[sub,:]+np.array([1,0,0])])
+        ID = np.hstack([ID,ID[sub]])
+        # y tile
+        sub = pos[:,1] < tol_distance
+        pos = np.vstack([pos,pos[sub,:]+np.array([0,1,0])])
+        ID = np.hstack([ID,ID[sub]])
+        # z tile
+        sub = pos[:,2] < tol_distance
+        pos = np.vstack([pos,pos[sub,:]+np.array([0,0,1])])
+        ID = np.hstack([ID,ID[sub]])
+
+        # Cartesian atomic positions
+        xyz = pos @ self.lat_real
+
+        # projection direction of the plot
+        if np.size(proj_dir) == 2:
+            el = proj_dir[0]
+            az = proj_dir[1]
+        elif np.size(proj_dir) == 3:
+            if proj_dir[0] == 0 and proj_dir[1] == 0:
+                el = 90 * np.sign(proj_dir[2])
+            else:
+                el = np.arctan(proj_dir[2]/np.sqrt(proj_dir[0]**2 + proj_dir[1]**2)) * 180/np.pi
+            az = np.arctan2(proj_dir[1],proj_dir[0]) * 180/np.pi
+        else:
+            raise Exception('Projection direction cannot contain ' + np.size(proj_dir) + ' elements')
+
+
+
+        # 3D plotting
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(
+            projection='3d',
+            elev=el, 
+            azim=az)
+
+        # unit cell
+        p = np.vstack([
+            [0,0,0],
+            u,
+            u+v,
+            v,
+            w,
+            u+w,
+            u+v+w,
+            v+w])
+        f = np.array([
+            [0,1,2,3],
+            [4,5,6,7],
+            [0,1,5,4],
+            [2,3,7,6],
+            [0,3,7,4],
+            [1,2,6,5]]);
+
+        # ax.plot3D(xline, yline, zline, 'gray')
+        pc = art3d.Poly3DCollection(
+            p[f], 
+            facecolors=[0, 0.7, 1], 
+            edgecolor=[0,0,0],
+            linewidth=2,
+            alpha=0.2,
+            )
+        ax.add_collection(pc)
+
+        # atoms
+        ID_all = np.unique(ID)
+        for ID_plot in ID_all:
+            sub = ID == ID_plot
+            ax.scatter(
+                xs=xyz[sub,1], 
+                ys=xyz[sub,0], 
+                zs=xyz[sub,2],
+                s=size_marker,
+                linewidth=2,
+                color=atomic_colors(ID_plot),
+                edgecolor=[0,0,0])
+
+        # plot limit
+        if plot_limit is None:
+            plot_limit = np.array([
+                [np.min(p[:,0]), np.max(p[:,0])],
+                [np.min(p[:,1]), np.max(p[:,1])],
+                [np.min(p[:,2]), np.max(p[:,2])],
+                ])
+            plot_limit = plot_limit * 1.1
+
+        ax.axes.set_xlim3d(left=plot_limit[0,0], right=plot_limit[0,1]) 
+        ax.axes.set_ylim3d(bottom=plot_limit[1,0], top=plot_limit[1,1]) 
+        ax.axes.set_zlim3d(bottom=plot_limit[2,0], top=plot_limit[2,1]) 
+        ax.set_box_aspect((1,1,1));
+        ax.set_axis_off()
+
+        plt.show();
+
+        if returnfig:
+            return fig, ax
+
+
     def plot_structure_factors(
         self,
         proj_dir=[10,30],
@@ -157,7 +296,7 @@ class Crystal:
         Args:
             dir_proj (float):           projection direction, either [azim elev] or normal vector
             scale_markers (float):      size scaling for markers
-            plot_limit (float):         x y z plot limits, defaul is [-1 1]*self.k_max
+            plot_limit (float):         x y z plot limits, default is [-1 1]*self.k_max
             figsize (2 element float):  size scaling of figure axes
             returnfig (bool):           set to True to return figure and axes handles
 
@@ -1539,6 +1678,7 @@ class Crystal:
         corr_all=None,
         corr_range=np.array([0, 5]),
         orientation_index_plot = 0,
+        orientation_rotate_xy=None,
         scale_legend = None,
         corr_normalize=True,
         figsize=(20,5),
@@ -1552,6 +1692,7 @@ class Crystal:
             orientation_matrices (float):   numpy array containing orientations, with size (Rx, Ry, 3, 3) or (Rx, Ry, 3, 3, num_matches)
             corr_all(float):                numpy array containing the correlation values to use as a mask
             orientation_index_plot (int):   index of orientations to plot
+            orientation_rotate_xy (float):  rotation in radians for the xy directions of plots
             scale_legend (float):           2 elements, x and y scaling of legend panel
             figlayout (int)                 2 elements giving the # of rows and columns for the figure.  
                                             Must be [1, 4], [2, 2] or [4,1] currently.
@@ -1588,6 +1729,14 @@ class Crystal:
             orientation_matrices.shape[1],
             3,3))
 
+        # in-plane rotation array if needed
+        if orientation_rotate_xy is not None:
+            m = np.array([
+                [np.cos(orientation_rotate_xy), -np.sin(orientation_rotate_xy), 0],
+                [np.sin(orientation_rotate_xy), np.cos(orientation_rotate_xy), 0],
+                [0,0,1]])
+
+
 
         # loop over all pixels and calculate weights
         for ax in range(orientation_matrices.shape[0]):
@@ -1596,6 +1745,10 @@ class Crystal:
                     orient = orientation_matrices[ax,ay,:,:]
                 else:
                     orient = orientation_matrices[ax,ay,:,:,orientation_index_plot]
+
+                # Rotate in-plane if needed
+                if orientation_rotate_xy is not None:
+                    orient = m @ orient
 
 
                 for a0 in range(3):
@@ -2016,7 +2169,12 @@ def axisEqual3D(ax):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
 
-
+# def atomic_colors(ID):
+def atomic_colors(ID):
+    return {
+        1: np.array([1,0,0]),
+        79: np.array([1.0,0.7,0.0]),
+    }.get(ID, np.array([0.0,0.0,0.0]))
 
 
 # def cdesign(degree):
