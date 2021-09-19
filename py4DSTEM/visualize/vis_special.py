@@ -94,11 +94,9 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     fit = double_sided_gaussian(p_ellipse, qxx, qyy)
 
     # Show
-    fig,ax = show(dp,scaling=scaling,returnfig=True,cmap=cmap_data,
-                  mask=np.logical_not(mask),mask_color='empty',**kwargs)
-    vmin,vmax = show(dp,scaling=scaling,mask=np.logical_not(mask),returnclipvals=True,
-                     **kwargs)
-    #vmin,vmax = 3.237,12.416
+    (fig,ax),(vmin,vmax) = show(dp,scaling=scaling,cmap=cmap_data,
+                  mask=np.logical_not(mask),mask_color='empty',
+                  returnfig=True,returnclipvals=True,**kwargs)
     show(dp,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,
          cmap=cmap_fit,mask=mask,mask_color='empty',**kwargs)
     if fitborder:
