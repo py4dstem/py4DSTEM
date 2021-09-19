@@ -315,9 +315,11 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Create colormap with mask_color for bad values
-    # TKTKTK -- EDITS CONTINUE HERE
-    cm = copy(plt.cm.get_cmap(cmap))
-    cm.set_bad(color=mask_color)
+    cm = copy(plt.cm.get_cmap(cmap))  # why are we making a copy here? (bhs20210917)
+    if mask_color=='empty':
+        cm.set_bad(alpha=0)
+    else:
+        cm.set_bad(color=mask_color)
 
     # Plot the image
     if not hist:
