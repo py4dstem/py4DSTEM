@@ -299,8 +299,6 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         vmax = c+m
     else:
         raise Exception
-    if returnclipvals:
-        return vmin,vmax
 
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
@@ -475,15 +473,18 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
 
     # Show or return
-    if returnfig:
-        return fig,ax
-    elif returncax:
-        return cax
-    elif figax is not None:
+    returnval = []
+    if returnfig: returnval.append((fig,ax))
+    if returnclipvals: returnval.append((vmin,vmax))
+    if returncax: returnval.append(cax)
+    if len(returnval)==0:
+        if figax is None:
+            plt.show()
         return
+    elif(len(returnval))==1:
+        return returnval[0]
     else:
-        plt.show()
-        return
+        return tuple(returnval)
 
 def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
                                         returnhist=False, returnfig=False):
