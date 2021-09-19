@@ -260,17 +260,19 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
-        if min != None:
-            if min > 0: min = np.log(min)
-            else: min = np.min(_ar[_mask])
-        if max != None: max = np.log(max)
+        if clipvals == 'manual':
+            if min != None:
+                if min > 0: min = np.log(min)
+                else: min = np.min(_ar[_mask])
+            if max != None: max = np.log(max)
     elif scaling == 'power':
         _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar.data[_mask],power)
         _ar[~_mask] = np.nan
-        if min != None: min = np.power(min,power)
-        if max != None: max = np.power(max,power)
+        if clipvals == 'manual':
+            if min != None: min = np.power(min,power)
+            if max != None: max = np.power(max,power)
     else:
         raise Exception
 
