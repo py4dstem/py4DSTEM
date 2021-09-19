@@ -223,7 +223,11 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             Wherever mask==True, plot the pixel normally, and where ``mask==False``,
             pixel values are set to mask_color. If hist==True, ignore these values in the
             histogram. If ``mask_alpha`` is specified, the mask is blended with the array
-            underneath, with 0 yielding an opaque mask and 1 yielding a fully transparent mask. 
+            underneath, with 0 yielding an opaque mask and 1 yielding a fully transparent
+            mask. If ``mask_color`` is set to ``'empty'`` instead of a matplotlib.color,
+            nothing is done to pixels where ``mask==False``, allowing overlaying multiple
+            arrays in different regions of an image by invoking the ``figax` kwarg over
+            multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
@@ -236,7 +240,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
         assert mask.shape == ar.shape
-        assert is_color_like(mask_color)
+        assert is_color_like(mask_color) or mask_color=='empty'
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
@@ -274,7 +278,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             max = np.power(max,power)
     else:
         raise Exception
-    
+
     _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
@@ -309,8 +313,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Create the masked array applying the user mask (this is done after the 
     # vmin and vmax are determined so the mask doesn't affect those)
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
-    
+
     # Create colormap with mask_color for bad values
+    # TKTKTK -- EDITS CONTINUE HERE
     cm = copy(plt.cm.get_cmap(cmap))
     cm.set_bad(color=mask_color)
 
