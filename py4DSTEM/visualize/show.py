@@ -313,7 +313,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Create colormap with mask_color for bad values
-    cm = copy(plt.cm.get_cmap(cmap))  # why are we making a copy here? (bhs20210917)
+    cm = copy(plt.cm.get_cmap(cmap))
     if mask_color=='empty':
         cm.set_bad(alpha=0)
     else:
