@@ -93,19 +93,20 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     # Get fit data
     fit = double_sided_gaussian(p_ellipse, qxx, qyy)
 
-    # Make masked arrays
-    data_ma = np.ma.array(data=dp, mask=mask)
-    fit_ma = np.ma.array(data=fit, mask=mask==False)
-
     # Show
-    fig,ax = show(data_ma,scaling=scaling,returnfig=True,cmap=cmap_data,**kwargs)
-    vmin,vmax = show(data_ma,scaling=scaling,returnclipvals=True,**kwargs)
-    show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,**kwargs)
+    fig,ax = show(dp,scaling=scaling,returnfig=True,cmap=cmap_data,
+                  mask=np.logical_not(mask),mask_color='empty',**kwargs)
+    vmin,vmax = show(dp,scaling=scaling,mask=np.logical_not(mask),returnclipvals=True,
+                     **kwargs)
+    #vmin,vmax = 3.237,12.416
+    show(dp,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,
+         cmap=cmap_fit,mask=mask,mask_color='empty',**kwargs)
     if fitborder:
         _thetas = np.roll(thetas,-1)
         for i in range(N):
-            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),np.degrees(_thetas[2*i+1]),
-                               width=qmax-qmin,fill=None,color=fitbordercolor,lw=fitborderlw))
+            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),
+                         np.degrees(_thetas[2*i+1]),width=qmax-qmin,fill=None,
+                         color=fitbordercolor,lw=fitborderlw))
 
     if not returnfig:
         plt.show()
