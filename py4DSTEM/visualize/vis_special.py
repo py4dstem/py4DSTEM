@@ -4,12 +4,12 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 from . import show
-from .overlay import add_pointlabels,add_vector,add_bragg_index_labels
+from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..io import PointList
 from ..process.utils import get_voronoi_vertices
-from ..process.calibration import double_sided_gaussian
+from ..process.calibration import double_sided_gaussian, convert_ellipse_params
 from ..process.latticevectors import get_selected_lattice_vectors
 
 def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
@@ -46,7 +46,8 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
 
 def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
-                            scaling='log',returnfig=False,**kwargs):
+                            scaling='log',ellipse=False,ellipse_color='r',
+                            ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
     the data and the fit in a pinwheel pattern.
@@ -66,6 +67,7 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
         fitborderlw     (number) linewidth of the fitborder
         scaling         (str) the normal scaling param -- see docstring for
                         visualize.show
+        ellipse         (bool) if True, overlay an ellipse
         returnfig       (bool) if True, returns the figure
     """
     assert(len(p_ellipse)==11)
@@ -105,6 +107,14 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
             ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),
                          np.degrees(_thetas[2*i+1]),width=qmax-qmin,fill=None,
                          color=fitbordercolor,lw=fitborderlw))
+
+    # Add ellipse overlay
+    if ellipse:
+        R,e,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
+        R *= p_ellipse[6]
+        ellipse={'center':(qx0,qy0),'a':R,'e':e,'theta':theta,
+                 'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
+        add_ellipses(ax,ellipse)
 
     if not returnfig:
         plt.show()
