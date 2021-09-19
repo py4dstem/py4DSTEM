@@ -101,7 +101,6 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     fig,ax = show(data_ma,scaling=scaling,returnfig=True,cmap=cmap_data,**kwargs)
     vmin,vmax = show(data_ma,scaling=scaling,returnclipvals=True,**kwargs)
     show(fit_ma,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,cmap=cmap_fit,**kwargs)
-
     if fitborder:
         _thetas = np.roll(thetas,-1)
         for i in range(N):
