@@ -38,7 +38,7 @@ def read_v0_12(fp, **kwargs):
                                     called splitext(fp)[0]+'.log'.
         mem         str             Only used if a single DataCube is loaded. In this case, mem
                                     specifies how the data should be stored; must be "RAM"
-                                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+                                    or "MEMMAP" or "DASK". See docstring for py4DSTEM.file.io.read. Default
                                     is "RAM".
         binfactor   int             Only used if a single DataCube is loaded. In this case,
                                     a binfactor of > 1 causes the data to be binned by this amount
