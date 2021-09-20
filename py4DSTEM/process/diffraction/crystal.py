@@ -150,21 +150,23 @@ class Crystal:
 
     def plot_structure(
         self,
-        proj_dir=[10,30],
+        proj_dir=[3,2,1],
         size_marker=400,
         tol_distance=0.001,
         plot_limit=None,
+        show_axes=False,
         figsize=(8,8),
         returnfig=False):
         """
-        Quick 3D plot of the atomic structure
+        Quick 3D plot of the untit cell /atomic structure.
 
         Args:
-            proj_dir (float):           projection direction, either [azim elev] or normal vector
+            proj_dir (float):           projection direction, either [elev azim] or normal vector
             scale_markers (float):      size scaling for markers
             tol_distance (float):       tolerance for repeating atoms on edges on cell boundaries
-            plot_limit (float):         3x2 numpy array containing x y z plot limits in rows.
+            plot_limit (float):         2x3 numpy array containing x y z plot min and max in columns.
                                         Default is 1.1* unit cell dimensions
+            show_axes (bool):           Whether to plot axes or not
             figsize (2 element float):  size scaling of figure axes
             returnfig (bool):           set to True to return figure and axes handles
 
@@ -211,7 +213,11 @@ class Crystal:
             az = np.arctan2(proj_dir[1],proj_dir[0]) * 180/np.pi
         else:
             raise Exception('Projection direction cannot contain ' + np.size(proj_dir) + ' elements')
-
+        proj_dir = np.array([
+            np.cos(el*np.pi/180)*np.cos(az*np.pi/180),
+            np.cos(el*np.pi/180)*np.sin(az*np.pi/180),
+            np.sin(el*np.pi/180),
+            ])
 
 
         # 3D plotting
@@ -231,6 +237,8 @@ class Crystal:
             u+w,
             u+v+w,
             v+w])
+        p = p[:,[1,0,2]]  # Reorder cell boundaries
+
         f = np.array([
             [0,1,2,3],
             [4,5,6,7],
@@ -249,14 +257,18 @@ class Crystal:
             )
         ax.add_collection(pc)
 
+        # # small shift of coordinates towards camera
+        # d = -0.0 * proj_dir / np.linalg.norm(proj_dir)
+        # print(d)
+
         # atoms
         ID_all = np.unique(ID)
         for ID_plot in ID_all:
             sub = ID == ID_plot
             ax.scatter(
-                xs=xyz[sub,1], 
-                ys=xyz[sub,0], 
-                zs=xyz[sub,2],
+                xs=xyz[sub,1], # + d[0], 
+                ys=xyz[sub,0], # + d[1], 
+                zs=xyz[sub,2], # + d[2],
                 s=size_marker,
                 linewidth=2,
                 color=atomic_colors(ID_plot),
@@ -265,17 +277,19 @@ class Crystal:
         # plot limit
         if plot_limit is None:
             plot_limit = np.array([
-                [np.min(p[:,0]), np.max(p[:,0])],
-                [np.min(p[:,1]), np.max(p[:,1])],
-                [np.min(p[:,2]), np.max(p[:,2])],
+                [np.min(p[:,0]), np.min(p[:,1]), np.min(p[:,2])],
+                [np.max(p[:,0]), np.max(p[:,1]), np.max(p[:,2])],
                 ])
-            plot_limit = plot_limit * 1.1
+            plot_limit = (plot_limit - np.mean(plot_limit,axis=0))*1.1 \
+                + np.mean(plot_limit,axis=0)
 
-        ax.axes.set_xlim3d(left=plot_limit[0,0], right=plot_limit[0,1]) 
-        ax.axes.set_ylim3d(bottom=plot_limit[1,0], top=plot_limit[1,1]) 
-        ax.axes.set_zlim3d(bottom=plot_limit[2,0], top=plot_limit[2,1]) 
+        ax.axes.set_xlim3d(  left=plot_limit[0,1], right=plot_limit[1,0]) 
+        ax.axes.set_ylim3d(bottom=plot_limit[0,0],   top=plot_limit[1,1]) 
+        ax.axes.set_zlim3d(bottom=plot_limit[0,2],   top=plot_limit[1,2]) 
         ax.set_box_aspect((1,1,1));
-        ax.set_axis_off()
+        ax.invert_yaxis()
+        if show_axes is False:
+            ax.set_axis_off()
 
         plt.show();
 
@@ -294,7 +308,7 @@ class Crystal:
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
         Args:
-            dir_proj (float):           projection direction, either [azim elev] or normal vector
+            dir_proj (float):           projection direction, either [elev azim] or normal vector
             scale_markers (float):      size scaling for markers
             plot_limit (float):         x y z plot limits, default is [-1 1]*self.k_max
             figsize (2 element float):  size scaling of figure axes
@@ -724,7 +738,7 @@ class Crystal:
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
         Args:
-            dir_proj (float):           projection direction, either [azim elev] or normal vector
+            dir_proj (float):           projection direction, either [elev azim] or normal vector
                                         Default is mean vector of self.orientation_zone_axis_range rows
             marker_size (float):        size of markers
             plot_limit (float):         x y z plot limits, default is [0, 1.05]
@@ -1050,7 +1064,7 @@ class Crystal:
         self,
         bragg_peaks,
         num_matches_return = 1,
-        tol_peak_delete = 0.1,
+        tol_peak_delete = None,
         subpixel_tilt=False,
         plot_corr=False,
         plot_corr_3D=False,
@@ -1065,6 +1079,8 @@ class Crystal:
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
+            tol_peak_delete (float):            Distance to delete peaks for multiple matches.
+                                                Default is kernel_size * 0.5
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
@@ -1084,7 +1100,11 @@ class Crystal:
             orientation_output = np.zeros((3,3))
         else:
             orientation_output = np.zeros((3,3,num_matches_return))
-            r_del_2 = tol_peak_delete**2
+
+            if tol_peak_delete is None:
+                tol_peak_delete = self.orientation_kernel_size * 0.5
+
+            # r_del_2 = tol_peak_delete**2
             corr_output = np.zeros((num_matches_return))
 
         # loop over the number of matches to return
@@ -1296,16 +1316,27 @@ class Crystal:
                 # qphi = np.arctan2(qy, qx)
 
                 remove = np.zeros_like(qx,dtype='bool')
+                scale_int = np.zeros_like(qx)
                 for a0 in np.arange(qx.size):
                     d_2 = (bragg_peaks_fit.data['qx'] - qx[a0])**2 \
                         + (bragg_peaks_fit.data['qy'] - qy[a0])**2
-                    if np.min(d_2) < r_del_2:
+
+                    dist_min = np.sqrt(np.min(d_2))
+
+                    if dist_min < tol_peak_delete:
                         remove[a0] = True
+                    elif dist_min < self.orientation_kernel_size:
+                        scale_int[a0] = (dist_min - tol_peak_delete) \
+                        / (self.orientation_kernel_size - tol_peak_delete)
+
+                    # if np.min(d_2) < r_del_2:
+                    #     remove[a0] = True
 
                 # qx = qx[~np.isin(qx, remove)]
                 # qy = qy[~np.isin(qy, remove)]
                 # qr = qr[~np.isin(qr, remove)]
                 # qphi = qphi[~np.isin(qphi, remove)]
+                intensity = intensity * scale_int
                 qx = qx[~remove]
                 qy = qy[~remove]
                 intensity = intensity[~remove]
@@ -2172,8 +2203,9 @@ def axisEqual3D(ax):
 # def atomic_colors(ID):
 def atomic_colors(ID):
     return {
-        1: np.array([1,0,0]),
-        79: np.array([1.0,0.7,0.0]),
+        1:    np.array([0.8,0.8,0.8]),
+        8:    np.array([1.0,0.0,0.0]),
+        79:   np.array([1.0,0.7,0.0]),
     }.get(ID, np.array([0.0,0.0,0.0]))
 
 
