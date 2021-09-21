@@ -331,7 +331,7 @@ def fit_double_sided_gaussian(data, p0, mask=None):
 
 def compare_double_sided_gaussian(data, p, power=1, mask=None):
     """
-    Plots a comparison between a diffraction pattern and a fit, given p. 
+    Plots a comparison between a diffraction pattern and a fit, given p.
     """
     if mask is None:
         mask = np.ones_like(data)
