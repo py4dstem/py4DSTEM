@@ -1135,7 +1135,7 @@ class Crystal:
             corr_full = np.sum(np.real(np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None,:,:]))), axis=1)
             # Find best match for each zone axis
             ind_phi = np.argmax(corr_full, axis=1)
-            print(self.orientation_gamma*180./np.pi)
+            # print(self.orientation_gamma*180./np.pi)
             corr_value = np.zeros(self.orientation_num_zones)
             corr_in_plane_angle = np.zeros(self.orientation_num_zones)
             dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
