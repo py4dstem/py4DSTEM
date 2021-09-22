@@ -8,8 +8,8 @@ from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellip
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..io import PointList
-from ..process.utils import get_voronoi_vertices
-from ..process.calibration import double_sided_gaussian, convert_ellipse_params
+from ..process.utils import get_voronoi_vertices,convert_ellipse_params
+from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
 
 def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,

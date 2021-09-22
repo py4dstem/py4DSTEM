@@ -3,7 +3,11 @@ import matplotlib.pyplot as plt
 import py4DSTEM
 import scipy.io as sio
 from py4DSTEM.process.utils import print_progress_bar
-from py4DSTEM.process.utils.ellipticalCoords import *
+from py4DSTEM.process.utils.ellipticalCoords import * ## What else is used here? These fns have
+                                                      ## moved around some. In general, specifying
+                                                      ## the fns is better practice. TODO: change
+                                                      ## this import
+from ..calibration import fit_ellipse_amorphous_ring
 import matplotlib
 from tqdm import tqdm
 
@@ -35,7 +39,7 @@ def fit_stack(datacube, init_coefs, mask=None):
             elif len(mask.shape) == 4:
                 mask_current = mask[i, j, :, :]
 
-            coefs = fit_double_sided_gaussian(
+            coefs = fit_ellipse_amorphous_ring(
                 datacube.data[i, j, :, :], init_coefs, mask=mask_current
             )
             coefs_array[i, j] = coefs
