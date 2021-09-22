@@ -19,7 +19,7 @@ the module docstring for process/utils/ellipticalCoords.py.
 import numpy as np
 from scipy.optimize import leastsq
 from scipy.ndimage.filters import gaussian_filter
-from ..utils import get_CoM
+from ..utils import get_CoM, convert_ellipse_params, radial_integral
 from ...io import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
