@@ -293,13 +293,9 @@ def get_origin_brightest_disk(
     else:
         mask *= np.exp((qxa**2 + qya**2)/(-2*probe_mask_size**2))
 
-
     # init output arrays
     qx0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
     qy0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
-
-    if mask is not None:
-        maskCorr = np.real(np.fft.ifft2(np.fft.fft2(mask)**2))
 
     for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
     # for (rx,ry) in tqdmnd(2,2,desc='Finding origins',unit='DP',unit_scale=True):
