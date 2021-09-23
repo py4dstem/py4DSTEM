@@ -106,7 +106,7 @@ def cartesian_to_polarelliptical_transform(
     cartesianData,
     params,
     dr=1,
-    dtheta=np.radians(2),
+    dphi=np.radians(2),
     r_range=None,
     mask=None,
     maskThresh=0.99,
@@ -115,29 +115,24 @@ def cartesian_to_polarelliptical_transform(
     Transforms an array of data in cartesian coordinates into a data array in
     polar-elliptical coordinates.
 
-    If the cartesian coordinates are (qx,qy), then the parametrization for the
-    polar-elliptical coordinate system is::
-
-        qx = qx0 + A*r*cos(theta)*cos(phi) - B*r*sin(theta)*sin(phi)
-        qy = qy0 + B*r*cos(theta)*sin(phi) + A*r*sin(theta)*cos(phi)
-
-    where the final coordinates are (r,theta), and the parameters are (qx0,qy0,A,B,phi).
-    Physically, this corresponds to elliptical coordinates centered at (qx0,qy0),
-    stretched by A/B along the semimajor axes, and with those axes tilted by phi with
-    respect to the (qx,qy) axes.
+    Discussion of the elliptical parametrization used can be found in the docstring
+    for the process.utils.ellipticalCoords module.
 
     Args:
         cartesianData (2D float array): the data in cartesian coordinates
-        params (5-tuple): specifies (qx0,qy0,A,B,phi), the parameters for the
-            transformation
-        dr (float): sampling of the (r,theta) coords: the width of the bins in r
-        dtheta (float): sampling of the (r,theta) coords: the width of the bins in theta,
+        params (5-tuple): specifies (qx0,qy0,a,e,theta), the parameters for the
+            transformation. These are the same 5 parameters which are outputs
+            of the elliptical fitting functions in the process.calibration
+            module, e.g. fit_ellipse_amorphous_ring and fit_ellipse_1D. For
+            more details, see the process.utils.ellipticalCoords module docstring
+        dr (float): sampling of the (r,phi) coords: the width of the bins in r
+        dphi (float): sampling of the (r,phi) coords: the width of the bins in phi,
             in radians
         r_range (number or length 2 list/tuple or None): specifies the sampling of the
             (r,theta) coords.  Precise behavior which depends on the parameter type:
+                * if None, autoselects max r value
                 * if r_range is a number, specifies the maximum r value
                 * if r_range is a length 2 list/tuple, specifies the min/max r values
-                * if None, autoselects max r value
         mask (2d array of bools): shape must match cartesianData; where mask==False,
             ignore these datapoints in making the polarElliptical data array
         maskThresh (float): the final data mask is calculated by converting mask (above)
@@ -153,7 +148,7 @@ def cartesian_to_polarelliptical_transform(
             * **polarEllipticalData**: *(2D masked array)* a masked array containing
               the data and the data mask, in polarElliptical coordinates
             * **rr**: *(2D array)* meshgrid of the r coordinates
-            * **tt**: *(2D array)* meshgrid of the theta coordinates
+            * **pp**: *(2D array)* meshgrid of the phi coordinates
     """
     if mask is None:
         mask = np.ones_like(cartesianData, dtype=bool)
@@ -163,7 +158,8 @@ def cartesian_to_polarelliptical_transform(
     assert len(params) == 5, "params must have length 5"
 
     # Get params
-    qx0, qy0, A, B, phi = params
+    qx0, qy0, a, e, theta = params
+    Nx, Ny = cartesianData.shape
 
     # Define r_range: 
     if r_range is None:
@@ -188,21 +184,20 @@ def cartesian_to_polarelliptical_transform(
         except TypeError:
             r_min, r_max = 0, r_range
 
-    Nx, Ny = cartesianData.shape
-    # Define the r/theta coords
+    # Define the r/phi coords
     r_bins = np.arange(r_min + dr / 2.0, r_max + dr / 2.0, dr)  # values are bin centers
-    t_bins = np.arange(-np.pi + dtheta / 2.0, np.pi + dtheta / 2.0, dtheta)
-    rr, tt = np.meshgrid(r_bins, t_bins)
-    Nr, Nt = rr.shape
+    p_bins = np.arange(-np.pi + dphi / 2.0, np.pi + dphi / 2.0, dphi)
+    rr, pp = np.meshgrid(r_bins, p_bins)
+    Nr, Np = rr.shape
 
-    # Get (qx,qy) corresponding to each (r,theta) in the newly defined coords
-    xr = rr * np.cos(tt)
-    yr = rr * np.sin(tt)
-    qx = qx0 + xr * A * np.cos(phi) - yr * B * np.sin(phi)
-    qy = qy0 + xr * A * np.sin(phi) + yr * B * np.cos(phi)
+    # Get (qx,qy) corresponding to each (r,phi) in the newly defined coords
+    xr = rr * np.cos(pp)
+    yr = rr * np.sin(pp)
+    qx = qx0 + xr * np.cos(theta) - yr * e * np.sin(theta)
+    qy = qy0 + xr * np.sin(theta) + yr * e * np.cos(theta)
 
-    # qx,qy are now shape (Nr,Ntheta) arrays, such that (qx[r,theta],qy[r,theta]) is the point
-    # in cartesian space corresponding to r,theta.  We now get the values for the final
+    # qx,qy are now shape (Nr,Np) arrays, such that (qx[r,phi],qy[r,phi]) is the point
+    # in cartesian space corresponding to r,phi.  We now get the values for the final
     # polarEllipticalData array by interpolating values at these coords from the original
     # cartesianData array.
 
@@ -219,21 +214,21 @@ def cartesian_to_polarelliptical_transform(
         ((1 - dx) * (1 - dy), (dx) * (1 - dy), (1 - dx) * (dy), (dx) * (dy))
     )
     transform_mask = transform_mask.ravel()
-    polarEllipticalData = np.zeros(Nr * Nt)
+    polarEllipticalData = np.zeros(Nr * Np)
     polarEllipticalData[transform_mask] = np.sum(
         cartesianData[x_inds, y_inds] * weights, axis=0
     )
-    polarEllipticalData = np.reshape(polarEllipticalData, (Nr, Nt))
+    polarEllipticalData = np.reshape(polarEllipticalData, (Nr, Np))
 
     # Transform mask
-    polarEllipticalMask = np.zeros(Nr * Nt)
+    polarEllipticalMask = np.zeros(Nr * Np)
     polarEllipticalMask[transform_mask] = np.sum(mask[x_inds, y_inds] * weights, axis=0)
-    polarEllipticalMask = np.reshape(polarEllipticalMask, (Nr, Nt))
+    polarEllipticalMask = np.reshape(polarEllipticalMask, (Nr, Np))
 
     polarEllipticalData = np.ma.array(
         data=polarEllipticalData, mask=polarEllipticalMask < maskThresh
     )
-    return polarEllipticalData, rr, tt
+    return polarEllipticalData, rr, pp
 
 
 ### Radial integration
@@ -262,8 +257,8 @@ def radial_integral(ar, x0, y0, dr):
             )
         )
     )
-    polarAr, rr, tt = cartesian_to_polarelliptical_transform(
-        ar, params=(x0, y0, 1, 1, 0), dr=dr, dtheta=np.radians(2), r_range=rmax
+    polarAr, rr, pp = cartesian_to_polarelliptical_transform(
+        ar, params=(x0, y0, 1, 1, 0), dr=dr, dphi=np.radians(2), r_range=rmax
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
@@ -277,7 +272,7 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     Args:
         ar (2d array): the data
         dr (number): the r sampling
-        ellipse_params (5-tuple): the parameters (x0,y0,A,B,phi) for the ellipse
+        ellipse_params (5-tuple): the parameters (x0,y0,a,e,theta) for the ellipse
 
     Returns:
         (2-tuple): A 2-tuple containing:
@@ -297,7 +292,7 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
             )
         )
     )
-    polarAr, rr, tt = cartesian_to_polarelliptical_transform(
+    polarAr, rr, pp = cartesian_to_polarelliptical_transform(
         ar, params=ellipse_params, dr=dr, dtheta=np.radians(2), r_range=rmax
     )
     radial_integral = np.sum(polarAr, axis=0)
