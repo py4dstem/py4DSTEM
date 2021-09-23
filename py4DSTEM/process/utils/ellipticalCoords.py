@@ -31,10 +31,11 @@ the convert_ellipse_params() and convert_ellipse_params_r() methods.
 
 Transformation from cartesian to polar-elliptical space is done using
 
-       x = x0 + a*r*cos(theta)*cos(phi) + b*r*sin(theta)*sin(phi)
-       y = y0 + b*r*sin(theta)*sin(phi) - a*r*cos(theta)*cos(phi)
+       x = x0 + a*r*cos(phi)*cos(theta) + b*r*sin(phi)*sin(theta)
+       y = y0 + a*r*cos(phi)*sin(theta) - b*r*sin(phi)*cos(theta)
 
-where b = a*e is the semiminor axis length. All angular quantities are in radians.
+where b = a*e is the semiminor axis length, and (r,phi) are the polar-elliptical
+coordinates. All angular quantities are in radians.
 """
 
 import numpy as np
