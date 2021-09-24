@@ -6,7 +6,7 @@ from scipy.optimize import leastsq
 
 from ..fit import plane,parabola,bezier_two,fit_2D
 from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
-from ...io.datastructure import PointListArray
+from ...io.datastructure import PointListArray, DataCube
 from ..diskdetection.braggvectormap import get_bragg_vector_map
 
 
@@ -224,26 +224,68 @@ def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
 
     return qx0, qy0, braggvectormap
 
-def get_origin_single_dp_beamstop(dp,**kwargs):
+def get_origin_single_dp_beamstop(
+        DP:np.ndarray, 
+        mask:np.ndarray
+    ):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
     Args:
+        DP (np array): diffraction pattern
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove and holes
 
     Returns:
+        qx0, qy0 (tuple) measured center position of diffraction pattern
     """
-    return
 
-def get_origin_beamstop(dp,**kwargs):
+    imCorr = np.real(
+        np.fft.ifft2(
+        np.fft.fft2(
+            DP * mask
+        ) * 
+        np.conj(
+            np.fft.fft2(
+                np.rot90(DP, 2) * np.rot90(mask, 2)
+            )
+        ))) 
+    
+    xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
+    
+    dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
+    dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
+    
+    return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
+
+
+def get_origin_beamstop(
+        datacube:DataCube,
+        mask:np.ndarray
+    ):
     """
-    Find the origin for all single diffraction patterns in a datacube,
-    assuming there is a beam stop.
+    Find the origin for each diffraction pattern, assuming there is a beam stop.
 
     Args:
+        datacube (DataCube)
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove and holes
 
     Returns:
+        qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
     """
-    return
+
+    qx0 = np.zeros(datacube.data.shape[:2])
+    qy0 = np.zeros_like(qx0)
+
+    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
+        x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
+
+    return qx0, qy0
 
 
 ### Functions for fitting the origin
