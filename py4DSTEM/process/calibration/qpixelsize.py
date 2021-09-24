@@ -6,7 +6,8 @@ from typing import Union, Optional
 from py4DSTEM.process.utils import get_CoM
 from ...io.datastructure import Coordinates, PointListArray
 
-def get_dq(q,d):
+
+def get_dq(q, d):
     """
     Get dq, the size of the detector pixels in the diffraction plane, in inverse length
     units.
@@ -19,9 +20,10 @@ def get_dq(q,d):
     Returns:
         (number): the detector pixel size
     """
-    return 1/(q*d)
+    return 1 / (q * d)
 
-def get_dq_from_indexed_peaks(qs,hkl,a):
+
+def get_dq_from_indexed_peaks(qs, hkl, a):
     """
     Get dq, the size of the detector pixels in the diffraction plane, in inverse length
     units, using a set of measured peak distances from the optic axis, their Miller
@@ -43,34 +45,36 @@ def get_dq_from_indexed_peaks(qs,hkl,a):
               fit peaks
             * **mask**: *(array of bools)* False wherever hkl[i]==(0,0,0)
     """
-    assert len(qs)==len(hkl), "qs and hkl must have same length"
+    assert len(qs) == len(hkl), "qs and hkl must have same length"
 
     # Get spacings
-    d_inv = np.array([np.sqrt(a**2+b**2+c**2) for (a,b,c) in hkl])
-    mask = d_inv!=0
+    d_inv = np.array([np.sqrt(a ** 2 + b ** 2 + c ** 2) for (a, b, c) in hkl])
+    mask = d_inv != 0
 
     # Get scaling factor
-    c0 = np.average(qs[mask]/d_inv[mask])
-    fiterr = lambda c: qs[mask] - c*d_inv[mask]
-    popt,_ = leastsq(fiterr,c0)
+    c0 = np.average(qs[mask] / d_inv[mask])
+    fiterr = lambda c: qs[mask] - c * d_inv[mask]
+    popt, _ = leastsq(fiterr, c0)
     c = popt[0]
 
     # Get pixel size
-    dq = 1/(c*a)
-    qs_fit = d_inv[mask]/a
-    hkl_fit = [hkl[i] for i in range(len(hkl)) if mask[i]==True]
+    dq = 1 / (c * a)
+    qs_fit = d_inv[mask] / a
+    hkl_fit = [hkl[i] for i in range(len(hkl)) if mask[i] == True]
 
     return dq, qs_fit, hkl_fit
 
+
 def calibrate_Bragg_peaks_pixel_size(
-    braggpeaks:PointListArray, 
-    q_pixel_size:Optional[float]=None,
-    q_pixel_units:Optional[str] = None,
-    coords:Optional[Coordinates]=None, 
-    name:Optional[str]=None):
+    braggpeaks: PointListArray,
+    q_pixel_size: Optional[float] = None,
+    q_pixel_units: Optional[str] = None,
+    coords: Optional[Coordinates] = None,
+    name: Optional[str] = None,
+):
     """
     Calibrate reciprocal space measurements of Bragg peak positions, using
-    either `q_pixel_size` or the `Q_pixel_size` field of a 
+    either `q_pixel_size` or the `Q_pixel_size` field of a
     Coordinates object
 
     Accepts:
@@ -87,27 +91,31 @@ def calibrate_Bragg_peaks_pixel_size(
         braggpeaks_calibrated  (PointListArray) the calibrated Bragg peaks
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert (q_pixel_size is not None) != (coords is not None), (
-                                "Either (qx0,qy0) or coords must be specified")
+    assert (q_pixel_size is not None) != (
+        coords is not None
+    ), "Either (qx0,qy0) or coords must be specified"
 
     if coords is not None:
         q_pixel_size = coords.get_Q_pixel_size()
         q_pixel_units = coords.get_Q_pixel_units()
-        assert q_pixel_size is not None and q_pixel_units is not None, "coords did not contain center position"
-    
+        assert (
+            q_pixel_size is not None and q_pixel_units is not None
+        ), "coords did not contain center position"
+
     if name is None:
-        sl = braggpeaks.name.split('_')
-        _name = '_'.join([s for i,s in enumerate(sl) if not (s=='raw' and i==len(sl)-1)])
-        name = _name+"_calibrated"
-    assert isinstance(name,str)
+        sl = braggpeaks.name.split("_")
+        _name = "_".join(
+            [s for i, s in enumerate(sl) if not (s == "raw" and i == len(sl) - 1)]
+        )
+        name = _name + "_calibrated"
+    assert isinstance(name, str)
 
     braggpeaks_calibrated = braggpeaks.copy(name=name)
 
     for Rx in range(braggpeaks_calibrated.shape[0]):
         for Ry in range(braggpeaks_calibrated.shape[1]):
-            pointlist = braggpeaks_calibrated.get_pointlist(Rx,Ry)
-            pointlist.data['qx'] *= q_pixel_size
-            pointlist.data['qy'] *= q_pixel_size
+            pointlist = braggpeaks_calibrated.get_pointlist(Rx, Ry)
+            pointlist.data["qx"] *= q_pixel_size
+            pointlist.data["qy"] *= q_pixel_size
 
     return braggpeaks_calibrated
-
