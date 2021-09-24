@@ -71,7 +71,7 @@ class Crystal:
         self.numbers = np.array([s.Z for s in self.structure.species], dtype=np.intp)
 
     def calculate_structure_factors(
-        self, k_max: float = 2.0, tol_structure_factor: float = 1e-2
+        self, k_max: float = 2.0, tol_structure_factor: float = 1e-2, return_intensities: bool = False,
     ):
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
@@ -149,6 +149,16 @@ class Crystal:
 
         # Structure factor intensities
         self.struct_factors_int = np.abs(self.struct_factors) ** 2
+
+        if return_intensities:
+            q_SF = np.linspace(0, self.k_max, 250)
+            I_SF = np.zeros_like(q_SF)
+            for i in range(self.g_vec_leng.shape[0]):
+                idx = np.argmin(np.abs(q_SF - self.g_vec_leng[i]))
+                I_SF[idx] += self.struct_factors_int[i]
+            I_SF /= np.max(I_SF)
+
+            return (q_SF, I_SF)
 
     def plot_structure(
         self,
