@@ -68,10 +68,9 @@ def get_dq_from_indexed_peaks(qs, hkl, a):
 def calibrate_Bragg_peaks_pixel_size(
     braggpeaks: PointListArray,
     q_pixel_size: Optional[float] = None,
-    q_pixel_units: Optional[str] = None,
     coords: Optional[Coordinates] = None,
     name: Optional[str] = None,
-):
+) -> PointListArray:
     """
     Calibrate reciprocal space measurements of Bragg peak positions, using
     either `q_pixel_size` or the `Q_pixel_size` field of a
@@ -80,7 +79,6 @@ def calibrate_Bragg_peaks_pixel_size(
     Accepts:
         braggpeaks  (PointListArray) the detected, unscaled bragg peaks
         q_pixel_size (float) Q pixel size in inverse Ångström
-        q_pixel_units (str) Units for Q pixel size
         coords      (Coordinates) an object containing pixel size
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
@@ -97,9 +95,8 @@ def calibrate_Bragg_peaks_pixel_size(
 
     if coords is not None:
         q_pixel_size = coords.get_Q_pixel_size()
-        q_pixel_units = coords.get_Q_pixel_units()
         assert (
-            q_pixel_size is not None and q_pixel_units is not None
+            q_pixel_size is not None
         ), "coords did not contain center position"
 
     if name is None:
