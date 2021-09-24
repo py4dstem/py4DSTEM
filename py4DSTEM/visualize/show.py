@@ -223,7 +223,11 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             Wherever mask==True, plot the pixel normally, and where ``mask==False``,
             pixel values are set to mask_color. If hist==True, ignore these values in the
             histogram. If ``mask_alpha`` is specified, the mask is blended with the array
-            underneath, with 0 yielding an opaque mask and 1 yielding a fully transparent mask. 
+            underneath, with 0 yielding an opaque mask and 1 yielding a fully transparent
+            mask. If ``mask_color`` is set to ``'empty'`` instead of a matplotlib.color,
+            nothing is done to pixels where ``mask==False``, allowing overlaying multiple
+            arrays in different regions of an image by invoking the ``figax` kwarg over
+            multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
@@ -236,7 +240,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
         assert mask.shape == ar.shape
-        assert is_color_like(mask_color)
+        assert is_color_like(mask_color) or mask_color=='empty'
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
@@ -256,25 +260,22 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
-        if min != None:
-            if min > 0:
-                min = np.log(min)
-            else:
-                min = np.min(_ar[_mask])
-        if max != None:
-            max = np.log(max)
+        if clipvals == 'manual':
+            if min != None:
+                if min > 0: min = np.log(min)
+                else: min = np.min(_ar[_mask])
+            if max != None: max = np.log(max)
     elif scaling == 'power':
         _mask = ar.data>0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.power(ar.data[_mask],power)
         _ar[~_mask] = np.nan
-        if min != None:
-            min = np.power(min,power)
-        if max != None:
-            max = np.power(max,power)
+        if clipvals == 'manual':
+            if min != None: min = np.power(min,power)
+            if max != None: max = np.power(max,power)
     else:
         raise Exception
-    
+
     _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
@@ -295,8 +296,6 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         vmax = c+m
     else:
         raise Exception
-    if returnclipvals:
-        return vmin,vmax
 
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
@@ -309,10 +308,13 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     # Create the masked array applying the user mask (this is done after the 
     # vmin and vmax are determined so the mask doesn't affect those)
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
-    
+
     # Create colormap with mask_color for bad values
     cm = copy(plt.cm.get_cmap(cmap))
-    cm.set_bad(color=mask_color)
+    if mask_color=='empty':
+        cm.set_bad(alpha=0)
+    else:
+        cm.set_bad(color=mask_color)
 
     # Plot the image
     if not hist:
@@ -466,17 +468,24 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     if rtheta_grid is not None:
         add_rtheta_grid(ax,grid)
 
-
     # Show or return
-    if returnfig:
-        return fig,ax
-    elif returncax:
-        return cax
-    elif figax is not None:
+    returnval = []
+    if returnfig: returnval.append((fig,ax))
+    if returnclipvals:
+        if scaling == 'log':
+            vmin,vmax = np.power(np.e,vmin),np.power(np.e,vmax)
+        elif scaling == 'power':
+            vmin,vmax = np.power(vmin,1/power),np.power(vmax,1/power)
+        returnval.append((vmin,vmax))
+    if returncax: returnval.append(cax)
+    if len(returnval)==0:
+        if figax is None:
+            plt.show()
         return
+    elif(len(returnval))==1:
+        return returnval[0]
     else:
-        plt.show()
-        return
+        return tuple(returnval)
 
 def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
                                         returnhist=False, returnfig=False):
