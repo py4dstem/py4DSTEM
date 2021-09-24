@@ -99,7 +99,7 @@ def calibrate_Bragg_peaks_pixel_size(
         assert q_pixel_size is not None, "coords did not contain center position"
 
     if q_pixel_size is not None:
-        assert isinstance(q_pixel_size, float): "q_pixel_size must be a float."
+        assert isinstance(q_pixel_size, float), "q_pixel_size must be a float."
 
     if name is None:
         sl = braggpeaks.name.split("_")
