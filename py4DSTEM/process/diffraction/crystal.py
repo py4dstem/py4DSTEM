@@ -6,12 +6,13 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from mpl_toolkits.mplot3d import Axes3D, art3d
 import warnings
+from typing import Union, Optional
 
 try:
     import pymatgen as mg
     from pymatgen.ext.matproj import MPRester
 except Exception:
-    print(r"pymatgen not found... kinematic module won't work ¯\_(ツ)_/¯")
+    print(r"pymatgen not found... Crystal module won't work ¯\_(ツ)_/¯")
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
@@ -26,13 +27,18 @@ class Crystal:
                         or a string containing the Materials Project ID for the 
                         structure (requires API key in config file, see:
                         https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
+        conventional_standard_structure: (bool) whether to convert primitive unit cell to 
+                        conventional structure. When using the MP API, cells are usually primitive
+                        and so indexing will be with respect to the primitive basis vectors,
+                        which will yield unexpected orientation results. Set to True to 
+                        convet the cell to a conventional representation. 
     """
 
     def __init__(
         self, 
-        structure,
-        conventional_standard_structure=True,
-        **kwargs):
+        structure:Union[str,mg.core.Structure],
+        conventional_standard_structure:bool=True,
+        ):
         """
         Instantiate a Crystal object. 
         Calculate lattice vectors.
@@ -62,13 +68,13 @@ class Crystal:
         # Initialize Crystal
         self.positions = self.structure.frac_coords   #: fractional atomic coordinates
 
-        #: atomic numbers - if only one value is provided, assume all atoms are same species
+        #: atomic numbers
         self.numbers = np.array([s.Z for s in self.structure.species], dtype=np.intp)
 
     def calculate_structure_factors(
         self, 
-        k_max=2, 
-        tol_structure_factor=1e-2):
+        k_max:float=2.0, 
+        tol_structure_factor:float=1e-2):
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
         
@@ -151,13 +157,13 @@ class Crystal:
 
     def plot_structure(
         self,
-        proj_dir=[3,2,1],
-        size_marker=400,
-        tol_distance=0.001,
-        plot_limit=None,
-        show_axes=False,
-        figsize=(8,8),
-        returnfig=False):
+        proj_dir:Union[list,np.ndarray]=[3,2,1],
+        size_marker:float=400,
+        tol_distance:float=0.001,
+        plot_limit:Optional[np.ndarray]=None,
+        show_axes:bool=False,
+        figsize:Union[tuple,list,np.ndarray]=(8,8),
+        returnfig:bool=False):
         """
         Quick 3D plot of the untit cell /atomic structure.
 
@@ -300,11 +306,11 @@ class Crystal:
 
     def plot_structure_factors(
         self,
-        proj_dir=[10,30],
-        scale_markers=1,
-        plot_limit=None,
-        figsize=(8,8),
-        returnfig=False):
+        proj_dir:Union[list,tuple,np.ndarray]=[10,30],
+        scale_markers:float=1,
+        plot_limit:Optional[Union[list,tuple,np.ndarray]]=None,
+        figsize:Union[list,tuple,np.ndarray]=(8,8),
+        returnfig:bool=False):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
@@ -369,14 +375,14 @@ class Crystal:
 
     def orientation_plan(
         self, 
-        zone_axis_range = np.array([[0,1,1],[1,1,1]]),
-        angle_step_zone_axis = 2.0,
-        angle_step_in_plane = 2.0,
-        accel_voltage = 300e3, 
-        corr_kernel_size = 0.08,
-        tol_distance = 0.01,
-        plot_corr_norm = False,
-        figsize = (6,6),
+        zone_axis_range:np.ndarray = np.array([[0,1,1],[1,1,1]]),
+        angle_step_zone_axis:float = 2.0,
+        angle_step_in_plane:float = 2.0,
+        accel_voltage:float = 300e3, 
+        corr_kernel_size:float = 0.08,
+        tol_distance:float = 0.01,
+        plot_corr_norm:bool = False,
+        figsize:Union[list,tuple,np.ndarray] = (6,6),
         ):
         """
         Calculate the rotation basis arrays for an SO(3) rotation correlogram.
@@ -385,11 +391,11 @@ class Crystal:
             zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
                                                 Note that we always start at [0,0,1] to make z-x-z rotation work.
                                                 Setting this to 'full' as a string will use a hemispherical range.
-            angle_step_zone_axis (numpy float): Approximate angular step size for zone axis [degrees]
-            angle_step_in_plane (numpy float):  Approximate angular step size for in-plane rotation [degrees]
-            accel_voltage (numpy float):        Accelerating voltage for electrons [Volts]
-            corr_kernel_size (np float):        Correlation kernel size length in Angstroms
-            tol_distance (numpy float):         Distance tolerance for radial shell assignment [1/Angstroms]
+            angle_step_zone_axis (float): Approximate angular step size for zone axis [degrees]
+            angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
+            accel_voltage (float):        Accelerating voltage for electrons [Volts]
+            corr_kernel_size (float):        Correlation kernel size length in Angstroms
+            tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
         """
 
         # Store inputs
@@ -475,9 +481,7 @@ class Crystal:
 
             self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep,:]))
             self.orientation_num_zones = self.orientation_vecs.shape[0]
-            # self.orientation_sector = np.hstack((
-            #     orientation_sector,
-            #     np.ones(np.sum(keep), dtype='int')))
+
             self.orientation_inds = np.vstack((
                 self.orientation_inds, 
                 self.orientation_inds[keep,:])).astype('int')
@@ -498,10 +502,6 @@ class Crystal:
             self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep,:]))
             self.orientation_num_zones = self.orientation_vecs.shape[0]
 
-
-            # self.orientation_sector = np.hstack((
-            #     self.orientation_sector,
-            #     self.orientation_sector[keep]+2))
             orientation_sector = np.hstack((
                 self.orientation_inds[:,2],
                 self.orientation_inds[keep,2] + 2))
@@ -512,9 +512,6 @@ class Crystal:
 
 
         # Convert to spherical coordinates
-        # azim = np.arctan2(
-        #     self.orientation_vecs[:,1],
-        #     self.orientation_vecs[:,0])
         elev = np.arctan2(np.hypot(
             self.orientation_vecs[:,0], 
             self.orientation_vecs[:,1]), 
@@ -570,13 +567,6 @@ class Crystal:
                 [0,  np.cos(elev[a0]), np.sin(elev[a0])],
                 [0, -np.sin(elev[a0]),  np.cos(elev[a0])]])
             self.orientation_rotation_matrices[a0,:,:] = m1z @ m2x
-            # m2y = np.array([
-            #     [np.cos(elev[a0]),     0,  np.sin(elev[a0])],
-            #     [0,                    1,   0],
-            #     [-np.sin(elev[a0]),     0,   np.cos(elev[a0])]])
-            # self.orientation_rotation_matrices[a0,:,:] = m1z @ m2y
-            # self.orientation_rotation_matrices[a0,:,:] = m2x @ m1z
-            # print(np.round(self.orientation_rotation_matrices[a0,:,:]*100)/100)
             self.orientation_rotation_angles[a0,:] = [azim[a0], elev[a0]]
 
         # init
@@ -586,7 +576,6 @@ class Crystal:
         # Calculate reference arrays for all orientations
         for a0 in tqdmnd(np.arange(self.orientation_num_zones), desc="Orientation plan", unit=" zone axes"):
             p = np.linalg.inv(self.orientation_rotation_matrices[a0,:,:]) @ self.g_vec_all
-            # p = self.orientation_rotation_matrices[a0,:,:] @ self.g_vec_all
 
             # Excitation errors
             cos_alpha = (k0[2,None] + p[2,:]) \
@@ -610,32 +599,6 @@ class Crystal:
             # Normalization
             self.orientation_ref[a0,:,:] /= \
                 np.sqrt(np.sum(self.orientation_ref[a0,:,:]**2))
-            # self.orientation_ref[a0,:,:] /= \
-            #     np.sqrt(np.sum(np.abs(np.fft.fft(self.orientation_ref[a0,:,:]))**2))
-
-
-
-        # s = np.hstack((
-        #     np.round(self.orientation_rotation_angles * 180/np.pi*100)/100,
-        #     np.round(self.orientation_vecs*100)/100))
-        # print(s)
-        # print(np.round(self.orientation_vecs*100)/100)
-
-        # ind = 36
-        # print(np.round(self.orientation_vecs[ind,:]*100)/100)
-
-
-        # fig, ax = plt.subplots(figsize=(32,8))
-        # im_plot = np.real(self.orientation_ref[ind,:,:]).astype('float')
-        # cmax = np.max(im_plot)
-        # im_plot = im_plot / cmax 
-
-        # im = ax.imshow(
-        #     im_plot,
-        #     cmap='viridis',
-        #     vmin=0.0,
-        #     vmax=1.0)
-        # fig.colorbar(im)
 
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
@@ -692,49 +655,13 @@ class Crystal:
             plt.show()  
 
 
-        # ind = 1;
-        # x = g_proj[ind,0,:]
-        # y = g_proj[ind,1,:]
-        # z = g_proj[ind,2,:]
-
-        # fig = plt.figure(figsize=(8,8))
-        # ax = fig.add_subplot(
-        #     projection='3d',
-        #     elev=0, 
-        #     azim=0)
-        # ax.scatter(
-        #     xs=x, 
-        #     ys=y, 
-        #     zs=z,
-        #     s=30,
-        #     edgecolors=None)
-        # r = 2.1
-        # ax.axes.set_xlim3d(left=-r, right=r) 
-        # ax.axes.set_ylim3d(bottom=-r, top=r) 
-        # ax.axes.set_zlim3d(bottom=-r, top=r) 
-        # axisEqual3D(ax)
-        # plt.show()
-
-
-        # # Test plotting
-        # fig = plt.figure(figsize=(16,8))
-        # ax = fig.add_subplot()
-        # ax.scatter(
-        #     self.g_vec_leng, 
-        #     self.orientation_shell_index, 
-        #     s=5)
-        # plt.show()
-
-
-
-
     def plot_orientation_zones(
         self,
-        proj_dir=None,
-        marker_size=20,
-        plot_limit=np.array([-1.1, 1.1]),
-        figsize=(8,8),
-        returnfig=False):
+        proj_dir:Optional[Union[list,tuple,np.ndarray]]=None,
+        marker_size:float=20,
+        plot_limit:Union[list,tuple,np.ndarray]=np.array([-1.1, 1.1]),
+        figsize:Union[list,tuple,np.ndarray]=(8,8),
+        returnfig:bool=False):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
@@ -910,9 +837,9 @@ class Crystal:
 
     def plot_orientation_plan(
         self,
-        index_plot=0,
-        figsize=(14,6),
-        returnfig=False
+        index_plot:int=0,
+        figsize:Union[list,tuple,np.ndarray]=(14,6),
+        returnfig:bool=False
         ):
         """
         3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
@@ -995,12 +922,12 @@ class Crystal:
 
 
     def match_orientations(
-                           self,
-                           bragg_peaks_array,
-                           num_matches_return = 1,
-                           return_corr=False,
-                           subpixel_tilt=False,
-                           ):
+       self,
+       bragg_peaks_array:PointListArray,
+       num_matches_return:int = 1,
+       return_corr:bool=False,
+       subpixel_tilt:bool=False,
+       ):
 
         if num_matches_return == 1:
             orientation_matrices = np.zeros((*bragg_peaks_array.shape, 3, 3),dtype=np.float64)
@@ -1011,50 +938,29 @@ class Crystal:
             if return_corr:
                 corr_all = np.zeros((*bragg_peaks_array.shape, num_matches_return),dtype=np.float64)
 
-
         for rx,ry in tqdmnd(*bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList"):
             bragg_peaks = bragg_peaks_array.get_pointlist(rx,ry)
 
-            if num_matches_return == 1:
-                if return_corr:
-                    orientation_matrices[rx,ry,:,:], corr_all[rx,ry] = self.match_single_pattern(
-                        bragg_peaks,
-                        subpixel_tilt=subpixel_tilt,
-                        plot_corr=False,
-                        plot_corr_3D=False,
-                        return_corr=True,
-                        verbose=False,
-                        )
-                else:
-                    orientation_matrices[rx,ry,:,:] = self.match_single_pattern(
-                        bragg_peaks,
-                        subpixel_tilt=subpixel_tilt,
-                        plot_corr=False,
-                        plot_corr_3D=False,
-                        return_corr=False,
-                        verbose=False,
-                        )
+            if return_corr:
+                orientation_matrices[rx,ry], corr_all[rx,ry] = self.match_single_pattern(
+                    bragg_peaks,
+                    subpixel_tilt=subpixel_tilt,
+                    num_matches_return=num_matches_return,
+                    plot_corr=False,
+                    plot_corr_3D=False,
+                    return_corr=True,
+                    verbose=False,
+                    )
             else:
-                if return_corr:
-                    orientation_matrices[rx,ry,:,:,:], corr_all[rx,ry,:] = self.match_single_pattern(
-                        bragg_peaks,
-                        num_matches_return = num_matches_return,
-                        subpixel_tilt=subpixel_tilt,
-                        plot_corr=False,
-                        plot_corr_3D=False,
-                        return_corr=True,
-                        verbose=False,
-                        )
-                else:
-                    orientation_matrices[rx,ry,:,:,:] = self.match_single_pattern(
-                        bragg_peaks,
-                        num_matches_return = num_matches_return,
-                        subpixel_tilt=subpixel_tilt,
-                        plot_corr=False,
-                        plot_corr_3D=False,
-                        return_corr=False,
-                        verbose=False,
-                        )
+                orientation_matrices[rx,ry] = self.match_single_pattern(
+                    bragg_peaks,
+                    subpixel_tilt=subpixel_tilt,
+                    num_matches_return=num_matches_return,
+                    plot_corr=False,
+                    plot_corr_3D=False,
+                    return_corr=False,
+                    verbose=False,
+                    )
 
         if return_corr:
             return orientation_matrices, corr_all
@@ -1063,16 +969,16 @@ class Crystal:
 
     def match_single_pattern(
         self,
-        bragg_peaks,
-        num_matches_return = 1,
-        tol_peak_delete = None,
-        subpixel_tilt=False,
-        plot_corr=False,
-        plot_corr_3D=False,
-        return_corr=False,
-        returnfig=False,
-        figsize=(12,4),
-        verbose=False,
+        bragg_peaks:PointList,
+        num_matches_return:int = 1,
+        tol_peak_delete:Optional[float] = None,
+        subpixel_tilt:bool=False,
+        plot_corr:bool=False,
+        plot_corr_3D:bool=False,
+        return_corr:bool=False,
+        returnfig:bool=False,
+        figsize:Union[list,tuple,np.ndarray]=(12,4),
+        verbose:bool=False,
         ):
         """
         Solve for the best fit orientation of a single diffraction pattern.
@@ -1180,9 +1086,6 @@ class Crystal:
                 else:
                     ind_x, ind_y = ind_to_sub(ind_best_fit)
                     max_x, max_y = ind_to_sub(self.orientation_num_zones-1)
-                    # print(self.orientation_num_zones)
-                    # print(ind_x, ind_y)
-                    # print(max_x, max_y)
 
                     if ind_y == 0:
                         ind_x_prev = sub_to_ind(ind_x-1, 0)
@@ -1306,17 +1209,6 @@ class Crystal:
                     orientation_matrix,
                     sigma_excitation_error=self.orientation_kernel_size)
 
-                # qr_fit = np.sqrt(
-                #     bragg_peaks_fit.data['qx']**2 +
-                #     bragg_peaks_fit.data['qy']**2)
-                # qphi_fit = np.arctan2(
-                #     bragg_peaks_fit.data['qy'],
-                #     bragg_peaks_fit.data['qx'])
-                # qx = bragg_peaks.data['qx']
-                # qy = bragg_peaks.data['qy']
-                # qr = np.sqrt(qx**2 + qy**2)
-                # qphi = np.arctan2(qy, qx)
-
                 remove = np.zeros_like(qx,dtype='bool')
                 scale_int = np.zeros_like(qx)
                 for a0 in np.arange(qx.size):
@@ -1331,13 +1223,6 @@ class Crystal:
                         scale_int[a0] = (dist_min - tol_peak_delete) \
                         / (self.orientation_kernel_size - tol_peak_delete)
 
-                    # if np.min(d_2) < r_del_2:
-                    #     remove[a0] = True
-
-                # qx = qx[~np.isin(qx, remove)]
-                # qy = qy[~np.isin(qy, remove)]
-                # qr = qr[~np.isin(qr, remove)]
-                # qphi = qphi[~np.isin(qphi, remove)]
                 intensity = intensity * scale_int
                 qx = qx[~remove]
                 qy = qy[~remove]
@@ -1441,10 +1326,6 @@ class Crystal:
                 im_corr_zone_axis.ravel()[inds_1D] = corr_value
                 im_mask.ravel()[inds_1D] = False
 
-                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-                # im_plot = np.ma.masked_where(
-                #     (im_corr_zone_axis - cmin) / (cmax - cmin).
-                #     im_mask)
                 im_plot = np.ma.masked_array(
                      (im_corr_zone_axis - cmin) / (cmax - cmin),
                      mask=im_mask)
@@ -1459,13 +1340,6 @@ class Crystal:
                 ax[0].spines['top'].set_color('none')
                 ax[0].spines['bottom'].set_color('none')
 
-
-                # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-                # ax[0].imshow(
-                #     im_plot,
-                #     cmap='viridis',
-                #     vmin=0.0,
-                #     vmax=1.0)
 
                 inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
                 ax[0].scatter(inds_plot[1],inds_plot[0], s=120, linewidth = 2, facecolors='none', edgecolors='r')
@@ -1503,7 +1377,6 @@ class Crystal:
             ax[1].set_ylabel('Corr. of Best Fit Zone Axis',
                 size=16)
             ax[1].set_ylim([0,1.01])
-            # ax[1].set_ylim([0.99,1.01])
 
             plt.show()
 
@@ -1539,10 +1412,6 @@ class Crystal:
                 [-1, 1, 1],
                 [ 1,-1, 1],
                 [-1,-1, 1],
-                # [ 1, 1,-1],
-                # [-1, 1,-1],
-                # [ 1,-1,-1],
-                # [-1,-1,-1],
                 ])
 
             for a1 in range(d_sign.shape[0]):
@@ -1556,15 +1425,7 @@ class Crystal:
                         edgecolors=None)
 
 
-            # v = np.array([])
-
-
-            # ax.scatter(
-            #     xs=x, 
-            #     ys=y, 
-            #     zs=z,
-            #     s=10)
-            # # axes limits
+            # axes limits
             r = 1.05
             ax.axes.set_xlim3d(left=-r, right=r) 
             ax.axes.set_ylim3d(bottom=-r, top=r) 
@@ -1586,20 +1447,15 @@ class Crystal:
             else:
                 return orientation_output
 
-        returnfig
-        # return (orientation_output, corr_output) if return_corr else orientation_output
-
-
-
 
     def generate_diffraction_pattern(
         self, 
-        zone_axis = [0,0,1],
-        foil_normal = None,
-        proj_x_axis = None,
-        sigma_excitation_error = 0.02,
-        tol_excitation_error_mult = 3,
-        tol_intensity = 0.1
+        zone_axis:Union[list,tuple,np.ndarray] = [0,0,1],
+        foil_normal:Optional[Union[list,tuple,np.ndarray]] = None,
+        proj_x_axis:Optional[Union[list,tuple,np.ndarray]] = None,
+        sigma_excitation_error:float = 0.02,
+        tol_excitation_error_mult:float = 3,
+        tol_intensity:float = 0.1
         ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -1609,13 +1465,15 @@ class Crystal:
                                              Can also be a 3x3 orientation matrix (zone axis 3rd column)
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (np float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
-            tol_excitation_error_mult (np float): tolerance in units of sigma for s_g inclusion
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
+            tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
 
         Returns:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
+
+        zone_axis = np.asarray(zone_axis)
 
         if zone_axis.ndim == 1:
             zone_axis = np.asarray(zone_axis)
@@ -1635,11 +1493,6 @@ class Crystal:
 
         # Logic to set x axis for projected images
         if proj_x_axis is None:
-            # if (zone_axis == np.array([-1,0,0])).all:
-            #     proj_x_axis = np.array([0,-1,0])
-            # else:
-            #     proj_x_axis = np.array([-1,0,0])
-
             if np.all(zone_axis == np.array([-1,0,0])):
                 proj_x_axis = np.array([0,-1,0])
             elif np.all(zone_axis == np.array([1,0,0])):
@@ -1707,16 +1560,16 @@ class Crystal:
 
     def plot_orientation_maps(
         self,
-        orientation_matrices,
-        corr_all=None,
-        corr_range=np.array([0, 5]),
-        orientation_index_plot = 0,
-        orientation_rotate_xy=None,
-        scale_legend = None,
-        corr_normalize=True,
-        figsize=(20,5),
-        figlayout = np.array([1,4]),
-        returnfig=False):
+        orientation_matrices:np.ndarray,
+        corr_all:Optional[np.ndarray]=None,
+        corr_range:np.ndarray=np.array([0, 5]),
+        orientation_index_plot:int = 0,
+        orientation_rotate_xy:bool=None,
+        scale_legend:bool = None,
+        corr_normalize:bool=True,
+        figsize:Union[list,tuple,np.ndarray]=(20,5),
+        figlayout:Union[list,tuple,np.ndarray] = np.array([1,4]),
+        returnfig:bool=False):
         """
         Generate and plot the orientation maps
 
@@ -1823,17 +1676,6 @@ class Crystal:
                 for a1 in range(3):
                     images_orientation[:,:,a0,a1] *=  mask
 
-            # images_orientation *= mask
-                # vec = np.array([1,-1,1])
-                # vec = vec / np.linalg.norm(vec)
-                # wz = np.linalg.solve(A, np.sort(np.abs(vec)))
-                # print(np.round(wz*1e3)/1e3)
-
-        # print(self.orientation_zone_axis_range)
-
-
-
-
         # Draw legend
         x = np.linspace(0,1,leg_size[0])
         y = np.linspace(0,1,leg_size[1])
@@ -1913,12 +1755,6 @@ class Crystal:
         label_2 /= np.min(np.abs(label_2[np.abs(label_2)>0]))
         
 
-        # ax[3].set_xticks([0])
-        # ax[3].set_xticklabels([
-        #     str(label_0)])
-        # ax[3].xaxis.tick_top()
-
-        # ax[3].axis.set_label_position("right")
         ax[3].yaxis.tick_right()
         ax[3].set_yticks([(leg_size[0]-1)/2])
         ax[3].set_yticklabels([
@@ -1967,19 +1803,7 @@ class Crystal:
                 pos.height*scale_legend[1],
                 ] 
             ax[3].set_position(pos_new) 
-        #     if scale_legend[0] != 1:
-        #         x_range = ax[3].get_xlim()
-        #         x_range_new = np.array([
-        #             x_range[0],
-        #             x_range[1] / scale_legend[0],
-        #             ])                
-        #         ax[3].set_xlim(x_range_new)
-        #         ax3a.set_xlim(x_range_new)
-        #         ax3b.set_xlim(x_range_new)
-
-        #         # y_range = ax[3].get_xlim()
-
-        #         # print(y_range)            
+      
 
         if returnfig:
             return images_orientation, fig, ax
@@ -1988,18 +1812,18 @@ class Crystal:
 
 
 def plot_diffraction_pattern(
-    bragg_peaks,
-    bragg_peaks_compare=None,
-    scale_markers=10,
-    scale_markers_compare=None,
-    power_markers=1,
-    plot_range_kx_ky=None,
-    add_labels=True,
-    shift_labels=0.08,
-    shift_marker = 0.005,
-    min_marker_size = 1e-6,
-    figsize=(8,8),
-    returnfig=False,
+    bragg_peaks:PointList,
+    bragg_peaks_compare:PointList=None,
+    scale_markers:float=10,
+    scale_markers_compare:Optional[float]=None,
+    power_markers:float=1,
+    plot_range_kx_ky:Optional[Union[list,tuple,np.ndarray]]=None,
+    add_labels:bool=True,
+    shift_labels:float=0.08,
+    shift_marker:float = 0.005,
+    min_marker_size:float = 1e-6,
+    figsize:Union[list,tuple,np.ndarray]=(8,8),
+    returnfig:bool=False,
     input_fig_handle=None):
     """
     2D scatter plot of the Bragg peaks
@@ -2067,16 +1891,12 @@ def plot_diffraction_pattern(
         ax.set_xlim((-plot_range_kx_ky[0],plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1],plot_range_kx_ky[1]))
 
-    # ax[0].axis["x"].set_axislabel_direction("+")
-    # ax[0].invert_xaxis()
     ax.invert_yaxis()
     ax.set_box_aspect(1)
     ax.xaxis.tick_top()
 
     # Labels for all peaks
     if add_labels is True:
-        # shift_labels = 0.08
-        # shift_marker = 0.005
         text_params = {
             'ha': 'center',
             'va': 'center',
@@ -2085,102 +1905,19 @@ def plot_diffraction_pattern(
             'color': 'r',
             'size': 10}
 
-        # def overline(x):
-        #     return str(x) if np.abs(x) >= 0 else '$\overline{" + str(np.abs(x)) + "}$'
-        # def overline(x):
-        #     if np.abs(x) >= 0:
-        #         return str(x) 
-        #     else:
-        #         return '$\overline{" + str(np.abs(x)) + "}$'
+        def overline(x):
+            return str(x) if np.abs(x) >= 0 else '$\overline{" + str(np.abs(x)) + "}$'
 
         for a0 in np.arange(bragg_peaks.data.shape[0]):
             h = bragg_peaks.data['h'][a0]
             k = bragg_peaks.data['k'][a0]
             l = bragg_peaks.data['l'][a0]
 
-            # plt.text( \
-                # bragg_peaks.data['qy'][a0],
-                # bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                # f'{overline(h)}{overline(k)}{overline(l)}',
-                # **text_params)  
-
-
-            if h >= 0:
-                if k >= 0:
-                    if l >= 0:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            str(h) + ' ' + str(k) + ' ' + str(l),
-                            **text_params)  
-                    else:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            str(h) + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
-                            **text_params)  
-                else:
-                    if l >= 0:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
-                            **text_params)  
-                    else:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            str(h) + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
-                            **text_params)  
-            else:
-                if k >= 0:
-                    if l >= 0:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + str(l),
-                            **text_params)  
-                    else:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + str(k) + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
-                            **text_params)  
-                else:
-                    if l >= 0:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + str(l),
-                            **text_params)  
-                    else:
-                        ax.text( \
-                            bragg_peaks.data['qy'][a0],
-                            bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-                            '$\overline{' + str(np.abs(h)) + '}$' + ' ' + '$\overline{' + str(np.abs(k)) + '}$' + ' ' + '$\overline{' + str(np.abs(l)) + '}$',
-                            **text_params) 
-
-            # if bragg_peaks.data['h'][a0] >= 0:
-            #     t1 = str(bragg_peaks.data['h'][a0])
-            # # else:
-            # #     t1 = u'str(bragg_peaks.data['h'][a0])\u0305'
-
-            # t = t1 + ' ' + \
-            #     str(bragg_peaks.data['k'][a0]) + ' ' + \
-            #     str(bragg_peaks.data['l'][a0])
-
-
-            # plt.text( \
-            #     bragg_peaks.data['qy'][a0],
-            #     bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
-            #     t,
-            #     **text_params)      
-
-    # # axes limits
-    # r = self.k_max * 1.05
-    # ax.axes.set_xlim3d(left=-r, right=r) 
-    # ax.axes.set_ylim3d(bottom=-r, top=r) 
-    # ax.axes.set_zlim3d(bottom=-r, top=r) 
+            ax.text( \
+                bragg_peaks.data['qy'][a0],
+                bragg_peaks.data['qx'][a0] - shift_labels - shift_marker*np.sqrt(marker_size[a0]),
+                f'{overline(h)}{overline(k)}{overline(l)}',
+                **text_params)  
 
     if input_fig_handle is None:
         plt.show()
@@ -2202,7 +1939,6 @@ def axisEqual3D(ax):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
 
-# def atomic_colors(ID):
 def atomic_colors(ID):
     return {
         1:    np.array([0.8,0.8,0.8]),
@@ -2221,87 +1957,3 @@ def atomic_colors(ID):
         79:   np.array([1.0,0.7,0.0]),
     }.get(ID, np.array([0.0,0.0,0.0]))
 
-
-# def cdesign(degree):
-#     """
-#     Returns the spherical coordinates of Colin-design.
-
-#     Args:
-#         degree: int designating the maximum order
-
-#     Returns:
-#         azim: Nx1, azimuth of each point in the t-design
-#         elev: Nx1, elevation of each point in the t-design
-#         vecs: Nx3, array of cartesian coordinates for each point
-
-#     """
-
-#     degree = np.asarray(degree).astype(np.int)
-#     steps = (degree // 4) + 1
-
-#     u = np.array((0,0,1))
-#     v = np.array((0,1,1)) / np.sqrt(2)
-#     w = np.array((1,1,1)) / np.sqrt(3)
-
-#     # Calculate points along u and v using the SLERP formula
-#     # https://en.wikipedia.org/wiki/Slerp
-#     weights = np.linspace(0,1,steps+1)
-#     angle_u_v = np.arccos(np.sum(u * v))
-#     pv = u[None,:] * np.sin((1-weights[:,None])*angle_u_v)/np.sin(angle_u_v) + \
-#          v[None,:] * np.sin(   weights[:,None] *angle_u_v)/np.sin(angle_u_v) 
-
-#     # Calculate points along u and w using the SLERP formula
-#     angle_u_w = np.arccos(np.sum(u * w))
-#     pw = u[None,:] * np.sin((1-weights[:,None])*angle_u_w)/np.sin(angle_u_w) + \
-#          w[None,:] * np.sin(   weights[:,None] *angle_u_w)/np.sin(angle_u_w) 
-
-
-#     # Init array to hold all points
-#     num_points = ((steps+1)*(steps+2)/2).astype(np.int)
-#     vecs = np.zeros((num_points,3))
-#     vecs[0,:] = u
-
-#     # Calculate points on 1/48th of the unit sphere with another application of SLERP
-#     for a0 in np.arange(1,steps+1):
-#         inds = np.arange(a0*(a0+1)/2, a0*(a0+1)/2 + a0 + 1).astype(np.int)
-
-#         p0 = pv[a0,:]
-#         p1 = pw[a0,:]
-#         angle_p = np.arccos(np.sum(p0 * p1))
-
-#         weights = np.linspace(0,1,a0+1)
-#         vecs[inds,:] = \
-#             p0[None,:] * np.sin((1-weights[:,None])*angle_p)/np.sin(angle_p) + \
-#             p1[None,:] * np.sin(   weights[:,None] *angle_p)/np.sin(angle_p) 
-
-#     # Expand to 1/8 of the sphere
-#     vecs = np.vstack((
-#         vecs[:,[0,1,2]],
-#         vecs[:,[0,2,1]],
-#         vecs[:,[1,0,2]],
-#         vecs[:,[1,2,0]],
-#         vecs[:,[2,0,1]],
-#         vecs[:,[2,1,0]],
-#         ))
-#     # Remove duplicate points
-#     vecs = np.unique(vecs, axis=0)
-
-#     # Expand to full the sphere
-#     vecs = np.vstack((
-#         vecs*np.array(( 1, 1, 1)),
-#         vecs*np.array((-1, 1, 1)),
-#         vecs*np.array(( 1,-1, 1)),
-#         vecs*np.array((-1,-1, 1)),
-#         vecs*np.array(( 1, 1,-1)),
-#         vecs*np.array((-1, 1,-1)),
-#         vecs*np.array(( 1,-1,-1)),
-#         vecs*np.array((-1,-1,-1)),
-#         ))
-#     # Remove duplicate points
-#     vecs = np.unique(vecs, axis=0)
-
-#     # Spherical coordinates
-#     azim = np.arctan2(vecs[:,1],vecs[:,0])
-#     elev = np.arctan2(np.hypot(vecs[:,1], vecs[:,0]), vecs[:,2])
-
-#     return azim, elev, vecs
