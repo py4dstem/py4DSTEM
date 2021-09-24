@@ -95,9 +95,7 @@ def calibrate_Bragg_peaks_pixel_size(
 
     if coords is not None:
         q_pixel_size = coords.get_Q_pixel_size()
-        assert (
-            q_pixel_size is not None
-        ), "coords did not contain center position"
+        assert q_pixel_size is not None, "coords did not contain center position"
 
     if name is None:
         sl = braggpeaks.name.split("_")
@@ -109,9 +107,11 @@ def calibrate_Bragg_peaks_pixel_size(
 
     braggpeaks_calibrated = braggpeaks.copy(name=name)
 
-    for Rx, Ry in tqdmnd(braggpeaks_calibrated.shape[0],braggpeaks_calibrated.shape[1]):
-            pointlist = braggpeaks_calibrated.get_pointlist(Rx, Ry)
-            pointlist.data["qx"] *= q_pixel_size
-            pointlist.data["qy"] *= q_pixel_size
+    for Rx, Ry in tqdmnd(
+        braggpeaks_calibrated.shape[0], braggpeaks_calibrated.shape[1]
+    ):
+        pointlist = braggpeaks_calibrated.get_pointlist(Rx, Ry)
+        pointlist.data["qx"] *= q_pixel_size
+        pointlist.data["qy"] *= q_pixel_size
 
     return braggpeaks_calibrated
