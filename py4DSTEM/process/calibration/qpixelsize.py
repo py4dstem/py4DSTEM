@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.optimize import leastsq
 from typing import Union, Optional
-from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.process.utils import get_CoM, tqdmnd
 from ...io.datastructure import Coordinates, PointListArray
 
 
@@ -109,8 +109,7 @@ def calibrate_Bragg_peaks_pixel_size(
 
     braggpeaks_calibrated = braggpeaks.copy(name=name)
 
-    for Rx in range(braggpeaks_calibrated.shape[0]):
-        for Ry in range(braggpeaks_calibrated.shape[1]):
+    for Rx, Ry in tqdmnd(braggpeaks_calibrated.shape[0],braggpeaks_calibrated.shape[1]):
             pointlist = braggpeaks_calibrated.get_pointlist(Rx, Ry)
             pointlist.data["qx"] *= q_pixel_size
             pointlist.data["qy"] *= q_pixel_size
