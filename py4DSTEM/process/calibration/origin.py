@@ -9,7 +9,6 @@ from ..utils import get_CoM, add_to_2D_array_from_floats, tqdmnd, get_maxima_2D
 from ...io.datastructure import PointListArray
 from ..diskdetection.braggvectormap import get_bragg_vector_map
 from ..diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
-# from ..process.calibration import get_probe_size
 
 
 ### Functions for finding the origin
@@ -71,15 +70,10 @@ def get_origin_single_dp(dp,r,rscale=1.2):
     Find the origin for a single diffraction pattern, assuming (a) there is no beam stop,
     and (b) the center beam contains the highest intensity.
 
-    Args:the probe std is actually not terrible, but I'd never use it - I always use sigmoids with terminated tails
-1:31
-to guarantee some degree of locality
-1:33
-I'll leave it as is for 
-        dp (ndarray): a diffraction pattern
-        r (number): the approximate radius of the center disk
-        rscale (number): expand 'r' by this amount to form a mask about the center disk
-            when taking its center of mass
+    Args:
+        dp (ndarray): the diffraction pattern
+        r (number): the approximate disk radius
+        rscale (number): factor by which `r` is scaled to generate a mask
 
     Returns:
         (2-tuple): The origin
@@ -230,7 +224,6 @@ def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
 
     return qx0, qy0, braggvectormap
 
-
 def get_origin_brightest_disk(
         datacube,
         probe_kernel,
@@ -240,26 +233,29 @@ def get_origin_brightest_disk(
         upsample_factor=16,
         mask=None):    
     """
-    Find the origin for all diffraction patterns in a datacube, by finding the brightest peak and then
-    masking around that peak.
+    Find the origin for all diffraction patterns in a datacube, by finding the
+    brightest peak and then masking around that peak.
 
     Args:
-        datacube (DataCube):            the data
-        probe_kernel (array):           probe kernel for disk detection
-        qxyInit (array):                (qx0,qy0) origin for choosing the peak
-        probe_mask_size (float):        mask size in pixels. If set to None, we set it to 2*probe radius estimate.
-        sub_pixel                       'None' or 'poly' or 'multicorr'
-        upsample_factor (int):          upsample factor
-        mask (ndarray or None):         if not None, should be an (Q_Nx,Q_Ny) shaped
-                                        boolean array. Mask will be applied to diffraction
-                                        patterns before finding the center.
-        probe_mask_std_scale (float):   size of Gaussian mask sigma. If set to None, function will estimate probe size.
-
+        datacube (DataCube): the data
+        probe_kernel (array): probe kernel for disk detection
+        qxyInit (array or None): (qx0,qy0) origin for choosing the peak, or `None`.
+            If `None`, the origin is the mean diffraction pattern is computed,
+            which may be slow for large datasets, and is used to compute
+            `(qx0,qy0)`.
+        probe_mask_size (float): mask size in pixels. If set to None, we set it
+            to 2*probe radius estimate.
+        sub_pixel (str): 'None' or 'poly' or 'multicorr'
+        upsample_factor (int): upsample factor
+        mask (ndarray or None): if not None, should be an (Q_Nx,Q_Ny) shaped
+            boolean array. Mask will be applied to diffraction patterns before
+            finding the center.
+        probe_mask_std_scale (float): size of Gaussian mask sigma. If set to
+            None, function will estimate probe size.
 
     Returns:
         2 (R_Nx,R_Ny)-shaped ndarrays: the origin, (x,y) at each scan position
     """
-
     if probe_mask_size is None:
         probe_mask_size, px, py = get_probe_size(np.fft.fftshift(probe_kernel))
         probe_mask_size *= 2
@@ -282,7 +278,7 @@ def get_origin_brightest_disk(
             maxNumPeaks = 1,
             subpixel = subpixel,
             upsample_factor = upsample_factor)
-        qxyInit = np.array([peaks.data['qx'],peaks.data['qx']])
+        qxyInit = np.array([peaks.data['qx'],peaks.data['qy']])
 
     # Create mask
     qx = np.arange(datacube.Q_Nx) - qxyInit[0]
@@ -321,72 +317,6 @@ def get_origin_brightest_disk(
             qy0_ar[rx,ry] = peaks.data['qy']
 
     return qx0_ar, qy0_ar
-
-def get_origin_autocorrelation(
-        datacube,
-        subpixel='multicorr',
-        upsample_factor=16,
-        mask=None):
-
-    """
-    Find the origin for all diffraction patterns in a datacube, using the autocorrelation method.
-    Note - currently does not work!
-
-    Args:
-        datacube (DataCube): the data
-        mask (ndarray or None): if not None, should be an (Q_Nx,Q_Ny) shaped
-                    boolean array. Mask will be applied to diffraction patterns before finding the center.
-
-    Returns:
-        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
-    """
-
-    # init output arrays
-    qx0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
-    qy0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
-
-    if mask is not None:
-        maskCorr = np.real(np.fft.ifft2(np.fft.fft2(mask)**2))
-
-    # for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
-    for (rx,ry) in tqdmnd(1,1,desc='Finding origins',unit='DP',unit_scale=True):
-    # for (rx,ry) in (range(1), range(1)):
-    # for rx, ry in zip(range(1),range(1)):
-        dp = (datacube.data[rx,ry,:,:])
-
-        # Calculate correlogram
-        if mask is None:
-            # dpCorr = np.real(np.fft.ifft2(np.fft.fft2(dp)**2))
-            dpCorrFFT = np.fft.fft2(dp)**2
-            dpCorr = np.real(np.fft.ifft2(dpCorrFFT))
-
-            # find the center coordinate
-            qx0, qy0, intensity = get_maxima_2D(
-                dpCorr,
-                subpixel=subpixel,
-                upsample_factor=upsample_factor,
-                maxNumPeaks=1,
-                ar_FT=dpCorrFFT)
-
-
-        else:
-            dpCorr = np.real(np.fft.ifft2(np.fft.fft2(dp * mask)**2))
-            dpCorr = dpCorr / maskCorr
-
-            # find the center coordinate
-            qx0, qy0, intensity = get_maxima_2D(
-                dpCorr,
-                subpixel=subpixel,
-                upsample_factor=upsample_factor,
-                maxNumPeaks=1)
-        
-        qx0_ar[rx,ry] = datacube.Q_Nx - ((qx0/2 + datacube.Q_Nx/4) % datacube.Q_Nx/2) - datacube.Q_Nx/4
-        qy0_ar[rx,ry] = datacube.Q_Ny - ((qy0/2 + datacube.Q_Ny/4) % datacube.Q_Ny/2) - datacube.Q_Ny/4
-    
-    return qx0_ar, qy0_ar
-
-
-
 
 def get_origin_single_dp_beamstop(dp,**kwargs):
     """
