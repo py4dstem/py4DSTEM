@@ -274,7 +274,6 @@ def get_probe_kernel_edge_gaussian(
     qr2 = (qx**2 + qy**2)
     # Calculate Gaussian normalization kernel
     qstd2 = np.sum(qr2*probe_kernel) / np.sum(probe_kernel)
-    print(np.sqrt(qstd2))
     kernel_norm = np.exp(-qr2 / (2*qstd2*sigma_probe_scale**2))
 
     # Output normalized kernel
@@ -336,7 +335,4 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared
     probe_kernel = probe_kernel/np.sum(probe_kernel) - sigmoid/np.sum(sigmoid)
 
     return probe_kernel
-
-
-
 
