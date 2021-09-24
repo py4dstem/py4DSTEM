@@ -133,7 +133,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
         f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) =
             Norm(r; I0,sigma0,0) +
             Norm(r; I1,sigma1,R)*Theta(r-R)
-            Norm(r; I1,sigma2,R)*Theta(R-r) + offset
+            Norm(r; I1,sigma2,R)*Theta(R-r) + c_bkgd
 
     where
 
