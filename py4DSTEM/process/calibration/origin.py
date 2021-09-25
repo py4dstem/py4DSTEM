@@ -4,13 +4,14 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
-from ..fit import plane,parabola,bezier_two,fit_2D
-from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
-from ...io.datastructure import PointListArray
+from ..fit import plane, parabola, bezier_two, fit_2D
+from ..utils import get_CoM, add_to_2D_array_from_floats, tqdmnd
+from ...io.datastructure import PointListArray, DataCube
 from ..diskdetection.braggvectormap import get_bragg_vector_map
 
 
 ### Functions for finding the origin
+
 
 def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     """
@@ -42,29 +43,30 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
             * **x0**: *(float)* the x position of the central disk center
             * **y0**: *(float)* the y position of the central disk center
     """
-    thresh_vals = np.linspace(thresh_lower,thresh_upper,N)
+    thresh_vals = np.linspace(thresh_lower, thresh_upper, N)
     r_vals = np.zeros(N)
 
     # Get r for each mask
     DPmax = np.max(DP)
     for i in range(len(thresh_vals)):
         thresh = thresh_vals[i]
-        mask = DP > DPmax*thresh
-        r_vals[i] = np.sqrt(np.sum(mask)/np.pi)
+        mask = DP > DPmax * thresh
+        r_vals[i] = np.sqrt(np.sum(mask) / np.pi)
 
     # Get derivative and determine trustworthy r-values
     dr_dtheta = np.gradient(r_vals)
-    mask = (dr_dtheta <= 0) * (dr_dtheta >= 2*np.median(dr_dtheta))
+    mask = (dr_dtheta <= 0) * (dr_dtheta >= 2 * np.median(dr_dtheta))
     r = np.mean(r_vals[mask])
 
     # Get origin
     thresh = np.mean(thresh_vals[mask])
-    mask = DP > DPmax*thresh
-    x0,y0 = get_CoM(DP*mask)
+    mask = DP > DPmax * thresh
+    x0, y0 = get_CoM(DP * mask)
 
-    return r,x0,y0
+    return r, x0, y0
 
-def get_origin_single_dp(dp,r,rscale=1.2):
+
+def get_origin_single_dp(dp, r, rscale=1.2):
     """
     Find the origin for a single diffraction pattern, assuming (a) there is no beam stop,
     and (b) the center beam contains the highest intensity.
@@ -78,14 +80,15 @@ def get_origin_single_dp(dp,r,rscale=1.2):
     Returns:
         (2-tuple): The origin
     """
-    Q_Nx,Q_Ny = dp.shape
-    _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),(Q_Nx,Q_Ny))
-    qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
-    mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
-    qx0,qy0 = get_CoM(dp*mask)
-    return qx0,qy0
+    Q_Nx, Q_Ny = dp.shape
+    _qx0, _qy0 = np.unravel_index(np.argmax(gaussian_filter(dp, r)), (Q_Nx, Q_Ny))
+    qyy, qxx = np.meshgrid(np.arange(Q_Ny), np.arange(Q_Nx))
+    mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+    qx0, qy0 = get_CoM(dp * mask)
+    return qx0, qy0
 
-def get_origin(datacube,r=None,rscale=1.2,dp_max=None,mask=None):
+
+def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity
@@ -114,41 +117,60 @@ def get_origin(datacube,r=None,rscale=1.2,dp_max=None,mask=None):
     """
     if r is None:
         if dp_max is None:
-            dp_max = np.max(datacube.data,axis=(0,1))
+            dp_max = np.max(datacube.data, axis=(0, 1))
         else:
-            assert dp_max.shape == (datacube.Q_Nx,datacube.Q_Ny)
-        r,_,_ = get_probe_size(dp_max)
+            assert dp_max.shape == (datacube.Q_Nx, datacube.Q_Ny)
+        r, _, _ = get_probe_size(dp_max)
 
-    qx0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
-    qy0 = np.zeros((datacube.R_Nx,datacube.R_Ny))
-    qyy,qxx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
+    qx0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    qy0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    qyy, qxx = np.meshgrid(np.arange(datacube.Q_Ny), np.arange(datacube.Q_Nx))
 
     if mask is None:
-        for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
-            dp = datacube.data[rx,ry,:,:]
-            _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
-                                         (datacube.Q_Nx,datacube.Q_Ny))
-            _mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
-            qx0[rx,ry],qy0[rx,ry] = get_CoM(dp*_mask)
+        for (rx, ry) in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            desc="Finding origins",
+            unit="DP",
+            unit_scale=True,
+        ):
+            dp = datacube.data[rx, ry, :, :]
+            _qx0, _qy0 = np.unravel_index(
+                np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+            )
+            _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+            qx0[rx, ry], qy0[rx, ry] = get_CoM(dp * _mask)
 
     else:
-        assert mask.shape==(datacube.R_Nx,datacube.R_Ny)
-        assert mask.dtype==bool
-        qx0 = np.ma.array(data=qx0,mask=np.zeros((datacube.R_Nx,datacube.R_Ny),dtype=bool))
-        qy0 = np.ma.array(data=qy0,mask=np.zeros((datacube.R_Nx,datacube.R_Ny),dtype=bool))
-        for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
-            if mask[rx,ry]:
-                dp = datacube.data[rx,ry,:,:]
-                _qx0,_qy0 = np.unravel_index(np.argmax(gaussian_filter(dp,r)),
-                                             (datacube.Q_Nx,datacube.Q_Ny))
-                _mask = np.hypot(qxx-_qx0,qyy-_qy0) < r*rscale
-                qx0.data[rx,ry],qy0.data[rx,ry] = get_CoM(dp*_mask)
+        assert mask.shape == (datacube.R_Nx, datacube.R_Ny)
+        assert mask.dtype == bool
+        qx0 = np.ma.array(
+            data=qx0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
+        )
+        qy0 = np.ma.array(
+            data=qy0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
+        )
+        for (rx, ry) in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            desc="Finding origins",
+            unit="DP",
+            unit_scale=True,
+        ):
+            if mask[rx, ry]:
+                dp = datacube.data[rx, ry, :, :]
+                _qx0, _qy0 = np.unravel_index(
+                    np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+                )
+                _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+                qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
             else:
-                qx0.mask,qy0.mask = True,True
+                qx0.mask, qy0.mask = True, True
 
-    return qx0,qy0
+    return qx0, qy0
 
-def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
+
+def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=None):
     """
     Gets the diffraction shifts using detected Bragg disk positions.
 
@@ -178,78 +200,128 @@ def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
               purposes.
     """
     assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
-    assert all([isinstance(item, (int,np.integer)) for item in [Q_Nx,Q_Ny]])
+    assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
     assert isinstance(findcenter, str), "center must be a str"
-    assert findcenter in ['CoM','max'], "center must be either 'CoM' or 'max'"
-    R_Nx,R_Ny = braggpeaks.shape
+    assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
+    R_Nx, R_Ny = braggpeaks.shape
 
     # Get guess at position of unscattered beam
     if bvm is None:
         braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
     else:
         braggvectormap_all = bvm
-    if findcenter=='max':
-        x0,y0 = np.unravel_index(np.argmax(gaussian_filter(braggvectormap_all,10)),(Q_Nx,Q_Ny))
+    if findcenter == "max":
+        x0, y0 = np.unravel_index(
+            np.argmax(gaussian_filter(braggvectormap_all, 10)), (Q_Nx, Q_Ny)
+        )
     else:
-        x0,y0 = get_CoM(braggvectormap_all)
+        x0, y0 = get_CoM(braggvectormap_all)
         braggvectormap = np.zeros_like(braggvectormap_all)
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                pointlist = braggpeaks.get_pointlist(Rx,Ry)
+                pointlist = braggpeaks.get_pointlist(Rx, Ry)
                 if pointlist.length > 0:
-                    r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                    r2 = (pointlist.data["qx"] - x0) ** 2 + (
+                        pointlist.data["qy"] - y0
+                    ) ** 2
                     index = np.argmin(r2)
-                    braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                    pointlist.data['qx'][index],
-                                                    pointlist.data['qy'][index],
-                                                    pointlist.data['intensity'][index])
-        x0,y0 = get_CoM(braggvectormap)
+                    braggvectormap = add_to_2D_array_from_floats(
+                        braggvectormap,
+                        pointlist.data["qx"][index],
+                        pointlist.data["qy"][index],
+                        pointlist.data["intensity"][index],
+                    )
+        x0, y0 = get_CoM(braggvectormap)
 
     # Get Bragg peak closest to unscattered beam at each scan position
     braggvectormap = np.zeros_like(braggvectormap_all)
-    qx0 = np.zeros((R_Nx,R_Ny))
-    qy0 = np.zeros((R_Nx,R_Ny))
+    qx0 = np.zeros((R_Nx, R_Ny))
+    qy0 = np.zeros((R_Nx, R_Ny))
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            pointlist = braggpeaks.get_pointlist(Rx,Ry)
+            pointlist = braggpeaks.get_pointlist(Rx, Ry)
             if pointlist.length > 0:
-                r2 = (pointlist.data['qx']-x0)**2 + (pointlist.data['qy']-y0)**2
+                r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
                 index = np.argmin(r2)
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,
-                                                pointlist.data['qx'][index],
-                                                pointlist.data['qy'][index],
-                                                pointlist.data['intensity'][index])
-                qx0[Rx,Ry] = pointlist.data['qx'][index]
-                qy0[Rx,Ry] = pointlist.data['qy'][index]
+                braggvectormap = add_to_2D_array_from_floats(
+                    braggvectormap,
+                    pointlist.data["qx"][index],
+                    pointlist.data["qy"][index],
+                    pointlist.data["intensity"][index],
+                )
+                qx0[Rx, Ry] = pointlist.data["qx"][index]
+                qy0[Rx, Ry] = pointlist.data["qy"][index]
 
     return qx0, qy0, braggvectormap
 
-def get_origin_single_dp_beamstop(dp,**kwargs):
+
+def get_origin_single_dp_beamstop(DP: np.ndarray, mask: np.ndarray):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
     Args:
+        DP (np array): diffraction pattern
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove and holes
 
     Returns:
+        qx0, qy0 (tuple) measured center position of diffraction pattern
     """
-    return
 
-def get_origin_beamstop(dp,**kwargs):
+    imCorr = np.real(
+        np.fft.ifft2(
+            np.fft.fft2(DP * mask)
+            * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
+        )
+    )
+
+    xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
+
+    dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
+    dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
+
+    return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
+
+
+def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
     """
-    Find the origin for all single diffraction patterns in a datacube,
-    assuming there is a beam stop.
+    Find the origin for each diffraction pattern, assuming there is a beam stop.
 
     Args:
+        datacube (DataCube)
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove and holes
 
     Returns:
+        qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
     """
-    return
+
+    qx0 = np.zeros(datacube.data.shape[:2])
+    qy0 = np.zeros_like(qx0)
+
+    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
+        x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
+
+    return qx0, qy0
 
 
 ### Functions for fitting the origin
 
-def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=False,
-               robust=False, robust_steps=3, robust_thresh=2):
+
+def fit_origin(
+    qx0_meas,
+    qy0_meas,
+    mask=None,
+    fitfunction="plane",
+    returnfitp=False,
+    robust=False,
+    robust_steps=3,
+    robust_thresh=2,
+):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
@@ -283,53 +355,73 @@ def fit_origin(qx0_meas, qy0_meas, mask=None, fitfunction='plane', returnfitp=Fa
         giving fit parameters and covariance matrices with respect to the chosen
         fitting function.
     """
-    assert isinstance(qx0_meas,np.ndarray) and len(qx0_meas.shape)==2
-    assert isinstance(qx0_meas,np.ndarray) and len(qy0_meas.shape)==2
+    assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
+    assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
-    assert mask is None or mask.shape==qx0_meas.shape and mask.dtype==bool
-    assert fitfunction in ('plane','parabola','bezier_two')
-    if fitfunction=='plane':
+    assert mask is None or mask.shape == qx0_meas.shape and mask.dtype == bool
+    assert fitfunction in ("plane", "parabola", "bezier_two")
+    if fitfunction == "plane":
         f = plane
-    elif fitfunction=='parabola':
+    elif fitfunction == "parabola":
         f = parabola
-    elif fitfunction=='bezier_two':
+    elif fitfunction == "bezier_two":
         f = bezier_two
     else:
         raise Exception("Invalid fitfunction '{}'".format(fitfunction))
 
     # Fit data
     if mask is None:
-        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas,
-            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
-        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas,
-            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh)
+        popt_x, pcov_x, qx0_fit = fit_2D(
+            f,
+            qx0_meas,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+        )
+        popt_y, pcov_y, qy0_fit = fit_2D(
+            f,
+            qy0_meas,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+        )
 
     else:
-        popt_x, pcov_x, qx0_fit = fit_2D(f, qx0_meas,
-            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
-            data_mask=mask==False)
-        popt_y, pcov_y, qy0_fit = fit_2D(f, qy0_meas,
-            robust=robust, robust_steps=robust_steps, robust_thresh=robust_thresh,
-            data_mask=mask==False)
+        popt_x, pcov_x, qx0_fit = fit_2D(
+            f,
+            qx0_meas,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+            data_mask=mask == False,
+        )
+        popt_y, pcov_y, qy0_fit = fit_2D(
+            f,
+            qy0_meas,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+            data_mask=mask == False,
+        )
 
     # Compute residuals
-    qx0_residuals = qx0_meas-qx0_fit
-    qy0_residuals = qy0_meas-qy0_fit
+    qx0_residuals = qx0_meas - qx0_fit
+    qy0_residuals = qy0_meas - qy0_fit
 
     # Return
     if not returnfitp:
-        return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
+        return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
     else:
-        return (qx0_fit,qy0_fit,qx0_residuals,qy0_residuals),(popt_x,popt_y,pcov_x,pcov_y)
-
-
-
-
-
-
+        return (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals), (
+            popt_x,
+            popt_y,
+            pcov_x,
+            pcov_y,
+        )
 
 
 ### Older / soon-to-be-deprecated functions for finding the origin
+
 
 def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     """
@@ -354,42 +446,75 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     """
     # Get score
     score = np.zeros_like(xshifts)
-    score[:-1,:] += np.abs(xshifts[:-1,:]-np.roll(xshifts,(-1, 0),axis=(0,1))[:-1,:])
-    score[ 1:,:] += np.abs(xshifts[ 1:,:]-np.roll(xshifts,( 1, 0),axis=(0,1))[ 1:,:])
-    score[:,:-1] += np.abs(xshifts[:,:-1]-np.roll(xshifts,( 0,-1),axis=(0,1))[:,:-1])
-    score[:, 1:] += np.abs(xshifts[:, 1:]-np.roll(xshifts,( 0, 1),axis=(0,1))[:, 1:])
-    score[:-1,:-1] += np.abs(xshifts[:-1,:-1]-np.roll(xshifts,(-1,-1),axis=(0,1))[:-1,:-1])
-    score[ 1:,:-1] += np.abs(xshifts[ 1:,:-1]-np.roll(xshifts,( 1,-1),axis=(0,1))[ 1:,:-1])
-    score[:-1, 1:] += np.abs(xshifts[:-1, 1:]-np.roll(xshifts,(-1, 1),axis=(0,1))[:-1, 1:])
-    score[ 1:, 1:] += np.abs(xshifts[ 1:, 1:]-np.roll(xshifts,( 1, 1),axis=(0,1))[ 1:, 1:])
-    score[:-1,:] += np.abs(yshifts[:-1,:]-np.roll(yshifts,(-1, 0),axis=(0,1))[:-1,:])
-    score[ 1:,:] += np.abs(yshifts[ 1:,:]-np.roll(yshifts,( 1, 0),axis=(0,1))[ 1:,:])
-    score[:,:-1] += np.abs(yshifts[:,:-1]-np.roll(yshifts,( 0,-1),axis=(0,1))[:,:-1])
-    score[:, 1:] += np.abs(yshifts[:, 1:]-np.roll(yshifts,( 0, 1),axis=(0,1))[:, 1:])
-    score[:-1,:-1] += np.abs(yshifts[:-1,:-1]-np.roll(yshifts,(-1,-1),axis=(0,1))[:-1,:-1])
-    score[ 1:,:-1] += np.abs(yshifts[ 1:,:-1]-np.roll(yshifts,( 1,-1),axis=(0,1))[ 1:,:-1])
-    score[:-1, 1:] += np.abs(yshifts[:-1, 1:]-np.roll(yshifts,(-1, 1),axis=(0,1))[:-1, 1:])
-    score[ 1:, 1:] += np.abs(yshifts[ 1:, 1:]-np.roll(yshifts,( 1, 1),axis=(0,1))[ 1:, 1:])
-    score[1:-1,1:-1] /= 8.
-    score[: 1,1:-1] /= 5.
-    score[-1:,1:-1] /= 5.
-    score[1:-1,: 1] /= 5.
-    score[1:-1,-1:] /= 5.
-    score[ 0, 0] /= 3.
-    score[ 0,-1] /= 3.
-    score[-1, 0] /= 3.
-    score[-1,-1] /= 3.
+    score[:-1, :] += np.abs(
+        xshifts[:-1, :] - np.roll(xshifts, (-1, 0), axis=(0, 1))[:-1, :]
+    )
+    score[1:, :] += np.abs(
+        xshifts[1:, :] - np.roll(xshifts, (1, 0), axis=(0, 1))[1:, :]
+    )
+    score[:, :-1] += np.abs(
+        xshifts[:, :-1] - np.roll(xshifts, (0, -1), axis=(0, 1))[:, :-1]
+    )
+    score[:, 1:] += np.abs(
+        xshifts[:, 1:] - np.roll(xshifts, (0, 1), axis=(0, 1))[:, 1:]
+    )
+    score[:-1, :-1] += np.abs(
+        xshifts[:-1, :-1] - np.roll(xshifts, (-1, -1), axis=(0, 1))[:-1, :-1]
+    )
+    score[1:, :-1] += np.abs(
+        xshifts[1:, :-1] - np.roll(xshifts, (1, -1), axis=(0, 1))[1:, :-1]
+    )
+    score[:-1, 1:] += np.abs(
+        xshifts[:-1, 1:] - np.roll(xshifts, (-1, 1), axis=(0, 1))[:-1, 1:]
+    )
+    score[1:, 1:] += np.abs(
+        xshifts[1:, 1:] - np.roll(xshifts, (1, 1), axis=(0, 1))[1:, 1:]
+    )
+    score[:-1, :] += np.abs(
+        yshifts[:-1, :] - np.roll(yshifts, (-1, 0), axis=(0, 1))[:-1, :]
+    )
+    score[1:, :] += np.abs(
+        yshifts[1:, :] - np.roll(yshifts, (1, 0), axis=(0, 1))[1:, :]
+    )
+    score[:, :-1] += np.abs(
+        yshifts[:, :-1] - np.roll(yshifts, (0, -1), axis=(0, 1))[:, :-1]
+    )
+    score[:, 1:] += np.abs(
+        yshifts[:, 1:] - np.roll(yshifts, (0, 1), axis=(0, 1))[:, 1:]
+    )
+    score[:-1, :-1] += np.abs(
+        yshifts[:-1, :-1] - np.roll(yshifts, (-1, -1), axis=(0, 1))[:-1, :-1]
+    )
+    score[1:, :-1] += np.abs(
+        yshifts[1:, :-1] - np.roll(yshifts, (1, -1), axis=(0, 1))[1:, :-1]
+    )
+    score[:-1, 1:] += np.abs(
+        yshifts[:-1, 1:] - np.roll(yshifts, (-1, 1), axis=(0, 1))[:-1, 1:]
+    )
+    score[1:, 1:] += np.abs(
+        yshifts[1:, 1:] - np.roll(yshifts, (1, 1), axis=(0, 1))[1:, 1:]
+    )
+    score[1:-1, 1:-1] /= 8.0
+    score[:1, 1:-1] /= 5.0
+    score[-1:, 1:-1] /= 5.0
+    score[1:-1, :1] /= 5.0
+    score[1:-1, -1:] /= 5.0
+    score[0, 0] /= 3.0
+    score[0, -1] /= 3.0
+    score[-1, 0] /= 3.0
+    score[-1, -1] /= 3.0
 
     # Get mask and return
-    cutoff = np.std(score)*n_sigma
+    cutoff = np.std(score) * n_sigma
     mask = score > cutoff
     if edge_boundary > 0:
-        mask[:edge_boundary,:] = True
-        mask[-edge_boundary:,:] = True
-        mask[:,:edge_boundary] = True
-        mask[:,-edge_boundary:] = True
+        mask[:edge_boundary, :] = True
+        mask[-edge_boundary:, :] = True
+        mask[:, :edge_boundary] = True
+        mask[:, -edge_boundary:] = True
 
     return mask, score, cutoff
+
 
 def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
     """
@@ -411,33 +536,35 @@ def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
         braggpeaks_centered  (PointListArray) the centered Bragg peaks
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert (qx0 is not None and qy0 is not None) != (coords is not None), (
-                                "Either (qx0,qy0) or coords must be specified")
+    assert (qx0 is not None and qy0 is not None) != (
+        coords is not None
+    ), "Either (qx0,qy0) or coords must be specified"
     if coords is not None:
-        qx0,qy0 = coords.get_origin()
-        assert qx0 is not None and qy0 is not None, "coords did not contain center position"
+        qx0, qy0 = coords.get_origin()
+        assert (
+            qx0 is not None and qy0 is not None
+        ), "coords did not contain center position"
     if name is None:
-        sl = braggpeaks.name.split('_')
-        _name = '_'.join([s for i,s in enumerate(sl) if not (s=='raw' and i==len(sl)-1)])
-        name = _name+"_centered"
-    assert isinstance(name,str)
+        sl = braggpeaks.name.split("_")
+        _name = "_".join(
+            [s for i, s in enumerate(sl) if not (s == "raw" and i == len(sl) - 1)]
+        )
+        name = _name + "_centered"
+    assert isinstance(name, str)
     braggpeaks_centered = braggpeaks.copy(name=name)
 
     if np.isscalar(qx0) & np.isscalar(qy0):
         for Rx in range(braggpeaks_centered.shape[0]):
             for Ry in range(braggpeaks_centered.shape[1]):
-                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
-                pointlist.data['qx'] -= qx0
-                pointlist.data['qy'] -= qy0
+                pointlist = braggpeaks_centered.get_pointlist(Rx, Ry)
+                pointlist.data["qx"] -= qx0
+                pointlist.data["qy"] -= qy0
     else:
         for Rx in range(braggpeaks_centered.shape[0]):
             for Ry in range(braggpeaks_centered.shape[1]):
-                pointlist = braggpeaks_centered.get_pointlist(Rx,Ry)
-                qx,qy = qx0[Rx,Ry],qy0[Rx,Ry]
-                pointlist.data['qx'] -= qx
-                pointlist.data['qy'] -= qy
+                pointlist = braggpeaks_centered.get_pointlist(Rx, Ry)
+                qx, qy = qx0[Rx, Ry], qy0[Rx, Ry]
+                pointlist.data["qx"] -= qx
+                pointlist.data["qy"] -= qy
 
     return braggpeaks_centered
-
-
-
