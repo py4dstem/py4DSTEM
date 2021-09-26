@@ -12,7 +12,7 @@ try:
     import pymatgen as mg
     from pymatgen.ext.matproj import MPRester
 except Exception:
-    print(r"pymatgen not found... Crystal module won't work ¯\_(ツ)_/¯")
+    print(r"pymatgen not found... pymatgen Crystal module won't work ¯\_(ツ)_/¯")
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
@@ -92,25 +92,6 @@ class Crystal:
             assert isinstance(
                 structure, mg.core.Structure
             ), "structure must be pymatgen Structure object"
-
-            self.structure = (
-                mg.symmetry.analyzer.SpacegroupAnalyzer(
-                    structure
-                ).get_conventional_standard_structure()
-                if conventional_standard_structure
-                else structure
-            )
-            self.struc_dict = self.structure.as_dict()
-
-            self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix
-            self.lat_real = self.structure.lattice.matrix
-
-            # Initialize Crystal
-            self.positions = self.structure.frac_coords  #: fractional atomic coordinates
-
-            #: atomic numbers
-            self.numbers = np.array([s.Z for s in self.structure.species], dtype=np.intp)
-
 
     def calculate_structure_factors(
         self, k_max: float = 2.0, tol_structure_factor: float = 1e-2, return_intensities: bool = False,
