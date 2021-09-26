@@ -9,6 +9,7 @@ from py4DSTEM.process.utils import tqdmnd
 def calibrate_Bragg_peaks_rotation(
     braggpeaks: PointListArray,
     theta: Optional[float] = None,
+    flip: Optional[bool] = None,
     coords: Optional[Coordinates] = None,
     name: Optional[str] = None,
 ) -> PointListArray:
@@ -18,7 +19,8 @@ def calibrate_Bragg_peaks_rotation(
 
     Accepts:
         braggpeaks  (PointListArray) the CENTERED Bragg peaks
-        theta       (float) the rotation betwee real and reciprocal space in radians
+        theta       (float) the rotation between real and reciprocal space in radians
+        flip        (bool) whether there is a flip between real and reciprocal space
         coords      (Coordinates) an object containing QR_rotation
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_centered'
@@ -30,17 +32,20 @@ def calibrate_Bragg_peaks_rotation(
     """
 
     assert isinstance(braggpeaks, PointListArray)
-    assert (theta is not None) != (
+    assert (theta is not None and flip is not None) != (
         coords is not None
     ), "Either (qx0,qy0) or coords must be specified"
 
     if coords is not None:
         assert isinstance(coords, Coordinates), "coords must be a Coordinates object."
         theta = coords.get_QR_rotation()
+        flip = coords.get_QR_flip()
         assert theta is not None, "coords did not contain center position"
 
     if theta is not None:
         assert isinstance(theta, float), "theta must be a float."
+    if flip is not None:
+        assert isinstance(flip, bool), "flip must be a boolean."
 
     if name is None:
         sl = braggpeaks.name.split("_")
@@ -57,7 +62,10 @@ def calibrate_Bragg_peaks_rotation(
     for Rx, Ry in tqdmnd(braggpeaks_rotated.shape[0], braggpeaks_rotated.shape[1]):
         pointlist = braggpeaks.get_pointlist(Rx, Ry)
 
-        positions = R @ np.vstack((pointlist.data["qx"], pointlist.data["qy"]))
+        if flip:
+            positions = R @ np.vstack((pointlist.data["qy"], pointlist.data["qx"]))
+        else:
+            positions = R @ np.vstack((pointlist.data["qx"], pointlist.data["qy"]))
 
         rotated_pointlist = braggpeaks_rotated.get_pointlist(Rx, Ry)
         rotated_pointlist.data["qx"] = positions[0, :]
