@@ -12,7 +12,7 @@ try:
     import pymatgen as mg
     from pymatgen.ext.matproj import MPRester
 except Exception:
-    print(r"pymatgen not found... Crystal module won't work ¯\_(ツ)_/¯")
+    print(r"pymatgen not found... pymatgen Crystal module won't work ¯\_(ツ)_/¯")
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
@@ -36,39 +36,62 @@ class Crystal:
 
     def __init__(
         self,
-        structure: Union[str, mg.core.Structure],
-        conventional_standard_structure: bool = True,
+        positions, 
+        numbers, 
+        cell, 
+        structure=None,
+        conventional_standard_structure=True,
     ):
         """
         Instantiate a Crystal object.
         Calculate lattice vectors.
         """
 
-        if isinstance(structure, str):
-            with MPRester() as m:
-                structure = m.get_structure_by_material_id(structure)
+        if positions is not None:
+            # Initialize Crystal
+            self.positions = np.asarray(positions)   #: fractional atomic coordinates
 
-        assert isinstance(
-            structure, mg.core.Structure
-        ), "structure must be pymatgen Structure object"
+            #: atomic numbers - if only one value is provided, assume all atoms are same species
+            numbers = np.asarray(numbers, dtype='intp')
+            if np.size(numbers) == 1:
+                self.numbers = np.ones(positions.shape[0], dtype='intp') * numbers
+            elif np.size(numbers) == positions.shape[0]:
+                self.numbers = numbers
+            else:
+                raise Exception('Number of positions and atomic numbers do not match')
 
-        self.structure = (
-            mg.symmetry.analyzer.SpacegroupAnalyzer(
-                structure
-            ).get_conventional_standard_structure()
-            if conventional_standard_structure
-            else structure
-        )
-        self.struc_dict = self.structure.as_dict()
 
-        self.lat_inv = self.structure.lattice.reciprocal_lattice_crystallographic.matrix
-        self.lat_real = self.structure.lattice.matrix
+            # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma] 
+            cell = np.asarray(cell, dtype='float_')      
+            if np.size(cell) == 1:
+                self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
+            elif np.size(cell) == 3:
+                self.cell = np.hstack([cell, 90, 90, 90])
+            elif np.size(cell) == 6:  
+                self.cell = cell             
+            else:
+                raise Exception('Cell cannot contain ' + np.size(cell) + ' elements')
 
-        # Initialize Crystal
-        self.positions = self.structure.frac_coords  #: fractional atomic coordinates
+            # calculate unit cell lattice vectors
+            a = self.cell[0]
+            b = self.cell[1]
+            c = self.cell[2]
+            alpha = self.cell[3] * np.pi/180
+            beta  = self.cell[4] * np.pi/180
+            gamma = self.cell[5] * np.pi/180
+            t = (np.cos(alpha)-np.cos(beta)*np.cos(gamma))/np.sin(gamma)
+            self.lat_real = np.array([ \
+                [a, 0, 0],
+                [b*np.cos(gamma), b*np.sin(gamma), 0],
+                [c*np.cos(beta), c*t, c*np.sqrt(1-np.cos(beta)**2-t**2)]])
+        else:
+            if isinstance(structure, str):
+                with MPRester() as m:
+                    structure = m.get_structure_by_material_id(structure)
 
-        #: atomic numbers
-        self.numbers = np.array([s.Z for s in self.structure.species], dtype=np.intp)
+            assert isinstance(
+                structure, mg.core.Structure
+            ), "structure must be pymatgen Structure object"
 
     def calculate_structure_factors(
         self, k_max: float = 2.0, tol_structure_factor: float = 1e-2, return_intensities: bool = False,
