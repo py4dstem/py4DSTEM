@@ -418,7 +418,7 @@ class Crystal:
         tol_distance: float = 0.01,
         plot_corr_norm: bool = False,
         fiber_axis = None,
-        fiber_angle_range = None,
+        fiber_angles = None,
         figsize: Union[list, tuple, np.ndarray] = (6, 6),
     ):
         """
@@ -438,7 +438,7 @@ class Crystal:
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
             fiber_axis (float):           (3,) vector specifying the fiber axis
-            fiber_angle_range (float):    scalar specifying angular range [degrees]
+            fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
 
         """
 
@@ -446,14 +446,41 @@ class Crystal:
         self.accel_voltage = np.asarray(accel_voltage)
         self.orientation_kernel_size = np.asarray(corr_kernel_size)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
+        self.orientation_fiber_angles = np.asarray(fiber_angles)
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         if isinstance(zone_axis_range, str):
-            if zone_axis_range == "fiber":
+            if zone_axis_range == "fiber" and fiber_axis is not None and fiber_angles is not None:
+                # Determine vector ranges
+                self.orientation_fiber_axis  = np.array(self.orientation_fiber_axis ).astype('float')
+                self.orientation_fiber_axis  = self.orientation_fiber_axis / np.linalg.norm(self.orientation_fiber_axis )
 
+                if np.all(self.orientation_fiber_axis  == np.array([1.0,0.0,0.0])):
+                    v1 = np.array([0.0,1.0,0.0])
+                else:
+                    v1 = np.array([1.0,0.0,0.0])
 
+                v2 = np.cross(self.orientation_fiber_axis, v1)
+                v3 = np.cross(v2, fiber_axis)
+                v2 = v2 / np.linalg.norm(v2)
+                v3 = v3 / np.linalg.norm(v3)
+
+                theta = self.orientation_fiber_angles[0]*np.pi/180.0
+                if self.orientation_fiber_angles[1] == 180 or self.orientation_fiber_angles[1] == 360:
+                    phi = np.pi/2.0
+                else:
+                    phi = self.orientation_fiber_angles[1]*np.pi/180.0
+
+                v2output = self.orientation_fiber_axis *np.cos(theta) + v2*np.sin(theta)
+                v3output = self.orientation_fiber_axis *np.cos(theta) + \
+                    (v2*np.sin(theta))*np.cos(phi) + \
+                    (v3*np.sin(theta))*np.sin(phi)
+                
+                self.orientation_zone_axis_range = np.vstack(
+                    (self.orientation_fiber_axis, v2output, v3output)
+                ).astype("float")
 
                 self.orientation_full = False
                 self.orientation_half = False
@@ -470,6 +497,11 @@ class Crystal:
                     self.orientation_full = False
                     self.orientation_half = True
                     self.orientation_fiber = False
+                else:
+                    if zone_axis_range == "fiber" and fiber_axis is None:
+                        raise ValueError('For fiber zone axes, you must specify the fiber axis and angular ranges')                        
+                    else:
+                        raise ValueError('Zone axis range must be a 2x3 array, 3x3 array, or full, half or fiber')
 
         else:
             # Define 3 vectors which span zone axis orientation range, normalize
@@ -520,6 +552,8 @@ class Crystal:
             )
         ).astype(np.int)
 
+
+        # Generate points spanning the zone axis range
         # Calculate points along u and v using the SLERP formula
         # https://en.wikipedia.org/wiki/Slerp
         weights = np.linspace(0, 1, self.orientation_zone_axis_steps + 1)
@@ -550,7 +584,10 @@ class Crystal:
         self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
         self.orientation_inds = np.zeros((self.orientation_num_zones, 3), dtype="int")
 
-        # Calculate zone axis points on the unit sphere with another application of SLERP
+
+
+        # Calculate zone axis points on the unit sphere with another application of SLERP, 
+        # or circular arc SLERP for fiber texture
         for a0 in np.arange(1, self.orientation_zone_axis_steps + 1):
             inds = np.arange(a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1).astype(
                 np.int
@@ -558,19 +595,114 @@ class Crystal:
 
             p0 = pv[a0, :]
             p1 = pw[a0, :]
-            angle_p = np.arccos(np.sum(p0 * p1))
 
             weights = np.linspace(0, 1, a0 + 1)
-            self.orientation_vecs[inds, :] = p0[None, :] * np.sin(
-                (1 - weights[:, None]) * angle_p
-            ) / np.sin(angle_p) + p1[None, :] * np.sin(
-                weights[:, None] * angle_p
-            ) / np.sin(
-                angle_p
-            )
+
+            if zone_axis_range == "fiber":
+                # For fiber texture, place points on circular arc perpendicular to the fiber axis
+                self.orientation_vecs[inds, :] = p0[None, :] 
+
+                p_proj = np.dot(p0, self.orientation_fiber_axis) * self.orientation_fiber_axis
+                p0_sub = p0 - p_proj
+                p1_sub = p1 - p_proj
+                angle_p_sub = np.arccos(np.sum(p0_sub * p1_sub))
+
+                self.orientation_vecs[inds, :] = p_proj + \
+                    p0_sub[None, :] * np.sin(
+                    (1 - weights[:, None]) * angle_p_sub
+                    ) / np.sin(angle_p_sub) + p1_sub[None, :] * np.sin(
+                    weights[:, None] * angle_p_sub
+                    ) / np.sin(
+                    angle_p_sub
+                    )
+            else:
+                angle_p = np.arccos(np.sum(p0 * p1))
+
+                self.orientation_vecs[inds, :] = p0[None, :] * np.sin(
+                    (1 - weights[:, None]) * angle_p
+                ) / np.sin(angle_p) + p1[None, :] * np.sin(
+                    weights[:, None] * angle_p
+                ) / np.sin(
+                    angle_p
+                )
 
             self.orientation_inds[inds, 0] = a0
             self.orientation_inds[inds, 1] = np.arange(a0 + 1)
+
+        # Fiber texture extend to 180 angular range if needed
+        if zone_axis_range == "fiber" and \
+            (self.orientation_fiber_angles[1] == 180 or self.orientation_fiber_angles[1] == 360):
+            # Mirror about the axes 0 and 1
+            n = np.cross(self.orientation_zone_axis_range[0,:],
+                self.orientation_zone_axis_range[1,:])
+            n = n / np.linalg.norm(n)
+
+            # n = self.orientation_zone_axis_range[2,:]
+            m = np.identity(3)- 2*(n[:,None] @ n[None,:])
+
+            vec_new = np.copy(self.orientation_vecs) @ m
+            orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
+
+            keep = np.zeros(vec_new.shape[0], dtype="bool")
+            for a0 in range(keep.size):
+                if (
+                    np.sqrt(
+                        np.min(
+                            np.sum(
+                                (self.orientation_vecs - vec_new[a0, :]) ** 2, axis=1
+                            )
+                        )
+                    )
+                    > tol_distance
+                ):
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep, :]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+            self.orientation_inds = np.vstack(
+                (self.orientation_inds, self.orientation_inds[keep, :])
+            ).astype("int")
+            self.orientation_inds[:, 2] = np.hstack(
+                (orientation_sector, np.ones(np.sum(keep), dtype="int"))
+            )
+        # Fiber texture extend to 360 angular range if needed
+        if zone_axis_range == "fiber" and self.orientation_fiber_angles[1] == 360:
+            # Mirror about the axes 0 and 2
+            n = np.cross(self.orientation_zone_axis_range[0,:],
+                self.orientation_zone_axis_range[2,:])
+            n = n / np.linalg.norm(n)
+
+            # n = self.orientation_zone_axis_range[2,:]
+            m = np.identity(3)- 2*(n[:,None] @ n[None,:])
+
+            vec_new = np.copy(self.orientation_vecs) @ m
+            orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
+
+            keep = np.zeros(vec_new.shape[0], dtype="bool")
+            for a0 in range(keep.size):
+                if (
+                    np.sqrt(
+                        np.min(
+                            np.sum(
+                                (self.orientation_vecs - vec_new[a0, :]) ** 2, axis=1
+                            )
+                        )
+                    )
+                    > tol_distance
+                ):
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep, :]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+            self.orientation_inds = np.vstack(
+                (self.orientation_inds, self.orientation_inds[keep, :])
+            ).astype("int")
+            self.orientation_inds[:, 2] = np.hstack(
+                (orientation_sector, np.ones(np.sum(keep), dtype="int"))
+            )
+        
 
         # expand to quarter sphere if needed
         if self.orientation_half or self.orientation_full:
@@ -924,22 +1056,28 @@ class Crystal:
         label_0 = self.orientation_zone_axis_range[0, :]
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        label_0 = np.round(label_0 * 1e3) * 1e-3
 
-        label_1 = self.orientation_zone_axis_range[1, :]
-        label_1 = np.round(label_1 * 1e3) * 1e-3
-        label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        if self.orientation_fiber is False:
+            label_1 = self.orientation_zone_axis_range[1, :]
+            label_1 = np.round(label_1 * 1e3) * 1e-3
+            label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+            label_1 = np.round(label_1 * 1e3) * 1e-3
 
-        label_2 = self.orientation_zone_axis_range[2, :]
-        label_2 = np.round(label_2 * 1e3) * 1e-3
-        label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            label_2 = self.orientation_zone_axis_range[2, :]
+            label_2 = np.round(label_2 * 1e3) * 1e-3
+            label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            label_2 = np.round(label_2 * 1e3) * 1e-3
 
-        inds = np.array(
-            [
-                0,
-                self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
-                self.orientation_num_zones - 1,
-            ]
-        )
+            inds = np.array(
+                [
+                    0,
+                    self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
+                    self.orientation_num_zones - 1,
+                ]
+            )
+        else:
+            inds = np.array([0])
 
         ax.scatter(
             xs=self.orientation_vecs[inds, 1] * 1.02,
@@ -973,26 +1111,27 @@ class Crystal:
             ha="center",
             **text_params,
         )
-        ax.text(
-            self.orientation_vecs[inds[1], 1] * text_scale_pos,
-            self.orientation_vecs[inds[1], 0] * text_scale_pos,
-            self.orientation_vecs[inds[1], 2] * text_scale_pos,
-            label_1,
-            None,
-            zorder=12,
-            ha="right",
-            **text_params,
-        )
-        ax.text(
-            self.orientation_vecs[inds[2], 1] * text_scale_pos,
-            self.orientation_vecs[inds[2], 0] * text_scale_pos,
-            self.orientation_vecs[inds[2], 2] * text_scale_pos,
-            label_2,
-            None,
-            zorder=13,
-            ha="left",
-            **text_params,
-        )
+        if self.orientation_fiber is False:
+            ax.text(
+                self.orientation_vecs[inds[1], 1] * text_scale_pos,
+                self.orientation_vecs[inds[1], 0] * text_scale_pos,
+                self.orientation_vecs[inds[1], 2] * text_scale_pos,
+                label_1,
+                None,
+                zorder=12,
+                ha="right",
+                **text_params,
+            )
+            ax.text(
+                self.orientation_vecs[inds[2], 1] * text_scale_pos,
+                self.orientation_vecs[inds[2], 0] * text_scale_pos,
+                self.orientation_vecs[inds[2], 2] * text_scale_pos,
+                label_2,
+                None,
+                zorder=13,
+                ha="left",
+                **text_params,
+            )
 
         # ax.scatter(
         #     xs=self.g_vec_all[0,:],
