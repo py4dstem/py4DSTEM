@@ -215,9 +215,9 @@ def double_sided_gaussian_fiterr(p, x, y, val):
 
 def double_sided_gaussian(p, x, y):
     """
-    Return the value of the double-sided gaussian function at point (x,y) given parameters p.
+    Return the value of the double-sided gaussian function at point (x,y) given
+    parameters p, described in detail in the fit_ellipse_amorphous_ring docstring.
     """
-
     # Unpack parameters
     I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
     r2 = 1 * (x - x0) ** 2 + B * (x - x0) * (y - y0) + C * (y - y0) ** 2
