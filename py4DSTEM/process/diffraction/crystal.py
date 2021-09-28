@@ -323,13 +323,15 @@ class Crystal:
                 plot_limit, axis=0
             )
 
-        ax.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 0])
-        ax.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 1])
-        ax.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
-        ax.set_box_aspect((1, 1, 1))
+        
         ax.invert_yaxis()
         if show_axes is False:
             ax.set_axis_off()
+        ax.axes.set_xlim3d(left  =plot_limit[0, 1], right=plot_limit[1, 1])
+        ax.axes.set_ylim3d(bottom=plot_limit[0, 0],   top=plot_limit[1, 0])
+        ax.axes.set_zlim3d(bottom=plot_limit[0, 2],   top=plot_limit[1, 2])
+        # ax.set_box_aspect((1, 1, 1))
+        axisEqual3D(ax)
 
         plt.show()
 
@@ -415,55 +417,88 @@ class Crystal:
         corr_kernel_size: float = 0.08,
         tol_distance: float = 0.01,
         plot_corr_norm: bool = False,
+        fiber_axis = None,
+        fiber_angle_range = None,
         figsize: Union[list, tuple, np.ndarray] = (6, 6),
     ):
         """
         Calculate the rotation basis arrays for an SO(3) rotation correlogram.
 
         Args:
-            zone_axis_range (3x3 numpy float):  Row vectors give the range for zone axis orientations.
-                                                Note that we always start at [0,0,1] to make z-x-z rotation work.
-                                                Setting this to 'full' as a string will use a hemispherical range.
+            zone_axis_range (float): Row vectors give the range for zone axis orientations.
+                                     If user specifies 2 vectors (2x3 array), we start at [0,0,1]
+                                        to make z-x-z rotation work.
+                                     If user specifies 3 vectors (3x3 array), plan will span these vectors.
+                                     Setting to 'full' as a string will use a hemispherical range.
+                                     Setting to 'half' as a string will use a quarter sphere range.
+                                     Setting to 'fiber' as a string will make a spherical cap around a given vector.
             angle_step_zone_axis (float): Approximate angular step size for zone axis [degrees]
             angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (float):        Accelerating voltage for electrons [Volts]
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
+            fiber_axis (float):           (3,) vector specifying the fiber axis
+            fiber_angle_range (float):    scalar specifying angular range [degrees]
+
         """
 
         # Store inputs
         self.accel_voltage = np.asarray(accel_voltage)
         self.orientation_kernel_size = np.asarray(corr_kernel_size)
+        self.orientation_fiber_axis = np.asarray(fiber_axis)
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         if isinstance(zone_axis_range, str):
-            self.orientation_zone_axis_range = np.array(
-                [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
-            )
+            if zone_axis_range == "fiber":
 
-            if zone_axis_range == "full":
-                self.orientation_full = True
-                self.orientation_half = False
-            elif zone_axis_range == "half":
+
+
                 self.orientation_full = False
-                self.orientation_half = True
+                self.orientation_half = False
+                self.orientation_fiber = True
+            else:
+                self.orientation_zone_axis_range = np.array(
+                    [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
+                )
+                if zone_axis_range == "full":
+                    self.orientation_full = True
+                    self.orientation_half = False
+                    self.orientation_fiber = False
+                elif zone_axis_range == "half":
+                    self.orientation_full = False
+                    self.orientation_half = True
+                    self.orientation_fiber = False
 
         else:
             # Define 3 vectors which span zone axis orientation range, normalize
-            self.orientation_zone_axis_range = np.vstack(
-                (np.array([0, 0, 1]), np.array(zone_axis_range))
-            ).astype("float")
-            self.orientation_zone_axis_range[1, :] /= np.linalg.norm(
-                self.orientation_zone_axis_range[1, :]
-            )
-            self.orientation_zone_axis_range[2, :] /= np.linalg.norm(
-                self.orientation_zone_axis_range[2, :]
-            )
+            if zone_axis_range.shape[0] == 3:
+                self.orientation_zone_axis_range = zone_axis_range.astype("float")
+                self.orientation_zone_axis_range[0, :] /= np.linalg.norm(
+                    self.orientation_zone_axis_range[0, :]
+                )
+                self.orientation_zone_axis_range[1, :] /= np.linalg.norm(
+                    self.orientation_zone_axis_range[1, :]
+                )
+                self.orientation_zone_axis_range[2, :] /= np.linalg.norm(
+                    self.orientation_zone_axis_range[2, :]
+                )
 
+            elif zone_axis_range.shape[0] == 2:
+                self.orientation_zone_axis_range = np.vstack(
+                    (np.array([0, 0, 1]), np.array(zone_axis_range))
+                ).astype("float")
+                self.orientation_zone_axis_range[1, :] /= np.linalg.norm(
+                    self.orientation_zone_axis_range[1, :]
+                )
+                self.orientation_zone_axis_range[2, :] /= np.linalg.norm(
+                    self.orientation_zone_axis_range[2, :]
+                )
             self.orientation_full = False
             self.orientation_half = False
+            self.orientation_fiber = False
+
 
         # Solve for number of angular steps in zone axis (rads)
         angle_u_v = np.arccos(
