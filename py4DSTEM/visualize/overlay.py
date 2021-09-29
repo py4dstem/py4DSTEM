@@ -225,7 +225,7 @@ def add_ellipses(ax,d):
     Parameters:
         center
         a
-        e
+        b
         theta
         color
         fill
@@ -243,6 +243,14 @@ def add_ellipses(ax,d):
     assert(isinstance(a,list))
     N = len(a)
     assert(all([isinstance(i,Number) for i in a]))
+    # semiminor axis length
+    assert('b' in d.keys())
+    b = d['b']
+    if isinstance(b,Number):
+        b = [b]
+    assert(isinstance(b,list))
+    assert(len(b)==N)
+    assert(all([isinstance(i,Number) for i in b]))
     # center
     assert('center' in d.keys())
     center = d['center']
@@ -253,14 +261,6 @@ def add_ellipses(ax,d):
     assert(len(center)==N)
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
-    # ratio of axis lengths
-    assert('e' in d.keys())
-    e = d['e']
-    if isinstance(e,Number):
-        e = [e for i in range(N)]
-    assert(isinstance(e,list))
-    assert(len(e)==N)
-    assert(all([isinstance(i,Number) for i in e]))
     # theta
     assert('theta' in d.keys())
     theta = d['theta']
@@ -310,7 +310,7 @@ def add_ellipses(ax,d):
         assert(len(linestyle)==N)
         assert(all([isinstance(lw,(str)) for lw in linestyle]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
+    kws = [k for k in d.keys() if k not in ('center','a','b','theta','color',
                                             'fill','alpha','linewidth','linestyle')]
     kwargs = dict()
     for k in kws:
@@ -318,9 +318,9 @@ def add_ellipses(ax,d):
 
     # add the ellipses
     for i in range(N):
-        cent,_a,_e,_theta,col,f,_alpha,lw,ls = (center[i],a[i],e[i],theta[i],color[i],fill[i],
+        cent,_a,_b,_theta,col,f,_alpha,lw,ls = (center[i],a[i],b[i],theta[i],color[i],fill[i],
                                                 alpha[i],linewidth[i],linestyle[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_b,2*_a,-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,linestyle=ls,**kwargs)
         ax.add_patch(ellipse)
 

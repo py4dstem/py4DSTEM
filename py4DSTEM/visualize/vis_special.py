@@ -21,7 +21,7 @@ def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
     Args:
         center (2-tuple): the center
         Ri,Ro (numbers): the annulus radii
-        ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,e,theta).
+        ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
             See the module docstring for utils.ellipticalCoords for more details.
         fill (bool): the fill value of the annulus
         color_ann (color): annulus color
@@ -31,11 +31,11 @@ def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
         linewidth_ann:
         linewidth_ell:
     """
-    qx0,qy0,a,e,theta = ellipse_params
+    qx0,qy0,a,b,theta = ellipse_params
     fig,ax = show(ar,
                   annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
                            'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
-                  ellipse={'center':(qx0,qy0),'a':a,'e':e,'theta':theta,
+                  ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                            'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
                   returnfig=True,**kwargs)
 
@@ -111,9 +111,9 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
 
     # Add ellipse overlay
     if ellipse:
-        R,e,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
-        R *= p_ellipse[6]
-        ellipse={'center':(qx0,qy0),'a':R,'e':e,'theta':theta,
+        a,b,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
+        a *= p_ellipse[6]
+        ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
         add_ellipses(ax,ellipse)
 
