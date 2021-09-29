@@ -46,7 +46,7 @@ def fit_ellipse_1D(ar,x0,y0,ri,ro,mask=None,returnABC=False):
             * **x0**: the center x-position
             * **y0**: the center y-position
             * **a**: the semimajor axis length
-            * **e**: the ratio of lengths of the semiminor to the semimajor axes
+            * **b**: the semiminor axis length
             * **theta**: the tilt of the ellipse semimajor axis with respect to the
               x-axis, in radians
 
@@ -70,10 +70,10 @@ def fit_ellipse_1D(ar,x0,y0,ri,ro,mask=None,returnABC=False):
     x,y,A,B,C = leastsq(ellipse_err, p0, args=(xs,ys,vals))[0]
 
     # Convert ellipse params
-    a,e,theta = convert_ellipse_params(A,B,C)
+    a,b,theta = convert_ellipse_params(A,B,C)
 
     if not returnABC:
-        return x,y,a,e,theta
+        return x,y,a,b,theta
     else:
         return x,y,A,B,C
 
@@ -201,9 +201,9 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     # Return
     _x0,_y0 = p[7],p[8]
     _A,_B,_C = 1,p[9],p[10]
-    _a,_e,_theta = convert_ellipse_params(_A,_B,_C)
-    _a *= p[6]
-    return (_x0,_y0,_a,_e,_theta),p
+    _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
+    _a *= p[6]  # TODO what is up here? need
+    return (_x0,_y0,_a,_b,_theta),p
 
 def double_sided_gaussian_fiterr(p, x, y, val):
     """
