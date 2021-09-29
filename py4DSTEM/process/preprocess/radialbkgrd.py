@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 from ..utils import cartesian_to_polarelliptical_transform
 
 ## Create look up table for background subtraction
-def get_1D_polar_background(data, qx0, qy0 ,e, phi,
+def get_1D_polar_background(data, qx0, qy0 ,a, b, theta,
                     maskUpdateIter=3,
                     min_relative_threshold = 4,
                     smoothing = False,
@@ -25,8 +25,8 @@ def get_1D_polar_background(data, qx0, qy0 ,e, phi,
             usually a diffraction pattern
         qx0,qy0 (floats): the ellipse center; if the braggpeaks have been centered,
             these should be zero
-        e (float): the length ratio of semiminor/semimajor axes
-        phi (float): tilt of the major axis with respect  to (qx, qy) axis, in radians
+        a,b (floats): the semimajor/semiminor axis lengths
+        theta (float): tilt of the major axis with respect  to (qx, qy) axis, in radians
         maskUpdate_iter (integer):
         min_relative_threshold (float):
         smoothing (bool): if true savgol filter smoothing is applied
@@ -53,7 +53,7 @@ def get_1D_polar_background(data, qx0, qy0 ,e, phi,
     assert isinstance(return_polararr, bool), "return_polararr must be bool"
 
     # Compute Polar Transform
-    polarData, rr, tt = cartesian_to_polarelliptical_transform(data,tuple([qx0,qy0, 1, e, phi]))
+    polarData, rr, tt = cartesian_to_polarelliptical_transform(data,tuple([qx0,qy0, a, b, theta]))
 
     # Crop polar data to maximum distance which contains information from original image
     if (polarData.mask.sum(axis = (0))==polarData.shape[0]).any():
@@ -96,7 +96,7 @@ def get_1D_polar_background(data, qx0, qy0 ,e, phi,
         return(background1D, r_bins)
 
 #Create 2D Background 
-def get_2D_polar_background(data, background1D, r_bins, qx0, qy0, phi, e):
+def get_2D_polar_background(data, background1D, r_bins, qx0, qy0, a, b, theta):
     """
     Gets 2D polar elliptical background from linear 1D background
 
@@ -108,8 +108,8 @@ def get_2D_polar_background(data, background1D, r_bins, qx0, qy0, phi, e):
             background1D
         qx0,qy0 (floats): the ellipse center; if the braggpeaks have been centered, these
             should be zero
-        e (float): the length ratio of semiminor/semimajor axes
-        phi (float): tilt of the major axis with respect  to (qx, qy) axis, in radians
+        a,b (floats): the semimajor/semiminor axis lengths
+        theta (float): tilt of the semimajor axis with respect to the x-axis, in radians
 
     Returns:
         (ndarray) 2D polar elliptical median background image
@@ -121,8 +121,8 @@ def get_2D_polar_background(data, background1D, r_bins, qx0, qy0, phi, e):
 
 
     # Calculate the semimajor axis distance for each point in the 2D array
-    r = np.sqrt(((xc*np.cos(phi)+yc*np.sin(phi))**2)+
-                (((xc*np.sin(phi)-yc*np.cos(phi))**2)/(e**2)))
+    r = np.sqrt(((xc*np.cos(theta)+yc*np.sin(theta))**2)+
+                (((xc*np.sin(theta)-yc*np.cos(theta))**2)/((b/a)**2)))
 
     # Create a 2D eliptical background using linear interpolation  
     f = interp1d(r_bins, background1D, fill_value = 'extrapolate')
