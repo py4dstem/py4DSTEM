@@ -275,15 +275,16 @@ def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
 
 def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_known, fitrad=6):
     """
-    When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus about the
-    central beam, the answer is degenerate: an infinite number of ellipses correctly fit this
-    data.  Starting from one ellipse in the degenerate family of ellipses, this function selects
-    the ellipse which will yield a final angle of phi_known between a pair of the diffraction
-    peaks after performing elliptical distortion correction.
+    When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus
+    about the central beam, the answer is degenerate: an infinite number of ellipses
+    correctly fit this data.  Starting from one ellipse in the degenerate family of
+    ellipses, this function selects the ellipse which will yield a final angle of
+    phi_known between a pair of the diffraction peaks after performing elliptical
+    distortion correction.
 
-    Note that there are two possible angles which phi_known might refer to, because the angle of
-    interest is well defined up to a complementary angle.  This function is written such that
-    phi_known should be the smaller of these two angles.
+    Note that there are two possible angles which phi_known might refer to, because the
+    angle of interest is well defined up to a complementary angle.  This function is
+    written such that phi_known should be the smaller of these two angles.
 
     Args:
         data (ndarray) the data to fit, typically a Bragg vector map
@@ -294,7 +295,8 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
         theta (float): the initial ellipse angle, in radians
         r_inner (float): the fitting annulus inner radius
         r_outer (float): the fitting annulus outer radius
-        phi_known (float): the known angle between a pair of diffraction peaks, in radians
+        phi_known (float): the known angle between a pair of diffraction peaks, in
+            radians
         fitrad (float): the region about the fixed data point used to refine its position
 
     Returns:
