@@ -748,7 +748,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
-        x0,y0 = roi_state['pos']
+        y0,x0 = roi_state['pos']
         xc,yc = int(x0+1),int(y0+1)
 
         # Set the diffraction space image
@@ -790,7 +790,7 @@ class DataViewer(QtWidgets.QMainWindow):
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
 
                 #update the label:
                 self.diffraction_space_view_text.setText(
