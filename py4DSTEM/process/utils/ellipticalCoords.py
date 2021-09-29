@@ -44,7 +44,7 @@ import numpy as np
 def convert_ellipse_params(A,B,C):
     """
     Converts ellipse parameters from canonical form (A,B,C) into semi-axis lengths and
-    tilt (a,e,theta), where e = b/a.
+    tilt (a,b,theta).
     See module docstring for more info.
 
     Args:
@@ -55,7 +55,7 @@ def convert_ellipse_params(A,B,C):
         (3-tuple): A 3-tuple consisting of:
 
         * **a**: (float) the semimajor axis length
-        * **e**: (float) the ratio of lengths of the semiminor to the semimajor axes
+        * **b**: (float) the semiminor axis length
         * **theta**: (float) the tilt of the ellipse semimajor axis with respect to
           the x-axis, in radians
     """
@@ -73,26 +73,23 @@ def convert_ellipse_params(A,B,C):
     a = - np.sqrt( -2*b4a*(A+C+val) ) / b4a
     b = - np.sqrt( -2*b4a*(A+C-val) ) / b4a
     a,b = max(a,b),min(a,b)
-    e = b/a
-    return a,e,theta
+    return a,b,theta
 
-def convert_ellipse_params_r(a,e,theta):
+def convert_ellipse_params_r(a,b,theta):
     """
-    Converts from ellipse parameters (a,e,theta) to (A,B,C).
+    Converts from ellipse parameters (a,b,theta) to (A,B,C).
     See module docstring for more info.
 
     Args:
-        a,e,theta (floats): parameters of an ellipse, where `a` is the semimajor
-            axis length, e is the ratio of the semiminor to semimajor axes, and
-            theta is the tilt of the semimajor- with respect to the x-axis, in
-            radians.
+        a,b,theta (floats): parameters of an ellipse, where `a`/`b` are the
+            semimajor/semiminor axis lengths, and theta is the tilt of the semimajor axis
+            with respect to the x-axis, in radians.
 
     Returns:
         (3-tuple): A 3-tuple consisting of (A,B,C), the ellipse parameters in
             canonical form.
     """
     sin2,cos2 = np.sin(theta)**2,np.cos(theta)**2
-    b = a*e
     a2,b2 = a**2,b**2
     A = sin2/b2 + cos2/a2
     C = cos2/b2 + sin2/a2
@@ -120,7 +117,7 @@ def cartesian_to_polarelliptical_transform(
 
     Args:
         cartesianData (2D float array): the data in cartesian coordinates
-        params (5-tuple): specifies (qx0,qy0,a,e,theta), the parameters for the
+        params (5-tuple): specifies (qx0,qy0,a,b,theta), the parameters for the
             transformation. These are the same 5 parameters which are outputs
             of the elliptical fitting functions in the process.calibration
             module, e.g. fit_ellipse_amorphous_ring and fit_ellipse_1D. For
@@ -158,7 +155,7 @@ def cartesian_to_polarelliptical_transform(
     assert len(params) == 5, "params must have length 5"
 
     # Get params
-    qx0, qy0, a, e, theta = params
+    qx0, qy0, a, b, theta = params
     Nx, Ny = cartesianData.shape
 
     # Define r_range: 
@@ -193,8 +190,8 @@ def cartesian_to_polarelliptical_transform(
     # Get (qx,qy) corresponding to each (r,phi) in the newly defined coords
     xr = rr * np.cos(pp)
     yr = rr * np.sin(pp)
-    qx = qx0 + xr * np.cos(theta) - yr * e * np.sin(theta)
-    qy = qy0 + xr * np.sin(theta) + yr * e * np.cos(theta)
+    qx = qx0 + xr * np.cos(theta) - yr * (b/a) * np.sin(theta)
+    qy = qy0 + xr * np.sin(theta) + yr * (b/a) * np.cos(theta)
 
     # qx,qy are now shape (Nr,Np) arrays, such that (qx[r,phi],qy[r,phi]) is the point
     # in cartesian space corresponding to r,phi.  We now get the values for the final
@@ -267,12 +264,13 @@ def radial_integral(ar, x0, y0, dr):
 
 def radial_elliptical_integral(ar, dr, ellipse_params):
     """
-    Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
+    Computes the radial integral of array ar from center (x0,y0) with a step size in r of
+    dr.
 
     Args:
         ar (2d array): the data
         dr (number): the r sampling
-        ellipse_params (5-tuple): the parameters (x0,y0,a,e,theta) for the ellipse
+        ellipse_params (5-tuple): the parameters (x0,y0,a,b,theta) for the ellipse
 
     Returns:
         (2-tuple): A 2-tuple containing:
