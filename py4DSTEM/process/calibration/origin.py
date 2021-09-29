@@ -4,9 +4,9 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
-from ..fit import plane,parabola,bezier_two,fit_2D
-from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
-from ...io.datastructure import PointListArray
+from ..fit import plane, parabola, bezier_two, fit_2D
+from ..utils import get_CoM, add_to_2D_array_from_floats, tqdmnd
+from ...io import PointListArray, DataCube
 from ..diskdetection.braggvectormap import get_bragg_vector_map
 
 
