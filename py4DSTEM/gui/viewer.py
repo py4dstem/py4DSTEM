@@ -771,7 +771,7 @@ class DataViewer(QtWidgets.QMainWindow):
                 self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
                     (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+            self.diffraction_space_widget.setImage(self.diffraction_space_view.T,
                                                    autoLevels=False,autoRange=False)
         else:
             pass
@@ -784,7 +784,7 @@ class DataViewer(QtWidgets.QMainWindow):
         if detector_shape == 0:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
@@ -802,7 +802,7 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 1:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
@@ -816,7 +816,7 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 2:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
             slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
