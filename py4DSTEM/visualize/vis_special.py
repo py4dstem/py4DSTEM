@@ -112,7 +112,8 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     # Add ellipse overlay
     if ellipse:
         a,b,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
-        a *= p_ellipse[6]
+        R = p_ellipse[6]
+        a,b = a*R,b*R
         ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
         add_ellipses(ax,ellipse)

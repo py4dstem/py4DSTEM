@@ -181,11 +181,11 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     sigma1 = (ro-ri)/4.
     sigma2 = (ro-ri)/4.
     c_bkgd = np.min(data)
-    B=0
-    C=1
     # To guess R, we take a radial integral
     q,radial_profile = radial_integral(data,x0,y0,1)
     R = q[(q>ri)*(q<ro)][np.argmax(radial_profile[(q>ri)*(q<ro)])]
+    B=0
+    C=1
 
     # Populate initial parameters
     p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C])
@@ -199,10 +199,11 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     p = leastsq(double_sided_gaussian_fiterr, _p0, args=(x_inds, y_inds, vals))[0]
 
     # Return
+    _R = p[6]
     _x0,_y0 = p[7],p[8]
     _A,_B,_C = 1,p[9],p[10]
     _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
-    _a *= p[6]  # TODO what is up here? need
+    _a,_b = _a*_R,_b*_R
     return (_x0,_y0,_a,_b,_theta),p
 
 def double_sided_gaussian_fiterr(p, x, y, val):
