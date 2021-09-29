@@ -16,8 +16,7 @@ following 5 parameters:
 
     x0,y0       the center of the ellipse
     a           the semimajor axis length
-    e           the ratio of lengths of the semiminor to semimajor
-                axes
+    b           the semiminor axis length
     theta       the (positive, right handed) tilt of the a-axis
                 to the x-axis, in radians
 
@@ -34,8 +33,8 @@ Transformation from cartesian to polar-elliptical space is done using
        x = x0 + a*r*cos(phi)*cos(theta) + b*r*sin(phi)*sin(theta)
        y = y0 + a*r*cos(phi)*sin(theta) - b*r*sin(phi)*cos(theta)
 
-where b = a*e is the semiminor axis length, and (r,phi) are the polar-elliptical
-coordinates. All angular quantities are in radians.
+where (r,phi) are the polar-elliptical coordinates. All angular quantities are in
+radians.
 """
 
 import numpy as np

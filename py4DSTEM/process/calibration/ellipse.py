@@ -7,8 +7,7 @@ parameters:
 
     x0,y0       the center of the ellipse
     a           the semimajor axis length
-    e           the ratio of lengths of the semiminor to semimajor
-                axes
+    b           the semiminor axis length
     theta       the (positive, right handed) tilt of the a-axis
                 to the x-axis, in radians
 
