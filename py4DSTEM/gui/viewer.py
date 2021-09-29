@@ -808,7 +808,7 @@ class DataViewer(QtWidgets.QMainWindow):
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
@@ -825,7 +825,7 @@ class DataViewer(QtWidgets.QMainWindow):
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y,R)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
