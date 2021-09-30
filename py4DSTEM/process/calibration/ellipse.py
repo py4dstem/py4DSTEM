@@ -98,7 +98,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
 
     The fit function is::
 
-        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C) =
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C) =
             Norm(r; I0,sigma0,0) +
             Norm(r; I1,sigma1,R)*Theta(r-R)
             Norm(r; I1,sigma2,R)*Theta(R-r) + c_bkgd
@@ -111,6 +111,8 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
         * Norm(x;I,s,u) is a gaussian in the variable x with maximum amplitude I,
           standard deviation s, and mean u
         * Theta(x) is a Heavyside step function
+        * R is the radial center of the double sided gaussian, derived from (A,B,C)
+          and set to the mean of the semiaxis lengths
 
     The function thus contains a pair of gaussian-shaped peaks along the radial
     direction of a polar-elliptical parametrization of a 2D plane. The first gaussian is
@@ -128,8 +130,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
         * sigma2: outer std of Janus gaussian
         * c_bkgd: a constant offset
         * x0,y0: the origin
-        * R: the radial center of the Janus gaussian
-        * B,C: The ellipse parameters, in the form 1x^2 + Bxy + Cy^2 = 1
+        * A,B,C: The ellipse parameters, in the form Ax^2 + Bxy + Cy^2 = 1
 
     Args:
         data (2d array): the data
@@ -139,7 +140,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
             a guess at all parameters. If p0 is a 11-tuple it must be populated by some
             mix of numbers and None; any parameters which are set to None will be guessed
             by the function.  The parameters are the 11 parameters of the fit function
-            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C).
+            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C).
             Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
             to the main function, but if they are passed as elements of p0 these will
             take precendence.
@@ -187,11 +188,9 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     R = q[(q>ri)*(q<ro)][np.argmax(radial_profile[(q>ri)*(q<ro)])]
     # Initial guess at A,B,C
     A,B,C = convert_ellipse_params_r(R,R,0)
-    #B,C = B/A,C/A
 
     # Populate initial parameters
     p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C])
-    #p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C])
     if p0 is None:
         _p0 = p0_guess
     else:
@@ -204,8 +203,6 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     # Return
     _x0,_y0 = p[6],p[7]
     _A,_B,_C = p[8],p[9],p[10]
-    #_R,_B,_C = p[8],p[9],p[10]
-    #_A,_B,_C = _R**2,_B*R**2,_C*R**2
     _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
     return (_x0,_y0,_a,_b,_theta),p
 
