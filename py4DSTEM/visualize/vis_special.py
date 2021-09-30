@@ -12,7 +12,7 @@ from ..process.utils import get_voronoi_vertices,convert_ellipse_params
 from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
 
-def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
+def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
                         linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
     """
@@ -20,7 +20,7 @@ def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
 
     Args:
         center (2-tuple): the center
-        Ri,Ro (numbers): the annulus radii
+        fitradii (2-tuple of numbers): the annulus inner and outer fit radii
         ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
             See the module docstring for utils.ellipticalCoords for more details.
         fill (bool): the fill value of the annulus
@@ -31,6 +31,7 @@ def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
         linewidth_ann:
         linewidth_ell:
     """
+    Ri,Ro = fitradii
     qx0,qy0,a,b,theta = ellipse_params
     fig,ax = show(ar,
                   annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,

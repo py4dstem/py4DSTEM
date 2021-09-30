@@ -24,17 +24,16 @@ from ...io import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
 
-def fit_ellipse_1D(ar,x0,y0,ri,ro,mask=None,returnABC=False):
+def fit_ellipse_1D(ar,center,fitradii,mask=None,returnABC=False):
     """
     For a 2d array ar, fits a 1d elliptical curve to the data inside an annulus centered
-    at (x0,y0) with inner and outer radii ri and ro.  The data to fit make optionally
+    at `center` with inner and outer radii at `fitradii`.  The data to fit make optionally
     be additionally masked with the boolean array mask. See module docstring for more info.
 
     Args:
         ar (ndarray): array containing the data to fit
-        x0,y0 (floats): the center of the annular fitting region
-        ri (float): inner radius of the fit region
-        ro (float): outer radius of the fit region
+        center (2-tuple of floats): the center (x0,y0) of the annular fitting region
+        fitradii (2-tuple of floats): inner and outer radii (ri,ro) of the fit region
         mask (ar-shaped ndarray of bools): ignore data wherever mask==True
         returnABC (bool): if True, returns ellipse params in canonical form
 
@@ -55,6 +54,10 @@ def fit_ellipse_1D(ar,x0,y0,ri,ro,mask=None,returnABC=False):
         (A,B,C) are the ellipse parameters in canonical form.  See the module docstring
         for more info.
     """
+    # Unpack inputs
+    x0,y0 = center
+    ri,ro = fitradii
+
     # Get the datapoints to fit
     yy,xx = np.meshgrid(np.arange(ar.shape[1]),np.arange(ar.shape[0]))
     rr = np.sqrt((xx-x0)**2 + (yy-y0)**2)
