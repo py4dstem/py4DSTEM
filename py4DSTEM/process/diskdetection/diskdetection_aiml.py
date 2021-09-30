@@ -1,0 +1,717 @@
+# Functions for finding Bragg disks using AI/ML pipeline
+# Joydeep Munshi
+
+''' 
+
+Functions for finding Braggdisks using AI/ML method
+
+'''
+
+import os
+import glob
+import json
+import shutil
+import numpy as np
+import crystal4D
+import tensorflow as tf
+from scipy.ndimage.filters import gaussian_filter
+from time import time
+from numbers import Number
+
+from ...io.google_drive_downloader import download_file_from_google_drive
+from ...io.datastructure import PointList, PointListArray
+from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
+
+def _find_Bragg_disks_aiml_single_DP(DP, probe,
+                                     num_attmpts = 1,
+                                     thresold = 1,
+                                     predict = True,
+                                     edgeBoundary = 20,
+                                     minRelativeIntensity = 0.005,
+                                     minAbsoluteIntensity = 0,
+                                     relativeToPeak = 0,
+                                     minPeakSpacing = 60,
+                                     maxNumPeaks = 70,
+                                     subpixel = 'multicorr',
+                                     upsample_factor = 16,
+                                     filter_function = None,
+                                     peaks = None,
+                                     model_path = None):
+    """
+    Finds the Bragg disks in single DP by AI/ML method.
+    
+    The input DP and Probes need to be aligned before the precdiction. Detected peaks within 
+    edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
+    with intensities less than minRelativeIntensity of the brightest peak in the
+    correaltion are discarded. Then peaks which are within a distance of minPeakSpacing
+    of their nearest neighbor peak are found, and in each such pair the peak with the
+    lesser correlation intensities is removed. Finally, if the number of peaks remaining
+    exceeds maxNumPeaks, only the maxNumPeaks peaks with the highest correlation
+    intensity are retained.
+    
+    Args:
+        DP (ndarray): a diffraction pattern
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The shape
+            of the returned DP must match the shape of the probe kernel (but does not
+            need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        peaks (PointList): For internal use. If peaks is None, the PointList of peak
+            positions is created here. If peaks is not None, it is the PointList that
+            detected peaks are added to, and must have the appropriate coords
+            ('qx','qy','intensity').
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommeded to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
+
+    Returns:
+        (PointList): the Bragg peak positions and correlation intensities
+    """
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+
+    # Perform any prefiltering
+    DP = DP if filter_function is None else filter_function(DP)
+
+    if predict:
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
+        probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
+        prediction = np.zeros(shape = (1, DP.shape[0],DP.shape[1],1))
+        model = _get_latest_model(model_path = model_path)
+        for att in range(num_attmpts):
+            print('attempt {} \n'.format(att+1))
+            prediction += model.predict([DP,probe])
+        print('Averaging over {} attempts \n'.format(num_attmpts))
+        pred = prediction[0,:,:,0]/num_attmpts
+    else:
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        pred = DP
+    
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(pred, 
+                                                 minRelativeIntensity=minRelativeIntensity,
+                                                 minAbsoluteIntensity=minAbsoluteIntensity,
+                                                 edgeBoundary=edgeBoundary,
+                                                 relativeToPeak=relativeToPeak,
+                                                 maxNumPeaks=maxNumPeaks,
+                                                 minSpacing = minPeakSpacing,
+                                                 subpixel=subpixel,
+                                                 upsample_factor=upsample_factor)
+            
+    
+    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,thresold=thresold)
+
+    # Make peaks PointList
+    if peaks is None:
+        coords = [('qx',float),('qy',float),('intensity',float)]
+        peaks = PointList(coordinates=coords)
+        #peaks.remove_points(ai_peaks.data['intensity'] < minAbsIntensity)
+    else:
+        assert(isinstance(peaks,PointList))
+    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
+
+    return peaks
+
+
+def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
+                                   num_attmpts = 1,
+                                   thresold = 1,
+                                   predict =True,
+                                   edgeBoundary = 20,
+                                   minRelativeIntensity = 0.005,
+                                   minAbsoluteIntensity = 0,
+                                   relativeToPeak = 0,
+                                   minPeakSpacing = 60,
+                                   maxNumPeaks = 70,
+                                   subpixel = 'multicorr',
+                                   upsample_factor = 16,
+                                   filter_function = None,
+                                   model_path = None):
+    """
+    Finds the Bragg disks in the diffraction patterns of datacube at scan positions
+    (Rx,Ry) by AI/ML method.
+    
+    Args:
+        datacube (datacube): a diffraction datacube
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The shape
+            of the returned DP must match the shape of the probe kernel (but does not
+            need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        peaks (PointList): For internal use. If peaks is None, the PointList of peak
+            positions is created here. If peaks is not None, it is the PointList that
+            detected peaks are added to, and must have the appropriate coords
+            ('qx','qy','intensity').
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommended to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
+
+    Returns:
+        (n-tuple of PointLists, n=len(Rx)): the Bragg peak positions and
+        correlation intensities at each scan position (Rx,Ry).
+    """
+    assert(len(Rx)==len(Ry))
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
+    peaks = []
+    
+    if predict:
+        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
+                                             len(Rx), axis=0), axis=-1)
+        DP = tf.expand_dims(tf.expand_dims(datacube.data[Rx[0],Ry[0],:,:], axis=0), axis=-1)
+        total_DP = len(Rx)
+        for i in range(1,len(Rx)):
+            DP_ = tf.expand_dims(tf.expand_dims(datacube.data[Rx[i],Ry[i],:,:], axis=0), axis=-1)
+            DP = tf.concat([DP,DP_], axis=0)
+            
+        prediction = np.zeros(shape = (total_DP, datacube.Q_Nx, datacube.Q_Ny, 1))
+
+        model = _get_latest_model(model_path = model_path)
+        for att in range(num_attmpts):
+            print('attempt {} \n'.format(att+1))
+            prediction += model.predict([DP,probe], verbose=1)
+        print('Averaging over {} attempts \n'.format(num_attmpts))
+        prediction = prediction/num_attmpts
+        
+    #pred = tf.reshape(tf.keras.backend.permute_dimensions(pred, (0,3,1,2)),
+    #                  (len(Rx),len(Rx),datacube.Q_Nx, datacube.Q_Ny))
+
+    # Loop over selected diffraction patterns
+    for i in range(len(Rx)):
+        DP = prediction[i,:,:,0]
+        
+        _peaks =  _find_Bragg_disks_aiml_single_DP(DP, probe[0,:,:,0],
+                                                   thresold = thresold,
+                                                   predict = False,
+                                                   edgeBoundary=edgeBoundary,
+                                                   minRelativeIntensity=minRelativeIntensity,
+                                                   minAbsoluteIntensity=minAbsoluteIntensity,
+                                                   relativeToPeak=relativeToPeak,
+                                                   minPeakSpacing=minPeakSpacing,
+                                                   maxNumPeaks=maxNumPeaks,
+                                                   subpixel=subpixel,
+                                                   upsample_factor=upsample_factor,
+                                                   filter_function=filter_function,
+                                                   model_path=model_path)
+        peaks.append(_peaks)
+
+    peaks = tuple(peaks)
+    return peaks
+
+def find_Bragg_disks_aiml_serial(datacube, probe,
+                                 num_attmpts = 1,
+                                 thresold = 1,
+                                 predict =True,
+                                 batch_size = 2,
+                                 edgeBoundary = 20,
+                                 minRelativeIntensity = 0.005,
+                                 minAbsoluteIntensity = 0,
+                                 relativeToPeak = 0,
+                                 minPeakSpacing = 60,
+                                 maxNumPeaks = 70,
+                                 subpixel = 'multicorr',
+                                 upsample_factor = 16,
+                                 global_threshold = False,
+                                 minGlobalIntensity = 0.005,
+                                 metric = 'mean',
+                                 filter_function = None,
+                                 name = 'braggpeaks_raw',
+                                 _qt_progress_bar = None,
+                                 model_path = None,):
+    """
+    Finds the Bragg disks in all diffraction patterns of datacube from AI/ML method. 
+    When hist = True, returns histogram of intensities in the entire datacube.
+
+    Args:
+        datacube (datacube): a diffraction datacube
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
+            will implement Dask parrlelization implementation of the serial function to boost up the 
+            performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
+            significant amount of time to predict for all the DPs in a datacube.
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        global_threshold (bool): if True, applies global threshold based on
+            minGlobalIntensity and metric
+        minGlobalThreshold (float): the minimum allowed peak intensity, relative to the
+             selected metric (0-1), except in the case of 'manual' metric, in which the
+             threshold value based on the minimum intensity that you want thresholder
+             out should be set.
+        metric (string): the metric used to compare intensities. 'average' compares peak
+            intensity relative to the average of the maximum intensity in each
+            diffraction pattern. 'max' compares peak intensity relative to the maximum
+            intensity value out of all the diffraction patterns.  'median' compares peak
+            intensity relative to the median of the maximum intensity peaks in each
+            diffraction pattern. 'manual' Allows the user to threshold based on a
+            predetermined intensity value manually determined. In this case,
+            minIntensity should be an int.
+        name (str): name for the returned PointListArray
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The
+            shape of the returned DP must match the shape of the probe kernel (but does
+            not need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        _qt_progress_bar (QProgressBar instance): used only by the GUI.
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommended to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
+            
+    Returns:
+        (PointListArray): the Bragg peak positions and correlation intensities
+    """
+
+    # Make the peaks PointListArray
+    coords = [('qx',float),('qy',float),('intensity',float)]
+    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+
+    # check that the filtered DP is the right size for the probe kernel:
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
+    DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
+    #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
+    
+    if predict:
+        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
+                                             datacube.R_Nx*datacube.R_Ny, axis=0), axis=-1)
+        DP = tf.expand_dims(tf.reshape(datacube.data,
+                                      (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
+            
+        prediction = np.zeros(shape = (datacube.R_Nx*datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny, 1))
+        model = _get_latest_model(model_path = model_path)
+        for att in range(num_attmpts):
+            print('attempt {} \n'.format(att+1))
+            prediction += model.predict([DP,probe], batch_size = batch_size, verbose=1)
+        print('Averaging over {} attempts \n'.format(num_attmpts))
+        prediction = prediction/num_attmpts
+    
+    prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
+                            (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
+    
+    if _qt_progress_bar is not None:
+        from PyQt5.QtWidgets import QApplication
+
+    # Loop over all diffraction patterns
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+        if _qt_progress_bar is not None:
+            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+            QApplication.processEvents()
+        DP = prediction[Rx,Ry,:,:]
+        
+        _find_Bragg_disks_aiml_single_DP(DP, probe[0,:,:,0],
+                                         num_attmpts = num_attmpts,
+                                         thresold = thresold,
+                                         predict = False,
+                                         edgeBoundary=edgeBoundary,
+                                         minRelativeIntensity=minRelativeIntensity,
+                                         minAbsoluteIntensity=minAbsoluteIntensity,
+                                         relativeToPeak=relativeToPeak,
+                                         minPeakSpacing=minPeakSpacing,
+                                         maxNumPeaks=maxNumPeaks,
+                                         subpixel=subpixel,
+                                         upsample_factor=upsample_factor,
+                                         filter_function=filter_function,
+                                         peaks = peaks.get_pointlist(Rx,Ry),
+                                         model_path=model_path)
+        
+    if global_threshold == True:
+        peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
+                                    maxNumPeaks)
+    peaks.name = name
+    return peaks
+
+def find_Bragg_disks_aiml(datacube, probe,
+                          num_attmpts = 1,
+                          thresold = 1,
+                          predict = True,
+                          batch_size = 8,
+                          edgeBoundary = 20,
+                          minRelativeIntensity = 0.005,
+                          minAbsoluteIntensity = 0,
+                          relativeToPeak = 0,
+                          minPeakSpacing = 60,
+                          maxNumPeaks = 70,
+                          subpixel = 'multicorr',
+                          upsample_factor = 16,
+                          name = 'braggpeaks_raw',
+                          filter_function = None,
+                          _qt_progress_bar = None,
+                          model_path = None,
+                          distributed = None,
+                          CUDA = True):
+    """
+    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method.
+
+    datacube (datacube): a diffraction datacube
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
+            will implement Dask parrlelization implementation of the serial function to boost up the 
+            performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
+            significant amount of time to predict for all the DPs in a datacube.
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        global_threshold (bool): if True, applies global threshold based on
+            minGlobalIntensity and metric
+        minGlobalThreshold (float): the minimum allowed peak intensity, relative to the
+             selected metric (0-1), except in the case of 'manual' metric, in which the
+             threshold value based on the minimum intensity that you want thresholder
+             out should be set.
+        metric (string): the metric used to compare intensities. 'average' compares peak
+            intensity relative to the average of the maximum intensity in each
+            diffraction pattern. 'max' compares peak intensity relative to the maximum
+            intensity value out of all the diffraction patterns.  'median' compares peak
+            intensity relative to the median of the maximum intensity peaks in each
+            diffraction pattern. 'manual' Allows the user to threshold based on a
+            predetermined intensity value manually determined. In this case,
+            minIntensity should be an int.
+        name (str): name for the returned PointListArray
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The
+            shape of the returned DP must match the shape of the probe kernel (but does
+            not need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        _qt_progress_bar (QProgressBar instance): used only by the GUI.
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommended to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
+        distributed (dict): contains information for parallelprocessing using an
+            IPyParallel or Dask distributed cluster.  Valid keys are:
+                * ipyparallel (dict):
+                * client_file (str): path to client json for connecting to your
+                  existing IPyParallel cluster
+                * dask (dict):
+                  client (object): a dask client that connects to your
+                                      existing Dask cluster
+                * data_file (str): the absolute path to your original data
+                  file containing the datacube
+                * cluster_path (str): defaults to the working directory during processing
+            if distributed is None, which is the default, processing will be in serial
+        CUDA (bool): When True, py4DSTEM will use CUDA-enabled disk_detection_aiml function
+        
+    Returns:
+        (PointListArray): the Bragg peak positions and correlation intensities
+    """
+
+    def _parse_distributed(distributed):
+        import os
+
+        if "ipyparallel" in distributed:
+            if "client_file" in distributed["ipyparallel"]:
+                connect = distributed["ipyparallel"]["client_file"]
+            else:
+                raise KeyError("Within distributed[\"ipyparallel\"], missing key for \"client_file\"")
+
+            try:
+                import ipyparallel as ipp
+                c = ipp.Client(url_file=connect, timeout=30)
+
+                if len(c.ids) == 0:
+                    raise RuntimeError("No IPyParallel engines attached to cluster!")
+            except ImportError:
+                raise ImportError("Unable to import module ipyparallel!")
+        elif "dask" in distributed:
+            if "client" in distributed["dask"]:
+                connect = distributed["dask"]["client"]
+            else:
+                raise KeyError("Within distributed[\"dask\"], missing key for \"client\"")
+        else:
+            raise KeyError(
+                "Within distributed, you must specify 'ipyparallel' or 'dask'!")
+
+        if "data_file" not in distributed:
+            raise KeyError("Missing input data file path to distributed!  Required key 'data_file'")
+
+        data_file = distributed["data_file"]
+
+        if not isinstance(data_file, str):
+            raise TypeError("Expected string for distributed key 'data_file', received {}".format(type(data_file)))
+        if len(data_file.strip()) == 0:
+            raise ValueError("Empty data file path from distributed key 'data_file'")
+        elif not os.path.exists(data_file):
+            raise FileNotFoundError("File not found")
+
+        if "cluster_path" in distributed:
+            cluster_path = distributed["cluster_path"]
+
+            if not isinstance(cluster_path, str):
+                raise TypeError(
+                    "distributed key 'cluster_path' must be of type str, received {}".format(type(cluster_path)))
+
+            if len(cluster_path.strip()) == 0:
+                raise ValueError("distributed key 'cluster_path' cannot be an empty string!")
+            elif not os.path.exists(cluster_path):
+                raise FileNotFoundError("distributed key 'cluster_path' does not exist: {}".format(cluster_path))
+            elif not os.path.isdir(cluster_path):
+                raise NotADirectoryError("distributed key 'cluster_path' is not a directory: {}".format(cluster_path))
+        else:
+            cluster_path = None
+
+        return connect, data_file, cluster_path
+    
+    if distributed is None:
+        if not CUDA:
+            return find_Bragg_disks_aiml_serial(
+                datacube,
+                probe,
+                num_attmpts = num_attmpts,
+                thresold = thresold,
+                predict = predict,
+                batch_size = batch_size,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+                _qt_progress_bar=_qt_progress_bar)
+        elif _check_cuda_device_available():
+            from .diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
+            return find_Bragg_disks_aiml_CUDA(
+                datacube,
+                probe,
+                num_attmpts = num_attmpts,
+                thresold = thresold,
+                predict = predict,
+                batch_size = batch_size,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+                _qt_progress_bar=_qt_progress_bar)
+        else:
+            print('py4DSTEM was hoping to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to CPU (Non-CUDA) mode (Remember it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n')
+            return find_Bragg_disks_aiml_serial(
+                datacube,
+                probe,
+                num_attmpts = num_attmpts,
+                thresold = thresold,
+                predict = predict,
+                batch_size = batch_size,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+                _qt_progress_bar=_qt_progress_bar)
+
+    elif isinstance(distributed, dict):
+        #connect, data_file, cluster_path = _parse_distributed(distributed)
+
+        raise ValueError("{} not yet implemented for aiml pipeline".format(type(distributed)))
+    else:
+        raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
+
+def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,thresold=1):
+    """
+    Integrate DP over the region of thresold pixel and average them
+    """
+        disks = []
+        for x,y,i in zip(maxima_x,maxima_y,maxima_int):
+            disk = DP[int(x)-thresold:int(x)+thresold, int(y)-thresold:int(y)+thresold]
+            disks.append(np.average(disk))
+        disks = disks/max(disks)
+        return (maxima_x,maxima_y,disks)
+
+def _check_cuda_device_available():
+    """
+    Check if GPU is available to use by python/tensorflow.
+    """
+    import GPUtil 
+    gpus = GPUtil.getAvailable()
+    tf_recog_gpus = tf.config.experimental.list_physical_devices('GPU')
+    
+    if len(gpus) > 0 and len(tf_recog_gpus) >0:
+        return True
+    else:
+        return False
+    
+def _get_latest_model(model_path = None):
+    """
+    get the latest tensorflow model and model weights for disk detection
+    
+    Args:
+        model_path (filepath string): File path for the tensorflow models stored in local system,
+            if provided, disk detection will be performed loading the model provided by user.
+            By default, there is no need to provide any file path unless specificly required for
+            development/debug purpose. If None, _get_latest_model() will look up the latest model
+            from cloud and download and load them. 
+
+    Returns:
+         model                         Trained tensorflow model for disk detection
+    """
+    
+    from ...io.google_drive_downloader import download_file_from_google_drive
+    
+    if model_path is None:
+        try:
+            os.mkdir('./tmp')
+        except:
+            pass
+        
+        download_file_from_google_drive('1cmobCAp63gLuPMlRvYTj7tBX0ZbmXM9T','./tmp/model_metadata.json')
+        f = open('./tmp/model_metadata.json')
+        metadata = json.load(f)
+        file_id = metadata['file_id']
+        file_path = metadata['file_path']
+        file_type = metadata['file_type']
+        
+        try:
+            f_old = open('./tmp/model_metadata_old.json')
+            metaold = json.load(f_old)
+            file_id_old = metaold['file_id']
+        except:
+            file_id_old = file_id
+        
+        if os.path.exists(file_path) and file_id == file_id_old:
+            print('Latest model weight is already available in the local system. Loading the model... \n')
+            model_path = file_path
+            os.remove('./tmp/model_metadata_old.json')
+            os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
+        else:
+            print('Checking the latest model on the cloud... \n')
+            filename = file_path + file_type
+            download_file_from_google_drive(file_id,filename)
+            shutil.unpack_archive(filename, './tmp' ,format="zip")
+            model_path = file_path
+            os.remove(filename)
+            os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
+            print('Loading the model... \n')
+
+        model = tf.keras.models.load_model(model_path,
+                                           custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
+        print('Successfully loaded the model \n')
+    else:
+        model = tf.keras.models.load_model(model_path,
+                                           custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
+    
+    return model
