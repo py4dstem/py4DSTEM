@@ -92,7 +92,7 @@ def ellipse_err(p, x, y, val):
 
 ###### Fitting from amorphous diffraction rings ######
 
-def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
+def fit_ellipse_amorphous_ring(data,center,fitradii,p0=None,mask=None):
     """
     Fit the amorphous halo of a diffraction pattern, including any elliptical distortion.
 
@@ -134,8 +134,8 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
 
     Args:
         data (2d array): the data
-        x0,y0 (numbers): the center
-        ri,r0 (numbers): the inner and outer radii of the fitting annulus
+        center (2-tuple of numbers): the center (x0,y0)
+        fitradii (2-tuple of numbers): the inner and outer radii of the fitting annulus
         p0 (11-tuple): initial guess parameters. If p0 is None, the function will compute
             a guess at all parameters. If p0 is a 11-tuple it must be populated by some
             mix of numbers and None; any parameters which are set to None will be guessed
@@ -164,6 +164,8 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     if mask is None:
         mask = np.ones_like(data).astype(bool)
     assert data.shape == mask.shape, "data and mask must have same shapes."
+    x0,y0 = center
+    ri,ro = fitradii
 
     # Get data mask
     Nx,Ny = data.shape
