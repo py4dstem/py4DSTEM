@@ -18,7 +18,8 @@ the module docstring for process/utils/ellipticalCoords.py.
 import numpy as np
 from scipy.optimize import leastsq
 from scipy.ndimage.filters import gaussian_filter
-from ..utils import get_CoM, convert_ellipse_params, radial_integral
+from ..utils import convert_ellipse_params, convert_ellipse_params_r
+from ..utils import get_CoM, radial_integral
 from ...io import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
@@ -97,7 +98,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
 
     The fit function is::
 
-        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) =
+        f(x,y; I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C) =
             Norm(r; I0,sigma0,0) +
             Norm(r; I1,sigma1,R)*Theta(r-R)
             Norm(r; I1,sigma2,R)*Theta(R-r) + c_bkgd
@@ -106,7 +107,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
 
         * (x,y) are cartesian coordinates,
         * r is the radial coordinate,
-        * (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C) are parameters,
+        * (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C) are parameters,
         * Norm(x;I,s,u) is a gaussian in the variable x with maximum amplitude I,
           standard deviation s, and mean u
         * Theta(x) is a Heavyside step function
@@ -126,8 +127,8 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
         * sigma1: inner std of Janus gaussian
         * sigma2: outer std of Janus gaussian
         * c_bkgd: a constant offset
-        * R: center of the Janus gaussian
         * x0,y0: the origin
+        * R: the radial center of the Janus gaussian
         * B,C: The ellipse parameters, in the form 1x^2 + Bxy + Cy^2 = 1
 
     Args:
@@ -138,7 +139,7 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
             a guess at all parameters. If p0 is a 11-tuple it must be populated by some
             mix of numbers and None; any parameters which are set to None will be guessed
             by the function.  The parameters are the 11 parameters of the fit function
-            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C).
+            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C).
             Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
             to the main function, but if they are passed as elements of p0 these will
             take precendence.
@@ -152,8 +153,8 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
 
             * **x0**: x center
             * **y0**: y center,
-            * **a**: semimajor axis length
-            * **e**: ratio of semiminor/semimajor lengths
+            * **a**: the semimajor axis length
+            * **b**: the semiminor axis length
             * **theta**: tilt of a-axis w.r.t x-axis, in radians
 
         The second element is the full set of fit parameters to the double sided gaussian
@@ -184,11 +185,13 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     # To guess R, we take a radial integral
     q,radial_profile = radial_integral(data,x0,y0,1)
     R = q[(q>ri)*(q<ro)][np.argmax(radial_profile[(q>ri)*(q<ro)])]
-    B=0
-    C=1
+    # Initial guess at A,B,C
+    A,B,C = convert_ellipse_params_r(R,R,0)
+    #B,C = B/A,C/A
 
     # Populate initial parameters
-    p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C])
+    p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C])
+    #p0_guess = tuple([I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,R,B,C])
     if p0 is None:
         _p0 = p0_guess
     else:
@@ -199,11 +202,11 @@ def fit_ellipse_amorphous_ring(data,x0,y0,ri,ro,p0=None,mask=None):
     p = leastsq(double_sided_gaussian_fiterr, _p0, args=(x_inds, y_inds, vals))[0]
 
     # Return
-    _R = p[6]
-    _x0,_y0 = p[7],p[8]
-    _A,_B,_C = 1,p[9],p[10]
+    _x0,_y0 = p[6],p[7]
+    _A,_B,_C = p[8],p[9],p[10]
+    #_R,_B,_C = p[8],p[9],p[10]
+    #_A,_B,_C = _R**2,_B*R**2,_C*R**2
     _a,_b,_theta = convert_ellipse_params(_A,_B,_C)
-    _a,_b = _a*_R,_b*_R
     return (_x0,_y0,_a,_b,_theta),p
 
 def double_sided_gaussian_fiterr(p, x, y, val):
@@ -219,8 +222,12 @@ def double_sided_gaussian(p, x, y):
     parameters p, described in detail in the fit_ellipse_amorphous_ring docstring.
     """
     # Unpack parameters
-    I0, I1, sigma0, sigma1, sigma2, c_bkgd, R, x0, y0, B, C = p
-    r2 = 1 * (x - x0) ** 2 + B * (x - x0) * (y - y0) + C * (y - y0) ** 2
+    I0, I1, sigma0, sigma1, sigma2, c_bkgd, x0, y0, A, B, C = p
+    a,b,theta = convert_ellipse_params(A,B,C)
+    R = np.mean((a,b))
+    R2 = R**2
+    A,B,C = A*R2,B*R2,C*R2
+    r2 = A*(x - x0)**2 + B*(x - x0)*(y - y0) + C*(y - y0)**2
     r = np.sqrt(r2) - R
 
     return (
