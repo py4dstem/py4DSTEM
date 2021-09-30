@@ -46,7 +46,7 @@ def show_elliptical_fit(ar,Ri,Ro,ellipse_params,fill=True,
         return fig,ax
 
 
-def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
+def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
                             ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
@@ -56,7 +56,7 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
 
     Args:
         dp (array): the diffraction pattern
-        qmin,qmax (numbers): the min/max distances of the fitting annulus
+        fitradii (2-tuple of numbers): the min/max distances of the fitting annulus
         p_ellipse (11-tuple): the fit parameters to the double-sided gaussian fit
             function returned by fit_ellipse_amorphous_ring
         N (int): the number of pinwheel sections
@@ -77,6 +77,7 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     else:
         cmap_data,cmap_fit = cmap,cmap
     Q_Nx,Q_Ny = dp.shape
+    qmin,qmax = fitradii
 
     # Make coords
     qx0,qy0 = p_ellipse[6],p_ellipse[7]
