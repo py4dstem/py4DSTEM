@@ -23,7 +23,7 @@ def download_file_from_google_drive(id_,destination, overwrite=False):
     elif os.path.exists(destination) and overwrite == True:
         print("File Already Existed, Downloading and Overwriting")
     else:
-        print("Downloading")
+        print("Downloading {}".format(destination))
 
     def get_confirm_token(response):
         for key, value in response.cookies.items():
@@ -46,7 +46,7 @@ def download_file_from_google_drive(id_,destination, overwrite=False):
 
     response = session.get(URL, params = { 'id' : id_ }, stream = True)
     token = get_confirm_token(response)
-
+    
     if token:
         params = { 'id' : id_, 'confirm' : token }
         response = session.get(URL, params = params, stream = True)
