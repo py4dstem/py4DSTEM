@@ -364,6 +364,10 @@ class Crystal:
             el = proj_dir[0]
             az = proj_dir[1]
         elif np.size(proj_dir) == 3:
+            if not self.cartesian_directions:
+                proj_dir = self.zone_axis_to_cartesian(proj_dir)
+
+
             if proj_dir[0] == 0 and proj_dir[1] == 0:
                 el = 90 * np.sign(proj_dir[2])
             else:
@@ -416,11 +420,13 @@ class Crystal:
         accel_voltage: float = 300e3,
         corr_kernel_size: float = 0.08,
         tol_distance: float = 0.01,
-        plot_corr_norm: bool = False,
         fiber_axis = None,
         fiber_angles = None,
+        cartesian_directions=False,
         figsize: Union[list, tuple, np.ndarray] = (6, 6),
     ):
+        # plot_corr_norm: bool = False,  # option removed due to new normalization
+
         """
         Calculate the rotation basis arrays for an SO(3) rotation correlogram.
 
@@ -439,7 +445,9 @@ class Crystal:
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
             fiber_axis (float):           (3,) vector specifying the fiber axis
             fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
-
+            cartesian_directions (bool): When set to true, all zone axes and projection directions
+                                         are specified in Cartesian directions.
+            figsize (float):            (2,) vector giving the figure size
         """
 
         # Store inputs
@@ -447,28 +455,30 @@ class Crystal:
         self.orientation_kernel_size = np.asarray(corr_kernel_size)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
         self.orientation_fiber_angles = np.asarray(fiber_angles)
+        self.cartesian_directions = cartesian_directions
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         if isinstance(zone_axis_range, str):
             if zone_axis_range == "fiber" and fiber_axis is not None and fiber_angles is not None:
-                # Determine vector ranges
-                self.orientation_fiber_axis  = np.array(self.orientation_fiber_axis ).astype('float')
-                self.orientation_fiber_axis  = self.orientation_fiber_axis / np.linalg.norm(self.orientation_fiber_axis )
 
-                if np.all(self.orientation_fiber_axis  == np.array([1.0,0.0,0.0])):
+                # Determine vector ranges
+                self.orientation_fiber_axis  = np.array(self.orientation_fiber_axis, dtype='float')
+                if self.cartesian_directions:
+                    self.orientation_fiber_axis = self.orientation_fiber_axis / np.linalg.norm(self.orientation_fiber_axis )
+                else: 
+                    self.orientation_fiber_axis = self.zone_axis_to_cartesian(self.orientation_fiber_axis)
+
+                # Generate 2 perpendicular vectors to self.orientation_fiber_axis
+                if np.all(np.abs(self.orientation_fiber_axis)  == np.array([1.0,0.0,0.0])):
                     v0 = np.array([0.0,1.0,0.0])
                 else:
                     v0 = np.array([1.0,0.0,0.0])
-
                 v2 = np.cross(self.orientation_fiber_axis, v0)
                 v3 = np.cross(v2, self.orientation_fiber_axis)
-                # v2 = np.cross(self.orientation_fiber_axis, v1)
-                # v3 = np.cross(v2, fiber_axis)
                 v2 = v2 / np.linalg.norm(v2)
                 v3 = v3 / np.linalg.norm(v3)
-
 
                 if self.orientation_fiber_angles[0] == 0:
                     self.orientation_zone_axis_range = np.vstack(
@@ -512,9 +522,15 @@ class Crystal:
                         raise ValueError('Zone axis range must be a 2x3 array, 3x3 array, or full, half or fiber')
 
         else:
+            self.orientation_zone_axis_range = np.array(zone_axis_range, dtype='float')
+
+            if not self.cartesian_directions:
+                for a0 in range(zone_axis_range.shape[0]):
+                    self.orientation_zone_axis_range[a0,:] = self.zone_axis_to_cartesian(self.orientation_zone_axis_range[a0,:])
+
             # Define 3 vectors which span zone axis orientation range, normalize
             if zone_axis_range.shape[0] == 3:
-                self.orientation_zone_axis_range = zone_axis_range.astype("float")
+                self.orientation_zone_axis_range = np.array(self.orientation_zone_axis_range, dtype='float')
                 self.orientation_zone_axis_range[0, :] /= np.linalg.norm(
                     self.orientation_zone_axis_range[0, :]
                 )
@@ -527,7 +543,7 @@ class Crystal:
 
             elif zone_axis_range.shape[0] == 2:
                 self.orientation_zone_axis_range = np.vstack(
-                    (np.array([0, 0, 1]), np.array(zone_axis_range))
+                    (np.array([0, 0, 1]), np.array(self.orientation_zone_axis_range, dtype='float'))
                 ).astype("float")
                 self.orientation_zone_axis_range[1, :] /= np.linalg.norm(
                     self.orientation_zone_axis_range[1, :]
@@ -560,8 +576,7 @@ class Crystal:
             )
         ).astype(np.int)
 
-
-        if zone_axis_range == "fiber" and self.orientation_fiber_angles[0] == 0:
+        if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
             self.orientation_num_zones = int(1)
             self.orientation_vecs = np.zeros((1,3))
             self.orientation_vecs[0,:] = self.orientation_zone_axis_range[0, :]
@@ -614,7 +629,7 @@ class Crystal:
 
                 weights = np.linspace(0, 1, a0 + 1)
 
-                if zone_axis_range == "fiber":
+                if self.orientation_fiber:
                     # For fiber texture, place points on circular arc perpendicular to the fiber axis
                     self.orientation_vecs[inds, :] = p0[None, :] 
 
@@ -645,8 +660,10 @@ class Crystal:
                 self.orientation_inds[inds, 0] = a0
                 self.orientation_inds[inds, 1] = np.arange(a0 + 1)
 
+
+
         # Fiber texture extend to 180 angular range if needed
-        if zone_axis_range == "fiber" and \
+        if self.orientation_fiber and \
             self.orientation_fiber_angles[0] != 0 and \
             (self.orientation_fiber_angles[1] == 180 or self.orientation_fiber_angles[1] == 360):
             # Mirror about the axes 0 and 1
@@ -684,7 +701,7 @@ class Crystal:
                 (orientation_sector, np.ones(np.sum(keep), dtype="int"))
             )
         # Fiber texture extend to 360 angular range if needed
-        if zone_axis_range == "fiber" and \
+        if self.orientation_fiber and \
             self.orientation_fiber_angles[0] != 0 and \
             self.orientation_fiber_angles[1] == 360:
             # Mirror about the axes 0 and 2
@@ -780,6 +797,7 @@ class Crystal:
                 (self.orientation_inds, self.orientation_inds[keep, :])
             ).astype("int")
             self.orientation_inds[:, 2] = orientation_sector
+
 
         # Convert to spherical coordinates
         elev = np.arctan2(
@@ -927,53 +945,53 @@ class Crystal:
         # self.orientation_ref = np.fft.fft(self.orientation_ref)
         self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
-        # plot the correlation normalization
-        if plot_corr_norm is True:
-            # 2D correlation slice
-            im_corr_zone_axis = np.zeros(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps + 1,
-                )
-            )
-            for a0 in np.arange(self.orientation_zone_axis_steps + 1):
-                inds_val = np.arange(
-                    a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1
-                ).astype(np.int)
-                im_corr_zone_axis[a0, range(a0 + 1)] = self.orientation_corr_norm[
-                    inds_val
-                ]
+        # # plot the correlation normalization
+        # if plot_corr_norm is True:
+        #     # 2D correlation slice
+        #     im_corr_zone_axis = np.zeros(
+        #         (
+        #             self.orientation_zone_axis_steps + 1,
+        #             self.orientation_zone_axis_steps + 1,
+        #         )
+        #     )
+        #     for a0 in np.arange(self.orientation_zone_axis_steps + 1):
+        #         inds_val = np.arange(
+        #             a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1
+        #         ).astype(np.int)
+        #         im_corr_zone_axis[a0, range(a0 + 1)] = self.orientation_corr_norm[
+        #             inds_val
+        #         ]
 
-            # Zone axis
-            fig, ax = plt.subplots(figsize=figsize)
-            # cmin = np.min(self.orientation_corr_norm)
-            cmax = np.max(self.orientation_corr_norm)
+        #     # Zone axis
+        #     fig, ax = plt.subplots(figsize=figsize)
+        #     # cmin = np.min(self.orientation_corr_norm)
+        #     cmax = np.max(self.orientation_corr_norm)
 
-            # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-            im_plot = im_corr_zone_axis / cmax
+        #     # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+        #     im_plot = im_corr_zone_axis / cmax
 
-            im = ax.imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-            fig.colorbar(im)
+        #     im = ax.imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+        #     fig.colorbar(im)
 
-            label_0 = self.orientation_zone_axis_range[0, :]
-            label_0 = np.round(label_0 * 1e3) * 1e-3
-            label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        #     label_0 = self.orientation_zone_axis_range[0, :]
+        #     label_0 = np.round(label_0 * 1e3) * 1e-3
+        #     label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
 
-            label_1 = self.orientation_zone_axis_range[1, :]
-            label_1 = np.round(label_1 * 1e3) * 1e-3
-            label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        #     label_1 = self.orientation_zone_axis_range[1, :]
+        #     label_1 = np.round(label_1 * 1e3) * 1e-3
+        #     label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
 
-            label_2 = self.orientation_zone_axis_range[2, :]
-            label_2 = np.round(label_2 * 1e3) * 1e-3
-            label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+        #     label_2 = self.orientation_zone_axis_range[2, :]
+        #     label_2 = np.round(label_2 * 1e3) * 1e-3
+        #     label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
 
-            ax.set_yticks([0])
-            ax.set_yticklabels([str(label_0)])
+        #     ax.set_yticks([0])
+        #     ax.set_yticklabels([str(label_0)])
 
-            ax.set_xticks([0, self.orientation_zone_axis_steps])
-            ax.set_xticklabels([str(label_1), str(label_2)])
+        #     ax.set_xticks([0, self.orientation_zone_axis_steps])
+        #     ax.set_xticklabels([str(label_1), str(label_2)])
 
-            plt.show()
+        #     plt.show()
 
     def plot_orientation_zones(
         self,
@@ -1000,6 +1018,9 @@ class Crystal:
 
         if proj_dir is None:
             proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
+        elif not self.cartesian_directions:
+            proj_dir = self.zone_axis_to_cartesian(proj_dir)
+
 
         if np.size(proj_dir) == 2:
             el = proj_dir[0]
@@ -1072,18 +1093,29 @@ class Crystal:
         )
 
         # zone axis range labels
-        label_0 = self.orientation_zone_axis_range[0, :]
+        if self.cartesian_directions:
+            label_0 = self.orientation_zone_axis_range[0, :]
+        else:
+            label_0 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[0, :])
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0 * 1e3) * 1e-3
 
         if self.orientation_fiber is False:
-            label_1 = self.orientation_zone_axis_range[1, :]
+            
+            if self.cartesian_directions:
+                label_1 = self.orientation_zone_axis_range[1, :]
+            else:
+                label_1 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[1, :])            
             label_1 = np.round(label_1 * 1e3) * 1e-3
             label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
             label_1 = np.round(label_1 * 1e3) * 1e-3
 
-            label_2 = self.orientation_zone_axis_range[2, :]
+            if self.cartesian_directions:
+                label_2 = self.orientation_zone_axis_range[2, :]
+            else:
+                label_2 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[2, :])
+
             label_2 = np.round(label_2 * 1e3) * 1e-3
             label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
             label_2 = np.round(label_2 * 1e3) * 1e-3
@@ -1200,6 +1232,8 @@ class Crystal:
             zone_axis=self.orientation_vecs[index_plot, :],
             sigma_excitation_error=self.orientation_kernel_size / 3,
         )
+
+
         plot_diffraction_pattern(
             bragg_peaks,
             figsize=(figsize[1], figsize[1]),
@@ -1710,7 +1744,7 @@ class Crystal:
                                 )
 
             # apply in-plane rotation
-            phi = corr_in_plane_angle[ind_best_fit]  # + np.pi
+            phi = corr_in_plane_angle[ind_best_fit] # - np.pi/2
             m3z = np.array(
                 [
                     [np.cos(phi), np.sin(phi), 0],
@@ -1731,6 +1765,14 @@ class Crystal:
 
             if verbose:
                 zone_axis_fit = orientation_matrix[:, 2]
+
+                if not self.cartesian_directions:
+                    # TODO - I definitely think this should be cartesian--> zone,
+                    # but that seems to return incorrect labels.  Not sure why! -CO
+
+                    # zone_axis_fit = self.cartesian_to_zone_axis(zone_axis_fit)
+                    zone_axis_fit = self.zone_axis_to_cartesian(zone_axis_fit)
+
                 temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
                 temp = np.round(temp * 1e3) / 1e3
                 print(
@@ -2049,10 +2091,26 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
-        zone_axis = np.asarray(zone_axis)
+        zone_axis = np.asarray(zone_axis, dtype='float')
 
         if zone_axis.ndim == 1:
             zone_axis = np.asarray(zone_axis)
+            zone_axis = zone_axis / np.linalg.norm(zone_axis)
+
+            if not self.cartesian_directions:
+                zone_axis = self.cartesian_to_zone_axis(zone_axis)
+
+            if proj_x_axis is None:
+                if np.all(np.abs(zone_axis)  == np.array([1.0,0.0,0.0])):
+                    v0 = np.array([0.0,-1.0,0.0])
+                else:
+                    v0 = np.array([-1.0,0.0,0.0])
+                proj_x_axis = np.cross(zone_axis, v0)                
+            else:
+                proj_x_axis = np.asarray(proj_x_axis, dtype='float')
+                if not self.cartesian_directions:
+                    proj_x_axis = self.zone_axis_to_cartesian(proj_x_axis)
+
         elif zone_axis.shape == (3, 3):
             proj_x_axis = zone_axis[:, 0]
             zone_axis = zone_axis[:, 2]
@@ -2060,21 +2118,41 @@ class Crystal:
             proj_x_axis = zone_axis[:, 0, 0]
             zone_axis = zone_axis[:, 2, 0]
 
-        # Foil normal
+        # Set x and y projection vectors
+        ky_proj = np.cross(zone_axis, proj_x_axis)
+        kx_proj = np.cross(ky_proj, zone_axis)
+        
+        kx_proj = kx_proj / np.linalg.norm(kx_proj)
+        ky_proj = ky_proj / np.linalg.norm(ky_proj)
+
+        # Foil normal vector
         if foil_normal is None:
             foil_normal = zone_axis
         else:
-            foil_normal = np.asarray(foil_normal)
-        foil_normal = foil_normal / np.linalg.norm(foil_normal)
-
-        # Logic to set x axis for projected images
-        if proj_x_axis is None:
-            if np.all(zone_axis == np.array([-1, 0, 0])):
-                proj_x_axis = np.array([0, -1, 0])
-            elif np.all(zone_axis == np.array([1, 0, 0])):
-                proj_x_axis = np.array([0, 1, 0])
+            foil_normal = np.asarray(foil_normal, dtype='float')
+            if not cartesian_directions:
+                foil_normal = self.zone_axis_to_cartesian(foil_normal)
             else:
-                proj_x_axis = np.array([-1, 0, 0])
+                foil_normal = foil_normal / np.linalg.norm(foil_normal)
+
+        # if proj_x_axis is None:
+        #     if np.all(zone_axis == np.array([-1, 0, 0])):
+        #         proj_x_axis = np.array([0, -1, 0])
+        #     elif np.all(zone_axis == np.array([1, 0, 0])):
+        #         proj_x_axis = np.array([0, 1, 0])
+        #     else:
+        #         proj_x_axis = np.array([-1, 0, 0])
+
+        # # Logic to set x axis for projected images
+        # Generate 2 zone_axis
+        # if np.all(zone_axis  == np.array([1.0,0.0,0.0])):
+        #     v0 = np.array([0.0,-1.0,0.0])
+        # else:
+        #     v0 = np.array([-1.0,0.0,0.0])
+        # kx_proj = np.cross(zone_axis, v0)
+        # ky_proj = np.cross(kx_proj, zone_axis)
+        # kx_proj = kx_proj / np.linalg.norm(kx_proj)
+        # ky_proj = ky_proj / np.linalg.norm(ky_proj)
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
@@ -2106,9 +2184,6 @@ class Crystal:
         keep_int = g_int > tol_intensity
 
         # Diffracted peak locations
-        ky_proj = np.cross(zone_axis, proj_x_axis)
-        kx_proj = np.cross(ky_proj, zone_axis)
-
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
         gx_proj = np.sum(g_diff[:, keep_int] * kx_proj[:, None], axis=0)
@@ -2477,6 +2552,22 @@ class Crystal:
         else:
             return images_orientation
 
+    # def zone_axis_to_cartesian(self, zone_axis):
+    #     vec_cart = zone_axis @ self.lat_real
+    #     return vec_cart / np.linalg.norm(vec_cart)
+
+    # def cartesian_to_zone_axis(self, vec_cart):
+    #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
+    #     return zone_axis / np.linalg.norm(zone_axis)
+
+    def cartesian_to_zone_axis(self, zone_axis):
+        vec_cart = zone_axis @ self.lat_real
+        return vec_cart / np.linalg.norm(vec_cart)
+
+    def zone_axis_to_cartesian(self, vec_cart):
+        zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
+        return zone_axis / np.linalg.norm(zone_axis)
+
 
 def plot_diffraction_pattern(
     bragg_peaks: PointList,
@@ -2566,7 +2657,7 @@ def plot_diffraction_pattern(
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
 
     ax.invert_yaxis()
-    ax.set_box_aspect(1)
+    # ax.set_box_aspect(1)
     ax.xaxis.tick_top()
 
     # Labels for all peaks
@@ -2583,7 +2674,7 @@ def plot_diffraction_pattern(
         def overline(x):
             return str(x) if x >= 0 else (r"\overline{" + str(np.abs(x)) + "}")
 
-        for a0 in np.arange(bragg_peaks.data.shape[0]):
+        for a0 in range(bragg_peaks.data.shape[0]):
             h = bragg_peaks.data["h"][a0]
             k = bragg_peaks.data["k"][a0]
             l = bragg_peaks.data["l"][a0]
@@ -2597,11 +2688,16 @@ def plot_diffraction_pattern(
                 **text_params,
             )
 
+    # Force plot to have 1:1 aspect ratio
+    ax.set_aspect('equal')
+
     if input_fig_handle is None:
         plt.show()
 
     if returnfig:
         return fig, ax
+
+
 
 
 def axisEqual3D(ax):
