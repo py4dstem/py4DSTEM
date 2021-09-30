@@ -79,7 +79,7 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     Q_Nx,Q_Ny = dp.shape
 
     # Make coords
-    qx0,qy0 = p_ellipse[7],p_ellipse[8]
+    qx0,qy0 = p_ellipse[6],p_ellipse[7]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qx,qy = qxx-qx0,qyy-qy0
     q = np.hypot(qx,qy)
@@ -111,9 +111,10 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
 
     # Add ellipse overlay
     if ellipse:
-        a,b,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
-        R = p_ellipse[6]
-        a,b = a*R,b*R
+        A,B,C = p_ellipse[8],p_ellipse[9],p_ellipse[10]
+        #R,B,C = p_ellipse[8],p_ellipse[9],p_ellipse[10]
+        #A,B,C = R**2,B*R**2,C*R**2
+        a,b,theta = convert_ellipse_params(A,B,C)
         ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
         add_ellipses(ax,ellipse)
