@@ -8,12 +8,6 @@ from mpl_toolkits.mplot3d import Axes3D, art3d
 import warnings
 from typing import Union, Optional
 
-try:
-    import pymatgen as mg
-    from pymatgen.ext.matproj import MPRester
-except Exception:
-    print(r"pymatgen not found... pymatgen Crystal module won't work ¯\_(ツ)_/¯")
-
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
@@ -23,10 +17,6 @@ class Crystal:
     A class storing a single crystal structure, and associated diffraction data.
 
     Args:
-        structure       a pymatgen Structure object for the material
-                        or a string containing the Materials Project ID for the
-                        structure (requires API key in config file, see:
-                        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
         conventional_standard_structure: (bool) whether to convert primitive unit cell to
                         conventional structure. When using the MP API, cells are usually primitive
                         and so indexing will be with respect to the primitive basis vectors,
@@ -36,65 +26,105 @@ class Crystal:
 
     def __init__(
         self,
-        positions, 
-        numbers, 
-        cell, 
-        structure=None,
-        conventional_standard_structure=True,
+        positions,
+        numbers,
+        cell,
     ):
         """
         Instantiate a Crystal object.
         Calculate lattice vectors.
         """
+        # Initialize Crystal
+        self.positions = np.asarray(positions)  #: fractional atomic coordinates
 
-        if positions is not None:
-            # Initialize Crystal
-            self.positions = np.asarray(positions)   #: fractional atomic coordinates
-
-            #: atomic numbers - if only one value is provided, assume all atoms are same species
-            numbers = np.asarray(numbers, dtype='intp')
-            if np.size(numbers) == 1:
-                self.numbers = np.ones(positions.shape[0], dtype='intp') * numbers
-            elif np.size(numbers) == positions.shape[0]:
-                self.numbers = numbers
-            else:
-                raise Exception('Number of positions and atomic numbers do not match')
-
-
-            # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma] 
-            cell = np.asarray(cell, dtype='float_')      
-            if np.size(cell) == 1:
-                self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
-            elif np.size(cell) == 3:
-                self.cell = np.hstack([cell, 90, 90, 90])
-            elif np.size(cell) == 6:  
-                self.cell = cell             
-            else:
-                raise Exception('Cell cannot contain ' + np.size(cell) + ' elements')
-
-            # calculate unit cell lattice vectors
-            a = self.cell[0]
-            b = self.cell[1]
-            c = self.cell[2]
-            alpha = self.cell[3] * np.pi/180
-            beta  = self.cell[4] * np.pi/180
-            gamma = self.cell[5] * np.pi/180
-            t = (np.cos(alpha)-np.cos(beta)*np.cos(gamma))/np.sin(gamma)
-            self.lat_real = np.array([ \
-                [a, 0, 0],
-                [b*np.cos(gamma), b*np.sin(gamma), 0],
-                [c*np.cos(beta), c*t, c*np.sqrt(1-np.cos(beta)**2-t**2)]])
+        #: atomic numbers - if only one value is provided, assume all atoms are same species
+        numbers = np.asarray(numbers, dtype="intp")
+        if np.size(numbers) == 1:
+            self.numbers = np.ones(positions.shape[0], dtype="intp") * numbers
+        elif np.size(numbers) == positions.shape[0]:
+            self.numbers = numbers
         else:
-            if isinstance(structure, str):
-                with MPRester() as m:
-                    structure = m.get_structure_by_material_id(structure)
+            raise Exception("Number of positions and atomic numbers do not match")
 
-            assert isinstance(
-                structure, mg.core.Structure
-            ), "structure must be pymatgen Structure object"
+        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma]
+        cell = np.asarray(cell, dtype="float_")
+        if np.size(cell) == 1:
+            self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
+        elif np.size(cell) == 3:
+            self.cell = np.hstack([cell, 90, 90, 90])
+        elif np.size(cell) == 6:
+            self.cell = cell
+        else:
+            raise Exception("Cell cannot contain " + np.size(cell) + " elements")
+
+        # calculate unit cell lattice vectors
+        a = self.cell[0]
+        b = self.cell[1]
+        c = self.cell[2]
+        alpha = self.cell[3] * np.pi / 180
+        beta = self.cell[4] * np.pi / 180
+        gamma = self.cell[5] * np.pi / 180
+        t = (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+        self.lat_real = np.array(
+            [
+                [a, 0, 0],
+                [b * np.cos(gamma), b * np.sin(gamma), 0],
+                [c * np.cos(beta), c * t, c * np.sqrt(1 - np.cos(beta) ** 2 - t ** 2)],
+            ]
+        )
+
+    def from_pymatgen_structure(structure, conventional_standard_structure=True):
+        """
+        Create a Crystal object from a pymatgen Structure object.
+        If a Materials Project API key is installed, you may pass
+        the Materials Project ID of a structure, which will be
+        fetched through the MP API. For setup information see:
+        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
+
+        Note that pymatgen typically prefers to return primitive unit cells,
+        which can be overridden by setting conventional_standard_structure=True.
+        """
+        import pymatgen as mg
+        from pymatgen.ext.matproj import MPRester
+
+        if isinstance(structure, str):
+            with MPRester() as m:
+                structure = m.get_structure_by_material_id(structure)
+
+        assert isinstance(
+            structure, mg.core.Structure
+        ), "structure must be pymatgen Structure object"
+
+        structure = (
+            mg.symmetry.analyzer.SpacegroupAnalyzer(
+                structure
+            ).get_conventional_standard_structure()
+            if conventional_standard_structure
+            else structure
+        )
+
+        positions = structure.frac_coords  #: fractional atomic coordinates
+
+        cell = np.array(
+            [
+                structure.lattice.a,
+                structure.lattice.b,
+                structure.lattice.c,
+                structure.lattice.alpha,
+                structure.lattice.beta,
+                structure.lattice.gamma,
+            ]
+        )
+
+        numbers = np.array([s.species.elements[0].Z for s in structure])
+
+        return Crystal(positions, numbers, cell)
 
     def calculate_structure_factors(
-        self, k_max: float = 2.0, tol_structure_factor: float = 1e-2, return_intensities: bool = False,
+        self,
+        k_max: float = 2.0,
+        tol_structure_factor: float = 1e-2,
+        return_intensities: bool = False,
     ):
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
@@ -323,13 +353,12 @@ class Crystal:
                 plot_limit, axis=0
             )
 
-        
         ax.invert_yaxis()
         if show_axes is False:
             ax.set_axis_off()
-        ax.axes.set_xlim3d(left  =plot_limit[0, 1], right=plot_limit[1, 1])
-        ax.axes.set_ylim3d(bottom=plot_limit[0, 0],   top=plot_limit[1, 0])
-        ax.axes.set_zlim3d(bottom=plot_limit[0, 2],   top=plot_limit[1, 2])
+        ax.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
+        ax.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
+        ax.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
         # ax.set_box_aspect((1, 1, 1))
         axisEqual3D(ax)
 
@@ -366,7 +395,6 @@ class Crystal:
         elif np.size(proj_dir) == 3:
             if not self.cartesian_directions:
                 proj_dir = self.zone_axis_to_cartesian(proj_dir)
-
 
             if proj_dir[0] == 0 and proj_dir[1] == 0:
                 el = 90 * np.sign(proj_dir[2])
@@ -420,8 +448,8 @@ class Crystal:
         accel_voltage: float = 300e3,
         corr_kernel_size: float = 0.08,
         tol_distance: float = 0.01,
-        fiber_axis = None,
-        fiber_angles = None,
+        fiber_axis=None,
+        fiber_angles=None,
         cartesian_directions=False,
         figsize: Union[list, tuple, np.ndarray] = (6, 6),
     ):
@@ -461,20 +489,33 @@ class Crystal:
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         if isinstance(zone_axis_range, str):
-            if zone_axis_range == "fiber" and fiber_axis is not None and fiber_angles is not None:
+            if (
+                zone_axis_range == "fiber"
+                and fiber_axis is not None
+                and fiber_angles is not None
+            ):
 
                 # Determine vector ranges
-                self.orientation_fiber_axis  = np.array(self.orientation_fiber_axis, dtype='float')
+                self.orientation_fiber_axis = np.array(
+                    self.orientation_fiber_axis, dtype="float"
+                )
                 if self.cartesian_directions:
-                    self.orientation_fiber_axis = self.orientation_fiber_axis / np.linalg.norm(self.orientation_fiber_axis )
-                else: 
-                    self.orientation_fiber_axis = self.zone_axis_to_cartesian(self.orientation_fiber_axis)
+                    self.orientation_fiber_axis = (
+                        self.orientation_fiber_axis
+                        / np.linalg.norm(self.orientation_fiber_axis)
+                    )
+                else:
+                    self.orientation_fiber_axis = self.zone_axis_to_cartesian(
+                        self.orientation_fiber_axis
+                    )
 
                 # Generate 2 perpendicular vectors to self.orientation_fiber_axis
-                if np.all(np.abs(self.orientation_fiber_axis)  == np.array([1.0,0.0,0.0])):
-                    v0 = np.array([0.0,1.0,0.0])
+                if np.all(
+                    np.abs(self.orientation_fiber_axis) == np.array([1.0, 0.0, 0.0])
+                ):
+                    v0 = np.array([0.0, 1.0, 0.0])
                 else:
-                    v0 = np.array([1.0,0.0,0.0])
+                    v0 = np.array([1.0, 0.0, 0.0])
                 v2 = np.cross(self.orientation_fiber_axis, v0)
                 v3 = np.cross(v2, self.orientation_fiber_axis)
                 v2 = v2 / np.linalg.norm(v2)
@@ -486,16 +527,23 @@ class Crystal:
                     ).astype("float")
                 else:
 
-                    theta = self.orientation_fiber_angles[0]*np.pi/180.0
-                    if self.orientation_fiber_angles[1] == 180 or self.orientation_fiber_angles[1] == 360:
-                        phi = np.pi/2.0
+                    theta = self.orientation_fiber_angles[0] * np.pi / 180.0
+                    if (
+                        self.orientation_fiber_angles[1] == 180
+                        or self.orientation_fiber_angles[1] == 360
+                    ):
+                        phi = np.pi / 2.0
                     else:
-                        phi = self.orientation_fiber_angles[1]*np.pi/180.0
+                        phi = self.orientation_fiber_angles[1] * np.pi / 180.0
 
-                    v2output = self.orientation_fiber_axis *np.cos(theta) + v2*np.sin(theta)
-                    v3output = self.orientation_fiber_axis *np.cos(theta) + \
-                        (v2*np.sin(theta))*np.cos(phi) + \
-                        (v3*np.sin(theta))*np.sin(phi)
+                    v2output = self.orientation_fiber_axis * np.cos(
+                        theta
+                    ) + v2 * np.sin(theta)
+                    v3output = (
+                        self.orientation_fiber_axis * np.cos(theta)
+                        + (v2 * np.sin(theta)) * np.cos(phi)
+                        + (v3 * np.sin(theta)) * np.sin(phi)
+                    )
                     self.orientation_zone_axis_range = np.vstack(
                         (self.orientation_fiber_axis, v2output, v3output)
                     ).astype("float")
@@ -517,20 +565,30 @@ class Crystal:
                     self.orientation_fiber = False
                 else:
                     if zone_axis_range == "fiber" and fiber_axis is None:
-                        raise ValueError('For fiber zone axes, you must specify the fiber axis and angular ranges')                        
+                        raise ValueError(
+                            "For fiber zone axes, you must specify the fiber axis and angular ranges"
+                        )
                     else:
-                        raise ValueError('Zone axis range must be a 2x3 array, 3x3 array, or full, half or fiber')
+                        raise ValueError(
+                            "Zone axis range must be a 2x3 array, 3x3 array, or full, half or fiber"
+                        )
 
         else:
-            self.orientation_zone_axis_range = np.array(zone_axis_range, dtype='float')
+            self.orientation_zone_axis_range = np.array(zone_axis_range, dtype="float")
 
             if not self.cartesian_directions:
                 for a0 in range(zone_axis_range.shape[0]):
-                    self.orientation_zone_axis_range[a0,:] = self.zone_axis_to_cartesian(self.orientation_zone_axis_range[a0,:])
+                    self.orientation_zone_axis_range[
+                        a0, :
+                    ] = self.zone_axis_to_cartesian(
+                        self.orientation_zone_axis_range[a0, :]
+                    )
 
             # Define 3 vectors which span zone axis orientation range, normalize
             if zone_axis_range.shape[0] == 3:
-                self.orientation_zone_axis_range = np.array(self.orientation_zone_axis_range, dtype='float')
+                self.orientation_zone_axis_range = np.array(
+                    self.orientation_zone_axis_range, dtype="float"
+                )
                 self.orientation_zone_axis_range[0, :] /= np.linalg.norm(
                     self.orientation_zone_axis_range[0, :]
                 )
@@ -543,7 +601,10 @@ class Crystal:
 
             elif zone_axis_range.shape[0] == 2:
                 self.orientation_zone_axis_range = np.vstack(
-                    (np.array([0, 0, 1]), np.array(self.orientation_zone_axis_range, dtype='float'))
+                    (
+                        np.array([0, 0, 1]),
+                        np.array(self.orientation_zone_axis_range, dtype="float"),
+                    )
                 ).astype("float")
                 self.orientation_zone_axis_range[1, :] /= np.linalg.norm(
                     self.orientation_zone_axis_range[1, :]
@@ -554,7 +615,6 @@ class Crystal:
             self.orientation_full = False
             self.orientation_half = False
             self.orientation_fiber = False
-
 
         # Solve for number of angular steps in zone axis (rads)
         angle_u_v = np.arccos(
@@ -578,8 +638,8 @@ class Crystal:
 
         if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
             self.orientation_num_zones = int(1)
-            self.orientation_vecs = np.zeros((1,3))
-            self.orientation_vecs[0,:] = self.orientation_zone_axis_range[0, :]
+            self.orientation_vecs = np.zeros((1, 3))
+            self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
             self.orientation_inds = np.zeros((1, 3), dtype="int")
 
         else:
@@ -613,11 +673,11 @@ class Crystal:
             ).astype(np.int)
             self.orientation_vecs = np.zeros((self.orientation_num_zones, 3))
             self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
-            self.orientation_inds = np.zeros((self.orientation_num_zones, 3), dtype="int")
+            self.orientation_inds = np.zeros(
+                (self.orientation_num_zones, 3), dtype="int"
+            )
 
-
-
-            # Calculate zone axis points on the unit sphere with another application of SLERP, 
+            # Calculate zone axis points on the unit sphere with another application of SLERP,
             # or circular arc SLERP for fiber texture
             for a0 in np.arange(1, self.orientation_zone_axis_steps + 1):
                 inds = np.arange(a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1).astype(
@@ -631,21 +691,25 @@ class Crystal:
 
                 if self.orientation_fiber:
                     # For fiber texture, place points on circular arc perpendicular to the fiber axis
-                    self.orientation_vecs[inds, :] = p0[None, :] 
+                    self.orientation_vecs[inds, :] = p0[None, :]
 
-                    p_proj = np.dot(p0, self.orientation_fiber_axis) * self.orientation_fiber_axis
+                    p_proj = (
+                        np.dot(p0, self.orientation_fiber_axis)
+                        * self.orientation_fiber_axis
+                    )
                     p0_sub = p0 - p_proj
                     p1_sub = p1 - p_proj
                     angle_p_sub = np.arccos(np.sum(p0_sub * p1_sub))
 
-                    self.orientation_vecs[inds, :] = p_proj + \
-                        p0_sub[None, :] * np.sin(
-                        (1 - weights[:, None]) * angle_p_sub
-                        ) / np.sin(angle_p_sub) + p1_sub[None, :] * np.sin(
-                        weights[:, None] * angle_p_sub
-                        ) / np.sin(
-                        angle_p_sub
-                        )
+                    self.orientation_vecs[inds, :] = (
+                        p_proj
+                        + p0_sub[None, :]
+                        * np.sin((1 - weights[:, None]) * angle_p_sub)
+                        / np.sin(angle_p_sub)
+                        + p1_sub[None, :]
+                        * np.sin(weights[:, None] * angle_p_sub)
+                        / np.sin(angle_p_sub)
+                    )
                 else:
                     angle_p = np.arccos(np.sum(p0 * p1))
 
@@ -660,19 +724,24 @@ class Crystal:
                 self.orientation_inds[inds, 0] = a0
                 self.orientation_inds[inds, 1] = np.arange(a0 + 1)
 
-
-
         # Fiber texture extend to 180 angular range if needed
-        if self.orientation_fiber and \
-            self.orientation_fiber_angles[0] != 0 and \
-            (self.orientation_fiber_angles[1] == 180 or self.orientation_fiber_angles[1] == 360):
+        if (
+            self.orientation_fiber
+            and self.orientation_fiber_angles[0] != 0
+            and (
+                self.orientation_fiber_angles[1] == 180
+                or self.orientation_fiber_angles[1] == 360
+            )
+        ):
             # Mirror about the axes 0 and 1
-            n = np.cross(self.orientation_zone_axis_range[0,:],
-                self.orientation_zone_axis_range[1,:])
+            n = np.cross(
+                self.orientation_zone_axis_range[0, :],
+                self.orientation_zone_axis_range[1, :],
+            )
             n = n / np.linalg.norm(n)
 
             # n = self.orientation_zone_axis_range[2,:]
-            m = np.identity(3)- 2*(n[:,None] @ n[None,:])
+            m = np.identity(3) - 2 * (n[:, None] @ n[None, :])
 
             vec_new = np.copy(self.orientation_vecs) @ m
             orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
@@ -701,16 +770,20 @@ class Crystal:
                 (orientation_sector, np.ones(np.sum(keep), dtype="int"))
             )
         # Fiber texture extend to 360 angular range if needed
-        if self.orientation_fiber and \
-            self.orientation_fiber_angles[0] != 0 and \
-            self.orientation_fiber_angles[1] == 360:
+        if (
+            self.orientation_fiber
+            and self.orientation_fiber_angles[0] != 0
+            and self.orientation_fiber_angles[1] == 360
+        ):
             # Mirror about the axes 0 and 2
-            n = np.cross(self.orientation_zone_axis_range[0,:],
-                self.orientation_zone_axis_range[2,:])
+            n = np.cross(
+                self.orientation_zone_axis_range[0, :],
+                self.orientation_zone_axis_range[2, :],
+            )
             n = n / np.linalg.norm(n)
 
             # n = self.orientation_zone_axis_range[2,:]
-            m = np.identity(3)- 2*(n[:,None] @ n[None,:])
+            m = np.identity(3) - 2 * (n[:, None] @ n[None, :])
 
             vec_new = np.copy(self.orientation_vecs) @ m
             orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
@@ -738,7 +811,6 @@ class Crystal:
             self.orientation_inds[:, 2] = np.hstack(
                 (orientation_sector, np.ones(np.sum(keep), dtype="int"))
             )
-        
 
         # expand to quarter sphere if needed
         if self.orientation_half or self.orientation_full:
@@ -797,7 +869,6 @@ class Crystal:
                 (self.orientation_inds, self.orientation_inds[keep, :])
             ).astype("int")
             self.orientation_inds[:, 2] = orientation_sector
-
 
         # Convert to spherical coordinates
         elev = np.arctan2(
@@ -1021,7 +1092,6 @@ class Crystal:
         elif not self.cartesian_directions:
             proj_dir = self.zone_axis_to_cartesian(proj_dir)
 
-
         if np.size(proj_dir) == 2:
             el = proj_dir[0]
             az = proj_dir[1]
@@ -1096,17 +1166,21 @@ class Crystal:
         if self.cartesian_directions:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
-            label_0 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[0, :])
+            label_0 = self.cartesian_to_zone_axis(
+                self.orientation_zone_axis_range[0, :]
+            )
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0 * 1e3) * 1e-3
 
         if self.orientation_fiber is False:
-            
+
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
             else:
-                label_1 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[1, :])            
+                label_1 = self.cartesian_to_zone_axis(
+                    self.orientation_zone_axis_range[1, :]
+                )
             label_1 = np.round(label_1 * 1e3) * 1e-3
             label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
             label_1 = np.round(label_1 * 1e3) * 1e-3
@@ -1114,7 +1188,9 @@ class Crystal:
             if self.cartesian_directions:
                 label_2 = self.orientation_zone_axis_range[2, :]
             else:
-                label_2 = self.cartesian_to_zone_axis(self.orientation_zone_axis_range[2, :])
+                label_2 = self.cartesian_to_zone_axis(
+                    self.orientation_zone_axis_range[2, :]
+                )
 
             label_2 = np.round(label_2 * 1e3) * 1e-3
             label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
@@ -1232,7 +1308,6 @@ class Crystal:
             zone_axis=self.orientation_vecs[index_plot, :],
             sigma_excitation_error=self.orientation_kernel_size / 3,
         )
-
 
         plot_diffraction_pattern(
             bragg_peaks,
@@ -1744,7 +1819,7 @@ class Crystal:
                                 )
 
             # apply in-plane rotation
-            phi = corr_in_plane_angle[ind_best_fit] # - np.pi/2
+            phi = corr_in_plane_angle[ind_best_fit]  # - np.pi/2
             m3z = np.array(
                 [
                     [np.cos(phi), np.sin(phi), 0],
@@ -2091,7 +2166,7 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
-        zone_axis = np.asarray(zone_axis, dtype='float')
+        zone_axis = np.asarray(zone_axis, dtype="float")
 
         if zone_axis.ndim == 1:
             zone_axis = np.asarray(zone_axis)
@@ -2101,13 +2176,13 @@ class Crystal:
                 zone_axis = self.cartesian_to_zone_axis(zone_axis)
 
             if proj_x_axis is None:
-                if np.all(np.abs(zone_axis)  == np.array([1.0,0.0,0.0])):
-                    v0 = np.array([0.0,-1.0,0.0])
+                if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
+                    v0 = np.array([0.0, -1.0, 0.0])
                 else:
-                    v0 = np.array([-1.0,0.0,0.0])
-                proj_x_axis = np.cross(zone_axis, v0)                
+                    v0 = np.array([-1.0, 0.0, 0.0])
+                proj_x_axis = np.cross(zone_axis, v0)
             else:
-                proj_x_axis = np.asarray(proj_x_axis, dtype='float')
+                proj_x_axis = np.asarray(proj_x_axis, dtype="float")
                 if not self.cartesian_directions:
                     proj_x_axis = self.zone_axis_to_cartesian(proj_x_axis)
 
@@ -2121,7 +2196,7 @@ class Crystal:
         # Set x and y projection vectors
         ky_proj = np.cross(zone_axis, proj_x_axis)
         kx_proj = np.cross(ky_proj, zone_axis)
-        
+
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
 
@@ -2129,7 +2204,7 @@ class Crystal:
         if foil_normal is None:
             foil_normal = zone_axis
         else:
-            foil_normal = np.asarray(foil_normal, dtype='float')
+            foil_normal = np.asarray(foil_normal, dtype="float")
             if not cartesian_directions:
                 foil_normal = self.zone_axis_to_cartesian(foil_normal)
             else:
@@ -2266,15 +2341,23 @@ class Crystal:
 
         # Basis for fitting fiber texture
         if self.orientation_fiber:
-            p1_proj = np.dot(self.orientation_zone_axis_range[1,:], 
-                self.orientation_zone_axis_range[0,:]) * \
-                self.orientation_zone_axis_range[0,:]
-            p2_proj = np.dot(self.orientation_zone_axis_range[2,:], 
-                self.orientation_zone_axis_range[0,:]) * \
-                self.orientation_zone_axis_range[0,:]
-            p1_sub = self.orientation_zone_axis_range[1,:] - p1_proj
-            p2_sub = self.orientation_zone_axis_range[2,:] - p2_proj
-            B = np.vstack((self.orientation_zone_axis_range[0,:],p1_sub,p2_sub)).T
+            p1_proj = (
+                np.dot(
+                    self.orientation_zone_axis_range[1, :],
+                    self.orientation_zone_axis_range[0, :],
+                )
+                * self.orientation_zone_axis_range[0, :]
+            )
+            p2_proj = (
+                np.dot(
+                    self.orientation_zone_axis_range[2, :],
+                    self.orientation_zone_axis_range[0, :],
+                )
+                * self.orientation_zone_axis_range[0, :]
+            )
+            p1_sub = self.orientation_zone_axis_range[1, :] - p1_proj
+            p2_sub = self.orientation_zone_axis_range[2, :] - p2_proj
+            B = np.vstack((self.orientation_zone_axis_range[0, :], p1_sub, p2_sub)).T
 
         # initalize image arrays
         images_orientation = np.zeros(
@@ -2308,17 +2391,23 @@ class Crystal:
                     # w = np.linalg.solve(A, orient[:, 0])
                     w = np.linalg.solve(B, orient[:, 0])
 
-                    h = np.mod(np.arctan2(w[2],w[1]) * 180 / np.pi / self.orientation_fiber_angles[1], 1)
-                    w0 = np.maximum(1-3*np.abs(np.mod(3/6-h,1)-1/2),0)
-                    w1 = np.maximum(1-3*np.abs(np.mod(5/6-h,1)-1/2),0)
-                    w2 = np.maximum(1-3*np.abs(np.mod(7/6-h,1)-1/2),0)
-                    w_scale = 1 / (1 - np.exp(-np.max((w0,w1,w2))))
+                    h = np.mod(
+                        np.arctan2(w[2], w[1])
+                        * 180
+                        / np.pi
+                        / self.orientation_fiber_angles[1],
+                        1,
+                    )
+                    w0 = np.maximum(1 - 3 * np.abs(np.mod(3 / 6 - h, 1) - 1 / 2), 0)
+                    w1 = np.maximum(1 - 3 * np.abs(np.mod(5 / 6 - h, 1) - 1 / 2), 0)
+                    w2 = np.maximum(1 - 3 * np.abs(np.mod(7 / 6 - h, 1) - 1 / 2), 0)
+                    w_scale = 1 / (1 - np.exp(-np.max((w0, w1, w2))))
 
                     rgb = (
-                          color_basis[0, :] * w0 * w_scale
+                        color_basis[0, :] * w0 * w_scale
                         + color_basis[1, :] * w1 * w_scale
                         + color_basis[2, :] * w2 * w_scale
-                    )                    
+                    )
                     images_orientation[ax, ay, :, 0] = rgb
 
                     # zone axis
@@ -2334,7 +2423,7 @@ class Crystal:
                 else:
                     for a0 in range(3):
                         # Cubic sorting for now - needs to be updated with symmetries
-                        # w = np.linalg.solve(A,orient[:,a0])                   
+                        # w = np.linalg.solve(A,orient[:,a0])
                         # w = np.linalg.solve(A, np.sort(np.abs(orient[:, a0])))
                         w = np.linalg.solve(A, orient[:, a0])
                         w = w / (1 - np.exp(-np.max(w)))
@@ -2404,12 +2493,14 @@ class Crystal:
             x = np.linspace(-1, 1, leg_size[0])
             y = np.linspace(-1, 1, leg_size[1])
             ya, xa = np.meshgrid(y, x)
-            mask_legend = xa**2 + ya**2 <= 1
+            mask_legend = xa ** 2 + ya ** 2 <= 1
 
-            h = np.mod(np.arctan2(ya, xa) * 180 / np.pi / self.orientation_fiber_angles[1], 1)
-            w0 = np.maximum(1-3*np.abs(np.mod(3/6-h,1)-1/2),0)
-            w1 = np.maximum(1-3*np.abs(np.mod(5/6-h,1)-1/2),0)
-            w2 = np.maximum(1-3*np.abs(np.mod(7/6-h,1)-1/2),0)
+            h = np.mod(
+                np.arctan2(ya, xa) * 180 / np.pi / self.orientation_fiber_angles[1], 1
+            )
+            w0 = np.maximum(1 - 3 * np.abs(np.mod(3 / 6 - h, 1) - 1 / 2), 0)
+            w1 = np.maximum(1 - 3 * np.abs(np.mod(5 / 6 - h, 1) - 1 / 2), 0)
+            w2 = np.maximum(1 - 3 * np.abs(np.mod(7 / 6 - h, 1) - 1 / 2), 0)
 
             w_scale = np.maximum(np.maximum(w0, w1), w2)
             # w_scale = w0 + w1 + w2
@@ -2429,7 +2520,6 @@ class Crystal:
                 inplane_legend[:, :, a0] *= mask_legend
                 inplane_legend[:, :, a0] += 1 - mask_legend
             inplane_legend = np.clip(inplane_legend, 0, 1)
-
 
         # plotting
         if figlayout[0] == 1 and figlayout[1] == 4:
@@ -2458,7 +2548,7 @@ class Crystal:
             ax[0].set_title("In-Plane Rotation", size=20)
             # ax[1].imshow(im_legend, aspect="auto")
 
-        else:    
+        else:
             ax[0].set_title("Orientation of x-axis", size=20)
             ax[1].set_title("Orientation of y-axis", size=20)
         ax[2].set_title("Zone Axis", size=20)
@@ -2517,7 +2607,7 @@ class Crystal:
         ax3b.tick_params(labelsize=16)
 
         if self.orientation_fiber:
-            ax[1].axis('off')
+            ax[1].axis("off")
 
         if scale_legend is not None:
             pos = ax[3].get_position()
@@ -2528,7 +2618,7 @@ class Crystal:
                 pos.height * scale_legend[1],
             ]
             ax[3].set_position(pos_new)
-    
+
             if self.orientation_fiber:
                 pos = ax[1].get_position()
                 if np.size(scale_legend) == 2:
@@ -2689,15 +2779,13 @@ def plot_diffraction_pattern(
             )
 
     # Force plot to have 1:1 aspect ratio
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
 
     if input_fig_handle is None:
         plt.show()
 
     if returnfig:
         return fig, ax
-
-
 
 
 def axisEqual3D(ax):
