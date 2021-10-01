@@ -17,11 +17,12 @@ class Crystal:
     A class storing a single crystal structure, and associated diffraction data.
 
     Args:
-        conventional_standard_structure: (bool) whether to convert primitive unit cell to
-                        conventional structure. When using the MP API, cells are usually primitive
-                        and so indexing will be with respect to the primitive basis vectors,
-                        which will yield unexpected orientation results. Set to True to
-                        convet the cell to a conventional representation.
+        positions (np.array): fractional coordinates of each atom in the cell
+        numbers (np.array): Z number for each atom in the cell
+        cell (np.array): specify the unit cell, using a variable number of parameters
+            1 number: the lattice parameter for a cubic cell
+            3 numbers: the three lattice parameters for an orthorhombic cell
+            6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
     """
 
     def __init__(
