@@ -16,13 +16,6 @@ class Crystal:
     """
     A class storing a single crystal structure, and associated diffraction data.
 
-    Args:
-        positions (np.array): fractional coordinates of each atom in the cell
-        numbers (np.array): Z number for each atom in the cell
-        cell (np.array): specify the unit cell, using a variable number of parameters
-            1 number: the lattice parameter for a cubic cell
-            3 numbers: the three lattice parameters for an orthorhombic cell
-            6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
     """
 
     def __init__(
@@ -32,8 +25,13 @@ class Crystal:
         cell,
     ):
         """
-        Instantiate a Crystal object.
-        Calculate lattice vectors.
+        Args:
+            positions (np.array): fractional coordinates of each atom in the cell
+            numbers (np.array): Z number for each atom in the cell
+            cell (np.array): specify the unit cell, using a variable number of parameters
+                1 number: the lattice parameter for a cubic cell
+                3 numbers: the three lattice parameters for an orthorhombic cell
+                6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
