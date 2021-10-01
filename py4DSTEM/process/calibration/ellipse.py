@@ -242,7 +242,7 @@ def double_sided_gaussian(p, x, y):
 
 ### Correct Bragg peak positions, making a circular coordinate system
 
-def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
+def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True):
     """
     Given some elliptical distortions with ellipse parameters p and some measured
     PointListArray of Bragg peak positions braggpeaks, returns the elliptically corrected
@@ -250,16 +250,23 @@ def correct_braggpeak_elliptical_distortions(braggpeaks,e,theta,x0=0,y0=0):
 
     Args:
         braggpeaks (PointListArray): the Bragg peaks
-        e (number): the length ratio of semiminor/semimajor axes
-        theta (number): tilt of the a-axis with respect to the x-axis, in radians
-        x0,y0 (number): the ellipse center; if the braggpeaks have been centered, these
-            should be zero
+        p_ellipse (5-tuple): the ellipse parameters (x0,y0,a,b,theta)
+        centered (bool): if True, assumes that the braggpeaks PointListArray has been
+            centered, and uses (x0,y0)=(0,0). Otherwise, uses the (x0,y0) from
+            `p_ellipse`
 
     Returns:
         braggpeaks_corrected    (PointListArray) the corrected Bragg peaks
     """
     assert(isinstance(braggpeaks,PointListArray))
+
+    # Unpack parameters
+    x0,y0,a,b,theta = p_ellipse
+    if centered:
+        x0,y0 = 0,0
+
     # Get the transformation matrix
+    e = b/a
     sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
     T = np.array(
             [
