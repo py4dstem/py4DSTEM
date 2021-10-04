@@ -11,7 +11,7 @@ import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
 from time import time
 
-from ...io.datastructure import PointList, PointListArray
+from ...io import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
 from .diskdetection import universal_threshold
