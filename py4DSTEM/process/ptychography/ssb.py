@@ -1,5 +1,5 @@
 import time
-from ...io.datastructure import DataCube
+from ...io import DataCube
 import sigpy as cp
 import torch as th
 import numpy as np
