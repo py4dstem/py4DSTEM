@@ -110,7 +110,12 @@ class Crystal:
             if space_grp:
                 query = [query[i] for i in range(len(query)) if mg.symmetry.analyzer.SpacegroupAnalyzer(query[i]['structure']).get_space_group_number() == space_grp]
             selected = query[np.argmin([query[i]['structure'].lattice.volume for i in range(len(query))])]
-            structure = mg.symmetry.analyzer.SpacegroupAnalyzer(selected["structure"]).get_conventional_standard_structure()
+            structure = (
+                mg.symmetry.analyzer.SpacegroupAnalyzer(
+                    selected["structure"]
+                ).get_conventional_standard_structure()
+                if conventional_standard_structure
+                else selected["structure"]
 
         positions = structure.frac_coords  #: fractional atomic coordinates
 
