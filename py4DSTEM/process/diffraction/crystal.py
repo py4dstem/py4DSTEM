@@ -392,8 +392,8 @@ class Crystal:
             el = proj_dir[0]
             az = proj_dir[1]
         elif np.size(proj_dir) == 3:
-            if not self.cartesian_directions:
-                proj_dir = self.zone_axis_to_cartesian(proj_dir)
+            if hasattr(self, 'cartesian_directions') and not self.cartesian_directions:
+                proj_dir = self.crystal_to_cartesian(proj_dir)
 
             if proj_dir[0] == 0 and proj_dir[1] == 0:
                 el = 90 * np.sign(proj_dir[2])
@@ -504,7 +504,7 @@ class Crystal:
                         / np.linalg.norm(self.orientation_fiber_axis)
                     )
                 else:
-                    self.orientation_fiber_axis = self.zone_axis_to_cartesian(
+                    self.orientation_fiber_axis = self.crystal_to_cartesian(
                         self.orientation_fiber_axis
                     )
 
@@ -579,7 +579,7 @@ class Crystal:
                 for a0 in range(zone_axis_range.shape[0]):
                     self.orientation_zone_axis_range[
                         a0, :
-                    ] = self.zone_axis_to_cartesian(
+                    ] = self.crystal_to_cartesian(
                         self.orientation_zone_axis_range[a0, :]
                     )
 
@@ -1089,7 +1089,7 @@ class Crystal:
         if proj_dir is None:
             proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
         elif not self.cartesian_directions:
-            proj_dir = self.zone_axis_to_cartesian(proj_dir)
+            proj_dir = self.crystal_to_cartesian(proj_dir)
 
         if np.size(proj_dir) == 2:
             el = proj_dir[0]
@@ -1165,7 +1165,7 @@ class Crystal:
         if self.cartesian_directions:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
-            label_0 = self.cartesian_to_zone_axis(
+            label_0 = self.cartesian_to_crystal(
                 self.orientation_zone_axis_range[0, :]
             )
         label_0 = np.round(label_0 * 1e3) * 1e-3
@@ -1177,7 +1177,7 @@ class Crystal:
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
             else:
-                label_1 = self.cartesian_to_zone_axis(
+                label_1 = self.cartesian_to_crystal(
                     self.orientation_zone_axis_range[1, :]
                 )
             label_1 = np.round(label_1 * 1e3) * 1e-3
@@ -1187,7 +1187,7 @@ class Crystal:
             if self.cartesian_directions:
                 label_2 = self.orientation_zone_axis_range[2, :]
             else:
-                label_2 = self.cartesian_to_zone_axis(
+                label_2 = self.cartesian_to_crystal(
                     self.orientation_zone_axis_range[2, :]
                 )
 
@@ -1284,14 +1284,17 @@ class Crystal:
     def plot_orientation_plan(
         self,
         index_plot: int = 0,
+        zone_axis_plot = None,
         figsize: Union[list, tuple, np.ndarray] = (14, 6),
         returnfig: bool = False,
     ):
         """
-        3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
+        3D scatter plot of the structure factors using magnitude^2, 
+        i.e. intensity.
 
         Args:
-            index_plot (int):           which zone axis slice to plot
+            index_plot (int):           which index slice to plot
+            zone_axis_plot (3 element float): which zone axis slice to plot
             figsize (2 element float):  size scaling of figure axes
             returnfig (bool):           set to True to return figure and axes handles
 
@@ -1299,6 +1302,14 @@ class Crystal:
             fig, ax                     (optional) figure and axes handles
         """
 
+
+        # Determine which index to plot if zone_axis_plot is specified
+        if zone_axis_plot is not None:
+            zone_axis_plot = np.array(zone_axis_plot, dtype='float')
+            zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
+            index_plot = np.argmin(np.sum((self.orientation_vecs - zone_axis_plot)**2,axis=1))
+
+        # initialize figure
         fig, ax = plt.subplots(1, 2, figsize=figsize)
 
         # Generate and plot diffraction pattern
@@ -1844,8 +1855,8 @@ class Crystal:
                     # TODO - I definitely think this should be cartesian--> zone,
                     # but that seems to return incorrect labels.  Not sure why! -CO
 
-                    # zone_axis_fit = self.cartesian_to_zone_axis(zone_axis_fit)
-                    zone_axis_fit = self.zone_axis_to_cartesian(zone_axis_fit)
+                    # zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
+                    zone_axis_fit = self.crystal_to_cartesian(zone_axis_fit)
 
                 temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
                 temp = np.round(temp * 1e3) / 1e3
@@ -2172,7 +2183,7 @@ class Crystal:
             zone_axis = zone_axis / np.linalg.norm(zone_axis)
 
             if not self.cartesian_directions:
-                zone_axis = self.cartesian_to_zone_axis(zone_axis)
+                zone_axis = self.cartesian_to_crystal(zone_axis)
 
             if proj_x_axis is None:
                 if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
@@ -2183,7 +2194,7 @@ class Crystal:
             else:
                 proj_x_axis = np.asarray(proj_x_axis, dtype="float")
                 if not self.cartesian_directions:
-                    proj_x_axis = self.zone_axis_to_cartesian(proj_x_axis)
+                    proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
 
         elif zone_axis.shape == (3, 3):
             proj_x_axis = zone_axis[:, 0]
@@ -2205,7 +2216,7 @@ class Crystal:
         else:
             foil_normal = np.asarray(foil_normal, dtype="float")
             if not cartesian_directions:
-                foil_normal = self.zone_axis_to_cartesian(foil_normal)
+                foil_normal = self.crystal_to_cartesian(foil_normal)
             else:
                 foil_normal = foil_normal / np.linalg.norm(foil_normal)
 
@@ -2641,19 +2652,19 @@ class Crystal:
         else:
             return images_orientation
 
-    # def zone_axis_to_cartesian(self, zone_axis):
+    # def crystal_to_cartesian(self, zone_axis):
     #     vec_cart = zone_axis @ self.lat_real
     #     return vec_cart / np.linalg.norm(vec_cart)
 
-    # def cartesian_to_zone_axis(self, vec_cart):
+    # def cartesian_to_crystal(self, vec_cart):
     #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
     #     return zone_axis / np.linalg.norm(zone_axis)
 
-    def cartesian_to_zone_axis(self, zone_axis):
+    def cartesian_to_crystal(self, zone_axis):
         vec_cart = zone_axis @ self.lat_real
         return vec_cart / np.linalg.norm(vec_cart)
 
-    def zone_axis_to_cartesian(self, vec_cart):
+    def crystal_to_cartesian(self, vec_cart):
         zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
         return zone_axis / np.linalg.norm(zone_axis)
 
