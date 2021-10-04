@@ -88,11 +88,9 @@ class Crystal:
         
         if structure is not None:
             if isinstance(structure, str):
-                try:
-                    mpr = MPRester(MaPKey)
-                    structure = mpr.get_structure_by_material_id(structure)
-                raise 'Please provide a valid MP API key!!'
-                
+                mpr = MPRester(MaPKey)
+                structure = mpr.get_structure_by_material_id(structure)
+            
             assert isinstance(
                 structure, mg.core.Structure
             ), "structure must be pymatgen Structure object"
@@ -105,10 +103,7 @@ class Crystal:
                 else structure
             )
         else:
-             try:
-                mpr = MPRester(MaPKey)
-            except:
-                print('Please provide a valid MP API key!!')
+            mpr = MPRester(MaPKey)
             if formula is None:
                 print('Please provide a formula to query MP databsae')
             query = mpr.query(criteria={"pretty_formula": formula}, properties=["structure","icsd_ids","spacegroup"])
@@ -154,42 +149,41 @@ class Crystal:
                                      pymatgen Structure.from_spacegroup function
                 lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
                 from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
-                write_xyz:           (bool) if True, write xyz for visualization in Vesta, default: False
             
         '''
         
         import pymatgen as mg
         
         if lattice_type == 'cubic':
-            assert(len(latt_params) == 1)
+            assert(len(latt_params) == 1), 'Only 1 lattice parameter is expected for cubic: a, but given {}'.format(len(latt_params))
             lattice = mg.core.Lattice.cubic(latt_params[0])
         elif lattice_type == 'hexagonal':
-            assert(len(latt_params) == 2)
+            assert(len(latt_params) == 2), '2 lattice parametere are expected for hexagonal: a, c, but given {len(latt_params)}'.format(len(latt_params))
             lattice = mg.core.Lattice.hexagonal(latt_params[0],
-                                        latt_params[1])
+                                                latt_params[1])
         elif lattice_type == 'tetragonal':
-            assert(len(latt_params) == 2)
+            assert(len(latt_params) == 2), '2 lattice parametere are expected for tetragonal: a, c, but given {len(latt_params)}'.format(len(latt_params))
             lattice = mg.core.Lattice.tetragonal(latt_params[0],
-                                         latt_params[1])
+                                                 latt_params[1])
         elif lattice_type == 'orthorhombic':
-            assert(len(latt_params) == 3)
+            assert(len(latt_params) == 3), '3 lattice parametere are expected for orthorhombic: a, b, c, but given {len(latt_params)}'.format(len(latt_params))
             lattice = mg.core.Lattice.orthorhombic(latt_params[0],
-                                          latt_params[1],
-                                          latt_params[2])
+                                                   latt_params[1],
+                                                   latt_params[2])
         elif lattice_type == 'monoclinic':
-            assert(len(latt_params) == 4)
+            assert(len(latt_params) == 4), '4 lattice parametere are expected for monoclinic: a, b, c, beta,  but given {len(latt_params)}'.format(len(latt_params))
             lattice = mg.core.Lattice.monoclinic(latt_params[0],
-                                         latt_params[1],
-                                         latt_params[2],
-                                         latt_params[3])
+                                                 latt_params[1],
+                                                 latt_params[2],
+                                                 latt_params[3])
         else:
-            assert(len(latt_params) == 6)
+            assert(len(latt_params) == 6), 'all 6 lattice parametere are expected: a, b, c, alpha, beta, gamma, but given {len(latt_params)}'.format(len(latt_params))
             lattice = mg.core.Lattice.from_parameters(latt_params[0],
-                                              latt_params[1],
-                                              latt_params[2],
-                                              latt_params[3],
-                                              latt_params[4],
-                                              latt_params[5])
+                                                      latt_params[1],
+                                                      latt_params[2],
+                                                      latt_params[3],
+                                                      latt_params[4],
+                                                      latt_params[5])
         
         if space_group:
             structure = mg.core.Structure.from_spacegroup(space_group,
