@@ -5,9 +5,10 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import leastsq
 
 from ..fit import plane,parabola,bezier_two,fit_2D
-from ..utils import get_CoM, add_to_2D_array_from_floats,tqdmnd
+from ..utils import get_CoM, add_to_2D_array_from_floats, tqdmnd, get_maxima_2D
 from ...io import PointListArray
 from ..diskdetection.braggvectormap import get_bragg_vector_map
+from ..diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
 
 
 ### Functions for finding the origin
@@ -70,10 +71,9 @@ def get_origin_single_dp(dp,r,rscale=1.2):
     and (b) the center beam contains the highest intensity.
 
     Args:
-        dp (ndarray): a diffraction pattern
-        r (number): the approximate radius of the center disk
-        rscale (number): expand 'r' by this amount to form a mask about the center disk
-            when taking its center of mass
+        dp (ndarray): the diffraction pattern
+        r (number): the approximate disk radius
+        rscale (number): factor by which `r` is scaled to generate a mask
 
     Returns:
         (2-tuple): The origin
@@ -223,6 +223,100 @@ def get_origin_from_braggpeaks(braggpeaks,Q_Nx,Q_Ny,findcenter='CoM',bvm=None):
                 qy0[Rx,Ry] = pointlist.data['qy'][index]
 
     return qx0, qy0, braggvectormap
+
+def get_origin_brightest_disk(
+        datacube,
+        probe_kernel,
+        qxyInit = None,
+        probe_mask_size=None,
+        subpixel=None,
+        upsample_factor=16,
+        mask=None):    
+    """
+    Find the origin for all diffraction patterns in a datacube, by finding the
+    brightest peak and then masking around that peak.
+
+    Args:
+        datacube (DataCube): the data
+        probe_kernel (array): probe kernel for disk detection
+        qxyInit (array or None): (qx0,qy0) origin for choosing the peak, or `None`.
+            If `None`, the origin is the mean diffraction pattern is computed,
+            which may be slow for large datasets, and is used to compute
+            `(qx0,qy0)`.
+        probe_mask_size (float): mask size in pixels. If set to None, we set it
+            to 2*probe radius estimate.
+        sub_pixel (str): 'None' or 'poly' or 'multicorr'
+        upsample_factor (int): upsample factor
+        mask (ndarray or None): if not None, should be an (Q_Nx,Q_Ny) shaped
+            boolean array. Mask will be applied to diffraction patterns before
+            finding the center.
+        probe_mask_std_scale (float): size of Gaussian mask sigma. If set to
+            None, function will estimate probe size.
+
+    Returns:
+        2 (R_Nx,R_Ny)-shaped ndarrays: the origin, (x,y) at each scan position
+    """
+    if probe_mask_size is None:
+        probe_mask_size, px, py = get_probe_size(np.fft.fftshift(probe_kernel))
+        probe_mask_size *= 2
+
+    # take fft of probe kernel
+    probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
+
+    if qxyInit is None:
+        # find initial guess for probe center using mean diffraction pattern
+        diff_mean = np.mean(datacube.data,axis=(0,1))
+        peaks = _find_Bragg_disks_single_DP_FK(
+            diff_mean,
+            probe_kernel_FT,
+            corrPower = 1,
+            sigma = 0,
+            edgeBoundary = 0,
+            minRelativeIntensity = 0,
+            minAbsoluteIntensity = 0,
+            relativeToPeak = 0,
+            maxNumPeaks = 1,
+            subpixel = subpixel,
+            upsample_factor = upsample_factor)
+        qxyInit = np.array([peaks.data['qx'],peaks.data['qy']])
+
+    # Create mask
+    qx = np.arange(datacube.Q_Nx) - qxyInit[0]
+    qy = np.arange(datacube.Q_Ny) - qxyInit[1]
+    qya,qxa = np.meshgrid(qy,qx)
+    if mask is None:
+        mask = np.exp((qxa**2 + qya**2)/(-2*probe_mask_size**2))
+    else:
+        mask *= np.exp((qxa**2 + qya**2)/(-2*probe_mask_size**2))
+
+    # init output arrays
+    qx0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
+    qy0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
+
+    for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
+    # for (rx,ry) in tqdmnd(2,2,desc='Finding origins',unit='DP',unit_scale=True):
+        if subpixel is None:
+            dp_corr = np.real(np.fft.ifft2(np.fft.fft2(datacube.data[rx,ry,:,:] * mask) * probe_kernel_FT))
+            ind2D = np.unravel_index(np.argmax(dp_corr), dp_corr.shape)
+            qx0_ar[rx,ry] = ind2D[0]
+            qy0_ar[rx,ry] = ind2D[1]
+        else:
+            peaks = _find_Bragg_disks_single_DP_FK(
+                datacube.data[rx,ry,:,:] * mask,
+                probe_kernel_FT,
+                corrPower = 1,
+                sigma = 0,
+                edgeBoundary = 0,
+                minRelativeIntensity = 0,
+                minAbsoluteIntensity = 0,
+                relativeToPeak = 0,
+                maxNumPeaks = 1,
+                subpixel = subpixel,
+                upsample_factor = upsample_factor)
+            qx0_ar[rx,ry] = peaks.data['qx']
+            qy0_ar[rx,ry] = peaks.data['qy']
+
+    return qx0_ar, qy0_ar
 
 def get_origin_single_dp_beamstop(dp,**kwargs):
     """

@@ -235,7 +235,10 @@ def get_probe_kernel(probe,origin=None):
     return probe_kernel
 
 
-def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
+def get_probe_kernel_edge_gaussian(
+        probe,
+        sigma_probe_scale,
+        origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian from the
     normalized probe such that the kernel integrates to zero, then shifting the center
@@ -260,20 +263,21 @@ def get_probe_kernel_edge_gaussian(probe, sigma_probe_scale, origin=None):
     else:
         xCoM,yCoM = origin
 
-    # Get probe size
-    qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
-    q2 = (qx-xCoM)**2 + (qy-yCoM)**2
-    qstd2 = np.sum(q2*probe) / np.sum(probe)
+    # Shift probe to origin
+    probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM)
 
-    # Normalize to one, then subtract of normed gaussian, yielding kernel which
-    # integrates to zero
-    probe_template_norm = probe/np.sum(probe)
-    subtr_gaussian = np.exp(-q2 / (2*qstd2*sigma_probe_scale**2))
-    subtr_gaussian = subtr_gaussian/np.sum(subtr_gaussian)
-    probe_kernel = probe_template_norm - subtr_gaussian
+    # Generate normalization kernel
+    # Coordinates
+    qy,qx = np.meshgrid(
+        np.mod(np.arange(Q_Ny) + Q_Ny//2, Q_Ny) - Q_Ny//2,
+        np.mod(np.arange(Q_Nx) + Q_Nx//2, Q_Nx) - Q_Nx//2)
+    qr2 = (qx**2 + qy**2)
+    # Calculate Gaussian normalization kernel
+    qstd2 = np.sum(qr2*probe_kernel) / np.sum(probe_kernel)
+    kernel_norm = np.exp(-qr2 / (2*qstd2*sigma_probe_scale**2))
 
-    # Shift center to array corners
-    probe_kernel = get_shifted_ar(probe_kernel, -xCoM, -yCoM)
+    # Output normalized kernel
+    probe_kernel = probe_kernel/np.sum(probe_kernel) - kernel_norm/np.sum(kernel_norm)
 
     return probe_kernel
 
@@ -306,10 +310,15 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared
     else:
         xCoM,yCoM = origin
 
-    # Get probe size
-    qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
-    qr = np.sqrt((qx-xCoM)**2 + (qy-yCoM)**2)
+    # Shift probe to origin
+    probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM)
 
+    # Generate normalization kernel
+    # Coordinates
+    qy,qx = np.meshgrid(
+        np.mod(np.arange(Q_Ny) + Q_Ny//2, Q_Ny) - Q_Ny//2,
+        np.mod(np.arange(Q_Nx) + Q_Nx//2, Q_Nx) - Q_Nx//2)
+    qr = np.sqrt(qx**2 + qy**2)
     # Calculate sigmoid
     if type == 'logistic':
         r0 = 0.5*(ro+ri)
@@ -322,22 +331,8 @@ def get_probe_kernel_edge_sigmoid(probe, ri, ro, origin=None, type='sine_squared
     else:
         raise Exception("type must be in {}".format(valid_types))
 
-
-    # Normalize to one, then subtract off logistic annulus, yielding kernel which
-    # integrates to zero
-    probe_template_norm = probe/np.sum(probe)
-    sigmoid_norm = sigmoid/np.sum(sigmoid)
-    probe_kernel = probe_template_norm - sigmoid_norm
-
-    # Shift center to array corners
-    probe_kernel = get_shifted_ar(probe_kernel, -xCoM, -yCoM)
+    # Output normalized kernel
+    probe_kernel = probe_kernel/np.sum(probe_kernel) - sigmoid/np.sum(sigmoid)
 
     return probe_kernel
-
-
-
-
-
-
-
 
