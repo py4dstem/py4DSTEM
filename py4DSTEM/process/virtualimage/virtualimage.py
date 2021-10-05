@@ -1,7 +1,7 @@
 # Functions for generating virtual images
 
 import numpy as np
-from ...io.datastructure import DataCube
+from ...io import DataCube
 from ..utils import tqdmnd
 
 def test():
