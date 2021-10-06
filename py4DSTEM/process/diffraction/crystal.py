@@ -78,10 +78,32 @@ class Crystal:
         If a Materials Project API key is installed, you may pass
         the Materials Project ID of a structure, which will be
         fetched through the MP API. For setup information see:
-        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
+        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file.
+        Alternatively, Materials Porject API key can be pass as an argument through
+        the function (MaPKey). To get your API key, please visit Materials Project website
+        and login/sign up using your email id. Once logged in, go to the dashboard
+        to generate your own API key (https://materialsproject.org/dashboard).
 
         Note that pymatgen typically prefers to return primitive unit cells,
         which can be overridden by setting conventional_standard_structure=True.
+        
+        Args:
+            structure:      (pymatgen structure/str), if specified as a string, it will be considered
+                            as a Materials Project ID of a structure, otherwise it will accept only
+                            pymatgen Structure object. if None, MP database will be queried using the 
+                            specified formula and/or space groups for the available structure
+            formula:        (str), pretty formula to search in the MP database, the forumlas in MP 
+                            database is not alwaays consisntent with conventional compositions. Please
+                            visit Materials Project website for information (https://materialsproject.org/)
+                            if None, structure argument must not be None, else it will throw error.
+            space_grp:      space group of the forumula provided to query MP database. If None, MP will search
+                            for all the available space groups for the formula provided and will consider the 
+                            one with lowest unit cell volume, only specify when using formula to search MP
+                            database
+            MaPKey:         (str) Generated Materials Project API key
+            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned 
+                            instead of the primitive unit cell pymatgen returns
+        
         """
         import pymatgen as mg
         from pymatgen.ext.matproj import MPRester
@@ -105,7 +127,7 @@ class Crystal:
         else:
             mpr = MPRester(MaPKey)
             if formula is None:
-                print('Please provide a formula to query MP databsae')
+                raise Exception('Atleast a formula needs to be provided to query from MP database!!')
             query = mpr.query(criteria={"pretty_formula": formula}, properties=["structure","icsd_ids","spacegroup"])
             if space_grp:
                 query = [query[i] for i in range(len(query)) if mg.symmetry.analyzer.SpacegroupAnalyzer(query[i]['structure']).get_space_group_number() == space_grp]
@@ -116,6 +138,7 @@ class Crystal:
                 ).get_conventional_standard_structure()
                 if conventional_standard_structure
                 else selected["structure"]
+            )
 
         positions = structure.frac_coords  #: fractional atomic coordinates
 
@@ -144,7 +167,7 @@ class Crystal:
         '''
         Generates pymatgen unit cell manually from user inputs
     
-        Accepts:
+        Args:
                 latt_params:         (list) list of lattice parameters for example for cubic: latt_params = [a]
                                      for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta]
                                      and in general: latt_params = [a,b,c,alpha,beta,gamma]
@@ -154,6 +177,8 @@ class Crystal:
                                      pymatgen Structure.from_spacegroup function
                 lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
                 from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
+        Returns:
+                structure:           pymatgen Structuere object 
             
         '''
         
