@@ -72,35 +72,73 @@ class Crystal:
             ]
         )
 
-    def from_pymatgen_structure(structure, conventional_standard_structure=True):
+    def from_pymatgen_structure(structure=None, formula=None, space_grp=None, MaPKey= None, conventional_standard_structure=True):
         """
         Create a Crystal object from a pymatgen Structure object.
         If a Materials Project API key is installed, you may pass
         the Materials Project ID of a structure, which will be
         fetched through the MP API. For setup information see:
-        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
+        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file.
+        Alternatively, Materials Porject API key can be pass as an argument through
+        the function (MaPKey). To get your API key, please visit Materials Project website
+        and login/sign up using your email id. Once logged in, go to the dashboard
+        to generate your own API key (https://materialsproject.org/dashboard).
 
         Note that pymatgen typically prefers to return primitive unit cells,
         which can be overridden by setting conventional_standard_structure=True.
+        
+        Args:
+            structure:      (pymatgen Structure or str), if specified as a string, it will be considered
+                            as a Materials Project ID of a structure, otherwise it will accept only
+                            pymatgen Structure object. if None, MP database will be queried using the 
+                            specified formula and/or space groups for the available structure
+            formula:        (str), pretty formula to search in the MP database, (note that the forumlas in MP 
+                            database are not always formatted in the conventional order. Please
+                            visit Materials Project website for information (https://materialsproject.org/)
+                            if None, structure argument must not be None
+            space_grp:      (int) space group number of the forumula provided to query MP database. If None, MP will search
+                            for all the available space groups for the formula provided and will consider the 
+                            one with lowest unit cell volume, only specify when using formula to search MP
+                            database
+            MaPKey:         (str) Materials Project API key
+            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned 
+                            instead of the primitive unit cell pymatgen returns
+        
         """
         import pymatgen as mg
         from pymatgen.ext.matproj import MPRester
+        
+        if structure is not None:
+            if isinstance(structure, str):
+                mpr = MPRester(MaPKey)
+                structure = mpr.get_structure_by_material_id(structure)
+            
+            assert isinstance(
+                structure, mg.core.Structure
+            ), "structure must be pymatgen Structure object"
 
-        if isinstance(structure, str):
-            with MPRester() as m:
-                structure = m.get_structure_by_material_id(structure)
-
-        assert isinstance(
-            structure, mg.core.Structure
-        ), "structure must be pymatgen Structure object"
-
-        structure = (
-            mg.symmetry.analyzer.SpacegroupAnalyzer(
-                structure
-            ).get_conventional_standard_structure()
-            if conventional_standard_structure
-            else structure
-        )
+            structure = (
+                mg.symmetry.analyzer.SpacegroupAnalyzer(
+                    structure
+                ).get_conventional_standard_structure()
+                if conventional_standard_structure
+                else structure
+            )
+        else:
+            mpr = MPRester(MaPKey)
+            if formula is None:
+                raise Exception('Atleast a formula needs to be provided to query from MP database!!')
+            query = mpr.query(criteria={"pretty_formula": formula}, properties=["structure","icsd_ids","spacegroup"])
+            if space_grp:
+                query = [query[i] for i in range(len(query)) if mg.symmetry.analyzer.SpacegroupAnalyzer(query[i]['structure']).get_space_group_number() == space_grp]
+            selected = query[np.argmin([query[i]['structure'].lattice.volume for i in range(len(query))])]
+            structure = (
+                mg.symmetry.analyzer.SpacegroupAnalyzer(
+                    selected["structure"]
+                ).get_conventional_standard_structure()
+                if conventional_standard_structure
+                else selected["structure"]
+            )
 
         positions = structure.frac_coords  #: fractional atomic coordinates
 
@@ -118,6 +156,78 @@ class Crystal:
         numbers = np.array([s.species.elements[0].Z for s in structure])
 
         return Crystal(positions, numbers, cell)
+    
+    def create_unitcell_from_params(latt_params, 
+                                   elements, 
+                                   positions, 
+                                   space_group = None, 
+                                   lattice_type = 'cubic', 
+                                   from_cartesian = False):
+        
+        '''
+        Generates pymatgen unit cell manually from user inputs
+    
+        Args:
+                latt_params:         (list of floats) list of lattice parameters. For example, for cubic: latt_params = [a],
+                                     for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta],
+                                     and in general: latt_params = [a,b,c,alpha,beta,gamma]
+                elements:            (list of strings) list of elements, for example for SnS: elements = ["Sn", "S"]
+                positions:           (list) list of (x,y,z) positions for each element present in the elements, default: fractional coord
+                space_group:         (optional) (string or int) space group of the crystal system, if specified, unit cell will be created using 
+                                     pymatgen Structure.from_spacegroup function
+                lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
+                from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
+        Returns:
+                structure:           pymatgen Structure object 
+            
+        '''
+        
+        import pymatgen as mg
+        
+        if lattice_type == 'cubic':
+            assert(len(latt_params) == 1), 'Only 1 lattice parameter is expected for cubic: a, but given {}'.format(len(latt_params))
+            lattice = mg.core.Lattice.cubic(latt_params[0])
+        elif lattice_type == 'hexagonal':
+            assert(len(latt_params) == 2), '2 lattice parametere are expected for hexagonal: a, c, but given {len(latt_params)}'.format(len(latt_params))
+            lattice = mg.core.Lattice.hexagonal(latt_params[0],
+                                                latt_params[1])
+        elif lattice_type == 'tetragonal':
+            assert(len(latt_params) == 2), '2 lattice parametere are expected for tetragonal: a, c, but given {len(latt_params)}'.format(len(latt_params))
+            lattice = mg.core.Lattice.tetragonal(latt_params[0],
+                                                 latt_params[1])
+        elif lattice_type == 'orthorhombic':
+            assert(len(latt_params) == 3), '3 lattice parametere are expected for orthorhombic: a, b, c, but given {len(latt_params)}'.format(len(latt_params))
+            lattice = mg.core.Lattice.orthorhombic(latt_params[0],
+                                                   latt_params[1],
+                                                   latt_params[2])
+        elif lattice_type == 'monoclinic':
+            assert(len(latt_params) == 4), '4 lattice parametere are expected for monoclinic: a, b, c, beta,  but given {len(latt_params)}'.format(len(latt_params))
+            lattice = mg.core.Lattice.monoclinic(latt_params[0],
+                                                 latt_params[1],
+                                                 latt_params[2],
+                                                 latt_params[3])
+        else:
+            assert(len(latt_params) == 6), 'all 6 lattice parametere are expected: a, b, c, alpha, beta, gamma, but given {len(latt_params)}'.format(len(latt_params))
+            lattice = mg.core.Lattice.from_parameters(latt_params[0],
+                                                      latt_params[1],
+                                                      latt_params[2],
+                                                      latt_params[3],
+                                                      latt_params[4],
+                                                      latt_params[5])
+        
+        if space_group:
+            structure = mg.core.Structure.from_spacegroup(space_group,
+                                                      lattice, 
+                                                      elements, 
+                                                      positions,
+                                                      coords_are_cartesian=from_cartesian)
+        else:
+            structure = mg.core.Structure(lattice, 
+                                  elements, 
+                                  positions,
+                                  coords_are_cartesian=from_cartesian)
+        
+        return structure
 
     def calculate_structure_factors(
         self,
