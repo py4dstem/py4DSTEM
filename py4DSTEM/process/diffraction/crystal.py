@@ -88,19 +88,19 @@ class Crystal:
         which can be overridden by setting conventional_standard_structure=True.
         
         Args:
-            structure:      (pymatgen structure/str), if specified as a string, it will be considered
+            structure:      (pymatgen Structure or str), if specified as a string, it will be considered
                             as a Materials Project ID of a structure, otherwise it will accept only
                             pymatgen Structure object. if None, MP database will be queried using the 
                             specified formula and/or space groups for the available structure
-            formula:        (str), pretty formula to search in the MP database, the forumlas in MP 
-                            database is not alwaays consisntent with conventional compositions. Please
+            formula:        (str), pretty formula to search in the MP database, (note that the forumlas in MP 
+                            database are not always formatted in the conventional order. Please
                             visit Materials Project website for information (https://materialsproject.org/)
-                            if None, structure argument must not be None, else it will throw error.
-            space_grp:      space group of the forumula provided to query MP database. If None, MP will search
+                            if None, structure argument must not be None
+            space_grp:      (int) space group number of the forumula provided to query MP database. If None, MP will search
                             for all the available space groups for the formula provided and will consider the 
                             one with lowest unit cell volume, only specify when using formula to search MP
                             database
-            MaPKey:         (str) Generated Materials Project API key
+            MaPKey:         (str) Materials Project API key
             conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned 
                             instead of the primitive unit cell pymatgen returns
         
@@ -168,17 +168,17 @@ class Crystal:
         Generates pymatgen unit cell manually from user inputs
     
         Args:
-                latt_params:         (list) list of lattice parameters for example for cubic: latt_params = [a]
-                                     for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta]
+                latt_params:         (list of floats) list of lattice parameters. For example, for cubic: latt_params = [a],
+                                     for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta],
                                      and in general: latt_params = [a,b,c,alpha,beta,gamma]
-                elements:            (list) list of elements, for example for SnS: elements = ["Sn", "S"]
+                elements:            (list of strings) list of elements, for example for SnS: elements = ["Sn", "S"]
                 positions:           (list) list of (x,y,z) positions for each element present in the elements, default: fractional coord
-                space_group:         (optional) (string) space group of the crystal system, if specified, unit cell will be created using 
+                space_group:         (optional) (string or int) space group of the crystal system, if specified, unit cell will be created using 
                                      pymatgen Structure.from_spacegroup function
                 lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
                 from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
         Returns:
-                structure:           pymatgen Structuere object 
+                structure:           pymatgen Structure object 
             
         '''
         
