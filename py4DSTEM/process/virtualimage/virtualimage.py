@@ -8,6 +8,7 @@ import dask.array as da
 def test():
     return True
 
+##### old py4dSTEM funcs ####
 def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
@@ -85,8 +86,11 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
+#### End of old py4DSTEM funcs ####
 
 #### Mask Making Functions ####
+# lifted from py4DSTEM old funcs
+
 def make_circ_mask(datacube, x0, y0, R, return_crop_vals=False):
     """
     Make a circular boolean mask centered at (x0,y0) and with radius R
@@ -117,7 +121,7 @@ def make_circ_mask(datacube, x0, y0, R, return_crop_vals=False):
     else:
         return full_mask
 
-def make_ann_mask(datacube, x0, y0, Ri, Ro):
+def make_annular_mask(datacube, x0, y0, Ri, Ro):
     """
     Make an annular boolean mask centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -175,7 +179,7 @@ def combine_masks(masks, operator='or'):
     
     Args:
         masks (list,tuple): collection of 2D boolean masks
-        operator (str): choice of operator either (or, xor)
+        operator (str): choice of operator either (or, xor) 
     
     Returns:
         (2D array): Boolean mask
@@ -193,41 +197,47 @@ def combine_masks(masks, operator='or'):
 #TODO Add multiple mask maker, e.g. give list of coordinate tuples 
 
 #### In memory functions ####
-#TODO Pick the prefered style  
+#TODO decide if fastmath is appropriate or not  
+#TODO add assertions if desired 
+
 @nb.jit(nopython=True, parallel=True, fastmath=True)
-def make_virtual_image_numba(datacube, mask, out):
+def make_virtual_image_numba(datacube, mask, out=None):
     """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
+    Make a virutal for all probe posistions from a py4DSTEM datacube object using a mask boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane.
     Args:
-        datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+        datacube (DataCube): py4DSTEM datacube, rx,ry,qx,qy, 
+        mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
+        out (2D numpy array, optional): pre-allocated output array
     Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
+        out (2D numpy array): virtual image 
     """    
+    
+    if out is None:
+        out = np.zeros(datacube.data.shape[:-2])
+
     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
         out[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
     return out
 
 # I can't get this to work quicker than you're brightfield function for some unknown reason.
 @nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
-def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out):
+def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out=None):
     """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
+    Make a virutal for all probe posistions from a py4DSTEM datacube object using a mask boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane.
     Args:
-        datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+        datacube (DataCube): py4DSTEM datacube, rx,ry,qx,qy, 
+        mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
+        xmin,xmax,ymin,ymax (ints): cordinates in pixels for the size of data to crop
+        out (2D numpy array, optional): pre-allocated output array
     Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
-    
+        out (2D numpy array): virtual image 
+    """    
+    if out is None:
+        out = np.zeros(datacube.data.shape[:-2])
+
+    # crop the mask and datacube to size of BF disk.    
     mask = mask[xmin:xmax,ymin:ymax]
     arr = datacube.data[:,:,xmin:xmax,ymin:ymax]
     for rx, ry in np.ndindex(arr.shape[:-2]):
@@ -235,48 +245,90 @@ def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out):
     return out
 
 
+#### Dask Function #### 
 
-@nb.jit(nopython=True, parallel=True, fastmath=True)
-def make_virtual_image_numba(datacube, mask):
+# can use a list of different output_dtype if that makes sense, I've set to np.uint for now. 
+# only works on dask array. 
+@da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.uint, axes=[(2,3),(0,1),()], vectorize=True)
+def make_virtual_image_dask(array, mask):
     """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
-    in the diffraction plane.
+    Make a virutal for all probe posistions from a dask array object using a mask in the diffraction plane.
+    Example:
+    image = make_virtual_image_dask(dataset.data, mask).compute()
+
     Args:
-        datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+        array (dask array): dask array of 4DSTEM data with shape rx,ry,qx,qy
+        mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
     Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
+        out (2D numpy array): virtual image lazy virtual image, requires explict computation
+    """    
+    val = np.sum(np.multiply(array,mask), dtype=np.uint)
+    return val
+
+
+#### I couldn't get this to work ####
+
+# @da.as_gufunc(signature='(m,n,i,j),(i,j)->(m,n)', output_dtypes=np.uint, vectorize=True)
+# def make_virtual_image_dask(datacube, mask):
+#     """
+#     Make a virutal for all probe posistions from a py4DSTEM datacube object using a mask boolean mask centered at (x0,y0) and with radius R
+#     in the diffraction plane.
+#     Args:
+#         datacube (DataCube): py4DSTEM datacube, rx,ry,qx,qy, 
+#         mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
+#     Returns:
+#         out (2D numpy array): virtual image 
+#     """    
+#     val = np.sum(np.multiply(datacube.data,mask), dtype=np.uint)
+#     return val
+
+
+
+#### OLD FUNCTIONS #### 
+
+
+
+# @nb.jit(nopython=True, parallel=True, fastmath=True)
+# def make_virtual_image_numba(datacube, mask):
+#     """
+#     Make a circular boolean mask centered at (x0,y0) and with radius R
+#     in the diffraction plane.
+#     Args:
+#         datacube (DataCube):
+#         x0,y0 (numbers): center of detector
+#         R (number): radius of detector
+#         return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+#     Returns:
+#         (2D array): Boolean mask
+#         (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
+#     """
     
-    out = np.zeros(datacube.data.shape[:-2])
-    for rx, ry in np.ndindex(datacube.dataray.shape[:-2]):
-        out[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
-    return out
+#     out = np.zeros(datacube.data.shape[:-2])
+#     for rx, ry in np.ndindex(datacube.dataray.shape[:-2]):
+#         out[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+#     return out
 
-# I can't get this to work quicker than you're brightfield function for some unknown reason.
-@nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
-def make_virtual_image_BF_numba(datacube, mask, xmin,xmax,ymin,ymax):
-    """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
-    in the diffraction plane.
-    Args:
-        datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
-    Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
-    out = np.zeros(datacube.data.shape[:-2])
-    mask = mask[xmin:xmax,ymin:ymax]
-    arr = datacube.data[:,:,xmin:xmax,ymin:ymax]
-    for rx, ry in np.ndindex(arr[:-2]):
-        out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask))
-    return out
+# # I can't get this to work quicker than you're brightfield function for some unknown reason.
+# @nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
+# def make_virtual_image_BF_numba(datacube, mask, xmin,xmax,ymin,ymax):
+#     """
+#     Make a circular boolean mask centered at (x0,y0) and with radius R
+#     in the diffraction plane.
+#     Args:
+#         datacube (DataCube):
+#         x0,y0 (numbers): center of detector
+#         R (number): radius of detector
+#         return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
+#     Returns:
+#         (2D array): Boolean mask
+#         (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
+#     """
+#     out = np.zeros(datacube.data.shape[:-2])
+#     mask = mask[xmin:xmax,ymin:ymax]
+#     arr = datacube.data[:,:,xmin:xmax,ymin:ymax]
+#     for rx, ry in np.ndindex(arr[:-2]):
+#         out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask))
+#     return out
 
 # Not as good way to do it, have to specify types etc. Leaving in for now incase I want to use something similar elsewhere 
 # @nb.guvectorize(signature='(i,j),(i,j)->()', ftylist=[(nb.uint[:,:], nb.boolean[:,:], nb.uint)], nopython=True, target='parallel')
@@ -298,24 +350,3 @@ def make_virtual_image_BF_numba(datacube, mask, xmin,xmax,ymin,ymax):
 
 
 
-#### Dask Functions #### 
-
-# can use a list of different output_dtype if that makes sense, I've set to np.uint for now. 
-# only works on dask array. 
-@da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.uint, vectorize=True)
-def make_virtual_image_dask(array, mask):
-    """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
-    in the diffraction plane.
-    Args:
-        array (dask_array):
-        mask (numbers): center of detector
-        R (number): radius of detector
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
-    Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
-
-    val = np.sum(np.multipy(array,mask), dtype=np.uint)
-    return val
