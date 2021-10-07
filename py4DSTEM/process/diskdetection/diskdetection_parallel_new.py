@@ -20,8 +20,10 @@ from distributed.protocol.serialize import register_serialization_family
 import distributed
 
 
+#### SERIALISERS ####
 # Define Serialiser 
-# these are functions which allow the hdf5 objects to he 
+# these are functions which allow the hdf5 objects to be passed. May not be required anymore 
+
 def dill_dumps(x):
     header = {'serializer': 'dill'}
     frames = [dill.dumps(x)]
@@ -40,7 +42,7 @@ def dill_loads(header, frames):
 def register_dill_serializer():
     """
     This function registers the dill serializer allowing dask to work on h5py objects. 
-    Not sure if and when this need to be run. 
+    Not sure if this needs to be run and how often this need to be run. Keeping this in for now. 
     Args:
         None
     Returns:
@@ -50,14 +52,31 @@ def register_dill_serializer():
     return None
 
 
+#### END OF SERAILISERS ####
 
+
+#### DASK WRAPPER FUNCTION #### 
+
+# Each delayed objected is passed a 4D array, currently implementing only on 2D slices. 
+# TODO add batching with fancy indexing  - needs to run a for loop over the batch of arrays
+# TODO add cuda accelerated version 
+# TODO add ML-AI version 
 def _find_Bragg_disks_single_DP_FK_dask_wrapper(arr, *args,**kwargs):
     # THis is needed as _find_Bragg_disks_single_DP_FK takes 2D array these arrays have the wrong shape
     return _find_Bragg_disks_single_DP_FK(arr[0,0], *args, **kwargs)
 
+
+#### END OF DASK WRAPPER FUNCTIONS ####
+
+
+
+#### MAIN FUNCTION
+# TODO add batching with fancy indexing - needs batch size, fancy indexing method 
+# TODO add cuda accelerated function - needs dask GPU cluster. 
+
 def beta_parallel_disk_detection(dataset, 
                             probe,
-                            #rxmin=None,
+                            #rxmin=None, # these would allow selecting a sub section 
                             #rxmax=None,
                             #rymin=None,
                             #rymax=None,
@@ -79,9 +98,10 @@ def beta_parallel_disk_detection(dataset,
     
     There is an asumption that unless specifying otherwise you are parallelising on a single Local Machine. 
     If this is not the case its probably best to pass the dask_client into the function, although you can just pass the required arguments to dask_client_params.
-    If no arguments 
+    If no dask_client arguments are passed it will create a dask_client for a local machine 
     
-    Do Not Pass peaks arguemnt. 
+    Note:
+        Do not pass "peaks" argument as a kwarg, like you might in "_find_Bragg_disks_single_DP_FK", as the results will be unreliable and may cause the calculation to crash.
     Args:
         dataset (py4dSTEM datacube): 4DSTEM dataset
         probe (ndarray): can be regular probe kernel or fourier transormed
@@ -96,11 +116,9 @@ def beta_parallel_disk_detection(dataset,
     Returns:
         peaks (PointListArray): the Bragg peak positions and the correlenation intensities
         dask_client(optional) (distributed.client.Client): dask_client for use later.
-
-    
     """
     # Dask Client stuff
-    #TODO how to guess at default params for client, sqrt no.cores. 
+    #TODO how to guess at default params for client, sqrt no.cores.  Something to do with the size of the diffraction patterm
     # write a function which can do this. 
     #TODO replace dask part with a with statement for easier clean up e.g.
     # with LocalCluser(params) as cluster, Client(cluster) as client: 
@@ -119,8 +137,8 @@ def beta_parallel_disk_detection(dataset,
             # LET DASK SET?
             # HAVE A FUNCTION WHICH RUNS ON A SUBSET OF THE DATA TO PICK OPTIMIAL VALUE?
             # psutil could be used to count cores. 
-            dask.config.set({'distributed.worker.memory.spill': False,
-                'distributed.worker.memory.target': False}) 
+            dask.config.set({'distributed.worker.memory.spill': False, # stops spilling to disk
+                'distributed.worker.memory.target': False}) # stops spilling to disk and erroring out
             cluster = LocalCluster()
             dask_client = Client(cluster)
 
@@ -130,7 +148,7 @@ def beta_parallel_disk_detection(dataset,
             try:
                 dask_client.restart()
             except Exception as e:
-                print('Could not restart dask client. Try manually restarting outside or passing "restart_dask_client=False"')
+                print('Could not restart dask client. Try manually restarting outside or passing "restart_dask_client=False"') # WARNING STATEMENT
                 return e 
         else:
             pass
@@ -162,13 +180,13 @@ def beta_parallel_disk_detection(dataset,
 
     # Convert the data to delayed 
     dataset_delayed = dask_data.to_delayed()
-    # TODO Trim data
+    # TODO Trim data e.g. rx,ry,qx,qy
     # I can pass the index values in here I should trim the probe and diffraction pattern first
 
 
-    # In to the meat of the function 
+    # Into the meat of the function 
     
-    # create an empty list
+    # create an empty list to which we will append the dealyed functions to. 
     res = []
     # loop over the dataset_delayed and create a delayed function of 
     for x in np.ndindex(dataset_delayed.shape):
@@ -184,23 +202,24 @@ def beta_parallel_disk_detection(dataset,
                                 #maxNumPeaks=maxNumPeaks,
                                 #subpixel='poly')
         res.append(temp)
-    _temp_peaks = dask_client.compute(res, optimize_graph=True)
+    _temp_peaks = dask_client.compute(res, optimize_graph=True) # creates futures and starts computing 
 
-    output = dask_client.gather(_temp_peaks)
+    output = dask_client.gather(_temp_peaks) # gather the future objects 
 
     coords = [('qx',float),('qy',float),('intensity',float)]
     peaks = PointListArray(coordinates=coords, shape=dataset.data.shape[:-2])
 
     #temp_peaks[0][0]
 
+    # operating over a list so we need the size (0->count) and re-create the probe positions (0->rx,0->ry),
     for (count,(rx, ry)) in zip([i for i in range(dataset.data[...,0,0].size)],np.ndindex(dataset.data.shape[:-2])):
         #peaks.get_pointlist(rx, ry).add_pointlist(temp_peaks[0][count])
         #peaks.get_pointlist(rx, ry).add_pointlist(output[count][0])
         peaks.get_pointlist(rx, ry).add_pointlist(output[count])
 
     # Clean up
-    dask_client.cancel(_temp_peaks)
-    del _temp_peaks
+    dask_client.cancel(_temp_peaks) # removes from the dask workers
+    del _temp_peaks # deletes the object 
     if close_dask_client:
         dask_client.close()
         return peaks
