@@ -72,6 +72,27 @@ class Crystal:
             ]
         )
 
+    def from_CIF(CIF, conventional_standard_structure=True):
+        """
+        Create a Crystal object from a CIF file, using pymatgen to import the CIF
+
+        Note that pymatgen typically prefers to return primitive unit cells,
+        which can be overridden by setting conventional_standard_structure=True.
+
+        Args:
+            CIF: (str or Path) path to the CIF File
+            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned 
+                instead of the primitive unit cell pymatgen typically returns
+        """
+        from pymatgen.io.cif import CifParser
+
+        parser = CifParser(CIF)
+
+        structure = parser.get_structures()[0]
+
+        return Crystal.from_pymatgen_structure(structure, conventional_standard_structure=conventional_standard_structure)
+
+
     def from_pymatgen_structure(structure=None, formula=None, space_grp=None, MaPKey= None, conventional_standard_structure=True):
         """
         Create a Crystal object from a pymatgen Structure object.
@@ -157,15 +178,16 @@ class Crystal:
 
         return Crystal(positions, numbers, cell)
     
-    def create_unitcell_from_params(latt_params, 
+    def from_unitcell_parameters(latt_params, 
                                    elements, 
                                    positions, 
                                    space_group = None, 
                                    lattice_type = 'cubic', 
-                                   from_cartesian = False):
+                                   from_cartesian = False,
+                                   conventional_standard_structure = True):
         
         '''
-        Generates pymatgen unit cell manually from user inputs
+        Create a Crystal using pymatgen to generate unit cell manually from user inputs
     
         Args:
                 latt_params:         (list of floats) list of lattice parameters. For example, for cubic: latt_params = [a],
@@ -177,8 +199,10 @@ class Crystal:
                                      pymatgen Structure.from_spacegroup function
                 lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
                 from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
+                conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned 
+                                     instead of the primitive unit cell pymatgen returns
         Returns:
-                structure:           pymatgen Structure object 
+                Crystal object
             
         '''
         
@@ -227,7 +251,7 @@ class Crystal:
                                   positions,
                                   coords_are_cartesian=from_cartesian)
         
-        return structure
+        return Crystal.from_pymatgen_structure(structure)
 
     def calculate_structure_factors(
         self,
