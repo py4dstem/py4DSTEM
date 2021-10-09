@@ -1969,7 +1969,7 @@ class Crystal:
                     zone_axis_fit = self.crystal_to_cartesian(zone_axis_fit)
 
                 temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-                temp = np.round(temp * 1e3) / 1e3
+                temp = np.round(temp, decimals=3)
                 print(
                     "Best fit zone axis = ("
                     + str(temp)
