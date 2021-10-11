@@ -13,10 +13,12 @@ import numpy as np
 from numpy.fft import fftfreq, fftshift
 
 import torch.nn as nn
-# from .utils import *
-from py4DSTEM.process.utils import plot, get_qx_qy_1d, electron_wavelength_angstrom
+
 from py4DSTEM.process.ptychography.utils import cartesian_aberrations_single, fftshift_checkerboard, aperture3, \
-    single_sideband_kernel, cartesian_aberrations, aperture_xp, single_sideband_kernel_cartesian
+    cartesian_aberrations, aperture_xp, single_sideband_kernel_cartesian
+
+from py4DSTEM.process.utils import get_qx_qy_1d, electron_wavelength_angstrom
+
 from tqdm import trange
 import math as m
 from math import sin, cos
@@ -278,17 +280,16 @@ def find_rotation_angle_with_double_disk_overlap(G, lam, dx, dscan, alpha_rad, m
     ny, nx, nky, nkx = G.shape
     xp = sp.backend.get_array_module(G)
 
-    Kx, Ky = get_qx_qy_1D([nkx, nky], dx, G[0, 0, 0, 0].real.dtype, fft_shifted=True)
-    Qx, Qy = get_qx_qy_1D([nx, ny], dscan, G[0, 0, 0, 0].real.dtype, fft_shifted=False)
+    Kx, Ky = get_qx_qy_1d([nkx, nky], dx, fft_shifted=True)
+    Qx, Qy = get_qx_qy_1d([nx, ny], dscan, fft_shifted=False)
 
-    Kx = xp.array(Kx)
-    Ky = xp.array(Ky)
-    Qx = xp.array(Qx)
-    Qy = xp.array(Qy)
+    Kx = xp.array(Kx, dtype=G[0, 0, 0, 0].real.dtype)
+    Ky = xp.array(Ky, dtype=G[0, 0, 0, 0].real.dtype)
+    Qx = xp.array(Qx, dtype=G[0, 0, 0, 0].real.dtype)
+    Qy = xp.array(Qy, dtype=G[0, 0, 0, 0].real.dtype)
 
     if aberrations is None:
         aberrations = xp.zeros((12))
-    aberration_angles = xp.zeros((12))
 
     if manual_frequencies is None:
         Gabs = xp.sum(xp.abs(G), (2, 3))
@@ -316,7 +317,7 @@ def find_rotation_angle_with_double_disk_overlap(G, lam, dx, dscan, alpha_rad, m
     for j, (range, parts) in enumerate(zip(ranges, partitions)):
         thetas = np.linspace(best_angle - np.deg2rad(range / 2), best_angle + np.deg2rad(range / 2), parts)
         intensities = double_overlap_intensitities_in_range(G_max, thetas, Qx_max, Qy_max, Kx, Ky, aberrations,
-                                                            aberration_angles, alpha_rad, lam, do_plot=False)
+                                                            alpha_rad, lam)
 
         sortind = np.argsort(intensities)
         max_ind0 = sortind[-1]
@@ -328,7 +329,7 @@ def find_rotation_angle_with_double_disk_overlap(G, lam, dx, dscan, alpha_rad, m
     return max_ind, thetas, intensities
 
 
-def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
+def weak_phase_reconstruction(dc: DataCube, aberrations=None, verbose=False, use_cuda=True):
     """
     Perform a ptychographic reconstruction of the datacube assuming a weak phase object.
     In the weak phase object approximation, the dataset in double Fourier-space
@@ -353,6 +354,9 @@ def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
 
     Args:
         dc: py4DSTEM datacube
+        aberrations: optional array shape (12,), cartesian aberration coefficients
+        verbose: optional bool, default: False
+        use_cuda: optional bool, default: True
 
     Returns:
         (Psi_Rp, Psi_Rp_left_sb, Psi_Rp_right_sb)
@@ -397,10 +401,14 @@ def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
 
     xp = sp.get_array_module(M)
 
-    Kx, Ky = get_qx_qy_1D([nkx, nky], k_max, M.dtype, fft_shifted=True)
-    Qx, Qy = get_qx_qy_1D([nx, ny], dxy, M.dtype, fft_shifted=False)
+    Kx, Ky = get_qx_qy_1d([nkx, nky], k_max, fft_shifted=True)
+    Qx, Qy = get_qx_qy_1d([nx, ny], dxy, fft_shifted=False)
 
-    pacbed = xp.mean(M, (0, 1))
+    Kx = Kx.astype(M.dtype)
+    Ky = Ky.astype(M.dtype)
+    Qx = Qx.astype(M.dtype)
+    Qy = Qy.astype(M.dtype)
+
     ap = aperture3(Kx, Ky, lam, alpha_rad).astype(xp.float32)
     scale = 1  # math.sqrt(mean_intensity / aperture_intensity)
     ap *= scale
@@ -411,8 +419,8 @@ def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
     end = time.perf_counter()
     print(f"FFT along scan coordinate took {end - start}s")
 
-    aberrations = xp.zeros((16))
-    aberration_angles = xp.zeros((12))
+    if aberrations is None:
+        aberrations = xp.zeros((12))
 
     Psi_Qp = xp.zeros((ny, nx), dtype=G.dtype)
     Psi_Qp_left_sb = xp.zeros((ny, nx), dtype=xp.complex64)
@@ -424,9 +432,9 @@ def weak_phase_reconstruction(dc: DataCube, verbose=False, use_cuda=True):
         blockspergrid = m.ceil(np.prod(G.shape) / threadsperblock)
         strides = cp.array((np.array(G.strides) / (G.nbytes / G.size)).astype(np.int))
 
-        single_sideband_kernel[blockspergrid, threadsperblock](G, strides, Qx, Qy, Kx, Ky, aberrations,
-                                                               aberration_angles, theta, alpha_rad, Psi_Qp,
-                                                               Psi_Qp_left_sb, Psi_Qp_right_sb, eps, lam, scale)
+        single_sideband_kernel_cartesian[blockspergrid, threadsperblock](G, strides, Qx, Qy, Kx, Ky, aberrations,
+                                                                         theta, alpha_rad, Psi_Qp, Psi_Qp_left_sb,
+                                                                         Psi_Qp_right_sb, eps, lam, scale)
     else:
         def get_qx_qy(M, dx, fft_shifted=False):
             qxa = fftfreq(M[0], dx[0])
