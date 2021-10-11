@@ -217,12 +217,23 @@ def get_CoM(ar):
 def get_maximal_points(ar):
     """
     For 2D array ar, returns an array of bools of the same shape which is True for all entries with
-    values larger than all 8 of their nearest neighbors.
+    values larger than all 8 of their nearest neighbors.  Excludes all boundary pixels.
     """
-    return (ar > np.roll(ar, (-1, 0), axis=(0, 1))) & (ar > np.roll(ar, (1, 0), axis=(0, 1))) & \
-           (ar > np.roll(ar, (0, -1), axis=(0, 1))) & (ar > np.roll(ar, (0, 1), axis=(0, 1))) & \
-           (ar > np.roll(ar, (-1, -1), axis=(0, 1))) & (ar > np.roll(ar, (-1, 1), axis=(0, 1))) & \
-           (ar > np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
+
+    # local max including periodic wrap-around
+    local_max = \
+        (ar > np.roll(ar, (-1, 0), axis=(0, 1))) & (ar > np.roll(ar, (1, 0), axis=(0, 1))) & \
+        (ar > np.roll(ar, (0, -1), axis=(0, 1))) & (ar > np.roll(ar, (0, 1), axis=(0, 1))) & \
+        (ar > np.roll(ar, (-1, -1), axis=(0, 1))) & (ar > np.roll(ar, (-1, 1), axis=(0, 1))) & \
+        (ar > np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
+
+    # remove boundary max
+    local_max[0,:] = False
+    local_max[:,0] = False
+    local_max[-1,:] = False
+    local_max[:,-1] = False
+
+    return local_max
 
 
 def get_maxima_2D(ar,
@@ -232,7 +243,7 @@ def get_maxima_2D(ar,
                   minRelativeIntensity=0,
                   minAbsoluteIntensity=0,
                   relativeToPeak=0,
-                  maxNumPeaks=0,
+                  maxNumPeaks=1,
                   subpixel='poly',
                   ar_FT=None,
                   upsample_factor=16):
@@ -252,7 +263,7 @@ def get_maxima_2D(ar,
         minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
             on an absolute scale
         relativeToPeak (int): 0=brightest maximum. 1=next brightest, etc.
-        maxNumPeaks (int): return only the first maxNumPeaks maxima
+        maxNumPeaks (int): return only the first maxNumPeaks maxima. Set to None to return all peaks.
         subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
             Must be in ('none','poly','multicorr').
                 * 'none': performs no subpixel fitting
@@ -271,6 +282,10 @@ def get_maxima_2D(ar,
             * **maxima_intensity** *(ndarray)*: intensity of the local maxima
     """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+
+
+    if maxNumPeaks is not None:
+        maxNumPeaks = np.asarray(maxNumPeaks, dtype='int')
 
     # Get maxima
     ar = gaussian_filter(ar, sigma)
@@ -298,6 +313,7 @@ def get_maxima_2D(ar,
     maxima['intensity'] = ar[maxima_x, maxima_y]
     maxima = np.sort(maxima, order='intensity')[::-1]
 
+
     if len(maxima) > 0:
         # Remove maxima which are too close
         if minSpacing > 0:
@@ -322,10 +338,10 @@ def get_maxima_2D(ar,
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
         # Remove maxima in excess of maxNumPeaks
-        if maxNumPeaks > 0:
-            assert isinstance(maxNumPeaks, (int, np.integer))
+        if maxNumPeaks is not None:
             if len(maxima) > maxNumPeaks:
                 maxima = maxima[:maxNumPeaks]
+
 
         # Subpixel fitting 
         # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
