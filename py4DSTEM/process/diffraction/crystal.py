@@ -1354,9 +1354,9 @@ class Crystal:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
             label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-        label_0 = np.round(label_0 * 1e3) * 1e-3
+        label_0 = np.round(label_0, decimals=3)
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
-        label_0 = np.round(label_0 * 1e3) * 1e-3
+        label_0 = np.round(label_0, decimals=3)
 
         if self.orientation_fiber is False:
 
