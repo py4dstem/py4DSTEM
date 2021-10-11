@@ -629,6 +629,7 @@ class Crystal:
         angle_step_in_plane: float = 2.0,
         accel_voltage: float = 300e3,
         corr_kernel_size: float = 0.08,
+        tol_peak_delete = None,
         tol_distance: float = 0.01,
         fiber_axis=None,
         fiber_angles=None,
@@ -652,6 +653,8 @@ class Crystal:
             angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (float):        Accelerating voltage for electrons [Volts]
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
+            tol_peak_delete (float):      Distance to delete peaks for multiple matches.
+                                          Default is kernel_size * 0.5
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
             fiber_axis (float):           (3,) vector specifying the fiber axis
             fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
@@ -663,6 +666,10 @@ class Crystal:
         # Store inputs
         self.accel_voltage = np.asarray(accel_voltage)
         self.orientation_kernel_size = np.asarray(corr_kernel_size)
+        if tol_peak_delete is None:
+            self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
+        else:
+            self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
         self.orientation_fiber_angles = np.asarray(fiber_angles)
         self.cartesian_directions = cartesian_directions
@@ -761,6 +768,8 @@ class Crystal:
             if not self.cartesian_directions:
                 for a0 in range(zone_axis_range.shape[0]):
                     self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
+                        a0, :
+                    ] = self.crystal_to_cartesian(
                         self.orientation_zone_axis_range[a0, :]
                     )
 
@@ -1347,6 +1356,8 @@ class Crystal:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
             label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+                self.orientation_zone_axis_range[0, :]
+            )
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0 * 1e3) * 1e-3
@@ -1480,6 +1491,7 @@ class Crystal:
         Returns:
             fig, ax                     (optional) figure and axes handles
         """
+
 
         # Determine which index to plot if zone_axis_plot is specified
         if zone_axis_plot is not None:
@@ -1619,7 +1631,6 @@ class Crystal:
         self,
         bragg_peaks: PointList,
         num_matches_return: int = 1,
-        tol_peak_delete: Optional[float] = None,
         subpixel_tilt: bool = False,
         plot_corr: bool = False,
         plot_corr_3D: bool = False,
@@ -1634,8 +1645,6 @@ class Crystal:
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
-            tol_peak_delete (float):            Distance to delete peaks for multiple matches.
-                                                Default is kernel_size * 0.5
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
@@ -1654,9 +1663,6 @@ class Crystal:
             orientation_output = np.zeros((3, 3))
         else:
             orientation_output = np.zeros((3, 3, num_matches_return))
-
-            if tol_peak_delete is None:
-                tol_peak_delete = self.orientation_kernel_size * 0.5
 
             # r_del_2 = tol_peak_delete**2
             corr_output = np.zeros((num_matches_return))
@@ -1683,7 +1689,7 @@ class Crystal:
                 if np.sum(sub) > 0:
                     im_polar[ind_radial, :] = np.sum(
                         radius
-                        * np.sqrt(intensity[sub, None])
+                        * np.sqrt(np.max(intensity[sub, None],0))
                         * np.maximum(
                             1
                             - np.sqrt(
@@ -2064,11 +2070,11 @@ class Crystal:
 
                     dist_min = np.sqrt(np.min(d_2))
 
-                    if dist_min < tol_peak_delete:
+                    if dist_min < self.orientation_tol_peak_delete:
                         remove[a0] = True
                     elif dist_min < self.orientation_kernel_size:
-                        scale_int[a0] = (dist_min - tol_peak_delete) / (
-                            self.orientation_kernel_size - tol_peak_delete
+                        scale_int[a0] = (dist_min - self.orientation_tol_peak_delete) / (
+                            self.orientation_kernel_size - self.orientation_tol_peak_delete
                         )
 
                 intensity = intensity * scale_int
