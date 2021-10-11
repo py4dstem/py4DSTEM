@@ -2435,8 +2435,8 @@ class Crystal:
                     for a0 in range(3):
                         # Cubic sorting for now - needs to be updated with symmetries
                         # w = np.linalg.solve(A,orient[:,a0])
-                        # w = np.linalg.solve(A, np.sort(np.abs(orient[:, a0])))
-                        w = np.linalg.solve(A, orient[:, a0])
+                        w = np.linalg.solve(A, np.sort(np.abs(orient[:, a0])))
+                        # w = np.linalg.solve(A, orient[:, a0])
                         w = w / (1 - np.exp(-np.max(w)))
 
                         rgb = (
