@@ -768,8 +768,6 @@ class Crystal:
             if not self.cartesian_directions:
                 for a0 in range(zone_axis_range.shape[0]):
                     self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
-                        a0, :
-                    ] = self.crystal_to_cartesian(
                         self.orientation_zone_axis_range[a0, :]
                     )
 
