@@ -72,117 +72,35 @@ class Crystal:
             ]
         )
 
-    def from_CIF(CIF, conventional_standard_structure=True):
-        """
-        Create a Crystal object from a CIF file, using pymatgen to import the CIF
-
-        Note that pymatgen typically prefers to return primitive unit cells,
-        which can be overridden by setting conventional_standard_structure=True.
-
-        Args:
-            CIF: (str or Path) path to the CIF File
-            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
-                instead of the primitive unit cell pymatgen typically returns
-        """
-        from pymatgen.io.cif import CifParser
-
-        parser = CifParser(CIF)
-
-        structure = parser.get_structures()[0]
-
-        return Crystal.from_pymatgen_structure(
-            structure, conventional_standard_structure=conventional_standard_structure
-        )
-
-    def from_pymatgen_structure(
-        structure=None,
-        formula=None,
-        space_grp=None,
-        MaPKey=None,
-        conventional_standard_structure=True,
-    ):
+    def from_pymatgen_structure(structure, conventional_standard_structure=True):
         """
         Create a Crystal object from a pymatgen Structure object.
         If a Materials Project API key is installed, you may pass
         the Materials Project ID of a structure, which will be
         fetched through the MP API. For setup information see:
-        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file.
-        Alternatively, Materials Porject API key can be pass as an argument through
-        the function (MaPKey). To get your API key, please visit Materials Project website
-        and login/sign up using your email id. Once logged in, go to the dashboard
-        to generate your own API key (https://materialsproject.org/dashboard).
+        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file
 
         Note that pymatgen typically prefers to return primitive unit cells,
         which can be overridden by setting conventional_standard_structure=True.
-
-        Args:
-            structure:      (pymatgen Structure or str), if specified as a string, it will be considered
-                            as a Materials Project ID of a structure, otherwise it will accept only
-                            pymatgen Structure object. if None, MP database will be queried using the
-                            specified formula and/or space groups for the available structure
-            formula:        (str), pretty formula to search in the MP database, (note that the forumlas in MP
-                            database are not always formatted in the conventional order. Please
-                            visit Materials Project website for information (https://materialsproject.org/)
-                            if None, structure argument must not be None
-            space_grp:      (int) space group number of the forumula provided to query MP database. If None, MP will search
-                            for all the available space groups for the formula provided and will consider the
-                            one with lowest unit cell volume, only specify when using formula to search MP
-                            database
-            MaPKey:         (str) Materials Project API key
-            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
-                            instead of the primitive unit cell pymatgen returns
-
         """
         import pymatgen as mg
         from pymatgen.ext.matproj import MPRester
 
-        if structure is not None:
-            if isinstance(structure, str):
-                mpr = MPRester(MaPKey)
-                structure = mpr.get_structure_by_material_id(structure)
+        if isinstance(structure, str):
+            with MPRester() as m:
+                structure = m.get_structure_by_material_id(structure)
 
-            assert isinstance(
-                structure, mg.core.Structure
-            ), "structure must be pymatgen Structure object"
+        assert isinstance(
+            structure, mg.core.Structure
+        ), "structure must be pymatgen Structure object"
 
-            structure = (
-                mg.symmetry.analyzer.SpacegroupAnalyzer(
-                    structure
-                ).get_conventional_standard_structure()
-                if conventional_standard_structure
-                else structure
-            )
-        else:
-            mpr = MPRester(MaPKey)
-            if formula is None:
-                raise Exception(
-                    "Atleast a formula needs to be provided to query from MP database!!"
-                )
-            query = mpr.query(
-                criteria={"pretty_formula": formula},
-                properties=["structure", "icsd_ids", "spacegroup"],
-            )
-            if space_grp:
-                query = [
-                    query[i]
-                    for i in range(len(query))
-                    if mg.symmetry.analyzer.SpacegroupAnalyzer(
-                        query[i]["structure"]
-                    ).get_space_group_number()
-                    == space_grp
-                ]
-            selected = query[
-                np.argmin(
-                    [query[i]["structure"].lattice.volume for i in range(len(query))]
-                )
-            ]
-            structure = (
-                mg.symmetry.analyzer.SpacegroupAnalyzer(
-                    selected["structure"]
-                ).get_conventional_standard_structure()
-                if conventional_standard_structure
-                else selected["structure"]
-            )
+        structure = (
+            mg.symmetry.analyzer.SpacegroupAnalyzer(
+                structure
+            ).get_conventional_standard_structure()
+            if conventional_standard_structure
+            else structure
+        )
 
         positions = structure.frac_coords  #: fractional atomic coordinates
 
@@ -200,107 +118,6 @@ class Crystal:
         numbers = np.array([s.species.elements[0].Z for s in structure])
 
         return Crystal(positions, numbers, cell)
-
-    def from_unitcell_parameters(
-        latt_params,
-        elements,
-        positions,
-        space_group=None,
-        lattice_type="cubic",
-        from_cartesian=False,
-        conventional_standard_structure=True,
-    ):
-
-        """
-        Create a Crystal using pymatgen to generate unit cell manually from user inputs
-
-        Args:
-                latt_params:         (list of floats) list of lattice parameters. For example, for cubic: latt_params = [a],
-                                     for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta],
-                                     and in general: latt_params = [a,b,c,alpha,beta,gamma]
-                elements:            (list of strings) list of elements, for example for SnS: elements = ["Sn", "S"]
-                positions:           (list) list of (x,y,z) positions for each element present in the elements, default: fractional coord
-                space_group:         (optional) (string or int) space group of the crystal system, if specified, unit cell will be created using
-                                     pymatgen Structure.from_spacegroup function
-                lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
-                from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
-                conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
-                                     instead of the primitive unit cell pymatgen returns
-        Returns:
-                Crystal object
-
-        """
-
-        import pymatgen as mg
-
-        if lattice_type == "cubic":
-            assert (
-                len(latt_params) == 1
-            ), "Only 1 lattice parameter is expected for cubic: a, but given {}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.cubic(latt_params[0])
-        elif lattice_type == "hexagonal":
-            assert (
-                len(latt_params) == 2
-            ), "2 lattice parametere are expected for hexagonal: a, c, but given {len(latt_params)}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.hexagonal(latt_params[0], latt_params[1])
-        elif lattice_type == "tetragonal":
-            assert (
-                len(latt_params) == 2
-            ), "2 lattice parametere are expected for tetragonal: a, c, but given {len(latt_params)}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.tetragonal(latt_params[0], latt_params[1])
-        elif lattice_type == "orthorhombic":
-            assert (
-                len(latt_params) == 3
-            ), "3 lattice parametere are expected for orthorhombic: a, b, c, but given {len(latt_params)}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.orthorhombic(
-                latt_params[0], latt_params[1], latt_params[2]
-            )
-        elif lattice_type == "monoclinic":
-            assert (
-                len(latt_params) == 4
-            ), "4 lattice parametere are expected for monoclinic: a, b, c, beta,  but given {len(latt_params)}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.monoclinic(
-                latt_params[0], latt_params[1], latt_params[2], latt_params[3]
-            )
-        else:
-            assert (
-                len(latt_params) == 6
-            ), "all 6 lattice parametere are expected: a, b, c, alpha, beta, gamma, but given {len(latt_params)}".format(
-                len(latt_params)
-            )
-            lattice = mg.core.Lattice.from_parameters(
-                latt_params[0],
-                latt_params[1],
-                latt_params[2],
-                latt_params[3],
-                latt_params[4],
-                latt_params[5],
-            )
-
-        if space_group:
-            structure = mg.core.Structure.from_spacegroup(
-                space_group,
-                lattice,
-                elements,
-                positions,
-                coords_are_cartesian=from_cartesian,
-            )
-        else:
-            structure = mg.core.Structure(
-                lattice, elements, positions, coords_are_cartesian=from_cartesian
-            )
-
-        return Crystal.from_pymatgen_structure(structure)
 
     def calculate_structure_factors(
         self,
@@ -575,7 +392,7 @@ class Crystal:
             el = proj_dir[0]
             az = proj_dir[1]
         elif np.size(proj_dir) == 3:
-            if hasattr(self, "cartesian_directions") and not self.cartesian_directions:
+            if hasattr(self, 'cartesian_directions') and not self.cartesian_directions:
                 proj_dir = self.crystal_to_cartesian(proj_dir)
 
             if proj_dir[0] == 0 and proj_dir[1] == 0:
@@ -629,6 +446,7 @@ class Crystal:
         angle_step_in_plane: float = 2.0,
         accel_voltage: float = 300e3,
         corr_kernel_size: float = 0.08,
+        tol_peak_delete = None,
         tol_distance: float = 0.01,
         fiber_axis=None,
         fiber_angles=None,
@@ -652,6 +470,8 @@ class Crystal:
             angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (float):        Accelerating voltage for electrons [Volts]
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
+            tol_peak_delete (float):      Distance to delete peaks for multiple matches.
+                                          Default is kernel_size * 0.5
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
             fiber_axis (float):           (3,) vector specifying the fiber axis
             fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
@@ -663,6 +483,10 @@ class Crystal:
         # Store inputs
         self.accel_voltage = np.asarray(accel_voltage)
         self.orientation_kernel_size = np.asarray(corr_kernel_size)
+        if tol_peak_delete is None:
+            self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
+        else:
+            self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
         self.orientation_fiber_angles = np.asarray(fiber_angles)
         self.cartesian_directions = cartesian_directions
@@ -760,7 +584,9 @@ class Crystal:
 
             if not self.cartesian_directions:
                 for a0 in range(zone_axis_range.shape[0]):
-                    self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
+                    self.orientation_zone_axis_range[
+                        a0, :
+                    ] = self.crystal_to_cartesian(
                         self.orientation_zone_axis_range[a0, :]
                     )
 
@@ -1346,7 +1172,9 @@ class Crystal:
         if self.cartesian_directions:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
-            label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+            label_0 = self.cartesian_to_crystal(
+                self.orientation_zone_axis_range[0, :]
+            )
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0 * 1e3) * 1e-3
@@ -1463,12 +1291,12 @@ class Crystal:
     def plot_orientation_plan(
         self,
         index_plot: int = 0,
-        zone_axis_plot=None,
+        zone_axis_plot = None,
         figsize: Union[list, tuple, np.ndarray] = (14, 6),
         returnfig: bool = False,
     ):
         """
-        3D scatter plot of the structure factors using magnitude^2,
+        3D scatter plot of the structure factors using magnitude^2, 
         i.e. intensity.
 
         Args:
@@ -1481,13 +1309,12 @@ class Crystal:
             fig, ax                     (optional) figure and axes handles
         """
 
+
         # Determine which index to plot if zone_axis_plot is specified
         if zone_axis_plot is not None:
-            zone_axis_plot = np.array(zone_axis_plot, dtype="float")
+            zone_axis_plot = np.array(zone_axis_plot, dtype='float')
             zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
-            index_plot = np.argmin(
-                np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
-            )
+            index_plot = np.argmin(np.sum((self.orientation_vecs - zone_axis_plot)**2,axis=1))
 
         # initialize figure
         fig, ax = plt.subplots(1, 2, figsize=figsize)
@@ -1619,7 +1446,6 @@ class Crystal:
         self,
         bragg_peaks: PointList,
         num_matches_return: int = 1,
-        tol_peak_delete: Optional[float] = None,
         subpixel_tilt: bool = False,
         plot_corr: bool = False,
         plot_corr_3D: bool = False,
@@ -1634,8 +1460,6 @@ class Crystal:
         Args:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
-            tol_peak_delete (float):            Distance to delete peaks for multiple matches.
-                                                Default is kernel_size * 0.5
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
@@ -1654,9 +1478,6 @@ class Crystal:
             orientation_output = np.zeros((3, 3))
         else:
             orientation_output = np.zeros((3, 3, num_matches_return))
-
-            if tol_peak_delete is None:
-                tol_peak_delete = self.orientation_kernel_size * 0.5
 
             # r_del_2 = tol_peak_delete**2
             corr_output = np.zeros((num_matches_return))
@@ -1683,7 +1504,7 @@ class Crystal:
                 if np.sum(sub) > 0:
                     im_polar[ind_radial, :] = np.sum(
                         radius
-                        * np.sqrt(intensity[sub, None])
+                        * np.sqrt(np.max(intensity[sub, None],0))
                         * np.maximum(
                             1
                             - np.sqrt(
@@ -2064,11 +1885,11 @@ class Crystal:
 
                     dist_min = np.sqrt(np.min(d_2))
 
-                    if dist_min < tol_peak_delete:
+                    if dist_min < self.orientation_tol_peak_delete:
                         remove[a0] = True
                     elif dist_min < self.orientation_kernel_size:
-                        scale_int[a0] = (dist_min - tol_peak_delete) / (
-                            self.orientation_kernel_size - tol_peak_delete
+                        scale_int[a0] = (dist_min - self.orientation_tol_peak_delete) / (
+                            self.orientation_kernel_size - self.orientation_tol_peak_delete
                         )
 
                 intensity = intensity * scale_int
