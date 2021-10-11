@@ -1,22 +1,59 @@
+import time
+
+import cupy as cp
+import cupyx.scipy.fft as fft
+
+import ipywidgets as widgets
+
+import matplotlib.pyplot as plt
+
+from matplotlib.patches import Rectangle
+from matplotlib_scalebar.scalebar import ScaleBar
+
 import numpy as np
 from ipywidgets import FloatSlider, GridspecLayout, VBox, HBox
-import ipywidgets as widgets
-from matplotlib_scalebar.scalebar import ScaleBar
-from numpy.fft import fftshift
-import time
-import cupy as cp
-import matplotlib.pyplot as plt
-import cupyx.scipy.fft as fft
-from skimage.filters import gaussian
-from matplotlib.patches import Rectangle
-import py4DSTEM
-from py4DSTEM.process.utils import Param
 
+import torch as th
+
+from numpy.fft import fftshift
+from skimage.filters import gaussian
+
+import py4DSTEM
+from py4DSTEM.process.ptychography import ZernikeProbeSingle, find_rotation_angle_with_double_disk_overlap, \
+    disk_overlap_function, single_sideband_reconstruction
+from py4DSTEM.process.ptychography.utils import fourier_coordinates_2D
+from py4DSTEM.process.ptychography.visualize import imsave
+from py4DSTEM.process.utils import Param, sector_mask, get_qx_qy_1d
+from py4DSTEM.io.datastructure import Metadata
+
+plt.ioff()
 out0 = widgets.Output(layout={'border': '1px solid black'})
 
 
 class InteractiveSSB:
-    def __init__(self, data, slice_image, radius, metadata, window_size=128):
+    """
+    A class for interactive single-sideband reconstruction.
+
+    A InteractiveSSB instance is intended for use in jupyter notebooks with ipywidgets enabled, where it displays a
+    graphical user interface that allows to select a region of interest and the STEM rotation, and reconstructs an image
+    using the Single-sideband reconstruction method. The aberrations used for the reconstruction can be tuned interactively.
+
+    Initialization methods:
+
+        __init__:
+            Initializes the class variables and the graphical user interface.
+
+        show: shows the ipywidgets GUI
+
+    Args:
+        data (ndarray): 4D data cube, cropped around the bright-field disk
+        slice_image (ndarray of floats): an image that is displayed to select a ROI to reconstruct
+        bright_field_radius (float): radisu of the bright-field disk in pixels
+        metadata (Metadata): a py4Dstem metadata object with populated metadata
+        ssb_size (int): size of the diffraction patten to use in the SSB reconstruction, mostly used for saving memory. default: 16
+    """
+    def __init__(self, data: np.array, slice_image: np.array, bright_field_radius: float, metadata: Metadata,
+                 ssb_size=16):
 
         meta = Param()
         meta.alpha_rad = metadata.microscope['convergence_semiangle_mrad'] * 1e-3
@@ -29,10 +66,10 @@ class InteractiveSSB:
         self.data = data
         self.scan_dimensions = np.array(self.data.shape[:2])
         self.frame_dimensions = np.array(self.data.shape[2:])
-        self.ssb_size = 16
+        self.ssb_size = ssb_size
         self.slic = np.s_[0:self.scan_dimensions[0], 0:self.scan_dimensions[1]]
         self.rmax = self.frame_dimensions[-1] // 2
-        self.alpha_max = self.rmax / radius * meta.alpha_rad
+        self.alpha_max = self.rmax / bright_field_radius * meta.alpha_rad
         self.slice_image = slice_image
         self.window_center = self.scan_dimensions // 2
         self.window_size = self.scan_dimensions[0]
@@ -98,7 +135,6 @@ class InteractiveSSB:
 
         qn = fourier_coordinates_2D([128, 128], r_min / 1.6)
         q = th.as_tensor(qn).cuda()
-        alpha = q * meta.wavelength
         self.probe_gen = ZernikeProbeSingle(q, meta.wavelength, fft_shifted=False)
         self.A = np.linalg.norm(qn, axis=0) * meta.wavelength < meta.alpha_rad
         self.A = gaussian(self.A, 1)
@@ -129,7 +165,6 @@ class InteractiveSSB:
             self.probe_realspace_imax = self.f1ax0.imshow(imsave(self.psi.cpu().numpy()))
             self.probe_fourier_imax = self.f1ax1.imshow(imsave(self.Psi_shifted.cpu().numpy()))
             self.probe_phases_imax = self.f1ax2.imshow(self.phases.cpu().numpy())
-            # ,cmap=plt.cm.get_cmap('Greys')
 
             self.f1ax0.set_xticks([])
             self.f1ax0.set_yticks([])
@@ -211,9 +246,6 @@ class InteractiveSSB:
             x0 -= 1
             self.window_size[1] = self.window_size[1] + 1
 
-        #         y1 = y1 if y0 > 0 else (y1 // 2) * 2
-        #         x1 = x1 if x0 > 0 else (x1 // 2) * 2
-
         self.slic = np.s_[y0:y1, x0:x1]
         self.out.append_stdout(f"slice {y0},{y1},{x0},{x1}\n")
 
@@ -256,16 +288,10 @@ class InteractiveSSB:
 
     @out0.capture()
     def _get_G(self, size):
-        bin_factor = int(np.min(np.floor(self.frame_dimensions / size)))
-        start = time.perf_counter()
         dc = self.dc[self.slic]
-
         M = cp.array(dc, dtype=cp.complex64)
-        ny, nx, nky, nkx = M.shape
-        start = time.perf_counter()
         G = fft.fft2(M, axes=(0, 1), overwrite_x=True)
         G /= cp.sqrt(np.prod(G.shape[:2]))
-
         return G
 
     @out0.capture()
@@ -274,8 +300,13 @@ class InteractiveSSB:
         self.dc = self.data[self.slic]
         self.out.append_stdout(f"Data shape is {self.dc.shape}\n")
 
-        self.Qy1d, self.Qx1d = get_qx_qy_1D(self.scan_dimensions, self.dxy, cp.float32, fft_shifted=False)
-        self.Ky, self.Kx = get_qx_qy_1D(self.dc.shape[-2:], self.r_min, cp.float32, fft_shifted=True)
+        self.Qy1d, self.Qx1d = get_qx_qy_1d(self.scan_dimensions, self.dxy, fft_shifted=False)
+        self.Ky, self.Kx = get_qx_qy_1d(self.dc.shape[-2:], self.r_min, fft_shifted=True)
+
+        self.Kx = cp.array(self.Kx, dtype=cp.float32)
+        self.Ky = cp.array(self.Ky, dtype=cp.float32)
+        self.Qy1d = cp.array(self.Qy1d, dtype=cp.float32)
+        self.Qx1d = cp.array(self.Qx1d, dtype=cp.float32)
 
         self.Psi_Qp = cp.zeros(self.scan_dimensions, dtype=np.complex64)
         self.Psi_Qp_left_sb = cp.zeros(self.scan_dimensions, dtype=np.complex64)
@@ -285,7 +316,6 @@ class InteractiveSSB:
         self.Psi_Rp_right_sb = cp.zeros(self.scan_dimensions, dtype=np.complex64)
 
         M = cp.array(self.dc, dtype=cp.complex64)
-        ny, nx, nky, nkx = M.shape
         start = time.perf_counter()
         G = fft.fft2(M, axes=(0, 1), overwrite_x=True)
         G /= cp.sqrt(np.prod(G.shape[:2]))
@@ -300,7 +330,6 @@ class InteractiveSSB:
         self.Psi_Qp_right_sb[:] = 0
 
         eps = 1e-3
-        start = time.perf_counter()
         single_sideband_reconstruction(
             self.G,
             self.Qx1d,
@@ -316,7 +345,6 @@ class InteractiveSSB:
             eps,
             self.meta.wavelength,
         )
-        m = 2
 
         self.Psi_Rp[:] = fft.ifft2(self.Psi_Qp, norm="ortho")
         self.Psi_Rp_left_sb[:] = fft.ifft2(self.Psi_Qp_left_sb, norm="ortho")
@@ -361,8 +389,6 @@ class InteractiveSSB:
         def func1(change):
             self.C[i] = change['new'] * multiplier
             w = change['new'] * multiplier
-            #             self.out.append_stdout(f"C[{i}] = {self.C[i]}\n")
-
             self.update_variables()
             self.update_gui()
 
@@ -373,7 +399,6 @@ class InteractiveSSB:
     def selected_index_changed(self, change):
         w = change['new']
         if w == 1:
-            #             if self.first_time_calc:
             n_fit = 9
             self.G = self._get_G_full(self.ssb_size)
             self.Gabs = cp.sum(cp.abs(self.G), (2, 3))
@@ -403,73 +428,16 @@ class InteractiveSSB:
             self.update_variables()
             self.update_gui()
 
-        elif w == 2:
-            data = dssb
-            bright_field_radius = radius
-
-            meta = metadata
-
-            defocus_list_nm = np.linspace(-300, 300, 60, endpoint=True) + 0
-            print(f'defocus_list_nm: {defocus_list_nm}')
-            defocal = []
-            defocal_right = []
-            defocal_left = []
-
-            for df in defocus_list_nm:
-                print(df)
-                C = xp.zeros((12,))
-                C[0] = df
-                Psi_Qp = cp.zeros((ny, nx), dtype=G.dtype)
-                Psi_Qp_left_sb = cp.zeros((ny, nx), dtype=np.complex64)
-                Psi_Qp_right_sb = cp.zeros((ny, nx), dtype=np.complex64)
-                start = time.perf_counter()
-                eps = 1e-3
-                single_sideband_reconstruction(
-                    self.G,
-                    self.Qx1d,
-                    self.Qy1d,
-                    self.Kx,
-                    self.Ky,
-                    self.C,
-                    np.deg2rad(self.rotation_deg),
-                    self.meta.alpha_rad,
-                    self.Psi_Qp,
-                    self.Psi_Qp_left_sb,
-                    self.Psi_Qp_right_sb,
-                    eps,
-                    self.meta.wavelength,
-                )
-                self.Psi_Rp[:] = fft.ifft2(self.Psi_Qp, norm="ortho")
-                self.Psi_Rp_left_sb[:] = fft.ifft2(self.Psi_Qp_left_sb, norm="ortho")
-                self.Psi_Rp_right_sb[:] = fft.ifft2(self.Psi_Qp_right_sb, norm="ortho")
-
-                defocal.append(Psi_Rp.get())
-                defocal_right.append(Psi_Rp_right_sb.get())
-                defocal_left.append(Psi_Rp_left_sb.get())
-
-            ssb_defocal = np.array(defocal)
-            ssb_defocal_right = np.array(defocal_right)
-            ssb_defocal_left = np.array(defocal_left)
-
-            #             fig, ax = plt.subplots(dpi=150)
-
-            #             var1 = np.var(ssb_defocal[...,m:-m,m:-m],(1,2))
-            #             var2 = np.var(ssb_defocal_right[...,m:-m,m:-m],(1,2))
-
-            #             for i, v in enumerate([var1,var2,var3]):
-            #                 ax.scatter(np.arange(len(v)), v, label=f'{i}', s=3)
-            #                 ax.plot(v, label=f'{i}')
-            #             plt.legend()
-
-            #             mxs = np.argmax(var1)
-            #             best_df = defocus_list_nm[mxs]
-            #             mxs2 = np.argmax(var2)
-            #             best_df2 = defocus_list_nm[mxs2]
-
-            self.out.append_stdout(f'best_df ssb_defocal: {mxs}:{best_df}\n')
-            self.out.append_stdout(f'best_df ssb_defocal_right: {mxs2}:{best_df2}\n')
-
     def show(self):
+        """
+        Shows the intarctive GUI.
+
+        Args:
+
+        Returns:
+            an ipywidgets GridspecLayout containing the GUI
+        """
+
         n_fit = 49
         ranges = [360, 30]
         partitions = [144, 120]
@@ -482,7 +450,6 @@ class InteractiveSSB:
         self.dc = self.data[self.slic]
 
         M = cp.array(self.dc, dtype=cp.complex64)
-        ny, nx, nky, nkx = M.shape
         self.G = fft.fft2(M, axes=(0, 1), overwrite_x=True)
         self.G /= cp.sqrt(np.prod(self.G.shape[:2]))
         self.Gabs = cp.sum(cp.abs(self.G), (2, 3))
