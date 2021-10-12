@@ -3060,7 +3060,7 @@ orientation_ranges = {
     '6mm':  ['fiber', [0,0,1], [180., 30.]],
     '-6m2': ['fiber', [0,0,1], [90., 60.]],
     '6/mmm':[[[1,0,0],[np.sqrt(3)/2.,0.5,0.]], None, None],
-    '23':   [[[1,0,0], [1,1,1]], None, None], # this is probaly wrong, it is half the needed range
+    '23':   [[[1,0,0], [1,1,1]], None, None], # this is probably wrong, it is half the needed range
     'm-3':  [[[1,0,0], [1,1,1]], None, None],
     '432':  [[[1,0,0], [1,1,1]], None, None],
     '-43m': [[[1,-1,1], [1,1,1]], None, None],
