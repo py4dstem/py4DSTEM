@@ -649,6 +649,8 @@ class Crystal:
                                      Setting to 'full' as a string will use a hemispherical range.
                                      Setting to 'half' as a string will use a quarter sphere range.
                                      Setting to 'fiber' as a string will make a spherical cap around a given vector.
+                                     Setting to 'auto' will use pymatgen to determine the point group symmetry
+                                        of the structure and choose an appropriate zone_axis_range
             angle_step_zone_axis (float): Approximate angular step size for zone axis [degrees]
             angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (float):        Accelerating voltage for electrons [Volts]
@@ -676,6 +678,19 @@ class Crystal:
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+
+        # Handle the "auto" case first, since it works by overriding zone_axis_range,
+        #   fiber_axis, and fiber_angles then using the regular parser:
+        if isinstance(zone_axis_range) and zone_axis_range == "auto":
+            from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+            from pymatgen.core.structure import Structure
+
+            structure = Structure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
+
+            pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
+
+            zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
+            
 
         if isinstance(zone_axis_range, str):
             if (
@@ -1354,8 +1369,6 @@ class Crystal:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
             label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-                self.orientation_zone_axis_range[0, :]
-            )
         label_0 = np.round(label_0 * 1e3) * 1e-3
         label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0 * 1e3) * 1e-3
@@ -3008,3 +3021,39 @@ def atomic_colors(ID):
         17: np.array([0.0, 1.0, 0.0]),
         79: np.array([1.0, 0.7, 0.0]),
     }.get(ID, np.array([0.0, 0.0, 0.0]))
+
+
+orientation_ranges = {
+    '1': [],
+    '-1':[],
+    '2':[],
+    'm':[],
+    '2/m':[],
+    '222':[],
+    'mm2':[],
+    'mmm':[],
+    '4':[],
+    '-4':[],
+    '4/m':[],
+    '422':[],
+    '4mm':[],
+    '-42m':[],
+    '4/mmm':[],
+    '3':[],
+    '-3':[],
+    '32':[],
+    '3m':[],
+    '-3m':[],
+    '6':[],
+    '-6':[],
+    '6/m':[],
+    '622':[],
+    '6mm':[],
+    '-6m2':[],
+    '6/mmm':[],
+    '23':[],
+    'm-3':[],
+    '432':[],
+    '-43m':[],
+    'm-3m':[],
+}
