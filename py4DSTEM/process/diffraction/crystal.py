@@ -908,7 +908,13 @@ class Crystal:
                     )
                     p0_sub = p0 - p_proj
                     p1_sub = p1 - p_proj
-                    angle_p_sub = np.arccos(np.sum(p0_sub * p1_sub))
+
+                    # print(np.round(p0_sub,decimals=3),
+                    #     np.round(p1_sub,decimals=3))
+                    angle_p_sub = np.arccos(
+                        np.sum(p0_sub * p1_sub) \
+                        / np.linalg.norm(p0_sub) \
+                        / np.linalg.norm(p1_sub))
 
                     self.orientation_vecs[inds, :] = (
                         p_proj
