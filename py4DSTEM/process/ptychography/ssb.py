@@ -115,6 +115,7 @@ def disk_overlap_kernel(gamma, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrati
         theta_rot (float): STEM rotation angle in rad
         alpha (float): convergence semi-angle in rad
         lam (float): wavelength in angstrom
+
     Returns:
         no returns, results is in gamma
     """
