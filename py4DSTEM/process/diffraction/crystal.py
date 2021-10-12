@@ -693,7 +693,7 @@ class Crystal:
             assert pointgroup in orientation_ranges, "Unrecognized pointgroup returned by pymatgen!"
 
             zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
-            zone_axis_range = np.array(zone_axis_range)
+            zone_axis_range = np.array(zone_axis_range, dtype=np.float64)
             self.cartesian_directions = True # the entries in the orientation_ranges object assume cartesian zones
 
             print(f"Automatically detected point group {pointgroup}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}.")
