@@ -681,15 +681,21 @@ class Crystal:
 
         # Handle the "auto" case first, since it works by overriding zone_axis_range,
         #   fiber_axis, and fiber_angles then using the regular parser:
-        if isinstance(zone_axis_range) and zone_axis_range == "auto":
+        if isinstance(zone_axis_range,str) and zone_axis_range == "auto":
             from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
             from pymatgen.core.structure import Structure
 
             structure = Structure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
 
             pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
+            self.pointgroup = pointgroup
+
+            assert pointgroup in orientation_ranges, "Unrecognized pointgroup returned by pymatgen!"
 
             zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
+            cartesian_directions = True # the entries in the orientation_ranges object assume cartesian zones
+
+            print(f"Automatically detected point group {pointgroup}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}.")
             
 
         if isinstance(zone_axis_range, str):
@@ -3022,38 +3028,40 @@ def atomic_colors(ID):
         79: np.array([1.0, 0.7, 0.0]),
     }.get(ID, np.array([0.0, 0.0, 0.0]))
 
-
+# zone axis range arguments for orientation_plan corresponding
+# to the symmetric wedge for each pointgroup, in the order:
+#   [zone_axis_range, fiber_axis, fiber_angles]
 orientation_ranges = {
-    '1': [],
-    '-1':[],
-    '2':[],
-    'm':[],
-    '2/m':[],
-    '222':[],
-    'mm2':[],
-    'mmm':[],
-    '4':[],
-    '-4':[],
-    '4/m':[],
-    '422':[],
-    '4mm':[],
-    '-42m':[],
-    '4/mmm':[],
-    '3':[],
-    '-3':[],
-    '32':[],
-    '3m':[],
-    '-3m':[],
-    '6':[],
-    '-6':[],
-    '6/m':[],
-    '622':[],
-    '6mm':[],
-    '-6m2':[],
-    '6/mmm':[],
-    '23':[],
-    'm-3':[],
-    '432':[],
-    '-43m':[],
-    'm-3m':[],
+    '1':    ['fiber', [0,0,1], [180., 360.]],
+    '-1':   ['full', None, None],
+    '2':    ['fiber', [0,0,1], [180., 180.]],
+    'm':    ['full', None, None],
+    '2/m':  ['half', None, None],
+    '222':  ['fiber', [0,0,1], [90., 180.]],
+    'mm2':  ['fiber', [0,0,1], [180., 90.]],
+    'mmm':  [[[1,0,0], [0,1,0]], None, None],
+    '4':    ['fiber', [0,0,1], [90., 180.]],
+    '-4':   ['half', None, None],
+    '4/m':  [[[1,0,0], [0,1,0]], None, None],
+    '422':  ['fiber', [0,0,1], [180., 45.]],
+    '4mm':  ['fiber', [0,0,1], [180., 45.]],
+    '-42m': ['fiber', [0,0,1], [180., 45.]],
+    '4/mmm':[[[1,0,0], [1,1,0]], None, None],
+    '3':    ['fiber', [0,0,1], [180., 120.]],
+    '-3':   ['fiber', [0,0,1], [180., 60.]],
+    '32':   ['fiber', [0,0,1], [90., 60.]],
+    '3m':   ['fiber', [0,0,1], [180., 60.]],
+    '-3m':  ['fiber', [0,0,1], [180., 30.]],
+    '6':    ['fiber', [0,0,1], [180., 60.]],
+    '-6':   ['fiber', [0,0,1], [180., 60.]],
+    '6/m':  [[[1,0,0],[0.5,np.sqrt(3)/2.,0]], None, None],
+    '622':  ['fiber', [0,0,1], [180., 30.]],
+    '6mm':  ['fiber', [0,0,1], [180., 30.]],
+    '-6m2': ['fiber', [0,0,1], [90., 60.]],
+    '6/mmm':[[[1,0,0],[np.sqrt(3)/2.,0.5,0.]], None, None],
+    '23':   [[[1,0,0], [1,1,1]], None, None], # this is probaly wrong, it is half the needed range
+    'm-3':  [[[1,0,0], [1,1,1]], None, None],
+    '432':  [[[1,0,0], [1,1,1]], None, None],
+    '-43m': [[[1,-1,1], [1,1,1]], None, None],
+    'm-3m': [[[0,1,1], [1,1,1]], None, None],
 }
