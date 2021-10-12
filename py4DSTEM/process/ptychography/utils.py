@@ -71,6 +71,7 @@ def aperture3(qx, qy, lam, alpha_max):
             qy (float, float, 1D): Qy components
             lam (float): wavelength in angstrom
             alpha_max (float): convergence semi-angle in rad
+
         Returns:
             bool, True if sqrt(qx**2 + qy**2) * lam < alpha_max
     """
@@ -92,6 +93,7 @@ def aperture_xp(qx, qy, lam, alpha_max, edge=2):
                 qy (float, float, 1D): Qy components
                 lam (float): wavelength in angstrom
                 alpha_max (float): convergence semi-angle in rad
+
             Returns:
                 bool, True if sqrt(qx**2 + qy**2) * lam < alpha_max
     """
@@ -121,6 +123,7 @@ def fftshift_checkerboard(w, h):
         Args:
             w (int): width of the array / 2
             h (int): height of the array / 2
+
         Returns:
             checkerboard array of size (w*2,h*2)
     """
@@ -237,11 +240,15 @@ def single_sideband_kernel_cartesian(G, strides, Qx_all, Qy_all, Kx_all, Ky_all,
     def chi3(qy, qx, lam, C):
         """
         Zernike polynomials in the cartesian coordinate system
-        :param qx:
-        :param qy:
-        :param lam: wavelength in Angstrom
-        :param C:   (12 ,)
-        :return:
+
+        Args:
+            qx (array, 2D float): 2D array of qx values
+            qy (array, 2D float): 2D array of qy values
+            lam (int): wavelength in Angstrom
+            C (array 1D, float): shape (12,)
+            
+        Returns:
+            checkerboard array of size (w*2,h*2)
         """
 
         u = qx * lam
