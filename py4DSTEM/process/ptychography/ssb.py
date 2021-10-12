@@ -129,6 +129,7 @@ def disk_overlap_kernel(gamma, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrati
             qy (float, float, 1D): Qy components
             lam (float): wavelength in angstrom
             alpha_max (float): convergence semi-angle in rad
+
         Returns:
             bool, True if sqrt(qx**2 + qy**2) * lam < alpha_max
         """
@@ -147,6 +148,7 @@ def disk_overlap_kernel(gamma, strides, Qx_all, Qy_all, Kx_all, Ky_all, aberrati
             qy (float, float, 1D): Qy components
             lam (float): wavelength in angstrom
             C (array, 1D): shape (12,) convergence semi-angle in rad
+
         Returns:
             phase of the aberration function at (qx,qy)
         """
@@ -240,6 +242,7 @@ def double_overlap_intensitities_in_range(G_max, thetas, Qx_max, Qy_max, Kx, Ky,
         aberrations (th.tensor, float, 1D): (12,) aberration coefficients
         alpha_rad (float): convergence semi-angle in rad
         lam (float): wavelength in angstrom
+
     Returns:
         (array, 1D) sum over double overlap intensities at STEM rotations given in thetas
     """
@@ -275,6 +278,7 @@ def find_rotation_angle_with_double_disk_overlap(G, lam, dx, dscan, alpha_rad, m
         verbose (bool): optional, talk to me or not
         manual_frequencies (list of 2-tuples): optional, indices into (NY, NX) that pick out spatial frequencies at which the G-function has bragg-peaks/maxima
         aberrations (th.tensor, float, 1D): (12,) aberration coefficients
+
     Returns:
         tuple (max_ind, thetas, intensities) max_ind: index into thetas and intensities that gives the maximum intensity in the double overlap sum --> the best STEM rotation angle
     """
