@@ -10,8 +10,6 @@ import numpy as np
 import numba as nb
 import h5py
 
-from ncempy.io import emd
-
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage_viewer as virtualimage
@@ -293,8 +291,7 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     if (mem, binfactor) == ("RAM", 1):
         data = np.array(g['data'])
     elif (mem, binfactor) == ("MEMMAP", 1):
-        emdF = emd.fileEMD(g.file.filename)
-        data, dims = emdF.get_memmap(0)
+        data = g['data']
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
 
