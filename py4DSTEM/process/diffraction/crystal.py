@@ -391,7 +391,7 @@ class Crystal:
             for i in range(self.g_vec_leng.shape[0]):
                 idx = np.argmin(np.abs(q_SF - self.g_vec_leng[i]))
                 I_SF[idx] += self.struct_factors_int[i]
-            I_SF /= np.max(I_SF)
+            I_SF = I_SF / np.max(I_SF)
 
             return (q_SF, I_SF)
 
@@ -1425,10 +1425,12 @@ class Crystal:
         else:
             label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
         label_0 = np.round(label_0, decimals=3)
-        label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0, decimals=3)
 
-        if self.orientation_fiber is False:
+        if self.orientation_fiber is False \
+            and self.orientation_full is False \
+            and self.orientation_half is False:
 
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
@@ -1437,7 +1439,7 @@ class Crystal:
                     self.orientation_zone_axis_range[1, :]
                 )
             label_1 = np.round(label_1 * 1e3) * 1e-3
-            label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+            label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
             label_1 = np.round(label_1 * 1e3) * 1e-3
 
             if self.cartesian_directions:
@@ -1448,7 +1450,7 @@ class Crystal:
                 )
 
             label_2 = np.round(label_2 * 1e3) * 1e-3
-            label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
             label_2 = np.round(label_2 * 1e3) * 1e-3
 
             inds = np.array(
@@ -1493,7 +1495,9 @@ class Crystal:
             ha="center",
             **text_params,
         )
-        if self.orientation_fiber is False:
+        if self.orientation_fiber is False \
+            and self.orientation_full is False \
+            and self.orientation_half is False:
             ax.text(
                 self.orientation_vecs[inds[1], 1] * text_scale_pos,
                 self.orientation_vecs[inds[1], 0] * text_scale_pos,
@@ -2308,15 +2312,15 @@ class Crystal:
 
                 label_0 = self.orientation_zone_axis_range[0, :]
                 label_0 = np.round(label_0 * 1e3) * 1e-3
-                label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+                label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
 
                 label_1 = self.orientation_zone_axis_range[1, :]
                 label_1 = np.round(label_1 * 1e3) * 1e-3
-                label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+                label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
 
                 label_2 = self.orientation_zone_axis_range[2, :]
                 label_2 = np.round(label_2 * 1e3) * 1e-3
-                label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+                label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
 
                 ax[0].set_xticks([0, self.orientation_zone_axis_steps])
                 ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
@@ -2822,15 +2826,15 @@ class Crystal:
 
         label_0 = self.orientation_zone_axis_range[0, :]
         label_0 = np.round(label_0 * 1e3) * 1e-3
-        label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
 
         label_1 = self.orientation_zone_axis_range[1, :]
         label_1 = np.round(label_1 * 1e3) * 1e-3
-        label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
 
         label_2 = self.orientation_zone_axis_range[2, :]
         label_2 = np.round(label_2 * 1e3) * 1e-3
-        label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+        label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
 
         ax[3].yaxis.tick_right()
         ax[3].set_yticks([(leg_size[0] - 1) / 2])
