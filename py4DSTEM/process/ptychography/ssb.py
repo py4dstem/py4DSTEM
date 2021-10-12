@@ -537,12 +537,22 @@ def single_sideband_reconstruction(G, Qx_all, Qy_all, Kx_all, Ky_all, aberration
               scanning transmission electron microscope. Ultramicroscopy 171, 117–125 (2016).
 
         Args:
-            dc: py4DSTEM datacube
+            G (th.tensor, float, 4D): (NY, NX, MY, MX) 4D tensor of disk overlap functions, the datacube fourier-transformed along the scan dimensions
+            Qx_all (th.tensor, float, 1D): Qx components
+            Qy_all (th.tensor, float, 1D): Qy components
+            Kx_all (th.tensor, float, 1D): Kx components
+            Ky_all (th.tensor, float, 1D): Ky components
+            aberrations (th.tensor, float, 1D): (12,) aberration coefficients
+            theta_rot (float): convergence semi-angle in rad
+            alpha_rad (float): convergence semi-angle in rad
+            Psi_Qp (th.tensor, float, 2D): (NY, NX) storage tensor for the resulting exit wave
+            Psi_Qp_left_sb (th.tensor, float, 2D): (NY, NX) storage tensor for the resulting exit wave, left sideband
+            Psi_Qp_right_sb (th.tensor, float, 2D): (NY, NX) storage tensor for the resulting exit wave, right sideband
+            eps (float): small value, typically 1e-3
+            lam (float): wavelength in angstrom
 
         Returns:
-            (Psi_Rp, Psi_Rp_left_sb, Psi_Rp_right_sb) in the provided variables
-            Psi_Rp is the result of method 1) and Psi_Rp_left_sb, Psi_Rp_right_sb are the results
-            of method 2)
+            None
         """
 
     xp = sp.backend.get_array_module(G)
