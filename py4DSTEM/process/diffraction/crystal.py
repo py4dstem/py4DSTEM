@@ -401,6 +401,7 @@ class Crystal:
         size_marker: float = 400,
         tol_distance: float = 0.001,
         plot_limit: Optional[np.ndarray] = None,
+        camera_dist: Optional[float] = False,
         show_axes: bool = False,
         figsize: Union[tuple, list, np.ndarray] = (8, 8),
         returnfig: bool = False,
@@ -414,6 +415,7 @@ class Crystal:
             tol_distance (float):       tolerance for repeating atoms on edges on cell boundaries
             plot_limit (float):         2x3 numpy array containing x y z plot min and max in columns.
                                         Default is 1.1* unit cell dimensions
+            camera_dist (float):        Move camera closer to the plot (relative to matplotlib default of 10)
             show_axes (bool):           Whether to plot axes or not
             figsize (2 element float):  size scaling of figure axes
             returnfig (bool):           set to True to return figure and axes handles
@@ -543,6 +545,9 @@ class Crystal:
         ax.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
         # ax.set_box_aspect((1, 1, 1))
         axisEqual3D(ax)
+
+        if camera_dist is not None:
+            ax.dist = camera_dist
 
         plt.show()
 
@@ -693,7 +698,9 @@ class Crystal:
             assert pointgroup in orientation_ranges, "Unrecognized pointgroup returned by pymatgen!"
 
             zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
-            if zone_axis_range == "fiber":
+            if isinstance(zone_axis_range, list):
+                zone_axis_range = np.array(zone_axis_range)
+            elif zone_axis_range == "fiber":
                 self.orientation_fiber_axis = np.asarray(fiber_axis)
                 self.orientation_fiber_angles = np.asarray(fiber_angles)
             self.cartesian_directions = True # the entries in the orientation_ranges object assume cartesian zones
