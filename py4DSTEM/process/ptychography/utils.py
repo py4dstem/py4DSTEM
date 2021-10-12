@@ -135,7 +135,7 @@ def fftshift_checkerboard(w, h):
 def fourier_coordinates_2D(N, dx=[1.0, 1.0], centered=True):
     """
         Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
-    	Specifying the pixelSize argument sets a unit size.
+        Specifying the pixelSize argument sets a unit size.
     """
     qxx = np.fft.fftfreq(N[1], dx[1])
     qyy = np.fft.fftfreq(N[0], dx[0])
@@ -156,7 +156,7 @@ def cartesian_aberrations_single(qx, qy, lam, C):
             lam (int): wavelength in Angstrom
             C (array 1D, float): shape (12,)
         Returns:
-            checkerboard array of size (w*2,h*2)
+            aberration surface chi on the grid given by (qx,qy)
     """
 
     u = qx * lam
@@ -246,9 +246,9 @@ def single_sideband_kernel_cartesian(G, strides, Qx_all, Qy_all, Kx_all, Ky_all,
             qy (array, 2D float): 2D array of qy values
             lam (int): wavelength in Angstrom
             C (array 1D, float): shape (12,)
-            
+
         Returns:
-            checkerboard array of size (w*2,h*2)
+            aberration surface chi on the grid given by (qx,qy)
         """
 
         u = qx * lam
