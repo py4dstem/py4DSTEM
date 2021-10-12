@@ -693,7 +693,9 @@ class Crystal:
             assert pointgroup in orientation_ranges, "Unrecognized pointgroup returned by pymatgen!"
 
             zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
-            zone_axis_range = np.array(zone_axis_range, dtype=np.float64)
+            if zone_axis_range == "fiber":
+                self.orientation_fiber_axis = np.asarray(fiber_axis)
+                self.orientation_fiber_angles = np.asarray(fiber_angles)
             self.cartesian_directions = True # the entries in the orientation_ranges object assume cartesian zones
 
             print(f"Automatically detected point group {pointgroup}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}.")
@@ -738,7 +740,12 @@ class Crystal:
                     ).astype("float")
                 else:
 
-                    theta = self.orientation_fiber_angles[0] * np.pi / 180.0
+                    if (
+                        self.orientation_fiber_angles[0] == 180
+                    ):
+                        theta = np.pi / 2.0
+                    else:
+                        theta = self.orientation_fiber_angles[0] * np.pi / 180.0
                     if (
                         self.orientation_fiber_angles[1] == 180
                         or self.orientation_fiber_angles[1] == 360
@@ -939,7 +946,42 @@ class Crystal:
                 self.orientation_inds[inds, 0] = a0
                 self.orientation_inds[inds, 1] = np.arange(a0 + 1)
 
-        # Fiber texture extend to 180 angular range if needed
+
+        if (
+            self.orientation_fiber
+            and self.orientation_fiber_angles[0] == 180
+        ):
+            # Mirror about the equator of fiber_zone_axis
+            m = np.identity(3) - 2 * (self.orientation_fiber_axis[:, None] @ self.orientation_fiber_axis[None, :])
+
+            vec_new = np.copy(self.orientation_vecs) @ m
+            orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
+
+            keep = np.zeros(vec_new.shape[0], dtype="bool")
+            for a0 in range(keep.size):
+                if (
+                    np.sqrt(
+                        np.min(
+                            np.sum(
+                                (self.orientation_vecs - vec_new[a0, :]) ** 2, axis=1
+                            )
+                        )
+                    )
+                    > tol_distance
+                ):
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep, :]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+            self.orientation_inds = np.vstack(
+                (self.orientation_inds, self.orientation_inds[keep, :])
+            ).astype("int")
+            self.orientation_inds[:, 2] = np.hstack(
+                (orientation_sector, np.ones(np.sum(keep), dtype="int"))
+            )
+
+        # Fiber texture angle 1 extend to 180 degree angular range if needed
         if (
             self.orientation_fiber
             and self.orientation_fiber_angles[0] != 0
