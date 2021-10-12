@@ -1442,6 +1442,8 @@ class Crystal:
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
             else:
+                print(5)
+
                 label_1 = self.cartesian_to_crystal(
                     self.orientation_zone_axis_range[1, :]
                 )
