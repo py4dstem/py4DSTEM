@@ -7,7 +7,6 @@ from py4DSTEM.io import DataCube
 
 if config.cupy_enabled:
     import cupy as cp
-
 import torch as th
 import numpy as np
 from numpy.fft import fftfreq, fftshift

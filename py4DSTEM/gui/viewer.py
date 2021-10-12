@@ -748,7 +748,7 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
-        x0,y0 = roi_state['pos']
+        y0,x0 = roi_state['pos']
         xc,yc = int(x0+1),int(y0+1)
 
         # Set the diffraction space image
@@ -771,7 +771,7 @@ class DataViewer(QtWidgets.QMainWindow):
                 self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
                     (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+            self.diffraction_space_widget.setImage(self.diffraction_space_view.T,
                                                    autoLevels=False,autoRange=False)
         else:
             pass
@@ -784,13 +784,13 @@ class DataViewer(QtWidgets.QMainWindow):
         if detector_shape == 0:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
 
                 #update the label:
                 self.diffraction_space_view_text.setText(
@@ -802,13 +802,13 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 1:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
@@ -816,7 +816,7 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 2:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
             slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
@@ -825,7 +825,7 @@ class DataViewer(QtWidgets.QMainWindow):
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y,R)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
