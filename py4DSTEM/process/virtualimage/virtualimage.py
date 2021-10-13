@@ -89,7 +89,6 @@ def get_virtualimage(
     datacube, 
     mask, 
     verbose=True,
-    return_mask_coords=False,
     ):
     """
     Get a virtual image using an arbitrary boolean mask
@@ -97,6 +96,7 @@ def get_virtualimage(
     Args:
         datacube (DataCube):    Input datacube with dimensions (R_Nx, R_Nx, Q_Nx, Q_Ny)
         mask (bool):            Mask with dimensions (Q_Nx, Q_Ny)
+        verbose (bool):         Use progress bar
 
     Returns:
         (2D array): the virtual image
@@ -113,7 +113,7 @@ def get_virtualimage(
     # Generate virtual image
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
     for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask_sub)
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax][mask_sub])
     
     return virtual_image
 
