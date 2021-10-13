@@ -85,7 +85,36 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
     return virtual_image
 
 
+def get_virtualimage(
+    datacube, 
+    mask, 
+    verbose=True,
+    ):
+    """
+    Get a virtual image using an arbitrary boolean mask
 
+    Args:
+        datacube (DataCube):    Input datacube with dimensions (R_Nx, R_Nx, Q_Nx, Q_Ny)
+        mask (bool):            Mask with dimensions (Q_Nx, Q_Ny)
+        verbose (bool):         Use progress bar
 
+    Returns:
+        (2D array): the virtual image
+    """
+    assert isinstance(datacube, DataCube)
+
+    # find range of True values in boolean mask
+    x = np.where(np.max(mask, axis=1))
+    y = np.where(np.max(mask, axis=0))
+    xmin, xmax = np.min(x), np.max(x)
+    ymin, ymax = np.min(y), np.max(y)
+    mask_sub = mask[xmin:xmax,ymin:ymax]
+
+    # Generate virtual image
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax][mask_sub])
+    
+    return virtual_image
 
 
