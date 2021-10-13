@@ -86,6 +86,37 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
 
 
 
+def get_virtualimage(datacube, mask, verbose=True):
+    """
+    Get a virtual image using an arbitrary boolean mask
+
+    Args:
+        datacube (DataCube):    Input datacube with dimensions (R_Nx, R_Nx, Q_Nx, Q_Ny)
+        mask (bool):            Mask with dimensions (Q_Nx, Q_Ny)
+
+    Returns:
+        (2D array): the virtual image
+    """
+    assert isinstance(datacube, DataCube)
+
+    
+    # assert Ro>Ri, "Inner radius must be smaller than outer radius"
+    # xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
+    # ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
+
+    # xsize,ysize = xmax-xmin,ymax-ymin
+    # x0_s,y0_s = x0-xmin,y0-ymin
+    # mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
+    # mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
+    # mask = np.logical_xor(mask_o,mask_i)
+
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
+    return virtual_image
+
+
+
 
 
 
