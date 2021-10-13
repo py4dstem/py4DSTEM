@@ -86,7 +86,12 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
 
 
 
-def get_virtualimage(datacube, mask, verbose=True):
+def get_virtualimage(
+    datacube, 
+    mask, 
+    verbose=True,
+    return_mask_coords=False,
+    ):
     """
     Get a virtual image using an arbitrary boolean mask
 
@@ -99,24 +104,52 @@ def get_virtualimage(datacube, mask, verbose=True):
     """
     assert isinstance(datacube, DataCube)
 
-    
-    # assert Ro>Ri, "Inner radius must be smaller than outer radius"
-    # xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
-    # ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
+    # Segment mask into rectangular regions
+    # Adapted from: https://stackoverflow.com/questions/2478447/find-largest-rectangle-containing-only-zeros-in-an-n%C3%97n-binary-matrix
+    # init arrays
+    w = np.zeros(dtype=int, shape=mask.shape)
+    h = np.zeros(dtype=int, shape=mask.shape)
+    coords = []
+    count = 0
+    mask_mark = ~mask.copy()
 
-    # xsize,ysize = xmax-xmin,ymax-ymin
-    # x0_s,y0_s = x0-xmin,y0-ymin
-    # mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
-    # mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
-    # mask = np.logical_xor(mask_o,mask_i)
+    while not np.all(mask_mark):
+        area_max = (0, [])
+        for r in range(mask.shape[0]):
+            for c in range(mask.shape[1]):
+                if mask_mark[r][c]:
+                    continue
+                if r == 0:
+                    h[r][c] = 1
+                else:
+                    h[r][c] = h[r-1][c]+1
+                if c == 0:
+                    w[r][c] = 1
+                else:
+                    w[r][c] = w[r][c-1]+1
+                minw = w[r][c]
+                for dh in range(h[r][c]):
+                    minw = min(minw, w[r-dh][c])
+                    area = (dh+1)*minw
+                    if area > area_max[0]:
+                        area_max = (area, [(r-dh, c-minw+1, r, c)])
 
+
+        mask_mark[ \
+            area_max[1][0][0]:area_max[1][0][2]+1,\
+            area_max[1][0][1]:area_max[1][0][3]+1] = True
+        coords.append(area_max[1][0])
+
+    # init virtual image
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
-    return virtual_image
 
-
-
-
+    # Generate virtual image
+    for c in tqdmnd(coords, disable=not verbose):
+        virtual_image += np.sum(datacube.data[:,:,c[0]:c[2]+1,c[1]:c[3]+1], axis=(2,3))
+    
+    if return_mask_coords:
+        return virtual_image, coords
+    else:
+        return virtual_image
 
 
