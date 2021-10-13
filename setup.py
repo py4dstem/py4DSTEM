@@ -17,7 +17,7 @@ setup(
     keywords="STEM 4DSTEM",
     python_requires='>=3.6',
     install_requires=[
-        'numpy == 1.19',
+        'numpy >= 1.19',
         'scipy == 1.5.2',
         'h5py == 2.10.0',
         'ncempy == 1.8.1',
