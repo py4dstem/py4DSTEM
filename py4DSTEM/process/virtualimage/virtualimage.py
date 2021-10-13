@@ -85,7 +85,6 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
     return virtual_image
 
 
-
 def get_virtualimage(
     datacube, 
     mask, 
@@ -104,52 +103,18 @@ def get_virtualimage(
     """
     assert isinstance(datacube, DataCube)
 
-    # Segment mask into rectangular regions
-    # Adapted from: https://stackoverflow.com/questions/2478447/find-largest-rectangle-containing-only-zeros-in-an-n%C3%97n-binary-matrix
-    # init arrays
-    w = np.zeros(dtype=int, shape=mask.shape)
-    h = np.zeros(dtype=int, shape=mask.shape)
-    coords = []
-    count = 0
-    mask_mark = ~mask.copy()
-
-    while not np.all(mask_mark):
-        area_max = (0, [])
-        for r in range(mask.shape[0]):
-            for c in range(mask.shape[1]):
-                if mask_mark[r][c]:
-                    continue
-                if r == 0:
-                    h[r][c] = 1
-                else:
-                    h[r][c] = h[r-1][c]+1
-                if c == 0:
-                    w[r][c] = 1
-                else:
-                    w[r][c] = w[r][c-1]+1
-                minw = w[r][c]
-                for dh in range(h[r][c]):
-                    minw = min(minw, w[r-dh][c])
-                    area = (dh+1)*minw
-                    if area > area_max[0]:
-                        area_max = (area, [(r-dh, c-minw+1, r, c)])
-
-
-        mask_mark[ \
-            area_max[1][0][0]:area_max[1][0][2]+1,\
-            area_max[1][0][1]:area_max[1][0][3]+1] = True
-        coords.append(area_max[1][0])
-
-    # init virtual image
-    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    # find range of True values in boolean mask
+    x = np.where(np.max(mask, axis=1))
+    y = np.where(np.max(mask, axis=0))
+    xmin, xmax = np.min(x), np.max(x)
+    ymin, ymax = np.min(y), np.max(y)
+    mask_sub = mask[xmin:xmax,ymin:ymax]
 
     # Generate virtual image
-    for c in tqdmnd(coords, disable=not verbose):
-        virtual_image += np.sum(datacube.data[:,:,c[0]:c[2]+1,c[1]:c[3]+1], axis=(2,3))
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask_sub)
     
-    if return_mask_coords:
-        return virtual_image, coords
-    else:
-        return virtual_image
+    return virtual_image
 
 
