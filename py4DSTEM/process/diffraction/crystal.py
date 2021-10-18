@@ -634,6 +634,8 @@ class Crystal:
         angle_step_in_plane: float = 2.0,
         accel_voltage: float = 300e3,
         corr_kernel_size: float = 0.08,
+        radial_power:float = 1.,
+        intensity_power:float = 0.5,
         tol_peak_delete = None,
         tol_distance: float = 0.01,
         fiber_axis=None,
@@ -660,6 +662,8 @@ class Crystal:
             angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
             accel_voltage (float):        Accelerating voltage for electrons [Volts]
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
+            radial_power (float):          Power for scaling the correlation intensity of each radial bin
+            intensity_power (float):       Power for scaling the intensity of structure factors
             tol_peak_delete (float):      Distance to delete peaks for multiple matches.
                                           Default is kernel_size * 0.5
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
@@ -683,6 +687,10 @@ class Crystal:
 
         # Calculate wavelenth
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+
+        # store the radial and intensity scaling to use later for generating test patterns
+        self.radial_power = radial_power
+        self.intensity_power = intensity_power
 
         # Handle the "auto" case first, since it works by overriding zone_axis_range,
         #   fiber_axis, and fiber_angles then using the regular parser:
@@ -1245,8 +1253,8 @@ class Crystal:
 
                 if ind_radial >= 0:
                     self.orientation_ref[a0, ind_radial, :] += (
-                        self.orientation_shell_radii[ind_radial]
-                        * np.sqrt(self.struct_factors_int[a1])
+                        np.power(self.orientation_shell_radii[ind_radial], radial_power)
+                        * np.power(self.struct_factors_int[a1], intensity_power)
                         * np.maximum(
                             1
                             - np.sqrt(
@@ -1771,8 +1779,8 @@ class Crystal:
 
                 if np.sum(sub) > 0:
                     im_polar[ind_radial, :] = np.sum(
-                        radius
-                        * np.sqrt(np.max(intensity[sub, None],0))
+                        np.power(radius,self.radial_power)
+                        * np.power(np.max(intensity[sub, None],0),self.intensity_power)
                         * np.maximum(
                             1
                             - np.sqrt(
