@@ -391,7 +391,7 @@ class Crystal:
             for i in range(self.g_vec_leng.shape[0]):
                 idx = np.argmin(np.abs(q_SF - self.g_vec_leng[i]))
                 I_SF[idx] += self.struct_factors_int[i]
-            I_SF /= np.max(I_SF)
+            I_SF = I_SF / np.max(I_SF)
 
             return (q_SF, I_SF)
 
@@ -401,6 +401,7 @@ class Crystal:
         size_marker: float = 400,
         tol_distance: float = 0.001,
         plot_limit: Optional[np.ndarray] = None,
+        camera_dist: Optional[float] = False,
         show_axes: bool = False,
         figsize: Union[tuple, list, np.ndarray] = (8, 8),
         returnfig: bool = False,
@@ -414,6 +415,7 @@ class Crystal:
             tol_distance (float):       tolerance for repeating atoms on edges on cell boundaries
             plot_limit (float):         2x3 numpy array containing x y z plot min and max in columns.
                                         Default is 1.1* unit cell dimensions
+            camera_dist (float):        Move camera closer to the plot (relative to matplotlib default of 10)
             show_axes (bool):           Whether to plot axes or not
             figsize (2 element float):  size scaling of figure axes
             returnfig (bool):           set to True to return figure and axes handles
@@ -543,6 +545,9 @@ class Crystal:
         ax.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
         # ax.set_box_aspect((1, 1, 1))
         axisEqual3D(ax)
+
+        if camera_dist is not None:
+            ax.dist = camera_dist
 
         plt.show()
 
@@ -693,7 +698,11 @@ class Crystal:
             assert pointgroup in orientation_ranges, "Unrecognized pointgroup returned by pymatgen!"
 
             zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
-            zone_axis_range = np.array(zone_axis_range, dtype=np.float64)
+            if isinstance(zone_axis_range, list):
+                zone_axis_range = np.array(zone_axis_range)
+            elif zone_axis_range == "fiber":
+                self.orientation_fiber_axis = np.asarray(fiber_axis)
+                self.orientation_fiber_angles = np.asarray(fiber_angles)
             self.cartesian_directions = True # the entries in the orientation_ranges object assume cartesian zones
 
             print(f"Automatically detected point group {pointgroup}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}.")
@@ -738,7 +747,12 @@ class Crystal:
                     ).astype("float")
                 else:
 
-                    theta = self.orientation_fiber_angles[0] * np.pi / 180.0
+                    if (
+                        self.orientation_fiber_angles[0] == 180
+                    ):
+                        theta = np.pi / 2.0
+                    else:
+                        theta = self.orientation_fiber_angles[0] * np.pi / 180.0
                     if (
                         self.orientation_fiber_angles[1] == 180
                         or self.orientation_fiber_angles[1] == 360
@@ -908,7 +922,13 @@ class Crystal:
                     )
                     p0_sub = p0 - p_proj
                     p1_sub = p1 - p_proj
-                    angle_p_sub = np.arccos(np.sum(p0_sub * p1_sub))
+
+                    # print(np.round(p0_sub,decimals=3),
+                    #     np.round(p1_sub,decimals=3))
+                    angle_p_sub = np.arccos(
+                        np.sum(p0_sub * p1_sub) \
+                        / np.linalg.norm(p0_sub) \
+                        / np.linalg.norm(p1_sub))
 
                     self.orientation_vecs[inds, :] = (
                         p_proj
@@ -933,7 +953,42 @@ class Crystal:
                 self.orientation_inds[inds, 0] = a0
                 self.orientation_inds[inds, 1] = np.arange(a0 + 1)
 
-        # Fiber texture extend to 180 angular range if needed
+
+        if (
+            self.orientation_fiber
+            and self.orientation_fiber_angles[0] == 180
+        ):
+            # Mirror about the equator of fiber_zone_axis
+            m = np.identity(3) - 2 * (self.orientation_fiber_axis[:, None] @ self.orientation_fiber_axis[None, :])
+
+            vec_new = np.copy(self.orientation_vecs) @ m
+            orientation_sector = np.zeros(vec_new.shape[0], dtype="int")
+
+            keep = np.zeros(vec_new.shape[0], dtype="bool")
+            for a0 in range(keep.size):
+                if (
+                    np.sqrt(
+                        np.min(
+                            np.sum(
+                                (self.orientation_vecs - vec_new[a0, :]) ** 2, axis=1
+                            )
+                        )
+                    )
+                    > tol_distance
+                ):
+                    keep[a0] = True
+
+            self.orientation_vecs = np.vstack((self.orientation_vecs, vec_new[keep, :]))
+            self.orientation_num_zones = self.orientation_vecs.shape[0]
+
+            self.orientation_inds = np.vstack(
+                (self.orientation_inds, self.orientation_inds[keep, :])
+            ).astype("int")
+            self.orientation_inds[:, 2] = np.hstack(
+                (orientation_sector, np.ones(np.sum(keep), dtype="int"))
+            )
+
+        # Fiber texture angle 1 extend to 180 degree angular range if needed
         if (
             self.orientation_fiber
             and self.orientation_fiber_angles[0] != 0
@@ -1372,16 +1427,22 @@ class Crystal:
         )
 
         # zone axis range labels
+        # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
         if self.cartesian_directions:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
             label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
         label_0 = np.round(label_0, decimals=3)
-        label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
         label_0 = np.round(label_0, decimals=3)
 
-        if self.orientation_fiber is False:
+        if self.orientation_fiber is False \
+            and self.orientation_full is False \
+            and self.orientation_half is False:
 
+            # label_1 = self.cartesian_to_crystal(
+            #     self.orientation_zone_axis_range[1, :]
+            #     )
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
             else:
@@ -1389,9 +1450,12 @@ class Crystal:
                     self.orientation_zone_axis_range[1, :]
                 )
             label_1 = np.round(label_1 * 1e3) * 1e-3
-            label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+            label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
             label_1 = np.round(label_1 * 1e3) * 1e-3
 
+            # label_2 = self.cartesian_to_crystal(
+            #     self.orientation_zone_axis_range[2, :]
+            # )
             if self.cartesian_directions:
                 label_2 = self.orientation_zone_axis_range[2, :]
             else:
@@ -1400,7 +1464,7 @@ class Crystal:
                 )
 
             label_2 = np.round(label_2 * 1e3) * 1e-3
-            label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
             label_2 = np.round(label_2 * 1e3) * 1e-3
 
             inds = np.array(
@@ -1445,7 +1509,9 @@ class Crystal:
             ha="center",
             **text_params,
         )
-        if self.orientation_fiber is False:
+        if self.orientation_fiber is False \
+            and self.orientation_full is False \
+            and self.orientation_half is False:
             ax.text(
                 self.orientation_vecs[inds[1], 1] * text_scale_pos,
                 self.orientation_vecs[inds[1], 0] * text_scale_pos,
@@ -2260,15 +2326,15 @@ class Crystal:
 
                 label_0 = self.orientation_zone_axis_range[0, :]
                 label_0 = np.round(label_0 * 1e3) * 1e-3
-                label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+                label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
 
                 label_1 = self.orientation_zone_axis_range[1, :]
                 label_1 = np.round(label_1 * 1e3) * 1e-3
-                label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+                label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
 
                 label_2 = self.orientation_zone_axis_range[2, :]
                 label_2 = np.round(label_2 * 1e3) * 1e-3
-                label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+                label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
 
                 ax[0].set_xticks([0, self.orientation_zone_axis_steps])
                 ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
@@ -2774,15 +2840,15 @@ class Crystal:
 
         label_0 = self.orientation_zone_axis_range[0, :]
         label_0 = np.round(label_0 * 1e3) * 1e-3
-        label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
+        label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
 
         label_1 = self.orientation_zone_axis_range[1, :]
         label_1 = np.round(label_1 * 1e3) * 1e-3
-        label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
 
         label_2 = self.orientation_zone_axis_range[2, :]
         label_2 = np.round(label_2 * 1e3) * 1e-3
-        label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
+        label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
 
         ax[3].yaxis.tick_right()
         ax[3].set_yticks([(leg_size[0] - 1) / 2])
@@ -3059,7 +3125,7 @@ orientation_ranges = {
     '622':  ['fiber', [0,0,1], [180., 30.]],
     '6mm':  ['fiber', [0,0,1], [180., 30.]],
     '-6m2': ['fiber', [0,0,1], [90., 60.]],
-    '6/mmm':[[[1,0,0],[np.sqrt(3)/2.,0.5,0.]], None, None],
+    '6/mmm':[[[np.sqrt(3)/2.,0.5,0.],[1,0,0]], None, None],
     '23':   [[[1,0,0], [1,1,1]], None, None], # this is probably wrong, it is half the needed range
     'm-3':  [[[1,0,0], [1,1,1]], None, None],
     '432':  [[[1,0,0], [1,1,1]], None, None],
