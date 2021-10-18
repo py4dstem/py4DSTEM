@@ -1427,6 +1427,7 @@ class Crystal:
         )
 
         # zone axis range labels
+        # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
         if self.cartesian_directions:
             label_0 = self.orientation_zone_axis_range[0, :]
         else:
@@ -1439,11 +1440,12 @@ class Crystal:
             and self.orientation_full is False \
             and self.orientation_half is False:
 
+            # label_1 = self.cartesian_to_crystal(
+            #     self.orientation_zone_axis_range[1, :]
+            #     )
             if self.cartesian_directions:
                 label_1 = self.orientation_zone_axis_range[1, :]
             else:
-                print(5)
-
                 label_1 = self.cartesian_to_crystal(
                     self.orientation_zone_axis_range[1, :]
                 )
@@ -1451,6 +1453,9 @@ class Crystal:
             label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
             label_1 = np.round(label_1 * 1e3) * 1e-3
 
+            # label_2 = self.cartesian_to_crystal(
+            #     self.orientation_zone_axis_range[2, :]
+            # )
             if self.cartesian_directions:
                 label_2 = self.orientation_zone_axis_range[2, :]
             else:
@@ -3120,7 +3125,7 @@ orientation_ranges = {
     '622':  ['fiber', [0,0,1], [180., 30.]],
     '6mm':  ['fiber', [0,0,1], [180., 30.]],
     '-6m2': ['fiber', [0,0,1], [90., 60.]],
-    '6/mmm':[[[1,0,0],[np.sqrt(3)/2.,0.5,0.]], None, None],
+    '6/mmm':[[[np.sqrt(3)/2.,0.5,0.],[1,0,0]], None, None],
     '23':   [[[1,0,0], [1,1,1]], None, None], # this is probably wrong, it is half the needed range
     'm-3':  [[[1,0,0], [1,1,1]], None, None],
     '432':  [[[1,0,0], [1,1,1]], None, None],
