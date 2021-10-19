@@ -2437,7 +2437,7 @@ class Crystal:
                                              Can also be a 3x3 orientation matrix (zone axis 3rd column)
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
 
