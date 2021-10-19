@@ -1754,8 +1754,6 @@ class Crystal:
             orientation_output = np.zeros((3, 3))
         else:
             orientation_output = np.zeros((3, 3, num_matches_return))
-
-            # r_del_2 = tol_peak_delete**2
             corr_output = np.zeros((num_matches_return))
 
         # loop over the number of matches to return
@@ -1777,7 +1775,7 @@ class Crystal:
                 dqr = np.abs(qr - radius)
                 sub = dqr < self.orientation_kernel_size
 
-                if np.sum(sub) > 0:
+                if np.any(sub):
                     im_polar[ind_radial, :] = np.sum(
                         np.power(radius,self.orientation_radial_power)
                         * np.power(np.max(intensity[sub, None],0),self.orientation_intensity_power)
@@ -2445,7 +2443,7 @@ class Crystal:
                                              Can also be a 3x3 orientation matrix (zone axis 3rd column)
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of Angstroms
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
 
