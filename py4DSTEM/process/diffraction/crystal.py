@@ -1746,8 +1746,6 @@ class Crystal:
             orientation_output = np.zeros((3, 3))
         else:
             orientation_output = np.zeros((3, 3, num_matches_return))
-
-            # r_del_2 = tol_peak_delete**2
             corr_output = np.zeros((num_matches_return))
 
         # loop over the number of matches to return
@@ -1769,7 +1767,7 @@ class Crystal:
                 dqr = np.abs(qr - radius)
                 sub = dqr < self.orientation_kernel_size
 
-                if np.sum(sub) > 0:
+                if np.any(sub):
                     im_polar[ind_radial, :] = np.sum(
                         radius
                         * np.sqrt(np.max(intensity[sub, None],0))
