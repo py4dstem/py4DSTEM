@@ -513,7 +513,7 @@ def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
     add_vector(ax2,dg2)
 
     if returnfig:
-        return g1,g2,fig,ax
+        return g1,g2,fig,(ax1,ax2)
     else:
         plt.show()
         return g1,g2

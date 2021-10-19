@@ -12,7 +12,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
 from numpy import nonzero
-from ..io.native import read_py4DSTEM, get_py4DSTEM_topgroups, get_py4DSTEM_version
+from ..io.native import read_py4DSTEM, get_py4DSTEM_topgroups, get_py4DSTEM_version, get_N_dataobjects
 import pyqtgraph as pg
 
 def datacube_selector(fp, data_id=0):
@@ -62,31 +62,6 @@ def datacube_selector(fp, data_id=0):
         return dc
     else:
         print("No datacubes found in this file.")
-
-
-def datacube_selector_dialog(fpath,window):
-    """
-    Presents the user with a dialog to choose one of the datacubes inside the file,
-    if more than one exists. Returns the selected DataCube object.
-    """
-    info = get_py4DSTEM_dataobject_info(fpath)
-    inds = np.nonzero(info['type']=='DataCube')[0]
-    N_dc = len(inds)
-
-    if N_dc == 1:
-        ind = inds[0]
-        dc = read_py4DSTEM(fpath, data_id=ind)
-    elif N_dc > 1:
-        # there is more than one object, so we need to present the user with a chooser
-        #indices = (self.dataobject_lookup_arr=='DataCube' | 
-        #    self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
-        print('More than one datacube detected...')
-        print('Pls harass developers to add support feature.')
-
-    return dc
-
-
-
 
 def sibling_path(fpath, fname):
     """
@@ -220,7 +195,7 @@ class LoggedQuantity(QtCore.QObject):
                 self.update_value(widget.text())
             widget.editingFinished.connect(on_edit_finished)
 
-        elif type(widget) == QtWidget.QLabel:
+        elif type(widget) == QtWidgets.QLabel:
             self.updated_value.connect(widget.setText)
 
         elif type(widget) == pg.widgets.SpinBox.SpinBox:
