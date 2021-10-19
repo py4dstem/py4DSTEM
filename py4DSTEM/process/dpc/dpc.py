@@ -393,7 +393,7 @@ def construct_illumation(shape, size, keV, aperture, ap_in_mrad=True,
 
     # Get diffraction space coordinates
     qsize = (float(Nx)/xsize,float(Ny)/ysize)
-    qx,qy = make_qspace_coords(shape, qsize)
+    qx, qy = np.meshgrid(np.fft.fftfreq(Nx, qsize[0]), np.fft.fftfreq(Ny, qsize[1]))
     qr = np.sqrt(qx**2 + qy**2)
 
     # Get electron wavenumber and aperture size
