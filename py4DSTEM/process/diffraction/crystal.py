@@ -1278,15 +1278,6 @@ class Crystal:
             self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
                 np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
             )
-            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / (
-            #     np.sum(self.orientation_ref[a0, :, :])
-            # )
-            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] - (
-            #     np.mean(self.orientation_ref[a0, :, :])
-            # )
-            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
-            #     np.sum(self.orientation_ref[a0, :, :] ** 2)
-            # )
 
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
@@ -1295,53 +1286,6 @@ class Crystal:
         # self.orientation_ref = np.fft.fft(self.orientation_ref)
         self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
-        # # plot the correlation normalization
-        # if plot_corr_norm is True:
-        #     # 2D correlation slice
-        #     im_corr_zone_axis = np.zeros(
-        #         (
-        #             self.orientation_zone_axis_steps + 1,
-        #             self.orientation_zone_axis_steps + 1,
-        #         )
-        #     )
-        #     for a0 in np.arange(self.orientation_zone_axis_steps + 1):
-        #         inds_val = np.arange(
-        #             a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1
-        #         ).astype(np.int)
-        #         im_corr_zone_axis[a0, range(a0 + 1)] = self.orientation_corr_norm[
-        #             inds_val
-        #         ]
-
-        #     # Zone axis
-        #     fig, ax = plt.subplots(figsize=figsize)
-        #     # cmin = np.min(self.orientation_corr_norm)
-        #     cmax = np.max(self.orientation_corr_norm)
-
-        #     # im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-        #     im_plot = im_corr_zone_axis / cmax
-
-        #     im = ax.imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-        #     fig.colorbar(im)
-
-        #     label_0 = self.orientation_zone_axis_range[0, :]
-        #     label_0 = np.round(label_0 * 1e3) * 1e-3
-        #     label_0 /= np.min(np.abs(label_0[np.abs(label_0) > 0]))
-
-        #     label_1 = self.orientation_zone_axis_range[1, :]
-        #     label_1 = np.round(label_1 * 1e3) * 1e-3
-        #     label_1 /= np.min(np.abs(label_1[np.abs(label_1) > 0]))
-
-        #     label_2 = self.orientation_zone_axis_range[2, :]
-        #     label_2 = np.round(label_2 * 1e3) * 1e-3
-        #     label_2 /= np.min(np.abs(label_2[np.abs(label_2) > 0]))
-
-        #     ax.set_yticks([0])
-        #     ax.set_yticklabels([str(label_0)])
-
-        #     ax.set_xticks([0, self.orientation_zone_axis_steps])
-        #     ax.set_xticklabels([str(label_1), str(label_2)])
-
-        #     plt.show()
 
     def plot_orientation_zones(
         self,
