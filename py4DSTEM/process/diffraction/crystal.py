@@ -931,8 +931,6 @@ class Crystal:
                     p0_sub = p0 - p_proj
                     p1_sub = p1 - p_proj
 
-                    # print(np.round(p0_sub,decimals=3),
-                    #     np.round(p1_sub,decimals=3))
                     angle_p_sub = np.arccos(
                         np.sum(p0_sub * p1_sub) \
                         / np.linalg.norm(p0_sub) \
@@ -1277,9 +1275,18 @@ class Crystal:
                     )
 
             # Normalization
-            self.orientation_ref[a0, :, :] /= np.sqrt(
-                np.sum(self.orientation_ref[a0, :, :] ** 2)
+            self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
+                np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
             )
+            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / (
+            #     np.sum(self.orientation_ref[a0, :, :])
+            # )
+            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] - (
+            #     np.mean(self.orientation_ref[a0, :, :])
+            # )
+            # self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
+            #     np.sum(self.orientation_ref[a0, :, :] ** 2)
+            # )
 
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
@@ -1723,6 +1730,7 @@ class Crystal:
         bragg_peaks: PointList,
         num_matches_return: int = 1,
         subpixel_tilt: bool = False,
+        plot_polar: bool = False,
         plot_corr: bool = False,
         plot_corr_3D: bool = False,
         return_corr: bool = False,
@@ -1737,6 +1745,7 @@ class Crystal:
             bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
             subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
+            plot_polar (bool):                  set to true to plot the polar transform of the diffraction pattern
             plot_corr (bool):                   set to true to plot the resulting correlogram
 
         Returns:
@@ -1810,6 +1819,10 @@ class Crystal:
                 ),
                 axis=1,
             )
+            # fig, ax = plt.subplots(1, 1, figsize=figsize)
+            # ax.imshow(corr_full)
+
+
             # Find best match for each zone axis
             ind_phi = np.argmax(corr_full, axis=1)
             # print(self.orientation_gamma*180./np.pi)
@@ -1824,13 +1837,21 @@ class Crystal:
                 c = corr_full[a0, inds]
 
                 if np.max(c) > 0:
-                    corr_value[a0] = c[1] + (c[0] - c[2]) ** 2 / (
-                        4 * (2 * c[1] - c[0] - c[2]) ** 2
-                    )
+                    # corr_value[a0] = c[1] + (c[0] - c[2]) ** 2 / (
+                    #     4 * (2 * c[1] - c[0] - c[2]) ** 2
+                    # )
                     dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
                     corr_in_plane_angle[a0] = (
                         self.orientation_gamma[ind_phi[a0]] + dc * dphi
                     )
+                    if dc == 0:
+                        corr_value[a0] = c[1]
+                    elif dc > 0:
+                        corr_value[a0] = c[1]*(1-dc) + c[2]*dc
+                    else:
+                        corr_value[a0] = c[1]*(1+dc) - c[0]*dc
+                    # print(np.round(c[1],decimals=3),np.round(corr_value[a0],decimals=3))
+
 
             # Determine the best fit orientation
             ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
@@ -2170,6 +2191,12 @@ class Crystal:
                 qx = qx[~remove]
                 qy = qy[~remove]
                 intensity = intensity[~remove]
+
+
+        # Plot polar space image
+        if plot_polar is True:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            ax.imshow(im_polar)
 
         # plotting correlation image
         if plot_corr is True:
