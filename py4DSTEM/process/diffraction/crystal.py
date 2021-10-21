@@ -636,6 +636,7 @@ class Crystal:
         corr_kernel_size: float = 0.08,
         radial_power:float = 1.,
         intensity_power:float = 0.5,
+        corr_2D_method = False,
         tol_peak_delete = None,
         tol_distance: float = 0.01,
         fiber_axis=None,
@@ -664,6 +665,7 @@ class Crystal:
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
             radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
             intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
+            corr_2D_method (bool):        Flag to enable the 2-step method for orientation matching.
             tol_peak_delete (float):      Distance to delete peaks for multiple matches.
                                           Default is kernel_size * 0.5
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
@@ -683,6 +685,7 @@ class Crystal:
             self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
         self.orientation_fiber_angles = np.asarray(fiber_angles)
+        self.orientation_corr_2D_method = corr_2D_method
         self.cartesian_directions = cartesian_directions
 
         # Calculate wavelenth
@@ -1196,6 +1199,8 @@ class Crystal:
             ),
             dtype="complex64",
         )
+        
+
 
         # Calculate rotation matrices for zone axes
         # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
@@ -1279,12 +1284,33 @@ class Crystal:
                 np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
             )
 
+
+        # initialize perpendicular orientation reference if needed
+        if self.orientation_corr_2D_method:
+            self.orientation_ref_perp = np.real(self.orientation_ref).astype("float64")
+            self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
+            self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
+            self.orientation_gamma_shift = -2j*np.pi* \
+                np.fft.fftfreq(self.orientation_in_plane_steps)
+
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
         # Fourier domain along angular axis
         # self.orientation_ref = np.fft.fft(self.orientation_ref)
         self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+
+        # Calculate perpendicular orientation reference if needed
+        if self.orientation_corr_2D_method:
+            for a0 in range(self.orientation_num_zones):
+                cos2_corr = np.sum(np.real(np.fft.ifft(
+                    self.orientation_ref[a0,:,:] * self.orientation_gamma_cos2_fft
+                )), axis=0)
+                ind_shift = np.argmax(cos2_corr)
+
+                self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
+                    * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                    * np.exp(self.orientation_gamma_shift*ind_shift)))
 
 
     def plot_orientation_zones(
@@ -1563,14 +1589,22 @@ class Crystal:
         )
 
         # Plot orientation plan
-        im_plot = np.real(
-            np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
-        ).astype("float")
-        im_plot = im_plot / self.orientation_ref_max
+        if self.orientation_corr_2D_method:
+            im_plot = np.vstack((
+                np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
+            ).astype("float"),
+                self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
+        else:
+            im_plot = np.real(
+                np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
+            ).astype("float") / self.orientation_ref_max
 
         # coordinates
         x = self.orientation_gamma * 180 / np.pi
-        y = np.arange(np.size(self.orientation_shell_radii))
+        if self.orientation_corr_2D_method:
+            y = np.arange(2*np.size(self.orientation_shell_radii))
+        else:
+            y = np.arange(np.size(self.orientation_shell_radii))
         dx = (x[1] - x[0]) / 2.0
         dy = (y[1] - y[0]) / 2.0
         extent = [x[0] - dx, x[-1] + dx, y[-1] + dy, y[0] - dy]
@@ -1588,6 +1622,11 @@ class Crystal:
         ax[1].xaxis.tick_top()
         ax[1].set_xticks(np.arange(0, 360 + 90, 90))
         ax[1].set_ylabel("Radial Index", size=20)
+        if self.orientation_corr_2D_method:
+            t0 = np.arange(0,np.size(self.orientation_shell_radii),10)
+            t1 = t0 + np.size(self.orientation_shell_radii)
+            ax[1].set_yticks(np.hstack((t0,t1)))
+            ax[1].set_yticklabels(np.hstack((t0,t0)))
 
         # Add text label
         zone_axis_fit = self.orientation_vecs[index_plot, :]
@@ -1597,7 +1636,7 @@ class Crystal:
         if scale > 0.14:
             zone_axis_fit = zone_axis_fit / scale
 
-        temp = np.round(zone_axis_fit * 1e2) / 1e2
+        temp = np.round(zone_axis_fit, decimals=2)
         ax[0].text(
             -k_x_y_range[0] * 0.95,
             -k_x_y_range[1] * 0.95,
