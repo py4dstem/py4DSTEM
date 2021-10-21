@@ -1284,15 +1284,6 @@ class Crystal:
                 np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
             )
 
-
-        # initialize perpendicular orientation reference if needed
-        if self.orientation_corr_2D_method:
-            self.orientation_ref_perp = np.real(self.orientation_ref).astype("float64")
-            self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
-            self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
-            self.orientation_gamma_shift = -2j*np.pi* \
-                np.fft.fftfreq(self.orientation_in_plane_steps)
-
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
@@ -1302,6 +1293,15 @@ class Crystal:
 
         # Calculate perpendicular orientation reference if needed
         if self.orientation_corr_2D_method:
+            self.orientation_ref_perp = np.real(np.fft.ifft(
+                self.orientation_ref)
+            ).astype("float64")
+            self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
+            self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
+            self.orientation_gamma_shift = 2j*np.pi* \
+                np.fft.fftfreq(self.orientation_in_plane_steps)
+
+            # if self.orientation_corr_2D_method:
             for a0 in range(self.orientation_num_zones):
                 cos2_corr = np.sum(np.real(np.fft.ifft(
                     self.orientation_ref[a0,:,:] * self.orientation_gamma_cos2_fft
@@ -1309,7 +1309,7 @@ class Crystal:
                 ind_shift = np.argmax(cos2_corr)
 
                 self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-                    * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                    * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft) \
                     * np.exp(self.orientation_gamma_shift*ind_shift)))
 
 
@@ -2108,7 +2108,9 @@ class Crystal:
                                 )
 
             # apply in-plane rotation
-            phi = corr_in_plane_angle[ind_best_fit]  # - np.pi/2
+            # phi = corr_in_plane_angle[ind_best_fit]  # - np.pi/2
+            phi = corr_in_plane_angle[ind_best_fit] 
+            # phi = 3*np.pi/2 + corr_in_plane_angle[ind_best_fit]  # - np.pi/2
             m3z = np.array(
                 [
                     [np.cos(phi), np.sin(phi), 0],
