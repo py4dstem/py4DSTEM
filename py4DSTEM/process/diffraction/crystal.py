@@ -1298,7 +1298,7 @@ class Crystal:
             ).astype("float64")
             self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
             self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
-            self.orientation_gamma_shift = 2j*np.pi* \
+            self.orientation_gamma_shift = -2j*np.pi* \
                 np.fft.fftfreq(self.orientation_in_plane_steps)
 
             # if self.orientation_corr_2D_method:
@@ -1309,8 +1309,8 @@ class Crystal:
                 ind_shift = np.argmax(cos2_corr)
 
                 self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-                    * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft) \
-                    * np.exp(self.orientation_gamma_shift*ind_shift)))
+                    * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                    * np.exp(self.orientation_gamma_shift*ind_shift))))
 
 
     def plot_orientation_zones(
