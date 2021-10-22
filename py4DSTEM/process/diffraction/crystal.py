@@ -1307,7 +1307,6 @@ class Crystal:
                     self.orientation_ref[a0,:,:] * self.orientation_gamma_cos2_fft
                 )), axis=0)
                 ind_shift = np.argmax(cos2_corr)
-
                 self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
                     * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
                     * np.exp(self.orientation_gamma_shift*ind_shift))))
@@ -1795,30 +1794,66 @@ class Crystal:
                         axis=0,
                     )
 
-            # Calculate orientation correlogram
-            corr_full = np.sum(
-                np.real(
-                    np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None, :, :]))
-                ),
-                axis=1,
-            )
-            # fig, ax = plt.subplots(1, 1, figsize=figsize)
-            # ax.imshow(corr_full)
+            # Calculate orientation correlogram(s)
+            if self.orientation_corr_2D_method:
+                # If 2D method is being used, calculate perpendicular correlogram
+                im_polar_fft = np.fft.fft(im_polar[None, :, :])
+                corr_full = np.maximum(np.sum(
+                    np.real(
+                        np.fft.ifft(self.orientation_ref * im_polar_fft)
+                    ),
+                    axis=1,
+                ),0)
+                corr_full_perp = np.maximum(np.sum(
+                    np.real(
+                        np.fft.ifft(self.orientation_ref_perp * im_polar_fft)
+                    ),
+                    axis=1,
+                ),0)
+                # corr_full = np.minimum(corr_full - corr_full_perp, corr_full_perp)
+                corr_full = (corr_full - corr_full_perp)* corr_full_perp
+                # corr_full_par = corr_full - corr_full_perp
+                # mask = corr_full != 0 
+                # corr_full[mask] = corr_full_perp[mask] * corr_full_par[mask] \
+                #     / (corr_full_perp[mask] + corr_full_par[mask])
+
+                # # corr_full = corr_full_perp * corr_full_par \
+                # #     / (corr_full_perp + corr_full_par + np.eps)
 
 
-            # Find best match for each zone axis
+            else:
+                # Otherwise compute regular orientation correlogram
+                corr_full = np.maximum(np.sum(
+                    np.real(
+                        np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None, :, :]))
+                    ),
+                    axis=1,
+                ),0)
+
+            # init for matching each zone axis
             ind_phi = np.argmax(corr_full, axis=1)
-            # print(self.orientation_gamma*180./np.pi)
             corr_value = np.zeros(self.orientation_num_zones)
             corr_in_plane_angle = np.zeros(self.orientation_num_zones)
             dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
 
+            # Find best match for each zone axis
             for a0 in range(self.orientation_num_zones):
+                # if self.orientation_corr_2D_method:
+                #     corr_value[a0] = corr_full_2D[a0,ind_phi[a0]]
+                # else:
+                # Use highest in-plane rotation correlation value as correlation score
+                corr_value[a0] = corr_full[a0,ind_phi[a0]]
+
+
+                # Subpixel shift of the in-plane rotation using quadratic fit
                 inds = np.mod(
                     ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
                 ).astype("int")
-                c = corr_full[a0, inds]
 
+                # if self.orientation_corr_2D_method:
+                #     c = corr_full_2D[a0, inds]
+                # else:
+                c = corr_full[a0, inds]
                 if np.max(c) > 0:
                     # corr_value[a0] = c[1] + (c[0] - c[2]) ** 2 / (
                     #     4 * (2 * c[1] - c[0] - c[2]) ** 2
@@ -1827,12 +1862,12 @@ class Crystal:
                     corr_in_plane_angle[a0] = (
                         self.orientation_gamma[ind_phi[a0]] + dc * dphi
                     )
-                    if dc == 0:
-                        corr_value[a0] = c[1]
-                    elif dc > 0:
-                        corr_value[a0] = c[1]*(1-dc) + c[2]*dc
-                    else:
-                        corr_value[a0] = c[1]*(1+dc) - c[0]*dc
+                    # if dc == 0:
+                    #     corr_value[a0] = c[1]
+                    # elif dc > 0:
+                    #     corr_value[a0] = c[1]*(1-dc) + c[2]*dc
+                    # else:
+                    #     corr_value[a0] = c[1]*(1+dc) - c[0]*dc
                     # print(np.round(c[1],decimals=3),np.round(corr_value[a0],decimals=3))
 
 
