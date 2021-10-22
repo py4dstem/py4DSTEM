@@ -636,7 +636,6 @@ class Crystal:
         corr_kernel_size: float = 0.08,
         radial_power:float = 1.,
         intensity_power:float = 0.5,
-        corr_2D_method = False,
         tol_peak_delete = None,
         tol_distance: float = 0.01,
         fiber_axis=None,
@@ -665,7 +664,6 @@ class Crystal:
             corr_kernel_size (float):        Correlation kernel size length in Angstroms
             radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
             intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
-            corr_2D_method (bool):        Flag to enable the 2-step method for orientation matching.
             tol_peak_delete (float):      Distance to delete peaks for multiple matches.
                                           Default is kernel_size * 0.5
             tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
@@ -685,7 +683,6 @@ class Crystal:
             self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
         self.orientation_fiber_axis = np.asarray(fiber_axis)
         self.orientation_fiber_angles = np.asarray(fiber_angles)
-        self.orientation_corr_2D_method = corr_2D_method
         self.cartesian_directions = cartesian_directions
 
         # Calculate wavelenth
@@ -1287,40 +1284,44 @@ class Crystal:
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
-        
-
-        # Calculate perpendicular orientation reference if needed
-        if self.orientation_corr_2D_method:
-            # self.orientation_ref_perp = np.real(np.fft.ifft(
-            #     self.orientation_ref)
-            # ).astype("complex64")
-            self.orientation_ref_perp = self.orientation_ref.copy()
-
-            self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
-            self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
-            self.orientation_gamma_shift = -2j*np.pi* \
-                np.fft.fftfreq(self.orientation_in_plane_steps)
-
-            # if self.orientation_corr_2D_method:
-            for a0 in range(self.orientation_num_zones):
-                cos2_corr = np.sum(np.real(np.fft.ifft(
-                    np.fft.fft(self.orientation_ref[a0,:,:]) * self.orientation_gamma_cos2_fft
-                )), axis=0)
-                ind_shift = np.argmax(cos2_corr)
-                # self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-                #     * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-                #     * np.exp(self.orientation_gamma_shift*ind_shift))))
-                self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-                    * (1-np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-                    * np.exp(self.orientation_gamma_shift*ind_shift))))
-
-
-            self.orientation_ref_perp = np.conj(np.fft.fft(self.orientation_ref_perp))
-
-
         # Fourier domain along angular axis
-        # self.orientation_ref = np.fft.fft(self.orientation_ref)
         self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+       
+        # Init vectors for the 2D corr method
+        self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
+        self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
+        self.orientation_gamma_shift = -2j*np.pi* \
+            np.fft.fftfreq(self.orientation_in_plane_steps)
+
+        # # Calculate perpendicular orientation reference if needed
+        # if self.orientation_corr_2D_method:
+        #     # self.orientation_ref_perp = np.real(np.fft.ifft(
+        #     #     self.orientation_ref)
+        #     # ).astype("complex64")
+        #     # self.orientation_ref_perp = self.orientation_ref.copy()
+
+        #     self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
+        #     self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
+        #     self.orientation_gamma_shift = -2j*np.pi* \
+        #         np.fft.fftfreq(self.orientation_in_plane_steps)
+
+            # # if self.orientation_corr_2D_method:
+            # for a0 in range(self.orientation_num_zones):
+            #     cos2_corr = np.sum(np.real(np.fft.ifft(
+            #         np.fft.fft(self.orientation_ref[a0,:,:]) * self.orientation_gamma_cos2_fft
+            #     )), axis=0)
+            #     ind_shift = np.argmax(cos2_corr)
+            #     # self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
+            #     #     * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+            #     #     * np.exp(self.orientation_gamma_shift*ind_shift))))
+            #     self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
+            #         * (1-np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+            #         * np.exp(self.orientation_gamma_shift*ind_shift))))
+
+
+            # self.orientation_ref_perp = np.conj(np.fft.fft(self.orientation_ref_perp))
+
+
 
 
 
@@ -1600,28 +1601,28 @@ class Crystal:
         )
 
         # Plot orientation plan
-        if self.orientation_corr_2D_method:
-            im_plot = np.vstack((
-                np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
-            ).astype("float"),
-                np.real(np.fft.ifft(self.orientation_ref_perp[index_plot, :, :], axis=1)
-            ).astype("float"))) / self.orientation_ref_max
+        # if self.orientation_corr_2D_method:
+        #     im_plot = np.vstack((
+        #         np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
+        #     ).astype("float"),
+        #         np.real(np.fft.ifft(self.orientation_ref_perp[index_plot, :, :], axis=1)
+        #     ).astype("float"))) / self.orientation_ref_max
 
-            # im_plot = np.vstack((
-            #     np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
-            # ).astype("float"),
-            #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
-        else:
-            im_plot = np.real(
-                np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
-            ).astype("float") / self.orientation_ref_max
+        #     # im_plot = np.vstack((
+        #     #     np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
+        #     # ).astype("float"),
+        #     #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
+        # else:
+        im_plot = np.real(
+            np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
+        ).astype("float") / self.orientation_ref_max
 
         # coordinates
         x = self.orientation_gamma * 180 / np.pi
-        if self.orientation_corr_2D_method:
-            y = np.arange(2*np.size(self.orientation_shell_radii))
-        else:
-            y = np.arange(np.size(self.orientation_shell_radii))
+        # if self.orientation_corr_2D_method:
+        #     y = np.arange(2*np.size(self.orientation_shell_radii))
+        # else:
+        y = np.arange(np.size(self.orientation_shell_radii))
         dx = (x[1] - x[0]) / 2.0
         dy = (y[1] - y[0]) / 2.0
         extent = [x[0] - dx, x[-1] + dx, y[-1] + dy, y[0] - dy]
@@ -1639,11 +1640,11 @@ class Crystal:
         ax[1].xaxis.tick_top()
         ax[1].set_xticks(np.arange(0, 360 + 90, 90))
         ax[1].set_ylabel("Radial Index", size=20)
-        if self.orientation_corr_2D_method:
-            t0 = np.arange(0,np.size(self.orientation_shell_radii),10)
-            t1 = t0 + np.size(self.orientation_shell_radii)
-            ax[1].set_yticks(np.hstack((t0,t1)))
-            ax[1].set_yticklabels(np.hstack((t0,t0)))
+        # if self.orientation_corr_2D_method:
+        #     t0 = np.arange(0,np.size(self.orientation_shell_radii),10)
+        #     t1 = t0 + np.size(self.orientation_shell_radii)
+        #     ax[1].set_yticks(np.hstack((t0,t1)))
+        #     ax[1].set_yticklabels(np.hstack((t0,t0)))
 
         # Add text label
         zone_axis_fit = self.orientation_vecs[index_plot, :]
@@ -1672,6 +1673,7 @@ class Crystal:
         self,
         bragg_peaks_array: PointListArray,
         num_matches_return: int = 1,
+        corr_2D_method = False,
         return_corr: bool = False,
         subpixel_tilt: bool = False,
     ):
@@ -1704,6 +1706,7 @@ class Crystal:
                     bragg_peaks,
                     subpixel_tilt=subpixel_tilt,
                     num_matches_return=num_matches_return,
+                    corr_2D_method=corr_2D_method,
                     plot_corr=False,
                     plot_corr_3D=False,
                     return_corr=True,
@@ -1729,6 +1732,7 @@ class Crystal:
         self,
         bragg_peaks: PointList,
         num_matches_return: int = 1,
+        corr_2D_method = False,
         subpixel_tilt: bool = False,
         plot_polar: bool = False,
         plot_corr: bool = False,
@@ -1742,11 +1746,12 @@ class Crystal:
         Solve for the best fit orientation of a single diffraction pattern.
 
         Args:
-            bragg_peaks (PointList):            numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-            num_matches_return (int):           return these many matches as 3th dim of orient (matrix)
-            subpixel_tilt (bool):               set to false for faster matching, returning the nearest corr point
-            plot_polar (bool):                  set to true to plot the polar transform of the diffraction pattern
-            plot_corr (bool):                   set to true to plot the resulting correlogram
+            bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+            num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
+            corr_2D_method (bool):        flag to enable the 2-step method for orientation matching.
+            subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
+            plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
+            plot_corr (bool):             set to true to plot the resulting correlogram
 
         Returns:
             orientation_output (3x3xN float)    orienation matrix where zone axis is the 3rd column, 3rd dim for multiple matches
@@ -1813,43 +1818,43 @@ class Crystal:
                     )
 
             # Calculate orientation correlogram(s)
-            if self.orientation_corr_2D_method:
-                # If 2D method is being used, calculate perpendicular correlogram
-                im_polar_fft = np.fft.fft(im_polar[None, :, :])
+            if corr_2D_method:
                 corr_full = np.sum(
                     np.real(
-                        np.fft.ifft(self.orientation_ref * im_polar_fft)
+                        np.fft.ifft(self.orientation_ref 
+                            * np.fft.fft(im_polar[None, :, :]))
                     ),
                     axis=1,
                 )
-                corr_full_perp = np.sum(
+
+                cos2_corr = np.sum(np.real(np.fft.ifft(
+                    np.fft.fft(im_polar) * self.orientation_gamma_cos2_fft
+                )), axis=0)
+                ind_shift = np.argmax(cos2_corr)
+                im_polar_cos = im_polar \
+                    * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                    * np.exp(self.orientation_gamma_shift*ind_shift)))
+
+                corr_cos = np.sum(
                     np.real(
-                        np.fft.ifft(self.orientation_ref_perp * im_polar_fft)
+                        np.fft.ifft(self.orientation_ref 
+                            * np.fft.fft(im_polar_cos[None, :, :]))
                     ),
                     axis=1,
                 )
-                # corr_full_2D = (corr_full - corr_full_perp) * corr_full_perp
-                corr_full = (corr_full - corr_full_perp) 
+
+                # corr_full = np.power(np.maximum(corr_cos,0),1) \
+                #     * np.power(np.maximum(corr_full - corr_cos,0),1)
 
 
-                # corr_full = np.power(np.maximum(corr_full - corr_full_perp,0), 0.5) \
-                #     * np.power(np.maximum(corr_full_perp,0), 0.5)
-
-
-                # corr_full = np.power(
-                #     np.power(corr_full - corr_full_perp, -4) + np.power(corr_full_perp, -4), -0.25)
-
-
-                # corr_full = np.minimum(corr_full - corr_full_perp, corr_full_perp)
-                # corr_full_par = corr_full - corr_full_perp
-                # mask = corr_full != 0 
-                # corr_full[mask] = corr_full_perp[mask] * corr_full_par[mask] \
-                #     / (corr_full_perp[mask] + corr_full_par[mask])
-
-                # # corr_full = corr_full_perp * corr_full_par \
-                # #     / (corr_full_perp + corr_full_par + np.eps)
-
-
+                corr_sin = corr_full - corr_cos
+                corr_full = corr_cos * corr_sin
+                # 2D correlation method
+                # corr_full_= corr_cos * corr_sin
+                # corr_full = np.power(corr_cos,0.5) * np.power(corr_sin,0.5)
+                # corr_full = np.minimum(corr_cos, corr_sin)
+                # mask = corr_full != 0
+                # corr_full[mask] = corr_cos[mask] * corr_sin[mask] / corr_full[mask]
             else:
                 # Otherwise compute regular orientation correlogram
                 corr_full = np.maximum(np.sum(
@@ -1872,9 +1877,9 @@ class Crystal:
                 # else:
                 # Use highest in-plane rotation correlation value as correlation score
                 corr_value[a0] = corr_full[a0,ind_phi[a0]]
+ 
 
-
-                # if self.orientation_corr_2D_method:
+                # if corr_2D_method:
                 #     corr_value[a0] = corr_full_2D[a0,ind_phi[a0]]
                 # else:
                 #     corr_value[a0] = corr_full[a0,ind_phi[a0]]
@@ -2626,6 +2631,7 @@ class Crystal:
         keep_int = g_int > tol_intensity
 
         # Diffracted peak locations
+        # scale = 1/cos_alpha[keep]
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
         gx_proj = np.sum(g_diff[:, keep_int] * kx_proj[:, None], axis=0)
