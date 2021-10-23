@@ -1674,7 +1674,7 @@ class Crystal:
         self,
         bragg_peaks_array: PointListArray,
         num_matches_return: int = 1,
-        corr_2D_method = False,
+        inversion_symmetry = True,
         return_corr: bool = False,
         subpixel_tilt: bool = False,
     ):
@@ -1707,7 +1707,7 @@ class Crystal:
                     bragg_peaks,
                     subpixel_tilt=subpixel_tilt,
                     num_matches_return=num_matches_return,
-                    corr_2D_method=corr_2D_method,
+                    inversion_symmetry = inversion_symmetry,
                     plot_corr=False,
                     plot_corr_3D=False,
                     return_corr=True,
@@ -1733,7 +1733,7 @@ class Crystal:
         self,
         bragg_peaks: PointList,
         num_matches_return: int = 1,
-        corr_2D_method = False,
+        inversion_symmetry = True,
         subpixel_tilt: bool = False,
         plot_polar: bool = False,
         plot_corr: bool = False,
@@ -1749,7 +1749,7 @@ class Crystal:
         Args:
             bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
             num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
-            corr_2D_method (bool):        flag to enable the 2-step method for orientation matching.
+            inversion_symmetry (bool):    check for inversion symmetry in the matches
             subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
             plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
             plot_corr (bool):             set to true to plot the resulting correlogram
@@ -1818,46 +1818,12 @@ class Crystal:
                         axis=0,
                     )
 
-            # # Calculate orientation correlogram(s)
-            # if corr_2D_method:
-            #     corr_full = np.sum(
-            #         np.real(
-            #             np.fft.ifft(self.orientation_ref 
-            #                 * np.fft.fft(im_polar[None, :, :]))
-            #         ),
-            #         axis=1,
-            #     )
+            # init
+            dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
+            corr_value = np.zeros(self.orientation_num_zones)
+            corr_in_plane_angle = np.zeros(self.orientation_num_zones)
 
-            #     cos2_corr = np.sum(np.real(np.fft.ifft(
-            #         np.fft.fft(im_polar) * self.orientation_gamma_cos2_fft
-            #     )), axis=0)
-            #     ind_shift = np.argmax(cos2_corr)
-            #     im_polar_cos = im_polar \
-            #         * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-            #         * np.exp(self.orientation_gamma_shift*-ind_shift)))
-
-            #     corr_cos = np.sum(
-            #         np.real(
-            #             np.fft.ifft(self.orientation_ref 
-            #                 * np.fft.fft(im_polar_cos[None, :, :]))
-            #         ),
-            #         axis=1,
-            #     )
-
-            #     # corr_full = np.power(np.maximum(corr_cos,0),1) \
-            #     #     * np.power(np.maximum(corr_full - corr_cos,0),1)
-
-
-            #     corr_sin = corr_full - corr_cos
-            #     corr_full = corr_cos * corr_sin
-            #     # 2D correlation method
-            #     # corr_full_= corr_cos * corr_sin
-            #     # corr_full = np.power(corr_cos,0.5) * np.power(corr_sin,0.5)
-            #     # corr_full = np.minimum(corr_cos, corr_sin)
-            #     # mask = corr_full != 0
-            #     # corr_full[mask] = corr_cos[mask] * corr_sin[mask] / corr_full[mask]
-            # else:
-            #     # Otherwise compute regular orientation correlogram
+            # Calculate orientation correlogram
             im_polar_fft = np.fft.fft(im_polar)
             corr_full = np.maximum(np.sum(
                 np.real(
@@ -1865,68 +1831,52 @@ class Crystal:
                 ),
                 axis=1,
             ),0)
-
-            # init for matching each zone axis
             ind_phi = np.argmax(corr_full, axis=1)
-            corr_value = np.zeros(self.orientation_num_zones)
-            corr_in_plane_angle = np.zeros(self.orientation_num_zones)
-            dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
+
+            # Calculate orientation correlogram for inverse pattern
+            if inversion_symmetry:
+                corr_full_inv = np.maximum(np.sum(
+                    np.real(
+                        np.fft.ifft(self.orientation_ref * np.conj(im_polar_fft)[None, :, :])
+                    ),
+                    axis=1,
+                ),0)
+                ind_phi_inv = np.argmax(corr_full_inv, axis=1)
+                corr_inv = np.zeros(self.orientation_num_zones, dtype='bool')
 
             # Find best match for each zone axis
             for a0 in range(self.orientation_num_zones):
                 # Correlation score
-                corr_value[a0] = corr_full[a0,ind_phi[a0]]
+                if inversion_symmetry:
+                    if corr_full_inv[a0,ind_phi_inv[a0]] > corr_full[a0,ind_phi[a0]]:
+                        corr_value[a0] = corr_full_inv[a0,ind_phi_inv[a0]]
+                        corr_inv[a0] = True
+                    else:
+                        corr_value[a0] = corr_full[a0,ind_phi[a0]]
+                else:
+                    corr_value[a0] = corr_full[a0,ind_phi[a0]]
 
                 # Subpixel angular fit
-                inds = np.mod(
-                    ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
-                ).astype("int")
-                c = corr_full[a0, inds]
-                if np.max(c) > 0:
-                    dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
-                    corr_in_plane_angle[a0] = (
-                        self.orientation_gamma[ind_phi[a0]] + dc * dphi
-                    )
-                
-
-                # if corr_2D_method:
-                #     ind_shift = ind_phi[a0] + dc
-                #     im_corr = im_polar \
-                #         * np.real(np.fft.ifft(np.conj(self.orientation_ref[a0,:,:]) \
-                #         * np.exp(self.orientation_gamma_shift*ind_shift)))
-                #     corr_sig = np.sum(im_corr)
-
-                #     # Find primary correlation axis and resulting correlation signal
-                #     ind_shift = np.argmax(
-                #         np.sum(np.real(np.fft.ifft(
-                #             np.fft.fft(im_corr) * self.orientation_gamma_cos2_fft
-                #         )), axis=0)
-                #     )
-                #     im_corr_mask = im_corr \
-                #         * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-                #         * np.exp(self.orientation_gamma_shift*ind_shift)))
-                #     corr_sig_cos = np.sum(im_corr_mask)
-
-                #     # 2D scoring function
-                #     # print(a0,np.round(corr_sig_cos/corr_sig*100,decimals=2))
-
-                #     corr_value[a0] = np.maximum(corr_sig_cos, 0) \
-                #         * np.maximum(corr_sig - corr_sig_cos, 0)
-
-
-                #     # corr_value[a0] = corr_sig
-                #     # corr_value[a0] = corr_full[a0,ind_phi[a0]]
-
-
-                # else:
-                    # corr_value[a0] = corr_full[a0,ind_phi[a0]]
-
-
-
-            # fig,ax = plt.subplots(1,1,figsize=(8,8))
-            # # ax.imshow(im_corr_shift)
-            # ax.imshow(np.vstack((im_corr ,im_corr_mask)))
-
+                if inversion_symmetry and corr_inv[a0]:
+                    inds = np.mod(
+                        ind_phi_inv[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full_inv[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi_inv[a0]] + dc * dphi
+                        )
+                else:
+                    inds = np.mod(
+                        ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi[a0]] + dc * dphi
+                        )
 
             # Determine the best fit orientation
             ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
@@ -2199,18 +2149,39 @@ class Crystal:
                                     * -dx
                                 )
 
-            # apply in-plane rotation
-            # phi = corr_in_plane_angle[ind_best_fit]  # - np.pi/2
-            phi = corr_in_plane_angle[ind_best_fit] 
-            # phi = 3*np.pi/2 + corr_in_plane_angle[ind_best_fit]  # - np.pi/2
-            m3z = np.array(
-                [
-                    [np.cos(phi), np.sin(phi), 0],
-                    [-np.sin(phi), np.cos(phi), 0],
-                    [0, 0, 1],
-                ]
-            )
+            # apply in-plane rotation, and inversion if needed
+            if inversion_symmetry and corr_inv[ind_best_fit]:
+                phi = corr_in_plane_angle[ind_best_fit] 
+                m3z = np.array(
+                    [
+                        [np.cos(phi), np.sin(phi), 0],
+                        [-np.sin(phi), np.cos(phi), 0],
+                        [0, 0, -1],
+                    ]
+                )
+            else:
+                phi = corr_in_plane_angle[ind_best_fit]
+                m3z = np.array(
+                    [
+                        [np.cos(phi), np.sin(phi), 0],
+                        [-np.sin(phi), np.cos(phi), 0],
+                        [0, 0, 1],
+                    ]
+                )
             orientation_matrix = orientation_matrix @ m3z
+            # if inversion_symmetry and corr_inv[ind_best_fit]:
+            #     orientation_matrix = np.linalg.inv(np.linalg.inv(orientation_matrix) 
+            #         @ np.array([
+            #         [1,0,0],
+            #         [0,-1,0],
+            #         [0,0,-1],
+            #     ])@ np.array([
+            #         [-1,0,0],
+            #         [0,-1,0],
+            #         [0,0,1],
+            #     ]))
+            #     print(np.round(orientation_matrix,decimals=2))
+   
 
             # Output the orientation matrix
             if num_matches_return == 1:
