@@ -1580,6 +1580,7 @@ class Crystal:
             index_plot = np.argmin(
                 np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
             )
+            print('Orientation plan index ' + str(index_plot))
 
         # initialize figure
         fig, ax = plt.subplots(1, 2, figsize=figsize)
@@ -1817,52 +1818,53 @@ class Crystal:
                         axis=0,
                     )
 
-            # Calculate orientation correlogram(s)
-            if corr_2D_method:
-                corr_full = np.sum(
-                    np.real(
-                        np.fft.ifft(self.orientation_ref 
-                            * np.fft.fft(im_polar[None, :, :]))
-                    ),
-                    axis=1,
-                )
+            # # Calculate orientation correlogram(s)
+            # if corr_2D_method:
+            #     corr_full = np.sum(
+            #         np.real(
+            #             np.fft.ifft(self.orientation_ref 
+            #                 * np.fft.fft(im_polar[None, :, :]))
+            #         ),
+            #         axis=1,
+            #     )
 
-                cos2_corr = np.sum(np.real(np.fft.ifft(
-                    np.fft.fft(im_polar) * self.orientation_gamma_cos2_fft
-                )), axis=0)
-                ind_shift = np.argmax(cos2_corr)
-                im_polar_cos = im_polar \
-                    * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-                    * np.exp(self.orientation_gamma_shift*ind_shift)))
+            #     cos2_corr = np.sum(np.real(np.fft.ifft(
+            #         np.fft.fft(im_polar) * self.orientation_gamma_cos2_fft
+            #     )), axis=0)
+            #     ind_shift = np.argmax(cos2_corr)
+            #     im_polar_cos = im_polar \
+            #         * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+            #         * np.exp(self.orientation_gamma_shift*-ind_shift)))
 
-                corr_cos = np.sum(
-                    np.real(
-                        np.fft.ifft(self.orientation_ref 
-                            * np.fft.fft(im_polar_cos[None, :, :]))
-                    ),
-                    axis=1,
-                )
+            #     corr_cos = np.sum(
+            #         np.real(
+            #             np.fft.ifft(self.orientation_ref 
+            #                 * np.fft.fft(im_polar_cos[None, :, :]))
+            #         ),
+            #         axis=1,
+            #     )
 
-                # corr_full = np.power(np.maximum(corr_cos,0),1) \
-                #     * np.power(np.maximum(corr_full - corr_cos,0),1)
+            #     # corr_full = np.power(np.maximum(corr_cos,0),1) \
+            #     #     * np.power(np.maximum(corr_full - corr_cos,0),1)
 
 
-                corr_sin = corr_full - corr_cos
-                corr_full = corr_cos * corr_sin
-                # 2D correlation method
-                # corr_full_= corr_cos * corr_sin
-                # corr_full = np.power(corr_cos,0.5) * np.power(corr_sin,0.5)
-                # corr_full = np.minimum(corr_cos, corr_sin)
-                # mask = corr_full != 0
-                # corr_full[mask] = corr_cos[mask] * corr_sin[mask] / corr_full[mask]
-            else:
-                # Otherwise compute regular orientation correlogram
-                corr_full = np.maximum(np.sum(
-                    np.real(
-                        np.fft.ifft(self.orientation_ref * np.fft.fft(im_polar[None, :, :]))
-                    ),
-                    axis=1,
-                ),0)
+            #     corr_sin = corr_full - corr_cos
+            #     corr_full = corr_cos * corr_sin
+            #     # 2D correlation method
+            #     # corr_full_= corr_cos * corr_sin
+            #     # corr_full = np.power(corr_cos,0.5) * np.power(corr_sin,0.5)
+            #     # corr_full = np.minimum(corr_cos, corr_sin)
+            #     # mask = corr_full != 0
+            #     # corr_full[mask] = corr_cos[mask] * corr_sin[mask] / corr_full[mask]
+            # else:
+            #     # Otherwise compute regular orientation correlogram
+            im_polar_fft = np.fft.fft(im_polar)
+            corr_full = np.maximum(np.sum(
+                np.real(
+                    np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])
+                ),
+                axis=1,
+            ),0)
 
             # init for matching each zone axis
             ind_phi = np.argmax(corr_full, axis=1)
@@ -1872,43 +1874,58 @@ class Crystal:
 
             # Find best match for each zone axis
             for a0 in range(self.orientation_num_zones):
-                # if self.orientation_corr_2D_method:
-                #     corr_value[a0] = corr_full_2D[a0,ind_phi[a0]]
-                # else:
-                # Use highest in-plane rotation correlation value as correlation score
+                # Correlation score
                 corr_value[a0] = corr_full[a0,ind_phi[a0]]
- 
 
-                # if corr_2D_method:
-                #     corr_value[a0] = corr_full_2D[a0,ind_phi[a0]]
-                # else:
-                #     corr_value[a0] = corr_full[a0,ind_phi[a0]]
-
-
-                # Subpixel shift of the in-plane rotation using quadratic fit
+                # Subpixel angular fit
                 inds = np.mod(
                     ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
                 ).astype("int")
-
-                # if self.orientation_corr_2D_method:
-                #     c = corr_full_2D[a0, inds]
-                # else:
                 c = corr_full[a0, inds]
                 if np.max(c) > 0:
-                    # corr_value[a0] = c[1] + (c[0] - c[2]) ** 2 / (
-                    #     4 * (2 * c[1] - c[0] - c[2]) ** 2
-                    # )
                     dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
                     corr_in_plane_angle[a0] = (
                         self.orientation_gamma[ind_phi[a0]] + dc * dphi
                     )
-                    # if dc == 0:
-                    #     corr_value[a0] = c[1]
-                    # elif dc > 0:
-                    #     corr_value[a0] = c[1]*(1-dc) + c[2]*dc
-                    # else:
-                    #     corr_value[a0] = c[1]*(1+dc) - c[0]*dc
-                    # print(np.round(c[1],decimals=3),np.round(corr_value[a0],decimals=3))
+                
+
+                # if corr_2D_method:
+                #     ind_shift = ind_phi[a0] + dc
+                #     im_corr = im_polar \
+                #         * np.real(np.fft.ifft(np.conj(self.orientation_ref[a0,:,:]) \
+                #         * np.exp(self.orientation_gamma_shift*ind_shift)))
+                #     corr_sig = np.sum(im_corr)
+
+                #     # Find primary correlation axis and resulting correlation signal
+                #     ind_shift = np.argmax(
+                #         np.sum(np.real(np.fft.ifft(
+                #             np.fft.fft(im_corr) * self.orientation_gamma_cos2_fft
+                #         )), axis=0)
+                #     )
+                #     im_corr_mask = im_corr \
+                #         * np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                #         * np.exp(self.orientation_gamma_shift*ind_shift)))
+                #     corr_sig_cos = np.sum(im_corr_mask)
+
+                #     # 2D scoring function
+                #     # print(a0,np.round(corr_sig_cos/corr_sig*100,decimals=2))
+
+                #     corr_value[a0] = np.maximum(corr_sig_cos, 0) \
+                #         * np.maximum(corr_sig - corr_sig_cos, 0)
+
+
+                #     # corr_value[a0] = corr_sig
+                #     # corr_value[a0] = corr_full[a0,ind_phi[a0]]
+
+
+                # else:
+                    # corr_value[a0] = corr_full[a0,ind_phi[a0]]
+
+
+
+            # fig,ax = plt.subplots(1,1,figsize=(8,8))
+            # # ax.imshow(im_corr_shift)
+            # ax.imshow(np.vstack((im_corr ,im_corr_mask)))
 
 
             # Determine the best fit orientation
@@ -2437,9 +2454,14 @@ class Crystal:
                 ax[0].set_yticklabels([str(label_1)], size=14)
 
             # In-plane rotation
+            # ax[1].plot(
+            #     self.orientation_gamma * 180 / np.pi,
+            #     (np.squeeze(corr_full[ind_best_fit, :]) - cmin) / (cmax - cmin),
+            # )
+            sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
             ax[1].plot(
                 self.orientation_gamma * 180 / np.pi,
-                (np.squeeze(corr_full[ind_best_fit, :]) - cmin) / (cmax - cmin),
+                sig_in_plane / np.max(sig_in_plane),
             )
             ax[1].set_xlabel("In-plane rotation angle [deg]", size=16)
             ax[1].set_ylabel("Corr. of Best Fit Zone Axis", size=16)
