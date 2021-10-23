@@ -1734,6 +1734,7 @@ class Crystal:
         bragg_peaks: PointList,
         num_matches_return: int = 1,
         inversion_symmetry = True,
+        corr_2D_method = False,
         subpixel_tilt: bool = False,
         plot_polar: bool = False,
         plot_corr: bool = False,
@@ -1818,13 +1819,28 @@ class Crystal:
                         axis=0,
                     )
 
+            # FFT along theta
+            im_polar_fft = np.fft.fft(im_polar)
+
+            # 2D correlation method
+            if corr_2D_method:
+                cos2_corr = np.sum(np.real(np.fft.ifft(
+                    im_polar_fft * self.orientation_gamma_cos2_fft
+                )), axis=0)
+                ind_shift = np.argmax(cos2_corr)
+                gamma_cos_shift = np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
+                    * np.exp(self.orientation_gamma_shift*ind_shift)))
+
+                im_polar_cos = im_polar * gamma_cos_shift
+                im_polar_sin = im_polar * (1-gamma_cos_shift)
+                im_polar = im_polar_cos + im_polar_sin * (np.sum(im_polar_cos) / np.sum(im_polar_sin))
+
             # init
             dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
             corr_value = np.zeros(self.orientation_num_zones)
             corr_in_plane_angle = np.zeros(self.orientation_num_zones)
 
             # Calculate orientation correlogram
-            im_polar_fft = np.fft.fft(im_polar)
             corr_full = np.maximum(np.sum(
                 np.real(
                     np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])
