@@ -642,6 +642,7 @@ class Crystal:
         fiber_angles=None,
         cartesian_directions=False,
         figsize: Union[list, tuple, np.ndarray] = (6, 6),
+        progress_bar: bool = True
     ):
         # plot_corr_norm: bool = False,  # option removed due to new normalization
 
@@ -672,6 +673,7 @@ class Crystal:
             cartesian_directions (bool): When set to true, all zone axes and projection directions
                                          are specified in Cartesian directions.
             figsize (float):            (2,) vector giving the figure size
+            progress_bar (bool):    If false no progress bar is displayed
         """
 
         # Store inputs
@@ -1228,6 +1230,7 @@ class Crystal:
             np.arange(self.orientation_num_zones),
             desc="Orientation plan",
             unit=" zone axes",
+            disable=progress_bar
         ):
             p = (
                 np.linalg.inv(self.orientation_rotation_matrices[a0, :, :])
@@ -1677,6 +1680,7 @@ class Crystal:
         inversion_symmetry = True,
         return_corr: bool = False,
         subpixel_tilt: bool = False,
+        progress_bar: bool = True
     ):
 
         if num_matches_return == 1:
@@ -1695,7 +1699,7 @@ class Crystal:
                 )
 
         for rx, ry in tqdmnd(
-            *bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList"
+            *bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList", disable=progress_bar
         ):
             bragg_peaks = bragg_peaks_array.get_pointlist(rx, ry)
 
