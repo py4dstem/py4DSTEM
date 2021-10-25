@@ -348,7 +348,7 @@ def get_origin_brightest_disk(
 
     return qx0_ar, qy0_ar
 
-def get_origin_single_dp_beamstop(dp,**kwargs):
+def get_origin_single_dp_beamstop(DP,mask):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
