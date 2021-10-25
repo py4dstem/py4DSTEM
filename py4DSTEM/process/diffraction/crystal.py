@@ -1675,6 +1675,7 @@ class Crystal:
         bragg_peaks_array: PointListArray,
         num_matches_return: int = 1,
         inversion_symmetry = True,
+        multiple_corr_reset = True,
         return_corr: bool = False,
         subpixel_tilt: bool = False,
     ):
@@ -1708,6 +1709,7 @@ class Crystal:
                     subpixel_tilt=subpixel_tilt,
                     num_matches_return=num_matches_return,
                     inversion_symmetry = inversion_symmetry,
+                    multiple_corr_reset = multiple_corr_reset,
                     plot_corr=False,
                     plot_corr_3D=False,
                     return_corr=True,
