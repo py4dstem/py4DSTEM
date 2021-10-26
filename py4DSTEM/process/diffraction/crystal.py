@@ -1230,7 +1230,7 @@ class Crystal:
             np.arange(self.orientation_num_zones),
             desc="Orientation plan",
             unit=" zone axes",
-            disable=progress_bar
+            disable=not progress_bar
         ):
             p = (
                 np.linalg.inv(self.orientation_rotation_matrices[a0, :, :])
@@ -1699,7 +1699,7 @@ class Crystal:
                 )
 
         for rx, ry in tqdmnd(
-            *bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList", disable=progress_bar
+            *bragg_peaks_array.shape, desc="Matching Orientations", unit=" PointList", disable=not progress_bar
         ):
             bragg_peaks = bragg_peaks_array.get_pointlist(rx, ry)
 
