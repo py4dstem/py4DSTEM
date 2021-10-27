@@ -15,7 +15,7 @@ setup(
     author_email='ben.savitzky@gmail.com',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
         'numpy >= 1.19',
         'scipy >= 1.5.2',
@@ -37,6 +37,7 @@ setup(
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
         'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0', 'dill >= 0.3.3'],
         'cuda': ['cupy'],
+        'acom': ['pymatgen'],
         },
     entry_points={
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']

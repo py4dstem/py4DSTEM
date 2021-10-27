@@ -8,3 +8,4 @@ from . import classification
 from . import dpc
 from . import rdf
 from . import virtualimage
+from . import diffraction
