@@ -401,7 +401,7 @@ class Crystal:
         size_marker: float = 400,
         tol_distance: float = 0.001,
         plot_limit: Optional[np.ndarray] = None,
-        camera_dist: Optional[float] = False,
+        camera_dist: Optional[float] = None,
         show_axes: bool = False,
         figsize: Union[tuple, list, np.ndarray] = (8, 8),
         returnfig: bool = False,
