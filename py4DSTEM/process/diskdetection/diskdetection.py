@@ -629,7 +629,7 @@ def find_Bragg_disks(datacube, probe,
 
 
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak,
-                         minPeakSpcing, maxNumPeaks):
+                         minPeakSpacing, maxNumPeaks):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional thresholding,
     returning the thresholded PointListArray. To skip a threshold, set that parameter to
