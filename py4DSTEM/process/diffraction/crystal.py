@@ -401,7 +401,7 @@ class Crystal:
         size_marker: float = 400,
         tol_distance: float = 0.001,
         plot_limit: Optional[np.ndarray] = None,
-        camera_dist: Optional[float] = False,
+        camera_dist: Optional[float] = None,
         show_axes: bool = False,
         figsize: Union[tuple, list, np.ndarray] = (8, 8),
         returnfig: bool = False,
@@ -506,10 +506,6 @@ class Crystal:
             alpha=0.2,
         )
         ax.add_collection(pc)
-
-        # # small shift of coordinates towards camera
-        # d = -0.0 * proj_dir / np.linalg.norm(proj_dir)
-        # print(d)
 
         # atoms
         ID_all = np.unique(ID)
