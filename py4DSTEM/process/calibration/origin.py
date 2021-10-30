@@ -411,23 +411,27 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
 
 def fit_origin(
-    qx0_meas,
-    qy0_meas,
+    data,
     mask=None,
     fitfunction="plane",
-    returnfitp=False,
     robust=False,
     robust_steps=3,
     robust_thresh=2,
+    return_ans=False,
+    returnfitp=False
 ):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
-    masked by the Boolean array `mask`.
+    masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
+    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Coordinates
+    instance, they will be retreived automatically. If a DataCube or Coordinates are
+    passed, fitted origin and residuals are stored there directly.
 
     Args:
-        qx0_meas (2d array): measured origin x-position
-        qy0_meas (2d array): measured origin y-position
+        data (DataCube or Coordinates or 2-tuple of arrays): if a 2-tuple, these are the
+            measured origin positions; otherwise, must be a DataCube or Coordinates
+            containing them
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp (bool, optional): if True, returns the fit parameters
@@ -440,19 +444,31 @@ def fit_origin(
             fitting.
 
     Returns:
-        (variable): Return value depends on returnfitp. If ``returnfitp==False``
-        (default), returns a 4-tuple containing:
+        (variable): Return value depends on return_ans and returnfitp. If both are False
+        (default), returns nothing. If ``return_ans==True`` and ``returnfitp==False``,
+        returns a 4-tuple containing:
 
             * **qx0_fit**: *(ndarray)* the fit origin x-position
             * **qy0_fit**: *(ndarray)* the fit origin y-position
             * **qx0_residuals**: *(ndarray)* the x-position fit residuals
             * **qy0_residuals**: *(ndarray)* the y-position fit residuals
 
-        If ``returnfitp==True``, returns a 2-tuple.  The first element is the 4-tuple
-        described above.  The second element is a 4-tuple (popt_x,popt_y,pcov_x,pcov_y)
-        giving fit parameters and covariance matrices with respect to the chosen
-        fitting function.
+        If ``return_ans==False`` and ``returnfitp==True``, returns a 4-tuplr containing
+        (popt_x,popt_y,pcov_x,pcov_y).
+
+        If both are True, returns a 2-tuple containing both of the aforementioned
+        4-tuples, in the order written above.
     """
+    if isinstance(data,tuple):
+        assert len(data)==2
+        qx0_meas,qy0_meas = data
+    elif isinstance(data,DataCube):
+        qx0_meas,qy0_meas = data.coordinates.get_origin_meas()
+    elif isinstance(data,Coordinates):
+        qx_meas,qy_meas = data.get_origin_meas()
+    else:
+        raise Exception("data must be of type Datacube or Coordinates or tuple")
+
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
@@ -507,9 +523,18 @@ def fit_origin(
     qy0_residuals = qy0_meas - qy0_fit
 
     # Return
-    if not returnfitp:
+    if isinstance(data,DataCube):
+        data.coordinates.set_origin(qx0_fit,qy0_fit)
+        data.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
+    elif isinstance(data,Coordinates):
+        data.set_origin(qx0_fit,qy0_fit)
+        data.set_origin_residuals(qx0_residuals,qy0_residuals)
+
+    if return_ans and not returnfitp:
         return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
-    else:
+    elif not return_ans and returnfitp:
+        return (popt_x,popt_y,pcov_x,pcov_y)
+    elif return_ans and returnfitp:
         return (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals), (
             popt_x,
             popt_y,
