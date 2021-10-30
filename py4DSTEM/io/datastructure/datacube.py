@@ -11,6 +11,7 @@ import numba as nb
 import h5py
 
 from .dataobject import DataObject
+from .coordinates import Coordinates
 from ...process import preprocess
 from ...process import virtualimage_viewer as virtualimage
 from ...process.utils import tqdmnd, bin2D
@@ -43,8 +44,11 @@ class DataCube(DataObject):
             self.Q_Nx = data.shape[2]  #: diffraction space x pixels
             self.Q_Ny = data.shape[3]  #: diffraction space y pixels
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
-
         self.update_slice_parsers()
+
+        # Initialize coordinates
+        self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
+
         # Set shape
         # TODO: look for shape in metadata
         # TODO: AND/OR look for R_Nx... in kwargs
@@ -65,6 +69,8 @@ class DataCube(DataObject):
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
+        self.coordinates.R_Nx = self.R_Nx
+        self.coordinates.R_Ny = self.R_Ny
 
     def swap_RQ(self):
         """
@@ -72,6 +78,10 @@ class DataCube(DataObject):
         """
         self = preprocess.swap_RQ(self)
         self.update_slice_parsers()
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
+        self.coordinates.R_Nx = self.R_Nx
+        self.coordinates.R_Ny = self.R_Ny
 
     def swap_Rxy(self):
         """
@@ -79,28 +89,44 @@ class DataCube(DataObject):
         """
         self = preprocess.swap_Rxy(self)
         self.update_slice_parsers()
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
+        self.coordinates.R_Nx = self.R_Nx
+        self.coordinates.R_Ny = self.R_Ny
 
     def swap_Qxy(self):
         """
         Swap reciprocal space x and y coordinates.
         """
         self = preprocess.swap_Qxy(self)
+        Q_Nx,Q_Ny = self.coordinates.Q_Nx,self.coordinates.Q_Ny
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
 
     def crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
         self = preprocess.crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
 
     def crop_data_real(self,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max):
         self = preprocess.crop_data_real(self,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max)
+        self.coordinates.R_Nx = self.R_Nx
+        self.coordinates.R_Ny = self.R_Ny
 
     def bin_data_diffraction(self, bin_factor):
         self = preprocess.bin_data_diffraction(self, bin_factor)
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
 
     def bin_data_mmap(self, bin_factor, dtype=np.float32):
         self = preprocess.bin_data_mmap(self, bin_factor, dtype=dtype)
+        self.coordinates.Q_Nx = self.Q_Nx
+        self.coordinates.Q_Ny = self.Q_Ny
 
     def bin_data_real(self, bin_factor):
         self = preprocess.bin_data_real(self, bin_factor)
-
+        self.coordinates.R_Nx = self.R_Nx
+        self.coordinates.R_Ny = self.R_Ny
 
 
     ################ Slice data #################
