@@ -102,6 +102,12 @@ class Coordinates(DataObject):
     def set_qy0_meas(self,qy0_meas):
         self._validate_input(qy0_meas)
         self.qy0_meas = qy0_meas
+    def set_qx0_residuals(self,qx0_residuals):
+        self._validate_input(qx0_residuals)
+        self.qx0_residuals = qx0_residuals
+    def set_qy0_residuals(self,qy0_residuals):
+        self._validate_input(qy0_residuals)
+        self.qy0_residuals = qy0_residuals
     def set_origin(self,qx0,qy0):
         self._validate_input(qx0)
         self._validate_input(qy0)
@@ -110,6 +116,10 @@ class Coordinates(DataObject):
         self._validate_input(qx0_meas)
         self._validate_input(qy0_meas)
         self.qx0_meas,self.qy0_meas = qx0_meas,qy0_meas
+    def set_origin_residuals(self,qx0_residuals,qy0_residuals):
+        self._validate_input(qx0_residuals)
+        self._validate_input(qy0_residuals)
+        self.qx0_residuals,self.qy0_residuals = qx0_residuals,qy0_residuals
     def set_e(self,e):
         self._validate_input(e)
         self.e = e
@@ -151,10 +161,16 @@ class Coordinates(DataObject):
         return self._get_value(self.qx0_meas,rx,ry)
     def get_qy0_meas(self,rx=None,ry=None):
         return self._get_value(self.qy0_meas,rx,ry)
+    def get_qx0_residuals(self,rx=None,ry=None):
+        return self._get_value(self.qx0_residuals,rx,ry)
+    def get_qy0_residuals(self,rx=None,ry=None):
+        return self._get_value(self.qy0_residuals,rx,ry)
     def get_origin(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
     def get_origin_meas(self,rx=None,ry=None):
         return self.get_qx0_meas(rx,ry),self.get_qy0_meas(rx,ry)
+    def get_origin_residuals(self,rx=None,ry=None):
+        return self.get_qx0_residuals(rx,ry),self.get_qy0_residuals(rx,ry)
     def get_e(self,rx=None,ry=None):
         return self._get_value(self.e,rx,ry)
     def get_theta(self,rx=None,ry=None):
