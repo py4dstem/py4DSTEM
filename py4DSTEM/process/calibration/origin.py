@@ -88,7 +88,7 @@ def get_origin_single_dp(dp, r, rscale=1.2):
     return qx0, qy0
 
 
-def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
+def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None, return_ans=False):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity
@@ -113,7 +113,8 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
                     arrays are returned for qx0,qy0
 
     Returns:
-        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
+        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): if return_ans is True, returns the
+            origin, (x,y) at each scan position
     """
     if r is None:
         if dp_max is None:
@@ -167,7 +168,9 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
             else:
                 qx0.mask, qy0.mask = True, True
 
-    return qx0, qy0
+    datacube.coordinates.set_origin_meas(qx0,qy0)
+    if return_ans:
+        return qx0, qy0
 
 
 def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=None):
