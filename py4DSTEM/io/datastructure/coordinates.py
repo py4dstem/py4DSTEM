@@ -147,8 +147,14 @@ class Coordinates(DataObject):
         return self._get_value(self.qx0,rx,ry)
     def get_qy0(self,rx=None,ry=None):
         return self._get_value(self.qy0,rx,ry)
+    def get_qx0_meas(self,rx=None,ry=None):
+        return self._get_value(self.qx0_meas,rx,ry)
+    def get_qy0_meas(self,rx=None,ry=None):
+        return self._get_value(self.qy0_meas,rx,ry)
     def get_origin(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
+    def get_origin_meas(self,rx=None,ry=None):
+        return self.get_qx0_meas(rx,ry),self.get_qy0_meas(rx,ry)
     def get_e(self,rx=None,ry=None):
         return self._get_value(self.e,rx,ry)
     def get_theta(self,rx=None,ry=None):
