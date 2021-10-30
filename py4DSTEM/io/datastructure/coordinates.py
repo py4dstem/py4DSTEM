@@ -96,10 +96,20 @@ class Coordinates(DataObject):
     def set_qy0(self,qy0):
         self._validate_input(qy0)
         self.qy0 = qy0
+    def set_qx0_meas(self,qx0_meas):
+        self._validate_input(qx0_meas)
+        self.qx0_meas = qx0_meas
+    def set_qy0_meas(self,qy0_meas):
+        self._validate_input(qy0_meas)
+        self.qy0_meas = qy0_meas
     def set_origin(self,qx0,qy0):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
+    def set_origin_meas(self,qx0_meas,qy0_meas):
+        self._validate_input(qx0_meas)
+        self._validate_input(qy0_meas)
+        self.qx0_meas,self.qy0_meas = qx0_meas,qy0_meas
     def set_e(self,e):
         self._validate_input(e)
         self.e = e
