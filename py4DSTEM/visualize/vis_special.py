@@ -7,7 +7,7 @@ from . import show
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from ..io import PointList
+from ..io import DataCube,Coordinates,PointList
 from ..process.utils import get_voronoi_vertices
 from ..process.calibration import double_sided_gaussian, convert_ellipse_params
 from ..process.latticevectors import get_selected_lattice_vectors
@@ -576,3 +576,25 @@ def show_max_peak_spacing(ar,spacing,braggdirections,color='g',lw=2,returnfig=Fa
     else:
         plt.show()
         return
+
+def show_origin(data,meas=False):
+    """
+    Show the positions of the origin.
+
+    Args:
+        data (DataCube or Coordinates or 2-tuple of arrays (qx0,qy0))
+        meas (bool): if True uses (qx0_meas,qy0_meas), else uses (qx0,qy0)
+    """
+    if isinstance(data,tuple):
+        assert len(data)==2
+        qx,qy = data
+    elif isinstance(data,DataCube):
+        qx,qy = data.coordinates.get_origin_meas() if meas else data.coordinates.get_origin()
+    elif isinstance(data,Coordinates):
+        qx,qy = data.get_origin_meas() if meas else data.get_origin()
+    else:
+        raise Exception("data must be of type Datacube or Coordinates or tuple")
+
+    show_image_grid(get_ar = lambda i:[qx,qy][i],H=1,W=2,cmap='RdBu')
+
+

@@ -91,7 +91,9 @@ def get_origin_single_dp(dp, r, rscale=1.2):
 def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None, return_ans=False):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
-    beam stop, and (b) the center beam contains the highest intensity
+    beam stop, and (b) the center beam contains the highest intensity. Stores the origin
+    positions in the Coordinates associated with datacube, and optionally also returns
+    them.
 
     Args:
         datacube (DataCube): the data
