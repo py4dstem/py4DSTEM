@@ -1,7 +1,6 @@
 # Functions for generating virtual images
 
 import numpy as np
-from ...io import DataCube
 from ..utils import tqdmnd
 
 def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
@@ -17,7 +16,6 @@ def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
@@ -39,7 +37,6 @@ def get_virtualimage_circ(datacube, x0, y0, R, verbose=True):
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
     xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
     ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
 
@@ -65,7 +62,6 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
     assert Ro>Ri, "Inner radius must be smaller than outer radius"
     xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
     ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
