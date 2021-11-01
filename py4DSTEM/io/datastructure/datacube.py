@@ -46,8 +46,9 @@ class DataCube(DataObject):
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
         self.update_slice_parsers()
 
-        # Initialize coordinates
+        #: stores calibration metadata
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
+        self.images = {} #: stores image-like 2D arrays derived from this data
 
         # Set shape
         # TODO: look for shape in metadata
@@ -56,7 +57,16 @@ class DataCube(DataObject):
         #self.R_N = self.R_Nx*self.R_Ny
         #self.set_scan_shape(self.R_Nx,self.R_Ny)
 
-    ############### Processing functions, organized by file in process directory ##############
+
+
+    ########### Processing functions, organized by file in process directory ############
+
+    ############## virtualimage.py #############
+
+    def get_max_dp(self):
+        self.images['dp_max'] = get_max_dp(self)
+
+
 
     ############### preprocess.py ##############
 
