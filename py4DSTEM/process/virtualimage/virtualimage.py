@@ -4,9 +4,6 @@ import numpy as np
 from ...io import DataCube
 from ..utils import tqdmnd
 
-def test():
-    return True
-
 def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
