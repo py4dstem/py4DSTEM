@@ -184,14 +184,13 @@ def combine_masks(masks, operator='or'):
     Returns:
         (2D array): Boolean mask
     """
-    assert(operator.lower() in ('or', 'xor'))
+    assert(operator.lower() in ('or', 'xor')), 'specified operator not supported, must be "or" or "xor"'
 
     if operator.lower() == 'or': 
         return np.logical_or.reduce(masks)
     elif operator.lower() == 'xor':
         return np.logical_xor.reduce(masks)
-    else: 
-        print('specified operator not supported, must be "or" or "xor"')
+
 
 #TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections
 #TODO Add multiple mask maker, e.g. give list of coordinate tuples 
@@ -217,19 +216,19 @@ def make_virtual_image_numba(datacube, mask, out=None):
         out = np.zeros(datacube.data.shape[:-2])
 
     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-        out[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+        out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask))
     return out
 
 # I can't get this to work quicker than you're brightfield function for some unknown reason.
 @nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
-def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out=None):
+def make_virtual_image_BF_numba(datacube, mask, crop_vals=(xmin, xmax, ymin, ymax), out=None):
     """
     Make a virutal for all probe posistions from a py4DSTEM datacube object using a mask boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane.
     Args:
         datacube (DataCube): py4DSTEM datacube, rx,ry,qx,qy, 
         mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
-        xmin,xmax,ymin,ymax (ints): cordinates in pixels for the size of data to crop
+        crop_vals(xmin,xmax,ymin,ymax) (ints): cordinates in pixels for the size of data to crop
         out (2D numpy array, optional): pre-allocated output array
     Returns:
         out (2D numpy array): virtual image 
@@ -237,11 +236,16 @@ def make_virtual_image_BF_numba(datacube, mask, xmin, xmax, ymin, ymax, out=None
     if out is None:
         out = np.zeros(datacube.data.shape[:-2])
 
+    # unpack the crop values 
+    (xmin, xmax, ymin, ymax) = crop_vals
+
     # crop the mask and datacube to size of BF disk.    
     mask = mask[xmin:xmax,ymin:ymax]
     arr = datacube.data[:,:,xmin:xmax,ymin:ymax]
     for rx, ry in np.ndindex(arr.shape[:-2]):
-        out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask))
+        # out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask))
+        out[rx,ry] = np.sum(arr[rx,ry][mask])
+
     return out
 
 
