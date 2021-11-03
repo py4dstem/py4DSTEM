@@ -47,11 +47,16 @@ class DataCube(DataObject):
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
         self.update_slice_parsers()
 
-        #: stores calibration metadata
+        # Containers for derivative data
+        self.images = {} #: dict storing image-like 2D arrays derived from this data
+        self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
+        self.pointlistarrays = {} #: dict storing pointlistarrays
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
-        self.images = {} #: stores image-like 2D arrays derived from this data
-        self.pointlists = {} #: stores pointlists and lists/tuples of pointlists
-        self.pointlistarrays = {} #: stores pointlistarrays
+            #: Coordinate instance storing calibration metadata
+
+        # Set flags
+        self.bragg_origin_is_calibrated = False
+
 
         # Set shape
         # TODO: look for shape in metadata
@@ -201,8 +206,6 @@ class DataCube(DataObject):
         show_selected_dps(self,positions,im=im,colors=colors,
                 HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
 
-
-
     def show_some_bragg_disks(self,colors=None,HW=None,figsize_dp=(4,4),
                               **kwargs):
         """
@@ -227,6 +230,24 @@ class DataCube(DataObject):
         show_selected_dps(self,positions,bragg_pos=bragg_pos,alpha=alpha,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
+    def show_bvm(self,**vis_params):
+        """
+
+        """
+        # get all `bvm_*` keys
+        # assert there's at least one
+        # pick one
+        # show it
+
+        assert('bvm_centered' in self.images.keys())
+        bvm = self.images['bvm_centered']
+
+        from ...visualize import show
+        if 'cmap' not in vis_params.keys():
+            vis_params['cmap'] = 'jet'
+        if 'scaling' not in vis_params.keys():
+            vis_params['scaling'] = 'log'
+        show(bvm,**vis_params)
 
 
 
@@ -369,6 +390,56 @@ class DataCube(DataObject):
             self,self.images['probe_kernel'],Rx=x,Ry=y,**kwargs)
         self.pointlists['bragg_pos_some_dps'] = bragg_pos
         self.pointlists['_bragg_pos_some_dps_positions'] = positions
+
+    def find_bragg_disks(self,**disk_detec_params):
+        """
+
+        """
+        from ...process.diskdetection import find_Bragg_disks
+        assert('probe_kernel' in self.images.keys())
+        peaks = find_Bragg_disks(self,self.images['probe_kernel'],
+                                 **disk_detec_params,
+                                 name = 'bragg_positions')
+        self.pointlistarrays['bragg_positions'] = peaks
+
+        try:
+            print('Calibrating origin positions')
+            self.calibrate_bragg_origins()
+        except AttributeError:
+            print('Origin positions not found; skipping calibration')
+
+    def calibrate_bragg_origins(self):
+        """
+
+        """
+        from ...process.calibration import center_braggpeaks
+        assert('bragg_positions' in self.pointlistarrays.keys())
+        assert(not self.bragg_origin_is_calibrated)
+        peaks = center_braggpeaks(self.pointlistarrays['bragg_positions'],
+                                  coords=self.coordinates,
+                                  name = 'bragg_positions')
+        self.pointlistarrays['bragg_positions'] = peaks
+        x,y = self.coordinates.get_origin()
+        self.images['bragg_origins_x'] = x
+        self.images['bragg_origins_y'] = y
+        self.bragg_origin_is_calibrated = True
+
+
+
+    ############ braggvectormap.py #############
+
+    def get_bvm(self):
+        """
+
+        """
+        from ...process.diskdetection import get_bvm
+        assert('bragg_positions' in self.pointlistarrays.keys())
+        bvm = get_bvm(self.pointlistarrays['bragg_positions'],
+                      self.Q_Nx,self.Q_Ny)
+        if self.bragg_origin_is_calibrated:
+            self.images['bvm_centered'] = bvm
+        else:
+            self.images['bvm_raw'] = bvm
 
 
 
