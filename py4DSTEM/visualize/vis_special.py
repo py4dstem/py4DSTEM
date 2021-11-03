@@ -624,8 +624,8 @@ def show_origin_fit(data):
                                        qy0_meas,qy0_fit,qy0_residuals][i],
                     H=2,W=3,cmap='RdBu')
 
-def show_selected_dps(datacube,positions,im=None,colors=None,
-                      HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
+                      colors=None,HW=None,figsize_im=(6,6),figsize_dp=(4,4),
                       **kwargs):
     """
     Shows two plots: first, a real space image overlaid with colored dots
@@ -637,6 +637,12 @@ def show_selected_dps(datacube,positions,im=None,colors=None,
         positions (len N list or tuple of 2-tuples): the scan positions
         im (str or None): name of a real space image stored in datacube.
             Defaults to 'BF'.
+        bragg_pos (len N list of pointlistarrays): bragg disk positions
+            for each position. if passed, overlays the disk positions,
+            and supresses plot of the real space image
+        alpha (number): the probe semiconvergence angle. If passed,
+            disk positions are indicated with disk-sized circles,
+            rather than dots
         colors (len N list of colors or None):
         HW (2-tuple of ints): diffraction pattern grid shape
         figsize_im (2-tuple): size of the image figure
@@ -651,9 +657,15 @@ def show_selected_dps(datacube,positions,im=None,colors=None,
         im = 'BF'
     assert(im in datacube.images.keys()), "datacube has no image called '{}'".format(im)
     im = datacube.images[im]
+    if bragg_pos is not None:
+        show_disk_pos = True
+        assert(len(bragg_pos)==N)
+    else:
+        show_disk_pos = False
     if colors is None:
         from matplotlib.cm import gist_ncar
-        colors = gist_ncar(np.linspace(0,1,N,endpoint=False))
+        linsp = np.linspace(0,1,N,endpoint=False)
+        colors = [gist_ncar(i) for i in linsp]
     assert(len(colors)==N), "Number of positions and colors don't match"
     from matplotlib.colors import is_color_like
     assert([is_color_like(i) for i in colors])
@@ -669,10 +681,19 @@ def show_selected_dps(datacube,positions,im=None,colors=None,
     y = [i[1] for i in positions]
     if 'scaling' not in kwargs.keys():
         kwargs['scaling'] = 'log'
-    show_points(im,x=x,y=y,pointcolor=colors,figsize=figsize_im)
-    show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+    if not show_disk_pos:
+        show_points(im,x=x,y=y,pointcolor=colors,figsize=figsize_im)
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                        get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                        **kwargs)
+    else:
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
                     get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                    get_x=lambda i:bragg_pos[i].data['qx'],
+                    get_y=lambda i:bragg_pos[i].data['qy'],
+                    get_pointcolors=lambda i:colors[i],
                     **kwargs)
+
 
 
 
