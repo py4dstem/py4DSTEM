@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show
+from . import show, show_points
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
@@ -623,6 +623,56 @@ def show_origin_fit(data):
     show_image_grid(get_ar = lambda i:[qx0_meas,qx0_fit,qx0_residuals,
                                        qy0_meas,qy0_fit,qy0_residuals][i],
                     H=2,W=3,cmap='RdBu')
+
+def show_selected_dps(datacube,positions,im=None,colors=None,
+                      HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+                      **kwargs):
+    """
+    Shows two plots: first, a real space image overlaid with colored dots
+    at the specified positions; second, a grid of diffraction patterns
+    corresponding to these scan positions.
+
+    Args:
+        datacube (DataCube):
+        positions (len N list or tuple of 2-tuples): the scan positions
+        im (str or None): name of a real space image stored in datacube.
+            Defaults to 'BF'.
+        colors (len N list of colors or None):
+        HW (2-tuple of ints): diffraction pattern grid shape
+        figsize_im (2-tuple): size of the image figure
+        figsize_dp (2-tuple): size of each diffraction pattern panel
+        **kwargs (dict): arguments passed to visualize.show for the
+            *diffraction patterns*. Default is `scaling='log'`
+    """
+    assert isinstance(datacube,DataCube)
+    N = len(positions)
+    assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
+    if im is None:
+        im = 'BF'
+    assert(im in datacube.images.keys()), "datacube has no image called '{}'".format(im)
+    im = datacube.images[im]
+    if colors is None:
+        from matplotlib.cm import gist_ncar
+        colors = gist_ncar(np.linspace(0,1,N,endpoint=False))
+    assert(len(colors)==N), "Number of positions and colors don't match"
+    from matplotlib.colors import is_color_like
+    assert([is_color_like(i) for i in colors])
+    if HW is None:
+        W = int(np.ceil(np.sqrt(N)))
+        if W<3: W=3
+        H = int(np.ceil(N/W))
+    else:
+        H,W = HW
+    assert(all([isinstance(x,(int,np.integer)) for x in (H,W)]))
+
+    x = [i[0] for i in positions]
+    y = [i[1] for i in positions]
+    if 'scaling' not in kwargs.keys():
+        kwargs['scaling'] = 'log'
+    show_points(im,x=x,y=y,pointcolor=colors,figsize=figsize_im)
+    show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                    get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                    **kwargs)
 
 
 
