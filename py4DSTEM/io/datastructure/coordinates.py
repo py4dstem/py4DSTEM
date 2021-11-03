@@ -120,6 +120,10 @@ class Coordinates(DataObject):
         self._validate_input(qx0_residuals)
         self._validate_input(qy0_residuals)
         self.qx0_residuals,self.qy0_residuals = qx0_residuals,qy0_residuals
+    def set_alpha_pix(self,alpha_pix):
+        self.alpha_pix = alpha_pix
+    def set_probe_center(self,probe_center):
+        self.probe_center = probe_center
     def set_e(self,e):
         self._validate_input(e)
         self.e = e
@@ -171,6 +175,10 @@ class Coordinates(DataObject):
         return self.get_qx0_meas(rx,ry),self.get_qy0_meas(rx,ry)
     def get_origin_residuals(self,rx=None,ry=None):
         return self.get_qx0_residuals(rx,ry),self.get_qy0_residuals(rx,ry)
+    def get_alpha_pix(self):
+        return self.alpha_pix
+    def get_probe_center(self):
+        return self.probe_center
     def get_e(self,rx=None,ry=None):
         return self._get_value(self.e,rx,ry)
     def get_theta(self,rx=None,ry=None):

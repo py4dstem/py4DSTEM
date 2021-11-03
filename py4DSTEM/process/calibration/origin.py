@@ -88,7 +88,7 @@ def get_origin_single_dp(dp, r, rscale=1.2):
     return qx0, qy0
 
 
-def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None, return_ans=False):
+def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity. Stores the origin
@@ -115,8 +115,7 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None, return_ans=
                     arrays are returned for qx0,qy0
 
     Returns:
-        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): if return_ans is True, returns the
-            origin, (x,y) at each scan position
+        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays):
     """
     if r is None:
         if dp_max is None:
@@ -170,9 +169,7 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None, return_ans=
             else:
                 qx0.mask, qy0.mask = True, True
 
-    datacube.coordinates.set_origin_meas(qx0,qy0)
-    if return_ans:
-        return qx0, qy0
+    return qx0, qy0
 
 
 def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=None):
@@ -417,7 +414,6 @@ def fit_origin(
     robust=False,
     robust_steps=3,
     robust_thresh=2,
-    return_ans=False,
     returnfitp=False
 ):
     """
@@ -429,9 +425,7 @@ def fit_origin(
     passed, fitted origin and residuals are stored there directly.
 
     Args:
-        data (DataCube or Coordinates or 2-tuple of arrays): if a 2-tuple, these are the
-            measured origin positions; otherwise, must be a DataCube or Coordinates
-            containing them
+        data (2-tuple of 2d arrays): the measured origin positions (q0x,qy0)
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp (bool, optional): if True, returns the fit parameters
@@ -444,7 +438,7 @@ def fit_origin(
             fitting.
 
     Returns:
-        (variable): Return value depends on return_ans and returnfitp. If both are False
+        (variable): Return value depends on returnfitp. If both are False
         (default), returns nothing. If ``return_ans==True`` and ``returnfitp==False``,
         returns a 4-tuple containing:
 
@@ -459,16 +453,8 @@ def fit_origin(
         If both are True, returns a 2-tuple containing both of the aforementioned
         4-tuples, in the order written above.
     """
-    if isinstance(data,tuple):
-        assert len(data)==2
-        qx0_meas,qy0_meas = data
-    elif isinstance(data,DataCube):
-        qx0_meas,qy0_meas = data.coordinates.get_origin_meas()
-    elif isinstance(data,Coordinates):
-        qx_meas,qy_meas = data.get_origin_meas()
-    else:
-        raise Exception("data must be of type Datacube or Coordinates or tuple")
-
+    assert isinstance(data,tuple) and len(data)==2
+    qx0_meas,qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
@@ -523,24 +509,12 @@ def fit_origin(
     qy0_residuals = qy0_meas - qy0_fit
 
     # Return
-    if isinstance(data,DataCube):
-        data.coordinates.set_origin(qx0_fit,qy0_fit)
-        data.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
-    elif isinstance(data,Coordinates):
-        data.set_origin(qx0_fit,qy0_fit)
-        data.set_origin_residuals(qx0_residuals,qy0_residuals)
+    ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
+    if returnfitp:
+        ans = ans,(popt_x,popt_y,pcov_x,pcov_y)
+    return ans
 
-    if return_ans and not returnfitp:
-        return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
-    elif not return_ans and returnfitp:
-        return (popt_x,popt_y,pcov_x,pcov_y)
-    elif return_ans and returnfitp:
-        return (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals), (
-            popt_x,
-            popt_y,
-            pcov_x,
-            pcov_y,
-        )
+
 
 
 ### Older / soon-to-be-deprecated functions for finding the origin
