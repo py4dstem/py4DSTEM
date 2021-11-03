@@ -62,10 +62,248 @@ class DataCube(DataObject):
 
     ########### Processing functions, organized by file in process directory ############
 
+
+
+    ############## visualize ###################
+
+    def show(self, im=None, **kwargs):
+        """
+        Show a single 2D slice of the dataset, passing any **kwargs to
+        the visualize.show function. Default scaling is 'log'.
+
+        Args:
+            im (variable): (type of im) image dislayed
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (len 2 list) the point-detector virtual image from (qx,qy)
+                - (string) the attached im of this name, if it exists
+        """
+        from ...visualize import show
+        if im is None:
+            try:
+                im = self.images['dp_max']
+            except KeyError:
+                im = self.data[0,0,:,:]
+        elif isinstance(im,tuple):
+            assert(len(im)==2)
+            im = self.data[im[0],im[1],:,:]
+        elif isinstance(im,list):
+            assert(len(im)==2)
+            im = self.data[:,:,im[0],im[1]]
+        elif isinstance(im,str):
+            try:
+                im = self.images[im]
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+        else:
+            raise Exception("Invalid type, {}".format(type(im)))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show(im,**kwargs)
+
+    def position_circular_detector(self,center,radius,dp=None,alpha=0.25,**kwargs):
+        """
+        Display a circular detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached im of this name, if it exists
+        """
+        from ...visualize import show_circles
+        if dp is None:
+            try:
+                dp = self.images['dp_max']
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.images[dp]
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
+
+    def show_origin_meas(self):
+        """
+        Show the measured origin positions
+        """
+        from ...visualize import show_origin_meas
+        show_origin_meas(self)
+
+    def show_origin_fit(self):
+        """
+        Show the fit origin positions
+        """
+        from ...visualize import show_origin_fit
+        show_origin_fit(self)
+
+    def show_probe_size(self):
+        """
+        Show the measure size of the vacuum probe
+        """
+        from ...visualize import show_circles
+        assert('probe_image' in self.images.keys())
+        show_circles(self.images['probe_image'],self.coordinates.probe_center,self.coordinates.alpha_pix)
+
+    def show_probe_kernel(self,R=None,L=None,W=None):
+        """
+        Visualize the probe kernel.
+
+        Args:
+            R (int): side length of displayed image, in pixels
+            L (int): the line profile length
+            W (int): the line profile integration window width
+        """
+        from ...visualize import show_kernel
+        assert('probe_kernel' in self.images.keys())
+        if R is None:
+            try:
+                R = int( 5*self.coordinates.alpha_pix )
+            except NameError:
+                R = self.Q_Nx // 4
+        if L is None:
+            L = 2*R
+        if W is None:
+            W = 1
+        show_kernel(self.images['probe_kernel'],R,L,W)
+
+
+
     ############## virtualimage.py #############
 
     def get_max_dp(self):
+        """
+        Computes the maximal diffraction pattern.
+        """
         self.images['dp_max'] = virtualimage.get_max_dp(self)
+
+    def capture_circular_detector(self,center,radius,name):
+        """
+        Computes the virtual image from a circular detector.
+
+        Args:
+            center (2-tuple): (x0,y0) of detector
+            radius (number): radius of detector
+            name (str): label for this image
+        """
+        self.images[name] = virtualimage.get_virtualimage_circ(
+                                self,center[0],center[1],radius)
+
+
+
+    ############## calibration ################
+
+    def measure_origin(self, **kwargs):
+        """
+        Measure the position of the origin for data with no beamstop,
+        and for which the center beam has the highest intensity. If
+        the maximal diffraction pattern hasn't been computed, this
+        function computes it. See process.calibration.origin.get_origin
+        for more info.
+        """
+        from ...process.calibration.origin import get_origin
+        if 'dp_max' not in self.images.keys():
+            self.get_max_dp()
+        kwargs['dp_max'] = self.images['dp_max']
+        qx0,qy0 = get_origin(self, **kwargs)
+        self.coordinates.set_origin_meas(qx0,qy0)
+
+    def fit_origin(self, **kwargs):
+        """
+        Performs a fit to the measured origin positions. See
+        process.calibration.origin.fit_origin for more info.
+        """
+        from ...process.calibration.origin import fit_origin
+        try:
+            origin_meas = self.coordinates.get_origin_meas()
+        except AttributeError or KeyError:
+            raise Exception('First run measure_origin!')
+        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
+        self.coordinates.set_origin(qx0_fit,qy0_fit)
+        self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
+
+    def get_probe_size(self, **kwargs):
+        """
+        Measures the convergence angle from a probe image in pixels.
+        See process.calibration.origin.get_probe_size for more info.
+        """
+        from ...process.calibration.origin import get_probe_size
+        assert('probe_image' in self.images.keys()), "First add a probe image!"
+        qr,qx0,qy0 = get_probe_size(self.images['probe_image'],**kwargs)
+        self.coordinates.set_alpha_pix(qr)
+        self.coordinates.set_probe_center((qx0,qy0))
+
+
+
+
+    ############## diskdetection.py ############
+
+    def get_probe_kernel(self,method='sigmoid',**kwargs):
+        """
+        Compute a probe kernel from the probe image.
+
+        Args:
+            method (str): determines how the kernel is constructed. For
+            details of each method, see the
+            process.diskdetection.probe.get_probe_* fn docs.
+
+            Methods:
+                - 'none': normalizes, shifts center
+                - 'gaussian': normalizes, shifts center, subtracts a gaussian
+                - 'sigmoid' normalizes, shifts center, makes sigmoid trench
+        """
+        assert(method in ('none','gaussian','sigmoid'))
+        assert('probe_image' in self.images.keys())
+
+        # get data
+        probe = self.images['probe_image']
+        try:
+            center = self.coordinates.probe_center
+            alpha = self.coordinates.alpha_pix
+        except AttributeError:
+            from ...process.calibration.origin import get_probe_size
+            assert('probe_image' in self.images.keys())
+            alpha,qx0,qy0 = get_probe_size(self.images['probe_image'])
+        if 'origin' not in kwargs.keys():
+            try:
+                kwargs['origin'] = center
+            except NameError:
+                kwargs['origin'] = (qx0,qy0)
+
+        # make the probe kernel
+        if method == 'none':
+            from ...process.diskdetection.probe import get_probe_kernel
+            probe_kernel = get_probe_kernel(probe,**kwargs)
+
+        if method == 'gaussian':
+            from ...process.diskdetection.probe import get_probe_kernel_edge_gaussian
+            if 'sigma' not in kwargs.keys():
+                kwargs['sigma'] = alpha * 3.2                                       # discuss
+            probe_kernel = get_probe_kernel_edge_gaussian(probe,**kwargs)
+
+        if method == 'sigmoid':
+            from ...process.diskdetection.probe import get_probe_kernel_edge_sigmoid
+            if 'ri' not in kwargs.keys() or 'ro' not in kwargs.keys():
+                kwargs['ri'] = alpha
+                kwargs['ro'] = alpha * 2                                            # discuss
+            probe_kernel = get_probe_kernel_edge_sigmoid(probe,**kwargs)
+
+        # save
+        self.images['probe_kernel'] = probe_kernel
+
+
+
+
+
 
 
 
@@ -138,6 +376,41 @@ class DataCube(DataObject):
         self = preprocess.bin_data_real(self, bin_factor)
         self.coordinates.R_Nx = self.R_Nx
         self.coordinates.R_Ny = self.R_Ny
+
+
+
+
+
+
+    ############ Miscellaneous methods #############
+
+    def add_image(self,image,name):
+        """
+        Attach an image to the datacube
+
+        Args:
+            image (2d array):
+            name (str): label for the data
+        """
+        assert(len(image.shape)==2)
+        assert(isinstance(name,str))
+        self.images[name] = image
+
+    def add_probe_image(self,image):
+        """
+        Attach an image of the electron probe over vacuum to the data
+
+        Args:
+            image (2d array):
+        """
+        assert(image.shape == (self.Q_Nx,self.Q_Ny)), "probe shape must match the datacube's diffraction space shape"
+        self.images['probe_image'] = image
+
+
+
+
+
+
 
 
     ################ Slice data #################
