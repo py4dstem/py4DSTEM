@@ -55,7 +55,12 @@ class DataCube(DataObject):
             #: Coordinate instance storing calibration metadata
 
         # Set flags
-        self.bragg_origin_is_calibrated = False
+        self.bragg_origin_calibrated = False
+        self.bragg_ellipse_calibrated = False
+        self.bvm_vis_params = {}
+        self.set_bvm_vis_params(cmap='jet',scaling='log')
+
+
 
 
         # Set shape
@@ -119,6 +124,8 @@ class DataCube(DataObject):
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached im of this name, if it exists
+            center (2-tuple):
+            radius (number):
         """
         from ...visualize import show_circles
         if dp is None:
@@ -138,6 +145,40 @@ class DataCube(DataObject):
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
+
+    def position_annular_detector(self,center,ri,ro,dp=None,alpha=0.25,**kwargs):
+        """
+        Display an annular detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached im of this name, if it exists
+            center (2-tuple):
+            ri,ro: the inner and outer radii
+        """
+        from ...visualize import show
+        if dp is None:
+            try:
+                dp = self.images['dp_max']
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.images[dp]
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show(dp,
+             annulus={'center':center,'Ri':ri,'Ro':ro,'fill':True,'alpha':0.3},
+             **kwargs)
 
     def show_origin_meas(self):
         """
@@ -230,24 +271,67 @@ class DataCube(DataObject):
         show_selected_dps(self,positions,bragg_pos=bragg_pos,alpha=alpha,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
-    def show_bvm(self,**vis_params):
+    def set_bvm_vis_params(self,**kwargs):
+        self.bvm_vis_params = kwargs
+
+    def show_bvm(self,name='bvm',**vis_params):
         """
 
+        Args:
+            name (str): should be in 'bvm','bvm_uncalibated,
+                'bvm_centered','bvm_centered_ellcorr'
         """
-        # get all `bvm_*` keys
-        # assert there's at least one
-        # pick one
-        # show it
-
-        assert('bvm_centered' in self.images.keys())
-        bvm = self.images['bvm_centered']
-
         from ...visualize import show
-        if 'cmap' not in vis_params.keys():
-            vis_params['cmap'] = 'jet'
-        if 'scaling' not in vis_params.keys():
-            vis_params['scaling'] = 'log'
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
         show(bvm,**vis_params)
+
+    def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple):
+            name (str): should be in 'bvm','bvm_uncalibated,
+                'bvm_centered','bvm_centered_ellcorr'
+        """
+        from ...visualize import show
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
+                      'Ri':radii[0],'Ro':radii[1],'fill':True,
+                      'alpha':0.3,'color':'y'},
+             **vis_params)
+
+    def show_elliptical_fit_bragg(self,radii,p_ellipse,name='bvm',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple):
+            name (str): should be in 'bvm','bvm_uncalibated,
+                'bvm_centered','bvm_centered_ellcorr'
+        """
+        from ...visualize import show
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        center = bvm.shape[0]/2,bvm.shape[1]/2
+        _,_,a,b,theta = p_ellipse
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':center,'Ri':radii[0],'Ro':radii[1],'fill':True,
+                      'alpha':0.2,'color':'y'},
+             ellipse={'center':center,'a':a,'b':b,'theta':theta,
+                       'color':'r','alpha':0.7,'linewidth':2},
+             **vis_params)
+
+
+
+
 
 
 
@@ -274,6 +358,17 @@ class DataCube(DataObject):
 
 
     ############## calibration ################
+
+    def get_probe_size(self, **kwargs):
+        """
+        Measures the convergence angle from a probe image in pixels.
+        See process.calibration.origin.get_probe_size for more info.
+        """
+        from ...process.calibration.origin import get_probe_size
+        assert('probe_image' in self.images.keys()), "First add a probe image!"
+        qr,qx0,qy0 = get_probe_size(self.images['probe_image'],**kwargs)
+        self.coordinates.set_alpha_pix(qr)
+        self.coordinates.set_probe_center((qx0,qy0))
 
     def measure_origin(self, **kwargs):
         """
@@ -304,17 +399,16 @@ class DataCube(DataObject):
         self.coordinates.set_origin(qx0_fit,qy0_fit)
         self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
 
-    def get_probe_size(self, **kwargs):
+    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_centered'):
         """
-        Measures the convergence angle from a probe image in pixels.
-        See process.calibration.origin.get_probe_size for more info.
+        Fits the elliptical distortions using an annular ragion
+        of a bragg vector map
         """
-        from ...process.calibration.origin import get_probe_size
-        assert('probe_image' in self.images.keys()), "First add a probe image!"
-        qr,qx0,qy0 = get_probe_size(self.images['probe_image'],**kwargs)
-        self.coordinates.set_alpha_pix(qr)
-        self.coordinates.set_probe_center((qx0,qy0))
-
+        from ...process.calibration import fit_ellipse_1D
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        return p_ellipse
 
 
 
@@ -414,7 +508,7 @@ class DataCube(DataObject):
         """
         from ...process.calibration import center_braggpeaks
         assert('bragg_positions' in self.pointlistarrays.keys())
-        assert(not self.bragg_origin_is_calibrated)
+        assert(not self.bragg_origin_calibrated)
         peaks = center_braggpeaks(self.pointlistarrays['bragg_positions'],
                                   coords=self.coordinates,
                                   name = 'bragg_positions')
@@ -422,8 +516,23 @@ class DataCube(DataObject):
         x,y = self.coordinates.get_origin()
         self.images['bragg_origins_x'] = x
         self.images['bragg_origins_y'] = y
-        self.bragg_origin_is_calibrated = True
+        self.bragg_origin_calibrated = True
 
+    def calibrate_bragg_elliptical_distortions(self,p_ellipse):
+        """
+
+        """
+        from ...process.calibration import correct_braggpeak_elliptical_distortions
+        assert('bragg_positions' in self.pointlistarrays.keys())
+        assert(self.bragg_origin_calibrated)
+        assert(not self.bragg_ellipse_calibrated)
+        peaks = correct_braggpeak_elliptical_distortions(
+            self.pointlistarrays['bragg_positions'],p_ellipse,name='bragg_positions')
+        self.pointlistarrays['bragg_positions'] = peaks
+        _,_,a,b,theta = p_ellipse
+        self.coordinates.set_ellipse(a,b,theta)
+        self.bragg_ellipse_calibrated = True
+        bvm = self.get_bvm()
 
 
     ############ braggvectormap.py #############
@@ -434,12 +543,23 @@ class DataCube(DataObject):
         """
         from ...process.diskdetection import get_bvm
         assert('bragg_positions' in self.pointlistarrays.keys())
-        bvm = get_bvm(self.pointlistarrays['bragg_positions'],
-                      self.Q_Nx,self.Q_Ny)
-        if self.bragg_origin_is_calibrated:
+        peaks = self.pointlistarrays['bragg_positions']
+        boc = self.bragg_origin_calibrated
+        bec = self.bragg_ellipse_calibrated
+        if not boc and not bec:
+            bvm = get_bvm_crazytown(peaks,self.Q_Nx,self.Q_Ny)
+            self.images['bvm_uncalibrated'] = bvm
+            self.images['bvm'] = bvm
+        elif not boc and bec:
+            raise Exception('How did you get here?')
+        elif boc and not bec:
+            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
             self.images['bvm_centered'] = bvm
-        else:
-            self.images['bvm_raw'] = bvm
+            self.images['bvm'] = bvm
+        elif boc and bec:
+            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
+            self.images['bvm_centered_ellcorr'] = bvm
+            self.images['bvm'] = bvm
 
 
 
