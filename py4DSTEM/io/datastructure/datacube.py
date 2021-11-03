@@ -176,6 +176,32 @@ class DataCube(DataObject):
             W = 1
         show_kernel(self.images['probe_kernel'],R,L,W)
 
+    def show_selected_dps(self,positions,im=None,colors=None,
+                          HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+                          **kwargs):
+        """
+        Shows two plots: first, a real space image overlaid with colored dots
+        at the specified positions; second, a grid of diffraction patterns
+        corresponding to these scan positions.
+
+        Args:
+            datacube (DataCube):
+            positions (len N list or tuple of 2-tuples): the scan positions
+            im (str or None): name of a real space image stored in datacube.
+                Defaults to 'BF'.
+            colors (len N list of colors or None):
+            HW (2-tuple of ints): diffraction pattern grid shape
+            figsize_im (2-tuple): size of the image figure
+            figsize_dp (2-tuple): size of each diffraction pattern panel
+            **kwargs (dict): arguments passed to visualize.show for the
+                *diffraction patterns*. Default is `scaling='log'`
+        """
+        from ...visualize.vis_special import show_selected_dps
+        show_selected_dps(self,positions,im,colors,
+                          HW,figsize_im,figsize_dp,**kwargs)
+
+
+
 
 
     ############## virtualimage.py #############
