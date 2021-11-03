@@ -50,6 +50,8 @@ class DataCube(DataObject):
         #: stores calibration metadata
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
         self.images = {} #: stores image-like 2D arrays derived from this data
+        self.pointlists = {} #: stores pointlists and lists/tuples of pointlists
+        self.pointlistarrays = {} #: stores pointlistarrays
 
         # Set shape
         # TODO: look for shape in metadata
@@ -185,7 +187,6 @@ class DataCube(DataObject):
         corresponding to these scan positions.
 
         Args:
-            datacube (DataCube):
             positions (len N list or tuple of 2-tuples): the scan positions
             im (str or None): name of a real space image stored in datacube.
                 Defaults to 'BF'.
@@ -197,9 +198,34 @@ class DataCube(DataObject):
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
-        show_selected_dps(self,positions,im,colors,
-                          HW,figsize_im,figsize_dp,**kwargs)
+        show_selected_dps(self,positions,im=im,colors=colors,
+                HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
 
+
+
+    def show_some_bragg_disks(self,colors=None,HW=None,figsize_dp=(4,4),
+                              **kwargs):
+        """
+        Shows the positions of Bragg disks detected with
+        self.find_some_bragg_disks.
+
+        Args:
+            colors (list of colors or None):
+            HW (2-tuple of ints): diffraction pattern grid shape
+            figsize_dp (2-tuple): size of each diffraction pattern panel
+            **kwargs (dict): arguments passed to visualize.show for the
+                *diffraction patterns*. Default is `scaling='log'`
+        """
+        from ...visualize.vis_special import show_selected_dps
+        assert('bragg_pos_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
+        bragg_pos = self.pointlists['bragg_pos_some_dps']
+        positions = self.pointlists['_bragg_pos_some_dps_positions']
+        try:
+            alpha = self.coordinates.alpha_pix
+        except NameError:
+            alpha = None
+        show_selected_dps(self,positions,bragg_pos=bragg_pos,alpha=alpha,
+                          colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
 
 
@@ -326,8 +352,23 @@ class DataCube(DataObject):
         # save
         self.images['probe_kernel'] = probe_kernel
 
+    def find_some_bragg_disks(self,positions,**kwargs):
+        """
+        Finds the bragg disks in the DPs at `positions`. For more info,
+        see process.diskdetection.find_Bragg_disks_selected.
 
-
+        Args:
+            positions ((Nx2) shaped)
+        """
+        from ...process.diskdetection import find_Bragg_disks_selected
+        assert('probe_kernel' in self.images.keys())
+        N = len(positions)
+        x = [i[0] for i in positions]
+        y = [i[1] for i in positions]
+        bragg_pos = find_Bragg_disks_selected(
+            self,self.images['probe_kernel'],Rx=x,Ry=y,**kwargs)
+        self.pointlists['bragg_pos_some_dps'] = bragg_pos
+        self.pointlists['_bragg_pos_some_dps_positions'] = positions
 
 
 
