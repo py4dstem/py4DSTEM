@@ -35,8 +35,8 @@ class Coordinates(DataObject):
             ``R_pixel_units``
         R_pixel_units (string): the real space pixel units
         qx0,qy0 (number or ndarray): the origin of diffraction space
-        e (number): the ratio of lengths of the semiminor to semimajor axes of the
-            elliptical distortions
+        a (number): semimajor axis length for elliptical distorions
+        b (number): semiminor axis length for elliptical distorions
         theta (number): the (positive, right handed) tilt of the semimajor axis of
             the elliptical distortions with respect to the x-axis, in radians
         QR_rotation (number): the (positive,right handed) rotational misalignment of
@@ -124,16 +124,20 @@ class Coordinates(DataObject):
         self.alpha_pix = alpha_pix
     def set_probe_center(self,probe_center):
         self.probe_center = probe_center
-    def set_e(self,e):
-        self._validate_input(e)
-        self.e = e
+    def set_a(self,a):
+        self._validate_input(a)
+        self.a = a
+    def set_b(self,b):
+        self._validate_input(b)
+        self.b = b
     def set_theta(self,theta):
         self._validate_input(theta)
         self.theta = theta
-    def set_ellipse(self,e,theta):
-        self._validate_input(e)
+    def set_ellipse(self,a,b,theta):
+        self._validate_input(a)
+        self._validate_input(b)
         self._validate_input(theta)
-        self.e,self.theta = e,theta
+        self.a,self.b,self.theta = a,b,theta
     def set_QR_rotation(self,QR_rotation):
         self._validate_input(QR_rotation)
         self.QR_rotation = QR_rotation
@@ -179,12 +183,14 @@ class Coordinates(DataObject):
         return self.alpha_pix
     def get_probe_center(self):
         return self.probe_center
-    def get_e(self,rx=None,ry=None):
-        return self._get_value(self.e,rx,ry)
+    def get_a(self,rx=None,ry=None):
+        return self._get_value(self.a,rx,ry)
+    def get_b(self,rx=None,ry=None):
+        return self._get_value(self.b,rx,ry)
     def get_theta(self,rx=None,ry=None):
         return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
-        return self.get_e(rx,ry),self.get_theta(rx,ry)
+        return self.get_a(rx,ry),self.get_b(rx,ry),self.get_theta(rx,ry)
     def get_QR_rotation(self):
         return self.QR_rotation
     def get_QR_flip(self):
