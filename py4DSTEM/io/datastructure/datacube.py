@@ -12,6 +12,7 @@ import h5py
 
 from .dataobject import DataObject
 from .coordinates import Coordinates
+from .pointlist import PointList
 from ...process import preprocess
 from ...process import virtualimage
 from ...process import virtualimage_viewer
@@ -50,15 +51,21 @@ class DataCube(DataObject):
         # Containers for derivative data
         self.images = {} #: dict storing image-like 2D arrays derived from this data
         self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
-        self.pointlistarrays = {} #: dict storing pointlistarrays
+        self.bragg_positions = {} #: dict storing pointlistarrays of bragg disk positions
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
             #: Coordinate instance storing calibration metadata
 
-        # Set flags
-        self.bragg_origin_calibrated = False
-        self.bragg_ellipse_calibrated = False
+        # Set bragg calibration state flags
+        self.bragg_calstate_uncalibrated = False
+        self.bragg_calstate_origin = False
+        self.bragg_calstate_ellipse = False
+        self.bragg_calstate_dq = False
+        self.bragg_calstate_rotflip = False
+
+        # bvm visualization
         self.bvm_vis_params = {}
         self.set_bvm_vis_params(cmap='jet',scaling='log')
+
 
 
 
@@ -261,14 +268,14 @@ class DataCube(DataObject):
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
-        assert('bragg_pos_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
-        bragg_pos = self.pointlists['bragg_pos_some_dps']
-        positions = self.pointlists['_bragg_pos_some_dps_positions']
+        assert('bragg_positions_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
+        bragg_positions = self.pointlists['bragg_positions_some_dps']
+        positions = self.pointlists['_bragg_positions_some_dps_positions']
         try:
             alpha = self.coordinates.alpha_pix
         except NameError:
             alpha = None
-        show_selected_dps(self,positions,bragg_pos=bragg_pos,alpha=alpha,
+        show_selected_dps(self,positions,bragg_pos=bragg_positions,alpha=alpha,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
     def set_bvm_vis_params(self,**kwargs):
@@ -278,8 +285,10 @@ class DataCube(DataObject):
         """
 
         Args:
-            name (str): should be in 'bvm','bvm_uncalibated,
-                'bvm_centered','bvm_centered_ellcorr'
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
         assert(name in self.images.keys())
@@ -293,8 +302,10 @@ class DataCube(DataObject):
 
         Args:
             radii (2-tuple):
-            name (str): should be in 'bvm','bvm_uncalibated,
-                'bvm_centered','bvm_centered_ellcorr'
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
         assert(name in self.images.keys())
@@ -312,8 +323,10 @@ class DataCube(DataObject):
 
         Args:
             radii (2-tuple):
-            name (str): should be in 'bvm','bvm_uncalibated,
-                'bvm_centered','bvm_centered_ellcorr'
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
         assert(name in self.images.keys())
@@ -329,10 +342,38 @@ class DataCube(DataObject):
                        'color':'r','alpha':0.7,'linewidth':2},
              **vis_params)
 
+    def show_bvm_radial_integral(self,name='bvm',ymax=None,q_ref=None,
+                                 returnfig=False):
+        """
 
-
-
-
+        Args:
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show_qprofile
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        assert(name_profile in self.pointlists.keys())
+        profile = self.pointlists[name_profile]
+        dq = self.coordinates.get_Q_pixel_size()
+        units = self.coordinates.get_Q_pixel_units()
+        q = profile.data['q'] * dq
+        if ymax is None:
+            n = len(profile.data)
+            ymax = np.max(profile.data['I'][n//4:]) * 1.2
+        fig,ax = show_qprofile(q=q,intensity=profile.data['I'],ymax=ymax,
+                      xlabel='q ('+units+')',returnfig=True)
+        if q_ref is not None:
+            ax.vlines(q_ref,0,ax.get_ylim()[1],color='r')
+        if returnfig:
+            return fig,ax
+        else:
+            import matplotlib.pyplot as plt
+            plt.show()
 
 
     ############## virtualimage.py #############
@@ -399,7 +440,7 @@ class DataCube(DataObject):
         self.coordinates.set_origin(qx0_fit,qy0_fit)
         self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
 
-    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_centered'):
+    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
         """
         Fits the elliptical distortions using an annular ragion
         of a bragg vector map
@@ -409,6 +450,52 @@ class DataCube(DataObject):
         bvm = self.images[name]
         p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
         return p_ellipse
+
+    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
+        """
+
+        """
+        from ...process.utils import radial_integral
+        assert(name in self.images.keys())
+        bvm = self.images[name]
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
+        N = len(q)
+        coords = [('q',float),('I',float)]
+        data = np.zeros(N,coords)
+        data['q'] = q
+        data['I'] = I
+        radial_integral = PointList(coordinates=coords,data=data,
+                                    name=name_profile)
+        self.pointlists[name_profile] = radial_integral
+
+    def calibrate_dq(self,method='single_measurement',**kwargs):
+        """
+
+        """
+        methods = ['single_measurement',
+                   ]
+        assert(method in methods)
+        if method == 'single_measurement':
+            assert(all([x in kwargs.keys() for x in (
+                   'q_pix','q_known','units')]))
+            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
+            dq = 1. / ( qp * qk )
+            self.coordinates.set_Q_pixel_size(dq)
+            self.coordinates.set_Q_pixel_units(u+'^-1')
+
+    def calibrate_rotation(self,theta,flip):
+        """
+
+        Args:
+            theta (number): in radians
+            flip (bool):
+        """
+        self.coordinates.set_QR_rotation(theta)
+        self.coordinates.set_QR_flip(flip)
+
+
 
 
 
@@ -480,10 +567,10 @@ class DataCube(DataObject):
         N = len(positions)
         x = [i[0] for i in positions]
         y = [i[1] for i in positions]
-        bragg_pos = find_Bragg_disks_selected(
+        bragg_positions = find_Bragg_disks_selected(
             self,self.images['probe_kernel'],Rx=x,Ry=y,**kwargs)
-        self.pointlists['bragg_pos_some_dps'] = bragg_pos
-        self.pointlists['_bragg_pos_some_dps_positions'] = positions
+        self.pointlists['bragg_positions_some_dps'] = bragg_positions
+        self.pointlists['_bragg_positions_some_dps_positions'] = positions
 
     def find_bragg_disks(self,**disk_detec_params):
         """
@@ -492,9 +579,9 @@ class DataCube(DataObject):
         from ...process.diskdetection import find_Bragg_disks
         assert('probe_kernel' in self.images.keys())
         peaks = find_Bragg_disks(self,self.images['probe_kernel'],
-                                 **disk_detec_params,
-                                 name = 'bragg_positions')
-        self.pointlistarrays['bragg_positions'] = peaks
+                                 **disk_detec_params)
+        self.bragg_positions['uncalibrated'] = peaks
+        self.bragg_calstate_uncalibrated = True
 
         try:
             print('Calibrating origin positions')
@@ -507,59 +594,121 @@ class DataCube(DataObject):
 
         """
         from ...process.calibration import center_braggpeaks
-        assert('bragg_positions' in self.pointlistarrays.keys())
-        assert(not self.bragg_origin_calibrated)
-        peaks = center_braggpeaks(self.pointlistarrays['bragg_positions'],
-                                  coords=self.coordinates,
-                                  name = 'bragg_positions')
-        self.pointlistarrays['bragg_positions'] = peaks
-        x,y = self.coordinates.get_origin()
-        self.images['bragg_origins_x'] = x
-        self.images['bragg_origins_y'] = y
-        self.bragg_origin_calibrated = True
+        assert('uncalibrated' in self.bragg_positions.keys())
+        assert(self.bragg_calstate_uncalibrated)
+        assert(not self.bragg_calstate_origin)
+        peaks = center_braggpeaks(self.bragg_positions['uncalibrated'],
+                                  coords=self.coordinates)
+        self.bragg_positions['origin'] = peaks
+        self.bragg_calstate_origin = True
 
     def calibrate_bragg_elliptical_distortions(self,p_ellipse):
         """
 
         """
         from ...process.calibration import correct_braggpeak_elliptical_distortions
-        assert('bragg_positions' in self.pointlistarrays.keys())
-        assert(self.bragg_origin_calibrated)
-        assert(not self.bragg_ellipse_calibrated)
+        assert('origin' in self.bragg_positions.keys())
+        assert(self.bragg_calstate_origin)
+        assert(not self.bragg_calstate_ellipse)
         peaks = correct_braggpeak_elliptical_distortions(
-            self.pointlistarrays['bragg_positions'],p_ellipse,name='bragg_positions')
-        self.pointlistarrays['bragg_positions'] = peaks
+            self.bragg_positions['origin'],p_ellipse)
+        self.bragg_positions['ellipse'] = peaks
         _,_,a,b,theta = p_ellipse
         self.coordinates.set_ellipse(a,b,theta)
-        self.bragg_ellipse_calibrated = True
-        bvm = self.get_bvm()
+        self.bragg_calstate_ellipse = True
+
+    def calibrate_bragg_dq(self):
+        """
+
+        """
+        from ...process.calibration import calibrate_Bragg_peaks_pixel_size
+        assert('ellipse' in self.bragg_positions.keys())
+        assert(self.bragg_calstate_ellipse)
+        assert(not self.bragg_calstate_dq)
+        peaks = calibrate_Bragg_peaks_pixel_size(
+            self.bragg_positions['ellipse'],coords=self.coordinates)
+        self.bragg_positions['dq'] = peaks
+        self.bragg_calstate_dq = True
+
+    def calibrate_bragg_rotation(self):
+        """
+
+        """
+        from ...process.calibration import calibrate_Bragg_peaks_rotation
+        assert('dq' in self.bragg_positions.keys())
+        assert(self.bragg_calstate_dq)
+        assert(not self.bragg_calstate_rotflip)
+        #self.coordinates.set_QR_rotation(rot)
+        #self.coordinates.set_QR_flip(flip)
+        peaks = calibrate_Bragg_peaks_rotation(
+            self.bragg_positions['dq'],coords=self.coordinates)
+        self.bragg_positions['rotflip'] = peaks
+        self.bragg_calstate_rotflip = True
+
+    def fit_bvm_radial_peak(self,lims,name='bvm',ymax=None):
+        """
+
+        """
+        from ...process.fit import fit_1D_gaussian,gaussian
+        from ...visualize import show_qprofile
+        assert(len(lims)==2)
+        assert(name in self.images.keys())
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        assert(name_profile in self.pointlists.keys())
+        profile = self.pointlists[name_profile]
+
+        q,I = profile.data['q'],profile.data['I']
+        A,mu,sigma = fit_1D_gaussian(q,I,lims[0],lims[1])
+
+        if ymax is None:
+            n = len(profile.data)
+            ymax = np.max(profile.data['I'][n//4:]) * 1.2
+        fig,ax = show_qprofile(q,I,ymax=ymax,returnfig=True)
+        ax.vlines(lims,0,ax.get_ylim()[1],color='r')
+        ax.vlines(mu,0,ax.get_ylim()[1],color='g')
+        ax.plot(q,gaussian(q,A,mu,sigma),color='r')
+
+        return mu
+
 
 
     ############ braggvectormap.py #############
 
-    def get_bvm(self):
+    def get_bvm(self,name='_best',overwrite=False):
         """
 
         """
         from ...process.diskdetection import get_bvm
-        assert('bragg_positions' in self.pointlistarrays.keys())
-        peaks = self.pointlistarrays['bragg_positions']
-        boc = self.bragg_origin_calibrated
-        bec = self.bragg_ellipse_calibrated
-        if not boc and not bec:
-            bvm = get_bvm_crazytown(peaks,self.Q_Nx,self.Q_Ny)
-            self.images['bvm_uncalibrated'] = bvm
+        calstates = [self.bragg_calstate_uncalibrated,
+                     self.bragg_calstate_origin,
+                     self.bragg_calstate_ellipse,
+                     self.bragg_calstate_dq,
+                     self.bragg_calstate_rotflip]
+        calstate = np.sum(calstates)
+        assert(calstate!=0)
+        d_calstate = {1:'uncalibrated',
+                      2:'origin',
+                      3:'ellipse',
+                      4:'dq',
+                      5:'rotflip'}
+        name_best = d_calstate[calstate]
+        if name == '_best':
+            name = name_best
+        else:
+            assert(name in ('uncalibrated','origin','ellipse','dq','rotflip'))
+        if name == name_best:
+            set_bvm = True
+        if 'bvm_'+name in self.images.keys():
+            if not overwrite:
+                raise Exception("This bvm has already been computed. To recompute and overwrite, pass `overwrite=True`")
+
+        peaks = self.bragg_positions[name]
+        bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
+        self.images['bvm_'+name] = bvm
+        if set_bvm:
             self.images['bvm'] = bvm
-        elif not boc and bec:
-            raise Exception('How did you get here?')
-        elif boc and not bec:
-            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-            self.images['bvm_centered'] = bvm
-            self.images['bvm'] = bvm
-        elif boc and bec:
-            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-            self.images['bvm_centered_ellcorr'] = bvm
-            self.images['bvm'] = bvm
+
 
 
 
