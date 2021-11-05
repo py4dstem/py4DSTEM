@@ -45,7 +45,7 @@ def calibrate_Bragg_peaks_rotation(
     if theta is not None:
         assert isinstance(theta, float), "theta must be a float."
     if flip is not None:
-        assert isinstance(flip, bool), "flip must be a boolean."
+        assert isinstance(flip, (bool,np.bool_)), "flip must be a boolean."
 
     if name is None:
         sl = braggpeaks.name.split("_")

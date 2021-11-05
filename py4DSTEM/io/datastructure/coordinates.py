@@ -142,7 +142,7 @@ class Coordinates(DataObject):
         self._validate_input(QR_rotation)
         self.QR_rotation = QR_rotation
     def set_QR_flip(self,QR_flip):
-        self._validate_input(QR_flip)
+        assert(isinstance(QR_flip,(bool,np.bool_)))
         self.QR_flip = QR_flip
 
     def get_R_Nx(self):
