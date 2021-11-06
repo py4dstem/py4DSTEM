@@ -102,10 +102,11 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     show(fit,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,
          cmap=cmap_fit,mask=mask,mask_color='empty',**kwargs)
     if fitborder:
-        _thetas = np.roll(thetas,-1)
+        if N%2==1: thetas += (thetas[1]-thetas[0])/2
+        if (N//2%2)==0: thetas = np.roll(thetas,-1)
         for i in range(N):
-            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),
-                         np.degrees(_thetas[2*i+1]),width=qmax-qmin,fill=None,
+            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(thetas[2*i]),
+                         np.degrees(thetas[2*i+1]),width=qmax-qmin,fill=None,
                          color=fitbordercolor,lw=fitborderlw))
 
     # Add ellipse overlay
