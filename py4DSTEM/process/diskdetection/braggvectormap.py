@@ -115,11 +115,10 @@ def get_weighted_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, weights):
                            desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(peaks.length):
-                qx = peaks.data['qx'][i]+qx0
-                qy = peaks.data['qy'][i]+qy0
-                I = peaks.data['intensity'][i]
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
+            qx = peaks.data['qx']+qx0
+            qy = peaks.data['qy']+qy0
+            I = peaks.data['intensity']
+            add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
     return braggvectormap
 
 
@@ -232,11 +231,10 @@ def get_weighted_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, weights):
                            desc='Computing Bragg vector map',unit='DP',unit_scale=True):
         if weights[Rx,Ry] != 0:
             peaks = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(peaks.length):
-                qx = peaks.data['qx'][i]
-                qy = peaks.data['qy'][i]
-                I = peaks.data['intensity'][i]
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
+            qx = peaks.data['qx']
+            qy = peaks.data['qy']
+            I = peaks.data['intensity']
+            braggvectormap = add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
     return braggvectormap
 
 
