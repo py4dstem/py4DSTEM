@@ -456,6 +456,9 @@ def add_to_2D_array_from_floats(ar, x, y, I):
     """
     Adds the values I to array ar, distributing the value between the four pixels nearest
     (x,y) using linear interpolation.  Inputs (x,y,I) may be floats or arrays of floats.
+
+    Note that if the same [x,y] coordinate appears more than once in the input array,
+    only the *final* value of I at that coordinate will get added.
     """
     Nx, Ny = ar.shape
     x0, x1 = (np.floor(x)).astype(int), (np.ceil(x)).astype(int)
