@@ -22,12 +22,13 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         center (2-tuple): the center
         fitradii (2-tuple of numbers): the annulus inner and outer fit radii
         ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
-            See the module docstring for utils.ellipticalCoords for more details.
-        fill (bool): the fill value of the annulus
+            See the module docstring for utils.elliptical_coords for more details.
+        fill (bool): if True, fills in the annular fitting region,
+          else shows only inner/outer edges
         color_ann (color): annulus color
         color_ell (color): ellipse color
-        alpha_ann:
-        alpha_ell:
+        alpha_ann: transparency for the annulus
+        alpha_ell: transparency forn the fit ellipse
         linewidth_ann:
         linewidth_ell:
     """
@@ -515,7 +516,7 @@ def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
     add_vector(ax2,dg2)
 
     if returnfig:
-        return g1,g2,fig,ax
+        return g1,g2,fig,(ax1,ax2)
     else:
         plt.show()
         return g1,g2
