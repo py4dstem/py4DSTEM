@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
-from ...io.datastructure import PointList, PointListArray
+from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D,tqdmnd
 
 def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
@@ -629,7 +629,7 @@ def find_Bragg_disks(datacube, probe,
 
 
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak,
-                         minPeakSpcing, maxNumPeaks):
+                         minPeakSpacing, maxNumPeaks):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional thresholding,
     returning the thresholded PointListArray. To skip a threshold, set that parameter to

@@ -62,6 +62,7 @@ class Metadata(DataObject):
             'e':('calibration',),   # elliptical distortion
             'theta':('calibration',),
             'beam_energy':('microscope',),
+            'convergence_semiangle_mrad': ('microscope',),
             'QR_rotation':('microscope','calibration'),
             'QR_rotation_units':('microscope','calibration')
         }
