@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import py4DSTEM
-import scipy.io as sio
 from py4DSTEM.process.utils import print_progress_bar
 from py4DSTEM.process.utils.ellipticalCoords import * ## What else is used here? These fns have
                                                       ## moved around some. In general, specifying
