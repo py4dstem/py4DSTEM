@@ -159,7 +159,7 @@ def get_data_from_int(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
             data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     if mem == "MEMMAP":
-        f = h5py.File(filepath,'r')
+        f = h5py.File(fp,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
@@ -202,7 +202,7 @@ def get_data_from_str(fp,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     # if using MEMMAP, file cannot be accessed from the context manager
     # or else it will be closed before the data is accessed
     if mem == "MEMMAP":
-        f = h5py.File(filepath,'r')
+        f = h5py.File(fp,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 

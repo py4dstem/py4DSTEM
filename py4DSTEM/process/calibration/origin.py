@@ -350,7 +350,7 @@ def get_origin_brightest_disk(
 
     return qx0_ar, qy0_ar
 
-def get_origin_single_dp_beamstop(DP,mask):
+def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
@@ -389,7 +389,7 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
         mask (np array): boolean mask which is False under the beamstop and True
             in the diffraction pattern. One approach to generating this mask
             is to apply a suitable threshold on the average diffraction pattern
-            and use binary opening/closing to remove and holes
+            and use binary opening/closing to remove any holes
 
     Returns:
         qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
@@ -400,6 +400,9 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
+
+        qx0[rx,ry] = x
+        qy0[rx,ry] = y
 
     return qx0, qy0
 

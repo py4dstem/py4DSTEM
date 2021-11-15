@@ -230,38 +230,6 @@ def cartesian_to_polarelliptical_transform(
 
 ### Radial integration
 
-def radial_integral(ar, x0, y0, dr):
-    """
-    Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
-
-    Args:
-        ar (2d array): the data
-        x0,y0 (floats): the origin
-
-    Returns:
-        (2-tuple): A 2-tuple containing:
-
-            * **rbin_centers**: *(1d array)* the bins centers of the radial integral
-            * **radial_integral**: *(1d array)* the radial integral
-    """
-    rmax = int(
-        max(
-            (
-                np.hypot(x0, y0),
-                np.hypot(x0, ar.shape[1] - y0),
-                np.hypot(ar.shape[0] - x0, y0),
-                np.hypot(ar.shape[0] - x0, ar.shape[1] - y0),
-            )
-        )
-    )
-    polarAr, rr, pp = cartesian_to_polarelliptical_transform(
-        ar, params=(x0, y0, 1, 1, 0), dr=dr, dphi=np.radians(2), r_range=rmax
-    )
-    radial_integral = np.sum(polarAr, axis=0)
-    rbin_centers = rr[0, :]
-    return rbin_centers,radial_integral
-
-
 def radial_elliptical_integral(ar, dr, ellipse_params):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of
@@ -298,17 +266,20 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     return rbin_centers,radial_integral
 
 
+def radial_integral(ar, x0, y0, dr):
+    """
+    Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
+    Args:
+        ar (2d array): the data
+        x0,y0 (floats): the origin
+        dr (number): radial step size
 
+    Returns:
+        (2-tuple): A 2-tuple containing:
 
-
-
-
-
-
-
-
-
-
-
+            * **rbin_centers**: *(1d array)* the bins centers of the radial integral
+            * **radial_integral**: *(1d array)* the radial integral
+    """
+    return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0))
 
