@@ -237,6 +237,7 @@ def radial_integral(ar, x0, y0, dr):
     Args:
         ar (2d array): the data
         x0,y0 (floats): the origin
+        dr (number): radial step size
 
     Returns:
         (2-tuple): A 2-tuple containing:
