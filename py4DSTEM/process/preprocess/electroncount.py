@@ -8,7 +8,7 @@ import numpy as np
 from scipy import optimize
 
 from ..utils import get_maximal_points, print_progress_bar, bin2D
-from ...io.datastructure import PointListArray
+from ...io import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
@@ -193,7 +193,7 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
             else:
                 # I'm not sure I understand this - we're flipping coordinates to match what?
                 # TODO: check array flipping - may vary by camera
-                counted[Rx,Ry,:,:]=torch.transpose(events.type(torch_.cuda.ShortTensor),0,1).flip(0).flip(1)
+                counted[Rx,Ry,:,:]=torch.transpose(events.type(torch.cuda.ShortTensor),0,1).flip(0).flip(1)
 
     if output=='datacube':
         return counted.cpu().numpy()
@@ -303,6 +303,9 @@ def torch_bin(array,device,factor=2):
     Returns:
         (array): the binned array
     """
+
+    import torch
+
     x,y =  array.shape
     binx,biny = x//factor,y//factor
     xx,yy = binx*factor,biny*factor
@@ -376,6 +379,8 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
 if __name__=="__main__":
 
     from py4DSTEM.process.preprocess import get_darkreference
+    from py4DSTEM.io import DataCube, save
+    from ncempy.io import dm
 
     dm4_filepath = 'Capture25.dm4'
 
@@ -392,7 +397,7 @@ if __name__=="__main__":
 
 
     # Get memory mapped 4D datacube from dm file
-    datacube = dm.dmReader(dm4filename,dSetNum=0,verbose=False)['data']
+    datacube = dm.dmReader(dm4_filepath,dSetNum=0,verbose=False)['data']
     datacube = np.moveaxis(datacube,(0,1),(2,3))
 
     # Get dark reference
@@ -407,9 +412,9 @@ if __name__=="__main__":
 
     # For outputting datacubes, wrap counted into a py4DSTEM DataCube
     if output=='datacube':
-        electron_counted_data = DataCube(data=counted)
+        electron_counted_data = DataCube(data=electron_counted_data)
 
-    output_path = dm4filename.replace('.dm4','.h5')
+    output_path = dm4_filepath.replace('.dm4','.h5')
     save(electron_counted_data, output_path)
 
 
