@@ -1,3 +1,5 @@
+# Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
+# Joydeep Munshi
 ''' 
 
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
@@ -6,6 +8,7 @@ Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 import numpy as np
 import cupy as cp
+from numba import cuda
 import tensorflow as tf
 from cupyx.scipy.ndimage import gaussian_filter
 from time import time
@@ -20,7 +23,7 @@ from .diskdetection import universal_threshold
 from pdb import set_trace
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
-                          num_attmpts = 1,
+                          num_attmpts = 5,
                           thresold = 1,
                           predict = True,
                           batch_size = 8,
@@ -117,13 +120,6 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
     assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
-    # get the maximal array kernel
-    #if probe_kernel_FT.dtype == 'float64':
-    #    get_maximal_points = kernels['maximal_pts_float64']
-    #elif probe_kernel_FT.dtype == 'float32':
-    #    get_maximal_points = kernels['maximal_pts_float32']
-    #else:
-    #    raise TypeError("Maximal kernel only valid for float32 and float64 types...")
     get_maximal_points = kernels['maximal_pts_float64']
 
     if get_maximal_points.max_threads_per_block < DP.shape[1]:
@@ -135,34 +131,40 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
         threads = (DP.shape[1],)
         
     if predict:
+        t0 = time()
+        model = _get_latest_model(model_path = model_path)
         probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
                                              datacube.R_Nx*datacube.R_Ny, axis=0), axis=-1)
         DP = tf.expand_dims(tf.reshape(datacube.data,
-                                           (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
+                                      (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
             
         prediction = np.zeros(shape = (datacube.R_Nx*datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny, 1))
-        model = _get_latest_model(model_path = model_path)
+        
+        image_num = datacube.R_Nx*datacube.R_Ny
+        batch_num = int(image_num//batch_size)
+
         for att in range(num_attmpts):
-            print('attempt {} \n'.format(att+1))
-            prediction += model.predict([DP,probe], batch_size = batch_size, verbose=1)
+            for i in tqdmnd(range(batch_num), desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts)):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+            if (i+1)*batch_size < image_num:
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+        
         print('Averaging over {} attempts \n'.format(num_attmpts))
         prediction = prediction/num_attmpts
     
         prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
-                                (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny)) 
-
+                                (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
 
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
 
     # Loop over all diffraction patterns
-    t0 = time()
-    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML CUDA',unit='DP',unit_scale=True):
         if _qt_progress_bar is not None:
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
         DP = prediction[Rx,Ry,:,:]
-        _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe[0,:,:,0],
+        _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                       num_attmpts = num_attmpts,
                                       thresold = thresold,
                                       predict = False,
@@ -179,9 +181,9 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
                                       get_maximal_points = get_maximal_points,
                                       blocks = blocks,
                                       threads = threads)
-    t = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
-                                                                   int(t/60), int(t%60)))
+    t2 = time()-t0
+    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
+                                                                   int(t2/60), int(t2%60)))
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
@@ -189,7 +191,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     return peaks
 
 def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
-                                  num_attmpts = 1,
+                                  num_attmpts = 5,
                                   thresold = 1,
                                   predict = False,
                                   edgeBoundary = 20,
@@ -268,23 +270,22 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
      """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
-    # Perform any prefiltering
-    DP = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
-
     if predict:
+        model = _get_latest_model(model_path = model_path)
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert(len(probe.shape)==2), "Dimension of Probe should be 2 (Qx, Qy)"
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
-        prediction = np.zeros(shape = (1, DP.shape[0],DP.shape[1],1))
-        model = _get_latest_model(model_path = model_path)
+        prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
+        
         for att in range(num_attmpts):
             print('attempt {} \n'.format(att+1))
             prediction += model.predict([DP,probe])
         print('Averaging over {} attempts \n'.format(num_attmpts))
-        pred = prediction[0,:,:,0]/num_attmpts
+        pred = cp.array(prediction[0,:,:,0]/num_attmpts,dtype='float64')
     else:
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
-        pred = DP
+        pred = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
 
     # Find the maxima
     maxima_x,maxima_y,maxima_int = get_maxima_2D(pred,
