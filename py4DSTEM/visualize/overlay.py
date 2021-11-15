@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle,Wedge,Ellipse
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
