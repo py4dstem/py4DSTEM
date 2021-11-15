@@ -32,7 +32,7 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
     ceily = np.ceil(qy).astype(np.int64)
     
     # Remove any points outside [0, Q_Nx] & [0, Q_Ny]
-    mask = np.logical_and(np.logical_and(np.logical_and((floorx>=0),(floory>=0)),(ceilx<Q_Nx)),(ceily<Q_Ny))
+    mask = np.logical_and.reduce(((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
     qx = qx[mask]
     qy = qy[mask]
     I = I[mask]
@@ -152,7 +152,7 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
     ceily = np.ceil(qy).astype(np.int64)
     
     # Remove any points outside [0, Q_Nx] & [0, Q_Ny]
-    mask = np.logical_and(np.logical_and(np.logical_and((floorx>=0),(floory>=0)),(ceilx<Q_Nx)),(ceily<Q_Ny))
+    mask = np.logical_and.reduce(((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
     qx = qx[mask]
     qy = qy[mask]
     I = I[mask]
