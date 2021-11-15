@@ -3,7 +3,7 @@
 
 ''' 
 
-Functions for finding Braggdisks using AI/ML method
+Functions for finding Braggdisks using AI/ML method using tensorflow 
 
 '''
 
@@ -22,10 +22,11 @@ from ...io.google_drive_downloader import download_file_from_google_drive
 from ...io.datastructure import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
-def _find_Bragg_disks_aiml_single_DP(DP, probe,
-                                     num_attmpts = 1,
+def find_Bragg_disks_aiml_single_DP(DP, probe,
+                                     num_attmpts = 5,
                                      thresold = 1,
                                      predict = True,
+                                     sigma = 0,
                                      edgeBoundary = 20,
                                      minRelativeIntensity = 0.005,
                                      minAbsoluteIntensity = 0,
@@ -40,7 +41,7 @@ def _find_Bragg_disks_aiml_single_DP(DP, probe,
     """
     Finds the Bragg disks in single DP by AI/ML method.
     
-    The input DP and Probes need to be aligned before the precdiction. Detected peaks within 
+    The input DP and Probes need to be aligned before the prediction. Detected peaks within 
     edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
     with intensities less than minRelativeIntensity of the brightest peak in the
     correaltion are discarded. Then peaks which are within a distance of minPeakSpacing
@@ -103,13 +104,14 @@ def _find_Bragg_disks_aiml_single_DP(DP, probe,
     DP = DP if filter_function is None else filter_function(DP)
 
     if predict:
+        model = _get_latest_model(model_path = model_path)
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
-        prediction = np.zeros(shape = (1, DP.shape[0],DP.shape[1],1))
-        model = _get_latest_model(model_path = model_path)
-        for att in range(num_attmpts):
-            print('attempt {} \n'.format(att+1))
+        prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
+        
+        for i in tqdmnd(num_attmpts, desc='Neural network is predicting atomic potential', unit='ATTEMPTS',unit_scale=True):
             prediction += model.predict([DP,probe])
         print('Averaging over {} attempts \n'.format(num_attmpts))
         pred = prediction[0,:,:,0]/num_attmpts
@@ -118,6 +120,7 @@ def _find_Bragg_disks_aiml_single_DP(DP, probe,
         pred = DP
     
     maxima_x,maxima_y,maxima_int = get_maxima_2D(pred, 
+                                                 sigma = sigma,
                                                  minRelativeIntensity=minRelativeIntensity,
                                                  minAbsoluteIntensity=minAbsoluteIntensity,
                                                  edgeBoundary=edgeBoundary,
@@ -128,13 +131,12 @@ def _find_Bragg_disks_aiml_single_DP(DP, probe,
                                                  upsample_factor=upsample_factor)
             
     
-    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,thresold=thresold)
+    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,radius=thresold)
 
     # Make peaks PointList
     if peaks is None:
         coords = [('qx',float),('qy',float),('intensity',float)]
         peaks = PointList(coordinates=coords)
-        #peaks.remove_points(ai_peaks.data['intensity'] < minAbsIntensity)
     else:
         assert(isinstance(peaks,PointList))
     peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
@@ -143,9 +145,11 @@ def _find_Bragg_disks_aiml_single_DP(DP, probe,
 
 
 def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
-                                   num_attmpts = 1,
+                                   num_attmpts = 5,
                                    thresold = 1,
+                                   batch_size = 1,
                                    predict =True,
+                                   sigma = 0,
                                    edgeBoundary = 20,
                                    minRelativeIntensity = 0.005,
                                    minAbsoluteIntensity = 0,
@@ -214,33 +218,37 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
     peaks = []
     
     if predict:
-        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
+        model = _get_latest_model(model_path = model_path)
+        t0= time()
+        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0), 
                                              len(Rx), axis=0), axis=-1)
-        DP = tf.expand_dims(tf.expand_dims(datacube.data[Rx[0],Ry[0],:,:], axis=0), axis=-1)
+        DP = np.expand_dims(np.expand_dims(datacube.data[Rx[0],Ry[0],:,:], axis=0), axis=-1)
         total_DP = len(Rx)
         for i in range(1,len(Rx)):
-            DP_ = tf.expand_dims(tf.expand_dims(datacube.data[Rx[i],Ry[i],:,:], axis=0), axis=-1)
-            DP = tf.concat([DP,DP_], axis=0)
+            DP_ = np.expand_dims(np.expand_dims(datacube.data[Rx[i],Ry[i],:,:], axis=0), axis=-1)
+            DP = np.concatenate([DP,DP_], axis=0)
             
         prediction = np.zeros(shape = (total_DP, datacube.Q_Nx, datacube.Q_Ny, 1))
-
-        model = _get_latest_model(model_path = model_path)
+        
+        image_num = len(Rx)
+        batch_num = int(image_num//batch_size)
+        
         for att in range(num_attmpts):
-            print('attempt {} \n'.format(att+1))
-            prediction += model.predict([DP,probe], verbose=1)
-        print('Averaging over {} attempts \n'.format(num_attmpts))
+            for i in tqdmnd(batch_num, desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts), unit='DP',unit_scale=True):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+            if (i+1)*batch_size < image_num:
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+        
         prediction = prediction/num_attmpts
         
-    #pred = tf.reshape(tf.keras.backend.permute_dimensions(pred, (0,3,1,2)),
-    #                  (len(Rx),len(Rx),datacube.Q_Nx, datacube.Q_Ny))
-
     # Loop over selected diffraction patterns
-    for i in range(len(Rx)):
-        DP = prediction[i,:,:,0]
+    for Rx in tqdmnd(image_num,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
+        DP = prediction[Rx,:,:,0]
         
-        _peaks =  _find_Bragg_disks_aiml_single_DP(DP, probe[0,:,:,0],
+        _peaks =  find_Bragg_disks_aiml_single_DP(DP, probe,
                                                    thresold = thresold,
                                                    predict = False,
+                                                   sigma = sigma,
                                                    edgeBoundary=edgeBoundary,
                                                    minRelativeIntensity=minRelativeIntensity,
                                                    minAbsoluteIntensity=minAbsoluteIntensity,
@@ -252,15 +260,19 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
                                                    filter_function=filter_function,
                                                    model_path=model_path)
         peaks.append(_peaks)
+    t2 = time()-t0
+    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(image_num, int(t2/3600),
+                                                                   int(t2/60), int(t2%60)))
 
     peaks = tuple(peaks)
     return peaks
 
 def find_Bragg_disks_aiml_serial(datacube, probe,
-                                 num_attmpts = 1,
+                                 num_attmpts = 5,
                                  thresold = 1,
                                  predict =True,
                                  batch_size = 2,
+                                 sigma = 0,
                                  edgeBoundary = 20,
                                  minRelativeIntensity = 0.005,
                                  minAbsoluteIntensity = 0,
@@ -356,36 +368,44 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
     
     if predict:
-        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
-                                             datacube.R_Nx*datacube.R_Ny, axis=0), axis=-1)
-        DP = tf.expand_dims(tf.reshape(datacube.data,
-                                      (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
-            
-        prediction = np.zeros(shape = (datacube.R_Nx*datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny, 1))
+        t0=time()
         model = _get_latest_model(model_path = model_path)
+        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0), 
+                                             datacube.R_N, axis=0), axis=-1)
+        DP = np.expand_dims(np.reshape(datacube.data,
+                                      (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
+            
+        prediction = np.zeros(shape = (datacube.R_N, datacube.Q_Nx, datacube.Q_Ny, 1))
+        
+        image_num = datacube.R_N
+        batch_num = int(image_num//batch_size)
+
         for att in range(num_attmpts):
-            print('attempt {} \n'.format(att+1))
-            prediction += model.predict([DP,probe], batch_size = batch_size, verbose=1)
-        print('Averaging over {} attempts \n'.format(num_attmpts))
+            for i in tqdmnd(batch_num, desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts), unit='DP',unit_scale=True):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+            if (i+1)*batch_size < image_num:
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+
         prediction = prediction/num_attmpts
     
-    prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
-                            (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
-    
+        prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
+                                (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
+        
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
 
     # Loop over all diffraction patterns
-    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
         if _qt_progress_bar is not None:
             _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
             QApplication.processEvents()
-        DP = prediction[Rx,Ry,:,:]
+        DP_ = prediction[Rx,Ry,:,:]
         
-        _find_Bragg_disks_aiml_single_DP(DP, probe[0,:,:,0],
+        find_Bragg_disks_aiml_single_DP(DP_, probe,
                                          num_attmpts = num_attmpts,
                                          thresold = thresold,
                                          predict = False,
+                                         sigma = sigma,
                                          edgeBoundary=edgeBoundary,
                                          minRelativeIntensity=minRelativeIntensity,
                                          minAbsoluteIntensity=minAbsoluteIntensity,
@@ -397,6 +417,9 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                          filter_function=filter_function,
                                          peaks = peaks.get_pointlist(Rx,Ry),
                                          model_path=model_path)
+    t2 = time()-t0
+    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
+                                                                   int(t2/60), int(t2%60)))
         
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
@@ -405,10 +428,11 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     return peaks
 
 def find_Bragg_disks_aiml(datacube, probe,
-                          num_attmpts = 1,
+                          num_attmpts = 5,
                           thresold = 1,
                           predict = True,
                           batch_size = 8,
+                          sigma = 0,
                           edgeBoundary = 20,
                           minRelativeIntensity = 0.005,
                           minAbsoluteIntensity = 0,
@@ -562,95 +586,130 @@ def find_Bragg_disks_aiml(datacube, probe,
     
     if distributed is None:
         if not CUDA:
-            return find_Bragg_disks_aiml_serial(
-                datacube,
-                probe,
-                num_attmpts = num_attmpts,
-                thresold = thresold,
-                predict = predict,
-                batch_size = batch_size,
-                edgeBoundary=edgeBoundary,
-                minRelativeIntensity=minRelativeIntensity,
-                minAbsoluteIntensity=minAbsoluteIntensity,
-                relativeToPeak=relativeToPeak,
-                minPeakSpacing=minPeakSpacing,
-                maxNumPeaks=maxNumPeaks,
-                subpixel=subpixel,
-                upsample_factor=upsample_factor,
-                model_path=model_path,
-                name=name,
-                filter_function=filter_function,
-                _qt_progress_bar=_qt_progress_bar)
+            if _check_cuda_device_available():
+                print('CUDA = False was selected but py4DSTEM found available CUDA device to speed up. Switching to CUDA-enabled mode!! \n')
+                #from .diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
+                return find_Bragg_disks_aiml_serial(datacube,
+                                                  probe,
+                                                  num_attmpts = num_attmpts,
+                                                  thresold = thresold,
+                                                  predict = predict,
+                                                  batch_size = batch_size,
+                                                  sigma = sigma,
+                                                  edgeBoundary=edgeBoundary,
+                                                  minRelativeIntensity=minRelativeIntensity,
+                                                  minAbsoluteIntensity=minAbsoluteIntensity,
+                                                  relativeToPeak=relativeToPeak,
+                                                  minPeakSpacing=minPeakSpacing,
+                                                  maxNumPeaks=maxNumPeaks,
+                                                  subpixel=subpixel,
+                                                  upsample_factor=upsample_factor,
+                                                  model_path=model_path,
+                                                  name=name,
+                                                  filter_function=filter_function,
+                                                  _qt_progress_bar=_qt_progress_bar)
+            else:
+                if num_attmpts > 1:
+                    import warnings
+                    warnings.warn('WARNING: num_attmpts > 1 will take significant amount of time with Non-CUDA device, try enabling CUDA. Setting num_attmpts = 1 for now...')
+                    num_attmpts = 1
+                return find_Bragg_disks_aiml_serial(datacube,
+                                                    probe,
+                                                    num_attmpts = num_attmpts,
+                                                    thresold = thresold,
+                                                    predict = predict,
+                                                    batch_size = batch_size,
+                                                    sigma = sigma,
+                                                    edgeBoundary=edgeBoundary,
+                                                    minRelativeIntensity=minRelativeIntensity,
+                                                    minAbsoluteIntensity=minAbsoluteIntensity,
+                                                    relativeToPeak=relativeToPeak,
+                                                    minPeakSpacing=minPeakSpacing,
+                                                    maxNumPeaks=maxNumPeaks,
+                                                    subpixel=subpixel,
+                                                    upsample_factor=upsample_factor,
+                                                    model_path=model_path,
+                                                    name=name,
+                                                    filter_function=filter_function,
+                                                    _qt_progress_bar=_qt_progress_bar)
         elif _check_cuda_device_available():
             from .diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
-            return find_Bragg_disks_aiml_CUDA(
-                datacube,
-                probe,
-                num_attmpts = num_attmpts,
-                thresold = thresold,
-                predict = predict,
-                batch_size = batch_size,
-                edgeBoundary=edgeBoundary,
-                minRelativeIntensity=minRelativeIntensity,
-                minAbsoluteIntensity=minAbsoluteIntensity,
-                relativeToPeak=relativeToPeak,
-                minPeakSpacing=minPeakSpacing,
-                maxNumPeaks=maxNumPeaks,
-                subpixel=subpixel,
-                upsample_factor=upsample_factor,
-                model_path=model_path,
-                name=name,
-                filter_function=filter_function,
-                _qt_progress_bar=_qt_progress_bar)
+            return find_Bragg_disks_aiml_CUDA(datacube,
+                                              probe,
+                                              num_attmpts = num_attmpts,
+                                              thresold = thresold,
+                                              predict = predict,
+                                              batch_size = batch_size,
+                                              sigma = sigma,
+                                              edgeBoundary=edgeBoundary,
+                                              minRelativeIntensity=minRelativeIntensity,
+                                              minAbsoluteIntensity=minAbsoluteIntensity,
+                                              relativeToPeak=relativeToPeak,
+                                              minPeakSpacing=minPeakSpacing,
+                                              maxNumPeaks=maxNumPeaks,
+                                              subpixel=subpixel,
+                                              upsample_factor=upsample_factor,
+                                              model_path=model_path,
+                                              name=name,
+                                              filter_function=filter_function,
+                                              _qt_progress_bar=_qt_progress_bar)
         else:
-            print('py4DSTEM was hoping to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to CPU (Non-CUDA) mode (Remember it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n')
-            return find_Bragg_disks_aiml_serial(
-                datacube,
-                probe,
-                num_attmpts = num_attmpts,
-                thresold = thresold,
-                predict = predict,
-                batch_size = batch_size,
-                edgeBoundary=edgeBoundary,
-                minRelativeIntensity=minRelativeIntensity,
-                minAbsoluteIntensity=minAbsoluteIntensity,
-                relativeToPeak=relativeToPeak,
-                minPeakSpacing=minPeakSpacing,
-                maxNumPeaks=maxNumPeaks,
-                subpixel=subpixel,
-                upsample_factor=upsample_factor,
-                model_path=model_path,
-                name=name,
-                filter_function=filter_function,
-                _qt_progress_bar=_qt_progress_bar)
+            print('py4DSTEM attempted to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to CPU (Non-CUDA) mode (Remember it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n')
+            if num_attmpts > 1:
+                import warnings
+                warnings.warn('WARNING: num_attmpts > 1 will take significant amount of time with Non-CUDA device, try enabling CUDA. Setting num_attmpts = 1 for now...')
+                num_attmpts = 1
+            return find_Bragg_disks_aiml_serial(datacube,
+                                                probe,
+                                                num_attmpts = num_attmpts,
+                                                thresold = thresold,
+                                                predict = predict,
+                                                batch_size = batch_size,
+                                                sigma = sigma,
+                                                edgeBoundary=edgeBoundary,
+                                                minRelativeIntensity=minRelativeIntensity,
+                                                minAbsoluteIntensity=minAbsoluteIntensity,
+                                                relativeToPeak=relativeToPeak,
+                                                minPeakSpacing=minPeakSpacing,
+                                                maxNumPeaks=maxNumPeaks,
+                                                subpixel=subpixel,
+                                                upsample_factor=upsample_factor,
+                                                model_path=model_path,
+                                                name=name,
+                                                filter_function=filter_function,
+                                                _qt_progress_bar=_qt_progress_bar)
 
     elif isinstance(distributed, dict):
-        #connect, data_file, cluster_path = _parse_distributed(distributed)
-
-        raise ValueError("{} not yet implemented for aiml pipeline".format(type(distributed)))
+        raise Exception("{} not yet implemented for aiml pipeline".format(type(distributed)))
     else:
-        raise ValueError("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
+        raise Exception("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
-def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,thresold=1):
+def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,radius=1):
     """
-    Integrate DP over the region of thresold pixel and average them
+    Integrate DP over the circular patch of pixel with radius
     """
-        disks = []
-        for x,y,i in zip(maxima_x,maxima_y,maxima_int):
-            disk = DP[int(x)-thresold:int(x)+thresold, int(y)-thresold:int(y)+thresold]
-            disks.append(np.average(disk))
+    disks = []
+    for x,y,i in zip(maxima_x,maxima_y,maxima_int):
+        img_size = DP.shape[0]
+        r1,r2 = np.ogrid[-x:img_size-x, -y:img_size-y]
+        mask = r1**2 + r2**2 <= radius**2
+        mask_arr = np.zeros((img_size, img_size))
+        mask_arr[mask] = 1
+        disk = DP*mask_arr
+        disks.append(np.average(disk))
+    try:
         disks = disks/max(disks)
-        return (maxima_x,maxima_y,disks)
+    except:
+        pass
+    return (maxima_x,maxima_y,disks)
 
 def _check_cuda_device_available():
     """
     Check if GPU is available to use by python/tensorflow.
     """
-    import GPUtil 
-    gpus = GPUtil.getAvailable()
     tf_recog_gpus = tf.config.experimental.list_physical_devices('GPU')
     
-    if len(gpus) > 0 and len(tf_recog_gpus) >0:
+    if len(tf_recog_gpus) >0:
         return True
     else:
         return False
@@ -667,10 +726,11 @@ def _get_latest_model(model_path = None):
             from cloud and download and load them. 
 
     Returns:
-         model                         Trained tensorflow model for disk detection
+         model:    Trained tensorflow model for disk detection
     """
     
     from ...io.google_drive_downloader import download_file_from_google_drive
+    tf.keras.backend.clear_session()
     
     if model_path is None:
         try:
@@ -709,8 +769,8 @@ def _get_latest_model(model_path = None):
 
         model = tf.keras.models.load_model(model_path,
                                            custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
-        print('Successfully loaded the model \n')
     else:
+        print('Loading the user provided model... \n')
         model = tf.keras.models.load_model(model_path,
                                            custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
     
