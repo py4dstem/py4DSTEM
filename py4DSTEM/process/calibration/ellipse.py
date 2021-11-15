@@ -47,6 +47,7 @@ where b = a*e is the semiminor axis length.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
 from scipy.signal import savgol_filter
