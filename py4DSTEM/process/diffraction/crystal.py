@@ -2634,7 +2634,7 @@ class Crystal:
             foil_normal = zone_axis
         else:
             foil_normal = np.asarray(foil_normal, dtype="float")
-            if not cartesian_directions:
+            if not self.cartesian_directions:
                 foil_normal = self.crystal_to_cartesian(foil_normal)
             else:
                 foil_normal = foil_normal / np.linalg.norm(foil_normal)
