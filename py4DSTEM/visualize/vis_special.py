@@ -23,11 +23,12 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         fitradii (2-tuple of numbers): the annulus inner and outer fit radii
         ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
             See the module docstring for utils.ellipticalCoords for more details.
-        fill (bool): the fill value of the annulus
+        fill (bool): if True, fills in the annular fitting region,
+          else shows only inner/outer edges
         color_ann (color): annulus color
         color_ell (color): ellipse color
-        alpha_ann:
-        alpha_ell:
+        alpha_ann: transparency for the annulus
+        alpha_ell: transparency forn the fit ellipse
         linewidth_ann:
         linewidth_ell:
     """
