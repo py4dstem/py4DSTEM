@@ -393,7 +393,7 @@ def construct_illumation(shape, size, keV, aperture, ap_in_mrad=True,
 
     # Get diffraction space coordinates
     qsize = (float(Nx)/xsize,float(Ny)/ysize)
-    qx, qy = np.meshgrid(np.fft.fftfreq(Nx, qsize[0]), np.fft.fftfreq(Ny, qsize[1]))
+    qx, qy = make_Fourier_coords2D(qsize[0],qsize[1])
     qr = np.sqrt(qx**2 + qy**2)
 
     # Get electron wavenumber and aperture size
@@ -490,26 +490,7 @@ def get_interaction_constant(E):
 
 ####################### Utility functions ##########################
 
-# def make_qspace_coords(shape,qsize):
-#     """
-#     Creates a diffraction space coordinate grid.
-# 
-#     Number of pixels in the grid (sampling) is given by shape = (Nx,Ny).
-#     Extent of the grid is given by qsize = (xsize,ysize), where xsize,ysize are in inverse length
-#     units, and are the number of pixels divided by the real space size.
-# 
-#     Accepts:
-#         shape       (2-tuple of ints) grid shape
-#         qsize       (2-tuple of floats) grid size, in reciprocal length units
-# 
-#     Returns:
-#         qx          (2D ndarray) the x diffraction space coordinates
-#         qy          (2D ndarray) the y diffraction space coordinates
-#     """
-#     qx = np.fft.fftfreq(shape[0])*qsize[0]
-#     qy = np.fft.fftfreq(shape[1])*qsize[1]
-#     return qx,qy
-# 
+
 # def pad_shift(ar, x, y):
 #     """
 #     Similar to np.roll, but designed for special handling of zero padded matrices.
