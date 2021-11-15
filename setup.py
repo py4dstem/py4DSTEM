@@ -43,6 +43,6 @@ setup(
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
     },
     package_data={
-        'py4DSTEM':['process/utils/scatteringFactors.txt']
+        'py4DSTEM':['process/utils/scattering_factors.txt']
     },
 )

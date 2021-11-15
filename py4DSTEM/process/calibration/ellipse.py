@@ -12,7 +12,7 @@ parameters:
                 to the x-axis, in radians
 
 More details about the elliptical parameterization used can be found in
-the module docstring for process/utils/ellipticalCoords.py.
+the module docstring for process/utils/elliptical_coords.py.
 """
 
 import numpy as np
