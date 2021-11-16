@@ -113,7 +113,7 @@ def cartesian_to_polarelliptical_transform(
     polar-elliptical coordinates.
 
     Discussion of the elliptical parametrization used can be found in the docstring
-    for the process.utils.ellipticalCoords module.
+    for the process.utils.elliptical_coords module.
 
     Args:
         cartesianData (2D float array): the data in cartesian coordinates
@@ -121,7 +121,7 @@ def cartesian_to_polarelliptical_transform(
             transformation. These are the same 5 parameters which are outputs
             of the elliptical fitting functions in the process.calibration
             module, e.g. fit_ellipse_amorphous_ring and fit_ellipse_1D. For
-            more details, see the process.utils.ellipticalCoords module docstring
+            more details, see the process.utils.elliptical_coords module docstring
         dr (float): sampling of the (r,phi) coords: the width of the bins in r
         dphi (float): sampling of the (r,phi) coords: the width of the bins in phi,
             in radians
