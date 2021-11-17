@@ -5,8 +5,8 @@ from ...io.datastructure import DataCube
 from ..utils import tqdmnd
 import numba as nb
 import dask.array as da
-def test():
-    return True
+# def test():
+#     return True``
 
 ##### old py4dSTEM funcs ####
 def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
@@ -198,7 +198,13 @@ def combine_masks(masks, operator='or'):
 #### In memory functions ####
 #TODO decide if fastmath is appropriate or not  
 #TODO add assertions if desired 
-
+#TODO add ability to shift patterns from coordinates / calibration centers - after v 13.0 update
+#TODO add simplified boolean functions i.e. abstract away passing mask,
+#TODO e.g. BF That only takes center and radius
+#TODO e.g. Circ,rectangular annular take minimal arguments
+#TODO correct names e.g. change "make..." to "get...", shorten _numba to _nb
+#TODO add alias functions e.g make_
+#TODO add alias functions 
 @nb.jit(nopython=True, parallel=True, fastmath=True)
 def make_virtual_image_numba(datacube, mask, out=None):
     """
@@ -220,7 +226,7 @@ def make_virtual_image_numba(datacube, mask, out=None):
     return out
 
 # I can't get this to work quicker than you're brightfield function for some unknown reason.
-@nb.jit(nopython=True, parallel=False, cache=False, fastmath=True)
+@nb.jit(nopython=True, parallel=False, cache=True, fastmath=True)
 def make_virtual_image_BF_numba(datacube, mask, crop_vals=(xmin, xmax, ymin, ymax), out=None):
     """
     Make a virutal for all probe posistions from a py4DSTEM datacube object using a mask boolean mask centered at (x0,y0) and with radius R
@@ -250,7 +256,9 @@ def make_virtual_image_BF_numba(datacube, mask, crop_vals=(xmin, xmax, ymin, yma
 
 
 #### Dask Function #### 
-
+#TODO add complementary functions to above operating on dask e.g. BF, annular, circular etc. 
+#TODO change to passing datacube
+#TODO add automagic application of Dask or Numba functions depending on type(datacube.data)
 # can use a list of different output_dtype if that makes sense, I've set to np.uint for now. 
 # only works on dask array. 
 @da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.uint, axes=[(2,3),(0,1),()], vectorize=True)
