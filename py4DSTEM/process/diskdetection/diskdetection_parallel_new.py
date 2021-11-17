@@ -117,6 +117,7 @@ def beta_parallel_disk_detection(dataset,
         peaks (PointListArray): the Bragg peak positions and the correlenation intensities
         dask_client(optional) (distributed.client.Client): dask_client for use later.
     """
+    #TODO add asserts abotu peaks not being passed
     # Dask Client stuff
     #TODO how to guess at default params for client, sqrt no.cores.  Something to do with the size of the diffraction patterm
     # write a function which can do this. 
@@ -157,6 +158,7 @@ def beta_parallel_disk_detection(dataset,
     # Probe stuff
     assert (probe.shape == dataset.data.shape[2:]), "Probe and Diffraction Pattern Shapes are Mismatched"
     if probe_type != "FT":
+    #TODO clean up and pull out redudant parts
     #if probe.dtype != (np.complex128 or np.complex64 or np.complex256):
         #DO FFT SHIFT THING
         probe_kernel_FT = np.conj(np.fft.fft2(probe))
@@ -169,9 +171,9 @@ def beta_parallel_disk_detection(dataset,
         dask_probe_delayed = dask_probe_array.to_delayed()
 
     # GET DATA 
-
+    #TODO add another elif if it is a dask array then pass
     if type(dataset.data) == np.ndarray:
-        dask_data = da.from_array(dataset.array, chunks=(1, 1,dataset.Q_Nx, dataset.Q_Ny))
+        dask_data = da.from_array(dataset.data, chunks=(1, 1,dataset.Q_Nx, dataset.Q_Ny))
     elif dataset.stack_pointer != None:
         dask_data = da.from_array(dataset.stack_pointer, chunks=(1, 1,dataset.Q_Nx, dataset.Q_Ny))
     else: 
