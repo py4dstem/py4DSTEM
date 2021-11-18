@@ -153,11 +153,21 @@ def filter_bad_pixels(
     datacube,
     thresh,
     ind_compare=1,
+    return_mask=False
     ):
     """
     This function performs pixel filtering to remove hot or cold pixels. We first compute a moving median filter,
     applied to the mean diffraction image. Pixels with intensity int_0 are compared to a locally ordered median
     value, default is the 2nd brightest pixel.
+
+    Args:
+            datacube (DataCube):      
+            thresh (float):            threshold for mask
+            ind_compare (int):         which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+
+        Returns:
+            datacube                     datacube              
+            mask (bool):                 (optional) the bad pixel mask
     """
 
     # Mean image over all probe positions
@@ -190,46 +200,15 @@ def filter_bad_pixels(
         np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),        
         ]), axis=0)
     diff_compare = np.reshape(diff_local_med[-ind_compare-1,:], diff_mean.shape)
-    # diff_med = np.reshape(np.median(np.vstack([
-    #     np.roll(diff_mean,(-1,-1)).ravel(),
-    #     np.roll(diff_mean,( 0,-1)).ravel(),
-    #     np.roll(diff_mean,( 1,-1)).ravel(),
-    #     np.roll(diff_mean,(-1, 0)).ravel(),
-    #     np.roll(diff_mean,( 0, 0)).ravel(),
-    #     np.roll(diff_mean,( 1, 0)).ravel(),
-    #     np.roll(diff_mean,(-1, 1)).ravel(),
-    #     np.roll(diff_mean,( 0, 1)).ravel(),
-    #     np.roll(diff_mean,( 1, 1)).ravel(),
-    #     \
-    #     np.roll(diff_mean,(-1,-2)).ravel(),
-    #     np.roll(diff_mean,( 0,-2)).ravel(),
-    #     np.roll(diff_mean,( 1,-2)).ravel(),
-    #     np.roll(diff_mean,(-1, 2)).ravel(),
-    #     np.roll(diff_mean,( 0, 2)).ravel(),
-    #     np.roll(diff_mean,( 1, 2)).ravel(),
-    #     \
-    #     np.roll(diff_mean,(-2,-1)).ravel(),
-    #     np.roll(diff_mean,(-2, 0)).ravel(),
-    #     np.roll(diff_mean,(-2, 1)).ravel(),
-    #     np.roll(diff_mean,( 2,-1)).ravel(),
-    #     np.roll(diff_mean,( 2, 0)).ravel(),
-    #     np.roll(diff_mean,( 2, 1)).ravel(),        
-    #     ]), axis=0), diff_mean.shape)
 
     # Generate mask
-    mask = diff_mean - diff_compare # > thresh
-
-    # mask = np.abs(diff_mean - diff_med)  
-    # mask_den = (diff_mean + diff_med)
-    # sub = mask_den > 0
-    # mask[sub] = mask[sub] / mask_den[sub]
-
+    mask = diff_mean - diff_compare > thresh
 
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(1,1,figsize=(16,16))
+    fig, ax = plt.subplots(1,1,figsize=(12,12))
     ax.imshow(
-        # mask,
-        np.hstack([diff_mean,diff_compare]),
+        mask,
+        # np.hstack([diff_mean,diff_compare]),
         cmap='turbo')
 
     plt.show()
