@@ -8,7 +8,7 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
-from ..utils import bin2D, tqdmnd
+from ..utils import bin2D, tqdmnd, get_shifted_ar
 from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
@@ -252,7 +252,7 @@ def datacube_diffraction_shift(
 
     # Loop over all images
     for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Shifting images", unit=" images"):
-        datacube.data[ax,ay,:,:] = py4DSTEM.process.utils.get_shifted_ar(
+        datacube.data[ax,ay,:,:] = get_shifted_ar(
             datacube.data[ax,ay,:,:],
             xshifts[ax,ay],
             yshifts[ax,ay],
