@@ -219,3 +219,45 @@ def filter_bad_pixels(
     else:
         return datacube
 
+def datacube_diffraction_shift(
+    datacube,
+    xshifts,
+    yshifts,
+    periodic=True,
+    bilinear=False,
+    ):
+    """
+    This function performs pixel filtering to remove hot or cold pixels. We first compute a moving median filter,
+    applied to the mean diffraction image. Pixels with intensity int_0 are compared to a locally ordered median
+    value, default is the 2nd brightest pixel.
+
+    Args:
+            datacube (DataCube):      
+            xshifts (float):       array or scalar value for the x dim shifts
+            yshifts (float):       array or scalar value for the y dim shifts
+            periodic (bool):       flag for periodic boundary conditions
+            bilinear (bool):       flag for bilinear image shifts
+
+        Returns:
+            datacube                     datacube              
+    """
+
+    # if the shift values are constant, expand to arrays
+    xshifts = np.array(xshifts)
+    yshifts = np.array(yshifts)
+    if xshifts.ndim == 0:
+        xshifts = xshifts * np.ones((datacube.R_Nx,datacube.R_Ny))
+    if yshifts.ndim == 0:
+        yshifts = yshifts * np.ones((datacube.R_Nx,datacube.R_Ny))    
+
+    # Loop over all images
+    for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Shifting images", unit=" images"):
+        datacube.data[ax,ay,:,:] = py4DSTEM.process.utils.get_shifted_ar(
+            datacube.data[ax,ay,:,:],
+            xshifts[ax,ay],
+            yshifts[ax,ay],
+            periodic=periodic,
+            bilinear=bilinear,
+        )
+
+    return datacube
