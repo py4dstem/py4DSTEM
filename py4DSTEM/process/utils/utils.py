@@ -152,17 +152,71 @@ def get_shift(ar1, ar2, corrPower=1):
     return xshift, yshift
 
 
-def get_shifted_ar(ar, xshift, yshift):
+def get_shifted_ar(
+    ar, 
+    xshift, 
+    yshift,
+    periodic=True,
+    bilinear=False,
+    ):
     """
-	Shifts array ar by the shift vector (xshift,yshift), using the Fourier shift theorem (i.e.
-	with sinc interpolation).
-    """
-    nx, ny = np.shape(ar)
-    qx, qy = make_Fourier_coords2D(nx, ny, 1)
-    nx, ny = float(nx), float(ny)
+	Shifts array ar by the shift vector (xshift,yshift), using the either 
+    the Fourier shift theorem (i.e.	with sinc interpolation), or bilinear
+    resampling. Boundary conditions can be periodic or not.
 
-    w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
-    shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
+    Args:
+            ar (float):            input array 
+            xshift (float):        shift along axis 0 (x) in pixels
+            yshift (float):        shift along axis 1 (y) in pixels
+            periodic (bool):       flag for periodic boundary conditions
+            bilinear (bool):       flag for bilinear image shifts
+
+        Returns:
+            datacube                     datacube              
+            mask (bool):                 (optional) the bad pixel mask
+    """
+
+
+
+    # Apply image shift
+    if bilinear is False:
+        nx, ny = np.shape(ar)
+        qx, qy = make_Fourier_coords2D(nx, ny, 1)
+        nx, ny = float(nx), float(ny)
+
+        w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
+        shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
+
+    else:
+        xF = (np.floor(xshift)).astype(int)
+        yF = (np.floor(yshift)).astype(int)
+        wx = xshift - xF
+        wy = yshift - yF
+            
+        shifted_ar = \
+            np.roll(ar,(xF  ,yF  ),axis=(0,1)) * ((1-wx)*(1-wy)) + \
+            np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
+            np.roll(ar,(xF  ,yF+1),axis=(0,1)) * ((1-wx)*(  wy)) + \
+            np.roll(ar,(xF+1,yF+1),axis=(0,1)) * ((  wx)*(  wy))
+    
+
+    if periodic is False:
+        # Rounded coordinates for boundaries
+        xR = (np.round(xshift)).astype(int)
+        yR = (np.round(yshift)).astype(int)
+
+        print(xR,yR)
+
+        if xR > 0:
+            shifted_ar[0:xR,:] = 0
+        elif xR < 0:
+            shifted_ar[xR:,:] = 0    
+        if yR > 0:
+            shifted_ar[:,0:yR] = 0
+        elif yR < 0:
+            shifted_ar[:,yR:] = 0    
+
+
     return shifted_ar
 
 
