@@ -9,6 +9,7 @@
 
 import numpy as np
 from ..utils import bin2D, tqdmnd
+from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
 
@@ -204,16 +205,17 @@ def filter_bad_pixels(
     # Generate mask
     mask = diff_mean - diff_compare > thresh
 
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(1,1,figsize=(12,12))
-    ax.imshow(
-        mask,
-        # np.hstack([diff_mean,diff_compare]),
-        cmap='turbo')
+    # apply filtering
+    for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Cleaning pixels", unit=" images"):
+        # Calculate local 3x3 median images
+        im_med = median_filter(
+            datacube.data[ax,ay,:,:],
+            size=3,
+            mode='nearest')
+        datacube.data[ax,ay,:,:][mask] = im_med[mask]
 
-    plt.show()
-
-
-    return datacube
-
+    if return_mask is True:
+        return datacube, mask
+    else:
+        return datacube
 
