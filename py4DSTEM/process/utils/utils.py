@@ -176,8 +176,6 @@ def get_shifted_ar(
             mask (bool):                 (optional) the bad pixel mask
     """
 
-
-
     # Apply image shift
     if bilinear is False:
         nx, ny = np.shape(ar)
@@ -198,14 +196,11 @@ def get_shifted_ar(
             np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
             np.roll(ar,(xF  ,yF+1),axis=(0,1)) * ((1-wx)*(  wy)) + \
             np.roll(ar,(xF+1,yF+1),axis=(0,1)) * ((  wx)*(  wy))
-    
 
     if periodic is False:
         # Rounded coordinates for boundaries
         xR = (np.round(xshift)).astype(int)
         yR = (np.round(yshift)).astype(int)
-
-        print(xR,yR)
 
         if xR > 0:
             shifted_ar[0:xR,:] = 0
@@ -215,7 +210,6 @@ def get_shifted_ar(
             shifted_ar[:,0:yR] = 0
         elif yR < 0:
             shifted_ar[:,yR:] = 0    
-
 
     return shifted_ar
 
