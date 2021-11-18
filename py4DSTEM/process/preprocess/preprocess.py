@@ -149,5 +149,92 @@ def bin_data_real(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
+def filter_bad_pixels(
+    datacube,
+    thresh,
+    ind_compare=1,
+    ):
+    """
+    This function performs pixel filtering to remove hot or cold pixels. We first compute a moving median filter,
+    applied to the mean diffraction image. Pixels with intensity int_0 are compared to a locally ordered median
+    value, default is the 2nd brightest pixel.
+    """
+
+    # Mean image over all probe positions
+    diff_mean = np.mean(datacube.data,axis=(0,1))
+
+    # Local median
+    diff_local_med = np.sort(np.vstack([
+        np.roll(diff_mean,(-1,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 1),axis=(0,1)).ravel(),
+        \
+        np.roll(diff_mean,(-1,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 2),axis=(0,1)).ravel(),
+        \
+        np.roll(diff_mean,(-2,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-2, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-2, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),        
+        ]), axis=0)
+    diff_compare = np.reshape(diff_local_med[-ind_compare-1,:], diff_mean.shape)
+    # diff_med = np.reshape(np.median(np.vstack([
+    #     np.roll(diff_mean,(-1,-1)).ravel(),
+    #     np.roll(diff_mean,( 0,-1)).ravel(),
+    #     np.roll(diff_mean,( 1,-1)).ravel(),
+    #     np.roll(diff_mean,(-1, 0)).ravel(),
+    #     np.roll(diff_mean,( 0, 0)).ravel(),
+    #     np.roll(diff_mean,( 1, 0)).ravel(),
+    #     np.roll(diff_mean,(-1, 1)).ravel(),
+    #     np.roll(diff_mean,( 0, 1)).ravel(),
+    #     np.roll(diff_mean,( 1, 1)).ravel(),
+    #     \
+    #     np.roll(diff_mean,(-1,-2)).ravel(),
+    #     np.roll(diff_mean,( 0,-2)).ravel(),
+    #     np.roll(diff_mean,( 1,-2)).ravel(),
+    #     np.roll(diff_mean,(-1, 2)).ravel(),
+    #     np.roll(diff_mean,( 0, 2)).ravel(),
+    #     np.roll(diff_mean,( 1, 2)).ravel(),
+    #     \
+    #     np.roll(diff_mean,(-2,-1)).ravel(),
+    #     np.roll(diff_mean,(-2, 0)).ravel(),
+    #     np.roll(diff_mean,(-2, 1)).ravel(),
+    #     np.roll(diff_mean,( 2,-1)).ravel(),
+    #     np.roll(diff_mean,( 2, 0)).ravel(),
+    #     np.roll(diff_mean,( 2, 1)).ravel(),        
+    #     ]), axis=0), diff_mean.shape)
+
+    # Generate mask
+    mask = diff_mean - diff_compare # > thresh
+
+    # mask = np.abs(diff_mean - diff_med)  
+    # mask_den = (diff_mean + diff_med)
+    # sub = mask_den > 0
+    # mask[sub] = mask[sub] / mask_den[sub]
+
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1,1,figsize=(16,16))
+    ax.imshow(
+        # mask,
+        np.hstack([diff_mean,diff_compare]),
+        cmap='turbo')
+
+    plt.show()
+
+
+    return datacube
 
 
