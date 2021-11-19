@@ -24,7 +24,7 @@ from ...io import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
 
-def fit_ellipse_1D(ar,center,fitradii,mask=None,returnABC=False):
+def fit_ellipse_1D(ar,center,fitradii,mask=None):
     """
     For a 2d array ar, fits a 1d elliptical curve to the data inside an annulus centered
     at `center` with inner and outer radii at `fitradii`.  The data to fit make optionally
@@ -35,24 +35,15 @@ def fit_ellipse_1D(ar,center,fitradii,mask=None,returnABC=False):
         center (2-tuple of floats): the center (x0,y0) of the annular fitting region
         fitradii (2-tuple of floats): inner and outer radii (ri,ro) of the fit region
         mask (ar-shaped ndarray of bools): ignore data wherever mask==True
-        returnABC (bool): if True, returns ellipse params in canonical form
 
     Returns:
-        (5-tuple of floats): A 5-tuple containing the ellipse parameters. The form of
-        the returned parameters depends on the input value `returnABC`.
-
-        If ``returnABC==False`` (default), returns:
-
+        (5-tuple of floats): A 5-tuple containing the ellipse parameters:
             * **x0**: the center x-position
             * **y0**: the center y-position
             * **a**: the semimajor axis length
             * **b**: the semiminor axis length
             * **theta**: the tilt of the ellipse semimajor axis with respect to the
               x-axis, in radians
-
-        If ``returnABC==True``, returns (x0,y0,A,B,C), where (x0,y0) are as above, and
-        (A,B,C) are the ellipse parameters in canonical form.  See the module docstring
-        for more info.
     """
     # Unpack inputs
     x0,y0 = center
@@ -76,10 +67,7 @@ def fit_ellipse_1D(ar,center,fitradii,mask=None,returnABC=False):
     # Convert ellipse params
     a,b,theta = convert_ellipse_params(A,B,C)
 
-    if not returnABC:
-        return x,y,a,b,theta
-    else:
-        return x,y,A,B,C
+    return x,y,a,b,theta
 
 def ellipse_err(p, x, y, val):
     """
@@ -88,6 +76,11 @@ def ellipse_err(p, x, y, val):
             ``A(x-x0)^2 + B(x-x0)(y-y0) + C(y-y0)^2 = 1``
     this function computes the error associated with the function's value at (x,y)
     given by its deviation from the ellipse times val.
+
+    Note that this function is for internal use, and uses ellipse parameters `p`
+    given in canonical form (x0,y0,A,B,C), which is different from the ellipse
+    parameterization used in all the user-facing functions, for reasons of
+    numerical stability.
     """
     x,y = x-p[0],y-p[1]
     return (p[2]*x**2 + p[3]*x*y + p[4]*y**2 - 1)*val
@@ -290,7 +283,7 @@ def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True)
 
 ### Fit an ellipse to crystalline scattering with a known angle between peaks
 
-def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_known, fitrad=6):
+def constrain_degenerate_ellipse(data, p_ellipse, r_inner, r_outer, phi_known, fitrad=6):
     """
     When fitting an ellipse to data containing 4 diffraction spots in a narrow annulus
     about the central beam, the answer is degenerate: an infinite number of ellipses
@@ -305,11 +298,7 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
 
     Args:
         data (ndarray) the data to fit, typically a Bragg vector map
-        x (float): the initial ellipse center, x
-        y (float): the initial ellipse center, y
-        a (float): the initial ellipse first semiaxis
-        b (float): the initial ellipse second semiaxis
-        theta (float): the initial ellipse angle, in radians
+        p_ellipse (5-tuple): the ellipse parameters (x0,y0,a,b,theta)
         r_inner (float): the fitting annulus inner radius
         r_outer (float): the fitting annulus outer radius
         phi_known (float): the known angle between a pair of diffraction peaks, in
@@ -322,6 +311,9 @@ def constrain_degenerate_ellipse(data, x, y, a, b, theta, r_inner, r_outer, phi_
             * **a_constrained**: *(float)* the first semiaxis of the selected ellipse
             * **b_constrained**: *(float)* the second semiaxis of the selected ellipse
     """
+    # Unpack ellipse params
+    x,y,a,b,theta = p_ellipse
+
     # Get 4 constraining points
     xs,ys = np.zeros(4),np.zeros(4)
     yy,xx = np.meshgrid(np.arange(data.shape[1]),np.arange(data.shape[0]))
