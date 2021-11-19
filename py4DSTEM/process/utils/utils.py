@@ -165,15 +165,14 @@ def get_shifted_ar(
     resampling. Boundary conditions can be periodic or not.
 
     Args:
-            ar (float):            input array 
-            xshift (float):        shift along axis 0 (x) in pixels
-            yshift (float):        shift along axis 1 (y) in pixels
-            periodic (bool):       flag for periodic boundary conditions
-            bilinear (bool):       flag for bilinear image shifts
+            ar (float): input array 
+            xshift (float): shift along axis 0 (x) in pixels
+            yshift (float): shift along axis 1 (y) in pixels
+            periodic (bool): flag for periodic boundary conditions
+            bilinear (bool): flag for bilinear image shifts
 
         Returns:
-            datacube                     datacube              
-            mask (bool):                 (optional) the bad pixel mask
+            (array) the shifted array              
     """
 
     # Apply image shift
