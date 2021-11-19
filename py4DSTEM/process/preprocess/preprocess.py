@@ -150,21 +150,23 @@ def bin_data_real(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
-def filter_bad_pixels(
+def filter_hot_pixels(
     datacube,
     thresh,
     ind_compare=1,
     return_mask=False
     ):
     """
-    This function performs pixel filtering to remove hot or cold pixels. We first compute a moving median filter,
-    applied to the mean diffraction image. Pixels with intensity int_0 are compared to a locally ordered median
-    value, default is the 2nd brightest pixel.
+    This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
+    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity 
+    values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
+    Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
+    Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
 
     Args:
-            datacube (DataCube):      
-            thresh (float):            threshold for mask
-            ind_compare (int):         which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+            datacube (DataCube):      py4DSTEM Datacube
+            thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+            ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
 
         Returns:
             datacube                     datacube              
@@ -227,19 +229,19 @@ def datacube_diffraction_shift(
     bilinear=False,
     ):
     """
-    This function performs pixel filtering to remove hot or cold pixels. We first compute a moving median filter,
-    applied to the mean diffraction image. Pixels with intensity int_0 are compared to a locally ordered median
-    value, default is the 2nd brightest pixel.
+    This function shifts each 2D diffraction image by the values defined by (xshifts,yshifts). 
+    The shift values can be scalars (same shift for all images) or arrays with the same dimensions as
+    the probe positions in datacube.
 
     Args:
-            datacube (DataCube):      
-            xshifts (float):       array or scalar value for the x dim shifts
-            yshifts (float):       array or scalar value for the y dim shifts
-            periodic (bool):       flag for periodic boundary conditions
-            bilinear (bool):       flag for bilinear image shifts
+            datacube (DataCube):   py4DSTEM DataCube
+            xshifts (float):       Array or scalar value for the x dim shifts
+            yshifts (float):       Array or scalar value for the y dim shifts
+            periodic (bool):       Flag for periodic boundary conditions. If set to false, boundaries are assumed to be periodic.
+            bilinear (bool):       Flag for bilinear image shifts. If set to False, Fourier shifting is used.
 
         Returns:
-            datacube                     datacube              
+            datacube (DataCube):   py4DSTEM DataCube              
     """
 
     # if the shift values are constant, expand to arrays
@@ -261,3 +263,4 @@ def datacube_diffraction_shift(
         )
 
     return datacube
+    
