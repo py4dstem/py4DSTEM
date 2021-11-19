@@ -161,7 +161,7 @@ def get_shifted_ar(
     ):
     """
 	Shifts array ar by the shift vector (xshift,yshift), using the either 
-    the Fourier shift theorem (i.e.	with sinc interpolation), or bilinear
+    the Fourier shift theorem (i.e. with sinc interpolation), or bilinear
     resampling. Boundary conditions can be periodic or not.
 
     Args:
