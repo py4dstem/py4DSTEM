@@ -176,7 +176,7 @@ def filter_hot_pixels(
     # Mean image over all probe positions
     diff_mean = np.mean(datacube.data,axis=(0,1))
 
-    # Local median
+    # Moving local ordered pixel values
     diff_local_med = np.sort(np.vstack([
         np.roll(diff_mean,(-1,-1),axis=(0,1)).ravel(),
         np.roll(diff_mean,( 0,-1),axis=(0,1)).ravel(),
@@ -202,6 +202,7 @@ def filter_hot_pixels(
         np.roll(diff_mean,( 2, 0),axis=(0,1)).ravel(),
         np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),        
         ]), axis=0)
+    # arry of the ind_compare'th pixel intensity
     diff_compare = np.reshape(diff_local_med[-ind_compare-1,:], diff_mean.shape)
 
     # Generate mask
