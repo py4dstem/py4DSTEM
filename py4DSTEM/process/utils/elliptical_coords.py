@@ -259,7 +259,7 @@ def radial_elliptical_integral(ar, dr, p_ellipse):
         )
     )
     polarAr, rr, pp = cartesian_to_polarelliptical_transform(
-        ar, p_ellipse=p_ellipse, dr=dr, dtheta=np.radians(2), r_range=rmax
+        ar, p_ellipse=p_ellipse, dr=dr, dphi=np.radians(2), r_range=rmax
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
