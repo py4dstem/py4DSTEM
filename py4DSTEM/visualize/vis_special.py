@@ -12,7 +12,7 @@ from ..process.utils import get_voronoi_vertices,convert_ellipse_params
 from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
 
-def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
+def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
                         linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
     """
@@ -21,7 +21,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
     Args:
         center (2-tuple): the center
         fitradii (2-tuple of numbers): the annulus inner and outer fit radii
-        ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
+        p_ellipse (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
             See the module docstring for utils.elliptical_coords for more details.
         fill (bool): if True, fills in the annular fitting region,
           else shows only inner/outer edges
@@ -33,7 +33,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         linewidth_ell:
     """
     Ri,Ro = fitradii
-    qx0,qy0,a,b,theta = ellipse_params
+    qx0,qy0,a,b,theta = p_ellipse
     fig,ax = show(ar,
                   annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
                            'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
@@ -48,7 +48,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         return fig,ax
 
 
-def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
+def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
                             ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
@@ -59,7 +59,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     Args:
         dp (array): the diffraction pattern
         fitradii (2-tuple of numbers): the min/max distances of the fitting annulus
-        p_ellipse (11-tuple): the fit parameters to the double-sided gaussian fit
+        p_dsg (11-tuple): the fit parameters to the double-sided gaussian
             function returned by fit_ellipse_amorphous_ring
         N (int): the number of pinwheel sections
         cmap (colormap or 2-tuple of colormaps): if passed a single cmap, uses this
@@ -72,7 +72,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
         ellipse (bool): if True, overlay an ellipse
         returnfig (bool): if True, returns the figure
     """
-    assert(len(p_ellipse)==11)
+    assert(len(p_dsg)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
         cmap_data,cmap_fit = cmap[0],cmap[1]
@@ -82,7 +82,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     qmin,qmax = fitradii
 
     # Make coords
-    qx0,qy0 = p_ellipse[6],p_ellipse[7]
+    qx0,qy0 = p_dsg[6],p_dsg[7]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qx,qy = qxx-qx0,qyy-qy0
     q = np.hypot(qx,qy)
@@ -96,7 +96,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     mask = pinwheel * (q>qmin) * (q<=qmax)
 
     # Get fit data
-    fit = double_sided_gaussian(p_ellipse, qxx, qyy)
+    fit = double_sided_gaussian(p_dsg, qxx, qyy)
 
     # Show
     (fig,ax),(vmin,vmax) = show(dp,scaling=scaling,cmap=cmap_data,
@@ -114,7 +114,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
 
     # Add ellipse overlay
     if ellipse:
-        A,B,C = p_ellipse[8],p_ellipse[9],p_ellipse[10]
+        A,B,C = p_dsg[8],p_dsg[9],p_dsg[10]
         a,b,theta = convert_ellipse_params(A,B,C)
         ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
