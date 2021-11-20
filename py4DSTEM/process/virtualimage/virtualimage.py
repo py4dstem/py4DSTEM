@@ -304,7 +304,7 @@ def get_virtual_image_numba(datacube, mask):
     #TODO should we be using fastmath = True ? 
 
     # if out is None:
-    #     out = np.zeros(datacube.data.shape[:-2])
+    out = np.zeros(datacube.data.shape[:-2])
 
     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask)) # multiply used here so that it can take any mask dtype
