@@ -280,7 +280,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 
 # Most generalised function 
 @nb.jit(nopython=True, parallel=True, fastmath=True)
-def get_virtual_image_numba(datacube, mask, out=None):
+def get_virtual_image_numba(datacube, mask):
     """
     Make a virutal for all probe posistions from a py4DSTEM datacube object. This is the most generalised and flexible method to make a virtual image, as any mask (boolean, int, float) may be passed. 
     There are other virtual image functions which are simpler to use and may be preferable for your use case. see:
@@ -303,8 +303,8 @@ def get_virtual_image_numba(datacube, mask, out=None):
     # assert datacube.data.shape[-2:] == mask.shape, "mask and diffraction pattern sizes are mismatched"
     #TODO should we be using fastmath = True ? 
 
-    if out is None:
-        out = np.zeros(datacube.data.shape[:-2])
+    # if out is None:
+    #     out = np.zeros(datacube.data.shape[:-2])
 
     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask)) # multiply used here so that it can take any mask dtype
