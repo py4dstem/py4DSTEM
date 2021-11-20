@@ -273,7 +273,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 
 #### In memory functions ####
 #TODO decide if fastmath is appropriate or not  
-#TODO add assertions if desired about shape of mask and diffraction image being the same. 
+#TODO add assertions if desired about shape of mask and diffraction image being the same. a little tricky with numba
 #TODO add ability to shift patterns from coordinates / calibration centers - after v 13.0 update
 #TODO add simplified boolean functions i.e. abstract away passing mask,
 #TODO add alias functions 
@@ -300,7 +300,7 @@ def get_virtual_image_numba(datacube, mask, out=None):
         out (2D numpy array): virtual image 
     """    
 
-    assert datacube.data.shape[-2:] == mask.shape, "mask and diffraction pattern sizes are mismatched"
+    # assert datacube.data.shape[-2:] == mask.shape, "mask and diffraction pattern sizes are mismatched"
     #TODO should we be using fastmath = True ? 
 
     if out is None:
