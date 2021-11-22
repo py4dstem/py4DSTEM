@@ -54,7 +54,7 @@ class DataCube(DataObject):
         self.diffractionslices = {} #: dict storing diffraction-like 2D arrays derived from this data
         self.realslices = {} #: dict storing image-like 2D arrays derived from this data
         self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
-        self.bragg_positions = {} #: dict storing pointlistarrays of bragg disk positions
+        self.braggpeaks = {} #: dict storing pointlistarrays of bragg disk positions
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
             #: Coordinate instance storing calibration metadata
 
@@ -273,14 +273,14 @@ class DataCube(DataObject):
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
-        assert('bragg_positions_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
-        bragg_positions = self.pointlists['bragg_positions_some_dps']
-        positions = self.pointlists['_bragg_positions_some_dps_positions']
+        assert('braggpeaks_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
+        braggpeaks = self.pointlists['braggpeaks_some_dps']
+        positions = self.pointlists['_braggpeaks_some_dps_positions']
         try:
             alpha = self.coordinates.alpha_pix
         except NameError:
             alpha = None
-        show_selected_dps(self,positions,bragg_pos=bragg_positions,alpha=alpha,
+        show_selected_dps(self,positions,bragg_pos=braggpeaks,alpha=alpha,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
     def set_bvm_vis_params(self,**kwargs):
@@ -297,7 +297,7 @@ class DataCube(DataObject):
         """
         from ...visualize import show
         assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name]
+        bvm = self.diffractionslices[name].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,**vis_params)
@@ -577,10 +577,10 @@ class DataCube(DataObject):
         N = len(positions)
         x = [i[0] for i in positions]
         y = [i[1] for i in positions]
-        bragg_positions = find_Bragg_disks_selected(
+        braggpeaks = find_Bragg_disks_selected(
             self,self.diffractionslices['probe_kernel'].data,Rx=x,Ry=y,**kwargs)
-        self.pointlists['bragg_positions_some_dps'] = bragg_positions
-        self.pointlists['_bragg_positions_some_dps_positions'] = positions
+        self.pointlists['braggpeaks_some_dps'] = braggpeaks
+        self.pointlists['_braggpeaks_some_dps_positions'] = positions
 
     def find_bragg_disks(self,**disk_detec_params):
         """
@@ -590,7 +590,7 @@ class DataCube(DataObject):
         assert('probe_kernel' in self.diffractionslices.keys())
         peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
-        self.bragg_positions['uncalibrated'] = peaks
+        self.braggpeaks['uncalibrated'] = peaks
         self.bragg_calstate_uncalibrated = True
 
         try:
@@ -604,12 +604,12 @@ class DataCube(DataObject):
 
         """
         from ...process.calibration import center_braggpeaks
-        assert('uncalibrated' in self.bragg_positions.keys())
+        assert('uncalibrated' in self.braggpeaks.keys())
         assert(self.bragg_calstate_uncalibrated)
         assert(not self.bragg_calstate_origin)
-        peaks = center_braggpeaks(self.bragg_positions['uncalibrated'],
+        peaks = center_braggpeaks(self.braggpeaks['uncalibrated'],
                                   coords=self.coordinates)
-        self.bragg_positions['origin'] = peaks
+        self.braggpeaks['origin'] = peaks
         self.bragg_calstate_origin = True
 
     def calibrate_bragg_elliptical_distortions(self,p_ellipse):
@@ -617,12 +617,12 @@ class DataCube(DataObject):
 
         """
         from ...process.calibration import correct_braggpeak_elliptical_distortions
-        assert('origin' in self.bragg_positions.keys())
+        assert('origin' in self.braggpeaks.keys())
         assert(self.bragg_calstate_origin)
         assert(not self.bragg_calstate_ellipse)
         peaks = correct_braggpeak_elliptical_distortions(
-            self.bragg_positions['origin'],p_ellipse)
-        self.bragg_positions['ellipse'] = peaks
+            self.braggpeaks['origin'],p_ellipse)
+        self.braggpeaks['ellipse'] = peaks
         _,_,a,b,theta = p_ellipse
         self.coordinates.set_ellipse(a,b,theta)
         self.bragg_calstate_ellipse = True
@@ -632,12 +632,12 @@ class DataCube(DataObject):
 
         """
         from ...process.calibration import calibrate_Bragg_peaks_pixel_size
-        assert('ellipse' in self.bragg_positions.keys())
+        assert('ellipse' in self.braggpeaks.keys())
         assert(self.bragg_calstate_ellipse)
         assert(not self.bragg_calstate_dq)
         peaks = calibrate_Bragg_peaks_pixel_size(
-            self.bragg_positions['ellipse'],coords=self.coordinates)
-        self.bragg_positions['dq'] = peaks
+            self.braggpeaks['ellipse'],coords=self.coordinates)
+        self.braggpeaks['dq'] = peaks
         self.bragg_calstate_dq = True
 
     def calibrate_bragg_rotation(self):
@@ -645,14 +645,14 @@ class DataCube(DataObject):
 
         """
         from ...process.calibration import calibrate_Bragg_peaks_rotation
-        assert('dq' in self.bragg_positions.keys())
+        assert('dq' in self.braggpeaks.keys())
         assert(self.bragg_calstate_dq)
         assert(not self.bragg_calstate_rotflip)
         #self.coordinates.set_QR_rotation(rot)
         #self.coordinates.set_QR_flip(flip)
         peaks = calibrate_Bragg_peaks_rotation(
-            self.bragg_positions['dq'],coords=self.coordinates)
-        self.bragg_positions['rotflip'] = peaks
+            self.braggpeaks['dq'],coords=self.coordinates)
+        self.braggpeaks['rotflip'] = peaks
         self.bragg_calstate_rotflip = True
 
     def fit_bvm_radial_peak(self,lims,name='bvm',ymax=None):
@@ -713,9 +713,9 @@ class DataCube(DataObject):
             if not overwrite:
                 raise Exception("This bvm has already been computed. To recompute and overwrite, pass `overwrite=True`")
 
-        peaks = self.bragg_positions[name]
+        peaks = self.braggpeaks[name]
         bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-        bvm_ds = DiffractionSlices(data=bvm,name='bvm_'+name)
+        bvm_ds = DiffractionSlice(data=bvm,name='bvm_'+name)
         self.diffractionslices['bvm_'+name] = bvm_ds
         if set_bvm:
             self.diffractionslices['bvm'] = bvm_ds
