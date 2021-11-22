@@ -152,7 +152,7 @@ def cartesian_to_polarelliptical_transform(
     assert (
         cartesianData.shape == mask.shape
     ), "Mask and cartesian data array shapes must match."
-    assert len(params) == 5, "params must have length 5"
+    assert len(p_ellipse) == 5, "p_ellipse must have length 5"
 
     # Get params
     qx0, qy0, a, b, theta = p_ellipse
