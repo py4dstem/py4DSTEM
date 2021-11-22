@@ -242,7 +242,7 @@ def double_sided_gaussian(p, x, y):
 
 ### Correct Bragg peak positions, making a circular coordinate system
 
-def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True):
+def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True,name=None):
     """
     Given some elliptical distortions with ellipse parameters p and some measured
     PointListArray of Bragg peak positions braggpeaks, returns the elliptically corrected
@@ -276,7 +276,8 @@ def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True)
         )
 
     # Correct distortions
-    braggpeaks_corrected = braggpeaks.copy(name=braggpeaks.name + "_ellipsecorrected")
+    name = braggpeaks.name+"_ellipsecorrected" if name is None else name
+    braggpeaks_corrected = braggpeaks.copy(name=name)
     for Rx in range(braggpeaks_corrected.shape[0]):
         for Ry in range(braggpeaks_corrected.shape[1]):
             pointlist = braggpeaks_corrected.get_pointlist(Rx, Ry)
