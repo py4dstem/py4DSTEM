@@ -49,7 +49,8 @@ class DataCube(DataObject):
         self.update_slice_parsers()
 
         # Containers for derivative data
-        self.images = {} #: dict storing image-like 2D arrays derived from this data
+        self.diffractionslices = {} #: dict storing diffraction-like 2D arrays derived from this data
+        self.realslices = {} #: dict storing image-like 2D arrays derived from this data
         self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
         self.bragg_positions = {} #: dict storing pointlistarrays of bragg disk positions
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
@@ -100,7 +101,7 @@ class DataCube(DataObject):
         from ...visualize import show
         if im is None:
             try:
-                im = self.images['dp_max']
+                im = self.diffractionslices['dp_max'].data
             except KeyError:
                 im = self.data[0,0,:,:]
         elif isinstance(im,tuple):
@@ -111,7 +112,7 @@ class DataCube(DataObject):
             im = self.data[:,:,im[0],im[1]]
         elif isinstance(im,str):
             try:
-                im = self.images[im]
+                im = self.diffractionslices[im].data
             except KeyError:
                 raise Exception("This datacube has no image called '{}'".format(im))
         else:
@@ -137,7 +138,7 @@ class DataCube(DataObject):
         from ...visualize import show_circles
         if dp is None:
             try:
-                dp = self.images['dp_max']
+                dp = self.diffractionslices['dp_max'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -145,7 +146,7 @@ class DataCube(DataObject):
             dp = self.data[dp[0],dp[1],:,:]
         elif isinstance(dp,str):
             try:
-                dp = self.images[dp]
+                dp = self.diffractionslices[dp].data
             except KeyError:
                 raise Exception("This datacube has no image called '{}'".format(dp))
 
@@ -169,7 +170,7 @@ class DataCube(DataObject):
         from ...visualize import show
         if dp is None:
             try:
-                dp = self.images['dp_max']
+                dp = self.diffractionslices['dp_max'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -177,7 +178,7 @@ class DataCube(DataObject):
             dp = self.data[dp[0],dp[1],:,:]
         elif isinstance(dp,str):
             try:
-                dp = self.images[dp]
+                dp = self.diffractionslices[dp].data
             except KeyError:
                 raise Exception("This datacube has no image called '{}'".format(dp))
 
@@ -206,8 +207,10 @@ class DataCube(DataObject):
         Show the measure size of the vacuum probe
         """
         from ...visualize import show_circles
-        assert('probe_image' in self.images.keys())
-        show_circles(self.images['probe_image'],self.coordinates.probe_center,self.coordinates.alpha_pix)
+        assert('probe_image' in self.diffractionslices.keys())
+        show_circles(self.diffractionslices['probe_image'].data,
+                     self.coordinates.probe_center,
+                     self.coordinates.alpha_pix)
 
     def show_probe_kernel(self,R=None,L=None,W=None):
         """
@@ -219,7 +222,7 @@ class DataCube(DataObject):
             W (int): the line profile integration window width
         """
         from ...visualize import show_kernel
-        assert('probe_kernel' in self.images.keys())
+        assert('probe_kernel' in self.diffractionslices.keys())
         if R is None:
             try:
                 R = int( 5*self.coordinates.alpha_pix )
@@ -229,7 +232,7 @@ class DataCube(DataObject):
             L = 2*R
         if W is None:
             W = 1
-        show_kernel(self.images['probe_kernel'],R,L,W)
+        show_kernel(self.diffractionslices['probe_kernel'].data,R,L,W)
 
     def show_selected_dps(self,positions,im=None,colors=None,
                           HW=None,figsize_im=(6,6),figsize_dp=(4,4),
@@ -291,8 +294,8 @@ class DataCube(DataObject):
                 'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name]
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,**vis_params)
@@ -308,8 +311,8 @@ class DataCube(DataObject):
                 'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,
@@ -329,8 +332,8 @@ class DataCube(DataObject):
                 'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
         center = bvm.shape[0]/2,bvm.shape[1]/2
         _,_,a,b,theta = p_ellipse
         if len(vis_params)==0:
@@ -353,8 +356,8 @@ class DataCube(DataObject):
                 'uncalibrated', 'origin','ellipse','dq','rotflip'
         """
         from ...visualize import show_qprofile
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
         assert(name[:3]=='bvm')
         name_profile = 'radial_integral_'+name
         assert(name_profile in self.pointlists.keys())
@@ -382,7 +385,11 @@ class DataCube(DataObject):
         """
         Computes the maximal diffraction pattern.
         """
-        self.images['dp_max'] = virtualimage.get_max_dp(self)
+        dp_max = DiffractionSlice(data=virtualimage.get_max_dp(self),
+                                  name='dp_max')
+
+        self.diffractionslices['dp_max'] = dp_max
+        return dp_max
 
     def capture_circular_detector(self,center,radius,name):
         """
@@ -393,10 +400,11 @@ class DataCube(DataObject):
             radius (number): radius of detector
             name (str): label for this image
         """
-        self.images[name] = virtualimage.get_virtualimage_circ(
-                                self,center[0],center[1],radius)
-
-
+        vi = DiffractionSlice(data=virtualimage.get_virtualimage_circ(
+                                   self,center[0],center[1],radius),
+                              name=name)
+        self.diffractionslices[name] = vi
+        return vi
 
     ############## calibration ################
 
@@ -406,8 +414,8 @@ class DataCube(DataObject):
         See process.calibration.origin.get_probe_size for more info.
         """
         from ...process.calibration.origin import get_probe_size
-        assert('probe_image' in self.images.keys()), "First add a probe image!"
-        qr,qx0,qy0 = get_probe_size(self.images['probe_image'],**kwargs)
+        assert('probe_image' in self.diffractionslices.keys()), "First add a probe image!"
+        qr,qx0,qy0 = get_probe_size(self.diffractionslices['probe_image'].data,**kwargs)
         self.coordinates.set_alpha_pix(qr)
         self.coordinates.set_probe_center((qx0,qy0))
 
@@ -420,9 +428,9 @@ class DataCube(DataObject):
         for more info.
         """
         from ...process.calibration.origin import get_origin
-        if 'dp_max' not in self.images.keys():
+        if 'dp_max' not in self.diffractionslices.keys():
             self.get_max_dp()
-        kwargs['dp_max'] = self.images['dp_max']
+        kwargs['dp_max'] = self.diffractionslices['dp_max'].data
         qx0,qy0 = get_origin(self, **kwargs)
         self.coordinates.set_origin_meas(qx0,qy0)
 
@@ -446,8 +454,8 @@ class DataCube(DataObject):
         of a bragg vector map
         """
         from ...process.calibration import fit_ellipse_1D
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
         p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
         return p_ellipse
 
@@ -456,8 +464,8 @@ class DataCube(DataObject):
 
         """
         from ...process.utils import radial_integral
-        assert(name in self.images.keys())
-        bvm = self.images[name]
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
         assert(name[:3]=='bvm')
         name_profile = 'radial_integral_'+name
         q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
@@ -516,17 +524,16 @@ class DataCube(DataObject):
                 - 'sigmoid' normalizes, shifts center, makes sigmoid trench
         """
         assert(method in ('none','gaussian','sigmoid'))
-        assert('probe_image' in self.images.keys())
+        assert('probe_image' in self.diffractionslices.keys())
 
         # get data
-        probe = self.images['probe_image']
+        probe = self.diffractionslices['probe_image'].data
         try:
             center = self.coordinates.probe_center
             alpha = self.coordinates.alpha_pix
         except AttributeError:
             from ...process.calibration.origin import get_probe_size
-            assert('probe_image' in self.images.keys())
-            alpha,qx0,qy0 = get_probe_size(self.images['probe_image'])
+            alpha,qx0,qy0 = get_probe_size(probe)
         if 'origin' not in kwargs.keys():
             try:
                 kwargs['origin'] = center
@@ -552,7 +559,8 @@ class DataCube(DataObject):
             probe_kernel = get_probe_kernel_edge_sigmoid(probe,**kwargs)
 
         # save
-        self.images['probe_kernel'] = probe_kernel
+        self.diffractionslices['probe_kernel'] = DiffractionSlice(data=probe_kernel,
+                                                                  name='probe_kernel')
 
     def find_some_bragg_disks(self,positions,**kwargs):
         """
@@ -563,12 +571,12 @@ class DataCube(DataObject):
             positions ((Nx2) shaped)
         """
         from ...process.diskdetection import find_Bragg_disks_selected
-        assert('probe_kernel' in self.images.keys())
+        assert('probe_kernel' in self.diffractionslices.keys())
         N = len(positions)
         x = [i[0] for i in positions]
         y = [i[1] for i in positions]
         bragg_positions = find_Bragg_disks_selected(
-            self,self.images['probe_kernel'],Rx=x,Ry=y,**kwargs)
+            self,self.diffractionslices['probe_kernel'].data,Rx=x,Ry=y,**kwargs)
         self.pointlists['bragg_positions_some_dps'] = bragg_positions
         self.pointlists['_bragg_positions_some_dps_positions'] = positions
 
@@ -577,8 +585,8 @@ class DataCube(DataObject):
 
         """
         from ...process.diskdetection import find_Bragg_disks
-        assert('probe_kernel' in self.images.keys())
-        peaks = find_Bragg_disks(self,self.images['probe_kernel'],
+        assert('probe_kernel' in self.diffractionslices.keys())
+        peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
         self.bragg_positions['uncalibrated'] = peaks
         self.bragg_calstate_uncalibrated = True
@@ -652,7 +660,7 @@ class DataCube(DataObject):
         from ...process.fit import fit_1D_gaussian,gaussian
         from ...visualize import show_qprofile
         assert(len(lims)==2)
-        assert(name in self.images.keys())
+        assert(name in self.diffractionslices.keys())
         assert(name[:3]=='bvm')
         name_profile = 'radial_integral_'+name
         assert(name_profile in self.pointlists.keys())
@@ -699,15 +707,16 @@ class DataCube(DataObject):
             assert(name in ('uncalibrated','origin','ellipse','dq','rotflip'))
         if name == name_best:
             set_bvm = True
-        if 'bvm_'+name in self.images.keys():
+        if 'bvm_'+name in self.diffractionslices.keys():
             if not overwrite:
                 raise Exception("This bvm has already been computed. To recompute and overwrite, pass `overwrite=True`")
 
         peaks = self.bragg_positions[name]
         bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-        self.images['bvm_'+name] = bvm
+        bvm_ds = DiffractionSlices(data=bvm,name='bvm_'+name)
+        self.diffractionslices['bvm_'+name] = bvm_ds
         if set_bvm:
-            self.images['bvm'] = bvm
+            self.diffractionslices['bvm'] = bvm_ds
 
 
 
@@ -791,17 +800,24 @@ class DataCube(DataObject):
 
     ############ Miscellaneous methods #############
 
-    def add_image(self,image,name):
+    def add_diffraction_slice(self,data,name=None):
         """
         Attach an image to the datacube
 
         Args:
-            image (2d array):
-            name (str): label for the data
+            image (2d array or DiffractionSlice):
+            name (str): label for the data, if None uses the name of the DiffractionSlice
         """
-        assert(len(image.shape)==2)
-        assert(isinstance(name,str))
-        self.images[name] = image
+        assert(isinstance(data,(np.ndarray,DiffractionSlice))), "data must be an array or a DiffractionSlice"
+        if isinstance(data,np.ndarray):
+            assert(len(ar.shape)==2)
+            assert(ar.shape == (self.Q_Nx,self.Q_Ny))
+            assert(name is not None and isinstance(name,str)), "please specify a string to name this data"
+            data = DiffractionSlice(data=data,name=name)
+        else:
+            if name is None:
+                name = DiffractionSlice.name
+        self.diffractionslices[name] = data
 
     def add_probe_image(self,image):
         """
@@ -811,7 +827,7 @@ class DataCube(DataObject):
             image (2d array):
         """
         assert(image.shape == (self.Q_Nx,self.Q_Ny)), "probe shape must match the datacube's diffraction space shape"
-        self.images['probe_image'] = image
+        self.add_diffraction_slice(image,name='probe_image')
 
 
 
