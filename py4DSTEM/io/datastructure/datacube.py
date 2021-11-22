@@ -11,6 +11,8 @@ import numba as nb
 import h5py
 
 from .dataobject import DataObject
+from .diffraction import DiffractionSlice
+from .real import RealSlice
 from .coordinates import Coordinates
 from .pointlist import PointList
 from ...process import preprocess
@@ -810,8 +812,8 @@ class DataCube(DataObject):
         """
         assert(isinstance(data,(np.ndarray,DiffractionSlice))), "data must be an array or a DiffractionSlice"
         if isinstance(data,np.ndarray):
-            assert(len(ar.shape)==2)
-            assert(ar.shape == (self.Q_Nx,self.Q_Ny))
+            assert(len(data.shape)==2)
+            assert(data.shape == (self.Q_Nx,self.Q_Ny))
             assert(name is not None and isinstance(name,str)), "please specify a string to name this data"
             data = DiffractionSlice(data=data,name=name)
         else:
