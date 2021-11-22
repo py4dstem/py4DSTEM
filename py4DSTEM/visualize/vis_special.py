@@ -658,8 +658,8 @@ def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
     assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
     if im is None:
         im = 'BF'
-    assert(im in datacube.images.keys()), "datacube has no image called '{}'".format(im)
-    im = datacube.images[im]
+    assert(im in datacube.diffractionslices.keys()), "datacube has no image called '{}'".format(im)
+    im = datacube.diffractionslices[im].data
     if bragg_pos is not None:
         show_disk_pos = True
         assert(len(bragg_pos)==N)
