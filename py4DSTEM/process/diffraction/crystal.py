@@ -16,6 +16,7 @@ class Crystal:
 
     # Visualization methods for the Crystal class are implemented in a separate file. This
     # import statement inside the class declaration imports them as methods of the class!
+    # (see https://stackoverflow.com/a/47562412)
     from .crystal_viz import (plot_structure, plot_structure_factors, plot_orientation_zones, 
                               plot_orientation_plan, plot_diffraction_pattern, plot_orientation_maps)
 
