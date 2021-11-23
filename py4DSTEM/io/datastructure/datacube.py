@@ -50,7 +50,7 @@ class DataCube(DataObject):
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
         self.update_slice_parsers()
 
-        # Containers for derivative data
+        # Containers for derived data
         self.diffractionslices = {} #: dict storing diffraction-like 2D arrays derived from this data
         self.realslices = {} #: dict storing image-like 2D arrays derived from this data
         self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
@@ -73,17 +73,133 @@ class DataCube(DataObject):
 
 
 
-        # Set shape
-        # TODO: look for shape in metadata
-        # TODO: AND/OR look for R_Nx... in kwargs
-        #self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = self.data.shape
-        #self.R_N = self.R_Nx*self.R_Ny
-        #self.set_scan_shape(self.R_Nx,self.R_Ny)
+    ########### Processing functions, organized by functionality ############
+
+    ############### maximal diffration pattern ################
+
+    def get_max_dp(self):
+        """
+        Computes the maximal diffraction pattern.
+        """
+        dp_max = DiffractionSlice(data=virtualimage.get_max_dp(self),
+                                  name='dp_max')
+
+        self.diffractionslices['dp_max'] = dp_max
+        return dp_max
+
+
+
+    ################## virtual imaging ##################
+
+    def position_circular_detector(self,center,radius,dp=None,alpha=0.25,**kwargs):
+        """
+        Display a circular detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached diffractionslice of this name, if it exists
+            center (2-tuple):
+            radius (number):
+        """
+        from ...visualize import show_circles
+        if dp is None:
+            try:
+                dp = self.diffractionslices['dp_max'].data
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
+
+    def position_rectangular_detector(self,lims,dp=None,alpha=0.25,**kwargs):
+        """
+        Display a rectangular detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached diffractionslice of this name, if it exists
+            center (2-tuple):
+            radius (number):
+        """
+        from ...visualize import show_rectangles
+        if dp is None:
+            try:
+                dp = self.diffractionslices['dp_max'].data
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show_rectangles(dp,lims,alpha=alpha,**kwargs)
+
+    def position_annular_detector(self,center,radii,dp=None,alpha=0.25,**kwargs):
+        """
+        Display an annular detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached diffractionslice of this name, if it exists
+            center (2-tuple):
+            radii (2-tuple_: the inner and outer radii
+        """
+        from ...visualize import show
+        if dp is None:
+            try:
+                dp = self.diffractionslices['dp_max'].data
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        show(dp,
+             annulus={'center':center,'radii':radii,'fill':True,'alpha':0.3},
+             **kwargs)
+
+
+
+
+
+
+
+
 
 
 
     ########### Processing functions, organized by file in process directory ############
-
 
 
     ############## visualize ###################
@@ -123,72 +239,6 @@ class DataCube(DataObject):
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show(im,**kwargs)
-
-    def position_circular_detector(self,center,radius,dp=None,alpha=0.25,**kwargs):
-        """
-        Display a circular detector overlaid on a diffraction-pattern-like array,
-        specified with the `dp` argument.
-
-        Args:
-            dp (variable): (type of dp) image used for overlay
-                - (None) the maximal dp, if it exists, else, the dp at (0,0)
-                - (2-tuple) the diffraction pattern at (rx,ry)
-                - (string) the attached im of this name, if it exists
-            center (2-tuple):
-            radius (number):
-        """
-        from ...visualize import show_circles
-        if dp is None:
-            try:
-                dp = self.diffractionslices['dp_max'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
-        if 'scaling' not in kwargs:
-            kwargs['scaling'] = 'log'
-        show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
-
-    def position_annular_detector(self,center,ri,ro,dp=None,alpha=0.25,**kwargs):
-        """
-        Display an annular detector overlaid on a diffraction-pattern-like array,
-        specified with the `dp` argument.
-
-        Args:
-            dp (variable): (type of dp) image used for overlay
-                - (None) the maximal dp, if it exists, else, the dp at (0,0)
-                - (2-tuple) the diffraction pattern at (rx,ry)
-                - (string) the attached im of this name, if it exists
-            center (2-tuple):
-            ri,ro: the inner and outer radii
-        """
-        from ...visualize import show
-        if dp is None:
-            try:
-                dp = self.diffractionslices['dp_max'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
-        if 'scaling' not in kwargs:
-            kwargs['scaling'] = 'log'
-        show(dp,
-             annulus={'center':center,'Ri':ri,'Ro':ro,'fill':True,'alpha':0.3},
-             **kwargs)
 
     def show_origin_meas(self):
         """
@@ -319,7 +369,7 @@ class DataCube(DataObject):
             vis_params = self.bvm_vis_params
         show(bvm,
              annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
-                      'Ri':radii[0],'Ro':radii[1],'fill':True,
+                      'radii':radii,'fill':True,
                       'alpha':0.3,'color':'y'},
              **vis_params)
 
@@ -341,7 +391,7 @@ class DataCube(DataObject):
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,
-             annulus={'center':center,'Ri':radii[0],'Ro':radii[1],'fill':True,
+             annulus={'center':center,'radii':radii,'fill':True,
                       'alpha':0.2,'color':'y'},
              ellipse={'center':center,'a':a,'b':b,'theta':theta,
                        'color':'r','alpha':0.7,'linewidth':2},
@@ -383,15 +433,6 @@ class DataCube(DataObject):
 
     ############## virtualimage.py #############
 
-    def get_max_dp(self):
-        """
-        Computes the maximal diffraction pattern.
-        """
-        dp_max = DiffractionSlice(data=virtualimage.get_max_dp(self),
-                                  name='dp_max')
-
-        self.diffractionslices['dp_max'] = dp_max
-        return dp_max
 
     def capture_circular_detector(self,center,radius,name):
         """
