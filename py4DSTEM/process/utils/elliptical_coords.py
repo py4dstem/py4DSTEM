@@ -101,7 +101,7 @@ def convert_ellipse_params_r(a,b,theta):
 
 def cartesian_to_polarelliptical_transform(
     cartesianData,
-    params,
+    p_ellipse,
     dr=1,
     dphi=np.radians(2),
     r_range=None,
@@ -117,7 +117,7 @@ def cartesian_to_polarelliptical_transform(
 
     Args:
         cartesianData (2D float array): the data in cartesian coordinates
-        params (5-tuple): specifies (qx0,qy0,a,b,theta), the parameters for the
+        p_ellipse (5-tuple): specifies (qx0,qy0,a,b,theta), the parameters for the
             transformation. These are the same 5 parameters which are outputs
             of the elliptical fitting functions in the process.calibration
             module, e.g. fit_ellipse_amorphous_ring and fit_ellipse_1D. For
@@ -152,10 +152,10 @@ def cartesian_to_polarelliptical_transform(
     assert (
         cartesianData.shape == mask.shape
     ), "Mask and cartesian data array shapes must match."
-    assert len(params) == 5, "params must have length 5"
+    assert len(p_ellipse) == 5, "p_ellipse must have length 5"
 
     # Get params
-    qx0, qy0, a, b, theta = params
+    qx0, qy0, a, b, theta = p_ellipse
     Nx, Ny = cartesianData.shape
 
     # Define r_range: 
@@ -230,7 +230,7 @@ def cartesian_to_polarelliptical_transform(
 
 ### Radial integration
 
-def radial_elliptical_integral(ar, dr, ellipse_params):
+def radial_elliptical_integral(ar, dr, p_ellipse):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of
     dr.
@@ -238,7 +238,7 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
     Args:
         ar (2d array): the data
         dr (number): the r sampling
-        ellipse_params (5-tuple): the parameters (x0,y0,a,b,theta) for the ellipse
+        p_ellipse (5-tuple): the parameters (x0,y0,a,b,theta) for the ellipse
 
     Returns:
         (2-tuple): A 2-tuple containing:
@@ -247,7 +247,7 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
             * **radial_integral**: *(1d array)* the radial integral
         radial_integral (1d array) the radial integral
     """
-    x0, y0 = ellipse_params[0], ellipse_params[1]
+    x0, y0 = p_ellipse[0], p_ellipse[1]
     rmax = int(
         max(
             (
@@ -259,7 +259,7 @@ def radial_elliptical_integral(ar, dr, ellipse_params):
         )
     )
     polarAr, rr, pp = cartesian_to_polarelliptical_transform(
-        ar, params=ellipse_params, dr=dr, dtheta=np.radians(2), r_range=rmax
+        ar, p_ellipse=p_ellipse, dr=dr, dphi=np.radians(2), r_range=rmax
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
