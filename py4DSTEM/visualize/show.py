@@ -96,8 +96,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
         will overlay a single red square, and
 
-            >>> show(ar, annulus={'center':[(28,68),(92,160)],'fill':True,
-                                  'alpha':[0.9,0.3],'Ri':[16,12],'Ro':[24,36],
+            >>> show(ar, annulus={'center':[(28,68),(92,160)],
+                                  'radii':[(16,24),(12,36)],
+                                  'fill':True,
+                                  'alpha':[0.9,0.3],
                                   'color':['r',(0,1,1,1)]})
 
         will overlay two annuli with two different centers, radii, colors, and
@@ -844,7 +846,7 @@ def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
     else:
         return fig,ax
 
-def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
+def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
                 **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed annuli.
@@ -857,7 +859,7 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
 
     Accepts:
         center      (2-tuple, or list of N 2-tuples) the center of the annulus (x0,y0)
-        Ri,Ro       (number of list of N numbers) the inner and outer radii
+        radii       (2-tuple, or list of N 2-tuples) the inner and outer radii
         color       (string of list of N strings)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
@@ -869,7 +871,7 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'Ri':Ri,'Ro':Ro,'color':color,'fill':fill,'alpha':alpha,
+    d = {'center':center,'radii':radii,'color':color,'fill':fill,'alpha':alpha,
          'linewidth':linewidth}
     add_annuli(ax,d)
 
