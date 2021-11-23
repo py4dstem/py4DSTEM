@@ -42,7 +42,7 @@ class nditer(Iterator):
 def tqdmnd(*args, **kwargs):
     """
     An N-dimensional extension of tqdm providing an iterator and
-    progress bar over the product of multiple iterations.
+    progress bar over the product of multiple iterators.
 
     Example Usage:
         for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
