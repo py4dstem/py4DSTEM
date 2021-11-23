@@ -3,16 +3,16 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show
+from . import show, show_points
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from ..io import PointList
+from ..io import DataCube,Coordinates,PointList
 from ..process.utils import get_voronoi_vertices,convert_ellipse_params
 from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
 
-def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
+def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
                         linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
     """
@@ -21,7 +21,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
     Args:
         center (2-tuple): the center
         fitradii (2-tuple of numbers): the annulus inner and outer fit radii
-        ellipse_params (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
+        p_ellipse (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
             See the module docstring for utils.elliptical_coords for more details.
         fill (bool): if True, fills in the annular fitting region,
           else shows only inner/outer edges
@@ -33,7 +33,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         linewidth_ell:
     """
     Ri,Ro = fitradii
-    qx0,qy0,a,b,theta = ellipse_params
+    qx0,qy0,a,b,theta = p_ellipse
     fig,ax = show(ar,
                   annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
                            'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
@@ -48,7 +48,7 @@ def show_elliptical_fit(ar,fitradii,ellipse_params,fill=True,
         return fig,ax
 
 
-def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
+def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
                             ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
@@ -59,7 +59,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     Args:
         dp (array): the diffraction pattern
         fitradii (2-tuple of numbers): the min/max distances of the fitting annulus
-        p_ellipse (11-tuple): the fit parameters to the double-sided gaussian fit
+        p_dsg (11-tuple): the fit parameters to the double-sided gaussian
             function returned by fit_ellipse_amorphous_ring
         N (int): the number of pinwheel sections
         cmap (colormap or 2-tuple of colormaps): if passed a single cmap, uses this
@@ -72,7 +72,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
         ellipse (bool): if True, overlay an ellipse
         returnfig (bool): if True, returns the figure
     """
-    assert(len(p_ellipse)==11)
+    assert(len(p_dsg)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
         cmap_data,cmap_fit = cmap[0],cmap[1]
@@ -82,7 +82,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     qmin,qmax = fitradii
 
     # Make coords
-    qx0,qy0 = p_ellipse[6],p_ellipse[7]
+    qx0,qy0 = p_dsg[6],p_dsg[7]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qx,qy = qxx-qx0,qyy-qy0
     q = np.hypot(qx,qy)
@@ -96,7 +96,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
     mask = pinwheel * (q>qmin) * (q<=qmax)
 
     # Get fit data
-    fit = double_sided_gaussian(p_ellipse, qxx, qyy)
+    fit = double_sided_gaussian(p_dsg, qxx, qyy)
 
     # Show
     (fig,ax),(vmin,vmax) = show(dp,scaling=scaling,cmap=cmap_data,
@@ -114,7 +114,7 @@ def show_amorphous_ring_fit(dp,fitradii,p_ellipse,N=12,cmap=('gray','gray'),
 
     # Add ellipse overlay
     if ellipse:
-        A,B,C = p_ellipse[8],p_ellipse[9],p_ellipse[10]
+        A,B,C = p_dsg[8],p_dsg[9],p_dsg[10]
         a,b,theta = convert_ellipse_params(A,B,C)
         ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
@@ -579,3 +579,124 @@ def show_max_peak_spacing(ar,spacing,braggdirections,color='g',lw=2,returnfig=Fa
     else:
         plt.show()
         return
+
+def show_origin_meas(data):
+    """
+    Show the measured positions of the origin.
+
+    Args:
+        data (DataCube or Coordinates or 2-tuple of arrays (qx0,qy0))
+    """
+    if isinstance(data,tuple):
+        assert len(data)==2
+        qx,qy = data
+    elif isinstance(data,DataCube):
+        qx,qy = data.coordinates.get_origin_meas()
+    elif isinstance(data,Coordinates):
+        qx,qy = data.get_origin_meas()
+    else:
+        raise Exception("data must be of type Datacube or Coordinates or tuple")
+
+    show_image_grid(get_ar = lambda i:[qx,qy][i],H=1,W=2,cmap='RdBu')
+
+def show_origin_fit(data):
+    """
+    Show the measured, fit, and residuals of the origin positions.
+
+    Args:
+        data (DataCube or Coordinates or (3,2)-tuple of arrays
+            ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
+    """
+    if isinstance(data,tuple):
+        assert len(data)==3
+        qx0_meas,qy_meas = data[0]
+        qx0_fit,qy0_fit = data[1]
+        qx0_residuals,qy0_residuals = data[2]
+    elif isinstance(data,DataCube):
+        qx0_meas,qy0_meas = data.coordinates.get_origin_meas()
+        qx0_fit,qy0_fit = data.coordinates.get_origin()
+        qx0_residuals,qy0_residuals = data.coordinates.get_origin_residuals()
+    elif isinstance(data,Coordinates):
+        qx0_meas,qy0_meas = data.get_origin_meas()
+        qx0_fit,qy0_fit = data.get_origin()
+        qx0_residuals,qy0_residuals = data.get_origin_residuals()
+    else:
+        raise Exception("data must be of type Datacube or Coordinates or tuple")
+
+    show_image_grid(get_ar = lambda i:[qx0_meas,qx0_fit,qx0_residuals,
+                                       qy0_meas,qy0_fit,qy0_residuals][i],
+                    H=2,W=3,cmap='RdBu')
+
+def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
+                      colors=None,HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+                      **kwargs):
+    """
+    Shows two plots: first, a real space image overlaid with colored dots
+    at the specified positions; second, a grid of diffraction patterns
+    corresponding to these scan positions.
+
+    Args:
+        datacube (DataCube):
+        positions (len N list or tuple of 2-tuples): the scan positions
+        im (str or None): name of a real space image stored in datacube.
+            Defaults to 'BF'.
+        bragg_pos (len N list of pointlistarrays): bragg disk positions
+            for each position. if passed, overlays the disk positions,
+            and supresses plot of the real space image
+        alpha (number): the probe semiconvergence angle. If passed,
+            disk positions are indicated with disk-sized circles,
+            rather than dots
+        colors (len N list of colors or None):
+        HW (2-tuple of ints): diffraction pattern grid shape
+        figsize_im (2-tuple): size of the image figure
+        figsize_dp (2-tuple): size of each diffraction pattern panel
+        **kwargs (dict): arguments passed to visualize.show for the
+            *diffraction patterns*. Default is `scaling='log'`
+    """
+    assert isinstance(datacube,DataCube)
+    N = len(positions)
+    assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
+    if im is None:
+        im = 'BF'
+    assert(im in datacube.images.keys()), "datacube has no image called '{}'".format(im)
+    im = datacube.images[im]
+    if bragg_pos is not None:
+        show_disk_pos = True
+        assert(len(bragg_pos)==N)
+    else:
+        show_disk_pos = False
+    if colors is None:
+        from matplotlib.cm import gist_ncar
+        linsp = np.linspace(0,1,N,endpoint=False)
+        colors = [gist_ncar(i) for i in linsp]
+    assert(len(colors)==N), "Number of positions and colors don't match"
+    from matplotlib.colors import is_color_like
+    assert([is_color_like(i) for i in colors])
+    if HW is None:
+        W = int(np.ceil(np.sqrt(N)))
+        if W<3: W=3
+        H = int(np.ceil(N/W))
+    else:
+        H,W = HW
+    assert(all([isinstance(x,(int,np.integer)) for x in (H,W)]))
+
+    x = [i[0] for i in positions]
+    y = [i[1] for i in positions]
+    if 'scaling' not in kwargs.keys():
+        kwargs['scaling'] = 'log'
+    if not show_disk_pos:
+        show_points(im,x=x,y=y,pointcolor=colors,figsize=figsize_im)
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                        get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                        **kwargs)
+    else:
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                    get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                    get_x=lambda i:bragg_pos[i].data['qx'],
+                    get_y=lambda i:bragg_pos[i].data['qy'],
+                    get_pointcolors=lambda i:colors[i],
+                    **kwargs)
+
+
+
+

@@ -507,10 +507,6 @@ class Crystal:
         )
         ax.add_collection(pc)
 
-        # # small shift of coordinates towards camera
-        # d = -0.0 * proj_dir / np.linalg.norm(proj_dir)
-        # print(d)
-
         # atoms
         ID_all = np.unique(ID)
         for ID_plot in ID_all:
