@@ -54,10 +54,10 @@ def tqdmnd(*args, **kwargs):
 
     Accepts:
         *args:  Any number of iterators. The Cartesian product of these
-                iterators is returned. Any integers I passed as arguments
-                will be converted to range(I). The input iterators must
+                iterators is returned. Any integers `I` passed as arguments
+                will be interpreted as `range(I)`. The input iterators must
                 have a known length.
-        **kwargs: keyword arguments are passed through directly to tqdm.
+        **kwargs: keyword arguments passed through directly to tqdm.
                 Full details are available at https://tqdm.github.io
                 Some useful ones you'll encounter in py4DSTEM are:
                     disable (bool): hide the progress bar when True
