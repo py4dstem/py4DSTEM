@@ -20,6 +20,8 @@ class Crystal:
     from .crystal_viz import (plot_structure, plot_structure_factors, plot_orientation_zones, 
                               plot_orientation_plan, plot_diffraction_pattern, plot_orientation_maps)
 
+    from .crystal_bloch import generate_dynamical_diffraction_pattern
+
     def __init__(
         self,
         positions,
