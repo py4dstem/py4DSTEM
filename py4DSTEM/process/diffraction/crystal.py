@@ -379,6 +379,11 @@ class Crystal:
                 )
             )
 
+        # Divide by unit cell volume
+        unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
+        print(unit_cell_volume)
+        self.struct_factors /= unit_cell_volume
+
         # Remove structure factors below tolerance level
         keep = np.abs(self.struct_factors) > tol_structure_factor
         self.hkl = self.hkl[:, keep]
