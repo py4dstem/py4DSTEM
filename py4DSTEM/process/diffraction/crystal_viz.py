@@ -1092,3 +1092,22 @@ def axisEqual3D(ax):
     r = maxsize / 2
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
+
+
+def atomic_colors(ID):
+    return {
+        1: np.array([0.8, 0.8, 0.8]),
+        2: np.array([1.0, 0.7, 0.0]),
+        3: np.array([1.0, 0.0, 1.0]),
+        4: np.array([0.0, 0.5, 0.0]),
+        5: np.array([0.5, 0.0, 0.0]),
+        6: np.array([0.5, 0.5, 0.5]),
+        7: np.array([0.0, 0.7, 1.0]),
+        8: np.array([1.0, 0.0, 0.0]),
+        13: np.array([0.6, 0.7, 0.8]),
+        14: np.array([0.3, 0.3, 0.3]),
+        15: np.array([1.0, 0.6, 0.0]),
+        16: np.array([1.0, 0.9, 0.0]),
+        17: np.array([0.0, 1.0, 0.0]),
+        79: np.array([1.0, 0.7, 0.0]),
+    }.get(ID, np.array([0.0, 0.0, 0.0]))
