@@ -104,7 +104,7 @@ def generate_dynamical_diffraction_pattern(
             else 0.0 + 0.0j
             for gmh, nonzero in zip(g_minus_h, nonzero_beams)
         ],
-        dtype=np.complex64,
+        dtype=np.complex128,
     ).reshape(beam_g.shape)
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g
@@ -129,7 +129,7 @@ def generate_dynamical_diffraction_pattern(
     #############################################################################################
 
     v, C = np.linalg.eig(U_gmh)  # decompose!
-    gamma = v / (2 * ZA @ foil_normal)  # divide by 2 k_n
+    gamma = v / (2.0 * ZA @ foil_normal)  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -138,7 +138,7 @@ def generate_dynamical_diffraction_pattern(
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
     ######################################################
 
-    E = [np.diag(np.exp(2 * np.pi * 1j * gamma * z)) for z in np.atleast_1d(thickness)]
+    E = [np.diag(np.exp(2.0j * np.pi * z * gamma)) for z in np.atleast_1d(thickness)]
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
