@@ -16,7 +16,7 @@ def generate_dynamical_diffraction_pattern(
     thickness: Union[float, list, tuple, np.ndarray],
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
-    verbose=True
+    verbose=False,
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -94,7 +94,9 @@ def generate_dynamical_diffraction_pattern(
     ]
 
     if verbose:
-        print(f"Zeroing out {np.count_nonzero(~np.array(nonzero_beams))} coupling from {n_beams} reflections input")
+        print(
+            f"Zeroing out {np.count_nonzero(~np.array(nonzero_beams))-n_beams} couplings out of {len(nonzero_beams)} from {n_beams} reflections input"
+        )
 
     # Relativistic correction to the potentials [2.38]
     prefactor = get_interaction_constant(self.accel_voltage) / (
