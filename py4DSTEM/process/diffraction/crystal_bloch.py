@@ -90,7 +90,7 @@ def generate_dynamical_diffraction_pattern(
     # greater than the k_max used in compute_structure_factors. We also flag
     # beams where g-h=0 to ignore.
     nonzero_beams = [
-        gmh in self.hkl.T and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
+        gmh.tolist() in self.hkl_list and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
     ]
 
     if verbose:
