@@ -584,6 +584,7 @@ def plot_orientation_plan(
 
 
 def plot_diffraction_pattern(
+    self,
     bragg_peaks: PointList,
     bragg_peaks_compare: PointList = None,
     scale_markers: float = 10,

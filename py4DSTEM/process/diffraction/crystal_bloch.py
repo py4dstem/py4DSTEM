@@ -6,6 +6,8 @@ from ...io.datastructure import PointList, PointListArray
 from ..dpc import get_interaction_constant
 from ..utils import electron_wavelength_angstrom
 
+from pdb import set_trace
+
 
 def generate_dynamical_diffraction_pattern(
     self,
@@ -43,7 +45,7 @@ def generate_dynamical_diffraction_pattern(
     """
 
     n_beams = beams.length
-    beam_g, beam_h = np.meshgrid(2 * (np.arange(n_beams)))
+    beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
     # Clean up zone axis input (same as in kinematic function)
     zone_axis = np.asarray(zone_axis) / np.linalg.norm(zone_axis)
@@ -70,22 +72,22 @@ def generate_dynamical_diffraction_pattern(
     # Compute the reduced structure matrix \hat{A} in DeGraef 5.52 #
     ################################################################
 
-    hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"]))
+    hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T
 
     # get hkl indices of \vec{g} - \vec{h}
     g_minus_h = np.vstack(
         (
-            beams.data["h"][beam_g] - beams.data["h"][beam_h],
-            beams.data["k"][beam_g] - beams.data["k"][beam_h],
-            beams.data["l"][beam_g] - beams.data["l"][beam_h],
+            beams.data["h"][beam_g.ravel()] - beams.data["h"][beam_h.ravel()],
+            beams.data["k"][beam_g.ravel()] - beams.data["k"][beam_h.ravel()],
+            beams.data["l"][beam_g.ravel()] - beams.data["l"][beam_h.ravel()],
         )
-    )
+    ).T
 
     # Check if each beam has a computed structure factor. We'll ignore coupling for scattering
     # greater than the k_max used in compute_structure_factors. We also flag
     # beams where g-h=0 to ignore.
     nonzero_beams = [
-        gmh in self.hkl and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
+        gmh in self.hkl.T and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
     ]
 
     # Relativistic correction to the potentials [2.38]
@@ -97,7 +99,7 @@ def generate_dynamical_diffraction_pattern(
     U_gmh = np.array(
         [
             prefactor
-            * self.structure_factors[int(np.where((self.hkl == gmh).all(axis=1))[0])]
+            * self.struct_factors[int(np.where((gmh == self.hkl.T).all(axis=1))[0])]
             if nonzero
             else 0.0 + 0.0j
             for gmh, nonzero in zip(g_minus_h, nonzero_beams)
@@ -106,7 +108,7 @@ def generate_dynamical_diffraction_pattern(
     ).reshape(beam_g.shape)
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g
-    g = np.linalg.inv(self.lat_real) @ hkl
+    g = np.linalg.inv(self.lat_real) @ hkl.T
     cos_alpha = np.sum(
         (ZA[:, None] + g) * foil_normal[:, None], axis=0
     ) / np.linalg.norm(ZA[:, None] + g, axis=0)
@@ -136,7 +138,7 @@ def generate_dynamical_diffraction_pattern(
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
     ######################################################
 
-    E = [np.diag(np.exp(2 * np.pi * 1j * gamma * z)) for z in np.array(thickness)]
+    E = [np.diag(np.exp(2 * np.pi * 1j * gamma * z)) for z in np.atleast_1d(thickness)]
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
@@ -144,20 +146,22 @@ def generate_dynamical_diffraction_pattern(
     ##############################################################################################
 
     psi_0 = np.zeros((n_beams,))
-    psi_0[int(np.where((hkl==[0,0,0]).all(axis=1))[0])] = 1.
+    psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
 
     # calculate the diffraction intensities for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
-    intensities = [np.abs(C @ Ez @ C_inv @ psi_0)**2 for Ez in E]
+    intensities = [np.abs(C @ Ez @ C_inv @ psi_0) ** 2 for Ez in E]
+
+    set_trace()
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        newpl.data['intensity'] = intensities[i]
+        newpl.data["intensity"] = intensities[i]
+        pls.append(newpl)
 
     if len(pls) == 1:
         return pls[0]
     else:
         return pls
-
