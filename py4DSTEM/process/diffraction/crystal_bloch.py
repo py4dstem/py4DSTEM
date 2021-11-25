@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+from scipy import linalg
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
@@ -15,6 +16,7 @@ def generate_dynamical_diffraction_pattern(
     thickness: Union[float, list, tuple, np.ndarray],
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    verbose=True
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -45,6 +47,7 @@ def generate_dynamical_diffraction_pattern(
     """
 
     n_beams = beams.length
+
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
     # Clean up zone axis input (same as in kinematic function)
@@ -90,6 +93,9 @@ def generate_dynamical_diffraction_pattern(
         gmh in self.hkl.T and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
     ]
 
+    if verbose:
+        print(f"Zeroing out {np.count_nonzero(~np.array(nonzero_beams))} coupling from {n_beams} reflections input")
+
     # Relativistic correction to the potentials [2.38]
     prefactor = get_interaction_constant(self.accel_voltage) / (
         np.pi * electron_wavelength_angstrom(self.accel_voltage)
@@ -106,6 +112,9 @@ def generate_dynamical_diffraction_pattern(
         ],
         dtype=np.complex128,
     ).reshape(beam_g.shape)
+
+    if verbose:
+        print(f"Bloch matrix has size {U_gmh.shape}")
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g
     g = np.linalg.inv(self.lat_real) @ hkl.T
@@ -128,7 +137,7 @@ def generate_dynamical_diffraction_pattern(
     # as its columns) and gamma (the reduced eigenvalues), as in DeGraef 5.52                   #
     #############################################################################################
 
-    v, C = np.linalg.eig(U_gmh)  # decompose!
+    v, C = linalg.eig(U_gmh)  # decompose!
     gamma = v / (2.0 * ZA @ foil_normal)  # divide by 2 k_n
 
     # precompute the inverse of C
@@ -152,7 +161,7 @@ def generate_dynamical_diffraction_pattern(
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
     intensities = [np.abs(C @ Ez @ C_inv @ psi_0) ** 2 for Ez in E]
 
-    set_trace()
+    # set_trace()
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
