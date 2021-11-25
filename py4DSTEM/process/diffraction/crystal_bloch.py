@@ -69,7 +69,7 @@ def generate_dynamical_diffraction_pattern(
     ################################################################
     # Compute the reduced structure matrix \hat{A} in DeGraef 5.52 #
     ################################################################
-    
+
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"]))
 
     # get hkl indices of \vec{g} - \vec{h}
@@ -84,7 +84,9 @@ def generate_dynamical_diffraction_pattern(
     # Check if each beam has a computed structure factor. We'll ignore coupling for scattering
     # greater than the k_max used in compute_structure_factors. We also flag
     # beams where g-h=0 to ignore.
-    nonzero_beams = [gmh in self.hkl and not np.array_equal(gmh,[0,0,0]) for gmh in g_minus_h]
+    nonzero_beams = [
+        gmh in self.hkl and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
+    ]
 
     # Relativistic correction to the potentials [2.38]
     prefactor = get_interaction_constant(self.accel_voltage) / (
@@ -124,11 +126,26 @@ def generate_dynamical_diffraction_pattern(
     # as its columns) and gamma (the reduced eigenvalues), as in DeGraef 5.52                   #
     #############################################################################################
 
+    v, C = np.linalg.eig(U_gmh)  # decompose!
+    gamma = v / (2 * ZA @ foil_normal)  # divide by 2 k_n
+
+    # precompute the inverse of C
+    C_inv = np.linalg.inv(C)
+
     ######################################################
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
     ######################################################
+
+    E = [np.diag(np.exp(2 * np.pi * 1j * gamma * z)) for z in np.array(thickness)]
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
     # values into PointLists                                                                     #
     ##############################################################################################
+
+    psi_0 = np.zeros((n_beams,))
+    psi_0[int(np.where((hkl==[0,0,0]).all(axis=1))[0])] = 1.
+
+    # calculate the diffraction intensities for each thichness matrix
+    # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
+    intensities = [np.abs(C @ Ez @ C_inv @ psi_0)**2 for Ez in E]
