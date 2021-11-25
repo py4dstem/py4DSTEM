@@ -386,6 +386,7 @@ class Crystal:
         # Remove structure factors below tolerance level
         keep = np.abs(self.struct_factors) > tol_structure_factor
         self.hkl = self.hkl[:, keep]
+        self.hkl_list = self.hkl.T.tolist()
         self.g_vec_all = self.g_vec_all[:, keep]
         self.g_vec_leng = self.g_vec_leng[keep]
         self.struct_factors = self.struct_factors[keep]
