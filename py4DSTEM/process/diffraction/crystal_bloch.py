@@ -149,3 +149,15 @@ def generate_dynamical_diffraction_pattern(
     # calculate the diffraction intensities for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
     intensities = [np.abs(C @ Ez @ C_inv @ psi_0)**2 for Ez in E]
+
+    # make new pointlists for each thickness case and copy intensities
+    pls = []
+    for i in range(len(intensities)):
+        newpl = beams.copy()
+        newpl.data['intensity'] = intensities[i]
+
+    if len(pls) == 1:
+        return pls[0]
+    else:
+        return pls
+
