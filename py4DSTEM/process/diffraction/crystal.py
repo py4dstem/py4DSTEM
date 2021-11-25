@@ -381,7 +381,6 @@ class Crystal:
 
         # Divide by unit cell volume
         unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
-        print(unit_cell_volume)
         self.struct_factors /= unit_cell_volume
 
         # Remove structure factors below tolerance level
@@ -2170,24 +2169,6 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
 
-
-def atomic_colors(ID):
-    return {
-        1: np.array([0.8, 0.8, 0.8]),
-        2: np.array([1.0, 0.7, 0.0]),
-        3: np.array([1.0, 0.0, 1.0]),
-        4: np.array([0.0, 0.5, 0.0]),
-        5: np.array([0.5, 0.0, 0.0]),
-        6: np.array([0.5, 0.5, 0.5]),
-        7: np.array([0.0, 0.7, 1.0]),
-        8: np.array([1.0, 0.0, 0.0]),
-        13: np.array([0.6, 0.7, 0.8]),
-        14: np.array([0.3, 0.3, 0.3]),
-        15: np.array([1.0, 0.6, 0.0]),
-        16: np.array([1.0, 0.9, 0.0]),
-        17: np.array([0.0, 1.0, 0.0]),
-        79: np.array([1.0, 0.7, 0.0]),
-    }.get(ID, np.array([0.0, 0.0, 0.0]))
 
 # zone axis range arguments for orientation_plan corresponding
 # to the symmetric wedge for each pointgroup, in the order:
