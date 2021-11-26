@@ -164,7 +164,7 @@ def generate_dynamical_diffraction_pattern(
     C_inv = np.linalg.inv(C)
 
     if verbose:
-        print(f"Decomposing the A matrix took {time()-t0} s.")
+        print(f"Decomposing the A matrix took {(time()-t0)*1000.} ms.")
 
     ######################################################
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
