@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 from scipy import linalg
 from typing import Union, Optional
+from time import time
 
 from ...io.datastructure import PointList, PointListArray
 from ..dpc import get_interaction_constant
@@ -48,6 +49,7 @@ def generate_dynamical_diffraction_pattern(
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
     """
+    t0 = time() # start timer for matrix setup
 
     n_beams = beams.length
 
@@ -145,16 +147,24 @@ def generate_dynamical_diffraction_pattern(
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg)
 
+    if verbose:
+        print(f"Constructing the A matrix took {(time()-t0)*1000.} ms.")
+
     #############################################################################################
     # Compute eigen-decomposition of \hat{A} to yield C (the matrix containing the eigenvectors #
     # as its columns) and gamma (the reduced eigenvalues), as in DeGraef 5.52                   #
     #############################################################################################
+
+    t0 = time() # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
     gamma = v / (2.0 * ZA @ foil_normal)  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
+
+    if verbose:
+        print(f"Decomposing the A matrix took {time()-t0} s.")
 
     ######################################################
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
