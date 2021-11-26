@@ -103,6 +103,10 @@ def generate_dynamical_diffraction_pattern(
         np.pi * electron_wavelength_angstrom(self.accel_voltage)
     )
 
+    # TODO: put this in a better place
+    # convert Vg from Å to VÅ
+    prefactor *= 47.86
+
     # Get the structure factors for each nonzero element, and zero otherwise
     U_gmh = np.array(
         [

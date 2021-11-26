@@ -2011,6 +2011,7 @@ class Crystal:
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 0.1,
+        k_max:float = None,
     ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -2023,6 +2024,7 @@ class Crystal:
             sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+            k_max (np float):                maximum scattering angle to keep in pattern
 
         Returns:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
@@ -2121,11 +2123,17 @@ class Crystal:
         keep_int = g_int > tol_intensity
 
         # Diffracted peak locations
-        # scale = 1/cos_alpha[keep]
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
-        gx_proj = np.sum(g_diff[:, keep_int] * kx_proj[:, None], axis=0)
-        gy_proj = np.sum(g_diff[:, keep_int] * ky_proj[:, None], axis=0)
+        gx_proj = np.sum(g_diff * kx_proj[:, None], axis=0)
+        gy_proj = np.sum(g_diff * ky_proj[:, None], axis=0)
+
+        if k_max is not None:
+            keep_kmax = np.hypot(gx_proj, gy_proj) < k_max
+            keep_int = np.logical_and(keep_int, keep_kmax)
+
+        gx_proj = gx_proj[keep_int]
+        gy_proj = gy_proj[keep_int]
 
         # Diffracted peak labels
         h = hkl[0, keep_int]
