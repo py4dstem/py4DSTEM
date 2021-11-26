@@ -16,6 +16,7 @@ def generate_dynamical_diffraction_pattern(
     thickness: Union[float, list, tuple, np.ndarray],
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    naive_absorption: bool = False,
     verbose=False,
 ) -> PointList:
     """
@@ -41,6 +42,8 @@ def generate_dynamical_diffraction_pattern(
                                          Can also be a 3x3 orientation matrix (zone axis 3rd column)
         foil_normal:                     3 element foil normal - set to None to use zone_axis
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        naive_absorption (bool):        Add an imaginary component that is 10% of the real component
+                                        as an __extremely__ simple approximation of absorption
 
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
@@ -90,7 +93,8 @@ def generate_dynamical_diffraction_pattern(
     # greater than the k_max used in compute_structure_factors. We also flag
     # beams where g-h=0 to ignore.
     nonzero_beams = [
-        gmh.tolist() in self.hkl_list and not np.array_equal(gmh, [0, 0, 0]) for gmh in g_minus_h
+        gmh.tolist() in self.hkl_list and not np.array_equal(gmh, [0, 0, 0])
+        for gmh in g_minus_h
     ]
 
     if verbose:
@@ -121,6 +125,9 @@ def generate_dynamical_diffraction_pattern(
 
     if verbose:
         print(f"Bloch matrix has size {U_gmh.shape}")
+
+    if naive_absorption:
+        U_gmh *= 1.0 + 0.1j
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g
     g = np.linalg.inv(self.lat_real) @ hkl.T
