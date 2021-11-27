@@ -4,11 +4,8 @@ from scipy import linalg
 from typing import Union, Optional
 from time import time
 
-from ...io.datastructure import PointList, PointListArray
-from ..dpc import get_interaction_constant
+from ...io.datastructure import PointList
 from ..utils import electron_wavelength_angstrom
-
-from pdb import set_trace
 
 
 def generate_dynamical_diffraction_pattern(
@@ -49,7 +46,7 @@ def generate_dynamical_diffraction_pattern(
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
     """
-    t0 = time() # start timer for matrix setup
+    t0 = time()  # start timer for matrix setup
 
     n_beams = beams.length
 
@@ -91,37 +88,9 @@ def generate_dynamical_diffraction_pattern(
         )
     ).T
 
-    # Check if each beam has a computed structure factor. We'll ignore coupling for scattering
-    # greater than the k_max used in compute_structure_factors. We also flag
-    # beams where g-h=0 to ignore.
-    nonzero_beams = [
-        gmh.tolist() in self.hkl_list and not np.array_equal(gmh, [0, 0, 0])
-        for gmh in g_minus_h
-    ]
-
-    if verbose:
-        print(
-            f"Zeroing out {np.count_nonzero(~np.array(nonzero_beams))-n_beams} couplings out of {len(nonzero_beams)} from {n_beams} reflections input"
-        )
-
-    # Relativistic correction to the potentials [2.38]
-    prefactor = get_interaction_constant(self.accel_voltage) / (
-        np.pi * electron_wavelength_angstrom(self.accel_voltage)
-    )
-
-    # TODO: put this in a better place
-    # convert Vg from Å to VÅ
-    prefactor *= 47.86
-
     # Get the structure factors for each nonzero element, and zero otherwise
     U_gmh = np.array(
-        [
-            prefactor
-            * self.struct_factors[int(np.where((gmh == self.hkl.T).all(axis=1))[0])]
-            if nonzero
-            else 0.0 + 0.0j
-            for gmh, nonzero in zip(g_minus_h, nonzero_beams)
-        ],
+        [self.Ug_dict.get((gmh[0], gmh[1], gmh[2]), 0.0 + 0.0j) for gmh in g_minus_h],
         dtype=np.complex128,
     ).reshape(beam_g.shape)
 
@@ -155,7 +124,7 @@ def generate_dynamical_diffraction_pattern(
     # as its columns) and gamma (the reduced eigenvalues), as in DeGraef 5.52                   #
     #############################################################################################
 
-    t0 = time() # start timer for eigendecomposition
+    t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
     gamma = v / (2.0 * ZA @ foil_normal)  # divide by 2 k_n
@@ -170,12 +139,19 @@ def generate_dynamical_diffraction_pattern(
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
     ######################################################
 
+    t0 = time()
+
     E = [np.diag(np.exp(2.0j * np.pi * z * gamma)) for z in np.atleast_1d(thickness)]
+
+    if verbose:
+        print(f"Constructing thickness matrices took {1000*(time()-t0)} ms.")
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
     # values into PointLists                                                                     #
     ##############################################################################################
+
+    t0 = time()
 
     psi_0 = np.zeros((n_beams,))
     psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
@@ -192,6 +168,9 @@ def generate_dynamical_diffraction_pattern(
         newpl = beams.copy()
         newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
+
+    if verbose:
+        print(f"Assembling outputs took {1000*(time()-t0)} ms.")
 
     if len(pls) == 1:
         return pls[0]
