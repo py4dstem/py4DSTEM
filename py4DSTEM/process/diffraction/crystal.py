@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
+from ..dpc import get_interaction_constant
 
 
 class Crystal:
@@ -386,13 +387,21 @@ class Crystal:
         # Remove structure factors below tolerance level
         keep = np.abs(self.struct_factors) > tol_structure_factor
         self.hkl = self.hkl[:, keep]
-        self.hkl_list = self.hkl.T.tolist()
+
         self.g_vec_all = self.g_vec_all[:, keep]
         self.g_vec_leng = self.g_vec_leng[keep]
         self.struct_factors = self.struct_factors[keep]
 
         # Structure factor intensities
         self.struct_factors_int = np.abs(self.struct_factors) ** 2
+
+        # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
+        # Relativistic correction to the potentials [2.38]
+        prefactor = 47.86 * get_interaction_constant(self.accel_voltage) / (
+            np.pi * electron_wavelength_angstrom(self.accel_voltage)
+        )
+        self.Ug_dict = {(self.hkl[0,i],self.hkl[1,i],self.hkl[2,i]): prefactor * self.struct_factors[i] for i in range(self.hkl.shape[1])}
+        self.Ug_dict[(0,0,0)] = 0.0 + 0.0j
 
         if return_intensities:
             q_SF = np.linspace(0, self.k_max, 250)
