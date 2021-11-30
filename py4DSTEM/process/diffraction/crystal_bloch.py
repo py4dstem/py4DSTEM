@@ -215,7 +215,7 @@ def generate_CBED(
     thickness: Union[float, list, tuple, np.ndarray],
     alpha_mrad: float,
     pixel_size_inv_A: float,
-    DP_size_inv_A: float,
+    DP_size_inv_A: Optional[float],
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
@@ -228,7 +228,7 @@ def generate_CBED(
         beams (PointList)
     """
 
-    alpha_rad = alpha_mrad / 1000.
+    alpha_rad = alpha_mrad / 1000.0
 
     # figure out the projected x and y directions from the beams input
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T.astype(
@@ -269,7 +269,14 @@ def generate_CBED(
     qx_max = np.max(np.abs(beams.data["qx"])) / pixel_size_inv_A
     qy_max = np.max(np.abs(beams.data["qy"])) / pixel_size_inv_A
 
-    DP_size = [int(2 * (qx_max + 2 * alpha_pix)), int(2 * (qy_max + 2 * alpha_pix))]
+    if DP_size_inv_A is None:
+        DP_size = [int(2 * (qx_max + 2 * alpha_pix)), int(2 * (qy_max + 2 * alpha_pix))]
+    else:
+        DP_size = [
+            int(2 * DP_size_inv_A / pixel_size_inv_A),
+            int(2 * DP_size_inv_A / pixel_size_inv_A),
+        ]
+
     qx0 = DP_size[0] / 2.0
     qy0 = DP_size[1] / 2.0
     DP_len = DP_size[0] * DP_size[1]
@@ -285,14 +292,24 @@ def generate_CBED(
             naive_absorption=naive_absorption,
         )
 
-        xpix = np.round(bloch.data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0).astype(np.int64)
-        ypix = np.round(bloch.data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0).astype(np.int64)
+        xpix = np.round(
+            bloch.data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
+        ).astype(np.int64)
+        ypix = np.round(
+            bloch.data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
+        ).astype(np.int64)
+
+        keep_mask = np.logical_and.reduce(
+            (xpix > 0, ypix > 0, xpix < (DP_size[0] - 1), ypix < (DP_size[1] - 1))
+        )
+
+        xpix = xpix[keep_mask]
+        ypix = ypix[keep_mask]
 
         DP += np.bincount(
             np.ravel_multi_index([xpix, ypix], DP_size),
-            bloch.data["intensity"],
+            bloch.data["intensity"][keep_mask],
             minlength=DP_len,
         ).reshape(DP_size)
-
 
     return DP
