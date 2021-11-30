@@ -6,6 +6,35 @@ from time import time
 
 from ...io.datastructure import PointList
 from ..utils import electron_wavelength_angstrom
+from ..dpc import get_interaction_constant
+
+
+def setup_dynamical_calculation(
+    self, accelerating_voltage: float, cartesian_directions: bool = True
+):
+    """
+    Setup required attributes for dynamical calculation without going
+    through the full ACOM pipeline
+    """
+    self.accel_voltage = accelerating_voltage
+    self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+    self.cartesian_directions = cartesian_directions
+
+
+def calculate_dynamical_structure_factors(self):
+    # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
+    # Relativistic correction to the potentials [2.38]
+    prefactor = (
+        47.86
+        * get_interaction_constant(self.accel_voltage)
+        / (np.pi * electron_wavelength_angstrom(self.accel_voltage))
+    )
+    self.Ug_dict = {
+        (self.hkl[0, i], self.hkl[1, i], self.hkl[2, i]): prefactor
+        * self.struct_factors[i]
+        for i in range(self.hkl.shape[1])
+    }
+    self.Ug_dict[(0, 0, 0)] = 0.0 + 0.0j
 
 
 def generate_dynamical_diffraction_pattern(

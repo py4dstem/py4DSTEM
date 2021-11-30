@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
-from ..dpc import get_interaction_constant
 
 
 class Crystal:
@@ -22,7 +21,8 @@ class Crystal:
                               plot_orientation_plan, plot_diffraction_pattern, plot_orientation_maps)
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
-    from .crystal_bloch import generate_dynamical_diffraction_pattern, generate_CBED
+    from .crystal_bloch import (generate_dynamical_diffraction_pattern, generate_CBED,
+                                setup_dynamical_calculation, calculate_dynamical_structure_factors)
 
     def __init__(
         self,
@@ -395,14 +395,6 @@ class Crystal:
 
         # Structure factor intensities
         self.struct_factors_int = np.abs(self.struct_factors) ** 2
-
-        # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
-        # Relativistic correction to the potentials [2.38]
-        prefactor = 47.86 * get_interaction_constant(self.accel_voltage) / (
-            np.pi * electron_wavelength_angstrom(self.accel_voltage)
-        )
-        self.Ug_dict = {(self.hkl[0,i],self.hkl[1,i],self.hkl[2,i]): prefactor * self.struct_factors[i] for i in range(self.hkl.shape[1])}
-        self.Ug_dict[(0,0,0)] = 0.0 + 0.0j
 
         if return_intensities:
             q_SF = np.linspace(0, self.k_max, 250)
