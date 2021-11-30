@@ -45,7 +45,8 @@ def generate_dynamical_diffraction_pattern(
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
-    verbose=False,
+    verbose:bool=False,
+    always_return_list:bool=False,
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -203,7 +204,7 @@ def generate_dynamical_diffraction_pattern(
     if verbose:
         print(f"Assembling outputs took {1000*(time()-t0)} ms.")
 
-    if len(pls) == 1:
+    if len(pls) == 1 and not always_return_list:
         return pls[0]
     else:
         return pls
@@ -225,7 +226,26 @@ def generate_CBED(
     Generate a dynamical CBED pattern using the Bloch wave method.
 
     Args:
-        beams (PointList)
+        beams (PointList):              PointList from the kinematical diffraction generator
+                                        which will define the beams included in the Bloch calculation
+        thickness (float or list/array) thickness to evaluate diffraction patterns at.
+                                        The main Bloch calculation can be reused for multiple thicknesses
+                                        without much overhead.
+        alpha_mrad (float):             Convergence angle for CBED pattern. Note that if disks in the calculation
+                                        overlap, they will be added incoherently (ie incorrectly)
+        pixel_size_inv_A (float):       CBED pixel size in 1/Å. 
+        DP_size_inv_A (optional float): If specified, defines the extents of the diffraction pattern.
+                                        If left unspecified, the DP will be automatically scaled to
+                                        fit all of the beams present in the input plus some small buffer.
+        zone_axis (np float vector):     3 element projection direction for sim pattern
+                                         Can also be a 3x3 orientation matrix (zone axis 3rd column)
+        foil_normal:                     3 element foil normal - set to None to use zone_axis
+        proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        naive_absorption (bool):        Add an imaginary component that is 10% of the real component
+                                        as an __extremely__ simple approximation of absorption
+
+    Returns:
+        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
     """
 
     alpha_rad = alpha_mrad / 1000.0
@@ -281,7 +301,8 @@ def generate_CBED(
     qy0 = DP_size[1] // 2
     DP_len = DP_size[0] * DP_size[1]
 
-    DP = np.zeros(DP_size)
+    thickness = np.atleast_1d(thickness)
+    DP = np.zeros((len(thickness), *DP_size))
 
     for i in tqdm(range(len(tZA))):
         bloch = self.generate_dynamical_diffraction_pattern(
@@ -290,13 +311,14 @@ def generate_CBED(
             zone_axis=tZA[i],
             foil_normal=foil_normal,
             naive_absorption=naive_absorption,
+            always_return_list=True,
         )
 
         xpix = np.round(
-            bloch.data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
+            bloch[0].data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
         ).astype(np.int64)
         ypix = np.round(
-            bloch.data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
+            bloch[0].data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
         ).astype(np.int64)
 
         keep_mask = np.logical_and.reduce(
@@ -306,10 +328,11 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
-        DP += np.bincount(
-            np.ravel_multi_index([xpix, ypix], DP_size),
-            bloch.data["intensity"][keep_mask],
-            minlength=DP_len,
-        ).reshape(DP_size)
+        for k, b in enumerate(bloch):
+            DP[k] += np.bincount(
+                np.ravel_multi_index([xpix, ypix], DP_size),
+                b.data["intensity"][keep_mask],
+                minlength=DP_len,
+            ).reshape(DP_size)
 
-    return DP
+    return np.squeeze(DP)
