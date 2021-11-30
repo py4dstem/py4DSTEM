@@ -277,8 +277,8 @@ def generate_CBED(
             int(2 * DP_size_inv_A / pixel_size_inv_A),
         ]
 
-    qx0 = DP_size[0] / 2.0
-    qy0 = DP_size[1] / 2.0
+    qx0 = DP_size[0] // 2
+    qy0 = DP_size[1] // 2
     DP_len = DP_size[0] * DP_size[1]
 
     DP = np.zeros(DP_size)
@@ -300,7 +300,7 @@ def generate_CBED(
         ).astype(np.int64)
 
         keep_mask = np.logical_and.reduce(
-            (xpix > 0, ypix > 0, xpix < (DP_size[0] - 1), ypix < (DP_size[1] - 1))
+            (xpix >= 0, ypix >= 0, xpix < DP_size[0], ypix < DP_size[1])
         )
 
         xpix = xpix[keep_mask]
