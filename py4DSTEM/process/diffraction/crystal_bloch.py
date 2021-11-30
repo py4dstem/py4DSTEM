@@ -28,7 +28,8 @@ def generate_dynamical_diffraction_pattern(
     If ``thickness`` is a sequence of values, a list of PointLists will be returned,
         corresponding to each thickness value in the input.
 
-    Frequent reference will be made to
+    Frequent reference will be made to "Introduction to conventional transmission electron microscopy"
+        by DeGraef, whose overall approach we follow here.
 
     Args:
         beams (PointList):              PointList from the kinematical diffraction generator
@@ -100,7 +101,7 @@ def generate_dynamical_diffraction_pattern(
     if naive_absorption:
         U_gmh *= 1.0 + 0.1j
 
-    # Compute the diagonal entries of \hat{A}: 2 k_0 s_g
+    # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
     g = np.linalg.inv(self.lat_real) @ hkl.T
     cos_alpha = np.sum(
         (ZA[:, None] + g) * foil_normal[:, None], axis=0
@@ -176,3 +177,36 @@ def generate_dynamical_diffraction_pattern(
         return pls[0]
     else:
         return pls
+
+
+def generate_CBED(
+    self,
+    beams: PointList,
+    thickness: Union[float, list, tuple, np.ndarray],
+    alpha_mrad: float,
+    pixel_size_inv_A: float,
+    DP_size_inv_A: float,
+    zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
+    foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    naive_absorption: bool = False,
+    overlapping_disks: bool = False,
+    verbose=False,
+) -> np.ndarray:
+    """
+    Generate a dynamical CBED pattern using the Bloch wave method.
+
+    Args:
+        beams (PointList)
+    """
+
+    # figure out the projected x and y directions from the beams input
+    hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T.astype(
+        np.float64
+    )
+    qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
+
+    proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
+    ZAx = proj[0] / np.linalg.norm(proj[0])
+    ZAy = proj[1] / np.linalg.norm(proj[1])
+
+    return
