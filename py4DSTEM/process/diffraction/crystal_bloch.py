@@ -3,6 +3,7 @@ import numpy as np
 from scipy import linalg
 from typing import Union, Optional
 from time import time
+from tqdm import tqdm
 
 from ...io.datastructure import PointList
 from ..utils import electron_wavelength_angstrom
@@ -218,7 +219,6 @@ def generate_CBED(
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
-    overlapping_disks: bool = False,
     verbose=False,
 ) -> np.ndarray:
     """
@@ -227,6 +227,8 @@ def generate_CBED(
     Args:
         beams (PointList)
     """
+
+    alpha_rad = alpha_mrad / 1000.
 
     # figure out the projected x and y directions from the beams input
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T.astype(
@@ -238,4 +240,59 @@ def generate_CBED(
     ZAx = proj[0] / np.linalg.norm(proj[0])
     ZAy = proj[1] / np.linalg.norm(proj[1])
 
-    return
+    # unit vector in zone axis direction:
+    ZA = np.array(zone_axis) / np.linalg.norm(np.array(zone_axis))
+
+    # TODO: refine pixel size to center reflections on pixels
+
+    # Generate list of plane waves inside aperture
+    alpha_pix = np.round(
+        alpha_rad / self.wavelength / pixel_size_inv_A
+    )  # radius of aperture in pixels
+
+    tx_pixels, ty_pixels = np.meshgrid(
+        np.arange(-alpha_pix, alpha_pix + 1), np.arange(-alpha_pix, alpha_pix + 1)
+    )  # plane waves in pixel units
+
+    # remove those outside circular aperture
+    keep_mask = np.hypot(tx_pixels, ty_pixels) < alpha_pix
+    tx_pixels = tx_pixels[keep_mask]
+    ty_pixels = ty_pixels[keep_mask]
+
+    tx_mrad = tx_pixels / alpha_pix * alpha_rad
+    ty_mrad = ty_pixels / alpha_pix * alpha_rad
+
+    # calculate plane waves as zone axes using small angle approximation for tilting
+    tZA = ZA + (tx_mrad[:, None] * ZAx) + (ty_mrad[:, None] * ZAy)
+
+    # determine DP size based on beams present, plus a little extra
+    qx_max = np.max(np.abs(beams.data["qx"])) / pixel_size_inv_A
+    qy_max = np.max(np.abs(beams.data["qy"])) / pixel_size_inv_A
+
+    DP_size = [int(2 * (qx_max + 2 * alpha_pix)), int(2 * (qy_max + 2 * alpha_pix))]
+    qx0 = DP_size[0] / 2.0
+    qy0 = DP_size[1] / 2.0
+    DP_len = DP_size[0] * DP_size[1]
+
+    DP = np.zeros(DP_size)
+
+    for i in tqdm(range(len(tZA))):
+        bloch = self.generate_dynamical_diffraction_pattern(
+            beams,
+            thickness=thickness,
+            zone_axis=tZA[i],
+            foil_normal=foil_normal,
+            naive_absorption=naive_absorption,
+        )
+
+        xpix = np.round(bloch.data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0).astype(np.int64)
+        ypix = np.round(bloch.data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0).astype(np.int64)
+
+        DP += np.bincount(
+            np.ravel_multi_index([xpix, ypix], DP_size),
+            bloch.data["intensity"],
+            minlength=DP_len,
+        ).reshape(DP_size)
+
+
+    return DP
