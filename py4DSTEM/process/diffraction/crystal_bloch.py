@@ -71,6 +71,16 @@ def generate_dynamical_diffraction_pattern(
         naive_absorption (bool):        Add an imaginary component that is 10% of the real component
                                         as an __extremely__ simple approximation of absorption
 
+    Less commonly used args:
+        always_return_list (bool):      When True, the return is always a list of PointLists, 
+                                        even for a single thickness
+        cache_dynamical_matrix (bool):  When True, enable caching of the dynamical matrix.
+                                        The cached matrix is stored in self.Ugmh_cached. If
+                                        this matrix does not exist, it is created and stored.
+                                        Subsequent calls will use the cached matrix for the 
+                                        off-diagonal components of the A matrix and overwrite
+                                        the diagonal elements. This is used for CBED calculations.
+
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
     """
@@ -173,7 +183,7 @@ def generate_dynamical_diffraction_pattern(
     np.fill_diagonal(U_gmh, 2 * k0 * sg)
 
     if verbose:
-        print(f"Constructing the A matrix took {(time()-t0)*1000.} ms.")
+        print(f"Constructing the A matrix took {(time()-t0)*1000.:.3f} ms.")
 
     #############################################################################################
     # Compute eigen-decomposition of \hat{A} to yield C (the matrix containing the eigenvectors #
@@ -189,7 +199,7 @@ def generate_dynamical_diffraction_pattern(
     C_inv = np.linalg.inv(C)
 
     if verbose:
-        print(f"Decomposing the A matrix took {(time()-t0)*1000.} ms.")
+        print(f"Decomposing the A matrix took {(time()-t0)*1000.:.3f} ms.")
 
     ######################################################
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
@@ -229,7 +239,7 @@ def generate_dynamical_diffraction_pattern(
         pls.append(newpl)
 
     if verbose:
-        print(f"Assembling outputs took {1000*(time()-t0)} ms.")
+        print(f"Assembling outputs took {1000*(time()-t0):.3f} ms.")
 
     if len(pls) == 1 and not always_return_list:
         return pls[0]
