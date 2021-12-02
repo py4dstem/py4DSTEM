@@ -329,6 +329,11 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
+        # Check for nonunique indices, since using the advanced slicing 
+        # method of adding to the DP causes undefined behavior if the
+        # same index appears more than once. This would only be caused
+        # by errors in the xpix,ypix calculation, so the check is
+        # normally disabled. I'm leaving it here for debugging purposes.
         # if True:
         #     indices = np.ravel_multi_index([xpix,ypix],DP_size)
         #     if len(indices) != len(xpix):
