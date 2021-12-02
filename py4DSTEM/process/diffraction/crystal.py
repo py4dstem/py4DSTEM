@@ -33,6 +33,7 @@ class Crystal:
         calculate_dynamical_structure_factors,
     )
 
+    # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
     from .crystal_ACOM import orientation_plan, match_orientations, match_single_pattern
 
     def __init__(
