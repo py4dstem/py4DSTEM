@@ -10,21 +10,16 @@ from ..utils import electron_wavelength_angstrom
 from ..dpc import get_interaction_constant
 
 
-def setup_dynamical_calculation(
+def calculate_dynamical_structure_factors(
     self, accelerating_voltage: float, cartesian_directions: bool = True
 ):
-    """
-    Setup required attributes for dynamical calculation without going
-    through the full ACOM pipeline
-    """
+    # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
+    # Relativistic correction to the potentials [2.38]
+
     self.accel_voltage = accelerating_voltage
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
     self.cartesian_directions = cartesian_directions
 
-
-def calculate_dynamical_structure_factors(self):
-    # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
-    # Relativistic correction to the potentials [2.38]
     prefactor = (
         47.86
         * get_interaction_constant(self.accel_voltage)
@@ -340,6 +335,6 @@ def generate_CBED(
         #         print(f"Nonunique indices!!! {i}")
 
         for patt, sim in zip(DP, bloch):
-            patt[xpix,ypix] += sim.data['intensity'][keep_mask]
+            patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
     return DP[0] if len(thickness) == 1 else DP
