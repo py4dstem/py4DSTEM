@@ -42,6 +42,7 @@ def generate_dynamical_diffraction_pattern(
     naive_absorption: bool = False,
     verbose: bool = False,
     always_return_list: bool = False,
+    cache_dynamical_matrix=False,
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -106,26 +107,54 @@ def generate_dynamical_diffraction_pattern(
 
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T
 
-    # get hkl indices of \vec{g} - \vec{h}
-    g_minus_h = np.vstack(
-        (
-            beams.data["h"][beam_g.ravel()] - beams.data["h"][beam_h.ravel()],
-            beams.data["k"][beam_g.ravel()] - beams.data["k"][beam_h.ravel()],
-            beams.data["l"][beam_g.ravel()] - beams.data["l"][beam_h.ravel()],
-        )
-    ).T
+    # If we are not supposed to cache, clear any cache
+    if not cache_dynamical_matrix and hasattr(self, "Ugmh_cached"):
+        delattr(self, "Ugmh_cached")
 
-    # Get the structure factors for each nonzero element, and zero otherwise
-    U_gmh = np.array(
-        [self.Ug_dict.get((gmh[0], gmh[1], gmh[2]), 0.0 + 0.0j) for gmh in g_minus_h],
-        dtype=np.complex128,
-    ).reshape(beam_g.shape)
+    # Check if we have a cached dynamical matrix, which saves us from calculating the
+    # off-diagonal elements when running this in a loop with the same zone axis
+    if (
+        cache_dynamical_matrix
+        and hasattr(self, "Ugmh_cached")
+        and self.Ugmh_cached is not None
+    ):
+        U_gmh = self.Ugmh_cached
+    else:
+        # No cached matrix is available/desired, so calculate it:
+
+        # get hkl indices of \vec{g} - \vec{h}
+        g_minus_h = np.vstack(
+            (
+                beams.data["h"][beam_g.ravel()] - beams.data["h"][beam_h.ravel()],
+                beams.data["k"][beam_g.ravel()] - beams.data["k"][beam_h.ravel()],
+                beams.data["l"][beam_g.ravel()] - beams.data["l"][beam_h.ravel()],
+            )
+        ).T
+
+        # Get the structure factors for each nonzero element, and zero otherwise
+        U_gmh = np.array(
+            [
+                self.Ug_dict.get((gmh[0], gmh[1], gmh[2]), 0.0 + 0.0j)
+                for gmh in g_minus_h
+            ],
+            dtype=np.complex128,
+        ).reshape(beam_g.shape)
+
+        if naive_absorption:
+            U_gmh *= 1.0 + 0.1j
+
+    # If we are supposed to cache, but don't have one saved, save this one:
+    if cache_dynamical_matrix and not hasattr(self, "Ugmh_cached"):
+        self.Ugmh_cached = None
+    if (
+        cache_dynamical_matrix
+        and hasattr(self, "Ugmh_cached")
+        and self.Ugmh_cached is None
+    ):
+        self.Ugmh_cached = U_gmh
 
     if verbose:
         print(f"Bloch matrix has size {U_gmh.shape}")
-
-    if naive_absorption:
-        U_gmh *= 1.0 + 0.1j
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
     g = np.linalg.inv(self.lat_real) @ hkl.T
@@ -305,6 +334,9 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
     DP = [np.zeros(DP_size) for _ in range(len(thickness))]
 
+    # Clear any cached dynamical matrix
+    self.Ugmh_cached = None
+
     for i in tqdm(range(len(tZA)), disable=not progress_bar):
         bloch = self.generate_dynamical_diffraction_pattern(
             beams,
@@ -313,6 +345,7 @@ def generate_CBED(
             foil_normal=foil_normal,
             naive_absorption=naive_absorption,
             always_return_list=True,
+            cache_dynamical_matrix=True,
         )
 
         xpix = np.round(
@@ -329,7 +362,7 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
-        # Check for nonunique indices, since using the advanced slicing 
+        # Check for nonunique indices, since using the advanced slicing
         # method of adding to the DP causes undefined behavior if the
         # same index appears more than once. This would only be caused
         # by errors in the xpix,ypix calculation, so the check is
@@ -341,5 +374,9 @@ def generate_CBED(
 
         for patt, sim in zip(DP, bloch):
             patt[xpix, ypix] += sim.data["intensity"][keep_mask]
+
+    # Clear the cached dynamical matrix to be safe
+    if hasattr(self, "Ugmh_cached"):
+        delattr(self, "Ugmh_cached")
 
     return DP[0] if len(thickness) == 1 else DP
