@@ -308,7 +308,7 @@ def generate_CBED(
     DP_len = DP_size[0] * DP_size[1]
 
     thickness = np.atleast_1d(thickness)
-    DP = np.zeros((len(thickness), *DP_size))
+    DP = [np.zeros(DP_size) for _ in range(len(thickness))]
 
     for i in tqdm(range(len(tZA)), disable=not progress_bar):
         bloch = self.generate_dynamical_diffraction_pattern(
@@ -322,10 +322,10 @@ def generate_CBED(
 
         xpix = np.round(
             bloch[0].data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
-        ).astype(np.int64)
+        ).astype(np.intp)
         ypix = np.round(
             bloch[0].data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
-        ).astype(np.int64)
+        ).astype(np.intp)
 
         keep_mask = np.logical_and.reduce(
             (xpix >= 0, ypix >= 0, xpix < DP_size[0], ypix < DP_size[1])
@@ -334,11 +334,7 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
-        for k, b in enumerate(bloch):
-            DP[k] += np.bincount(
-                np.ravel_multi_index([xpix, ypix], DP_size),
-                b.data["intensity"][keep_mask],
-                minlength=DP_len,
-            ).reshape(DP_size)
+        for patt, sim in zip(DP, bloch):
+            patt[xpix,ypix] += sim.data['intensity'][keep_mask]
 
-    return np.squeeze(DP)
+    return DP[0] if len(thickness) == 1 else DP
