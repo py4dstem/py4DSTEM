@@ -47,8 +47,6 @@ class PointList(DataObject):
         else:
             raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
 
-        self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
-
         if data is not None:
             if isinstance(data, PointList):
                 # If types agree, add all at once
@@ -61,8 +59,10 @@ class PointList(DataObject):
                 self.data = data
                 self.length = np.atleast_1d(data).shape[0]
             elif isinstance(data, tuple):
+                self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
                 self.add_tuple_of_nparrays(data)
             else:
+                self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
                 self.add_pointarray(data) # Otherwise, add one by one
 
     def add_point(self, point):
