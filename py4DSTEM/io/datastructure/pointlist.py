@@ -51,9 +51,15 @@ class PointList(DataObject):
 
         if data is not None:
             if isinstance(data, PointList):
-                self.add_pointlist(data)  # If types agree, add all at once
+                # If types agree, add all at once
+                assert self.dtype==data.data.dtype, "Error: dtypes must agree"
+                self.data = data.data
+                self.length = np.atleast_1d(data.data).shape[0]
             elif isinstance(data, np.ndarray):
-                self.add_dataarray(data)  # If types agree, add all at once
+                # If types agree, add all at once
+                assert self.dtype==data.dtype, "Error: dtypes must agree"
+                self.data = data
+                self.length = np.atleast_1d(data).shape[0]
             elif isinstance(data, tuple):
                 self.add_tuple_of_nparrays(data)
             else:

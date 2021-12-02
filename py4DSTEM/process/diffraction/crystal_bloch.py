@@ -190,7 +190,7 @@ def generate_dynamical_diffraction_pattern(
 
     # calculate the diffraction intensities for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
-    intensities = [np.abs(C @ Ez @ C_inv @ psi_0) ** 2 for Ez in E]
+    intensities = [np.abs(C @ (Ez @ (C_inv @ psi_0))) ** 2 for Ez in E]
 
     # set_trace()
 
@@ -263,6 +263,8 @@ def generate_CBED(
 
     # unit vector in zone axis direction:
     ZA = np.array(zone_axis) / np.linalg.norm(np.array(zone_axis))
+    if foil_normal is None:
+        foil_normal = ZA
 
     # TODO: refine pixel size to center reflections on pixels
 
