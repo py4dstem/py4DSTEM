@@ -171,12 +171,12 @@ def generate_dynamical_diffraction_pattern(
     # Compute thickness matrix/matrices E (DeGraef 5.60) #
     ######################################################
 
-    t0 = time()
+    # t0 = time()
 
-    E = [np.diag(np.exp(2.0j * np.pi * z * gamma)) for z in np.atleast_1d(thickness)]
+    # E = [np.diag(np.exp(2.0j * np.pi * z * gamma)) for z in np.atleast_1d(thickness)]
 
-    if verbose:
-        print(f"Constructing thickness matrices took {1000*(time()-t0)} ms.")
+    # if verbose:
+    #     print(f"Constructing thickness matrices took {1000*(time()-t0)} ms.")
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
@@ -189,8 +189,11 @@ def generate_dynamical_diffraction_pattern(
     psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
 
     # calculate the diffraction intensities for each thichness matrix
-    # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0
-    intensities = [np.abs(C @ (Ez @ (C_inv @ psi_0))) ** 2 for Ez in E]
+    # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
+    intensities = [
+        np.abs(C @ (np.diag(np.exp(2.0j * np.pi * z * gamma)) @ (C_inv @ psi_0))) ** 2
+        for z in np.atleast_1d(thickness)
+    ]
 
     # set_trace()
 
