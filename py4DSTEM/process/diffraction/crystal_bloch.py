@@ -334,6 +334,11 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
+        # if True:
+        #     indices = np.ravel_multi_index([xpix,ypix],DP_size)
+        #     if len(indices) != len(xpix):
+        #         print(f"Nonunique indices!!! {i}")
+
         for patt, sim in zip(DP, bloch):
             patt[xpix,ypix] += sim.data['intensity'][keep_mask]
 
