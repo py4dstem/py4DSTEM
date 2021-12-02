@@ -72,12 +72,12 @@ def generate_dynamical_diffraction_pattern(
                                         as an __extremely__ simple approximation of absorption
 
     Less commonly used args:
-        always_return_list (bool):      When True, the return is always a list of PointLists, 
+        always_return_list (bool):      When True, the return is always a list of PointLists,
                                         even for a single thickness
         cache_dynamical_matrix (bool):  When True, enable caching of the dynamical matrix.
                                         The cached matrix is stored in self.Ugmh_cached. If
                                         this matrix does not exist, it is created and stored.
-                                        Subsequent calls will use the cached matrix for the 
+                                        Subsequent calls will use the cached matrix for the
                                         off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
 
@@ -253,7 +253,7 @@ def generate_CBED(
     thickness: Union[float, list, tuple, np.ndarray],
     alpha_mrad: float,
     pixel_size_inv_A: float,
-    DP_size_inv_A: Optional[float],
+    DP_size_inv_A: Optional[float] = None,
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
