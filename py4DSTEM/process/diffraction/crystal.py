@@ -22,7 +22,7 @@ class Crystal:
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
     from .crystal_bloch import (generate_dynamical_diffraction_pattern, generate_CBED,
-                                setup_dynamical_calculation, calculate_dynamical_structure_factors)
+                                calculate_dynamical_structure_factors)
 
     def __init__(
         self,

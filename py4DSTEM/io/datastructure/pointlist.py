@@ -64,6 +64,8 @@ class PointList(DataObject):
             else:
                 self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
                 self.add_pointarray(data) # Otherwise, add one by one
+        else:
+            self.data = np.array([],dtype=self.dtype)  #: the data; a numpy structured array
 
     def add_point(self, point):
         point = tuple(point)
