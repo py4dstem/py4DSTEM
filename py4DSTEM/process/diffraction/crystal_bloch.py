@@ -45,8 +45,8 @@ def generate_dynamical_diffraction_pattern(
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
-    verbose:bool=False,
-    always_return_list:bool=False,
+    verbose: bool = False,
+    always_return_list: bool = False,
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -221,6 +221,7 @@ def generate_CBED(
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
     verbose=False,
+    progress_bar=True,
 ) -> np.ndarray:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -233,7 +234,7 @@ def generate_CBED(
                                         without much overhead.
         alpha_mrad (float):             Convergence angle for CBED pattern. Note that if disks in the calculation
                                         overlap, they will be added incoherently (ie incorrectly)
-        pixel_size_inv_A (float):       CBED pixel size in 1/Å. 
+        pixel_size_inv_A (float):       CBED pixel size in 1/Å.
         DP_size_inv_A (optional float): If specified, defines the extents of the diffraction pattern.
                                         If left unspecified, the DP will be automatically scaled to
                                         fit all of the beams present in the input plus some small buffer.
@@ -304,7 +305,7 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
     DP = np.zeros((len(thickness), *DP_size))
 
-    for i in tqdm(range(len(tZA))):
+    for i in tqdm(range(len(tZA)), disable=not progress_bar):
         bloch = self.generate_dynamical_diffraction_pattern(
             beams,
             thickness=thickness,
