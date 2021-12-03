@@ -257,6 +257,7 @@ def generate_CBED(
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
+    dtype: np.dtype = np.float32,
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
@@ -343,7 +344,7 @@ def generate_CBED(
     DP_len = DP_size[0] * DP_size[1]
 
     thickness = np.atleast_1d(thickness)
-    DP = [np.zeros(DP_size) for _ in range(len(thickness))]
+    DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
