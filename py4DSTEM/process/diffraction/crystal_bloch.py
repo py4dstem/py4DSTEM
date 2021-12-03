@@ -30,7 +30,7 @@ def calculate_dynamical_structure_factors(
         * self.struct_factors[i]
         for i in range(self.hkl.shape[1])
     }
-    self.Ug_dict[(0, 0, 0)] = 0.0 + 0.0j
+    self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
 
 
 def generate_dynamical_diffraction_pattern(
