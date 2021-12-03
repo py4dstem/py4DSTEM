@@ -257,8 +257,9 @@ def generate_CBED(
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
     naive_absorption: bool = False,
-    verbose=False,
-    progress_bar=True,
+    verbose: bool = False,
+    progress_bar: bool = True,
+    return_mask: bool = False,
 ) -> np.ndarray:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -344,6 +345,8 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
     DP = [np.zeros(DP_size) for _ in range(len(thickness))]
 
+    mask = np.zeros(DP_size, dtype=np.bool_)
+
     # Clear any cached dynamical matrix
     self.Ugmh_cached = None
 
@@ -372,6 +375,8 @@ def generate_CBED(
         xpix = xpix[keep_mask]
         ypix = ypix[keep_mask]
 
+        mask[xpix, ypix] = True
+
         # Check for nonunique indices, since using the advanced slicing
         # method of adding to the DP causes undefined behavior if the
         # same index appears more than once. This would only be caused
@@ -389,4 +394,7 @@ def generate_CBED(
     if hasattr(self, "Ugmh_cached"):
         delattr(self, "Ugmh_cached")
 
-    return DP[0] if len(thickness) == 1 else DP
+    if return_mask:
+        return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
+    else:
+        return DP[0] if len(thickness) == 1 else DP
