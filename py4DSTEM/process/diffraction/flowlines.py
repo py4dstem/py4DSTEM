@@ -7,6 +7,9 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from scipy.ndimage import gaussian_filter1d
 
+from matplotlib.colors import hsv_to_rgb
+from matplotlib.colors import rgb_to_hsv
+
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
 
@@ -139,12 +142,13 @@ def make_orientation_histogram(
 def make_flowline_map(
     orient_hist,
     thresh_seed = 0.2,
-    thresh_grow = 0.1,
+    thresh_grow = 0.05,
     thresh_collision = 0.01,
-    sep_xy = 4.0,
-    sep_theta = 15.0,
+    sep_seeds = 3,
+    sep_xy = 6.0,
+    sep_theta = 5.0,
     linewidth = 2.0,
-    step_size = 0.25,
+    step_size = 0.5,
     max_steps = 1000,
     sigma_x = 1.0,
     sigma_y = 1.0,
@@ -213,8 +217,15 @@ def make_flowline_map(
             orient >= np.roll(orient,1,axis=2),
             orient >= np.roll(orient,-1,axis=2)),
             orient >= thresh_seed)
-        x_inds,y_inds,t_inds = np.where(sub_seeds)
 
+        # Separate seeds
+        if sep_seeds > 0:
+            for a1 in range(sep_seeds-1):
+                sub_seeds[a1::sep_seeds,:,:] = False
+                sub_seeds[:,a1::sep_seeds,:] = False
+
+        # Index seeds
+        x_inds,y_inds,t_inds = np.where(sub_seeds)
         inds_sort = np.argsort(orient[sub_seeds])[::-1]
         x_inds = x_inds[inds_sort]
         y_inds = y_inds[inds_sort]
@@ -341,7 +352,7 @@ def make_flowline_map(
                     if count_rev > max_steps-1:
                         grow=False
 
-            xy_t_int_rev[0:count_rev,2] = xy_t_int_rev[0:count_rev,2] - np.pi/dtheta
+            # xy_t_int_rev[0:count_rev,2] = xy_t_int_rev[0:count_rev,2] - np.pi/dtheta
 
             # print(np.round(xy_t_int[0:100:10,:]))
             # print(np.round(xy_t_int_rev[1:1001:100,:]))
@@ -377,9 +388,118 @@ def make_flowline_map(
     # linewidth
     if linewidth > 1.0:
         s = linewidth - 1
-
+        
+        orient_flowlines = gaussian_filter1d(orient_flowlines, s, axis=0)
+        orient_flowlines = gaussian_filter1d(orient_flowlines, s, axis=1)
+        orient_flowlines = orient_flowlines * (s**2)
 
     return orient_flowlines
+
+
+
+
+def make_flowline_image(
+    orient_flowlines,
+    int_range = [0,0.5],
+    sym_rotation_order = 2,
+    greyscale = False,
+    greyscale_max = True,
+    white_background = False,
+    power_scaling = 1,
+    # cmap = 'hsv',
+    # correct_luminosity = True,
+    ):
+    """
+    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents diffraction data.
+    
+    Args:
+        orient_flowline (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
+                                    We assume theta bin ranges from 0 to 180 degrees and is periodic.
+        int_range (float)           2 element array giving the intensity range
+        sym_rotation_order (int):   rotational symmety for colouring
+
+    Returns:
+        im_flowline (array):          3D or 4D array containing flowline images
+    """
+
+    # init array
+    size_input = orient_flowlines.shape
+    size_output = np.array([size_input[0],size_input[1],3,size_input[2]])
+    im_flowline = np.zeros(size_output)
+
+    if greyscale is True:
+        for a0 in np.arange(size_input[2]):
+            if greyscale_max is True:
+                im = np.max(orient_flowlines[:,:,a0,:],axis=2)
+            else:
+                im = np.mmean(orient_flowlines[:,:,a0,:],axis=2)
+
+            sig = np.clip((im - int_range[0]) \
+                / (int_range[1] - int_range[0]),0,1)
+
+            if power_scaling != 1:
+                sig = sig ** power_scaling
+
+            if white_background is False:
+                im_flowline[:,:,:,a0] = sig[:,:,None]
+            else:
+                im_flowline[:,:,:,a0] = 1-sig[:,:,None]
+
+
+    else:
+        # Color basis
+        c0 = np.array([1.0, 0.0, 0.0])
+        c1 = np.array([0.0, 0.7, 0.0])
+        c2 = np.array([0.0, 0.3, 1.0])
+
+        # angles
+        theta = np.linspace(0,np.pi,size_input[3],endpoint=False)
+        # dtheta = theta[1] - theta[0]
+        theta_color = theta * sym_rotation_order
+        # print(theta_color*180/np.pi)
+
+        # color basis
+        b0 =  np.maximum(1 - np.abs(np.mod(theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+        b1 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+        b2 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+
+
+        for a0 in np.arange(size_input[2]):
+            for a1 in np.arange(size_input[3]):
+                sig = np.clip(
+                    (orient_flowlines[:,:,a0,a1] - int_range[0]) \
+                    / (int_range[1] - int_range[0]),0,1)
+
+                for a2 in np.arange(3):
+                    im_flowline[:,:,:,a0] = im_flowline[:,:,:,a0] + \
+                        sig[:,:,None]*(c0[None,None,:]*b0[a1]) + \
+                        sig[:,:,None]*(c1[None,None,:]*b1[a1]) + \
+                        sig[:,:,None]*(c2[None,None,:]*b2[a1])
+
+            # clip limit
+            im_flowline[:,:,:,a0] = np.clip(im_flowline[:,:,:,a0],0,1)
+
+            # contrast flip
+            if white_background is True:
+                im = rgb_to_hsv(im_flowline[:,:,:,a0])
+                # im_s = im[:,:,1]
+                im_v = im[:,:,2]
+                im[:,:,1] = im_v
+                im[:,:,2] = 1
+                im_flowline[:,:,:,a0] = hsv_to_rgb(im)
+
+        # print(im_flowline.shape)
+        # print((sig[:,:,None] * c1[None,None,:]).shape)
+
+        # fig,ax = plt.subplots(1,1,figsize=(8,8))
+        # ax.plot(theta,b0)
+        # ax.plot(theta,b1)
+        # ax.plot(theta,b2)
+        # plt.show()
+
+
+    return im_flowline
+
 
 
 
