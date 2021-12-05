@@ -140,8 +140,10 @@ def make_flowline_map(
     orient_hist,
     thresh_seed = 0.2,
     thresh_grow = 0.1,
-    thresh_stop = 0.1,
-    line_separation = 4.0,
+    thresh_collision = 0.01,
+    sep_xy = 4.0,
+    sep_theta = 15.0,
+    linewidth = 2.0,
     step_size = 0.25,
     max_steps = 1000,
     sigma_x = 1.0,
@@ -155,7 +157,7 @@ def make_flowline_map(
     Args:
         orient_hist (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
                                 We assume theta bin ranges from 0 to 180 degrees and is periodic.
-        line_separation (float):   Separation of the flowlines in pixels. Can be a float or a vector of floats.
+        sep (float):            Separation of the flowlines in pixels.
         progress_bar (bool):          Enable progress bar
 
     Returns:
@@ -174,10 +176,6 @@ def make_flowline_map(
         orient_hist.shape[3],
     ])
 
-    # Expand line separation into a vector if needed
-    if np.isscalar(line_separation):
-        line_separation = np.ones(num_radii) * line_separation
-
     # initialize weighting array
     vx = np.arange(-np.ceil(2*sigma_x),np.ceil(2*sigma_x)+1)
     vy = np.arange(-np.ceil(2*sigma_y),np.ceil(2*sigma_y)+1)
@@ -191,11 +189,21 @@ def make_flowline_map(
     vy = vy[None,:,None].astype('int')
     vt = vt[None,None,:].astype('int')
 
+    # initialize collision check array
+    cr = np.arange(-np.ceil(sep_xy),np.ceil(sep_xy)+1)
+    ct = np.arange(-np.ceil(sep_theta),np.ceil(sep_theta)+1)
+    ay,ax,at = np.meshgrid(cr,cr,ct)
+    c_mask = (ax**2 + ay**2)/sep_xy**2 + at**2/sep_theta**2 <= (1 + 1/sep_xy)**2
+    cx = cr[:,None,None].astype('int')
+    cy = cr[None,:,None].astype('int')
+    ct = ct[None,None,:].astype('int')
+
     # initalize flowline array
     orient_flowlines = np.zeros_like(orient_hist)
 
     # initialize output
     xy_t_int = np.zeros((max_steps+1,4))
+    xy_t_int_rev = np.zeros((max_steps+1,4))
 
     # Loop over radial bins
     for a0 in np.arange(num_radii):
@@ -212,16 +220,30 @@ def make_flowline_map(
         y_inds = y_inds[inds_sort]
         t_inds = t_inds[inds_sort]    
 
-        for a1 in tqdmnd(range(0,21), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
+        # for a1 in tqdmnd(range(0,40), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
+        for a1 in tqdmnd(range(0,x_inds.shape[0]), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
             # initial coordinate and intensity
             xy0 = np.array((x_inds[a1],y_inds[a1]))
-            t = theta[t_inds[a1]]
-            int_val = get_intensity(orient,xy0[0],xy0[1],t/dtheta)
-            xy_t_int[0,:] = np.hstack((xy0,t/dtheta,int_val))[None,:]
+            t0 = theta[t_inds[a1]]
+
+            # init theta
+            inds_theta = np.mod(np.round(t0/dtheta).astype('int')+vt,orient.shape[2])
+            orient_crop = k * orient[
+                np.clip(np.round(xy0[0]).astype('int')+vx,0,orient.shape[0]-1),
+                np.clip(np.round(xy0[1]).astype('int')+vy,0,orient.shape[1]-1),
+                inds_theta]
+            theta_crop = theta[inds_theta]
+            t0 = np.sum(orient_crop * theta_crop) / np.sum(orient_crop)
 
             # forward direction
-            v = np.array((-np.sin(t),np.cos(t))) * step_size
+            t = t0
+            v0 = np.array((-np.sin(t),np.cos(t)))
+            v = v0 * step_size
             xy = xy0
+            int_val = get_intensity(orient,xy0[0],xy0[1],t0/dtheta)
+            xy_t_int[0,0:2] = xy0
+            xy_t_int[0,2] = t/dtheta
+            xy_t_int[0,3] = int_val
             # main loop
             grow = True
             count = 0
@@ -232,11 +254,21 @@ def make_flowline_map(
                 xy = xy + v 
                 int_val = get_intensity(orient,xy[0],xy[1],t/dtheta)
 
+                # check for collision
+                flow_crop = orient_flowlines[
+                    np.clip(np.round(xy[0]).astype('int')+cx,0,orient.shape[0]-1),
+                    np.clip(np.round(xy[1]).astype('int')+cy,0,orient.shape[1]-1),
+                    (a0).astype('int'),
+                    np.mod(np.round(t/dtheta).astype('int')+ct,orient.shape[2])
+                ]
+                int_flow = np.max(flow_crop[c_mask])
+
                 if  xy[0] < 0 or \
-                    xy[1] <0 or \
-                    xy[0] < 0 or \
                     xy[1] < 0 or \
-                    int_val < thresh_grow:
+                    xy[0] > orient.shape[0] or \
+                    xy[1] > orient.shape[1] or \
+                    int_val < thresh_grow or \
+                    int_flow > thresh_collision:
                     grow = False
                 else:
                     # update direction
@@ -253,30 +285,99 @@ def make_flowline_map(
                     xy_t_int[count,2] = t/dtheta
                     xy_t_int[count,3] = int_val
 
-                    if count > max_steps:
+                    if count > max_steps-1:
                         grow=False
-                    #grow=False
-
-            # write into output array
-            # print(np.round(xy_t_int[0:count,:],decimals=0))
-            orient_flowlines[:,:,a0,:] = set_intensity(orient_flowlines[:,:,a0,:],xy_t_int[0:count,:])
 
             # reverse direction
+            t = t0 + np.pi
+            v0 = np.array((-np.sin(t),np.cos(t)))
+            v = v0 * step_size
+            xy = xy0
+            int_val = get_intensity(orient,xy0[0],xy0[1],t0/dtheta)
+            xy_t_int_rev[0,0:2] = xy0
+            xy_t_int_rev[0,2] = t/dtheta
+            xy_t_int_rev[0,3] = int_val
+            # main loop
+            grow = True
+            count_rev = 0
+            while grow is True:
+                count_rev += 1
+
+                # update position and intensity
+                xy = xy + v 
+                int_val = get_intensity(orient,xy[0],xy[1],t/dtheta)
+
+                # check for collision
+                flow_crop = orient_flowlines[
+                    np.clip(np.round(xy[0]).astype('int')+cx,0,orient.shape[0]-1),
+                    np.clip(np.round(xy[1]).astype('int')+cy,0,orient.shape[1]-1),
+                    (a0).astype('int'),
+                    np.mod(np.round(t/dtheta).astype('int')+ct,orient.shape[2])
+                ]
+                int_flow = np.max(flow_crop[c_mask])
+
+                if  xy[0] < 0 or \
+                    xy[1] < 0 or \
+                    xy[0] > orient.shape[0] or \
+                    xy[1] > orient.shape[1] or \
+                    int_val < thresh_grow or \
+                    int_flow > thresh_collision:
+                    grow = False
+                else:
+                    # update direction
+                    inds_theta = np.mod(np.round(t/dtheta).astype('int')+vt,orient.shape[2])
+                    orient_crop = k * orient[
+                        np.clip(np.round(xy[0]).astype('int')+vx,0,orient.shape[0]-1),
+                        np.clip(np.round(xy[1]).astype('int')+vy,0,orient.shape[1]-1),
+                        inds_theta]
+                    theta_crop = theta[inds_theta]
+                    t = np.sum(orient_crop * theta_crop) / np.sum(orient_crop) + np.pi
+                    v = np.array((-np.sin(t),np.cos(t))) * step_size
+
+                    xy_t_int_rev[count_rev,0:2] = xy
+                    xy_t_int_rev[count_rev,2] = t/dtheta
+                    xy_t_int_rev[count_rev,3] = int_val
+
+                    if count_rev > max_steps-1:
+                        grow=False
+
+            xy_t_int_rev[0:count_rev,2] = xy_t_int_rev[0:count_rev,2] - np.pi/dtheta
+
+            # print(np.round(xy_t_int[0:100:10,:]))
+            # print(np.round(xy_t_int_rev[1:1001:100,:]))
+            # print(xy_t_int_rev[1:count_rev:17,3])
+            # print(xy_t_int_rev[1:count_rev,0])
 
 
+            # if count > 1 or count_rev > 2:
 
+            #     fig,ax = plt.subplots(1,1,figsize=(8,4))
+            #     ax.plot(
+            #         xy_t_int[0:count,0],
+            #         xy_t_int[0:count,3])
+            #     ax.plot(
+            #         xy_t_int_rev[0:count_rev,0],
+            #         xy_t_int_rev[0:count_rev,3])
 
+            #     plt.show()
 
-
-        # inds = np.unravel_index(np.where(sub_seeds),size_3D)
-        # print(inds.shape)
-
-
-        # Generate all streams
-
+            # write into output array
+            if count > 0:
+                orient_flowlines[:,:,a0,:] = set_intensity(
+                    orient_flowlines[:,:,a0,:],
+                    xy_t_int[1:count,:])
+            if count_rev > 1:
+                orient_flowlines[:,:,a0,:] = set_intensity(
+                    orient_flowlines[:,:,a0,:],
+                    xy_t_int_rev[1:count_rev,:])
 
     # normalize to step size
     orient_flowlines = orient_flowlines * step_size
+
+    # linewidth
+    if linewidth > 1.0:
+        s = linewidth - 1
+
 
     return orient_flowlines
 
@@ -343,22 +444,22 @@ def set_intensity(orient,xy_t_int):
         [xF+1,yF  ,tF  ], 
         orient.shape[0:3], 
         mode=['clip','clip','wrap'])
-    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(1-dx)*(1-dy)*(1-dt)
+    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(  dx)*(1-dy)*(1-dt)
     inds_1D = np.ravel_multi_index(
         [xF+1,yF  ,tF+1], 
         orient.shape[0:3], 
         mode=['clip','clip','wrap'])
-    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(1-dx)*(1-dy)*(  dt)
+    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(  dx)*(1-dy)*(  dt)
     inds_1D = np.ravel_multi_index(
         [xF+1,yF+1,tF  ], 
         orient.shape[0:3], 
         mode=['clip','clip','wrap'])
-    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(1-dx)*(  dy)*(1-dt)
+    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(  dx)*(  dy)*(1-dt)
     inds_1D = np.ravel_multi_index(
         [xF+1,yF+1,tF+1], 
         orient.shape[0:3], 
         mode=['clip','clip','wrap'])
-    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(1-dx)*(  dy)*(  dt)
+    orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(  dx)*(  dy)*(  dt)
 
 
     return orient
