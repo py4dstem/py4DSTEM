@@ -22,7 +22,8 @@ def make_orientation_histogram(
     sigma_x = 1.0,
     sigma_y = 1.0,
     sigma_theta = 3.0,
-    normalize_intensity: bool = True,
+    normalize_intensity_image: bool = False,
+    normalize_intensity_stack: bool = True,
     progress_bar: bool = True,
     ):
     """
@@ -37,7 +38,8 @@ def make_orientation_histogram(
         sigma_x (float):                smoothing in x direction before upsample
         sigma_y (float):                smoothing in x direction before upsample
         sigma_theta (float):            smoothing in annular direction (units of bins, periodic)
-        normalize_intensity (bool):   Normalize to max peak intensity = 1
+        normalize_intensity_image (bool):   Normalize to max peak intensity = 1, per image
+        normalize_intensity_stack (bool):   Normalize to max peak intensity = 1, all images
         progress_bar (bool):          Enable progress bar
 
     Returns:
@@ -46,6 +48,7 @@ def make_orientation_histogram(
 
     # Input bins
     radial_ranges = np.array(radial_ranges)
+    radial_ranges_2 = radial_ranges**2
     num_radii = radial_ranges.shape[0]
     
     # coordinates
@@ -59,7 +62,8 @@ def make_orientation_histogram(
     orient_hist = np.zeros([
         size_output[0],
         size_output[1],
-        num_radii,num_theta_bins])
+        num_radii,
+        num_theta_bins])
 
     # Loop over all probe positions
     for rx, ry in tqdmnd(
@@ -80,7 +84,7 @@ def make_orientation_histogram(
         r2 = p.data['qx']**2 + p.data['qy']**2
 
         for a0 in range(num_radii):
-            sub = np.logical_and(r2 >= radial_ranges[a0,0], r2 >= radial_ranges[a0,1])
+            sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])
             
             if np.any(sub):
                 intensity = p.data['intensity'][sub]
@@ -124,10 +128,10 @@ def make_orientation_histogram(
     if sigma_theta is not None and sigma_theta > 0:
         orient_hist = gaussian_filter1d(orient_hist,sigma_theta,mode='wrap',axis=3)
 
-
-
     # normalization
-    if normalize_intensity is True:
+    if normalize_intensity_stack is True:
+            orient_hist = orient_hist / np.max(orient_hist)
+    elif normalize_intensity_image is True:
         for a0 in range(num_radii):
             orient_hist[:,:,a0,:] = orient_hist[:,:,a0,:] / np.max(orient_hist[:,:,a0,:])
 
