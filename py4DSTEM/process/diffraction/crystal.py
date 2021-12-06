@@ -14,9 +14,13 @@ class Crystal:
 
     """
 
-    # Visualization methods for the Crystal class are implemented in a separate file. This
+    # Various methods for the Crystal class are implemented in a separate file. This
     # import statement inside the class declaration imports them as methods of the class!
     # (see https://stackoverflow.com/a/47562412)
+
+    # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
+    from .crystal_ACOM import orientation_plan, match_orientations, match_single_pattern
+
     from .crystal_viz import (
         plot_structure,
         plot_structure_factors,
@@ -33,8 +37,7 @@ class Crystal:
         calculate_dynamical_structure_factors,
     )
 
-    # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
-    from .crystal_ACOM import orientation_plan, match_orientations, match_single_pattern
+    from .crystal_refine import index_pattern, estimate_thickness
 
     def __init__(
         self,
