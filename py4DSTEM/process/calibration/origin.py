@@ -456,7 +456,7 @@ def fit_origin(
         If both are True, returns a 2-tuple containing both of the aforementioned
         4-tuples, in the order written above.
     """
-    assert isinstance(data,tuple) and len(data)==2
+    # assert isinstance(data,tuple) and len(data)==2
     qx0_meas,qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2

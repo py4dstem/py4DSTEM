@@ -725,8 +725,11 @@ class DataCube(DataObject):
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+
+        if hasattr(self,'coordinates'):
+
+            self.coordinates.R_Nx = self.R_Nx
+            self.coordinates.R_Ny = self.R_Ny
 
     def swap_RQ(self):
         """
