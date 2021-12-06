@@ -28,8 +28,11 @@ def index_pattern(
     self,
     bragg_peaks: PointList,
     orientation: np.ndarray,
-    tol_distance: float,
-    signal_excitation_error: float,
+    tol_distance: float = 0.05,
+    sigma_excitation_error: float = 0.02,
+    tol_excitation_error_mult: float = 3,
+    tol_intensity: float = 0.1,
+    k_max: float = None,
 ) -> PointList:
     """
     Given a set of experimental Bragg disk locations and the orientation matrix
@@ -37,4 +40,55 @@ def index_pattern(
     within ``tol_distance`` of the kinematically predicted ones and return a
     new PointList containing (qx,qy,Intensity,h,k,l) for the matching peaks.
     """
-    return
+    match_dtype = np.dtype(
+        [
+            ("qx", np.float64),
+            ("qy", np.float64),
+            ("intensity", np.float64),
+            ("h", np.int64),
+            ("k", np.int64),
+            ("l", np.int64),
+        ]
+    )
+
+    sim_peaks = self.generate_diffraction_pattern(
+        zone_axis=orientation,
+        sigma_excitation_error=sigma_excitation_error,
+        tol_excitation_error_mult=tol_excitation_error_mult,
+        tol_intensity=tol_intensity,
+        k_max=k_max,
+    )
+
+    if sim_peaks.length == 0:
+        print("Warning! No kinematic peaks found!")
+        return PointList()
+
+    # Accumulate matches as a list of len-1 arrays, then concatenate later
+    # TODO: do this a smarter way
+    matches = []
+    # loop over all experimental peaks
+    for i in range(bragg_peaks.length):
+        # get current peak
+        qx, qy = bragg_peaks.data["qx"][i], bragg_peaks.data["qy"][i]
+
+        # get find closest peak, and check if it's within tol_distance
+        dq = np.hypot(sim_peaks.data["qx"] - qx, sim_peaks.data["qy"] - qy)
+        if np.min(dq) < tol_distance:
+            idx = np.argmin(dq)
+            matches.append(
+                np.array(
+                    [
+                        (
+                            sim_peaks.data["qx"][idx],
+                            sim_peaks.data["qy"][idx],
+                            bragg_peaks.data["intensity"][i],
+                            sim_peaks.data["h"][idx],
+                            sim_peaks.data["k"][idx],
+                            sim_peaks.data["l"][idx],
+                        )
+                    ],
+                    dtype=match_dtype,
+                )
+            )
+
+    return PointList(match_dtype, np.array(matches))
