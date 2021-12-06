@@ -326,7 +326,7 @@ class Crystal:
     def calculate_structure_factors(
         self,
         k_max: float = 2.0,
-        tol_structure_factor: float = 1e-2,
+        tol_structure_factor: float = 1e-4,
         return_intensities: bool = False,
     ):
         """
@@ -428,7 +428,7 @@ class Crystal:
         proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
-        tol_intensity: float = 0.1,
+        tol_intensity: float = 0.001,
         k_max: float = None,
     ):
         """
