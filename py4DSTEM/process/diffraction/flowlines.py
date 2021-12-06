@@ -147,12 +147,14 @@ def make_flowline_map(
     orient_hist,
     thresh_seed = 0.2,
     thresh_grow = 0.05,
-    thresh_collision = 0.01,
-    sep_seeds = 3,
+    thresh_collision = 0.001,
+    sep_seeds = None,
     sep_xy = 6.0,
     sep_theta = 5.0,
+    sort_seeds_intensity=False,
     linewidth = 2.0,
     step_size = 0.5,
+    min_steps = 4,
     max_steps = 1000,
     sigma_x = 1.0,
     sigma_y = 1.0,
@@ -171,6 +173,9 @@ def make_flowline_map(
     Returns:
         orient_flowlines (array):          3D or 4D array containing flowlines
     """
+
+    if sep_seeds is None:
+        sep_seeds = np.round(sep_xy / 2 + 0.5).astype('int')
 
     # number of radial bins
     num_radii = orient_hist.shape[2]
@@ -216,7 +221,7 @@ def make_flowline_map(
     # Loop over radial bins
     for a0 in np.arange(num_radii):
         # Find all seed locations
-        orient = orient_hist[:,:,a0,:]
+        orient = orient_hist[:,:,a0,:] # .copy()
         sub_seeds = np.logical_and(np.logical_and(
             orient >= np.roll(orient,1,axis=2),
             orient >= np.roll(orient,-1,axis=2)),
@@ -230,10 +235,11 @@ def make_flowline_map(
 
         # Index seeds
         x_inds,y_inds,t_inds = np.where(sub_seeds)
-        inds_sort = np.argsort(orient[sub_seeds])[::-1]
-        x_inds = x_inds[inds_sort]
-        y_inds = y_inds[inds_sort]
-        t_inds = t_inds[inds_sort]    
+        if sort_seeds_intensity is True:
+            inds_sort = np.argsort(orient[sub_seeds])[::-1]
+            x_inds = x_inds[inds_sort]
+            y_inds = y_inds[inds_sort]
+            t_inds = t_inds[inds_sort]    
 
         # for a1 in tqdmnd(range(0,40), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
         for a1 in tqdmnd(range(0,x_inds.shape[0]), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
@@ -377,14 +383,15 @@ def make_flowline_map(
             #     plt.show()
 
             # write into output array
-            if count > 0:
-                orient_flowlines[:,:,a0,:] = set_intensity(
-                    orient_flowlines[:,:,a0,:],
-                    xy_t_int[1:count,:])
-            if count_rev > 1:
-                orient_flowlines[:,:,a0,:] = set_intensity(
-                    orient_flowlines[:,:,a0,:],
-                    xy_t_int_rev[1:count_rev,:])
+            if count + count_rev > min_steps:
+                if count > 0:
+                    orient_flowlines[:,:,a0,:] = set_intensity(
+                        orient_flowlines[:,:,a0,:],
+                        xy_t_int[1:count,:])
+                if count_rev > 1:
+                    orient_flowlines[:,:,a0,:] = set_intensity(
+                        orient_flowlines[:,:,a0,:],
+                        xy_t_int_rev[1:count_rev,:])
 
     # normalize to step size
     orient_flowlines = orient_flowlines * step_size
