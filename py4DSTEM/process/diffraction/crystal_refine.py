@@ -24,7 +24,7 @@ def estimate_thickness(
     return
 
 
-def index_pattern(
+def index_Bragg_peaks_for_orientation(
     self,
     bragg_peaks: PointList,
     orientation: np.ndarray,
@@ -39,6 +39,22 @@ def index_pattern(
     computed in ``match_single_pattern``, select the experimental peaks that are
     within ``tol_distance`` of the kinematically predicted ones and return a
     new PointList containing (qx,qy,Intensity,h,k,l) for the matching peaks.
+
+    Args:
+        bragg_peaks:        (PointList) peaks to index, with (qx,qy,intensity) fields
+        orientation:        (tuple/array) orientation to generate comparison peaks from.
+                                Can be 3-element for a zone axis or [3x3] matrix to include
+                                in-plane rotation
+        tol_distance        (float) distance threshold from ideal peaks to index an experimental peak
+        The remaining args are passed on to Crystal.generate_diffraction_pattern:
+        sigma_excitation_error
+        tol_excitation_error_mult
+        tol_intensity
+        k_max
+
+    Note that to index kinematically forbidden peaks present in a pattern, you will
+    likely need to set tol_intensity=0
+
     """
     match_dtype = np.dtype(
         [
