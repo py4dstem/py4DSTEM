@@ -569,9 +569,10 @@ class Crystal:
                 ("l", "int"),
             ]
         )
-        bragg_peaks.add_pointarray(
-            np.vstack((gx_proj, gy_proj, g_int[keep_int], h, k, l)).T
-        )
+        if np.any(keep_int):
+            bragg_peaks.add_pointarray(
+                np.vstack((gx_proj, gy_proj, g_int[keep_int], h, k, l)).T
+            )
 
         return bragg_peaks
 
