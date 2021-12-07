@@ -77,7 +77,7 @@ def index_Bragg_peaks_from_orientation(
 
     if sim_peaks.length == 0:
         print("Warning! No kinematic peaks found!")
-        return PointList()
+        return PointList(match_dtype)
 
     # Accumulate matches as a list of len-1 arrays, then concatenate later
     # TODO: do this a smarter way
