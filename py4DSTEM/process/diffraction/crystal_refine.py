@@ -24,7 +24,7 @@ def estimate_thickness(
     return
 
 
-def index_Bragg_peaks_for_orientation(
+def index_Bragg_peaks_from_orientation(
     self,
     bragg_peaks: PointList,
     orientation: np.ndarray,
