@@ -107,4 +107,4 @@ def index_Bragg_peaks_from_orientation(
                 )
             )
 
-    return PointList(match_dtype, np.array(matches))
+    return PointList(match_dtype, np.squeeze(np.array(matches)))
