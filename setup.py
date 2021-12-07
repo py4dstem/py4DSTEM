@@ -5,7 +5,7 @@ with open("README.md","r") as f:
 
 setup(
     name='py4DSTEM',
-    version='0.12.7',
+    version='0.12.8',
     packages=find_packages(),
     description='An open source python package for processing and analysis of 4D STEM data.',
     long_description=long_description,
