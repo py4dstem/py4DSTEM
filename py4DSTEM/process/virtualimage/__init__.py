@@ -1,2 +1,2 @@
 from .virtualimage import *
-from .diffractionimage import *
+from .virtualdiffraction import *

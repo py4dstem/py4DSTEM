@@ -79,8 +79,8 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
 
 
 def get_virtualimage(
-    datacube, 
-    mask, 
+    datacube,
+    mask,
     verbose=True,
     ):
     """
@@ -107,7 +107,7 @@ def get_virtualimage(
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
     for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax][mask_sub])
-    
+
     return virtual_image
 
 
