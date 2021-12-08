@@ -72,10 +72,7 @@ class DataCube(DataObject):
 
 
 
-
-    ########### Processing functions, organized by functionality ############
-
-    ############### maximal diffration pattern ################
+    ################## virtual diffraction ##################
 
     def get_max_dp(self):
         """
