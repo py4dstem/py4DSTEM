@@ -20,7 +20,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
          cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
          coordinates=None,rx=None,ry=None,space='Q',
          pixelsize=None,pixelunits=None,x0=None,y0=None,e=None,theta=None,
-         **kwargs):
+         title=None,**kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -332,6 +332,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         x = bin_edges[:-1]+w/2.
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
+
+    # add a title
+    if title is not None:
+        ax.set_title(title)
 
     # Add a border
     if bordercolor is not None:

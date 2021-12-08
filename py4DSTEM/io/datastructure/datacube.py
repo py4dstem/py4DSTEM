@@ -285,13 +285,17 @@ class DataCube(DataObject):
         if dp is None:
             try:
                 dp = self.diffractionslices['dp_max'].data
+                title = 'dp_max'
             except KeyError:
                 dp = virtualimage.get_dp(self,(0,0))
+                title = 'dp 0,0'
         elif isinstance(dp,(tuple,list)):
             assert(len(dp)==2)
+            title = 'dp {},{}'.format(dp[0],dp[1])
             dp = virtualimage.get_dp(self,dp)
         elif isinstance(dp,str):
             try:
+                title = dp
                 dp = self.diffractionslices[dp].data
             except KeyError:
                 raise Exception("This datacube has no image called '{}'".format(dp))
@@ -300,6 +304,8 @@ class DataCube(DataObject):
 
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
+        if 'title' not in kwargs:
+            kwargs['title'] = title
         show(dp,**kwargs)
 
     def show_origin_meas(self):
