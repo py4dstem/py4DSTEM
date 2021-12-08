@@ -74,15 +74,83 @@ class DataCube(DataObject):
 
     ################## virtual diffraction ##################
 
-    def get_max_dp(self):
+    def get_dp(self,where=(0,0),name=None):
+        """
+        Returns a single diffraction pattern at the specified scan position.
+
+        Args:
+            where (2-tuple of ints): the (rx,ry) scan position
+            name (str or None): if specified, stores this pattern
+            in the datacube's dictionary of DiffractionSlices.
+
+        Returns:
+            (DiffractionSlice): the diffraction pattern
+        """
+        dp = DiffractionSlice(data=virtualimage.get_dp(self,where))
+        if name is not None:
+            dp.name = name
+            self.diffractionslices[name] = dp
+        return dp
+
+    def get_max_dp(self,where=None,name='max_dp'):
         """
         Computes the maximal diffraction pattern.
-        """
-        dp_max = DiffractionSlice(data=virtualimage.get_max_dp(self),
-                                  name='dp_max')
 
-        self.diffractionslices['dp_max'] = dp_max
+        Args:
+            where (None, or 4-tuple of ints, or boolean array): specifies which
+                diffraction patterns to compute the max dp over.  If `where` is
+                None, uses the whole datase. If it is a 4-tuple, uses a rectangular
+                region (xi,xf,yi,yf) of real space. If if is a boolean mask, the mask
+                shape must match real space, and only True pixels are used.
+
+        Returns:
+            (DiffractionSlice):
+        """
+        dp_max = DiffractionSlice(
+            data=virtualimage.get_max_dp(self,where=where),
+            name=name)
+        self.diffractionslices[name] = dp_max
         return dp_max
+
+    def get_mean_dp(self,where=None,name='mean_dp'):
+        """
+        Computes the mean diffraction pattern.
+
+        Args:
+            where (None, or 4-tuple of ints, or boolean array): specifies which
+                diffraction patterns to compute the mean dp over.  If `where` is
+                None, uses the whole datase. If it is a 4-tuple, uses a rectangular
+                region (xi,xf,yi,yf) of real space. If if is a boolean mask, the mask
+                shape must match real space, and only True pixels are used.
+
+        Returns:
+            (DiffractionSlice):
+        """
+        dp_mean = DiffractionSlice(
+            data=virtualimage.get_mean_dp(self,where=where),
+            name=name)
+        self.diffractionslices[name] = dp_mean
+        return dp_mean
+
+    def get_median_dp(self,where=None,name='median_dp'):
+        """
+        Computes the median diffraction pattern.
+
+        Args:
+            where (None, or 4-tuple of ints, or boolean array): specifies which
+                diffraction patterns to compute the median dp over.  If `where` is
+                None, uses the whole datase. If it is a 4-tuple, uses a rectangular
+                region (xi,xf,yi,yf) of real space. If if is a boolean mask, the mask
+                shape must match real space, and only True pixels are used.
+
+        Returns:
+            (DiffractionSlice):
+        """
+        dp_median = DiffractionSlice(
+            data=virtualimage.get_median_dp(self,where=where),
+            name=name)
+        self.diffractionslices[name] = dp_median
+        return dp_median
 
 
 
@@ -201,41 +269,38 @@ class DataCube(DataObject):
 
     ############## visualize ###################
 
-    def show(self, im=None, **kwargs):
+    def show(self, dp=None, **kwargs):
         """
         Show a single 2D slice of the dataset, passing any **kwargs to
         the visualize.show function. Default scaling is 'log'.
 
         Args:
-            im (variable): (type of im) image dislayed
-                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+            dp (None or 2-tuple or str): Behavior depends on the type of
+            the `dp` argument:
+                - (None) the maximal dp, if it exists. else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
-                - (len 2 list) the point-detector virtual image from (qx,qy)
-                - (string) the attached im of this name, if it exists
+                - (string) the attached DiffractionSlice of this name, if it exists
         """
         from ...visualize import show
-        if im is None:
+        if dp is None:
             try:
-                im = self.diffractionslices['dp_max'].data
+                dp = self.diffractionslices['dp_max'].data
             except KeyError:
-                im = self.data[0,0,:,:]
-        elif isinstance(im,tuple):
-            assert(len(im)==2)
-            im = self.data[im[0],im[1],:,:]
-        elif isinstance(im,list):
-            assert(len(im)==2)
-            im = self.data[:,:,im[0],im[1]]
-        elif isinstance(im,str):
+                dp = virtualimage.get_dp(self,(0,0))
+        elif isinstance(dp,(tuple,list)):
+            assert(len(dp)==2)
+            dp = virtualimage.get_dp(self,dp)
+        elif isinstance(dp,str):
             try:
-                im = self.diffractionslices[im].data
+                dp = self.diffractionslices[dp].data
             except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
+                raise Exception("This datacube has no image called '{}'".format(dp))
         else:
-            raise Exception("Invalid type, {}".format(type(im)))
+            raise Exception("Invalid type, {}".format(type(dp)))
 
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-        show(im,**kwargs)
+        show(dp,**kwargs)
 
     def show_origin_meas(self):
         """
