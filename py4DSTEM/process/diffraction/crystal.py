@@ -1280,9 +1280,9 @@ class Crystal:
                     )
 
             # Normalization
-            self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
-                np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
-            )
+            den_2 = np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
+            if den > 0:
+                self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(den)
 
         # Maximum value
         self.orientation_ref_max = np.max(np.real(self.orientation_ref))
