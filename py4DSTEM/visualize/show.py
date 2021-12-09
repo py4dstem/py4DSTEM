@@ -1,4 +1,4 @@
-from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points
+from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
 from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
 from ..io.datastructure import Coordinates
 
@@ -351,7 +351,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     if points is not None:
         add_points(ax,points)
     if grid_overlay is not None:
-        add_grid_overly(ax,grid)
+        add_grid_overlay(ax,grid_overlay)
 
 
     # Parse arguments for scale/coordinate overlays
@@ -466,7 +466,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
     # Add r-theta grid
     if rtheta_grid is not None:
-        add_rtheta_grid(ax,grid)
+        add_rtheta_grid(ax,rtheta_grid)
 
     # Show or return
     returnval = []
@@ -524,7 +524,7 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
         plt.show()
         return
     elif returnhist and not returnfig:
-        return counts,bins_edges
+        return counts,bin_edges
     elif not returnhist and returnfig:
         return fig, ax
     else:
