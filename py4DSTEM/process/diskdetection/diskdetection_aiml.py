@@ -2,9 +2,7 @@
 # Joydeep Munshi
 
 ''' 
-
 Functions for finding Braggdisks using AI/ML method using tensorflow 
-
 '''
 
 import os
@@ -19,12 +17,12 @@ from time import time
 from numbers import Number
 
 from ...io.google_drive_downloader import download_file_from_google_drive
-from ...io.datastructure import PointList, PointListArray
+from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attmpts = 5,
-                                     thresold = 1,
+                                     int_window_radius = 1,
                                      predict = True,
                                      sigma = 0,
                                      edgeBoundary = 20,
@@ -39,7 +37,8 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      peaks = None,
                                      model_path = None):
     """
-    Finds the Bragg disks in single DP by AI/ML method.
+    Finds the Bragg disks in single DP by AI/ML method. This method utilizes crystal4D network
+    to predict Bragg disks from diffraction images.
     
     The input DP and Probes need to be aligned before the prediction. Detected peaks within 
     edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
@@ -59,7 +58,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -99,14 +98,16 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         (PointList): the Bragg peak positions and correlation intensities
     """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
-
+    
     # Perform any prefiltering
+    if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = DP if filter_function is None else filter_function(DP)
+    
+    assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+    assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
 
     if predict:
         model = _get_latest_model(model_path = model_path)
-        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
-        assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
         prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
@@ -116,7 +117,6 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         print('Averaging over {} attempts \n'.format(num_attmpts))
         pred = prediction[0,:,:,0]/num_attmpts
     else:
-        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
     
     maxima_x,maxima_y,maxima_int = get_maxima_2D(pred, 
@@ -131,7 +131,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
                                                  upsample_factor=upsample_factor)
             
     
-    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,radius=thresold)
+    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
     # Make peaks PointList
     if peaks is None:
@@ -146,7 +146,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
 
 def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
                                    num_attmpts = 5,
-                                   thresold = 1,
+                                   int_window_radius = 1,
                                    batch_size = 1,
                                    predict =True,
                                    sigma = 0,
@@ -162,7 +162,8 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
                                    model_path = None):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions
-    (Rx,Ry) by AI/ML method.
+    (Rx,Ry) by AI/ML method. This method utilizes crystal4D network to predict Bragg 
+    disks from diffraction images.
     
     Args:
         datacube (datacube): a diffraction datacube
@@ -173,7 +174,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -214,7 +215,6 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         correlation intensities at each scan position (Rx,Ry).
     """
     assert(len(Rx)==len(Ry))
-    if filter_function: assert callable(filter_function), "filter_function must be callable"
     peaks = []
     
     if predict:
@@ -246,7 +246,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         DP = prediction[Rx,:,:,0]
         
         _peaks =  find_Bragg_disks_aiml_single_DP(DP, probe,
-                                                   thresold = thresold,
+                                                   int_window_radius = int_window_radius,
                                                    predict = False,
                                                    sigma = sigma,
                                                    edgeBoundary=edgeBoundary,
@@ -269,7 +269,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
 
 def find_Bragg_disks_aiml_serial(datacube, probe,
                                  num_attmpts = 5,
-                                 thresold = 1,
+                                 int_window_radius = 1,
                                  predict =True,
                                  batch_size = 2,
                                  sigma = 0,
@@ -301,7 +301,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
@@ -403,7 +403,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
         
         find_Bragg_disks_aiml_single_DP(DP_, probe,
                                          num_attmpts = num_attmpts,
-                                         thresold = thresold,
+                                         int_window_radius = int_window_radius,
                                          predict = False,
                                          sigma = sigma,
                                          edgeBoundary=edgeBoundary,
@@ -429,7 +429,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
 
 def find_Bragg_disks_aiml(datacube, probe,
                           num_attmpts = 5,
-                          thresold = 1,
+                          int_window_radius = 1,
                           predict = True,
                           batch_size = 8,
                           sigma = 0,
@@ -448,7 +448,8 @@ def find_Bragg_disks_aiml(datacube, probe,
                           distributed = None,
                           CUDA = True):
     """
-    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method.
+    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method 
+    utilizes crystal4D network to predict Bragg disks from diffraction images.
 
     datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
@@ -458,7 +459,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        thresold (int): thresold value (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
@@ -592,7 +593,7 @@ def find_Bragg_disks_aiml(datacube, probe,
                 return find_Bragg_disks_aiml_serial(datacube,
                                                   probe,
                                                   num_attmpts = num_attmpts,
-                                                  thresold = thresold,
+                                                  int_window_radius = int_window_radius,
                                                   predict = predict,
                                                   batch_size = batch_size,
                                                   sigma = sigma,
@@ -616,7 +617,7 @@ def find_Bragg_disks_aiml(datacube, probe,
                 return find_Bragg_disks_aiml_serial(datacube,
                                                     probe,
                                                     num_attmpts = num_attmpts,
-                                                    thresold = thresold,
+                                                    int_window_radius = int_window_radius,
                                                     predict = predict,
                                                     batch_size = batch_size,
                                                     sigma = sigma,
@@ -637,7 +638,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             return find_Bragg_disks_aiml_CUDA(datacube,
                                               probe,
                                               num_attmpts = num_attmpts,
-                                              thresold = thresold,
+                                              int_window_radius = int_window_radius,
                                               predict = predict,
                                               batch_size = batch_size,
                                               sigma = sigma,
@@ -662,7 +663,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             return find_Bragg_disks_aiml_serial(datacube,
                                                 probe,
                                                 num_attmpts = num_attmpts,
-                                                thresold = thresold,
+                                                int_window_radius = int_window_radius,
                                                 predict = predict,
                                                 batch_size = batch_size,
                                                 sigma = sigma,
@@ -684,15 +685,15 @@ def find_Bragg_disks_aiml(datacube, probe,
     else:
         raise Exception("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
 
-def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,radius=1):
+def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,int_window_radius=1):
     """
     Integrate DP over the circular patch of pixel with radius
     """
     disks = []
+    img_size = DP.shape[0]
     for x,y,i in zip(maxima_x,maxima_y,maxima_int):
-        img_size = DP.shape[0]
         r1,r2 = np.ogrid[-x:img_size-x, -y:img_size-y]
-        mask = r1**2 + r2**2 <= radius**2
+        mask = r1**2 + r2**2 <= int_window_radius**2
         mask_arr = np.zeros((img_size, img_size))
         mask_arr[mask] = 1
         disk = DP*mask_arr

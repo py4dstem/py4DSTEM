@@ -1,8 +1,5 @@
 ''' 
-
 Functions for finding Braggdisks using cupy
-
-
 
 '''
 
@@ -15,8 +12,6 @@ from ...io import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
 from .diskdetection import universal_threshold
-
-from pdb import set_trace
 
 def find_Bragg_disks_CUDA(datacube, probe,
                           corrPower = 1,
