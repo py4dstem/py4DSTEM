@@ -5,7 +5,7 @@ import py4DSTEM
 from py4DSTEM.process.rdf import amorph
 from py4DSTEM.process.preprocess import bin_data_mmap
 import matplotlib
-from py4DSTEM.process.utils.ellipticalCoords import *
+from py4DSTEM.process.utils.elliptical_coords import *
 from tqdm import tqdm
 from scipy.signal import medfilt2d
 from scipy.ndimage.morphology import binary_closing
