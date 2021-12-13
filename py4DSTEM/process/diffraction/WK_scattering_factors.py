@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import expi
 
 from ..utils import electron_wavelength_angstrom
 
@@ -148,16 +149,144 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
 
 def RI1(BI, BJ, G):
-    return 0.0
+    # "ERSTES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
+    eps = np.maximum(BI, BJ) * G ** 2
+
+    if eps <= 0.1:
+        ri1 = np.pi * BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ)
+        if G == 0.0:
+            return ri1
+        temp = 0.5 * BI ** 2 * np.log(BI / (BI + BJ)) + 0.5 * BJ ** 2 * np.log(
+            BJ / (BI + BJ)
+        )
+        temp += 0.75 * (BI ** 2 + BJ ** 2) - 0.25 * (BI + BJ) ** 2
+        temp -= 0.5 * (BI - BJ) ** 2
+        ri1 += np.pi * G ** 2 * temp
+        return ri1
+
+    ri1 = (
+        2.0 * 0.5772157 * np.log(BI * G ** 2)
+        + np.log(BJ * G ** 2)
+        - 2.0 * expi(-BI * BJ * G ** 2 / (BI + BJ))
+    )
+
+    ri1 += RIH1(BI * G ** 2, BI * G ** 2 * BI / (BI + BJ), BI * G ** 2)
+
+    ri1 += RIH1(BJ * G ** 2, BJ * G ** 2 * BJ / (BI + BJ), BJ * G ** 2)
+    ri1 *= np.pi / G ** 2
+
+    return ri1
 
 
 def RI2(BI, BJ, G, U):
-    return
+    # "ZWEITES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
+
+    U2 = U ** 2
+    U22 = 0.05 * U2
+    G2 = G ** 2
+    BIUH = BI + 0.5 * U2
+    BJUH = BJ + 0.5 * U2
+    BIU = BI + U2
+    BJU = BJ + U2
+
+    # "IST DIE ASYMPTOTISCHE ENTWICKLUNG ANWENDBAR?""
+    EPS = np.maximum(BI, BJ, U2)
+    EPS = EPS * G2
+
+    if EPS < 0.1:
+        ri2 = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2))
+        ri2 = ri2 + BJ * np.log((BI + BJ + U2) / (BJ + U2))
+        ri2 = ri2 + U2 * np.log(U2 / (BJ + U2))
+        ri2 = ri2 * np.pi
+        if G == 0.0:
+            return ri2
+        TEMP = 0.5 * U22 * U22 * np.log(BIU * BJU / (U2 * U2))
+        TEMP = TEMP + 0.5 * BIUH * BIUH * np.log(BIU / (BIUH + BJUH))
+        TEMP = TEMP + 0.5 * BJUH * BJUH * np.log(BJU / (BIUH + BJUH))
+        TEMP = TEMP + 0.25 * BIU * BIU + 0.5 * BI * BI
+        TEMP = TEMP + 0.25 * BJU * BJU + 0.5 * BJ * BJ
+        TEMP = TEMP - 0.25 * (BIUH + BJUH) * (BIUH + BJUH)
+        TEMP = TEMP - 0.5 * ((BI * BIU - BJ * BJU) / (BIUH + BJUH)) ** 2
+        TEMP = TEMP - U22 * U22
+        ri2 = ri2 + np.pi * G2 * TEMP
+        return ri2
+
+    ri2 = expi(-0.5 * U2 * G2 * BIUH / BIU) + expi(-0.5 * U2 * G2 * BJUH / BJU)
+    ri2 = ri2 - expi(-BIUH * BJUH * G2 / (BIUH + BJUH)) - expi(-0.25 * U2 * G2)
+    ri2 = 2.0 * ri2
+    X1 = 0.5 * U2 * G2
+    X2 = 0.25 * U2 * G2
+    X3 = 0.25 * U2 * U2 * G2 / BIU
+    ri2 = ri2 + RIH1(X1, X2, X3)
+
+    X1 = 0.5 * U2 * G2
+    X2 = 0.25 * U2 * G2
+    X3 = 0.25 * U2 * U2 * G2 / BJU
+    ri2 = ri2 + RIH1(X1, X2, X3)
+
+    X1 = BIUH * G2
+    X2 = BIUH * BIUH * G2 / (BIUH + BJUH)
+    X3 = BIUH * BIUH * G2 / BIU
+    ri2 = ri2 + RIH1(X1, X2, X3)
+
+    X1 = BJUH * G2
+    X2 = BJUH * BJUH * G2 / (BIUH + BJUH)
+    X3 = BJUH * BJUH * G2 / BJU
+    ri2 = ri2 + RIH1(X1, X2, X3)
+
+    ri2 = ri2 * np.pi / G2
+
+    return ri2
+
+
+def RIH1(X1, X2, X3):
+    # "WERTET DEN AUSDRUCK EXP(-X1) * ( EI(X2)-EI(X3) ) AUS"
+    if (X2 <= 20.0) and (X3 <= 20.0):
+        rih1 = np.exp(-X1) * (expi(X2) - expi(X3))
+        return rih1
+    if X2 > 20.0:
+        rih1 = np.exp(X2 - X1) * RIH2(X2) / X2
+    else:
+        rih1 = np.exp(-X1) * expi(X2)
+
+    if X3 > 20.0:
+        rih1 = rih1 - np.exp(X3 - X1) * RIH2(X3) / X3
+    else:
+        rih1 = rih1 - np.exp(-X1) * expi(X3)
+
+    return rih1
+
+
+def RIH2(X):
+    """
+    WERTET X*EXP(-X)*EI(X) AUS FUER GROSSE X
+    DURCH INTERPOLATION DER TABELLE ... AUS ABRAMOWITZ
+    """
+    idx = int(200.0 / X)
+    return RIH2_tabulated_data[idx] + 200.0 * (
+        RIH2_tabulated_data[idx + 1] - RIH2_tabulated_data[idx]
+    ) * ((1.0 / X) - 0.5e-3 * idx)
+    return 0.0
+
+
+def RIH3(X):
+    # "WERTET DEN AUSDRUCK EXP(-X) * EI(X) AUS"
+    if X <= 20.0:
+        return np.exp(-X) * expi(X)
+    else:
+        return RIH2(X) / X
 
 
 # fmt:off
 
-# TODO: What element does this table begin at? H, or He?
+RIH2_tabulated_data = np.array([1.000000,1.005051,1.010206,1.015472,1.020852,
+                                1.026355,1.031985,1.037751,1.043662,1.049726,
+                                1.055956,1.062364,1.068965,1.075780,1.082830,
+                                1.090140,1.097737,1.105647,1.113894,1.122497,
+                                1.131470])
+
+
+# TODO: This table starts at Hydrogen
 
 WK_A_param = np.array([
                     0.00427, 0.00957, 0.00802, 0.00209,
