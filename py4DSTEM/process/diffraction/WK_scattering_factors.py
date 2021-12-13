@@ -1,26 +1,163 @@
 import numpy as np
 
+from ..utils import electron_wavelength_angstrom
+
 """
 Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMsoftLib/others.f90 
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
 
-def get_WK_factor(g: float, Z: int, DW: float):
-    """ 
+def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
+    """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
-    in EMsoftLib/others.f90
+    in EMsoftLib/others.f90. Return value should be in Volts?
+
+    This implementation always returns the absorptive, relativistically corrected factors.
+
+    Currently this is mostly a direct translation of the Fortran code, along with
+    the accompanying comments from the original in quotation marks. This needs to be
+    vectorized and refactored for efficiency. I have taken some liberties regarding
+    the use of lower case letters, which evidently had not been invented by the late 1990s.
+    Figuring out what some of the magic numbers in the original correspond to would also
+    be an improvement.
+
+    The original code appears to have been designed to compute the WK factors directly,
+    rather than using the parameterization of the fit given in the WK paper. EMsoft would
+    use this routine to precompute and cache the necessary factors before calculating U_g.
+    I follow this route, but use Python's native caching to wrap this function rather than
+    build the lookup table manually.
     """
 
     # WK works in physicist units:
-    s = 2.0 * np.pi * g
+    # s = 2.0 * np.pi * g
+    s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
 
-    
+    DWF = np.exp(-0.5 * DW ** 2 * g ** 2)
 
+    A = WK_A_param[int(Z) - 1]
+    B = WK_B_param[int(Z) - 1]
+
+    # WEKO(A,B,S)
+    WK = 0.0
+    for i in range(4):
+        argu = B[i] * s ** 2
+        if argu < 1.0:
+            WK += A[i] * B[i] * (1.0 - 0.5 * argu)
+        elif argu > 20.0:
+            WK += A[i] / s ** 2
+        else:
+            WK += A[i] * (1.0 - np.exp(-argu)) / s ** 2
+
+    Freal = 4.0 * np.pi * DWF * WK
+
+    #################################################
+    # calculate "core" contribution, following FCORE:
+    k0 = 1.0 / electron_wavelength_angstrom(accelerating_voltage)
+
+    # "CALCULATE"
+    DE = 6.0e-3 * Z
+    theta_e = (
+        DE
+        / (2.0 * accelerating_voltage)
+        * (2.0 * accelerating_voltage + 1022.0)
+        / (accelerating_voltage + 1022.0)
+    )
+
+    # "SCREENING PARAMETER OF YUKAWA POTENTIAL"
+    R = 0.885 * 0.5289 / Z ** (1.0 / 3.0)
+
+    # "CALCULATE NORMALISING ANGLE"
+    TA = 1.0 / (k0 * R)
+
+    # "CALCULATE BRAGG ANGLE"
+    TB = g / (2.0 * k0)
+
+    # "NORMALIZE"
+    omega = 2.0 * TB / TA
+    kappa = theta_e / TA
+
+    x1 = (
+        omega
+        / ((1.0 + omega ** 2) * np.sqrt(omega ** 2 + 4.0 * kappa ** 2))
+        * np.log((omega + np.sqrt(omega ** 2 + 4.0 * kappa ** 2)) / (2.0 * kappa))
+    )
+
+    x2 = (
+        1.0
+        / np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
+        * np.log(
+            (
+                1.0
+                + 2.0 * kappa ** 2
+                + omega ** 2
+                + np.sqrt(1.0 + omega ** 2) ** 2
+                + 4.0 * kappa ** 2 * omega ** 2
+            )
+        )
+        / (2.0 * kappa * np.sqrt(1.0 + kappa ** 2))
+    )
+
+    if omega > 1.0e-2:
+        x3 = (
+            1.0
+            / (omega * np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
+            * np.log(
+                (omega + np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
+                / (2.0 * np.sqrt(1.0 + kappa ** 2))
+            )
+        )
+    else:
+        x3 = 1.0 / (4.0 * (1.0 + kappa ** 2))
+
+    Fcore = (
+        4.0 / 0.5289 ** 2 * 2.0 * np.pi / k0 ** 2 * (2 * Z) / (TA ** 2) * (x2 - x1 - x3)
+    )
+
+    ##########################################################
+    # calculate phonon contribution, following FPHON(G,UL,A,B)
+
+    U2 = DW ** 2
+
+    A1 = A * (4.0 * np.pi) ** 2
+    B1 = B / (4.0 * np.pi) ** 2
+
+    Fphon = 0.0
+
+    for jj in range(4):
+        Fphon += (
+            A1[jj]
+            * A1[jj]
+            * (DWF * RI1(B1[jj], B1[jj], g) - RI2(B1[jj], B1[jj], g, DW))
+        )
+        for ii in range(jj - 1):
+            Fphon += (
+                2.0
+                * A1[jj]
+                * A1[ii]
+                * (DWF * RI1(B1[ii], B1[jj], g) - RI2(B1[ii], B1[jj], g, DW))
+            )
+
+    Fimag = Fcore + Fphon
+
+    return np.complex128(Freal + 1.0j * Fimag)
+
+
+##############################################
+# Helper integral functions for DW calculation
+
+
+def RI1(BI, BJ, G):
+    return 0.0
+
+
+def RI2(BI, BJ, G, U):
     return
 
 
 # fmt:off
+
+# TODO: What element does this table begin at? H, or He?
 
 WK_A_param = np.array([
                     0.00427, 0.00957, 0.00802, 0.00209,
