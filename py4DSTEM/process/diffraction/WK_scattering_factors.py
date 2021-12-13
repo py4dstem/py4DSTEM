@@ -141,7 +141,12 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     Fimag = Fcore + Fphon
 
-    return np.complex128(Freal + 1.0j * Fimag)
+    # perform relativistic correction
+    gamma = (accelerating_voltage + 511.0) / (511.0)
+
+    Fscatt = np.complex128(Freal * gamma + 1.0j * (Fimag * gamma ** 2 / k0))
+
+    return Fscatt
 
 
 ##############################################
@@ -190,7 +195,7 @@ def RI2(BI, BJ, G, U):
     BJU = BJ + U2
 
     # "IST DIE ASYMPTOTISCHE ENTWICKLUNG ANWENDBAR?""
-    EPS = np.maximum(BI, BJ, U2)
+    EPS = np.max([BI, BJ, U2])
     EPS = EPS * G2
 
     if EPS < 0.1:
