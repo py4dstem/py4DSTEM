@@ -14,7 +14,7 @@ by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 
 
 @lru_cache(maxsize=1024)
-def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
+def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
     in EMsoftLib/others.f90. Return value should be in Volts?
@@ -39,8 +39,10 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     """
 
     # WK works in physicist units:
-    # s = 2.0 * np.pi * g
-    s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
+    s = 2.0 * np.pi * g # this is the scaling set by diffraction.f90:558
+    # s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
+
+    DW = B / (8.0 * np.pi**2) # convert B in Å^2 to UL^2
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
@@ -174,8 +176,8 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     # print(f"Fscatt:{Fscatt}")
 
     return (
-        Fscatt * 0.4787801 / (4.0 * np.pi)
-    )  # convert to Volts, and remove extra physicist factors
+        Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
+    )  # convert to Volts, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
 
 
 ##############################################
