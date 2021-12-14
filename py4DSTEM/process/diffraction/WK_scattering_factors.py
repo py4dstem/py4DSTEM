@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import expi
+from functools import lru_cache
 
 from ..utils import electron_wavelength_angstrom
 
@@ -8,7 +9,11 @@ Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMs
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
+# def get_WK_factor(g, Z, DW, accelerating_voltage):
+#     return compute_WK_factor(float(g), int(Z), float(DW), float(accelerating_voltage))
 
+
+@lru_cache(maxsize=1024)
 def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
@@ -27,7 +32,10 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     rather than using the parameterization of the fit given in the WK paper. EMsoft would
     use this routine to precompute and cache the necessary factors before calculating U_g.
     I follow this route, but use Python's native caching to wrap this function rather than
-    build the lookup table manually.
+    build the lookup table manually. When calling this inside the loop that computes
+    the lattice Fourier coefficients, the cache will quickly build up (especially if some
+    judicious rounding is utilized, to ensure floating point errors don't cause recomputation
+    of already-cached values.)
     """
 
     # WK works in physicist units:
