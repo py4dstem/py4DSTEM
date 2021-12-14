@@ -72,9 +72,11 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     #################################################
     # calculate "core" contribution, following FCORE:
-    k0 = 1.0 / electron_wavelength_angstrom(accelerating_voltage)
+    k0 = (
+        2.0 * np.pi / electron_wavelength_angstrom(accelerating_voltage)
+    )  # remember, physicist units here
 
-    # "CALCULATE"
+    # "CALCULATE CHARACTERISTIC ENERGY LOSS AND ANGLE"
     DE = 6.0e-3 * Z
     theta_e = (
         DE
@@ -110,8 +112,7 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
                 1.0
                 + 2.0 * kappa ** 2
                 + omega ** 2
-                + np.sqrt(1.0 + omega ** 2) ** 2
-                + 4.0 * kappa ** 2 * omega ** 2
+                + np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
             )
         )
         / (2.0 * kappa * np.sqrt(1.0 + kappa ** 2))
@@ -172,7 +173,9 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     # print(f"Fscatt:{Fscatt}")
 
-    return Fscatt
+    return (
+        Fscatt * 0.4787801 / (4.0 * np.pi)
+    )  # convert to Volts, and remove extra physicist factors
 
 
 ##############################################
@@ -181,7 +184,7 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
 def RI1(BI, BJ, G):
     # "ERSTES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
-    eps = np.maximum(BI, BJ) * G ** 2
+    eps = np.max([BI, BJ]) * G ** 2
 
     if eps <= 0.1:
         ri1 = np.pi * BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ)
@@ -213,7 +216,7 @@ def RI2(BI, BJ, G, U):
     # "ZWEITES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
 
     U2 = U ** 2
-    U22 = 0.05 * U2
+    U22 = 0.5 * U2
     G2 = G ** 2
     BIUH = BI + 0.5 * U2
     BJUH = BJ + 0.5 * U2
@@ -224,7 +227,7 @@ def RI2(BI, BJ, G, U):
     EPS = np.max([BI, BJ, U2])
     EPS = EPS * G2
 
-    if EPS < 0.1:
+    if EPS <= 0.1:
         ri2 = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2))
         ri2 = ri2 + BJ * np.log((BI + BJ + U2) / (BJ + U2))
         ri2 = ri2 + U2 * np.log(U2 / (BJ + U2))
@@ -297,7 +300,6 @@ def RIH2(X):
     return RIH2_tabulated_data[idx] + 200.0 * (
         RIH2_tabulated_data[idx + 1] - RIH2_tabulated_data[idx]
     ) * ((1.0 / X) - 0.5e-3 * idx)
-    return 0.0
 
 
 def RIH3(X):
