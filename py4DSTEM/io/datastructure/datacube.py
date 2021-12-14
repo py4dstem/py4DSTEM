@@ -284,8 +284,8 @@ class DataCube(DataObject):
         from ...visualize import show
         if dp is None:
             try:
-                dp = self.diffractionslices['dp_max'].data
-                title = 'dp_max'
+                dp = self.diffractionslices['max_dp'].data
+                title = 'max_dp'
             except KeyError:
                 dp = virtualimage.get_dp(self,(0,0))
                 title = 'dp 0,0'
