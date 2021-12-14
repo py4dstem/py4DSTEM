@@ -4,10 +4,17 @@ from scipy import linalg
 from typing import Union, Optional
 from time import time
 from tqdm import tqdm
+from dataclasses import dataclass
 
 from ...io.datastructure import PointList
 from ..utils import electron_wavelength_angstrom
 from ..dpc import get_interaction_constant
+
+
+@dataclass
+class DynamicalMatrixCache:
+    has_valid_cache: bool = False
+    cached_U_gmh: np.array = None
 
 
 def calculate_dynamical_structure_factors(
@@ -42,7 +49,7 @@ def generate_dynamical_diffraction_pattern(
     naive_absorption: bool = False,
     verbose: bool = False,
     always_return_list: bool = False,
-    cache_dynamical_matrix=False,
+    dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
 ) -> PointList:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -74,7 +81,7 @@ def generate_dynamical_diffraction_pattern(
     Less commonly used args:
         always_return_list (bool):      When True, the return is always a list of PointLists,
                                         even for a single thickness
-        cache_dynamical_matrix (bool):  When True, enable caching of the dynamical matrix.
+        dynamical_matrix_cache (bool):  When True, enable caching of the dynamical matrix.
                                         The cached matrix is stored in self.Ugmh_cached. If
                                         this matrix does not exist, it is created and stored.
                                         Subsequent calls will use the cached matrix for the
@@ -117,18 +124,10 @@ def generate_dynamical_diffraction_pattern(
 
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T
 
-    # If we are not supposed to cache, clear any cache
-    if not cache_dynamical_matrix and hasattr(self, "Ugmh_cached"):
-        delattr(self, "Ugmh_cached")
-
     # Check if we have a cached dynamical matrix, which saves us from calculating the
     # off-diagonal elements when running this in a loop with the same zone axis
-    if (
-        cache_dynamical_matrix
-        and hasattr(self, "Ugmh_cached")
-        and self.Ugmh_cached is not None
-    ):
-        U_gmh = self.Ugmh_cached
+    if dynamical_matrix_cache is not None and dynamical_matrix_cache.has_valid_cache:
+        U_gmh = dynamical_matrix_cache.cached_U_gmh
     else:
         # No cached matrix is available/desired, so calculate it:
 
@@ -154,14 +153,12 @@ def generate_dynamical_diffraction_pattern(
             U_gmh *= 1.0 + 0.1j
 
     # If we are supposed to cache, but don't have one saved, save this one:
-    if cache_dynamical_matrix and not hasattr(self, "Ugmh_cached"):
-        self.Ugmh_cached = None
     if (
-        cache_dynamical_matrix
-        and hasattr(self, "Ugmh_cached")
-        and self.Ugmh_cached is None
+        dynamical_matrix_cache is not None
+        and not dynamical_matrix_cache.has_valid_cache
     ):
-        self.Ugmh_cached = U_gmh
+        dynamical_matrix_cache.cached_U_gmh = U_gmh
+        dynamical_matrix_cache.has_valid_cache = True
 
     if verbose:
         print(f"Bloch matrix has size {U_gmh.shape}")
@@ -341,15 +338,13 @@ def generate_CBED(
 
     qx0 = DP_size[0] // 2
     qy0 = DP_size[1] // 2
-    DP_len = DP_size[0] * DP_size[1]
 
     thickness = np.atleast_1d(thickness)
     DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
-    # Clear any cached dynamical matrix
-    self.Ugmh_cached = None
+    Ugmh_cache = DynamicalMatrixCache()
 
     for i in tqdm(range(len(tZA)), disable=not progress_bar):
         bloch = self.generate_dynamical_diffraction_pattern(
@@ -359,7 +354,7 @@ def generate_CBED(
             foil_normal=foil_normal,
             naive_absorption=naive_absorption,
             always_return_list=True,
-            cache_dynamical_matrix=True,
+            dynamical_matrix_cache=Ugmh_cache,
         )
 
         xpix = np.round(

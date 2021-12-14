@@ -44,16 +44,16 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
-    print(f"s:{s}")
+    # print(f"s:{s}")
 
     DWF = np.exp(-0.5 * DW ** 2 * g ** 2)
-    print(f"DWF:{DWF}")
+    # print(f"DWF:{DWF}")
 
     A = WK_A_param[int(Z) - 1]
     B = WK_B_param[int(Z) - 1]
 
-    print(f"A:{A}")
-    print(f"B:{B}")
+    # print(f"A:{A}")
+    # print(f"B:{B}")
 
     # WEKO(A,B,S)
     WK = 0.0
@@ -68,7 +68,7 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     Freal = 4.0 * np.pi * DWF * WK
 
-    print(f"Freal:{Freal}")
+    # print(f"Freal:{Freal}")
 
     #################################################
     # calculate "core" contribution, following FCORE:
@@ -133,7 +133,7 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
         4.0 / 0.5289 ** 2 * 2.0 * np.pi / k0 ** 2 * (2 * Z) / (TA ** 2) * (x2 - x1 - x3)
     )
 
-    print(f"Fcore:{Fcore}")
+    # print(f"Fcore:{Fcore}")
 
     ##########################################################
     # calculate phonon contribution, following FPHON(G,UL,A,B)
@@ -161,16 +161,16 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     Fimag = (Fcore * DWF) + Fphon
 
-    print(f"Fphon:{Fphon}")
+    # print(f"Fphon:{Fphon}")
 
     # perform relativistic correction
     gamma = (accelerating_voltage_kV + 511.0) / (511.0)
 
-    print(f"gamma:{gamma}")
+    # print(f"gamma:{gamma}")
 
     Fscatt = np.complex128(Freal * gamma + 1.0j * (Fimag * gamma ** 2 / k0))
 
-    print(f"Fscatt:{Fscatt}")
+    # print(f"Fscatt:{Fscatt}")
 
     return Fscatt
 
