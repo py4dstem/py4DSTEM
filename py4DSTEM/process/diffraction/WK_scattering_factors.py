@@ -42,10 +42,18 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     # s = 2.0 * np.pi * g
     s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
 
+    accelerating_voltage_kV = accelerating_voltage / 1.0e3
+
+    print(f"s:{s}")
+
     DWF = np.exp(-0.5 * DW ** 2 * g ** 2)
+    print(f"DWF:{DWF}")
 
     A = WK_A_param[int(Z) - 1]
     B = WK_B_param[int(Z) - 1]
+
+    print(f"A:{A}")
+    print(f"B:{B}")
 
     # WEKO(A,B,S)
     WK = 0.0
@@ -60,6 +68,8 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
 
     Freal = 4.0 * np.pi * DWF * WK
 
+    print(f"Freal:{Freal}")
+
     #################################################
     # calculate "core" contribution, following FCORE:
     k0 = 1.0 / electron_wavelength_angstrom(accelerating_voltage)
@@ -68,9 +78,9 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
     DE = 6.0e-3 * Z
     theta_e = (
         DE
-        / (2.0 * accelerating_voltage)
-        * (2.0 * accelerating_voltage + 1022.0)
-        / (accelerating_voltage + 1022.0)
+        / (2.0 * accelerating_voltage_kV)
+        * (2.0 * accelerating_voltage_kV + 1022.0)
+        / (accelerating_voltage_kV + 1022.0)
     )
 
     # "SCREENING PARAMETER OF YUKAWA POTENTIAL"
@@ -123,6 +133,8 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
         4.0 / 0.5289 ** 2 * 2.0 * np.pi / k0 ** 2 * (2 * Z) / (TA ** 2) * (x2 - x1 - x3)
     )
 
+    print(f"Fcore:{Fcore}")
+
     ##########################################################
     # calculate phonon contribution, following FPHON(G,UL,A,B)
 
@@ -147,12 +159,18 @@ def compute_WK_factor(g: float, Z: int, DW: float, accelerating_voltage: float):
                 * (DWF * RI1(B1[ii], B1[jj], g) - RI2(B1[ii], B1[jj], g, DW))
             )
 
-    Fimag = Fcore + Fphon
+    Fimag = (Fcore * DWF) + Fphon
+
+    print(f"Fphon:{Fphon}")
 
     # perform relativistic correction
-    gamma = (accelerating_voltage + 511.0) / (511.0)
+    gamma = (accelerating_voltage_kV + 511.0) / (511.0)
+
+    print(f"gamma:{gamma}")
 
     Fscatt = np.complex128(Freal * gamma + 1.0j * (Fimag * gamma ** 2 / k0))
+
+    print(f"Fscatt:{Fscatt}")
 
     return Fscatt
 
