@@ -14,7 +14,9 @@ by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 
 
 @lru_cache(maxsize=1024)
-def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
+def compute_WK_factor(
+    g: float, Z: int, B: float, accelerating_voltage: float, VERBOSE=False
+):
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
     in EMsoftLib/others.f90. Return value should be in Volts?
@@ -39,23 +41,26 @@ def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
     """
 
     # WK works in physicist units:
-    s = 2.0 * np.pi * g # this is the scaling set by diffraction.f90:558
+    s = 2.0 * np.pi * g  # this is the scaling set by diffraction.f90:558
     # s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
 
-    DW = B / (8.0 * np.pi**2) # convert B in Å^2 to UL^2
+    DW = B / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
-    # print(f"s:{s}")
+    if VERBOSE:
+        print(f"s:{s}")
 
     DWF = np.exp(-0.5 * DW ** 2 * g ** 2)
-    # print(f"DWF:{DWF}")
+    if VERBOSE:
+        print(f"DWF:{DWF}")
 
     A = WK_A_param[int(Z) - 1]
     B = WK_B_param[int(Z) - 1]
 
-    # print(f"A:{A}")
-    # print(f"B:{B}")
+    if VERBOSE:
+        print(f"A:{A}")
+        print(f"B:{B}")
 
     # WEKO(A,B,S)
     WK = 0.0
@@ -70,7 +75,8 @@ def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
 
     Freal = 4.0 * np.pi * DWF * WK
 
-    # print(f"Freal:{Freal}")
+    if VERBOSE:
+        print(f"Freal:{Freal}")
 
     #################################################
     # calculate "core" contribution, following FCORE:
@@ -136,7 +142,8 @@ def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
         4.0 / 0.5289 ** 2 * 2.0 * np.pi / k0 ** 2 * (2 * Z) / (TA ** 2) * (x2 - x1 - x3)
     )
 
-    # print(f"Fcore:{Fcore}")
+    if VERBOSE:
+        print(f"Fcore:{Fcore}")
 
     ##########################################################
     # calculate phonon contribution, following FPHON(G,UL,A,B)
@@ -164,16 +171,19 @@ def compute_WK_factor(g: float, Z: int, B: float, accelerating_voltage: float):
 
     Fimag = (Fcore * DWF) + Fphon
 
-    # print(f"Fphon:{Fphon}")
+    if VERBOSE:
+        print(f"Fphon:{Fphon}")
 
     # perform relativistic correction
     gamma = (accelerating_voltage_kV + 511.0) / (511.0)
 
-    # print(f"gamma:{gamma}")
+    if VERBOSE:
+        print(f"gamma:{gamma}")
 
     Fscatt = np.complex128(Freal * gamma + 1.0j * (Fimag * gamma ** 2 / k0))
 
-    # print(f"Fscatt:{Fscatt}")
+    if VERBOSE:
+        print(f"Fscatt:{Fscatt}")
 
     return (
         Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
