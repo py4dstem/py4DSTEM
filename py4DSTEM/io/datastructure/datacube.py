@@ -156,7 +156,7 @@ class DataCube(DataObject):
 
     ################## virtual imaging ##################
 
-    def position_circular_detector(self,center,radius,dp=None,alpha=0.25,**kwargs):
+    def position_circular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
         """
         Display a circular detector overlaid on a diffraction-pattern-like array,
         specified with the `dp` argument.
@@ -166,8 +166,9 @@ class DataCube(DataObject):
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            center (2-tuple):
-            radius (number):
+            geometry (2-tuple): the geometry of the detector, given by (center,radius),
+                where center is the 2-tuple (qx0,qy0), and radius is a number
+            alpha (number): the transparency of the overlay
         """
         from ...visualize import show_circles
         if dp is None:
@@ -186,9 +187,11 @@ class DataCube(DataObject):
 
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
+
+        center,radius = geometry
         show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
 
-    def position_rectangular_detector(self,lims,dp=None,alpha=0.25,**kwargs):
+    def position_rectangular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
         """
         Display a rectangular detector overlaid on a diffraction-pattern-like array,
         specified with the `dp` argument.
@@ -198,8 +201,8 @@ class DataCube(DataObject):
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            center (2-tuple):
-            radius (number):
+            geometry (4-tuple): the detector limits (x0,xf,y0,yf)
+            alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
         if dp is None:
@@ -218,9 +221,10 @@ class DataCube(DataObject):
 
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-        show_rectangles(dp,lims,alpha=alpha,**kwargs)
 
-    def position_annular_detector(self,center,radii,dp=None,alpha=0.25,**kwargs):
+        show_rectangles(dp,geometry,alpha=alpha,**kwargs)
+
+    def position_annular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
         """
         Display an annular detector overlaid on a diffraction-pattern-like array,
         specified with the `dp` argument.
@@ -230,8 +234,9 @@ class DataCube(DataObject):
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            center (2-tuple):
-            radii (2-tuple_: the inner and outer radii
+            geometry (2-tuple): the geometry of the detector, given by (center,radii),
+                where center is the 2-tuple (qx0,qy0), and radii is the 2-tuple (ri,ro)
+            alpha (number): the transparency of the overlay
         """
         from ...visualize import show
         if dp is None:
@@ -250,6 +255,8 @@ class DataCube(DataObject):
 
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
+
+        center,radii = geometry
         show(dp,
              annulus={'center':center,'radii':radii,'fill':True,'alpha':0.3},
              **kwargs)
