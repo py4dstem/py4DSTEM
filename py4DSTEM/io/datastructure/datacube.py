@@ -4,11 +4,7 @@
 # methods pointing to processing functions - generally defined in other files in
 # the ./process directory.
 
-from collections.abc import Sequence
-from tempfile import TemporaryFile
-
 import numpy as np
-import numba as nb
 import h5py
 
 from .dataobject import DataObject
@@ -70,16 +66,6 @@ class DataCube(DataObject):
         # bvm visualization
         self.bvm_vis_params = {}
         self.set_bvm_vis_params(cmap='jet',scaling='log')
-
-
-        # TODO delete this
-        # Set bragg calibration state flags
-        self.bragg_calstate_uncalibrated = False
-        self.bragg_calstate_origin = False
-        self.bragg_calstate_ellipse = False
-        self.bragg_calstate_dq = False
-        self.bragg_calstate_rotflip = False
-
 
 
 
@@ -597,8 +583,23 @@ class DataCube(DataObject):
 
     ############## bragg vector maps ################
 
-    def set_bvm_vis_params(self,**kwargs):
-        self.bvm_vis_params = kwargs
+    def get_bvm(self,peaks='braggpeaks',name='bvm'):
+        """
+
+        """
+        from ...process.diskdetection import get_bvm,get_bvm_raw
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        if calibrated:
+            peaks = peaks['cal']
+            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
+        else:
+            peaks = peaks['raw']
+            bvm = get_bvm_raw(peaks,self.Q_Nx,self.Q_Ny)
+        bvm = DiffractionSlice(
+            data=bvm,
+            name=name)
+        self.diffractionslices[name] = bvm
 
     def show_bvm(self,name='bvm',**vis_params):
         """
@@ -615,6 +616,9 @@ class DataCube(DataObject):
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,**vis_params)
+
+    def set_bvm_vis_params(self,**kwargs):
+        self.bvm_vis_params = kwargs
 
 
 
@@ -947,6 +951,25 @@ class DataCube(DataObject):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##### asfjdsljksdf #######
+
     def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
         """
 
@@ -1029,28 +1052,6 @@ class DataCube(DataObject):
 
 
 
-
-
-    ############## diskdetection.py ############
-
-
-    ############ braggvectormap.py #############
-
-    def get_bvm(self,peaks='braggpeaks',calibrated=True,name='bvm'):
-        """
-
-        """
-        from ...process.diskdetection import get_bvm
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        if calibrated:
-            peaks = peaks['cal']
-        else:
-            peaks = peaks['raw']
-        bvm = DiffractionSlice(
-            data=get_bvm(peaks,self.Q_Nx,self.Q_Ny),
-            name=name)
-        self.diffractionslices[name] = bvm
 
 
 
