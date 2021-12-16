@@ -54,9 +54,17 @@ class DataCube(DataObject):
         # Containers
         self.diffractionslices = {}
         self.realslices = {}
-        self.pointlists = {}
         self.braggpeaks = {}
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
+        def add_diffractionslice(self,x):
+            x.coordinates = self.coordinates
+            self.diffractionslices[x.name] = x
+        def add_realslice(self,x):
+            x.coordinates = self.coordinates
+            self.realslices[x.name] = x
+        def add_braggpeaks(self,x):
+            x.coordinates = self.coordinates
+            self.braggpeaks[x.name] = x
 
         # initialize params
         # bvm visualization
@@ -170,23 +178,7 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
-        if im is None:
-            try:
-                im = self.realslices['sum'].data
-            except KeyError:
-                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
-        elif isinstance(im,tuple):
-            assert(len(im)==2)
-            im = self.data[:,:,im[0],im[1]]
-        elif isinstance(im,str):
-            try:
-                im = self.realslices[im].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
-
-        if 'scaling' not in kwargs:
-            kwargs['scaling'] = 'log'
-
+        im = self._get_best_im(im)
         show_rectangles(im,geometry,alpha=alpha,**kwargs)
 
     def position_realspace_mask(self,mask,im=None,alpha=0.25,**kwargs):
@@ -204,23 +196,7 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show
-        if im is None:
-            try:
-                im = self.realslices['sum'].data
-            except KeyError:
-                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
-        elif isinstance(im,tuple):
-            assert(len(im)==2)
-            im = self.data[:,:,im[0],im[1]]
-        elif isinstance(im,str):
-            try:
-                im = self.realslices[im].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
-
-        if 'scaling' not in kwargs:
-            kwargs['scaling'] = 'log'
-
+        im = self._get_best_im(im)
         show(im,mask=np.logical_not(mask),mask_color='r',mask_alpha=alpha,**kwargs)
 
 
@@ -350,24 +326,10 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_circles
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
+        center,radius = geometry
+        dp = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-
-        center,radius = geometry
         show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
 
     def position_rectangular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
@@ -384,23 +346,9 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
+        dp = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-
         show_rectangles(dp,geometry,alpha=alpha,**kwargs)
 
     def position_annular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
@@ -418,24 +366,10 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
+        center,radii = geometry
+        dp = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-
-        center,radii = geometry
         show(dp,
              annulus={'center':center,'radii':radii,'fill':True,'alpha':0.3},
              **kwargs)
@@ -454,24 +388,10 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-
+        lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
+        dp = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-
-        lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
         show_rectangles(dp,lims,alpha=alpha,**kwargs)
 
 
@@ -592,7 +512,7 @@ class DataCube(DataObject):
 
     ############# disk detection ###############
 
-    def show_some_dps(self,positions,im=None,colors=None,
+    def show_some_DPs(self,positions,im=None,colors=None,
                           HW=None,figsize_im=(6,6),figsize_dp=(4,4),
                           **kwargs):
         """
@@ -602,8 +522,11 @@ class DataCube(DataObject):
 
         Args:
             positions (len N list or tuple of 2-tuples): the scan positions
-            im (str or None): name of a real space image stored in datacube.
-                Defaults to 'BF'.
+            im (variable): (type of dp) image used for overlay
+                - (None) the sum image, if it exists, else, a virtual image
+                  from a point detector at the center pixel
+                - (2-tuple) the point detector virtual image from (qx,qy)
+                - (string) the attached realslice of this name, if it exists
             colors (len N list of colors or None):
             HW (2-tuple of ints): diffraction pattern grid shape
             figsize_im (2-tuple): size of the image figure
@@ -612,32 +535,9 @@ class DataCube(DataObject):
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
+        im = self._get_best_im(im)
         show_selected_dps(self,positions,im=im,colors=colors,
                 HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
-
-    def show_some_bragg_disks(self,colors=None,HW=None,figsize_dp=(4,4),
-                              **kwargs):
-        """
-        Shows the positions of Bragg disks detected with
-        self.find_some_bragg_disks.
-
-        Args:
-            colors (list of colors or None):
-            HW (2-tuple of ints): diffraction pattern grid shape
-            figsize_dp (2-tuple): size of each diffraction pattern panel
-            **kwargs (dict): arguments passed to visualize.show for the
-                *diffraction patterns*. Default is `scaling='log'`
-        """
-        from ...visualize.vis_special import show_selected_dps
-        assert('braggpeaks_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
-        braggpeaks = self.pointlists['braggpeaks_some_dps']
-        positions = self.pointlists['_braggpeaks_some_dps_positions']
-        try:
-            alpha = self.coordinates.alpha_pix
-        except NameError:
-            alpha = None
-        show_selected_dps(self,positions,bragg_pos=braggpeaks,alpha=alpha,
-                          colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
     def find_some_bragg_disks(self,positions,**kwargs):
         """
@@ -654,10 +554,32 @@ class DataCube(DataObject):
         y = [i[1] for i in positions]
         braggpeaks = find_Bragg_disks_selected(
             self,self.diffractionslices['probe_kernel'].data,Rx=x,Ry=y,**kwargs)
-        self.pointlists['braggpeaks_some_dps'] = braggpeaks
-        self.pointlists['_braggpeaks_some_dps_positions'] = positions
+        self.braggpeaks['_some_braggpeaks'] = {
+            'peaks':braggpeaks,'positions':positions
+        }
 
-    def find_bragg_disks(self,**disk_detec_params):
+    def show_some_bragg_disks(self,im=None,colors=None,HW=None,figsize_dp=(4,4),
+                              **kwargs):
+        """
+        Shows the positions of Bragg disks detected with
+        self.find_some_bragg_disks.
+
+        Args:
+            colors (list of colors or None):
+            HW (2-tuple of ints): diffraction pattern grid shape
+            figsize_dp (2-tuple): size of each diffraction pattern panel
+            **kwargs (dict): arguments passed to visualize.show for the
+                *diffraction patterns*. Default is `scaling='log'`
+        """
+        from ...visualize.vis_special import show_selected_dps
+        assert('_some_braggpeaks' in self.braggpeaks.keys()), "First run find_some_bragg_disks!"
+        braggpeaks = self.braggpeaks['_some_braggpeaks']['peaks']
+        positions = self.braggpeaks['_some_braggpeaks']['positions']
+        im = self._get_best_im(im)
+        show_selected_dps(self,positions,im=im,bragg_pos=braggpeaks,
+                          colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
+
+    def find_bragg_disks(self,name='braggpeaks',**disk_detec_params):
         """
 
         """
@@ -665,14 +587,57 @@ class DataCube(DataObject):
         assert('probe_kernel' in self.diffractionslices.keys())
         peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
-        self.braggpeaks['uncalibrated'] = peaks
-        self.bragg_calstate_uncalibrated = True
+        peaks.name = name
+        self.braggpeaks[name] = {
+            'raw':peaks,
+        }
 
-        try:
-            print('Calibrating origin positions')
-            self.calibrate_bragg_origins()
-        except AttributeError:
-            print('Origin positions not found; skipping calibration')
+
+
+
+    ############## bragg vector maps ################
+
+    def set_bvm_vis_params(self,**kwargs):
+        self.bvm_vis_params = kwargs
+
+    def show_bvm(self,name='bvm',**vis_params):
+        """
+
+        Args:
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,**vis_params)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###lksjdfsdlakjfdslkjfsdl###
 
     def calibrate_bragg_origins(self):
         """
@@ -948,29 +913,39 @@ class DataCube(DataObject):
             kwargs['title'] = title
         show(im,**kwargs)
 
+    def _get_best_dp(self,dp=None):
+        if dp is None:
+            try:
+                dp = self.diffractionslices['max_dp'].data
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+    def _get_best_im(self,im=None):
+        if im is None:
+            try:
+                im = self.realslices['sum'].data
+            except KeyError:
+                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
+        elif isinstance(im,tuple):
+            assert(len(im)==2)
+            im = self.data[:,:,im[0],im[1]]
+        elif isinstance(im,str):
+            try:
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+        return im
 
 
 
-    ############## bragg vector maps ################
-
-    def set_bvm_vis_params(self,**kwargs):
-        self.bvm_vis_params = kwargs
-
-    def show_bvm(self,name='bvm',**vis_params):
-        """
-
-        Args:
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
-        """
-        from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,**vis_params)
 
     def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
         """
@@ -1061,40 +1036,21 @@ class DataCube(DataObject):
 
     ############ braggvectormap.py #############
 
-    def get_bvm(self,name='_best',overwrite=False):
+    def get_bvm(self,peaks='braggpeaks',calibrated=True,name='bvm'):
         """
 
         """
         from ...process.diskdetection import get_bvm
-        calstates = [self.bragg_calstate_uncalibrated,
-                     self.bragg_calstate_origin,
-                     self.bragg_calstate_ellipse,
-                     self.bragg_calstate_dq,
-                     self.bragg_calstate_rotflip]
-        calstate = np.sum(calstates)
-        assert(calstate!=0)
-        d_calstate = {1:'uncalibrated',
-                      2:'origin',
-                      3:'ellipse',
-                      4:'dq',
-                      5:'rotflip'}
-        name_best = d_calstate[calstate]
-        if name == '_best':
-            name = name_best
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        if calibrated:
+            peaks = peaks['cal']
         else:
-            assert(name in ('uncalibrated','origin','ellipse','dq','rotflip'))
-        if name == name_best:
-            set_bvm = True
-        if 'bvm_'+name in self.diffractionslices.keys():
-            if not overwrite:
-                raise Exception("This bvm has already been computed. To recompute and overwrite, pass `overwrite=True`")
-
-        peaks = self.braggpeaks[name]
-        bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-        bvm_ds = DiffractionSlice(data=bvm,name='bvm_'+name)
-        self.diffractionslices['bvm_'+name] = bvm_ds
-        if set_bvm:
-            self.diffractionslices['bvm'] = bvm_ds
+            peaks = peaks['raw']
+        bvm = DiffractionSlice(
+            data=get_bvm(peaks,self.Q_Nx,self.Q_Ny),
+            name=name)
+        self.diffractionslices[name] = bvm
 
 
 
