@@ -15,7 +15,13 @@ by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 
 @lru_cache(maxsize=1024)
 def compute_WK_factor(
-    g: float, Z: int, B: float, accelerating_voltage: float, VERBOSE=False
+    g: float,
+    Z: int,
+    B: float,
+    accelerating_voltage: float,
+    include_core: bool = True,
+    include_phonon: bool = True,
+    VERBOSE=False,
 ):
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
@@ -40,18 +46,21 @@ def compute_WK_factor(
     of already-cached values.)
     """
 
-    # WK works in physicist units:
-    s = 2.0 * np.pi * g  # this is the scaling set by diffraction.f90:558
-    # s = g / (4.0 * np.pi)  # is this the right conversion? others.f90 seems inconsistent
+    # the WK Fortran code works in weird units:
+    # lowercase "g", our input, is the standard crystallographic quantity, in Å^-1
+    # uppercase "G" is the "G" in others.f90:FSCATT, g * 2π
+    # uppercase "S" is the "S" in others.f90:FSCATT, G / 4π = g / 2
+    G = g * 2.0 * np.pi
+    S = g / 2.0
 
     DW = B / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
     if VERBOSE:
-        print(f"s:{s}")
+        print(f"S:{S}")
 
-    DWF = np.exp(-0.5 * DW ** 2 * g ** 2)
+    DWF = np.exp(-0.5 * DW ** 2 * G ** 2)
     if VERBOSE:
         print(f"DWF:{DWF}")
 
@@ -65,13 +74,13 @@ def compute_WK_factor(
     # WEKO(A,B,S)
     WK = 0.0
     for i in range(4):
-        argu = B[i] * s ** 2
+        argu = B[i] * S ** 2
         if argu < 1.0:
             WK += A[i] * B[i] * (1.0 - 0.5 * argu)
         elif argu > 20.0:
-            WK += A[i] / s ** 2
+            WK += A[i] / S ** 2
         else:
-            WK += A[i] * (1.0 - np.exp(-argu)) / s ** 2
+            WK += A[i] * (1.0 - np.exp(-argu)) / S ** 2
 
     Freal = 4.0 * np.pi * DWF * WK
 
@@ -84,95 +93,103 @@ def compute_WK_factor(
         2.0 * np.pi / electron_wavelength_angstrom(accelerating_voltage)
     )  # remember, physicist units here
 
-    # "CALCULATE CHARACTERISTIC ENERGY LOSS AND ANGLE"
-    DE = 6.0e-3 * Z
-    theta_e = (
-        DE
-        / (2.0 * accelerating_voltage_kV)
-        * (2.0 * accelerating_voltage_kV + 1022.0)
-        / (accelerating_voltage_kV + 1022.0)
-    )
-
-    # "SCREENING PARAMETER OF YUKAWA POTENTIAL"
-    R = 0.885 * 0.5289 / Z ** (1.0 / 3.0)
-
-    # "CALCULATE NORMALISING ANGLE"
-    TA = 1.0 / (k0 * R)
-
-    # "CALCULATE BRAGG ANGLE"
-    TB = g / (2.0 * k0)
-
-    # "NORMALIZE"
-    omega = 2.0 * TB / TA
-    kappa = theta_e / TA
-
-    x1 = (
-        omega
-        / ((1.0 + omega ** 2) * np.sqrt(omega ** 2 + 4.0 * kappa ** 2))
-        * np.log((omega + np.sqrt(omega ** 2 + 4.0 * kappa ** 2)) / (2.0 * kappa))
-    )
-
-    x2 = (
-        1.0
-        / np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
-        * np.log(
-            (
-                1.0
-                + 2.0 * kappa ** 2
-                + omega ** 2
-                + np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
-            )
+    if include_core:
+        # "CALCULATE CHARACTERISTIC ENERGY LOSS AND ANGLE"
+        DE = 6.0e-3 * Z
+        theta_e = (
+            DE
+            / (2.0 * accelerating_voltage_kV)
+            * (2.0 * accelerating_voltage_kV + 1022.0)
+            / (accelerating_voltage_kV + 1022.0)
         )
-        / (2.0 * kappa * np.sqrt(1.0 + kappa ** 2))
-    )
 
-    if omega > 1.0e-2:
-        x3 = (
+        # "SCREENING PARAMETER OF YUKAWA POTENTIAL"
+        R = 0.885 * 0.5289 / Z ** (1.0 / 3.0)
+
+        # "CALCULATE NORMALISING ANGLE"
+        TA = 1.0 / (k0 * R)
+
+        # "CALCULATE BRAGG ANGLE"
+        TB = G / (2.0 * k0)
+
+        # "NORMALIZE"
+        omega = 2.0 * TB / TA
+        kappa = theta_e / TA
+
+        x1 = (
+            omega
+            / ((1.0 + omega ** 2) * np.sqrt(omega ** 2 + 4.0 * kappa ** 2))
+            * np.log((omega + np.sqrt(omega ** 2 + 4.0 * kappa ** 2)) / (2.0 * kappa))
+        )
+
+        x2 = (
             1.0
-            / (omega * np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
+            / np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
             * np.log(
-                (omega + np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
-                / (2.0 * np.sqrt(1.0 + kappa ** 2))
+                (
+                    1.0
+                    + 2.0 * kappa ** 2
+                    + omega ** 2
+                    + np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
+                )
             )
+            / (2.0 * kappa * np.sqrt(1.0 + kappa ** 2))
         )
+
+        if omega > 1.0e-2:
+            x3 = (
+                1.0
+                / (omega * np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
+                * np.log(
+                    (omega + np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
+                    / (2.0 * np.sqrt(1.0 + kappa ** 2))
+                )
+            )
+        else:
+            x3 = 1.0 / (4.0 * (1.0 + kappa ** 2))
+
+        Fcore = (
+            4.0
+            / 0.5289 ** 2
+            * 2.0
+            * np.pi
+            / k0 ** 2
+            * (2 * Z)
+            / (TA ** 2)
+            * (x2 - x1 - x3)
+        )
+
+        if VERBOSE:
+            print(f"Fcore:{Fcore}")
     else:
-        x3 = 1.0 / (4.0 * (1.0 + kappa ** 2))
-
-    Fcore = (
-        4.0 / 0.5289 ** 2 * 2.0 * np.pi / k0 ** 2 * (2 * Z) / (TA ** 2) * (x2 - x1 - x3)
-    )
-
-    if VERBOSE:
-        print(f"Fcore:{Fcore}")
+        Fcore = 0.0
 
     ##########################################################
     # calculate phonon contribution, following FPHON(G,UL,A,B)
-
-    U2 = DW ** 2
-
-    A1 = A * (4.0 * np.pi) ** 2
-    B1 = B / (4.0 * np.pi) ** 2
-
     Fphon = 0.0
+    if include_phonon:
+        U2 = DW ** 2
 
-    for jj in range(4):
-        Fphon += (
-            A1[jj]
-            * A1[jj]
-            * (DWF * RI1(B1[jj], B1[jj], g) - RI2(B1[jj], B1[jj], g, DW))
-        )
-        for ii in range(jj - 1):
+        A1 = A * (4.0 * np.pi) ** 2
+        B1 = B / (4.0 * np.pi) ** 2
+
+        for jj in range(4):
             Fphon += (
-                2.0
+                A1[jj]
                 * A1[jj]
-                * A1[ii]
-                * (DWF * RI1(B1[ii], B1[jj], g) - RI2(B1[ii], B1[jj], g, DW))
+                * (DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, DW))
             )
+            for ii in range(jj - 1):
+                Fphon += (
+                    2.0
+                    * A1[jj]
+                    * A1[ii]
+                    * (DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, DW))
+                )
+        if VERBOSE:
+            print(f"Fphon:{Fphon}")
 
     Fimag = (Fcore * DWF) + Fphon
-
-    if VERBOSE:
-        print(f"Fphon:{Fphon}")
 
     # perform relativistic correction
     gamma = (accelerating_voltage_kV + 511.0) / (511.0)
@@ -186,8 +203,9 @@ def compute_WK_factor(
         print(f"Fscatt:{Fscatt}")
 
     return (
-        Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
+        Fscatt * 0.4787801 * 0.664840340614319 * 100.0 / (4.0 * np.pi)
     )  # convert to Volts, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
+    # I am really not certain about these factors! AARGH
 
 
 ##############################################
