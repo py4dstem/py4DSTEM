@@ -9,9 +9,6 @@ Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMs
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
-# def get_WK_factor(g, Z, DW, accelerating_voltage):
-#     return compute_WK_factor(float(g), int(Z), float(DW), float(accelerating_voltage))
-
 
 @lru_cache(maxsize=1024)
 def compute_WK_factor(
@@ -26,25 +23,33 @@ def compute_WK_factor(
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
     of the elastic part and computation of the inelastic part found in EMsoftLib/others.f90.
-    Return value should be in Volts(?)
+    Return value should be in VÅ.
 
     This implementation always returns the absorptive, relativistically corrected factors.
 
     Currently this is mostly a direct translation of the Fortran code, along with
-    the accompanying comments from the original in quotation marks. This needs to be
-    vectorized and refactored for efficiency. I have taken some liberties regarding
-    the use of lower case letters, which evidently had not been invented by the late 1990s.
-    Figuring out what some of the magic numbers in the original correspond to would also
-    be an improvement.
+    the accompanying comments from the original in quotation marks. This could be
+    vectorized and refactored for efficiency.
 
-    The original code appears to have been designed to compute the WK factors directly,
-    rather than using the parameterization of the fit given in the WK paper. EMsoft would
+    This method uses an 8-parameter fit to the elastic form factors, and then computes the
+    absorptive form factors using an analytic solution based on that fitting function. EMsoft would
     use this routine to precompute and cache the necessary factors before calculating U_g.
     I follow this route, but use Python's native caching to wrap this function rather than
     build the lookup table manually. When calling this inside the loop that computes
-    the lattice Fourier coefficients, the cache will quickly build up (especially if some
-    judicious rounding is utilized, to ensure floating point errors don't cause recomputation
-    of already-cached values.)
+    the lattice Fourier coefficients, the cache will quickly build up.
+
+    Args: (note that these values cannot be arrays: the code is not vectorized)
+        g (float):                      Scattering vector magnitude in the crystallographic/py4DSTEM
+                                        convention, 1/d_hkl in units of 1/Å
+        Z (int):                        Atomic number. Data are available for H thru Cf (1 thru 98)
+        accelerating_voltage (float):   Accelerating voltage in eV.
+        debye_waller_B_factor (float):  Debye-Waller factor for TDS, in Å^2
+        include_core (bool):            If True, include the core loss contribution to the absorptive
+                                        form factors.
+        include_phonon (bool):          If True, include the phonon/TDS contribution to the
+                                        absorptive form factors.
+    Returns:
+        Fscatt (np.complex128):         The computed atomic form factor
     """
 
     # the WK Fortran code works in weird units:
