@@ -60,11 +60,11 @@ def compute_WK_factor(
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
     if debye_waller_B_factor is not None:
-        DW = debye_waller_B_factor / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
+        UL = debye_waller_B_factor / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
 
-        DWF = np.exp(-0.5 * DW ** 2 * G ** 2)
+        DWF = np.exp(-0.5 * UL ** 2 * G ** 2)
     else:
-        DW = 0.0
+        UL = 0.0
         DWF = 1.0
 
     if verbose:
@@ -174,7 +174,7 @@ def compute_WK_factor(
     # calculate phonon contribution, following FPHON(G,UL,A,B)
     Fphon = 0.0
     if include_phonon:
-        U2 = DW ** 2
+        U2 = UL ** 2
 
         A1 = A * (4.0 * np.pi) ** 2
         B1 = B / (4.0 * np.pi) ** 2
@@ -183,14 +183,18 @@ def compute_WK_factor(
             Fphon += (
                 A1[jj]
                 * A1[jj]
-                * (DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, DW))
+                * (
+                    DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL)
+                )  # should this be + or - ? others.f90 appears to disagree with WK paper...
             )
-            for ii in range(jj - 1):
+            for ii in range(jj + 1):
                 Fphon += (
                     2.0
                     * A1[jj]
                     * A1[ii]
-                    * (DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, DW))
+                    * (
+                        DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL)
+                    )  # should this be + or - ? others.f90 appears to disagree with WK paper...
                 )
         if verbose:
             print(f"Fphon:{Fphon}")
@@ -223,7 +227,7 @@ def RI1(BI, BJ, G):
     eps = np.max([BI, BJ]) * G ** 2
 
     if eps <= 0.1:
-        ri1 = np.pi * BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ)
+        ri1 = np.pi * (BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ))
         if G == 0.0:
             return ri1
         temp = 0.5 * BI ** 2 * np.log(BI / (BI + BJ)) + 0.5 * BJ ** 2 * np.log(
@@ -235,7 +239,8 @@ def RI1(BI, BJ, G):
         return ri1
 
     ri1 = (
-        2.0 * 0.5772157 * np.log(BI * G ** 2)
+        2.0 * 0.5772157
+        + np.log(BI * G ** 2)
         + np.log(BJ * G ** 2)
         - 2.0 * expi(-BI * BJ * G ** 2 / (BI + BJ))
     )
@@ -266,11 +271,15 @@ def RI2(BI, BJ, G, U):
     if EPS <= 0.1:
         ri2 = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2))
         ri2 = ri2 + BJ * np.log((BI + BJ + U2) / (BJ + U2))
-        ri2 = ri2 + U2 * np.log(U2 / (BJ + U2))
+        if U2 > 0.0:  # check if U=0, in which case we will force 0 * ∞ = 0
+            ri2 = ri2 + U2 * np.log(U2 / (BJ + U2))
         ri2 = ri2 * np.pi
         if G == 0.0:
             return ri2
-        TEMP = 0.5 * U22 * U22 * np.log(BIU * BJU / (U2 * U2))
+        if U2 > 0.0:
+            TEMP = 0.5 * U22 * U22 * np.log(BIU * BJU / (U2 * U2))
+        else:
+            TEMP = 0.0
         TEMP = TEMP + 0.5 * BIUH * BIUH * np.log(BIU / (BIUH + BJUH))
         TEMP = TEMP + 0.5 * BJUH * BJUH * np.log(BJU / (BIUH + BJUH))
         TEMP = TEMP + 0.25 * BIU * BIU + 0.5 * BI * BI
