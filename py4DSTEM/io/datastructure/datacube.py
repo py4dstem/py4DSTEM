@@ -354,6 +354,40 @@ class DataCube(DataObject):
              annulus={'center':center,'radii':radii,'fill':True,'alpha':0.3},
              **kwargs)
 
+    def position_point_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
+        """
+        Display a point detector overlaid on a diffraction-pattern-like array,
+        specified with the `dp` argument.
+
+        Args:
+            geometry (2-tuple): the detector position (qx0,qy0)
+            dp (variable): (type of dp) image used for overlay
+                - (None) the maximal dp, if it exists, else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached diffractionslice of this name, if it exists
+            alpha (number): the transparency of the overlay
+        """
+        from ...visualize import show_rectangles
+        if dp is None:
+            try:
+                dp = self.diffractionslices['dp_max'].data
+            except KeyError:
+                dp = self.data[0,0,:,:]
+        elif isinstance(dp,tuple):
+            assert(len(dp)==2)
+            dp = self.data[dp[0],dp[1],:,:]
+        elif isinstance(dp,str):
+            try:
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+
+        lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
+        show_rectangles(dp,lims,alpha=alpha,**kwargs)
+
 
 
 
