@@ -50,24 +50,26 @@ class DataCube(DataObject):
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
         self.update_slice_parsers()
 
-        # Containers for derived data
-        self.diffractionslices = {} #: dict storing diffraction-like 2D arrays derived from this data
-        self.realslices = {} #: dict storing image-like 2D arrays derived from this data
-        self.pointlists = {} #: dict storing pointlists and lists/tuples of pointlists
-        self.braggpeaks = {} #: dict storing pointlistarrays of bragg disk positions
+        # Containers
+        self.diffractionslices = {}
+        self.realslices = {}
+        self.pointlists = {}
+        self.braggpeaks = {}
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
-            #: Coordinate instance storing calibration metadata
 
+        # initialize params
+        # bvm visualization
+        self.bvm_vis_params = {}
+        self.set_bvm_vis_params(cmap='jet',scaling='log')
+
+
+        # TODO delete this
         # Set bragg calibration state flags
         self.bragg_calstate_uncalibrated = False
         self.bragg_calstate_origin = False
         self.bragg_calstate_ellipse = False
         self.bragg_calstate_dq = False
         self.bragg_calstate_rotflip = False
-
-        # bvm visualization
-        self.bvm_vis_params = {}
-        self.set_bvm_vis_params(cmap='jet',scaling='log')
 
 
 
@@ -156,18 +158,109 @@ class DataCube(DataObject):
 
     ################## virtual imaging ##################
 
+    def get_im(self,geometry,detector='point',name=None):
+        """
+        Computes a virtual image.  Which image depends on the arguments `geometry` and
+        `detector`.
+
+        Args:
+            geometry (variable): the type and meaning of this argument depend on the
+                value of the `detector` argument:
+                    - 'point': (2-tuple of ints) the (qx,qy) position of a point detector
+                    - 'rect': (4-tuple) the corners (qx0,qxf,qy0,qyf)
+                    - 'square': (2-tuple) ((qx0,qy0),s) where s is the sidelength and
+                      (qx0,qy0) is the upper left corner
+                    - 'circ': (2-tuple) (center,radius) where center=(qx0,qy0)
+                    - 'ann': (2-tuple) (center,radii) where center=(qx0,qy0) and
+                      radii=(ri,ro)
+                    - 'mask': (2D boolean array)
+            detector (str): the detector type. Must be one of: 'point','rect','square',
+                'circ', 'ann', or 'mask'
+            name (str or None): if specified, stores this image in the datacube's
+                dictionary of RealSlices.
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        im = RealSlice(data=virtualimage.get_im(self,geometry))
+        if name is not None:
+            im.name = name
+            self.realslices[name] = im
+        return im
+
+    def get_sum_im(self,name='sum'):
+        """
+        Computes the virtual image integrating over the entire detector.
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        geometry = (0,self.R_Nx,0,self.R_Ny)
+        im = RealSlice(data=virtualimage.get_im(self,geometry,'rect'),
+                       name=name)
+        self.realslices[name] = im
+        return im
+
+    def capture_circular_detector(self,geometry,name):
+        """
+        Computes the virtual image from a circular detector.
+
+        Args:
+            geometry (2-tuple): (center,radius) where center=(qx0,qy0)
+            name (str): label for this image
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        vi = RealSlice(data=virtualimage.get_virtualimage_circ(self,geometry),
+                       name=name)
+        self.realslices[name] = vi
+        return vi
+
+    def capture_rectangular_detector(self,geometry,name):
+        """
+        Computes the virtual image from a rectangular detector.
+
+        Args:
+            geometry (4-tuple): (qx0,qxf,qy0,qyf)
+            name (str): label for this image
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        vi = DiffractionSlice(data=virtualimage.get_virtualimage_rect(self,geometry),
+                              name=name)
+        self.realslices[name] = vi
+        return vi
+
+    def capture_annular_detector(self,geometry,name):
+        """
+        Computes the virtual image from an annular detector.
+
+        Args:
+            geometry (2-tuple): (center,radii) where center=(qx0,qy0) and radii=(ri,ro)
+            name (str): label for this image
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        vi = DiffractionSlice(data=virtualimage.get_virtualimage_ann(self,geometry),
+                              name=name)
+        self.realslices[name] = vi
+        return vi
+
     def position_circular_detector(self,geometry,dp=None,alpha=0.25,**kwargs):
         """
         Display a circular detector overlaid on a diffraction-pattern-like array,
         specified with the `dp` argument.
 
         Args:
+            geometry (2-tuple): the geometry of the detector, given by (center,radius),
+                where center is the 2-tuple (qx0,qy0), and radius is a number
             dp (variable): (type of dp) image used for overlay
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            geometry (2-tuple): the geometry of the detector, given by (center,radius),
-                where center is the 2-tuple (qx0,qy0), and radius is a number
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_circles
@@ -197,11 +290,11 @@ class DataCube(DataObject):
         specified with the `dp` argument.
 
         Args:
+            geometry (4-tuple): the detector limits (x0,xf,y0,yf)
             dp (variable): (type of dp) image used for overlay
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            geometry (4-tuple): the detector limits (x0,xf,y0,yf)
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
@@ -230,12 +323,12 @@ class DataCube(DataObject):
         specified with the `dp` argument.
 
         Args:
+            geometry (2-tuple): the geometry of the detector, given by (center,radii),
+                where center is the 2-tuple (qx0,qy0), and radii is the 2-tuple (ri,ro)
             dp (variable): (type of dp) image used for overlay
                 - (None) the maximal dp, if it exists, else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached diffractionslice of this name, if it exists
-            geometry (2-tuple): the geometry of the detector, given by (center,radii),
-                where center is the 2-tuple (qx0,qy0), and radii is the 2-tuple (ri,ro)
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show
@@ -271,19 +364,18 @@ class DataCube(DataObject):
 
 
 
-    ########### Processing functions, organized by file in process directory ############
-
 
     ############## visualize ###################
 
     def show(self, dp=None, **kwargs):
         """
-        Show a single 2D slice of the dataset, passing any **kwargs to
-        the visualize.show function. Default scaling is 'log'.
+        Show a single *diffraction shaped* 2D slice of the dataset,
+        passing any **kwargs to the visualize.show function.
+        Default scaling is 'log'.
 
         Args:
-            dp (None or 2-tuple or str): Behavior depends on the type of
-            the `dp` argument:
+            dp (None or 2-tuple or str): Specifies the data to show.
+            Behavior depends on the argument type:
                 - (None) the maximal dp, if it exists. else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached DiffractionSlice of this name, if it exists
@@ -314,6 +406,47 @@ class DataCube(DataObject):
         if 'title' not in kwargs:
             kwargs['title'] = title
         show(dp,**kwargs)
+
+    def show_im(self, im=None, **kwargs):
+        """
+        Show a single *real shaped* 2D slice of the dataset,
+        passing any **kwargs to the visualize.show function.
+
+        Args:
+            im (None or 2-tuple or str): Specifies the data to show.
+            Behavior depends on the argument type:
+                - (None) the sum image, if it exists. else, the virtual image
+                  from a point detector at the center of the detector
+                - (2-tuple) the virtual image from a point detector at (qx,qy)
+                - (string) the attached RealSlice of this name, if it exists
+        """
+        from ...visualize import show
+        if im is None:
+            try:
+                im = self.realslices['sum_im'].data
+                title = 'sum_im'
+            except KeyError:
+                qx,qy = self.Q_Nx//2,self.Q_Ny//2
+                im = virtualimage.get_im(self,
+                                         geometry=(qx,qy),
+                                         detector='point')
+                title = 'im {},{}'.format(qx,qy)
+        elif isinstance(im,(tuple,list)):
+            assert(len(im)==2)
+            title = 'im {},{}'.format(im[0],im[1])
+            im = virtualimage.get_im(self,im,'point')
+        elif isinstance(im,str):
+            try:
+                title = im
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+        else:
+            raise Exception("Invalid type, {}".format(type(im)))
+
+        if 'title' not in kwargs:
+            kwargs['title'] = title
+        show(im,**kwargs)
 
     def show_origin_meas(self):
         """
@@ -506,23 +639,7 @@ class DataCube(DataObject):
             plt.show()
 
 
-    ############## virtualimage.py #############
 
-
-    def capture_circular_detector(self,center,radius,name):
-        """
-        Computes the virtual image from a circular detector.
-
-        Args:
-            center (2-tuple): (x0,y0) of detector
-            radius (number): radius of detector
-            name (str): label for this image
-        """
-        vi = DiffractionSlice(data=virtualimage.get_virtualimage_circ(
-                                   self,center[0],center[1],radius),
-                              name=name)
-        self.diffractionslices[name] = vi
-        return vi
 
     ############## calibration ################
 
