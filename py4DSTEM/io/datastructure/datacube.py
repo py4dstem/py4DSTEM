@@ -406,6 +406,7 @@ class DataCube(DataObject):
         qr,qx0,qy0 = get_probe_size(self.diffractionslices['probe_image'].data,**kwargs)
         self.coordinates.set_alpha_pix(qr)
         self.coordinates.set_probe_center((qx0,qy0))
+        return qr,(qx0,qy0)
 
     def show_probe_size(self):
         """
@@ -469,6 +470,7 @@ class DataCube(DataObject):
         # save
         self.diffractionslices['probe_kernel'] = DiffractionSlice(data=probe_kernel,
                                                                   name='probe_kernel')
+        return probe_kernel
 
     def show_probe_kernel(self,R=None,L=None,W=None):
         """
@@ -543,6 +545,7 @@ class DataCube(DataObject):
         self.braggpeaks['_some_braggpeaks'] = {
             'peaks':braggpeaks,'positions':positions
         }
+        return braggpeaks
 
     def show_some_bragg_disks(self,im=None,colors=None,HW=None,figsize_dp=(4,4),
                               **kwargs):
@@ -577,6 +580,7 @@ class DataCube(DataObject):
         self.braggpeaks[name] = {
             'raw':peaks,
         }
+        return peaks
 
 
 
@@ -600,6 +604,7 @@ class DataCube(DataObject):
             data=bvm,
             name=name)
         self.diffractionslices[name] = bvm
+        return bvm
 
     def show_bvm(self,name='bvm',**vis_params):
         """
