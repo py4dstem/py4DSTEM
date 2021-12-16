@@ -17,15 +17,16 @@ by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 def compute_WK_factor(
     g: float,
     Z: int,
-    B: float,
     accelerating_voltage: float,
+    debye_waller_B_factor: float = None,
     include_core: bool = True,
     include_phonon: bool = True,
-    VERBOSE=False,
+    verbose=False,
 ):
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
-    in EMsoftLib/others.f90. Return value should be in Volts?
+    of the elastic part and computation of the inelastic part found in EMsoftLib/others.f90.
+    Return value should be in Volts(?)
 
     This implementation always returns the absorptive, relativistically corrected factors.
 
@@ -53,21 +54,26 @@ def compute_WK_factor(
     G = g * 2.0 * np.pi
     S = g / 2.0
 
-    DW = B / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
+    if verbose:
+        print(f"S:{S}")
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
-    if VERBOSE:
-        print(f"S:{S}")
+    if debye_waller_B_factor is not None:
+        DW = debye_waller_B_factor / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
 
-    DWF = np.exp(-0.5 * DW ** 2 * G ** 2)
-    if VERBOSE:
+        DWF = np.exp(-0.5 * DW ** 2 * G ** 2)
+    else:
+        DW = 0.0
+        DWF = 1.0
+
+    if verbose:
         print(f"DWF:{DWF}")
 
     A = WK_A_param[int(Z) - 1]
     B = WK_B_param[int(Z) - 1]
 
-    if VERBOSE:
+    if verbose:
         print(f"A:{A}")
         print(f"B:{B}")
 
@@ -84,7 +90,7 @@ def compute_WK_factor(
 
     Freal = 4.0 * np.pi * DWF * WK
 
-    if VERBOSE:
+    if verbose:
         print(f"Freal:{Freal}")
 
     #################################################
@@ -159,7 +165,7 @@ def compute_WK_factor(
             * (x2 - x1 - x3)
         )
 
-        if VERBOSE:
+        if verbose:
             print(f"Fcore:{Fcore}")
     else:
         Fcore = 0.0
@@ -186,7 +192,7 @@ def compute_WK_factor(
                     * A1[ii]
                     * (DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, DW))
                 )
-        if VERBOSE:
+        if verbose:
             print(f"Fphon:{Fphon}")
 
     Fimag = (Fcore * DWF) + Fphon
@@ -194,12 +200,12 @@ def compute_WK_factor(
     # perform relativistic correction
     gamma = (accelerating_voltage_kV + 511.0) / (511.0)
 
-    if VERBOSE:
+    if verbose:
         print(f"gamma:{gamma}")
 
-    Fscatt = np.complex128(Freal * gamma + 1.0j * (Fimag * gamma ** 2 / k0))
+    Fscatt = np.complex128((Freal * gamma) + (1.0j * (Fimag * gamma ** 2 / k0)))
 
-    if VERBOSE:
+    if verbose:
         print(f"Fscatt:{Fscatt}")
 
     return (
@@ -340,6 +346,10 @@ def RIH3(X):
         return RIH2(X) / X
 
 
+##################
+# TABULATED DATA #
+##################
+
 # fmt:off
 
 RIH2_tabulated_data = np.array([1.000000,1.005051,1.010206,1.015472,1.020852,
@@ -348,8 +358,6 @@ RIH2_tabulated_data = np.array([1.000000,1.005051,1.010206,1.015472,1.020852,
                                 1.090140,1.097737,1.105647,1.113894,1.122497,
                                 1.131470])
 
-
-# TODO: This table starts at Hydrogen
 
 WK_A_param = np.array([
                     0.00427, 0.00957, 0.00802, 0.00209,
@@ -450,7 +458,7 @@ WK_A_param = np.array([
                     0.46259, 0.97882, 0.73056, 0.12723,
                     0.46221, 0.95749, 0.76259, 0.14086,
                     0.48500, 0.95602, 0.77234, 0.13374,
-                    ]).reshape(4,98).T
+                    ]).reshape(98,4)
 
 
 WK_B_param = np.array([
@@ -552,4 +560,4 @@ WK_B_param = np.array([
                   0.03904,  0.72797,  8.00506, 86.41747,
                   0.03969,  0.68167,  7.29607, 75.72682,
                   0.04291,  0.69956,  7.38554, 77.18528,
-                  ]).reshape(4,98).T
+                  ]).reshape(98,4)
