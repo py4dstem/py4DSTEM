@@ -1,7 +1,8 @@
 # Defines the DataCube class.
 #
-# DataCube objects contain a 4DSTEM dataset, attributes describing its shape, and methods
-# pointing to processing functions - generally defined in other files in the process directory.
+# DataCube objects contain a 4DSTEM dataset, attributes describing its shape, and
+# methods pointing to processing functions - generally defined in other files in
+# the ./process directory.
 
 from collections.abc import Sequence
 from tempfile import TemporaryFile
@@ -154,6 +155,73 @@ class DataCube(DataObject):
         self.diffractionslices[name] = dp_median
         return dp_median
 
+    def position_realspace_lims(self,geometry,im=None,alpha=0.25,**kwargs):
+        """
+        Display a rectangle overlaid on an image-like array,
+        specified with the `im` argument.
+
+        Args:
+            geometry (4-tuple): the detector limits (x0,xf,y0,yf)
+            im (variable): (type of im) image used for overlay
+                - (None) the sum im, if it exists, else, the virtual image from
+                  a point detector at the center pixel
+                - (2-tuple) the virtual image from a point detector at (rx,ry)
+                - (string) the attached realslice of this name, if it exists
+            alpha (number): the transparency of the overlay
+        """
+        from ...visualize import show_rectangles
+        if im is None:
+            try:
+                im = self.realslices['sum'].data
+            except KeyError:
+                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
+        elif isinstance(im,tuple):
+            assert(len(im)==2)
+            im = self.data[:,:,im[0],im[1]]
+        elif isinstance(im,str):
+            try:
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+
+        show_rectangles(im,geometry,alpha=alpha,**kwargs)
+
+    def position_realspace_mask(self,mask,im=None,alpha=0.25,**kwargs):
+        """
+        Display a boolean mask overlaid on an image-like array,
+        specified with the `im` argument.
+
+        Args:
+            mask (2d boolean array):
+            im (variable): (type of im) image used for overlay
+                - (None) the sum im, if it exists, else, the virtual image from
+                  a point detector at the center pixel
+                - (2-tuple) the virtual image from a point detector at (rx,ry)
+                - (string) the attached realslice of this name, if it exists
+            alpha (number): the transparency of the overlay
+        """
+        from ...visualize import show
+        if im is None:
+            try:
+                im = self.realslices['sum'].data
+            except KeyError:
+                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
+        elif isinstance(im,tuple):
+            assert(len(im)==2)
+            im = self.data[:,:,im[0],im[1]]
+        elif isinstance(im,str):
+            try:
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+
+        show(im,mask=np.logical_not(mask),mask_color='r',mask_alpha=alpha,**kwargs)
 
 
     ################## virtual imaging ##################
@@ -182,7 +250,7 @@ class DataCube(DataObject):
         Returns:
             (RealSlice): the virtual image
         """
-        im = RealSlice(data=virtualimage.get_im(self,geometry))
+        im = RealSlice(data=virtualimage.get_im(self,geometry,detector=detector))
         if name is not None:
             im.name = name
             self.realslices[name] = im
@@ -233,6 +301,22 @@ class DataCube(DataObject):
         self.realslices[name] = vi
         return vi
 
+    def capture_point_detector(self,geometry,name):
+        """
+        Computes the virtual image from a point detector.
+
+        Args:
+            geometry (2-tuple): (qx,qy)
+            name (str): label for this image
+
+        Returns:
+            (RealSlice): the virtual image
+        """
+        vi = DiffractionSlice(data=virtualimage.get_virtualimage_point(self,geometry),
+                              name=name)
+        self.realslices[name] = vi
+        return vi
+
     def capture_annular_detector(self,geometry,name):
         """
         Computes the virtual image from an annular detector.
@@ -266,7 +350,7 @@ class DataCube(DataObject):
         from ...visualize import show_circles
         if dp is None:
             try:
-                dp = self.diffractionslices['dp_max'].data
+                dp = self.diffractionslices['max_dp'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -300,7 +384,7 @@ class DataCube(DataObject):
         from ...visualize import show_rectangles
         if dp is None:
             try:
-                dp = self.diffractionslices['dp_max'].data
+                dp = self.diffractionslices['max_dp'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -334,7 +418,7 @@ class DataCube(DataObject):
         from ...visualize import show
         if dp is None:
             try:
-                dp = self.diffractionslices['dp_max'].data
+                dp = self.diffractionslices['max_dp'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -370,7 +454,7 @@ class DataCube(DataObject):
         from ...visualize import show_rectangles
         if dp is None:
             try:
-                dp = self.diffractionslices['dp_max'].data
+                dp = self.diffractionslices['max_dp'].data
             except KeyError:
                 dp = self.data[0,0,:,:]
         elif isinstance(dp,tuple):
@@ -387,14 +471,6 @@ class DataCube(DataObject):
 
         lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
         show_rectangles(dp,lims,alpha=alpha,**kwargs)
-
-
-
-
-
-
-
-
 
 
 
@@ -697,9 +773,9 @@ class DataCube(DataObject):
         for more info.
         """
         from ...process.calibration.origin import get_origin
-        if 'dp_max' not in self.diffractionslices.keys():
+        if 'max_dp' not in self.diffractionslices.keys():
             self.get_max_dp()
-        kwargs['dp_max'] = self.diffractionslices['dp_max'].data
+        kwargs['dp_max'] = self.diffractionslices['max_dp'].data
         qx0,qy0 = get_origin(self, **kwargs)
         self.coordinates.set_origin_meas(qx0,qy0)
 
