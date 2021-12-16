@@ -627,7 +627,7 @@ def show_origin_fit(data):
                                        qy0_meas,qy0_fit,qy0_residuals][i],
                     H=2,W=3,cmap='RdBu')
 
-def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
+def show_selected_dps(datacube,positions,im,bragg_pos=None,
                       colors=None,HW=None,figsize_im=(6,6),figsize_dp=(4,4),
                       **kwargs):
     """
@@ -638,14 +638,10 @@ def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
     Args:
         datacube (DataCube):
         positions (len N list or tuple of 2-tuples): the scan positions
-        im (str or None): name of a real space image stored in datacube.
-            Defaults to 'BF'.
+        im (2d array): a real space image
         bragg_pos (len N list of pointlistarrays): bragg disk positions
             for each position. if passed, overlays the disk positions,
             and supresses plot of the real space image
-        alpha (number): the probe semiconvergence angle. If passed,
-            disk positions are indicated with disk-sized circles,
-            rather than dots
         colors (len N list of colors or None):
         HW (2-tuple of ints): diffraction pattern grid shape
         figsize_im (2-tuple): size of the image figure
@@ -656,10 +652,6 @@ def show_selected_dps(datacube,positions,im=None,bragg_pos=None,alpha=None,
     assert isinstance(datacube,DataCube)
     N = len(positions)
     assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
-    if im is None:
-        im = 'BF'
-    assert(im in datacube.diffractionslices.keys()), "datacube has no image called '{}'".format(im)
-    im = datacube.diffractionslices[im].data
     if bragg_pos is not None:
         show_disk_pos = True
         assert(len(bragg_pos)==N)
