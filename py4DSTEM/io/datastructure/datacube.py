@@ -224,6 +224,8 @@ class DataCube(DataObject):
         show(im,mask=np.logical_not(mask),mask_color='r',mask_alpha=alpha,**kwargs)
 
 
+
+
     ################## virtual imaging ##################
 
     def get_im(self,geometry,detector='point',name=None):
@@ -475,283 +477,18 @@ class DataCube(DataObject):
 
 
 
-    ############## visualize ###################
+    ################## probe #################
 
-    def show(self, dp=None, **kwargs):
+    def add_probe_image(self,image):
         """
-        Show a single *diffraction shaped* 2D slice of the dataset,
-        passing any **kwargs to the visualize.show function.
-        Default scaling is 'log'.
+        Attach an image of the electron probe over vacuum to the data
 
         Args:
-            dp (None or 2-tuple or str): Specifies the data to show.
-            Behavior depends on the argument type:
-                - (None) the maximal dp, if it exists. else, the dp at (0,0)
-                - (2-tuple) the diffraction pattern at (rx,ry)
-                - (string) the attached DiffractionSlice of this name, if it exists
+            image (2d array):
         """
-        from ...visualize import show
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-                title = 'max_dp'
-            except KeyError:
-                dp = virtualimage.get_dp(self,(0,0))
-                title = 'dp 0,0'
-        elif isinstance(dp,(tuple,list)):
-            assert(len(dp)==2)
-            title = 'dp {},{}'.format(dp[0],dp[1])
-            dp = virtualimage.get_dp(self,dp)
-        elif isinstance(dp,str):
-            try:
-                title = dp
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-        else:
-            raise Exception("Invalid type, {}".format(type(dp)))
-
-        if 'scaling' not in kwargs:
-            kwargs['scaling'] = 'log'
-        if 'title' not in kwargs:
-            kwargs['title'] = title
-        show(dp,**kwargs)
-
-    def show_im(self, im=None, **kwargs):
-        """
-        Show a single *real shaped* 2D slice of the dataset,
-        passing any **kwargs to the visualize.show function.
-
-        Args:
-            im (None or 2-tuple or str): Specifies the data to show.
-            Behavior depends on the argument type:
-                - (None) the sum image, if it exists. else, the virtual image
-                  from a point detector at the center of the detector
-                - (2-tuple) the virtual image from a point detector at (qx,qy)
-                - (string) the attached RealSlice of this name, if it exists
-        """
-        from ...visualize import show
-        if im is None:
-            try:
-                im = self.realslices['sum_im'].data
-                title = 'sum_im'
-            except KeyError:
-                qx,qy = self.Q_Nx//2,self.Q_Ny//2
-                im = virtualimage.get_im(self,
-                                         geometry=(qx,qy),
-                                         detector='point')
-                title = 'im {},{}'.format(qx,qy)
-        elif isinstance(im,(tuple,list)):
-            assert(len(im)==2)
-            title = 'im {},{}'.format(im[0],im[1])
-            im = virtualimage.get_im(self,im,'point')
-        elif isinstance(im,str):
-            try:
-                title = im
-                im = self.realslices[im].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
-        else:
-            raise Exception("Invalid type, {}".format(type(im)))
-
-        if 'title' not in kwargs:
-            kwargs['title'] = title
-        show(im,**kwargs)
-
-    def show_origin_meas(self):
-        """
-        Show the measured origin positions
-        """
-        from ...visualize import show_origin_meas
-        show_origin_meas(self)
-
-    def show_origin_fit(self):
-        """
-        Show the fit origin positions
-        """
-        from ...visualize import show_origin_fit
-        show_origin_fit(self)
-
-    def show_probe_size(self):
-        """
-        Show the measure size of the vacuum probe
-        """
-        from ...visualize import show_circles
-        assert('probe_image' in self.diffractionslices.keys())
-        show_circles(self.diffractionslices['probe_image'].data,
-                     self.coordinates.probe_center,
-                     self.coordinates.alpha_pix)
-
-    def show_probe_kernel(self,R=None,L=None,W=None):
-        """
-        Visualize the probe kernel.
-
-        Args:
-            R (int): side length of displayed image, in pixels
-            L (int): the line profile length
-            W (int): the line profile integration window width
-        """
-        from ...visualize import show_kernel
-        assert('probe_kernel' in self.diffractionslices.keys())
-        if R is None:
-            try:
-                R = int( 5*self.coordinates.alpha_pix )
-            except NameError:
-                R = self.Q_Nx // 4
-        if L is None:
-            L = 2*R
-        if W is None:
-            W = 1
-        show_kernel(self.diffractionslices['probe_kernel'].data,R,L,W)
-
-    def show_selected_dps(self,positions,im=None,colors=None,
-                          HW=None,figsize_im=(6,6),figsize_dp=(4,4),
-                          **kwargs):
-        """
-        Shows two plots: first, a real space image overlaid with colored dots
-        at the specified positions; second, a grid of diffraction patterns
-        corresponding to these scan positions.
-
-        Args:
-            positions (len N list or tuple of 2-tuples): the scan positions
-            im (str or None): name of a real space image stored in datacube.
-                Defaults to 'BF'.
-            colors (len N list of colors or None):
-            HW (2-tuple of ints): diffraction pattern grid shape
-            figsize_im (2-tuple): size of the image figure
-            figsize_dp (2-tuple): size of each diffraction pattern panel
-            **kwargs (dict): arguments passed to visualize.show for the
-                *diffraction patterns*. Default is `scaling='log'`
-        """
-        from ...visualize.vis_special import show_selected_dps
-        show_selected_dps(self,positions,im=im,colors=colors,
-                HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
-
-    def show_some_bragg_disks(self,colors=None,HW=None,figsize_dp=(4,4),
-                              **kwargs):
-        """
-        Shows the positions of Bragg disks detected with
-        self.find_some_bragg_disks.
-
-        Args:
-            colors (list of colors or None):
-            HW (2-tuple of ints): diffraction pattern grid shape
-            figsize_dp (2-tuple): size of each diffraction pattern panel
-            **kwargs (dict): arguments passed to visualize.show for the
-                *diffraction patterns*. Default is `scaling='log'`
-        """
-        from ...visualize.vis_special import show_selected_dps
-        assert('braggpeaks_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
-        braggpeaks = self.pointlists['braggpeaks_some_dps']
-        positions = self.pointlists['_braggpeaks_some_dps_positions']
-        try:
-            alpha = self.coordinates.alpha_pix
-        except NameError:
-            alpha = None
-        show_selected_dps(self,positions,bragg_pos=braggpeaks,alpha=alpha,
-                          colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
-
-    def set_bvm_vis_params(self,**kwargs):
-        self.bvm_vis_params = kwargs
-
-    def show_bvm(self,name='bvm',**vis_params):
-        """
-
-        Args:
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
-        """
-        from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,**vis_params)
-
-    def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
-        """
-
-        Args:
-            radii (2-tuple):
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
-        """
-        from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,
-             annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
-                      'radii':radii,'fill':True,
-                      'alpha':0.3,'color':'y'},
-             **vis_params)
-
-    def show_elliptical_fit_bragg(self,radii,p_ellipse,name='bvm',**vis_params):
-        """
-
-        Args:
-            radii (2-tuple):
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
-        """
-        from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        center = bvm.shape[0]/2,bvm.shape[1]/2
-        _,_,a,b,theta = p_ellipse
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,
-             annulus={'center':center,'radii':radii,'fill':True,
-                      'alpha':0.2,'color':'y'},
-             ellipse={'center':center,'a':a,'b':b,'theta':theta,
-                       'color':'r','alpha':0.7,'linewidth':2},
-             **vis_params)
-
-    def show_bvm_radial_integral(self,name='bvm',ymax=None,q_ref=None,
-                                 returnfig=False):
-        """
-
-        Args:
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
-        """
-        from ...visualize import show_qprofile
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        assert(name_profile in self.pointlists.keys())
-        profile = self.pointlists[name_profile]
-        dq = self.coordinates.get_Q_pixel_size()
-        units = self.coordinates.get_Q_pixel_units()
-        q = profile.data['q'] * dq
-        if ymax is None:
-            n = len(profile.data)
-            ymax = np.max(profile.data['I'][n//4:]) * 1.2
-        fig,ax = show_qprofile(q=q,intensity=profile.data['I'],ymax=ymax,
-                      xlabel='q ('+units+')',returnfig=True)
-        if q_ref is not None:
-            ax.vlines(q_ref,0,ax.get_ylim()[1],color='r')
-        if returnfig:
-            return fig,ax
-        else:
-            import matplotlib.pyplot as plt
-            plt.show()
-
-
-
-
-    ############## calibration ################
+        assert(image.shape == (self.Q_Nx,self.Q_Ny)), "probe shape must match the datacube's diffraction space shape"
+        self.diffractionslices['probe_image'] = DiffractionSlice(
+            data=image, name='probe_image')
 
     def get_probe_size(self, **kwargs):
         """
@@ -764,95 +501,15 @@ class DataCube(DataObject):
         self.coordinates.set_alpha_pix(qr)
         self.coordinates.set_probe_center((qx0,qy0))
 
-    def measure_origin(self, **kwargs):
+    def show_probe_size(self):
         """
-        Measure the position of the origin for data with no beamstop,
-        and for which the center beam has the highest intensity. If
-        the maximal diffraction pattern hasn't been computed, this
-        function computes it. See process.calibration.origin.get_origin
-        for more info.
+        Show the measure size of the vacuum probe
         """
-        from ...process.calibration.origin import get_origin
-        if 'max_dp' not in self.diffractionslices.keys():
-            self.get_max_dp()
-        kwargs['dp_max'] = self.diffractionslices['max_dp'].data
-        qx0,qy0 = get_origin(self, **kwargs)
-        self.coordinates.set_origin_meas(qx0,qy0)
-
-    def fit_origin(self, **kwargs):
-        """
-        Performs a fit to the measured origin positions. See
-        process.calibration.origin.fit_origin for more info.
-        """
-        from ...process.calibration.origin import fit_origin
-        try:
-            origin_meas = self.coordinates.get_origin_meas()
-        except AttributeError or KeyError:
-            raise Exception('First run measure_origin!')
-        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
-        self.coordinates.set_origin(qx0_fit,qy0_fit)
-        self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
-
-    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
-        """
-        Fits the elliptical distortions using an annular ragion
-        of a bragg vector map
-        """
-        from ...process.calibration import fit_ellipse_1D
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
-        return p_ellipse
-
-    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
-        """
-
-        """
-        from ...process.utils import radial_integral
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
-        N = len(q)
-        coords = [('q',float),('I',float)]
-        data = np.zeros(N,coords)
-        data['q'] = q
-        data['I'] = I
-        radial_integral = PointList(coordinates=coords,data=data,
-                                    name=name_profile)
-        self.pointlists[name_profile] = radial_integral
-
-    def calibrate_dq(self,method='single_measurement',**kwargs):
-        """
-
-        """
-        methods = ['single_measurement',
-                   ]
-        assert(method in methods)
-        if method == 'single_measurement':
-            assert(all([x in kwargs.keys() for x in (
-                   'q_pix','q_known','units')]))
-            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
-            dq = 1. / ( qp * qk )
-            self.coordinates.set_Q_pixel_size(dq)
-            self.coordinates.set_Q_pixel_units(u+'^-1')
-
-    def calibrate_rotation(self,theta,flip):
-        """
-
-        Args:
-            theta (number): in radians
-            flip (bool):
-        """
-        self.coordinates.set_QR_rotation(theta)
-        self.coordinates.set_QR_flip(flip)
-
-
-
-
-
-    ############## diskdetection.py ############
+        from ...visualize import show_circles
+        assert('probe_image' in self.diffractionslices.keys())
+        show_circles(self.diffractionslices['probe_image'].data,
+                     self.coordinates.probe_center,
+                     self.coordinates.alpha_pix)
 
     def get_probe_kernel(self,method='sigmoid',**kwargs):
         """
@@ -906,6 +563,81 @@ class DataCube(DataObject):
         # save
         self.diffractionslices['probe_kernel'] = DiffractionSlice(data=probe_kernel,
                                                                   name='probe_kernel')
+
+    def show_probe_kernel(self,R=None,L=None,W=None):
+        """
+        Visualize the probe kernel.
+
+        Args:
+            R (int): side length of displayed image, in pixels
+            L (int): the line profile length
+            W (int): the line profile integration window width
+        """
+        from ...visualize import show_kernel
+        assert('probe_kernel' in self.diffractionslices.keys())
+        if R is None:
+            try:
+                R = int( 5*self.coordinates.alpha_pix )
+            except NameError:
+                R = self.Q_Nx // 4
+        if L is None:
+            L = 2*R
+        if W is None:
+            W = 1
+        show_kernel(self.diffractionslices['probe_kernel'].data,R,L,W)
+
+
+
+
+
+    ############# disk detection ###############
+
+    def show_some_dps(self,positions,im=None,colors=None,
+                          HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+                          **kwargs):
+        """
+        Shows two plots: a real space image with the pixels at `positions`
+        highlighted, and a grid of the diffraction patterns from these
+        scan positions.
+
+        Args:
+            positions (len N list or tuple of 2-tuples): the scan positions
+            im (str or None): name of a real space image stored in datacube.
+                Defaults to 'BF'.
+            colors (len N list of colors or None):
+            HW (2-tuple of ints): diffraction pattern grid shape
+            figsize_im (2-tuple): size of the image figure
+            figsize_dp (2-tuple): size of each diffraction pattern panel
+            **kwargs (dict): arguments passed to visualize.show for the
+                *diffraction patterns*. Default is `scaling='log'`
+        """
+        from ...visualize.vis_special import show_selected_dps
+        show_selected_dps(self,positions,im=im,colors=colors,
+                HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
+
+    def show_some_bragg_disks(self,colors=None,HW=None,figsize_dp=(4,4),
+                              **kwargs):
+        """
+        Shows the positions of Bragg disks detected with
+        self.find_some_bragg_disks.
+
+        Args:
+            colors (list of colors or None):
+            HW (2-tuple of ints): diffraction pattern grid shape
+            figsize_dp (2-tuple): size of each diffraction pattern panel
+            **kwargs (dict): arguments passed to visualize.show for the
+                *diffraction patterns*. Default is `scaling='log'`
+        """
+        from ...visualize.vis_special import show_selected_dps
+        assert('braggpeaks_some_dps' in self.pointlists.keys()), "First run find_some_bragg_disks!"
+        braggpeaks = self.pointlists['braggpeaks_some_dps']
+        positions = self.pointlists['_braggpeaks_some_dps_positions']
+        try:
+            alpha = self.coordinates.alpha_pix
+        except NameError:
+            alpha = None
+        show_selected_dps(self,positions,bragg_pos=braggpeaks,alpha=alpha,
+                          colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
     def find_some_bragg_disks(self,positions,**kwargs):
         """
@@ -1026,6 +758,307 @@ class DataCube(DataObject):
 
 
 
+
+
+    ############# calibration #################
+
+    def measure_origin(self, **kwargs):
+        """
+        Measure the position of the origin for data with no beamstop,
+        and for which the center beam has the highest intensity. If
+        the maximal diffraction pattern hasn't been computed, this
+        function computes it. See process.calibration.origin.get_origin
+        for more info.
+        """
+        from ...process.calibration.origin import get_origin
+        if 'max_dp' not in self.diffractionslices.keys():
+            self.get_max_dp()
+        kwargs['dp_max'] = self.diffractionslices['max_dp'].data
+        qx0,qy0 = get_origin(self, **kwargs)
+        self.coordinates.set_origin_meas(qx0,qy0)
+
+    def fit_origin(self, **kwargs):
+        """
+        Performs a fit to the measured origin positions. See
+        process.calibration.origin.fit_origin for more info.
+        """
+        from ...process.calibration.origin import fit_origin
+        try:
+            origin_meas = self.coordinates.get_origin_meas()
+        except AttributeError or KeyError:
+            raise Exception('First run measure_origin!')
+        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
+        self.coordinates.set_origin(qx0_fit,qy0_fit)
+        self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
+
+    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
+        """
+        Fits the elliptical distortions using an annular ragion
+        of a bragg vector map
+        """
+        from ...process.calibration import fit_ellipse_1D
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        return p_ellipse
+
+    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
+        """
+
+        """
+        from ...process.utils import radial_integral
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
+        N = len(q)
+        coords = [('q',float),('I',float)]
+        data = np.zeros(N,coords)
+        data['q'] = q
+        data['I'] = I
+        radial_integral = PointList(coordinates=coords,data=data,
+                                    name=name_profile)
+        self.pointlists[name_profile] = radial_integral
+
+    def calibrate_dq(self,method='single_measurement',**kwargs):
+        """
+
+        """
+        methods = ['single_measurement',
+                   ]
+        assert(method in methods)
+        if method == 'single_measurement':
+            assert(all([x in kwargs.keys() for x in (
+                   'q_pix','q_known','units')]))
+            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
+            dq = 1. / ( qp * qk )
+            self.coordinates.set_Q_pixel_size(dq)
+            self.coordinates.set_Q_pixel_units(u+'^-1')
+
+    def calibrate_rotation(self,theta,flip):
+        """
+
+        Args:
+            theta (number): in radians
+            flip (bool):
+        """
+        self.coordinates.set_QR_rotation(theta)
+        self.coordinates.set_QR_flip(flip)
+
+    def show_origin_meas(self):
+        """
+        Show the measured origin positions
+        """
+        from ...visualize import show_origin_meas
+        show_origin_meas(self)
+
+    def show_origin_fit(self):
+        """
+        Show the fit origin positions
+        """
+        from ...visualize import show_origin_fit
+        show_origin_fit(self)
+
+
+
+
+
+
+    ############## visualize ###################
+
+    def show(self, dp=None, **kwargs):
+        """
+        Show a single *diffraction shaped* 2D slice of the dataset,
+        passing any **kwargs to the visualize.show function.
+        Default scaling is 'log'.
+
+        Args:
+            dp (None or 2-tuple or str): Specifies the data to show.
+            Behavior depends on the argument type:
+                - (None) the maximal dp, if it exists. else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached DiffractionSlice of this name, if it exists
+        """
+        from ...visualize import show
+        if dp is None:
+            try:
+                dp = self.diffractionslices['max_dp'].data
+                title = 'max_dp'
+            except KeyError:
+                dp = virtualimage.get_dp(self,(0,0))
+                title = 'dp 0,0'
+        elif isinstance(dp,(tuple,list)):
+            assert(len(dp)==2)
+            title = 'dp {},{}'.format(dp[0],dp[1])
+            dp = virtualimage.get_dp(self,dp)
+        elif isinstance(dp,str):
+            try:
+                title = dp
+                dp = self.diffractionslices[dp].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(dp))
+        else:
+            raise Exception("Invalid type, {}".format(type(dp)))
+
+        if 'scaling' not in kwargs:
+            kwargs['scaling'] = 'log'
+        if 'title' not in kwargs:
+            kwargs['title'] = title
+        show(dp,**kwargs)
+
+    def show_im(self, im=None, **kwargs):
+        """
+        Show a single *real shaped* 2D slice of the dataset,
+        passing any **kwargs to the visualize.show function.
+
+        Args:
+            im (None or 2-tuple or str): Specifies the data to show.
+            Behavior depends on the argument type:
+                - (None) the sum image, if it exists. else, the virtual image
+                  from a point detector at the center of the detector
+                - (2-tuple) the virtual image from a point detector at (qx,qy)
+                - (string) the attached RealSlice of this name, if it exists
+        """
+        from ...visualize import show
+        if im is None:
+            try:
+                im = self.realslices['sum_im'].data
+                title = 'sum_im'
+            except KeyError:
+                qx,qy = self.Q_Nx//2,self.Q_Ny//2
+                im = virtualimage.get_im(self,
+                                         geometry=(qx,qy),
+                                         detector='point')
+                title = 'im {},{}'.format(qx,qy)
+        elif isinstance(im,(tuple,list)):
+            assert(len(im)==2)
+            title = 'im {},{}'.format(im[0],im[1])
+            im = virtualimage.get_im(self,im,'point')
+        elif isinstance(im,str):
+            try:
+                title = im
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+        else:
+            raise Exception("Invalid type, {}".format(type(im)))
+
+        if 'title' not in kwargs:
+            kwargs['title'] = title
+        show(im,**kwargs)
+
+
+
+
+    ############## bragg vector maps ################
+
+    def set_bvm_vis_params(self,**kwargs):
+        self.bvm_vis_params = kwargs
+
+    def show_bvm(self,name='bvm',**vis_params):
+        """
+
+        Args:
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,**vis_params)
+
+    def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple):
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
+                      'radii':radii,'fill':True,
+                      'alpha':0.3,'color':'y'},
+             **vis_params)
+
+    def show_elliptical_fit_bragg(self,radii,p_ellipse,name='bvm',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple):
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        center = bvm.shape[0]/2,bvm.shape[1]/2
+        _,_,a,b,theta = p_ellipse
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':center,'radii':radii,'fill':True,
+                      'alpha':0.2,'color':'y'},
+             ellipse={'center':center,'a':a,'b':b,'theta':theta,
+                       'color':'r','alpha':0.7,'linewidth':2},
+             **vis_params)
+
+    def show_bvm_radial_integral(self,name='bvm',ymax=None,q_ref=None,
+                                 returnfig=False):
+        """
+
+        Args:
+            name (str): which bvm to show. Passing 'bvm' shows the
+                most calibrated bvm. Other options refer to which
+                calibrations have been performed, and include
+                'uncalibrated', 'origin','ellipse','dq','rotflip'
+        """
+        from ...visualize import show_qprofile
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        assert(name_profile in self.pointlists.keys())
+        profile = self.pointlists[name_profile]
+        dq = self.coordinates.get_Q_pixel_size()
+        units = self.coordinates.get_Q_pixel_units()
+        q = profile.data['q'] * dq
+        if ymax is None:
+            n = len(profile.data)
+            ymax = np.max(profile.data['I'][n//4:]) * 1.2
+        fig,ax = show_qprofile(q=q,intensity=profile.data['I'],ymax=ymax,
+                      xlabel='q ('+units+')',returnfig=True)
+        if q_ref is not None:
+            ax.vlines(q_ref,0,ax.get_ylim()[1],color='r')
+        if returnfig:
+            return fig,ax
+        else:
+            import matplotlib.pyplot as plt
+            plt.show()
+
+
+
+
+
+
+
+    ############## diskdetection.py ############
+
+
     ############ braggvectormap.py #############
 
     def get_bvm(self,name='_best',overwrite=False):
@@ -1141,38 +1174,6 @@ class DataCube(DataObject):
 
 
 
-
-
-    ############ Miscellaneous methods #############
-
-    def add_diffraction_slice(self,data,name=None):
-        """
-        Attach an image to the datacube
-
-        Args:
-            image (2d array or DiffractionSlice):
-            name (str): label for the data, if None uses the name of the DiffractionSlice
-        """
-        assert(isinstance(data,(np.ndarray,DiffractionSlice))), "data must be an array or a DiffractionSlice"
-        if isinstance(data,np.ndarray):
-            assert(len(data.shape)==2)
-            assert(data.shape == (self.Q_Nx,self.Q_Ny))
-            assert(name is not None and isinstance(name,str)), "please specify a string to name this data"
-            data = DiffractionSlice(data=data,name=name)
-        else:
-            if name is None:
-                name = DiffractionSlice.name
-        self.diffractionslices[name] = data
-
-    def add_probe_image(self,image):
-        """
-        Attach an image of the electron probe over vacuum to the data
-
-        Args:
-            image (2d array):
-        """
-        assert(image.shape == (self.Q_Nx,self.Q_Ny)), "probe shape must match the datacube's diffraction space shape"
-        self.add_diffraction_slice(image,name='probe_image')
 
 
 
