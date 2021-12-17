@@ -12,6 +12,7 @@ from .diffraction import DiffractionSlice
 from .real import RealSlice
 from .coordinates import Coordinates
 from .pointlist import PointList
+from .braggpeaks import BraggPeaks
 from ...process import preprocess
 from ...process import virtualimage
 from ...process import virtualimage_viewer
@@ -457,14 +458,14 @@ class DataCube(DataObject):
         if method == 'gaussian':
             from ...process.diskdetection.probe import get_probe_kernel_edge_gaussian
             if 'sigma' not in kwargs.keys():
-                kwargs['sigma'] = alpha * 3.2                                       # discuss
+                kwargs['sigma'] = alpha * 3.2                           # discuss
             probe_kernel = get_probe_kernel_edge_gaussian(probe,**kwargs)
 
         if method == 'sigmoid':
             from ...process.diskdetection.probe import get_probe_kernel_edge_sigmoid
             if 'ri' not in kwargs.keys() or 'ro' not in kwargs.keys():
                 kwargs['ri'] = alpha
-                kwargs['ro'] = alpha * 2                                            # discuss
+                kwargs['ro'] = alpha * 2                                # discuss
             probe_kernel = get_probe_kernel_edge_sigmoid(probe,**kwargs)
 
         # save
@@ -576,11 +577,10 @@ class DataCube(DataObject):
         assert('probe_kernel' in self.diffractionslices.keys())
         peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
-        peaks.name = name
-        self.braggpeaks[name] = {
-            'raw':peaks,
-        }
-        return peaks
+        braggpeaks = BraggPeaks(peaks,self.coordinates)
+        braggpeaks.name = name
+        self.braggpeaks[name] = braggpeaks
+        return braggpeaks
 
 
 
@@ -628,38 +628,131 @@ class DataCube(DataObject):
 
 
 
+    ############# calibration ##############
+
+
+    ####### calibration measurements
+
+    def measure_origin(self, **kwargs):
+        """
+        Measure the position of the origin for data with no beamstop,
+        and for which the center beam has the highest intensity. If
+        the maximal diffraction pattern hasn't been computed, this
+        function computes it. See process.calibration.origin.get_origin
+        for more info.
+        """
+        from ...process.calibration.origin import get_origin
+        if 'max_dp' not in self.diffractionslices.keys():
+            self.get_max_dp()
+        kwargs['dp_max'] = self.diffractionslices['max_dp'].data
+        origin = get_origin(self, **kwargs)
+        self.coordinates.set_origin_meas(origin)
+
+    def fit_origin(self, **kwargs):
+        """
+        Performs a fit to the measured origin positions. See
+        process.calibration.origin.fit_origin for more info.
+        """
+        from ...process.calibration.origin import fit_origin
+        try:
+            origin_meas = self.coordinates.get_origin_meas()
+        except AttributeError or KeyError:
+            raise Exception('First run measure_origin!')
+        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
+        self.coordinates.set_origin((qx0_fit,qy0_fit))
+        self.coordinates.set_origin_residuals((qx0_residuals,qy0_residuals))
+
+    def show_origin_meas(self):
+        """
+        Show the measured origin positions
+        """
+        from ...visualize import show_origin_meas
+        show_origin_meas(self)
+
+    def show_origin_fit(self):
+        """
+        Show the fit origin positions
+        """
+        from ...visualize import show_origin_fit
+        show_origin_fit(self)
 
 
 
 
 
 
+    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
+        """
+        Fits the elliptical distortions using an annular ragion
+        of a bragg vector map
+        """
+        from ...process.calibration import fit_ellipse_1D
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        return p_ellipse
 
-
-
-
-
-
-
-
-
-
-
-
-###lksjdfsdlakjfdslkjfsdl###
-
-    def calibrate_bragg_origins(self):
+    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
         """
 
         """
-        from ...process.calibration import center_braggpeaks
-        assert('uncalibrated' in self.braggpeaks.keys())
-        assert(self.bragg_calstate_uncalibrated)
-        assert(not self.bragg_calstate_origin)
-        peaks = center_braggpeaks(self.braggpeaks['uncalibrated'],
-                                  coords=self.coordinates)
-        self.braggpeaks['origin'] = peaks
-        self.bragg_calstate_origin = True
+        from ...process.utils import radial_integral
+        assert(name in self.diffractionslices.keys())
+        bvm = self.diffractionslices[name].data
+        assert(name[:3]=='bvm')
+        name_profile = 'radial_integral_'+name
+        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
+        N = len(q)
+        coords = [('q',float),('I',float)]
+        data = np.zeros(N,coords)
+        data['q'] = q
+        data['I'] = I
+        radial_integral = PointList(coordinates=coords,data=data,
+                                    name=name_profile)
+        self.pointlists[name_profile] = radial_integral
+
+
+    ####### apply calibrations to coordinates
+
+    def calibrate_dq(self,method='single_measurement',**kwargs):
+        """
+
+        """
+        methods = ['single_measurement',
+                   ]
+        assert(method in methods)
+        if method == 'single_measurement':
+            assert(all([x in kwargs.keys() for x in (
+                   'q_pix','q_known','units')]))
+            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
+            dq = 1. / ( qp * qk )
+            self.coordinates.set_Q_pixel_size(dq)
+            self.coordinates.set_Q_pixel_units(u+'^-1')
+
+    def calibrate_rotation(self,theta,flip):
+        """
+        Args:
+            theta (number): in radians
+            flip (bool):
+        """
+        self.coordinates.set_QR_rotation(theta)
+        self.coordinates.set_QR_flip(flip)
+
+
+    ####### apply calibrations to bragg peaks
+
+    def calibrate_bragg_positions(self,name='braggpeaks'):
+        """
+        Calibrates bragg scattering positions.
+        """
+        peaks = self.braggpeaks[name]
+        assert(isinstance(peaks,BraggPeaks))
+        assert(self.coordinates is peaks.coordinates)
+        peaks.calibrate()
+
+
+
+
 
     def calibrate_bragg_elliptical_distortions(self,p_ellipse):
         """
@@ -704,6 +797,20 @@ class DataCube(DataObject):
         self.braggpeaks['rotflip'] = peaks
         self.bragg_calstate_rotflip = True
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+######meowmixmeowmix#########meow#####mix######
     def fit_bvm_radial_peak(self,lims,name='bvm',ymax=None):
         """
 
@@ -733,106 +840,6 @@ class DataCube(DataObject):
 
 
 
-
-    ############# calibration #################
-
-    def measure_origin(self, **kwargs):
-        """
-        Measure the position of the origin for data with no beamstop,
-        and for which the center beam has the highest intensity. If
-        the maximal diffraction pattern hasn't been computed, this
-        function computes it. See process.calibration.origin.get_origin
-        for more info.
-        """
-        from ...process.calibration.origin import get_origin
-        if 'max_dp' not in self.diffractionslices.keys():
-            self.get_max_dp()
-        kwargs['dp_max'] = self.diffractionslices['max_dp'].data
-        qx0,qy0 = get_origin(self, **kwargs)
-        self.coordinates.set_origin_meas(qx0,qy0)
-
-    def fit_origin(self, **kwargs):
-        """
-        Performs a fit to the measured origin positions. See
-        process.calibration.origin.fit_origin for more info.
-        """
-        from ...process.calibration.origin import fit_origin
-        try:
-            origin_meas = self.coordinates.get_origin_meas()
-        except AttributeError or KeyError:
-            raise Exception('First run measure_origin!')
-        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
-        self.coordinates.set_origin(qx0_fit,qy0_fit)
-        self.coordinates.set_origin_residuals(qx0_residuals,qy0_residuals)
-
-    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
-        """
-        Fits the elliptical distortions using an annular ragion
-        of a bragg vector map
-        """
-        from ...process.calibration import fit_ellipse_1D
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
-        return p_ellipse
-
-    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
-        """
-
-        """
-        from ...process.utils import radial_integral
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
-        N = len(q)
-        coords = [('q',float),('I',float)]
-        data = np.zeros(N,coords)
-        data['q'] = q
-        data['I'] = I
-        radial_integral = PointList(coordinates=coords,data=data,
-                                    name=name_profile)
-        self.pointlists[name_profile] = radial_integral
-
-    def calibrate_dq(self,method='single_measurement',**kwargs):
-        """
-
-        """
-        methods = ['single_measurement',
-                   ]
-        assert(method in methods)
-        if method == 'single_measurement':
-            assert(all([x in kwargs.keys() for x in (
-                   'q_pix','q_known','units')]))
-            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
-            dq = 1. / ( qp * qk )
-            self.coordinates.set_Q_pixel_size(dq)
-            self.coordinates.set_Q_pixel_units(u+'^-1')
-
-    def calibrate_rotation(self,theta,flip):
-        """
-
-        Args:
-            theta (number): in radians
-            flip (bool):
-        """
-        self.coordinates.set_QR_rotation(theta)
-        self.coordinates.set_QR_flip(flip)
-
-    def show_origin_meas(self):
-        """
-        Show the measured origin positions
-        """
-        from ...visualize import show_origin_meas
-        show_origin_meas(self)
-
-    def show_origin_fit(self):
-        """
-        Show the fit origin positions
-        """
-        from ...visualize import show_origin_fit
-        show_origin_fit(self)
 
 
 
@@ -936,6 +943,7 @@ class DataCube(DataObject):
                 dp = self.diffractionslices[dp].data
             except KeyError:
                 raise Exception("This datacube has no image called '{}'".format(dp))
+        return dp
 
     def _get_best_im(self,im=None):
         if im is None:

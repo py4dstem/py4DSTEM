@@ -1,3 +1,4 @@
+# TODO rm all copying of PLAs
 # Find the origin of diffraction space
 
 import numpy as np
@@ -263,7 +264,7 @@ def get_origin_brightest_disk(
         probe_mask_size=None,
         subpixel=None,
         upsample_factor=16,
-        mask=None):    
+        mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, by finding the
     brightest peak and then masking around that peak.
@@ -616,55 +617,35 @@ def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
     return mask, score, cutoff
 
 
-def center_braggpeaks(braggpeaks, qx0=None, qy0=None, coords=None, name=None):
+def center_braggpeaks(braggpeaks,origin):
     """
-    Shift the braggpeaks positions to center them about the origin, given
-    either by (qx0,qy0) or by the Coordinates instance coords. Either
-    (qx0,qy0) or coords must be specified.
+    Shift the braggpeaks positions to center them about the origin.
 
     Accepts:
-        braggpeaks  (PointListArray) the detected, unshifted bragg peaks
-        qx0,qy0     ((R_Nx,R_Ny)-shaped arrays) the position of the origin,
-                    or scalar values for constant origin position.
-        coords      (Coordinates) an object containing the origin positions
-        name        (str, optional) a name for the returned PointListArray.
-                    If unspecified, takes the old PLA name, removes '_raw'
-                    if present at the end of the string, then appends
-                    '_centered'.
+        braggpeaks (PointListArray): the detected, unshifted bragg peaks
+        origin (2-tuple): (qx0,qy0) either as scalars or as (R_Nx,R_Ny)-
+            shaped arrays
 
     Returns:
-        braggpeaks_centered  (PointListArray) the centered Bragg peaks
+        (PointListArray): the centered Bragg peaks
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert (qx0 is not None and qy0 is not None) != (
-        coords is not None
-    ), "Either (qx0,qy0) or coords must be specified"
-    if coords is not None:
-        qx0, qy0 = coords.get_origin()
-        assert (
-            qx0 is not None and qy0 is not None
-        ), "coords did not contain center position"
-    if name is None:
-        sl = braggpeaks.name.split("_")
-        _name = "_".join(
-            [s for i, s in enumerate(sl) if not (s == "raw" and i == len(sl) - 1)]
-        )
-        name = _name + "_centered"
-    assert isinstance(name, str)
-    braggpeaks_centered = braggpeaks.copy(name=name)
+    assert(len(origin)==2)
+    qx0,qy0 = origin
 
     if np.isscalar(qx0) & np.isscalar(qy0):
-        for Rx in range(braggpeaks_centered.shape[0]):
-            for Ry in range(braggpeaks_centered.shape[1]):
-                pointlist = braggpeaks_centered.get_pointlist(Rx, Ry)
+        for Rx in range(braggpeaks.shape[0]):
+            for Ry in range(braggpeaks.shape[1]):
+                pointlist = braggpeaks.get_pointlist(Rx, Ry)
                 pointlist.data["qx"] -= qx0
                 pointlist.data["qy"] -= qy0
     else:
-        for Rx in range(braggpeaks_centered.shape[0]):
-            for Ry in range(braggpeaks_centered.shape[1]):
-                pointlist = braggpeaks_centered.get_pointlist(Rx, Ry)
+        assert(all([q.shape==braggpeaks.shape for q in origin]))
+        for Rx in range(braggpeaks.shape[0]):
+            for Ry in range(braggpeaks.shape[1]):
+                pointlist = braggpeaks.get_pointlist(Rx, Ry)
                 qx, qy = qx0[Rx, Ry], qy0[Rx, Ry]
                 pointlist.data["qx"] -= qx
                 pointlist.data["qy"] -= qy
 
-    return braggpeaks_centered
+    return braggpeaks
