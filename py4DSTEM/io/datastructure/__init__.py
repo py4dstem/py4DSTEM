@@ -8,4 +8,5 @@ from .pointlist import *
 from .pointlistarray import *
 from .metadata import *
 from .coordinates import *
+from .braggpeaks import *
 
