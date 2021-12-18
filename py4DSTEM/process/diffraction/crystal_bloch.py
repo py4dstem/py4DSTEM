@@ -34,17 +34,34 @@ def calculate_dynamical_structure_factors(
     Args:
         accelerating_voltage (float):   accelerating voltage in eV
         method (str):                   Choose which parameterization of the structure factors to use:
-                                            "Lobato": Uses the kinematic structure factors from crystal.py
-                                            "Lobato-absorptive": Lobato factors plus an imaginary part
-                                                equal to 0.1•f, as a simple way to include absorption
-                                            "WK":   Uses the Weickenmeier-Kohl parameterization for
-                                                    the elastic form factors, including Debye-Waller factor,
-                                                    with no absorption.
-                                            "WK-C": WK form factors plus the "core" contribution to absorption
-                                                    following H. Rose, Optik 45:2 (1976)
-                                            "WK-P": WK form factors plus the phonon/TDS absorptive contribution
-                                            "WK-CP": WK form factors plus core and phonon absorption (default)
+            "Lobato": Uses the kinematic structure factors from crystal.py
+            "Lobato-absorptive": Lobato factors plus an imaginary part
+                equal to 0.1•f, as a simple way to include absorption
+            "WK":   Uses the Weickenmeier-Kohl parameterization for
+                    the elastic form factors, including Debye-Waller factor,
+                    with no absorption.
+            "WK-C": WK form factors plus the "core" contribution to absorption
+                    following H. Rose, Optik 45:2 (1976)
+            "WK-P": WK form factors plus the phonon/TDS absorptive contribution
+            "WK-CP": WK form factors plus core and phonon absorption (default)
+        k_max (float):                  max scattering length to compute structure factors to
+        debye_waller_B_factor (float):  B factor for attenuating form factors to account for thermal
+                                        broadening of the potential, only used when a "WK" method is
+                                        selected. Required when WK-P or WK-CP are selected.
+                                        Units are Å^2.
+        tol_structure_factor (float):   tolerance for removing low-valued structure factors
+
+        See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors. 
     """
+
+    assert method in (
+        "Lobato",
+        "Lobato-absorptive",
+        "WK",
+        "WK-C",
+        "WK-P",
+        "WK-CP",
+    ), "Invalid method specified."
 
     # Calculate the reciprocal lattice points to include based on k_max
 
@@ -155,10 +172,10 @@ def calculate_dynamical_structure_factors(
 
             # accumulate the real and imag portions separately (?)
             Freal += np.real(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:,i_hkl] @ self.positions[i_pos])
+                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
             )
             Fimag += np.imag(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:,i_hkl] @ self.positions[i_pos])
+                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
             )
         struct_factors[i_hkl] = Freal + 1.0j * Fimag
 
