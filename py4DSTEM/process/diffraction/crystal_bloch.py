@@ -144,7 +144,7 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in range(hkl.shape[0]):
+    for i_hkl in range(hkl.shape[1]):
         Freal = 0.0
         Fimag = 0.0
         for i_pos in range(self.positions.shape[0]):
@@ -155,10 +155,10 @@ def calculate_dynamical_structure_factors(
 
             # accumulate the real and imag portions separately (?)
             Freal += np.real(fe) * np.exp(
-                (2.0j * np.pi) * (hkl @ self.positions[i_pos])
+                (2.0j * np.pi) * (hkl[:,i_hkl] @ self.positions[i_pos])
             )
             Fimag += np.imag(fe) * np.exp(
-                (2.0j * np.pi) * (hkl @ self.positions[i_pos])
+                (2.0j * np.pi) * (hkl[:,i_hkl] @ self.positions[i_pos])
             )
         struct_factors[i_hkl] = Freal + 1.0j * Fimag
 
@@ -188,7 +188,7 @@ def calculate_dynamical_structure_factors(
     )
     self.Ug_dict = {
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
-        for i in range(self.hkl.shape[1])
+        for i in range(hkl.shape[1])
     }
     self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
 
