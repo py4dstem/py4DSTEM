@@ -161,7 +161,7 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in range(hkl.shape[1]):
+    for i_hkl in tqdm(range(hkl.shape[1]),desc="Computing dynamical SF lookup table"):
         Freal = 0.0
         Fimag = 0.0
         for i_pos in range(self.positions.shape[0]):
@@ -211,7 +211,6 @@ def generate_dynamical_diffraction_pattern(
     thickness: Union[float, list, tuple, np.ndarray],
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
-    naive_absorption: bool = False,
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
@@ -240,8 +239,6 @@ def generate_dynamical_diffraction_pattern(
                                          Can also be a 3x3 orientation matrix (zone axis 3rd column)
         foil_normal:                     3 element foil normal - set to None to use zone_axis
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-        naive_absorption (bool):        Add an imaginary component that is 10% of the real component
-                                        as an __extremely__ simple approximation of absorption
 
     Less commonly used args:
         always_return_list (bool):      When True, the return is always a list of PointLists,
@@ -313,9 +310,6 @@ def generate_dynamical_diffraction_pattern(
             ],
             dtype=np.complex128,
         ).reshape(beam_g.shape)
-
-        if naive_absorption:
-            U_gmh *= 1.0 + 0.1j
 
     # If we are supposed to cache, but don't have one saved, save this one:
     if (
@@ -418,7 +412,6 @@ def generate_CBED(
     DP_size_inv_A: Optional[float] = None,
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
-    naive_absorption: bool = False,
     dtype: np.dtype = np.float32,
     verbose: bool = False,
     progress_bar: bool = True,
@@ -443,8 +436,6 @@ def generate_CBED(
                                          Can also be a 3x3 orientation matrix (zone axis 3rd column)
         foil_normal:                     3 element foil normal - set to None to use zone_axis
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-        naive_absorption (bool):        Add an imaginary component that is 10% of the real component
-                                        as an __extremely__ simple approximation of absorption
 
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
@@ -517,7 +508,6 @@ def generate_CBED(
             thickness=thickness,
             zone_axis=tZA[i],
             foil_normal=foil_normal,
-            naive_absorption=naive_absorption,
             always_return_list=True,
             dynamical_matrix_cache=Ugmh_cache,
         )
