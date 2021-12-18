@@ -7,8 +7,9 @@ from tqdm import tqdm
 from dataclasses import dataclass
 
 from ...io.datastructure import PointList
-from ..utils import electron_wavelength_angstrom
+from ..utils import electron_wavelength_angstrom, single_atom_scatter
 from ..dpc import get_interaction_constant
+from .WK_scattering_factors import compute_WK_factor
 
 
 @dataclass
@@ -18,8 +19,161 @@ class DynamicalMatrixCache:
 
 
 def calculate_dynamical_structure_factors(
-    self, accelerating_voltage: float, cartesian_directions: bool = True
+    self,
+    accelerating_voltage: float,
+    method: str = "WK-CP",
+    k_max: float = 2.0,
+    debye_waller_B_factor: float = None,
+    tol_structure_factor: float = 1.0e-4,
+    cartesian_directions: bool = True,
 ):
+    """
+    Calculate and store the relativistic corrected structure factors used for Bloch computations
+    in a dictionary for faster lookup.
+
+    Args:
+        accelerating_voltage (float):   accelerating voltage in eV
+        method (str):                   Choose which parameterization of the structure factors to use:
+                                            "Lobato": Uses the kinematic structure factors from crystal.py
+                                            "Lobato-absorptive": Lobato factors plus an imaginary part
+                                                equal to 0.1•f, as a simple way to include absorption
+                                            "WK":   Uses the Weickenmeier-Kohl parameterization for
+                                                    the elastic form factors, including Debye-Waller factor,
+                                                    with no absorption.
+                                            "WK-C": WK form factors plus the "core" contribution to absorption
+                                                    following H. Rose, Optik 45:2 (1976)
+                                            "WK-P": WK form factors plus the phonon/TDS absorptive contribution
+                                            "WK-CP": WK form factors plus core and phonon absorption (default)
+    """
+
+    # Calculate the reciprocal lattice points to include based on k_max
+
+    k_max = np.asarray(k_max)
+
+    # Inverse lattice vectors
+    lat_inv = np.linalg.inv(self.lat_real)
+
+    # Find shortest lattice vector direction
+    k_test = np.vstack(
+        [
+            lat_inv[0, :],
+            lat_inv[1, :],
+            lat_inv[2, :],
+            lat_inv[0, :] + lat_inv[1, :],
+            lat_inv[0, :] + lat_inv[2, :],
+            lat_inv[1, :] + lat_inv[2, :],
+            lat_inv[0, :] + lat_inv[1, :] + lat_inv[2, :],
+            lat_inv[0, :] - lat_inv[1, :] + lat_inv[2, :],
+            lat_inv[0, :] + lat_inv[1, :] - lat_inv[2, :],
+            lat_inv[0, :] - lat_inv[1, :] - lat_inv[2, :],
+        ]
+    )
+    k_leng_min = np.min(np.linalg.norm(k_test, axis=1))
+
+    # Tile lattice vectors
+    num_tile = np.ceil(k_max / k_leng_min)
+    ya, xa, za = np.meshgrid(
+        np.arange(-num_tile, num_tile + 1),
+        np.arange(-num_tile, num_tile + 1),
+        np.arange(-num_tile, num_tile + 1),
+    )
+    hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
+    g_vec_all = lat_inv @ hkl
+
+    # Delete lattice vectors outside of k_max
+    keep = np.linalg.norm(g_vec_all, axis=0) <= k_max
+    hkl = hkl[:, keep]
+    g_vec_all = g_vec_all[:, keep]
+    g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
+
+    # We do not precompute form factors here, instead we rely on using
+    # automatic caching of the form factors.
+    # TODO: Implement caching for Lobato factors
+
+    lobato_lookup = single_atom_scatter()
+
+    def get_f_e(q, Z, B, method):
+        if method == "Lobato":
+            # Real lobato factors
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
+            return np.complex128(lobato_lookup.fe)
+        elif method == "Lobato-absorptive":
+            # Fake absorptive Lobato factors
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
+            return np.complex128(lobato_lookup.fe + 0.1j * lobato_lookup.fe)
+        elif method == "WK":
+            # Real WK factor
+            return compute_WK_factor(
+                float(q),
+                int(Z),
+                float(accelerating_voltage),
+                float(debye_waller_B_factor),
+                include_core=False,
+                include_phonon=False,
+            )
+        elif method == "WK-C":
+            # WK, core only
+            return compute_WK_factor(
+                float(q),
+                int(Z),
+                float(accelerating_voltage),
+                float(debye_waller_B_factor),
+                include_core=True,
+                include_phonon=False,
+            )
+        elif method == "WK-P":
+            # WK, phonon only
+            return compute_WK_factor(
+                float(q),
+                int(Z),
+                float(accelerating_voltage),
+                float(debye_waller_B_factor),
+                include_core=False,
+                include_phonon=True,
+            )
+        elif method == "WK-CP":
+            # WK, core + phonon
+            return compute_WK_factor(
+                float(q),
+                int(Z),
+                float(accelerating_voltage),
+                float(debye_waller_B_factor),
+                include_core=True,
+                include_phonon=True,
+            )
+
+    # Calculate structure factors
+    struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
+    for i_hkl in range(hkl.shape[0]):
+        Freal = 0.0
+        Fimag = 0.0
+        for i_pos in range(self.positions.shape[0]):
+            # Get the appropriate atomic form factor:
+            fe = get_f_e(
+                g_vec_leng[i_hkl], self.numbers[i_pos], debye_waller_B_factor, method
+            )
+
+            # accumulate the real and imag portions separately (?)
+            Freal += np.real(fe) * np.exp(
+                (2.0j * np.pi) * (hkl @ self.positions[i_pos])
+            )
+            Fimag += np.imag(fe) * np.exp(
+                (2.0j * np.pi) * (hkl @ self.positions[i_pos])
+            )
+        struct_factors[i_hkl] = Freal + 1.0j * Fimag
+
+    # Divide by unit cell volume
+    unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
+    struct_factors /= unit_cell_volume
+
+    # Remove structure factors below tolerance level
+    keep = np.abs(struct_factors) > tol_structure_factor
+    hkl = hkl[:, keep]
+
+    g_vec_all = g_vec_all[:, keep]
+    g_vec_leng = g_vec_leng[keep]
+    struct_factors = struct_factors[keep]
+
     # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
     # Relativistic correction to the potentials [2.38]
 
@@ -33,8 +187,7 @@ def calculate_dynamical_structure_factors(
         / (np.pi * electron_wavelength_angstrom(self.accel_voltage))
     )
     self.Ug_dict = {
-        (self.hkl[0, i], self.hkl[1, i], self.hkl[2, i]): prefactor
-        * self.struct_factors[i]
+        (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(self.hkl.shape[1])
     }
     self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
