@@ -218,7 +218,7 @@ def compute_WK_factor(
         print(f"Fscatt:{Fscatt}")
 
     return (
-        Fscatt * 0.4787801 * 0.664840340614319 * 100.0 / (4.0 * np.pi)
+        Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
     )  # convert to Volts, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
     # I am really not certain about these factors! AARGH
 
