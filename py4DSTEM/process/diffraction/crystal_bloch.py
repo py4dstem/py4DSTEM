@@ -198,11 +198,6 @@ def calculate_dynamical_structure_factors(
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
     self.cartesian_directions = cartesian_directions
 
-    prefactor = (
-        47.86
-        * get_interaction_constant(self.accel_voltage)
-        / (np.pi * electron_wavelength_angstrom(self.accel_voltage))
-    )
     self.Ug_dict = {
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(hkl.shape[1])
