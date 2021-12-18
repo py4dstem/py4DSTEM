@@ -587,40 +587,33 @@ class DataCube(DataObject):
 
     ############## bragg vector maps ################
 
-    def get_bvm(self,peaks='braggpeaks',name='bvm'):
+    def get_bvm(self,peaks='braggpeaks',calibrated=True):
         """
-
+        Args:
+            peaks (str): specifies a BraggPeaks instance to use, which
+                must alread exist in datacube.braggpeaks
+            calibrated (bool): if True tries to use the calibrated
+                peak positions; if they are not found or if False,
+                uses the raw peak positions
         """
-        from ...process.diskdetection import get_bvm,get_bvm_raw
-        assert(peaks in self.braggpeaks.keys())
+        assert(peaks in self.braggpeaks.keys()), "Requested BraggPeaks can't be found"
         peaks = self.braggpeaks[peaks]
-        if calibrated:
-            peaks = peaks['cal']
-            bvm = get_bvm(peaks,self.Q_Nx,self.Q_Ny)
-        else:
-            peaks = peaks['raw']
-            bvm = get_bvm_raw(peaks,self.Q_Nx,self.Q_Ny)
-        bvm = DiffractionSlice(
-            data=bvm,
-            name=name)
-        self.diffractionslices[name] = bvm
+        bvm = peaks.get_bvm(calibrated=calibrated)
         return bvm
 
-    def show_bvm(self,name='bvm',**vis_params):
+    def show_bvm(self,peaks='braggpeaks',calibrated=True,**vis_params):
         """
 
         Args:
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
+            peaks (str): specifies a BraggPeaks instance to use
+            calibrated (bool): if True tries to use the calibrated
+                bvm; if it is not found or if False, show the raw bvm
         """
-        from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
-        show(bvm,**vis_params)
+        peaks.show_bvm(calibrated=calibrated,**vis_params)
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs
@@ -631,7 +624,7 @@ class DataCube(DataObject):
     ############# calibration ##############
 
 
-    ####### calibration measurements
+    ####### measure origin
 
     def measure_origin(self, **kwargs):
         """
@@ -677,20 +670,28 @@ class DataCube(DataObject):
         show_origin_fit(self)
 
 
+    # measure elliptical distortions
 
-
-
-
-    def fit_elliptical_distortions_bragg(self,fitradii,name='bvm_origin'):
+    def fit_elliptical_distortions_bragg(self,fitradii,peaks='braggpeaks'):
         """
         Fits the elliptical distortions using an annular ragion
         of a bragg vector map
         """
-        from ...process.calibration import fit_ellipse_1D
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        p_ellipse = peaks.fit_elliptical_distortions(fitradii)
+
+        # check that the ellipse params correctly wrote into coords
+        _p_ellipse = self.coordinates.get_p_ellipse()
+
+        #assert(np.array_equal(p_ellipse[0],_p_ellipse[0]))
+        #assert(np.array_equal(p_ellipse[1],_p_ellipse[1]))
+        assert(all([p_ellipse[i]==p_ellipse[i] for i in (2,3,4)]))
         return p_ellipse
+
+
+
+
 
     def get_bvm_radial_integral(self,name='bvm',dq=0.25):
         """
@@ -749,6 +750,15 @@ class DataCube(DataObject):
         assert(isinstance(peaks,BraggPeaks))
         assert(self.coordinates is peaks.coordinates)
         peaks.calibrate()
+
+    def calibrate_bragg_origins(self,name='braggpeaks'):
+        """
+        Calibrates bragg scattering positions.
+        """
+        peaks = self.braggpeaks[name]
+        assert(isinstance(peaks,BraggPeaks))
+        assert(self.coordinates is peaks.coordinates)
+        peaks.calibrate_origin()
 
 
 
@@ -961,41 +971,18 @@ class DataCube(DataObject):
                 raise Exception("This datacube has no image called '{}'".format(im))
         return im
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##### asfjdsljksdf #######
-
-    def bvm_fit_select_radii(self,radii,name='bvm',**vis_params):
+    def bvm_fit_select_radii(self,radii,peaks='braggpeaks',**vis_params):
         """
 
         Args:
             radii (2-tuple):
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
+            peaks (str): specifies a BraggPeaks instance to use
         """
         from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
+        assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
+        peaks = self.braggpeaks[peaks]
+        assert(peaks.bvms['cal_origin'] is not None), "Center the braggpeaks!"
+        bvm = peaks.bvms['cal_origin'].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,
@@ -1004,19 +991,18 @@ class DataCube(DataObject):
                       'alpha':0.3,'color':'y'},
              **vis_params)
 
-    def show_elliptical_fit_bragg(self,radii,p_ellipse,name='bvm',**vis_params):
+    def show_elliptical_fit_bragg(self,radii,p_ellipse,peaks='braggpeaks',**vis_params):
         """
 
         Args:
             radii (2-tuple):
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
+            peaks (str): specifies a BraggPeaks instance to use
         """
         from ...visualize import show
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
+        assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
+        peaks = self.braggpeaks[peaks]
+        assert(peaks.bvms['cal_origin'] is not None), "Center the braggpeaks!"
+        bvm = peaks.bvms['cal_origin'].data
         center = bvm.shape[0]/2,bvm.shape[1]/2
         _,_,a,b,theta = p_ellipse
         if len(vis_params)==0:
