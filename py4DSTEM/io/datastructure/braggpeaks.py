@@ -26,12 +26,14 @@ class BraggPeaks(DataObject):
         # containers for calibrated and uncalibrated bragg positions 
         self.peaks = {
             'raw':braggpeaks,
-            'cal':None
+            'cal':None,
+            'cal_origin':None
         }
         # and their bragg vector maps
         self.bvms = {
             'raw':None,
-            'cal':None
+            'cal':None,
+            'cal_origin':None
         }
 
         # coodinates / calibrations
@@ -62,9 +64,17 @@ class BraggPeaks(DataObject):
             from ...process.calibration import center_braggpeaks
             peaks = center_braggpeaks(peaks,(qx0,qy0))
         else:
-            print('...origin not found, skipping...')
+            print('...origin calibrations not found, skipping...')
 
         # Elliptical distortions
+        p_ellipse = self.coordinates.get_p_ellipse()
+        if all([x is not None for x in p_ellipse]):
+            print("...calibrating origin...")
+            from ...process.calibration import correct_braggpeak_elliptical_distortions
+            peaks = correct_braggpeak_elliptical_distortions(peaks,p_ellipse)
+        else:
+            print('...elliptical calibrations not found, skipping...')
+
 
         # Pixel size
 
@@ -73,12 +83,61 @@ class BraggPeaks(DataObject):
         del(self.peaks['cal'])
         self.peaks['cal'] = peaks
 
+    def calibrate_origin(self,get_bvm=True):
+        """
+        Calibrates the origin using calibration metadata from self.coordinates.
+        """
+        print('Copying data...')
+        peaks = self.peaks['raw'].copy()
+        print('Done.')
+
+        qx0,qy0 = self.coordinates.get_origin()
+        assert(qx0 is not None and qy0 is not None), "Origin calibrations not found!"
+        if qx0 is not None and qy0 is not None:
+            from ...process.calibration import center_braggpeaks
+            peaks = center_braggpeaks(peaks,(qx0,qy0))
+            del(self.peaks['cal_origin'])
+            self.peaks['cal_origin'] = peaks
+            if get_bvm:
+                self.get_bvm_origin()
+        else:
+            print('...origin not found, skipping...')
+
+    def fit_elliptical_distortions(self,fitradii):
+        """
+        Fits the elliptical distortions using an annular region
+        of a bragg vector map.
+
+        TODO: update fn to use peaks, not bvm
+        """
+        from ...process.calibration import fit_ellipse_1D
+        assert('cal_origin' in self.peaks.keys()), "Calibrate the origin!"
+        assert('cal_origin' in self.bvms.keys()), "Compute the origin-corrected BVM!"
+        peaks = self.peaks['cal_origin']
+        bvm = self.bvms['cal_origin'].data
+        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        _,_,a,b,theta = p_ellipse
+        self.coordinates.set_ellipse((a,b,theta))
+        return p_ellipse
 
 
 
 
 
     ####### bvm methods #######
+
+    def get_bvm(self,calibrated=True):
+        """
+        Args:
+            calibrated (bool): if True tries to use the calibrated
+                peak positions; if they are not found or if False,
+                uses the raw peak positions
+        """
+        if calibrated and self.peaks['cal'] is not None:
+            bvm = self.get_bvm_cal()
+        else:
+            bvm = self.get_bvm_raw()
+        return bvm
 
     def get_bvm_raw(self):
         """
@@ -101,10 +160,33 @@ class BraggPeaks(DataObject):
         self.bvms['cal'] = bvm
         return bvm
 
+    def get_bvm_origin(self):
+        """
+        """
+        from ...process.diskdetection import get_bvm
+        assert(self.peaks['cal_origin'] is not None), "Data has not been calibrated."
+        bvm = DiffractionSlice(
+            data=get_bvm(self.peaks['cal_origin'],self.Q_Nx,self.Q_Ny),
+            name='bvm_cal_origin')
+        self.bvms['cal_origin'] = bvm
+        return bvm
+
+    def show_bvm(self,calibrated=True,**vis_params):
+        """
+        Args:
+            calibrated (bool): if True tries to show the calibrated
+                bvm; if it is not found or if False, shows the raw bvm
+        """
+        if calibrated and self.bvms['cal'] is not None:
+            self.show_bvm_cal(**vis_params)
+        else:
+            self.show_bvm_raw(**vis_params)
+
     def show_bvm_raw(self,**vis_params):
         """
         """
         from ...visualize import show
+        assert(self.bvms['raw'] is not None), "BVM not found"
         bvm = self.bvms['raw'].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
@@ -114,7 +196,7 @@ class BraggPeaks(DataObject):
         """
         """
         from ...visualize import show
-        assert(self.peaks['cal'] is not None), "Data has not been calibrated."
+        assert(self.bvms['cal'] is not None), "BVM not found"
         bvm = self.bvms['cal'].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
@@ -130,14 +212,17 @@ class BraggPeaks(DataObject):
 
 
 
+
+
+
 ### Read/Write
+
+# TODO TODO TODO
 
 def save_braggpeaks_group(group, braggpeaks):
     """
     Expects an open .h5 group and a BraggPeaks instance; saves to the group
     """
-    # TODO WRITE THESE FNS
-    # save_pointlistarray_group below
     try:
         n_coords = len(pointlistarray.dtype.names)
     except:
