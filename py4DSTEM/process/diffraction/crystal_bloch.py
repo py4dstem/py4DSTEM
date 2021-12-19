@@ -109,6 +109,8 @@ def calculate_dynamical_structure_factors(
 
     lobato_lookup = single_atom_scatter()
 
+    from functools import lru_cache
+    @lru_cache(maxsize=2**12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
             # Real lobato factors
@@ -161,7 +163,7 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(range(hkl.shape[1]),desc="Computing dynamical SF lookup table"):
+    for i_hkl in tqdm(range(hkl.shape[1]),desc=f"Computing {method} lookup table"):
         Freal = 0.0
         Fimag = 0.0
         for i_pos in range(self.positions.shape[0]):
@@ -202,7 +204,10 @@ def calculate_dynamical_structure_factors(
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(hkl.shape[1])
     }
-    self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
+    # self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
+
+    # Clear cached WK factors to free up RAM
+    compute_WK_factor.cache_clear()
 
 
 def generate_dynamical_diffraction_pattern(
@@ -336,7 +341,7 @@ def generate_dynamical_diffraction_pattern(
     )
 
     # Fill in the diagonal, completing the structure mattrx
-    np.fill_diagonal(U_gmh, 2 * k0 * sg)
+    np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j*np.imag(self.Ug_dict[(0,0,0)]))
 
     if verbose:
         print(f"Constructing the A matrix took {(time()-t0)*1000.:.3f} ms.")
