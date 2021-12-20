@@ -579,6 +579,7 @@ class DataCube(DataObject):
                                  **disk_detec_params)
         braggpeaks = BraggPeaks(peaks,self.coordinates)
         braggpeaks.name = name
+        braggpeaks.set_bvm_vis_params(**self.bvm_vis_params)
         self.braggpeaks[name] = braggpeaks
         return braggpeaks
 
@@ -587,36 +588,38 @@ class DataCube(DataObject):
 
     ############## bragg vector maps ################
 
-    def get_bvm(self,peaks='braggpeaks',calibrated=True):
+    def get_bvm(self,which='raw',peaks='braggpeaks'):
         """
         Args:
+            which (str): Which bvm to compute, i.e. the Bragg peak positions
+                at which stage of calibration to use. Must be in
+                ('origin','ellipse','pixel','all').
             peaks (str): specifies a BraggPeaks instance to use, which
                 must alread exist in datacube.braggpeaks
-            calibrated (bool): if True tries to use the calibrated
-                peak positions; if they are not found or if False,
-                uses the raw peak positions
         """
         assert(peaks in self.braggpeaks.keys()), "Requested BraggPeaks can't be found"
         peaks = self.braggpeaks[peaks]
-        bvm = peaks.get_bvm(calibrated=calibrated)
+        assert(which in peaks.bvms.keys()), "Requested BVM can't be found"
+        bvm = peaks.get_bvm(which=which)
         return bvm
 
-    def show_bvm(self,peaks='braggpeaks',calibrated=True,**vis_params):
+    def show_bvm(self,which='raw',peaks='braggpeaks',**vis_params):
         """
 
         Args:
+            which (str): Which bvm to show, i.e. the Bragg peak positions
+                at which stage of calibration to use. Must be in
+                ('origin','ellipse','pixel','all').
             peaks (str): specifies a BraggPeaks instance to use
-            calibrated (bool): if True tries to use the calibrated
-                bvm; if it is not found or if False, show the raw bvm
         """
         assert(peaks in self.braggpeaks.keys())
         peaks = self.braggpeaks[peaks]
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        peaks.show_bvm(calibrated=calibrated,**vis_params)
+        peaks.show_bvm(which=which,**vis_params)
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs
+        for key in self.braggpeaks.keys():
+            self.braggpeaks[key].set_bvm_vis_params(**kwargs)
 
 
 
@@ -684,14 +687,11 @@ class DataCube(DataObject):
         # check that the ellipse params correctly wrote into coords
         _p_ellipse = self.coordinates.get_p_ellipse()
 
-        #assert(np.array_equal(p_ellipse[0],_p_ellipse[0]))
-        #assert(np.array_equal(p_ellipse[1],_p_ellipse[1]))
         assert(all([p_ellipse[i]==p_ellipse[i] for i in (2,3,4)]))
         return p_ellipse
 
 
-
-
+    # measure the pixel size
 
     def get_bvm_radial_integral(self,name='bvm',dq=0.25):
         """
@@ -742,14 +742,23 @@ class DataCube(DataObject):
 
     ####### apply calibrations to bragg peaks
 
-    def calibrate_bragg_positions(self,name='braggpeaks'):
+    def calibrate_bragg_positions(self,which='all',name='braggpeaks'):
         """
         Calibrates bragg scattering positions.
+
+        Args:
+            which (str): Which calibrations to perform.  If 'all' is passed,
+                performs applies all the measured calibrations found in
+                self.coordinates. Otherwise, indicates that only calibrations up
+                to this one should be applied - must be in
+                ('origin','ellipse','pixel','all').
+            name (str): which set of Bragg peak positions to use
         """
+        assert(name in self.braggpeaks.keys())
         peaks = self.braggpeaks[name]
         assert(isinstance(peaks,BraggPeaks))
         assert(self.coordinates is peaks.coordinates)
-        peaks.calibrate()
+        peaks.calibrate(which=which)
 
     def calibrate_bragg_origins(self,name='braggpeaks'):
         """
@@ -981,8 +990,8 @@ class DataCube(DataObject):
         from ...visualize import show
         assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
         peaks = self.braggpeaks[peaks]
-        assert(peaks.bvms['cal_origin'] is not None), "Center the braggpeaks!"
-        bvm = peaks.bvms['cal_origin'].data
+        assert(peaks.bvms['origin'] is not None), "Center the braggpeaks!"
+        bvm = peaks.bvms['origin'].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,
@@ -1001,8 +1010,8 @@ class DataCube(DataObject):
         from ...visualize import show
         assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
         peaks = self.braggpeaks[peaks]
-        assert(peaks.bvms['cal_origin'] is not None), "Center the braggpeaks!"
-        bvm = peaks.bvms['cal_origin'].data
+        assert(peaks.bvms['origin'] is not None), "Center the braggpeaks and get the centered bvm!"
+        bvm = peaks.bvms['origin'].data
         center = bvm.shape[0]/2,bvm.shape[1]/2
         _,_,a,b,theta = p_ellipse
         if len(vis_params)==0:
