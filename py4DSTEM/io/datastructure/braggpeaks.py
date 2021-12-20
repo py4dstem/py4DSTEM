@@ -26,14 +26,16 @@ class BraggPeaks(DataObject):
         # containers for calibrated and uncalibrated bragg positions 
         self.peaks = {
             'raw':braggpeaks,
-            'cal':None,
-            'cal_origin':None
+            'all':None,
+            'origin':None,
+            'ellipse':None
         }
         # and their bragg vector maps
         self.bvms = {
             'raw':None,
-            'cal':None,
-            'cal_origin':None
+            'all':None,
+            'origin':None,
+            'ellipse':None
         }
 
         # coodinates / calibrations
@@ -46,12 +48,27 @@ class BraggPeaks(DataObject):
         self.set_bvm_vis_params(cmap='jet',scaling='log')
 
 
-    ####### calibration methods ######
+    ####### calibration - applying calibrations ######
 
-    def calibrate(self):
+    def calibrate(self,which='all',get_bvm=True):
         """
-        Calibrates using calibration metadata from self.coordinates.
+        Calibrates the peak positions.  The new calibrated PointListArray
+        of bragg peaks is both returned and stored in self.peaks[which].
+
+        Args:
+            which (str): Which calibrations to perform.  If 'all' is passed,
+                performs applies all the measured calibrations found in
+                self.coordinates. Otherwise, indicates that only calibrations up
+                to this one should be applied - must be in
+                ('origin','ellipse','pixel','all').
+            get_bvms (bool): If True, computes the bvm of the calibrated data.
+
+        Returns:
+            (variable) if get_bvm is False, returns the calibrated PointListArray.
+                if get_bvm is True, returns a 2-tuple of the calibrated data and the
+                bvm.
         """
+        assert(which in ('all','origin','ellipse','pixel')), "Invalid value for argument `which`, {}".format(which)
         print('Copying data...')
         peaks = self.peaks['raw'].copy()
         print('Done.')
@@ -63,8 +80,16 @@ class BraggPeaks(DataObject):
             print('...calibrating origin...')
             from ...process.calibration import center_braggpeaks
             peaks = center_braggpeaks(peaks,(qx0,qy0))
+            if which == 'origin':
+                del(self.peaks[which])
+                self.peaks[which] = peaks
+                if get_bvm:
+                    bvm = self.get_bvm(which=which)
+                    return peaks,bvm
+                return peaks
         else:
             print('...origin calibrations not found, skipping...')
+            if which == 'origin': return
 
         # Elliptical distortions
         p_ellipse = self.coordinates.get_p_ellipse()
@@ -72,36 +97,28 @@ class BraggPeaks(DataObject):
             print("...calibrating origin...")
             from ...process.calibration import correct_braggpeak_elliptical_distortions
             peaks = correct_braggpeak_elliptical_distortions(peaks,p_ellipse)
+            if which == 'ellipse':
+                del(self.peaks[which])
+                self.peaks[which] = peaks
+                if get_bvm:
+                    bvm = self.get_bvm(which=which)
+                    return peaks,bvm
+                return peaks
         else:
             print('...elliptical calibrations not found, skipping...')
+            if which == 'ellipse': return
 
 
         # Pixel size
 
         # Rotation
 
-        del(self.peaks['cal'])
-        self.peaks['cal'] = peaks
+        del(self.peaks['all'])
+        self.peaks['all'] = peaks
+        return peaks
 
-    def calibrate_origin(self,get_bvm=True):
-        """
-        Calibrates the origin using calibration metadata from self.coordinates.
-        """
-        print('Copying data...')
-        peaks = self.peaks['raw'].copy()
-        print('Done.')
 
-        qx0,qy0 = self.coordinates.get_origin()
-        assert(qx0 is not None and qy0 is not None), "Origin calibrations not found!"
-        if qx0 is not None and qy0 is not None:
-            from ...process.calibration import center_braggpeaks
-            peaks = center_braggpeaks(peaks,(qx0,qy0))
-            del(self.peaks['cal_origin'])
-            self.peaks['cal_origin'] = peaks
-            if get_bvm:
-                self.get_bvm_origin()
-        else:
-            print('...origin not found, skipping...')
+    ####### calibration - measuring calibrations ######
 
     def fit_elliptical_distortions(self,fitradii):
         """
@@ -111,10 +128,10 @@ class BraggPeaks(DataObject):
         TODO: update fn to use peaks, not bvm
         """
         from ...process.calibration import fit_ellipse_1D
-        assert('cal_origin' in self.peaks.keys()), "Calibrate the origin!"
-        assert('cal_origin' in self.bvms.keys()), "Compute the origin-corrected BVM!"
-        peaks = self.peaks['cal_origin']
-        bvm = self.bvms['cal_origin'].data
+        assert('origin' in self.peaks.keys()), "Calibrate the origin!"
+        assert('origin' in self.bvms.keys()), "Compute the origin-corrected BVM!"
+        peaks = self.peaks['origin']
+        bvm = self.bvms['origin'].data
         p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
         _,_,a,b,theta = p_ellipse
         self.coordinates.set_ellipse((a,b,theta))
@@ -126,85 +143,48 @@ class BraggPeaks(DataObject):
 
     ####### bvm methods #######
 
-    def get_bvm(self,calibrated=True):
+    def get_bvm(self,which='raw'):
+        """
+        Compute a bvm. Both returns and stores it in self.bvms[which].
+
+        Args:
+            which (str): Which bvm to compute, i.e. the Bragg peak positions
+                at which stage of calibration to use. Must be in
+                ('raw','origin','ellipse','pixel','all').
+
+        Returns:
+            (DiffractionSlice) the bvm
+        """
+        assert(which in ('raw','origin','ellipse','pixel','all')), "Invalid value for argument `which`, {}".format(which)
+        assert(self.peaks[which] is not None), "This calibration state has not been computed, please calibrate the peak positions first with `self.calibrate(which = {} )`".format(which)
+        peaks = self.peaks[which]
+        if which=='raw':
+            from ...process.diskdetection import get_bvm_raw as get_bvm
+        else:
+            from ...process.diskdetection import get_bvm
+        bvm = DiffractionSlice(
+            data=get_bvm(self.peaks[which],self.Q_Nx,self.Q_Ny),
+            name=which)
+        self.bvms[which] = bvm
+        return bvm
+
+    def show_bvm(self,which='raw',**vis_params):
         """
         Args:
-            calibrated (bool): if True tries to use the calibrated
-                peak positions; if they are not found or if False,
-                uses the raw peak positions
-        """
-        if calibrated and self.peaks['cal'] is not None:
-            bvm = self.get_bvm_cal()
-        else:
-            bvm = self.get_bvm_raw()
-        return bvm
-
-    def get_bvm_raw(self):
-        """
-        """
-        from ...process.diskdetection import get_bvm_raw
-        bvm = DiffractionSlice(
-            data=get_bvm_raw(self.peaks['raw'],self.Q_Nx,self.Q_Ny),
-            name='bvm_raw')
-        self.bvms['raw'] = bvm
-        return bvm
-
-    def get_bvm_cal(self):
-        """
-        """
-        from ...process.diskdetection import get_bvm
-        assert(self.peaks['cal'] is not None), "Data has not been calibrated."
-        bvm = DiffractionSlice(
-            data=get_bvm(self.peaks['cal'],self.Q_Nx,self.Q_Ny),
-            name='bvm_cal')
-        self.bvms['cal'] = bvm
-        return bvm
-
-    def get_bvm_origin(self):
-        """
-        """
-        from ...process.diskdetection import get_bvm
-        assert(self.peaks['cal_origin'] is not None), "Data has not been calibrated."
-        bvm = DiffractionSlice(
-            data=get_bvm(self.peaks['cal_origin'],self.Q_Nx,self.Q_Ny),
-            name='bvm_cal_origin')
-        self.bvms['cal_origin'] = bvm
-        return bvm
-
-    def show_bvm(self,calibrated=True,**vis_params):
-        """
-        Args:
-            calibrated (bool): if True tries to show the calibrated
-                bvm; if it is not found or if False, shows the raw bvm
-        """
-        if calibrated and self.bvms['cal'] is not None:
-            self.show_bvm_cal(**vis_params)
-        else:
-            self.show_bvm_raw(**vis_params)
-
-    def show_bvm_raw(self,**vis_params):
-        """
+            which (str): Which bvm to show, i.e. the Bragg peak positions
+                at which stage of calibration to use. Must be in
+                ('raw','origin','ellipse','pixel','all').
         """
         from ...visualize import show
-        assert(self.bvms['raw'] is not None), "BVM not found"
-        bvm = self.bvms['raw'].data
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,**vis_params)
-
-    def show_bvm_cal(self,**vis_params):
-        """
-        """
-        from ...visualize import show
-        assert(self.bvms['cal'] is not None), "BVM not found"
-        bvm = self.bvms['cal'].data
+        assert(which in ('raw','origin','ellipse','pixel','all')), "Invalid value for argument `which`, {}".format(which)
+        assert(self.bvms[which] is not None), "This bvm has not been computed, please compute it first with `self.get_bvm(which = {} )`".format(which)
+        bvm = self.bvms[which].data
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
         show(bvm,**vis_params)
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs
-
 
 
 
