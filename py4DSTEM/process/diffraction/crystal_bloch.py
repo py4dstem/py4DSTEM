@@ -26,7 +26,7 @@ def calculate_dynamical_structure_factors(
     thermal_sigma: float = None,
     tol_structure_factor: float = 1.0e-4,
     cartesian_directions: bool = True,
-    verbose = True,
+    verbose=True,
 ):
     """
     Calculate and store the relativistic corrected structure factors used for Bloch computations
@@ -53,7 +53,7 @@ def calculate_dynamical_structure_factors(
                                         Units are Å^2.
         tol_structure_factor (float):   tolerance for removing low-valued structure factors
 
-        See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors. 
+        See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
 
     assert method in (
@@ -112,7 +112,8 @@ def calculate_dynamical_structure_factors(
     lobato_lookup = single_atom_scatter()
 
     from functools import lru_cache
-    @lru_cache(maxsize=2**12)
+
+    @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
             # Real lobato factors
@@ -165,14 +166,16 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(range(hkl.shape[1]),desc=f"Computing {method} lookup table", disable = not verbose):
+    for i_hkl in tqdm(
+        range(hkl.shape[1]),
+        desc=f"Computing {method} lookup table",
+        disable=not verbose,
+    ):
         Freal = 0.0
         Fimag = 0.0
         for i_pos in range(self.positions.shape[0]):
             # Get the appropriate atomic form factor:
-            fe = get_f_e(
-                g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method
-            )
+            fe = get_f_e(g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method)
 
             # accumulate the real and imag portions separately (?)
             Freal += np.real(fe) * np.exp(
@@ -343,7 +346,7 @@ def generate_dynamical_diffraction_pattern(
     )
 
     # Fill in the diagonal, completing the structure mattrx
-    np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j*np.imag(self.Ug_dict[(0,0,0)]))
+    np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
 
     if verbose:
         print(f"Constructing the A matrix took {(time()-t0)*1000.:.3f} ms.")
