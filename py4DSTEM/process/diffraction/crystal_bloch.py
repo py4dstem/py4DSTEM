@@ -107,12 +107,11 @@ def calculate_dynamical_structure_factors(
 
     # We do not precompute form factors here, instead we rely on using
     # automatic caching of the form factors.
-    # TODO: Implement caching for Lobato factors
 
     lobato_lookup = single_atom_scatter()
 
     from functools import lru_cache
-
+    
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
