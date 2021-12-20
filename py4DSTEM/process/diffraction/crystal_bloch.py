@@ -208,7 +208,7 @@ def calculate_dynamical_structure_factors(
     # self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
 
     # Clear cached WK factors to free up RAM
-    compute_WK_factor.cache_clear()
+    get_f_e.cache_clear()
 
 
 def generate_dynamical_diffraction_pattern(

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import expi
-from functools import lru_cache
+# from functools import lru_cache
 
 from ..utils import electron_wavelength_angstrom
 
@@ -10,7 +10,7 @@ by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
 
-@lru_cache(maxsize=1024)
+# @lru_cache(maxsize=1024)
 def compute_WK_factor(
     g: float,
     Z: int,
@@ -189,7 +189,7 @@ def compute_WK_factor(
                 A1[jj]
                 * A1[jj]
                 * (
-                    DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL)
+                    DWF * RI1(B1[jj], B1[jj], G) + RI2(B1[jj], B1[jj], G, UL)
                 )  # should this be + or - ? others.f90 appears to disagree with WK paper...
             )
             for ii in range(jj + 1):
@@ -198,7 +198,7 @@ def compute_WK_factor(
                     * A1[jj]
                     * A1[ii]
                     * (
-                        DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL)
+                        DWF * RI1(B1[ii], B1[jj], G) + RI2(B1[ii], B1[jj], G, UL)
                     )  # should this be + or - ? others.f90 appears to disagree with WK paper...
                 )
         if verbose:
