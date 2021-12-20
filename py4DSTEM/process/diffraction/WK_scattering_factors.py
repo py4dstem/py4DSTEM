@@ -15,7 +15,7 @@ def compute_WK_factor(
     g: float,
     Z: int,
     accelerating_voltage: float,
-    debye_waller_B_factor: float = None,
+    thermal_sigma: float = None,
     include_core: bool = True,
     include_phonon: bool = True,
     verbose=False,
@@ -43,7 +43,7 @@ def compute_WK_factor(
                                         convention, 1/d_hkl in units of 1/Å
         Z (int):                        Atomic number. Data are available for H thru Cf (1 thru 98)
         accelerating_voltage (float):   Accelerating voltage in eV.
-        debye_waller_B_factor (float):  Debye-Waller factor for TDS, in Å^2
+        thermal_sigma (float):          RMS atomic displacement for TDS, in Å^2
         include_core (bool):            If True, include the core loss contribution to the absorptive
                                         form factors.
         include_phonon (bool):          If True, include the phonon/TDS contribution to the
@@ -64,9 +64,8 @@ def compute_WK_factor(
 
     accelerating_voltage_kV = accelerating_voltage / 1.0e3
 
-    if debye_waller_B_factor is not None:
-        UL = debye_waller_B_factor / (8.0 * np.pi ** 2)  # convert B in Å^2 to UL^2
-
+    if thermal_sigma is not None:
+        UL = thermal_sigma
         DWF = np.exp(-0.5 * UL ** 2 * G ** 2)
     else:
         UL = 0.0

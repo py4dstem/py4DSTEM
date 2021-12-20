@@ -23,7 +23,7 @@ def calculate_dynamical_structure_factors(
     accelerating_voltage: float,
     method: str = "WK-CP",
     k_max: float = 2.0,
-    debye_waller_B_factor: float = None,
+    thermal_sigma: float = None,
     tol_structure_factor: float = 1.0e-4,
     cartesian_directions: bool = True,
     verbose = True,
@@ -47,7 +47,7 @@ def calculate_dynamical_structure_factors(
             "WK-P": WK form factors plus the phonon/TDS absorptive contribution
             "WK-CP": WK form factors plus core and phonon absorption (default)
         k_max (float):                  max scattering length to compute structure factors to
-        debye_waller_B_factor (float):  B factor for attenuating form factors to account for thermal
+        thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
                                         Units are Å^2.
@@ -128,7 +128,7 @@ def calculate_dynamical_structure_factors(
                 float(q),
                 int(Z),
                 float(accelerating_voltage),
-                float(debye_waller_B_factor),
+                float(thermal_sigma),
                 include_core=False,
                 include_phonon=False,
             )
@@ -138,7 +138,7 @@ def calculate_dynamical_structure_factors(
                 float(q),
                 int(Z),
                 float(accelerating_voltage),
-                float(debye_waller_B_factor),
+                float(thermal_sigma),
                 include_core=True,
                 include_phonon=False,
             )
@@ -148,7 +148,7 @@ def calculate_dynamical_structure_factors(
                 float(q),
                 int(Z),
                 float(accelerating_voltage),
-                float(debye_waller_B_factor),
+                float(thermal_sigma),
                 include_core=False,
                 include_phonon=True,
             )
@@ -158,7 +158,7 @@ def calculate_dynamical_structure_factors(
                 float(q),
                 int(Z),
                 float(accelerating_voltage),
-                float(debye_waller_B_factor),
+                float(thermal_sigma),
                 include_core=True,
                 include_phonon=True,
             )
@@ -171,7 +171,7 @@ def calculate_dynamical_structure_factors(
         for i_pos in range(self.positions.shape[0]):
             # Get the appropriate atomic form factor:
             fe = get_f_e(
-                g_vec_leng[i_hkl], self.numbers[i_pos], debye_waller_B_factor, method
+                g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method
             )
 
             # accumulate the real and imag portions separately (?)
