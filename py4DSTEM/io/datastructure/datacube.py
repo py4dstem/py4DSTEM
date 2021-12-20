@@ -11,7 +11,6 @@ from .dataobject import DataObject
 from .diffraction import DiffractionSlice
 from .real import RealSlice
 from .coordinates import Coordinates
-from .pointlist import PointList
 from .braggpeaks import BraggPeaks
 from ...process import preprocess
 from ...process import virtualimage
@@ -53,15 +52,6 @@ class DataCube(DataObject):
         self.realslices = {}
         self.braggpeaks = {}
         self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
-        def add_diffractionslice(self,x):
-            x.coordinates = self.coordinates
-            self.diffractionslices[x.name] = x
-        def add_realslice(self,x):
-            x.coordinates = self.coordinates
-            self.realslices[x.name] = x
-        def add_braggpeaks(self,x):
-            x.coordinates = self.coordinates
-            self.braggpeaks[x.name] = x
 
         # initialize params
         # bvm visualization
@@ -693,42 +683,41 @@ class DataCube(DataObject):
 
     # measure the pixel size
 
-    def get_bvm_radial_integral(self,name='bvm',dq=0.25):
+    def get_bvm_radial_integral(self,which='ellipse',peaks='braggpeaks',dq=0.25):
         """
 
         """
-        from ...process.utils import radial_integral
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
-        N = len(q)
-        coords = [('q',float),('I',float)]
-        data = np.zeros(N,coords)
-        data['q'] = q
-        data['I'] = I
-        radial_integral = PointList(coordinates=coords,data=data,
-                                    name=name_profile)
-        self.pointlists[name_profile] = radial_integral
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        return peaks.get_radial_integral(which=which,dq=dq)
+
+    def fit_bvm_radial_peak(self,lims,which='ellipse',peaks='braggpeaks',
+                            show=False,ymax=None):
+        """
+
+        """
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        return peaks.fit_radial_peak(lims,which,show,ymax)
+
+    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
+        """
+        Computes the size of the Q-space pixels. Returns and also stores
+        the answer in self.coordinates.
+
+        Args:
+            q_meas (number): a measured distance in q-space in pixels
+            q_known (number): the corresponding known *real space* distance
+            unit (str): the units of the real space value of `q_known`
+        """
+        dq = self.coordinates.calculate_Q_pixel_size(q_meas,q_known,units)
+        return dq
+
+
+
 
 
     ####### apply calibrations to coordinates
-
-    def calibrate_dq(self,method='single_measurement',**kwargs):
-        """
-
-        """
-        methods = ['single_measurement',
-                   ]
-        assert(method in methods)
-        if method == 'single_measurement':
-            assert(all([x in kwargs.keys() for x in (
-                   'q_pix','q_known','units')]))
-            qp,qk,u = kwargs['q_pix'],kwargs['q_known'],kwargs['units']
-            dq = 1. / ( qp * qk )
-            self.coordinates.set_Q_pixel_size(dq)
-            self.coordinates.set_Q_pixel_units(u+'^-1')
 
     def calibrate_rotation(self,theta,flip):
         """
@@ -742,7 +731,7 @@ class DataCube(DataObject):
 
     ####### apply calibrations to bragg peaks
 
-    def calibrate_bragg_positions(self,which='all',name='braggpeaks'):
+    def calibrate_bragg_positions(self,which='all',peaks='braggpeaks'):
         """
         Calibrates bragg scattering positions.
 
@@ -752,10 +741,10 @@ class DataCube(DataObject):
                 self.coordinates. Otherwise, indicates that only calibrations up
                 to this one should be applied - must be in
                 ('origin','ellipse','pixel','all').
-            name (str): which set of Bragg peak positions to use
+            peaks (str): which set of Bragg peak positions to use
         """
-        assert(name in self.braggpeaks.keys())
-        peaks = self.braggpeaks[name]
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
         assert(isinstance(peaks,BraggPeaks))
         assert(self.coordinates is peaks.coordinates)
         peaks.calibrate(which=which)
@@ -830,32 +819,6 @@ class DataCube(DataObject):
 
 
 ######meowmixmeowmix#########meow#####mix######
-    def fit_bvm_radial_peak(self,lims,name='bvm',ymax=None):
-        """
-
-        """
-        from ...process.fit import fit_1D_gaussian,gaussian
-        from ...visualize import show_qprofile
-        assert(len(lims)==2)
-        assert(name in self.diffractionslices.keys())
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        assert(name_profile in self.pointlists.keys())
-        profile = self.pointlists[name_profile]
-
-        q,I = profile.data['q'],profile.data['I']
-        A,mu,sigma = fit_1D_gaussian(q,I,lims[0],lims[1])
-
-        if ymax is None:
-            n = len(profile.data)
-            ymax = np.max(profile.data['I'][n//4:]) * 1.2
-        fig,ax = show_qprofile(q,I,ymax=ymax,returnfig=True)
-        ax.vlines(lims,0,ax.get_ylim()[1],color='r')
-        ax.vlines(mu,0,ax.get_ylim()[1],color='g')
-        ax.plot(q,gaussian(q,A,mu,sigma),color='r')
-
-        return mu
-
 
 
 
@@ -1023,38 +986,22 @@ class DataCube(DataObject):
                        'color':'r','alpha':0.7,'linewidth':2},
              **vis_params)
 
-    def show_bvm_radial_integral(self,name='bvm',ymax=None,q_ref=None,
-                                 returnfig=False):
+    def show_bvm_radial_profile(self,which='ellipse',peaks='braggpeaks',ymax=None,
+                                 q_ref=None,returnfig=False):
         """
-
         Args:
-            name (str): which bvm to show. Passing 'bvm' shows the
-                most calibrated bvm. Other options refer to which
-                calibrations have been performed, and include
-                'uncalibrated', 'origin','ellipse','dq','rotflip'
+            which (str): Which radial integral to show.  Must be in
+                ('origin','ellipse','pixel','all').
+            peaks (str): which set of Bragg peak positions to use
+            ymax (number or None): the upper limit of the y-axis
+            q_ref (number or tuple/list of numbers or None): if not None, plot
+                reference lines at these positions on the q-axis
         """
-        from ...visualize import show_qprofile
-        assert(name in self.diffractionslices.keys())
-        bvm = self.diffractionslices[name].data
-        assert(name[:3]=='bvm')
-        name_profile = 'radial_integral_'+name
-        assert(name_profile in self.pointlists.keys())
-        profile = self.pointlists[name_profile]
-        dq = self.coordinates.get_Q_pixel_size()
-        units = self.coordinates.get_Q_pixel_units()
-        q = profile.data['q'] * dq
-        if ymax is None:
-            n = len(profile.data)
-            ymax = np.max(profile.data['I'][n//4:]) * 1.2
-        fig,ax = show_qprofile(q=q,intensity=profile.data['I'],ymax=ymax,
-                      xlabel='q ('+units+')',returnfig=True)
-        if q_ref is not None:
-            ax.vlines(q_ref,0,ax.get_ylim()[1],color='r')
-        if returnfig:
-            return fig,ax
-        else:
-            import matplotlib.pyplot as plt
-            plt.show()
+        assert(peaks in self.braggpeaks.keys())
+        peaks = self.braggpeaks[peaks]
+        f = peaks.show_radial_profile(which,ymax,q_ref,returnfig)
+        if returnfig: return f
+
 
 
 

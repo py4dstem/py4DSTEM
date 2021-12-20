@@ -171,6 +171,26 @@ class Coordinates(DataObject):
         return (qx0,qy0,a,b,theta)
 
 
+    # pixel sizes
+
+    def set_Q_pixel_size(self,x):
+        self.params['Q_pixel_size'] = x
+    def get_Q_pixel_size(self,rx=None,ry=None):
+        return self._get_value('Q_pixel_size',rx,ry)
+    def set_R_pixel_size(self,x):
+        self.params['R_pixel_size'] = x
+    def get_R_pixel_size(self,rx=None,ry=None):
+        return self._get_value('R_pixel_size',rx,ry)
+    def set_Q_pixel_units(self,x):
+        self.params['Q_pixel_units'] = x
+    def get_Q_pixel_units(self,rx=None,ry=None):
+        return self._get_value('Q_pixel_units',rx,ry)
+    def set_R_pixel_units(self,x):
+        self.params['R_pixel_units'] = x
+    def get_R_pixel_units(self,rx=None,ry=None):
+        return self._get_value('R_pixel_units',rx,ry)
+
+
 
 
 
@@ -187,16 +207,6 @@ class Coordinates(DataObject):
         self.Q_Nx = Q_Nx
     def set_Q_Ny(self,Q_Ny):
         self.Q_Ny = Q_Ny
-    def set_Q_pixel_size(self,Q_pixel_size):
-        self._validate_input(Q_pixel_size)
-        self.Q_pixel_size = Q_pixel_size
-    def set_Q_pixel_units(self,Q_pixel_units):
-        self.Q_pixel_units = Q_pixel_units
-    def set_R_pixel_size(self,R_pixel_size):
-        self._validate_input(R_pixel_size)
-        self.R_pixel_size = R_pixel_size
-    def set_R_pixel_units(self,R_pixel_units):
-        self.R_pixel_units = R_pixel_units
     def set_alpha_pix(self,alpha_pix):
         self.alpha_pix = alpha_pix
     def set_probe_center(self,probe_center):
@@ -216,14 +226,6 @@ class Coordinates(DataObject):
         return self.Q_Nx
     def get_Q_Ny(self):
         return self.Q_Ny
-    def get_Q_pixel_size(self):
-        return self._get_value(self.Q_pixel_size)
-    def get_Q_pixel_units(self):
-        return self.Q_pixel_units
-    def get_R_pixel_size(self):
-        return self._get_value(self.R_pixel_size)
-    def get_R_pixel_units(self):
-        return self.R_pixel_units
     def get_alpha_pix(self):
         return self.alpha_pix
     def get_probe_center(self):
@@ -245,6 +247,25 @@ class Coordinates(DataObject):
                 if isinstance(v,np.ndarray):
                     v = 'array'
                 print('{0:<16}\t{1:<16}'.format(k,v))
+
+
+    # calibration methods
+
+    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
+        """
+        Computes the size of the Q-space pixels. Returns and also stores
+        the answer.
+
+        Args:
+            q_meas (number): a measured distance in q-space in pixels
+            q_known (number): the corresponding known *real space* distance
+            unit (str): the units of the real space value of `q_known`
+        """
+        dq = 1. / ( q_meas * q_known )
+        self.set_Q_pixel_size(dq)
+        self.set_Q_pixel_units(units+'^-1')
+        return dq
+
 
 
 

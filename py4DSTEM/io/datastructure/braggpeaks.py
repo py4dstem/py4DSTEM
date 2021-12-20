@@ -1,8 +1,10 @@
 import numpy as np
 from copy import copy
 import h5py
+import matplotlib.pyplot as plt
 from .dataobject import DataObject
 from .pointlistarray import PointListArray
+from .pointlist import PointList
 from .diffraction import DiffractionSlice
 from .coordinates import Coordinates
 from ...process.utils import tqdmnd
@@ -37,6 +39,7 @@ class BraggPeaks(DataObject):
             'origin':None,
             'ellipse':None
         }
+        self.radial_profiles = {}
 
         # coodinates / calibrations
         self.coordinates = coordinates
@@ -110,6 +113,23 @@ class BraggPeaks(DataObject):
 
 
         # Pixel size
+        dq = self.coordinates.get_Q_pixel_size()
+        units = self.coordinates.get_Q_pixel_units()
+        if dq is not None:
+            assert(units is not None)
+            print("...calibrating Q pixel size...")
+            from ...process.calibration import calibrate_Bragg_peaks_pixel_size
+            peaks = calibrate_Bragg_peaks_pixel_size(peaks,q_pixel_size=dq)
+            if which == 'pixel':
+                del(self.peaks[which])
+                self.peaks[which] = peaks
+                if get_bvm:
+                    bvm = self.get_bvm(which=which)
+                    return peaks,bvm
+                return peaks
+        else:
+            print('...pixel calibration not found, skipping...')
+
 
         # Rotation
 
@@ -119,6 +139,8 @@ class BraggPeaks(DataObject):
 
 
     ####### calibration - measuring calibrations ######
+
+    # Elliptical distortions
 
     def fit_elliptical_distortions(self,fitradii):
         """
@@ -137,8 +159,111 @@ class BraggPeaks(DataObject):
         self.coordinates.set_ellipse((a,b,theta))
         return p_ellipse
 
+    # Pixel size
+
+    def get_radial_integral(self,which='ellipse',dq=0.25):
+        """
+
+        """
+        from ...process.utils import radial_integral
+        assert(which in self.bvms.keys())
+        bvm = self.bvms[which].data
+
+        q,I = radial_integral(bvm,self.Q_Nx/2,self.Q_Ny/2,dr=dq)
+        N = len(q)
+        coords = [('q',float),('I',float)]
+        data = np.zeros(N,coords)
+        data['q'] = q
+        data['I'] = I
+
+        ans = PointList(data=data,coordinates=coords,name=which)
+        self.radial_profiles[which] = ans
+        return ans
 
 
+    def fit_radial_peak(self,lims,which='ellipse',show=False,ymax=None):
+        """
+
+        """
+        from ...process.fit import fit_1D_gaussian,gaussian
+        assert(which in self.bvms.keys())
+        bvm = self.bvms[which].data
+        assert(len(lims)==2)
+        assert(which in self.radial_profiles.keys()), "This radial profile hasn't been computed"
+        profile = self.radial_profiles[which]
+
+        q,I = profile.data['q'],profile.data['I']
+        A,mu,sigma = fit_1D_gaussian(q,I,lims[0],lims[1])
+
+        if show: self.show_radial_peak_fit((A,mu,sigma),lims,which,ymax)
+        return mu
+
+    def show_radial_profile(self,which='ellipse',ymax=None,
+                            q_ref=None,returnfig=False):
+        """
+        Args:
+            which (str): Which radial integral to show.  Must be in
+                ('origin','ellipse','pixel','all').
+            ymax (number or None): the upper limit of the y-axis
+            q_ref (number or tuple/list of numbers or None): if not None, plot
+                reference lines at these positions on the q-axis
+        """
+        from ...visualize import show_qprofile
+        assert(which in self.radial_profiles.keys()), "This radial profile has not been computed"
+        profile = self.radial_profiles[which]
+        dq = self.coordinates.get_Q_pixel_size()
+        units = self.coordinates.get_Q_pixel_units()
+        if dq is not None:
+            assert(units is not None)
+            q = profile.data['q'] * dq
+        if ymax is None:
+            n = len(profile.data)
+            ymax = np.max(profile.data['I'][n//4:]) * 1.2
+        fig,ax = show_qprofile(q=q,intensity=profile.data['I'],ymax=ymax,
+                      xlabel='q ('+units+')',returnfig=True)
+        if q_ref is not None:
+            ax.vlines(q_ref,0,ax.get_ylim()[1],color='r')
+        if returnfig:
+            return fig,ax
+        else:
+            import matplotlib.pyplot as plt
+            plt.show()
+
+    def show_radial_peak_fit(self,p,lims,which='ellipse',ymax=None):
+        """
+        Args:
+            p (3-tuple): the params of the fit gaussian, (A,mu,sigma)
+            lims (2-tuple): the fit window
+            which (str): which calibration state to use
+            ymax (number): the upper limit of the y-axis
+        """
+        from ...visualize import show_qprofile
+        from ...process.fit import gaussian
+        assert(which in self.radial_profiles.keys()), "This radial profile hasn't been computed"
+        profile = self.radial_profiles[which]
+        q,I = profile.data['q'],profile.data['I']
+        A,mu,sigma = p
+        if ymax is None:
+            n = len(profile.data)
+            ymax = np.max(I[n//4:]) * 1.2
+        fig,ax = show_qprofile(q,I,ymax=ymax,returnfig=True)
+        ax.vlines(lims,0,ax.get_ylim()[1],color='r')
+        ax.vlines(mu,0,ax.get_ylim()[1],color='g')
+        ax.plot(q,gaussian(q,A,mu,sigma),color='r')
+        plt.show()
+
+    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
+        """
+        Computes the size of the Q-space pixels. Returns and also stores
+        the answer in self.coordinates.
+
+        Args:
+            q_meas (number): a measured distance in q-space in pixels
+            q_known (number): the corresponding known *real space* distance
+            unit (str): the units of the real space value of `q_known`
+        """
+        dq = self.coordinates.calculate_Q_pixel_size(q_meas,q_known,units)
+        return dq
 
 
     ####### bvm methods #######
@@ -162,8 +287,12 @@ class BraggPeaks(DataObject):
             from ...process.diskdetection import get_bvm_raw as get_bvm
         else:
             from ...process.diskdetection import get_bvm
+        dq = self.coordinates.get_Q_pixel_size()
+        if dq is not None:
+            print(dq)
+            xmax,ymax = int(np.round(self.Q_Nx*dq)),int(np.round(self.Q_Ny*dq))
         bvm = DiffractionSlice(
-            data=get_bvm(self.peaks[which],self.Q_Nx,self.Q_Ny),
+            data=get_bvm(self.peaks[which],xmax,ymax),
             name=which)
         self.bvms[which] = bvm
         return bvm
