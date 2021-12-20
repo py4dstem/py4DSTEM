@@ -36,7 +36,8 @@ def calculate_dynamical_structure_factors(
         method (str):                   Choose which parameterization of the structure factors to use:
             "Lobato": Uses the kinematic structure factors from crystal.py
             "Lobato-absorptive": Lobato factors plus an imaginary part
-                equal to 0.1•f, as a simple way to include absorption
+                equal to 0.1•f, as a simple way to include absorption, per
+                Hashimoto, Howie, & Whelan, Proc R Soc Lond A 269:80-103 (1962)
             "WK":   Uses the Weickenmeier-Kohl parameterization for
                     the elastic form factors, including Debye-Waller factor,
                     with no absorption.
