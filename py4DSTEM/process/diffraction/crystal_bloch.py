@@ -26,6 +26,7 @@ def calculate_dynamical_structure_factors(
     debye_waller_B_factor: float = None,
     tol_structure_factor: float = 1.0e-4,
     cartesian_directions: bool = True,
+    verbose = True,
 ):
     """
     Calculate and store the relativistic corrected structure factors used for Bloch computations
@@ -164,7 +165,7 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(range(hkl.shape[1]),desc=f"Computing {method} lookup table"):
+    for i_hkl in tqdm(range(hkl.shape[1]),desc=f"Computing {method} lookup table", disable = not verbose):
         Freal = 0.0
         Fimag = 0.0
         for i_pos in range(self.positions.shape[0]):
