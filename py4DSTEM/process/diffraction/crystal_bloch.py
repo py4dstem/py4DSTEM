@@ -111,7 +111,7 @@ def calculate_dynamical_structure_factors(
     lobato_lookup = single_atom_scatter()
 
     from functools import lru_cache
-    
+
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
@@ -198,7 +198,6 @@ def calculate_dynamical_structure_factors(
     struct_factors = struct_factors[keep]
 
     # Store relativistic corrected structure factors in a dictionary for faster lookup in the Bloch code
-    # Relativistic correction to the potentials [2.38]
 
     self.accel_voltage = accelerating_voltage
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
@@ -208,9 +207,8 @@ def calculate_dynamical_structure_factors(
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(hkl.shape[1])
     }
-    # self.Ug_dict[(0, 0, 0)] = np.complex128(0.0 + 0.0j)
 
-    # Clear cached WK factors to free up RAM
+    # Clear cached scattering factors to free up RAM
     get_f_e.cache_clear()
 
 
