@@ -3,7 +3,7 @@
 import numpy as np
 from ..utils import add_to_2D_array_from_floats, tqdmnd
 
-def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
+def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     """
     Calculates the Bragg vector map from a PointListArray of Bragg peak positions, given
     braggpeak positions which have been centered about the origin. In the returned array
@@ -13,6 +13,7 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
         braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity', the
             default coordinates from the bragg peak detection fns
         Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
+        Q_pixel_size (number): the size of the diffraction space p[ixels
 
     Returns:
         (ndarray): the bragg vector map
@@ -21,8 +22,8 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny):
 
     # Concatenate all PointList data together for speed
     bigpl = np.concatenate([pl.data for subpl in braggpeaks.pointlists for pl in subpl])
-    qx = bigpl['qx'] + (Q_Nx/2.)
-    qy = bigpl['qy'] + (Q_Ny/2.)
+    qx = bigpl['qx']/Q_pixel_size + (Q_Nx/2.)
+    qy = bigpl['qy']/Q_pixel_size + (Q_Ny/2.)
     I = bigpl['intensity']
 
     # Precompute rounded coordinates
@@ -124,7 +125,7 @@ def get_weighted_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, weights):
 
 # Functions for getting bragg vector maps from raw / uncentered braggpeak data
 
-def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
+def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     """
     Calculates the Bragg vector map from a PointListArray of Bragg peak positions, where
     the peak positions have not been centered.
@@ -133,6 +134,7 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
         braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
             the default coordinates from the bragg peak detection fns
         Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
+        Q_pixel_size (number): the size of the diffraction space p[ixels
 
     Returns:
         (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
@@ -141,8 +143,8 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny):
 
     # Concatenate all PointList data together for speeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed
     bigpl = np.concatenate([pl.data for subpl in braggpeaks.pointlists for pl in subpl])
-    qx = bigpl['qx']
-    qy = bigpl['qy']
+    qx = bigpl['qx']/Q_pixel_size
+    qy = bigpl['qy']/Q_pixel_size
     I = bigpl['intensity']
 
     # Precompute rounded coordinates
