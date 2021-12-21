@@ -578,7 +578,7 @@ class DataCube(DataObject):
 
     ############## bragg vector maps ################
 
-    def get_bvm(self,which='raw',peaks='braggpeaks'):
+    def get_bvm(self,which='raw',peaks='braggpeaks',Q_pixel_size=1):
         """
         Args:
             which (str): Which bvm to compute, i.e. the Bragg peak positions
@@ -586,6 +586,7 @@ class DataCube(DataObject):
                 ('origin','ellipse','pixel','all').
             peaks (str): specifies a BraggPeaks instance to use, which
                 must alread exist in datacube.braggpeaks
+            Q_pixel_size (number): the size of the diffraction space p[ixels
         """
         assert(peaks in self.braggpeaks.keys()), "Requested BraggPeaks can't be found"
         peaks = self.braggpeaks[peaks]

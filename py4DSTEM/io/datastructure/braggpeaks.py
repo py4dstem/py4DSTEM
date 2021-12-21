@@ -268,7 +268,7 @@ class BraggPeaks(DataObject):
 
     ####### bvm methods #######
 
-    def get_bvm(self,which='raw'):
+    def get_bvm(self,which='raw',Q_pixel_size=1):
         """
         Compute a bvm. Both returns and stores it in self.bvms[which].
 
@@ -276,6 +276,7 @@ class BraggPeaks(DataObject):
             which (str): Which bvm to compute, i.e. the Bragg peak positions
                 at which stage of calibration to use. Must be in
                 ('raw','origin','ellipse','pixel','all').
+            Q_pixel_size (number): the size of the diffraction space p[ixels
 
         Returns:
             (DiffractionSlice) the bvm
@@ -287,12 +288,10 @@ class BraggPeaks(DataObject):
             from ...process.diskdetection import get_bvm_raw as get_bvm
         else:
             from ...process.diskdetection import get_bvm
-        dq = self.coordinates.get_Q_pixel_size()
-        if dq is not None:
-            print(dq)
-            xmax,ymax = int(np.round(self.Q_Nx*dq)),int(np.round(self.Q_Ny*dq))
+        if which in ('raw','origin','ellipse'): dq=1
+        else: dq = self.coordinates.get_Q_pixel_size()
         bvm = DiffractionSlice(
-            data=get_bvm(self.peaks[which],xmax,ymax),
+            data=get_bvm(self.peaks[which],self.Q_Nx,self.Q_Ny,Q_pixel_size=dq),
             name=which)
         self.bvms[which] = bvm
         return bvm
@@ -308,9 +307,14 @@ class BraggPeaks(DataObject):
         assert(which in ('raw','origin','ellipse','pixel','all')), "Invalid value for argument `which`, {}".format(which)
         assert(self.bvms[which] is not None), "This bvm has not been computed, please compute it first with `self.get_bvm(which = {} )`".format(which)
         bvm = self.bvms[which].data
+        if which in ('raw','origin','ellipse'): scalebar=None
+        else:
+            dq = self.coordinates.get_Q_pixel_size()
+            if dq is not None:
+                scalebar={}
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
-        show(bvm,**vis_params)
+        show(bvm,scalebar=scalebar,coordinates=self.coordinates,**vis_params)
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs

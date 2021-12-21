@@ -19,7 +19,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
          rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
          cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
          coordinates=None,rx=None,ry=None,space='Q',
-         pixelsize=None,pixelunits=None,x0=None,y0=None,e=None,theta=None,
+         pixelsize=None,pixelunits=None,x0=None,y0=None,a=None,theta=None,
          title=None,**kwargs):
     """
     General visualization function for 2D arrays.
@@ -408,15 +408,15 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         y0 = y0 if y0 is not None else 0
     # ellipticity
     if space == 'Q':
-        if e is not None:
+        if a is not None:
             pass
         elif coordinates is not None:
             try:
-                e = coordinates.get_e(rx,ry)
+                a = coordinates.get_a(rx,ry)
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for e')
+                raise Exception('The Coordinates instance passed does not contain a value for a')
         else:
-            e = 1
+            a = 1
         if theta is not None:
             pass
         elif coordinates is not None:
@@ -427,7 +427,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         else:
             theta = 0
     else:
-        e = e if e is not None else 1
+        a = a if a is not None else 1
         theta = theta if theta is not None else 0
 
 
