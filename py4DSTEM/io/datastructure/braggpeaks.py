@@ -130,11 +130,29 @@ class BraggPeaks(DataObject):
         else:
             print('...pixel calibration not found, skipping...')
 
-
         # Rotation
+        rotation = self.coordinates.get_QR_rotation_degrees()
+        flip = self.coordinates.get_QR_flip()
+        if all([x is not None for x in (rotation,flip)]):
+            print("...calibrating Q/R rotation and flip...")
+            from ...process.calibration import calibrate_bragg_peaks_rotation
+            peaks = calibrate_bragg_peaks_rotation(peaks,rotation,flip)
+            if which == 'rotation':
+                del(self.peaks[which])
+                self.peaks[which] = peaks
+                if get_bvm:
+                    bvm = self.get_bvm(which=which)
+                    return peaks,bvm
+                return peaks
+        else:
+            print('...rotation/flip calibration not found, skipping...')
 
+        # All calibrations
         del(self.peaks['all'])
         self.peaks['all'] = peaks
+        if get_bvm:
+            bvm = self.get_bvm(which=which)
+            return peaks,bvm
         return peaks
 
 

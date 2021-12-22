@@ -59,34 +59,6 @@ class Coordinates(DataObject):
 
 
     # origin
-
-    def set_qx0(self,x):
-        self.params['qx0'] = x
-    def get_qx0(self,rx=None,ry=None):
-        return self._get_value('qx0',rx,ry)
-    def set_qy0(self,x):
-        self.params['qy0'] = x
-    def get_qy0(self,rx=None,ry=None):
-        return self._get_value('qy0',rx,ry)
-
-    def set_qx0_meas(self,x):
-        self.params['qx0_meas'] = x
-    def get_qx0_meas(self,rx=None,ry=None):
-        return self._get_value('qx0_meas',rx,ry)
-    def set_qy0_meas(self,x):
-        self.params['qy0_meas'] = x
-    def get_qy0_meas(self,rx=None,ry=None):
-        return self._get_value('qy0_meas',rx,ry)
-
-    def set_qx0_residuals(self,x):
-        self.params['qx0_residuals'] = x
-    def get_qx0_residuals(self,rx=None,ry=None):
-        return self._get_value('qx0_residuals',rx,ry)
-    def set_qy0_residuals(self,x):
-        self.params['qy0_residuals'] = x
-    def get_qy0_residuals(self,rx=None,ry=None):
-        return self._get_value('qy0_residuals',rx,ry)
-
     def set_origin(self,origin):
         """
         Args:
@@ -124,9 +96,7 @@ class Coordinates(DataObject):
         qy0 = self._get_value('qy0_residuals',rx,ry)
         return (qx0,qy0)
 
-
     # ellipse
-
     def set_a(self,x):
         self.params['a'] = x
     def get_a(self,rx=None,ry=None):
@@ -170,75 +140,48 @@ class Coordinates(DataObject):
         theta = self._get_value('theta',rx,ry)
         return (qx0,qy0,a,b,theta)
 
-
     # pixel sizes
-
     def set_Q_pixel_size(self,x):
         self.params['Q_pixel_size'] = x
-    def get_Q_pixel_size(self,rx=None,ry=None):
-        return self._get_value('Q_pixel_size',rx,ry)
+    def get_Q_pixel_size(self):
+        return self._get_value('Q_pixel_size')
     def set_R_pixel_size(self,x):
         self.params['R_pixel_size'] = x
-    def get_R_pixel_size(self,rx=None,ry=None):
-        return self._get_value('R_pixel_size',rx,ry)
+    def get_R_pixel_size(self):
+        return self._get_value('R_pixel_size')
     def set_Q_pixel_units(self,x):
         self.params['Q_pixel_units'] = x
-    def get_Q_pixel_units(self,rx=None,ry=None):
-        return self._get_value('Q_pixel_units',rx,ry)
+    def get_Q_pixel_units(self):
+        return self._get_value('Q_pixel_units')
     def set_R_pixel_units(self,x):
         self.params['R_pixel_units'] = x
-    def get_R_pixel_units(self,rx=None,ry=None):
-        return self._get_value('R_pixel_units',rx,ry)
+    def get_R_pixel_units(self):
+        return self._get_value('R_pixel_units')
+
+    # Q/R-space rotation and flip
+    def set_QR_rotation_degrees(self,x):
+        self.params['QR_rotation_degrees'] = x
+    def get_QR_rotation_degrees(self):
+        return self._get_value('QR_rotation_degrees')
+    def set_QR_flip(self,x):
+        self.params['QR_flip'] = x
+    def get_QR_flip(self):
+        return self._get_value('QR_flip')
 
 
 
-
-
-
-
-
-
-    # Special get/set functions
-    def set_R_Nx(self,R_Nx):
-        self.R_Nx = R_Nx
-    def set_R_Ny(self,R_Ny):
-        self.R_Ny = R_Ny
-    def set_Q_Nx(self,Q_Nx):
-        self.Q_Nx = Q_Nx
-    def set_Q_Ny(self,Q_Ny):
-        self.Q_Ny = Q_Ny
+###mewowemow
     def set_alpha_pix(self,alpha_pix):
         self.alpha_pix = alpha_pix
     def set_probe_center(self,probe_center):
         self.probe_center = probe_center
-    def set_QR_rotation(self,QR_rotation):
-        self._validate_input(QR_rotation)
-        self.QR_rotation = QR_rotation
-    def set_QR_flip(self,QR_flip):
-        assert(isinstance(QR_flip,(bool,np.bool_)))
-        self.QR_flip = QR_flip
-
-    def get_R_Nx(self):
-        return self.R_Nx
-    def get_R_Ny(self):
-        return self.R_Ny
-    def get_Q_Nx(self):
-        return self.Q_Nx
-    def get_Q_Ny(self):
-        return self.Q_Ny
     def get_alpha_pix(self):
         return self.alpha_pix
     def get_probe_center(self):
         return self.probe_center
         return (qx0,qy0,a,b,theta)
-    def get_QR_rotation(self):
-        return self.QR_rotation
-    def get_QR_flip(self):
-        return self.QR_flip
 
-
-
-
+    # show
     def show(self):
         if 'name' in vars(self).keys():
             print('{0:<16}\t{1:<16}'.format('name',self.name))
@@ -250,7 +193,6 @@ class Coordinates(DataObject):
 
 
     # calibration methods
-
     def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
         """
         Computes the size of the Q-space pixels. Returns and also stores
