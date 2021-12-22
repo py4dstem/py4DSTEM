@@ -51,13 +51,13 @@ class DataCube(DataObject):
         self.diffractionslices = {}
         self.realslices = {}
         self.braggpeaks = {}
+        self._some_braggpeaks = {}
         self.calibrations = Calibrations(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
 
         # initialize params
         # bvm visualization
         self.bvm_vis_params = {}
         self.set_bvm_vis_params(cmap='jet',scaling='log')
-
 
 
     ################## virtual diffraction ##################
@@ -530,13 +530,14 @@ class DataCube(DataObject):
         show_selected_dps(self,positions,im=im,colors=colors,
                 HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
 
-    def find_some_bragg_disks(self,positions,**kwargs):
+    def find_some_bragg_disks(self,positions,name=1,**kwargs):
         """
         Finds the bragg disks in the DPs at `positions`. For more info,
         see process.diskdetection.find_Bragg_disks_selected.
 
         Args:
             positions ((Nx2) shaped)
+            name: identifier for a set of scan positions and their associated disks
         """
         from ...process.diskdetection import find_Bragg_disks_selected
         assert('probe_kernel' in self.diffractionslices.keys())
@@ -545,13 +546,13 @@ class DataCube(DataObject):
         y = [i[1] for i in positions]
         braggpeaks = find_Bragg_disks_selected(
             self,self.diffractionslices['probe_kernel'].data,Rx=x,Ry=y,**kwargs)
-        self.braggpeaks['_some_braggpeaks'] = {
+        self._some_braggpeaks[name] = {
             'peaks':braggpeaks,'positions':positions
         }
         return braggpeaks
 
     def show_some_bragg_disks(self,im=None,colors=None,HW=None,figsize_dp=(4,4),
-                              **kwargs):
+                              name=1,**kwargs):
         """
         Shows the positions of Bragg disks detected with
         self.find_some_bragg_disks.
@@ -560,18 +561,19 @@ class DataCube(DataObject):
             colors (list of colors or None):
             HW (2-tuple of ints): diffraction pattern grid shape
             figsize_dp (2-tuple): size of each diffraction pattern panel
+            name: identifier for a set of scan positions and their associated disks
             **kwargs (dict): arguments passed to visualize.show for the
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
-        assert('_some_braggpeaks' in self.braggpeaks.keys()), "First run find_some_bragg_disks!"
-        braggpeaks = self.braggpeaks['_some_braggpeaks']['peaks']
-        positions = self.braggpeaks['_some_braggpeaks']['positions']
+        assert(name in self._some_braggpeaks.keys()), "First run find_some_bragg_disks!"
+        braggpeaks = self._some_braggpeaks[name]['peaks']
+        positions = self._some_braggpeaks[name]['positions']
         im,_ = self._get_best_im(im)
         show_selected_dps(self,positions,im=im,bragg_pos=braggpeaks,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
-    def find_bragg_disks(self,name='braggpeaks',**disk_detec_params):
+    def find_bragg_disks(self,name='braggpeaks',set_as_default=False,**disk_detec_params):
         """
 
         """
@@ -583,6 +585,8 @@ class DataCube(DataObject):
         braggpeaks.name = name
         braggpeaks.set_bvm_vis_params(**self.bvm_vis_params)
         self.braggpeaks[name] = braggpeaks
+        if set_as_default or len(self.braggpeaks)==1:
+            self.set_default_braggpeaks(name)
         return braggpeaks
 
 
@@ -618,6 +622,13 @@ class DataCube(DataObject):
         assert(peaks in self.braggpeaks.keys())
         peaks = self.braggpeaks[peaks]
         peaks.show_bvm(which=which,**vis_params)
+
+
+
+    ############# Set default params #############
+
+    def set_default_braggpeaks(self,name):
+        self.peaks = self.braggpeaks['braggpeaks']
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs
@@ -698,98 +709,6 @@ class DataCube(DataObject):
         assert(peaks in self.braggpeaks.keys())
         peaks = self.braggpeaks[peaks]
         return peaks.fit_radial_peak(lims,which,show,ymax)
-
-    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
-        """
-        Computes the size of the Q-space pixels. Returns and also stores
-        the answer in self.calibrations.
-
-        Args:
-            q_meas (number): a measured distance in q-space in pixels
-            q_known (number): the corresponding known *real space* distance
-            unit (str): the units of the real space value of `q_known`
-        """
-        dq = self.calibrations.calculate_Q_pixel_size(q_meas,q_known,units)
-        return dq
-
-
-
-
-
-    ####### apply calibrations to calibrations
-
-    def calibrate_rotation(self,theta,flip):
-        """
-        Args:
-            theta (number): in radians
-            flip (bool):
-        """
-        self.calibrations.set_QR_rotation(theta)
-        self.calibrations.set_QR_flip(flip)
-
-
-    ####### apply calibrations to bragg peaks
-
-    def calibrate_bragg_positions(self,which='all',peaks='braggpeaks'):
-        """
-        Calibrates bragg scattering positions.
-
-        Args:
-            which (str): Which calibrations to perform.  If 'all' is passed,
-                performs applies all the measured calibrations found in
-                self.calibrations. Otherwise, indicates that only calibrations up
-                to this one should be applied - must be in
-                ('origin','ellipse','pixel','all').
-            peaks (str): which set of Bragg peak positions to use
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        assert(isinstance(peaks,BraggPeaks))
-        assert(self.calibrations is peaks.calibrations)
-        peaks.calibrate(which=which)
-
-    def calibrate_bragg_origins(self,name='braggpeaks'):
-        """
-        Calibrates bragg scattering positions.
-        """
-        peaks = self.braggpeaks[name]
-        assert(isinstance(peaks,BraggPeaks))
-        assert(self.calibrations is peaks.calibrations)
-        peaks.calibrate_origin()
-
-
-
-
-
-    def calibrate_bragg_elliptical_distortions(self,p_ellipse):
-        """
-
-        """
-        from ...process.calibration import correct_braggpeak_elliptical_distortions
-        assert('origin' in self.braggpeaks.keys())
-        assert(self.bragg_calstate_origin)
-        assert(not self.bragg_calstate_ellipse)
-        peaks = correct_braggpeak_elliptical_distortions(
-            self.braggpeaks['origin'],p_ellipse)
-        self.braggpeaks['ellipse'] = peaks
-        _,_,a,b,theta = p_ellipse
-        self.calibrations.set_ellipse(a,b,theta)
-        self.bragg_calstate_ellipse = True
-
-    def calibrate_bragg_dq(self):
-        """
-
-        """
-        from ...process.calibration import calibrate_Bragg_peaks_pixel_size
-        assert('ellipse' in self.braggpeaks.keys())
-        assert(self.bragg_calstate_ellipse)
-        assert(not self.bragg_calstate_dq)
-        peaks = calibrate_Bragg_peaks_pixel_size(
-            self.braggpeaks['ellipse'],coords=self.calibrations)
-        self.braggpeaks['dq'] = peaks
-        self.bragg_calstate_dq = True
-
-
 
 
 

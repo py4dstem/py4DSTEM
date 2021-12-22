@@ -194,24 +194,6 @@ class Calibrations(DataObject):
                 print('{0:<16}\t{1:<16}'.format(k,v))
 
 
-    ################ TODO: this probs should go away #############
-
-    # calibration methods
-    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
-        """
-        Computes the size of the Q-space pixels. Returns and also stores
-        the answer.
-
-        Args:
-            q_meas (number): a measured distance in q-space in pixels
-            q_known (number): the corresponding known *real space* distance
-            unit (str): the units of the real space value of `q_known`
-        """
-        dq = 1. / ( q_meas * q_known )
-        self.set_Q_pixel_size(dq)
-        self.set_Q_pixel_units(units+'^-1')
-        return dq
-
 
 
 

@@ -7,20 +7,19 @@ from py4DSTEM.process.utils import get_CoM, tqdmnd
 from ...io.datastructure import Calibrations, PointListArray
 
 
-def get_dq(q, d):
+def get_Q_pixel_size(q_meas, q_known, units='A'):
     """
-    Get dq, the size of the detector pixels in the diffraction plane, in inverse length
-    units.
+    Computes the size of the Q-space pixels.
 
     Args:
-        q (number): a measured diffraction space distance, in pixels
-        d (number): the known corresponding length, in *real space* length units (e.g.
-            in Angstroms)
+        q_meas (number): a measured distance in q-space in pixels
+        q_known (number): the corresponding known *real space* distance
+        unit (str): the units of the real space value of `q_known`
 
     Returns:
-        (number): the detector pixel size
+        (number,str): the detector pixel size, the associated units
     """
-    return 1 / (q * d)
+    return 1. / (q_meas * q_known), units+'^-1'
 
 
 def get_dq_from_indexed_peaks(qs, hkl, a):
