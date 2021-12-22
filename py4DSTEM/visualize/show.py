@@ -1,6 +1,6 @@
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
 from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from ..io.datastructure import Coordinates
+from ..io.datastructure import Calibrations
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +18,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
          hist=False,n_bins=256,mask=None,mask_color='k',mask_alpha=0.,
          rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
          cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
-         coordinates=None,rx=None,ry=None,space='Q',
+         calibrations=None,rx=None,ry=None,space='Q',
          pixelsize=None,pixelunits=None,x0=None,y0=None,a=None,theta=None,
          title=None,**kwargs):
     """
@@ -117,20 +117,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         overlays (coordinate systems and scalebars) require information about the
         plot - e.g. the position of the origin, the pixel sizes, the pixel units,
         any elliptical distortions, etc.  The easiest way to pass this information
-        is by pass a Coordinates object containing this info to ``show`` as the
-        keyword ``coordinates``. Second, once the coordinate information has been
+        is by pass a Calibrations object containing this info to ``show`` as the
+        keyword ``calibrations``. Second, once the coordinate information has been
         passed, informational overlays can autoselect their own parameters, thus simply
         passing an empty dict to one of these parameters will add that overlay.
 
         For example:
 
-            >>> show(dp, scalebar={}, coordinates=coords)
+            >>> show(dp, scalebar={}, calibrations=calibrations)
 
         will display the diffraction pattern ``dp`` with a scalebar overlaid in the
-        bottom left corner given the pixel size and units described in ``coords``,
+        bottom left corner given the pixel size and units described in ``calibrations``,
         and
 
-            >>> show(dp, coordinates=coords, scalebar={'length':0.5,'width':2,
+            >>> show(dp, calibrations=calibrations, scalebar={'length':0.5,'width':2,
                                                        'position':'ul','label':True'})
 
         will display a more customized scalebar.
@@ -138,20 +138,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         When overlaying coordinate grids, it is important to note that some relevant
         parameters, e.g. the position of the origin, may change by scan position.
         In these cases, the parameters ``rx``,``ry`` must also be passed to ``show``,
-        to tell the ``Coordinates`` object where to look for the relevant parameters.
+        to tell the ``Calibrations`` object where to look for the relevant parameters.
         For example:
 
-            >>> show(dp, cartesian_grid={}, coordinates=coords, rx=2,ry=5)
+            >>> show(dp, cartesian_grid={}, calibrations=calibrations, rx=2,ry=5)
 
         will overlay a cartesian coordinate grid on the diffraction pattern at scan
         position (2,5). Adding
 
-            >>> show(dp, coordinates=coords, rx=2, ry=5, cartesian_grid={'label':True,
+            >>> show(dp, calibrations=calibrations, rx=2, ry=5, cartesian_grid={'label':True,
                         'alpha':0.7,'color':'r'})
 
         will customize the appearance of the grid further. And
 
-            >>> show(im, coordinates=coords, cartesian_grid={}, space='R')
+            >>> show(im, calibrations=calibrations, cartesian_grid={}, space='R')
 
         displays a cartesian grid over a real space image.  For more details, see the
         documentation for the visualize functions add_*, where * = ('scalebar',
@@ -361,46 +361,46 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
 
     # Parse arguments for scale/coordinate overlays
-    if coordinates is not None:
-        assert isinstance(coordinates,Coordinates)
+    if calibrations is not None:
+        assert isinstance(calibrations,Calibrations)
     assert space in ('Q','R')
     # pixel size/units
-    if pixelsize is None and coordinates is None:
+    if pixelsize is None and calibrations is None:
         pixelsize = 1
     if pixelsize is not None:
         pass
     else:
         if space == 'Q':
-            pixelsize = coordinates.get_Q_pixel_size()
+            pixelsize = calibrations.get_Q_pixel_size()
         else:
-            pixelsize = coordinates.get_R_pixel_size()
-    if pixelunits is None and coordinates is None:
+            pixelsize = calibrations.get_R_pixel_size()
+    if pixelunits is None and calibrations is None:
         pixelunits = 'pixels'
     if pixelunits is not None:
         pass
     else:
         if space == 'Q':
-            pixelunits = coordinates.get_Q_pixel_units()
+            pixelunits = calibrations.get_Q_pixel_units()
         else:
-            pixelunits = coordinates.get_R_pixel_units()
+            pixelunits = calibrations.get_R_pixel_units()
     # origin
     if space == 'Q':
         if x0 is not None:
             pass
-        elif coordinates is not None:
+        elif calibrations is not None:
             try:
-                x0 = coordinates.get_origin(rx,ry)[0]
+                x0 = calibrations.get_origin(rx,ry)[0]
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for qx0')
+                raise Exception('The Calibrations instance passed does not contain a value for qx0')
         else:
             x0 = 0
         if y0 is not None:
             pass
-        elif coordinates is not None:
+        elif calibrations is not None:
             try:
-                y0 = coordinates.get_origin(rx,ry)[1]
+                y0 = calibrations.get_origin(rx,ry)[1]
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for qy0')
+                raise Exception('The Calibrations instance passed does not contain a value for qy0')
         else:
             y0 = 0
     else:
@@ -410,20 +410,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
     if space == 'Q':
         if a is not None:
             pass
-        elif coordinates is not None:
+        elif calibrations is not None:
             try:
-                a = coordinates.get_a(rx,ry)
+                a = calibrations.get_a(rx,ry)
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for a')
+                raise Exception('The Calibrations instance passed does not contain a value for a')
         else:
             a = 1
         if theta is not None:
             pass
-        elif coordinates is not None:
+        elif calibrations is not None:
             try:
-                theta = coordinates.get_theta(rx,ry)
+                theta = calibrations.get_theta(rx,ry)
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for theta')
+                raise Exception('The Calibrations instance passed does not contain a value for theta')
         else:
             theta = 0
     else:
@@ -540,7 +540,7 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
 
 def show_Q(ar,scalebar=True,grid=False,polargrid=False,
            Q_pixel_size=None,Q_pixel_units=None,
-           coordinates=None,rx=None,ry=None,
+           calibrations=None,rx=None,ry=None,
            qx0=None,qy0=None,
            e=None,theta=None,
            scalebarloc=0,scalebarsize=None,scalebarwidth=None,
@@ -556,44 +556,44 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
     including a scalebar, a cartesian grid, or a polar / polar-elliptical grid.
 
     Regardless of which overlay is requested, the function must recieve either values
-    for Q_pixel_size and Q_pixel_units, or a Coordinates instance containing these values.
+    for Q_pixel_size and Q_pixel_units, or a Calibrations instance containing these values.
     If both are passed, the manually passed values take precedence.
     If a cartesian grid is requested, (qx0,qy0) are required, either passed manually or
-    passed as a Coordinates instance with the appropriate (rx,ry) value.
+    passed as a Calibrations instance with the appropriate (rx,ry) value.
     If a polar grid is requested, (qx0,qy0,e,theta) are required, again either manually
-    or via a Coordinates instance.
+    or via a Calibrations instance.
 
     Any arguments accepted by the show() function (e.g. image scaling, clipvalues, etc)
     may be passed to this function as kwargs.
     """
     # Check inputs
     assert(isinstance(ar,np.ndarray) and len(ar.shape)==2)
-    if coordinates is not None:
-        assert isinstance(coordinates,Coordinates)
+    if calibrations is not None:
+        assert isinstance(calibrations,Calibrations)
     try:
         Q_pixel_size = Q_pixel_size if Q_pixel_size is not None else \
-                       coordinates.get_Q_pixel_size()
+                       calibrations.get_Q_pixel_size()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibrations or manually")
     try:
         Q_pixel_units = Q_pixel_units if Q_pixel_units is not None else \
-                       coordinates.get_Q_pixel_units()
+                       calibrations.get_Q_pixel_units()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibrations or manually")
     if grid or polargrid:
         try:
-            qx0 = qx0 if qx0 is not None else coordinates.get_qx0(rx,ry)
+            qx0 = qx0 if qx0 is not None else calibrations.get_qx0(rx,ry)
         except AttributeError:
-            raise Exception("qx0 must be specified, either in coordinates or manually")
+            raise Exception("qx0 must be specified, either in calibrations or manually")
         try:
-            qy0 = qy0 if qy0 is not None else coordinates.get_qy0(rx,ry)
+            qy0 = qy0 if qy0 is not None else calibrations.get_qy0(rx,ry)
         except AttributeError:
-            raise Exception("qy0 must be specified, either in coordinates or manually")
+            raise Exception("qy0 must be specified, either in calibrations or manually")
         assert isinstance(qx0,Number), "Error: qx0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(qy0,Number), "Error: qy0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
     if polargrid:
-        e = e if e is not None else coordinates.get_e(rx,ry)
-        theta = theta if theta is not None else coordinates.get_theta(rx,ry)
+        e = e if e is not None else calibrations.get_e(rx,ry)
+        theta = theta if theta is not None else calibrations.get_theta(rx,ry)
         assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
 

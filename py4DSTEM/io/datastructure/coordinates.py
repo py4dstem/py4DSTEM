@@ -5,183 +5,233 @@ from .dataobject import DataObject
 
 class Coordinates(DataObject):
     """
-    Stores and furinishes calibration measurements.
+    Defines coordinate systems for diffraction space in a 4D-STEM dataset.
+    This includes cartesian and polar-elliptical coordinate systems.
 
-    Usage:
+    Each parameter may be a single number, for the case where the parameter is identical
+    across all diffraction patterns, or it may be an (R_Nx,R_Ny)-shaped array, for the case
+    where the parameter varies with scan position, e.g. the shifting of the optic axis as
+    the beam is scanned.
 
-        >>> c = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
-        >>> c.set_p(p)
-        >>> p = c.get_p()
+    Storing and accessing some parameter ``p`` is accomplished with the get/set methods, e.g.
 
-    If the parameter has not been set, the getter methods return None
-    The value of a parameter may be a number, representing the entire dataset,
-    or an (R_Nx,R_Ny) shaped array, representing values at each detector pixel.
+        >>> coords = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
+        >>> coords.set_p(p)
+        >>> p = coords.get_p()
 
-        >>> pxy = c.get_p(rx,ry)
+    The get methods support retrieving numbers, arrays, or values at specified positions.
+    The code:
 
-    will return the value of `p` at pixel `rx,ry`.
+        >>> p = coords.get_p(rx,ry)
+
+    will retrieve the value ``p`` if ``p`` is a number, and the value ``p[rx,ry]`` if ``p`` is an array.
+
+    Args:
+        Q_Nx,Q_Ny (int): the shape of diffraction space
+        R_Nx,R_Ny (int): the shape of real space
+        Q_pixel_size (number): the detector pixel size, in units of ``Q_pixel_units``
+        Q_pixel_units (string): the detector pixel size units
+        R_pixel_size (number): the spacing between beam raster positions, in units of
+            ``R_pixel_units``
+        R_pixel_units (string): the real space pixel units
+        qx0,qy0 (number or ndarray): the origin of diffraction space
+        a (number): semimajor axis length for elliptical distorions
+        b (number): semiminor axis length for elliptical distorions
+        theta (number): the (positive, right handed) tilt of the semimajor axis of
+            the elliptical distortions with respect to the x-axis, in radians
+        QR_rotation (number): the (positive,right handed) rotational misalignment of
+            image plane with respec diffraction plane, in radians
+        QR_flip (bool): descibes whether the image and diffraction plane's coordinate
+            systems are inverted with respect to one another
     """
-    def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny):
+    def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny,
+                 Q_pixel_size=1,Q_pixel_units='pixels',
+                 R_pixel_size=1,R_pixel_units='pixels',
+                 **kwargs):
         """
-        Args:
-            R_Nx,R_Ny (int): the shape of real space
-            Q_Nx,Q_Ny (int): the shape of diffraction space
+        Initialize a coordinate system.
         """
-        DataObject.__init__(self)
-        self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny = R_Nx,R_Ny,Q_Nx,Q_Ny
+        DataObject.__init__(self, **kwargs)
 
         # Set attributes
-        self.params = {
-            'Q_Nx':Q_Nx,
-            'Q_Ny':Q_Ny,
-            'R_Nx':R_Nx,
-            'R_Ny':R_Ny,
-            'Q_pixel_size':1,
-            'Q_pixel_units':'pixels',
-            'R_pixel_size':1,
-            'R_pixel_units':'pixels'
-        }
+        self.set_R_Nx(R_Nx)
+        self.set_R_Ny(R_Ny)
+        self.set_Q_Nx(Q_Nx)
+        self.set_Q_Ny(Q_Ny)
+        self.set_Q_pixel_size(Q_pixel_size)
+        self.set_Q_pixel_units(Q_pixel_units)
+        self.set_R_pixel_size(R_pixel_size)
+        self.set_R_pixel_units(R_pixel_units)
 
+        # Set attributes passed as kwargs
+        for key,val in kwargs.items():
+            #vars(self)['set_'+key](val)
+            try:
+                getattr(self,'set_'+key)(val)
+            except AttributeError:
+                pass
 
-    def _get_value(self,p,rx=None,ry=None):
-        """ Enables returning the value of a pixel (rx,ry),
-            if these are passed and `p` is an appropriate array
-        """
-        try:
-            v = self.params[p]
-            if isinstance(v,np.ndarray) and rx is not None and ry is not None:
-                assert np.all([isinstance(i,(int,np.integer)) for i in (rx,ry)])
-                assert rx<self.R_Nx and ry<self.R_Ny
-                return p[rx,ry]
-            return v
-        except KeyError:
-            return None
-
-
-    # origin
-    def set_origin(self,origin):
-        """
-        Args:
-            origin (2-tuple): (qx0,qy0)
-        """
-        qx0,qy0 = origin
-        self.params['qx0'] = qx0
-        self.params['qy0'] = qy0
-    def get_origin(self,rx=None,ry=None):
-        qx0 = self._get_value('qx0',rx,ry)
-        qy0 = self._get_value('qy0',rx,ry)
-        return (qx0,qy0)
-    def set_origin_meas(self,x):
-        """
-        Args:
-            x (2-tuple): (qx0,qy0)
-        """
-        qx0,qy0 = x
-        self.params['qx0_meas'] = qx0
-        self.params['qy0_meas'] = qy0
-    def get_origin_meas(self,rx=None,ry=None):
-        qx0 = self._get_value('qx0_meas',rx,ry)
-        qy0 = self._get_value('qy0_meas',rx,ry)
-        return (qx0,qy0)
-    def set_origin_residuals(self,x):
-        """
-        Args:
-            x (2-tuple): (qx0,qy0)
-        """
-        qx0,qy0 = x
-        self.params['qx0_residuals'] = qx0
-        self.params['qy0_residuals'] = qy0
-    def get_origin_residuals(self,rx=None,ry=None):
-        qx0 = self._get_value('qx0_residuals',rx,ry)
-        qy0 = self._get_value('qy0_residuals',rx,ry)
-        return (qx0,qy0)
-
-    # ellipse
-    def set_a(self,x):
-        self.params['a'] = x
-    def get_a(self,rx=None,ry=None):
-        return self._get_value('a',rx,ry)
-    def set_b(self,x):
-        self.params['b'] = x
-    def get_b(self,rx=None,ry=None):
-        return self._get_value('b',rx,ry)
-    def set_theta(self,x):
-        self.params['theta'] = x
-    def get_theta(self,rx=None,ry=None):
-        return self._get_value('theta',rx,ry)
-    def set_ellipse(self,x):
-        """
-        Args:
-            x (3-tuple): (a,b,theta)
-        """
-        a,b,theta = x
-        self.params['a'] = a
-        self.params['b'] = b
-        self.params['theta'] = theta
-    def set_p_ellipse(self,x):
-        """
-        Args:
-            x (5-tuple): (qx0,qy0,a,b,theta) NOTE: does *not* change qx0,qy0
-        """
-        _,_,a,b,theta = x
-        self.params['a'] = a
-        self.params['b'] = b
-        self.params['theta'] = theta
-    def get_ellipse(self,rx=None,ry=None):
-        a = self._get_value('a',rx,ry)
-        b = self._get_value('b',rx,ry)
-        theta = self._get_value('theta',rx,ry)
-        return (a,b,theta)
-    def get_p_ellipse(self,rx=None,ry=None):
-        qx0 = self._get_value('qx0',rx,ry)
-        qy0 = self._get_value('qy0',rx,ry)
-        a = self._get_value('a',rx,ry)
-        b = self._get_value('b',rx,ry)
-        theta = self._get_value('theta',rx,ry)
-        return (qx0,qy0,a,b,theta)
-
-    # pixel sizes
-    def set_Q_pixel_size(self,x):
-        self.params['Q_pixel_size'] = x
-    def get_Q_pixel_size(self):
-        return self._get_value('Q_pixel_size')
-    def set_R_pixel_size(self,x):
-        self.params['R_pixel_size'] = x
-    def get_R_pixel_size(self):
-        return self._get_value('R_pixel_size')
-    def set_Q_pixel_units(self,x):
-        self.params['Q_pixel_units'] = x
-    def get_Q_pixel_units(self):
-        return self._get_value('Q_pixel_units')
-    def set_R_pixel_units(self,x):
-        self.params['R_pixel_units'] = x
-    def get_R_pixel_units(self):
-        return self._get_value('R_pixel_units')
-
-    # Q/R-space rotation and flip
-    def set_QR_rotation_degrees(self,x):
-        self.params['QR_rotation_degrees'] = x
-    def get_QR_rotation_degrees(self):
-        return self._get_value('QR_rotation_degrees')
-    def set_QR_flip(self,x):
-        self.params['QR_flip'] = x
-    def get_QR_flip(self):
-        return self._get_value('QR_flip')
-
-
-
-###mewowemow
+    # Special get/set functions
+    def set_R_Nx(self,R_Nx):
+        self.R_Nx = R_Nx
+    def set_R_Ny(self,R_Ny):
+        self.R_Ny = R_Ny
+    def set_Q_Nx(self,Q_Nx):
+        self.Q_Nx = Q_Nx
+    def set_Q_Ny(self,Q_Ny):
+        self.Q_Ny = Q_Ny
+    def set_Q_pixel_size(self,Q_pixel_size):
+        self._validate_input(Q_pixel_size)
+        self.Q_pixel_size = Q_pixel_size
+    def set_Q_pixel_units(self,Q_pixel_units):
+        self.Q_pixel_units = Q_pixel_units
+    def set_R_pixel_size(self,R_pixel_size):
+        self._validate_input(R_pixel_size)
+        self.R_pixel_size = R_pixel_size
+    def set_R_pixel_units(self,R_pixel_units):
+        self.R_pixel_units = R_pixel_units
+    def set_qx0(self,qx0):
+        self._validate_input(qx0)
+        self.qx0 = qx0
+    def set_qy0(self,qy0):
+        self._validate_input(qy0)
+        self.qy0 = qy0
+    def set_qx0_meas(self,qx0_meas):
+        self._validate_input(qx0_meas)
+        self.qx0_meas = qx0_meas
+    def set_qy0_meas(self,qy0_meas):
+        self._validate_input(qy0_meas)
+        self.qy0_meas = qy0_meas
+    def set_qx0_residuals(self,qx0_residuals):
+        self._validate_input(qx0_residuals)
+        self.qx0_residuals = qx0_residuals
+    def set_qy0_residuals(self,qy0_residuals):
+        self._validate_input(qy0_residuals)
+        self.qy0_residuals = qy0_residuals
+    def set_origin(self,qx0,qy0):
+        self._validate_input(qx0)
+        self._validate_input(qy0)
+        self.qx0,self.qy0 = qx0,qy0
+    def set_origin_meas(self,qx0_meas,qy0_meas):
+        self._validate_input(qx0_meas)
+        self._validate_input(qy0_meas)
+        self.qx0_meas,self.qy0_meas = qx0_meas,qy0_meas
+    def set_origin_residuals(self,qx0_residuals,qy0_residuals):
+        self._validate_input(qx0_residuals)
+        self._validate_input(qy0_residuals)
+        self.qx0_residuals,self.qy0_residuals = qx0_residuals,qy0_residuals
     def set_alpha_pix(self,alpha_pix):
         self.alpha_pix = alpha_pix
     def set_probe_center(self,probe_center):
         self.probe_center = probe_center
+    def set_a(self,a):
+        self._validate_input(a)
+        self.a = a
+    def set_b(self,b):
+        self._validate_input(b)
+        self.b = b
+    def set_theta(self,theta):
+        self._validate_input(theta)
+        self.theta = theta
+    def set_ellipse(self,a,b,theta):
+        self._validate_input(a)
+        self._validate_input(b)
+        self._validate_input(theta)
+        self.a,self.b,self.theta = a,b,theta
+    def set_p_ellipse(self,p_ellipse):
+        assert(len(p_ellipse==5))
+        _,_,a,b,theta = p_ellipse
+        self.set_ellipse(a,b,theta)
+    def set_QR_rotation(self,QR_rotation):
+        self._validate_input(QR_rotation)
+        self.QR_rotation = QR_rotation
+    def set_QR_flip(self,QR_flip):
+        assert(isinstance(QR_flip,(bool,np.bool_)))
+        self.QR_flip = QR_flip
+
+    def get_R_Nx(self):
+        return self.R_Nx
+    def get_R_Ny(self):
+        return self.R_Ny
+    def get_Q_Nx(self):
+        return self.Q_Nx
+    def get_Q_Ny(self):
+        return self.Q_Ny
+    def get_Q_pixel_size(self):
+        return self._get_value(self.Q_pixel_size)
+    def get_Q_pixel_units(self):
+        return self.Q_pixel_units
+    def get_R_pixel_size(self):
+        return self._get_value(self.R_pixel_size)
+    def get_R_pixel_units(self):
+        return self.R_pixel_units
+    def get_qx0(self,rx=None,ry=None):
+        return self._get_value(self.qx0,rx,ry)
+    def get_qy0(self,rx=None,ry=None):
+        return self._get_value(self.qy0,rx,ry)
+    def get_qx0_meas(self,rx=None,ry=None):
+        return self._get_value(self.qx0_meas,rx,ry)
+    def get_qy0_meas(self,rx=None,ry=None):
+        return self._get_value(self.qy0_meas,rx,ry)
+    def get_qx0_residuals(self,rx=None,ry=None):
+        return self._get_value(self.qx0_residuals,rx,ry)
+    def get_qy0_residuals(self,rx=None,ry=None):
+        return self._get_value(self.qy0_residuals,rx,ry)
+    def get_origin(self,rx=None,ry=None):
+        return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
+    def get_origin_meas(self,rx=None,ry=None):
+        return self.get_qx0_meas(rx,ry),self.get_qy0_meas(rx,ry)
+    def get_origin_residuals(self,rx=None,ry=None):
+        return self.get_qx0_residuals(rx,ry),self.get_qy0_residuals(rx,ry)
     def get_alpha_pix(self):
         return self.alpha_pix
     def get_probe_center(self):
         return self.probe_center
+    def get_a(self,rx=None,ry=None):
+        return self._get_value(self.a,rx,ry)
+    def get_b(self,rx=None,ry=None):
+        return self._get_value(self.b,rx,ry)
+    def get_theta(self,rx=None,ry=None):
+        return self._get_value(self.theta,rx,ry)
+    def get_ellipse(self,rx=None,ry=None):
+        return self.get_a(rx,ry),self.get_b(rx,ry),self.get_theta(rx,ry)
+    def get_p_ellipse(self,rx=None,ry=None):
+        qx0 = self.get_qx0(rx,ry)
+        qy0 = self.get_qy0(rx,ry)
+        a = self.get_a(rx,ry)
+        b = self.get_b(rx,ry)
+        theta = self.get_theta(rx,ry)
+        if rx is None and ry is None:
+            types = type(qx0),type(qy0),type(a),type(b),type(theta)
+            if any([isinstance(np.ndarray,t) for t in types]):
+                assert all([isinstance(np.ndarray,t) for t in types]), "Inconsistent types! Most likely the center (qx0,qy0) are arrays and the ellipse parameters (a,b,theta) are numbers. Try passing this function a position (rx,ry)."
         return (qx0,qy0,a,b,theta)
+    def get_QR_rotation(self):
+        return self.QR_rotation
+    def get_QR_flip(self):
+        return self.QR_flip
 
-    # show
+
+    def _validate_input(self,p):
+        assert isinstance(p,Number) or isinstance(p,np.ndarray)
+        if isinstance(p,np.ndarray):
+            assert p.shape == (self.R_Nx,self.R_Ny) or len(p.shape)==0
+
+    def _get_value(self,p,rx=None,ry=None):
+        try:
+            assert isinstance(p,Number) or isinstance(p,np.ndarray)
+            if isinstance(p,Number):
+                return p
+            if rx is None and ry is None:
+                return p
+            else:
+                assert np.all([isinstance(i,(int,np.integer)) for i in (rx,ry)])
+                assert rx<self.R_Nx and ry<self.R_Ny
+                return p[rx,ry]
+        except (NameError,AttributeError):
+            return None
+
+
     def show(self):
         if 'name' in vars(self).keys():
             print('{0:<16}\t{1:<16}'.format('name',self.name))
@@ -190,24 +240,6 @@ class Coordinates(DataObject):
                 if isinstance(v,np.ndarray):
                     v = 'array'
                 print('{0:<16}\t{1:<16}'.format(k,v))
-
-
-    # calibration methods
-    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
-        """
-        Computes the size of the Q-space pixels. Returns and also stores
-        the answer.
-
-        Args:
-            q_meas (number): a measured distance in q-space in pixels
-            q_known (number): the corresponding known *real space* distance
-            unit (str): the units of the real space value of `q_known`
-        """
-        dq = 1. / ( q_meas * q_known )
-        self.set_Q_pixel_size(dq)
-        self.set_Q_pixel_units(units+'^-1')
-        return dq
-
 
 
 

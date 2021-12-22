@@ -93,7 +93,7 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity. Stores the origin
-    positions in the Coordinates associated with datacube, and optionally also returns
+    positions in the Calibrations associated with datacube, and optionally also returns
     them.
 
     Args:
@@ -424,8 +424,8 @@ def fit_origin(
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
     masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
-    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Coordinates
-    instance, they will be retreived automatically. If a DataCube or Coordinates are
+    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibrations
+    instance, they will be retreived automatically. If a DataCube or Calibrations are
     passed, fitted origin and residuals are stored there directly.
 
     Args:
