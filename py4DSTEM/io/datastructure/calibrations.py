@@ -43,6 +43,8 @@ class Calibrations(DataObject):
         }
 
 
+    ######## calbration metadata getter/setter methods #########
+
     def _get_value(self,p,rx=None,ry=None):
         """ Enables returning the value of a pixel (rx,ry),
             if these are passed and `p` is an appropriate array
@@ -179,6 +181,7 @@ class Calibrations(DataObject):
         return self._get_value('probe_center')
 
 
+    ############# display all calibration metadata ##############
 
     # show
     def show(self):
@@ -190,6 +193,8 @@ class Calibrations(DataObject):
                     v = 'array'
                 print('{0:<16}\t{1:<16}'.format(k,v))
 
+
+    ################ TODO: this probs should go away #############
 
     # calibration methods
     def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
