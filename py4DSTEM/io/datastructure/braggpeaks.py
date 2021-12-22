@@ -6,7 +6,7 @@ from .dataobject import DataObject
 from .pointlistarray import PointListArray
 from .pointlist import PointList
 from .diffraction import DiffractionSlice
-from .coordinates import Coordinates
+from .calibrations import Calibrations
 from ...process.utils import tqdmnd
 
 class BraggPeaks(DataObject):
@@ -15,15 +15,15 @@ class BraggPeaks(DataObject):
     for working with this data, including calibration and generation of
     Bragg vector maps.
     """
-    def __init__(self, braggpeaks, coordinates, **kwargs):
+    def __init__(self, braggpeaks, calibrations, **kwargs):
         """
         Args:
             braggpeaks (PointListArray): a set of detected positions and intensities
-            coordinates (Coordinates):
+            calibrations (Calibrations):
         """
         DataObject.__init__(self, **kwargs)
         assert(isinstance(braggpeaks,PointListArray))
-        assert(isinstance(coordinates,Coordinates))
+        assert(isinstance(calibrations,Calibrations))
 
         # containers for calibrated and uncalibrated bragg positions 
         self.peaks = {
@@ -42,9 +42,9 @@ class BraggPeaks(DataObject):
         self.radial_profiles = {}
 
         # coodinates / calibrations
-        self.coordinates = coordinates
-        self.Q_Nx = coordinates.Q_Nx
-        self.Q_Ny = coordinates.Q_Ny
+        self.calibrations = calibrations
+        self.Q_Nx = calibrations.Q_Nx
+        self.Q_Ny = calibrations.Q_Ny
 
         # vis params
         self.bvm_vis_params = {}
@@ -61,7 +61,7 @@ class BraggPeaks(DataObject):
         Args:
             which (str): Which calibrations to perform.  If 'all' is passed,
                 performs applies all the measured calibrations found in
-                self.coordinates. Otherwise, indicates that only calibrations up
+                self.calibrations. Otherwise, indicates that only calibrations up
                 to this one should be applied - must be in
                 ('origin','ellipse','pixel','all').
             get_bvms (bool): If True, computes the bvm of the calibrated data.
@@ -78,7 +78,7 @@ class BraggPeaks(DataObject):
         print('Looking for calibration measurements...')
 
         # Origin
-        qx0,qy0 = self.coordinates.get_origin()
+        qx0,qy0 = self.calibrations.get_origin()
         if qx0 is not None and qy0 is not None:
             print('...calibrating origin...')
             from ...process.calibration import center_braggpeaks
@@ -95,7 +95,7 @@ class BraggPeaks(DataObject):
             if which == 'origin': return
 
         # Elliptical distortions
-        p_ellipse = self.coordinates.get_p_ellipse()
+        p_ellipse = self.calibrations.get_p_ellipse()
         if all([x is not None for x in p_ellipse]):
             print("...calibrating origin...")
             from ...process.calibration import correct_braggpeak_elliptical_distortions
@@ -113,8 +113,8 @@ class BraggPeaks(DataObject):
 
 
         # Pixel size
-        dq = self.coordinates.get_Q_pixel_size()
-        units = self.coordinates.get_Q_pixel_units()
+        dq = self.calibrations.get_Q_pixel_size()
+        units = self.calibrations.get_Q_pixel_units()
         if dq is not None:
             assert(units is not None)
             print("...calibrating Q pixel size...")
@@ -131,8 +131,8 @@ class BraggPeaks(DataObject):
             print('...pixel calibration not found, skipping...')
 
         # Rotation
-        rotation = self.coordinates.get_QR_rotation_degrees()
-        flip = self.coordinates.get_QR_flip()
+        rotation = self.calibrations.get_QR_rotation_degrees()
+        flip = self.calibrations.get_QR_flip()
         if all([x is not None for x in (rotation,flip)]):
             print("...calibrating Q/R rotation and flip...")
             from ...process.calibration import calibrate_bragg_peaks_rotation
@@ -174,7 +174,7 @@ class BraggPeaks(DataObject):
         bvm = self.bvms['origin'].data
         p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
         _,_,a,b,theta = p_ellipse
-        self.coordinates.set_ellipse((a,b,theta))
+        self.calibrations.set_ellipse((a,b,theta))
         return p_ellipse
 
     # Pixel size
@@ -229,8 +229,8 @@ class BraggPeaks(DataObject):
         from ...visualize import show_qprofile
         assert(which in self.radial_profiles.keys()), "This radial profile has not been computed"
         profile = self.radial_profiles[which]
-        dq = self.coordinates.get_Q_pixel_size()
-        units = self.coordinates.get_Q_pixel_units()
+        dq = self.calibrations.get_Q_pixel_size()
+        units = self.calibrations.get_Q_pixel_units()
         if dq is not None:
             assert(units is not None)
             q = profile.data['q'] * dq
@@ -273,14 +273,14 @@ class BraggPeaks(DataObject):
     def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
         """
         Computes the size of the Q-space pixels. Returns and also stores
-        the answer in self.coordinates.
+        the answer in self.calibrations.
 
         Args:
             q_meas (number): a measured distance in q-space in pixels
             q_known (number): the corresponding known *real space* distance
             unit (str): the units of the real space value of `q_known`
         """
-        dq = self.coordinates.calculate_Q_pixel_size(q_meas,q_known,units)
+        dq = self.calibrations.calculate_Q_pixel_size(q_meas,q_known,units)
         return dq
 
 
@@ -307,7 +307,7 @@ class BraggPeaks(DataObject):
         else:
             from ...process.diskdetection import get_bvm
         if which in ('raw','origin','ellipse'): dq=1
-        else: dq = self.coordinates.get_Q_pixel_size()
+        else: dq = self.calibrations.get_Q_pixel_size()
         bvm = DiffractionSlice(
             data=get_bvm(self.peaks[which],self.Q_Nx,self.Q_Ny,Q_pixel_size=dq),
             name=which)
@@ -327,12 +327,12 @@ class BraggPeaks(DataObject):
         bvm = self.bvms[which].data
         if which in ('raw','origin','ellipse'): scalebar=None
         else:
-            dq = self.coordinates.get_Q_pixel_size()
+            dq = self.calibrations.get_Q_pixel_size()
             if dq is not None:
                 scalebar={}
         if len(vis_params)==0:
             vis_params = self.bvm_vis_params
-        show(bvm,scalebar=scalebar,coordinates=self.coordinates,**vis_params)
+        show(bvm,scalebar=scalebar,calibrations=self.calibrations,**vis_params)
 
     def set_bvm_vis_params(self,**kwargs):
         self.bvm_vis_params = kwargs
@@ -359,7 +359,7 @@ def save_braggpeaks_group(group, braggpeaks):
     except:
         n_coords = 1
     #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("coordinates", np.string_(str(pointlistarray.dtype)))
+    group.attrs.create("calibrations", np.string_(str(pointlistarray.dtype)))
     group.attrs.create("dimensions", n_coords)
 
     pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
@@ -376,8 +376,8 @@ def get_pointlistarray_from_grp(g):
     name = g.name.split('/')[-1]
     dset = g['data']
     shape = g['data'].shape
-    coordinates = g['data'][0,0].dtype
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    calibrations = g['data'][0,0].dtype
+    pla = PointListArray(calibrations=calibrations,shape=shape,name=name)
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         pla.get_pointlist(i,j).add_dataarray(dset[i,j])
     return pla

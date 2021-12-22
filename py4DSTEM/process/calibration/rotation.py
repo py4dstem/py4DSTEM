@@ -2,7 +2,7 @@
 
 import numpy as np
 from typing import Optional
-from ...io.datastructure import Coordinates, PointListArray
+from ...io.datastructure import Calibrations, PointListArray
 from py4DSTEM.process.utils import tqdmnd
 
 
@@ -13,7 +13,7 @@ def calibrate_bragg_peaks_rotation(
 ) -> PointListArray:
     """
     Calibrate rotation of Bragg peak positions, using either the R/Q rotation `theta`
-    or the `QR_rotation` value inside a Coordinates object.
+    or the `QR_rotation` value inside a Calibrations object.
 
     Accepts:
         braggpeaks  (PointListArray) the CENTERED Bragg peaks

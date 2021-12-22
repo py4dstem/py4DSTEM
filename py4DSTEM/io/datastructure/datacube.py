@@ -10,7 +10,7 @@ import h5py
 from .dataobject import DataObject
 from .diffraction import DiffractionSlice
 from .real import RealSlice
-from .coordinates import Coordinates
+from .calibrations import Calibrations
 from .braggpeaks import BraggPeaks
 from ...process import preprocess
 from ...process import virtualimage
@@ -51,7 +51,7 @@ class DataCube(DataObject):
         self.diffractionslices = {}
         self.realslices = {}
         self.braggpeaks = {}
-        self.coordinates = Coordinates(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
+        self.calibrations = Calibrations(self.R_Nx,self.R_Ny,self.Q_Nx,self.Q_Ny)
 
         # initialize params
         # bvm visualization
@@ -395,8 +395,8 @@ class DataCube(DataObject):
         from ...process.calibration.origin import get_probe_size
         assert('probe_image' in self.diffractionslices.keys()), "First add a probe image!"
         qr,qx0,qy0 = get_probe_size(self.diffractionslices['probe_image'].data,**kwargs)
-        self.coordinates.set_alpha_pix(qr)
-        self.coordinates.set_probe_center((qx0,qy0))
+        self.calibrations.set_alpha_pix(qr)
+        self.calibrations.set_probe_center((qx0,qy0))
         return qr,(qx0,qy0)
 
     def show_probe_size(self):
@@ -406,8 +406,8 @@ class DataCube(DataObject):
         from ...visualize import show_circles
         assert('probe_image' in self.diffractionslices.keys())
         show_circles(self.diffractionslices['probe_image'].data,
-                     self.coordinates.probe_center,
-                     self.coordinates.alpha_pix)
+                     self.calibrations.probe_center,
+                     self.calibrations.alpha_pix)
 
     def get_probe_kernel(self,method='sigmoid',**kwargs):
         """
@@ -429,8 +429,8 @@ class DataCube(DataObject):
         # get data
         probe = self.diffractionslices['probe_image'].data
         try:
-            center = self.coordinates.probe_center
-            alpha = self.coordinates.alpha_pix
+            center = self.calibrations.probe_center
+            alpha = self.calibrations.alpha_pix
         except AttributeError:
             from ...process.calibration.origin import get_probe_size
             alpha,qx0,qy0 = get_probe_size(probe)
@@ -476,7 +476,7 @@ class DataCube(DataObject):
         assert('probe_kernel' in self.diffractionslices.keys())
         if R is None:
             try:
-                R = int( 5*self.coordinates.alpha_pix )
+                R = int( 5*self.calibrations.alpha_pix )
             except NameError:
                 R = self.Q_Nx // 4
         if L is None:
@@ -567,7 +567,7 @@ class DataCube(DataObject):
         assert('probe_kernel' in self.diffractionslices.keys())
         peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
-        braggpeaks = BraggPeaks(peaks,self.coordinates)
+        braggpeaks = BraggPeaks(peaks,self.calibrations)
         braggpeaks.name = name
         braggpeaks.set_bvm_vis_params(**self.bvm_vis_params)
         self.braggpeaks[name] = braggpeaks
@@ -633,7 +633,7 @@ class DataCube(DataObject):
             self.get_max_dp()
         kwargs['dp_max'] = self.diffractionslices['max_dp'].data
         origin = get_origin(self, **kwargs)
-        self.coordinates.set_origin_meas(origin)
+        self.calibrations.set_origin_meas(origin)
 
     def fit_origin(self, **kwargs):
         """
@@ -642,12 +642,12 @@ class DataCube(DataObject):
         """
         from ...process.calibration.origin import fit_origin
         try:
-            origin_meas = self.coordinates.get_origin_meas()
+            origin_meas = self.calibrations.get_origin_meas()
         except AttributeError or KeyError:
             raise Exception('First run measure_origin!')
         qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(origin_meas, **kwargs)
-        self.coordinates.set_origin((qx0_fit,qy0_fit))
-        self.coordinates.set_origin_residuals((qx0_residuals,qy0_residuals))
+        self.calibrations.set_origin((qx0_fit,qy0_fit))
+        self.calibrations.set_origin_residuals((qx0_residuals,qy0_residuals))
 
     def show_origin_meas(self):
         """
@@ -676,7 +676,7 @@ class DataCube(DataObject):
         p_ellipse = peaks.fit_elliptical_distortions(fitradii)
 
         # check that the ellipse params correctly wrote into coords
-        _p_ellipse = self.coordinates.get_p_ellipse()
+        _p_ellipse = self.calibrations.get_p_ellipse()
 
         assert(all([p_ellipse[i]==p_ellipse[i] for i in (2,3,4)]))
         return p_ellipse
@@ -704,21 +704,21 @@ class DataCube(DataObject):
     def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
         """
         Computes the size of the Q-space pixels. Returns and also stores
-        the answer in self.coordinates.
+        the answer in self.calibrations.
 
         Args:
             q_meas (number): a measured distance in q-space in pixels
             q_known (number): the corresponding known *real space* distance
             unit (str): the units of the real space value of `q_known`
         """
-        dq = self.coordinates.calculate_Q_pixel_size(q_meas,q_known,units)
+        dq = self.calibrations.calculate_Q_pixel_size(q_meas,q_known,units)
         return dq
 
 
 
 
 
-    ####### apply calibrations to coordinates
+    ####### apply calibrations to calibrations
 
     def calibrate_rotation(self,theta,flip):
         """
@@ -726,8 +726,8 @@ class DataCube(DataObject):
             theta (number): in radians
             flip (bool):
         """
-        self.coordinates.set_QR_rotation(theta)
-        self.coordinates.set_QR_flip(flip)
+        self.calibrations.set_QR_rotation(theta)
+        self.calibrations.set_QR_flip(flip)
 
 
     ####### apply calibrations to bragg peaks
@@ -739,7 +739,7 @@ class DataCube(DataObject):
         Args:
             which (str): Which calibrations to perform.  If 'all' is passed,
                 performs applies all the measured calibrations found in
-                self.coordinates. Otherwise, indicates that only calibrations up
+                self.calibrations. Otherwise, indicates that only calibrations up
                 to this one should be applied - must be in
                 ('origin','ellipse','pixel','all').
             peaks (str): which set of Bragg peak positions to use
@@ -747,7 +747,7 @@ class DataCube(DataObject):
         assert(peaks in self.braggpeaks.keys())
         peaks = self.braggpeaks[peaks]
         assert(isinstance(peaks,BraggPeaks))
-        assert(self.coordinates is peaks.coordinates)
+        assert(self.calibrations is peaks.calibrations)
         peaks.calibrate(which=which)
 
     def calibrate_bragg_origins(self,name='braggpeaks'):
@@ -756,7 +756,7 @@ class DataCube(DataObject):
         """
         peaks = self.braggpeaks[name]
         assert(isinstance(peaks,BraggPeaks))
-        assert(self.coordinates is peaks.coordinates)
+        assert(self.calibrations is peaks.calibrations)
         peaks.calibrate_origin()
 
 
@@ -775,7 +775,7 @@ class DataCube(DataObject):
             self.braggpeaks['origin'],p_ellipse)
         self.braggpeaks['ellipse'] = peaks
         _,_,a,b,theta = p_ellipse
-        self.coordinates.set_ellipse(a,b,theta)
+        self.calibrations.set_ellipse(a,b,theta)
         self.bragg_calstate_ellipse = True
 
     def calibrate_bragg_dq(self):
@@ -787,7 +787,7 @@ class DataCube(DataObject):
         assert(self.bragg_calstate_ellipse)
         assert(not self.bragg_calstate_dq)
         peaks = calibrate_Bragg_peaks_pixel_size(
-            self.braggpeaks['ellipse'],coords=self.coordinates)
+            self.braggpeaks['ellipse'],coords=self.calibrations)
         self.braggpeaks['dq'] = peaks
         self.bragg_calstate_dq = True
 
@@ -1010,64 +1010,64 @@ class DataCube(DataObject):
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+        self.calibrations.R_Nx = self.R_Nx
+        self.calibrations.R_Ny = self.R_Ny
 
     def swap_RQ(self):
         """
-        Swap real and reciprocal space coordinates.
+        Swap real and reciprocal space calibrations.
         """
         self = preprocess.swap_RQ(self)
         self.update_slice_parsers()
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
+        self.calibrations.R_Nx = self.R_Nx
+        self.calibrations.R_Ny = self.R_Ny
 
     def swap_Rxy(self):
         """
-        Swap real space x and y coordinates.
+        Swap real space x and y calibrations.
         """
         self = preprocess.swap_Rxy(self)
         self.update_slice_parsers()
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
+        self.calibrations.R_Nx = self.R_Nx
+        self.calibrations.R_Ny = self.R_Ny
 
     def swap_Qxy(self):
         """
-        Swap reciprocal space x and y coordinates.
+        Swap reciprocal space x and y calibrations.
         """
         self = preprocess.swap_Qxy(self)
-        Q_Nx,Q_Ny = self.coordinates.Q_Nx,self.coordinates.Q_Ny
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
+        Q_Nx,Q_Ny = self.calibrations.Q_Nx,self.calibrations.Q_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
 
     def crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
         self = preprocess.crop_data_diffraction(self,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max)
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
 
     def crop_data_real(self,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max):
         self = preprocess.crop_data_real(self,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max)
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+        self.calibrations.R_Nx = self.R_Nx
+        self.calibrations.R_Ny = self.R_Ny
 
     def bin_data_diffraction(self, bin_factor):
         self = preprocess.bin_data_diffraction(self, bin_factor)
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
 
     def bin_data_mmap(self, bin_factor, dtype=np.float32):
         self = preprocess.bin_data_mmap(self, bin_factor, dtype=dtype)
-        self.coordinates.Q_Nx = self.Q_Nx
-        self.coordinates.Q_Ny = self.Q_Ny
+        self.calibrations.Q_Nx = self.Q_Nx
+        self.calibrations.Q_Ny = self.Q_Ny
 
     def bin_data_real(self, bin_factor):
         self = preprocess.bin_data_real(self, bin_factor)
-        self.coordinates.R_Nx = self.R_Nx
-        self.coordinates.R_Ny = self.R_Ny
+        self.calibrations.R_Nx = self.R_Nx
+        self.calibrations.R_Ny = self.R_Ny
 
 
 

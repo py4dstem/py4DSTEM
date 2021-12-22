@@ -12,9 +12,9 @@ def tdesign(degree):
     summation of their values at the points defined by the t-design.
     Designs for order up to t=21 are stored and returned. Note that for the
     spherical harmonic transform (SHT) of a function of order N, a spherical
-    t-design of t>=2N should be used (or equivalently N=floor(t/2) ), since 
-    the integral evaluates the product of the spherical function with 
-    spherical harmonics of up to order N. 
+    t-design of t>=2N should be used (or equivalently N=floor(t/2) ), since
+    the integral evaluates the product of the spherical function with
+    spherical harmonics of up to order N.
 
     Returns:
         azim: Nx1, azimuth of each point in the t-design
@@ -24,8 +24,8 @@ def tdesign(degree):
     The designs have been copied from:
         http://neilsloane.com/sphdesigns/
     and should be referenced as:
-        "McLaren's Improved Snub Cube and Other New Spherical Designs in 
-        Three Dimensions", R. H. Hardin and N. J. A. Sloane, Discrete and 
+        "McLaren's Improved Snub Cube and Other New Spherical Designs in
+        Three Dimensions", R. H. Hardin and N. J. A. Sloane, Discrete and
         Computational Geometry, 15 (1996), pp. 429-441.
 
     Based on the MATLAB implementation by:
@@ -35,7 +35,7 @@ def tdesign(degree):
     assert degree <= 21, "Degree must be 21 or less."
     assert degree >= 1, "Degree should be at least 1."
     assert type(degree) is int, "Degree should be an integer."
-    
+
     vecs = _tdesigns[degree-1]
 
     azim = np.arctan2(vecs[:,1],vecs[:,0])
