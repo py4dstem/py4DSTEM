@@ -389,7 +389,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             pass
         elif coordinates is not None:
             try:
-                x0 = coordinates.get_qx0(rx,ry)
+                x0 = coordinates.get_origin(rx,ry)[0]
             except AttributeError:
                 raise Exception('The Coordinates instance passed does not contain a value for qx0')
         else:
@@ -398,7 +398,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
             pass
         elif coordinates is not None:
             try:
-                y0 = coordinates.get_qy0(rx,ry)
+                y0 = coordinates.get_origin(rx,ry)[1]
             except AttributeError:
                 raise Exception('The Coordinates instance passed does not contain a value for qy0')
         else:

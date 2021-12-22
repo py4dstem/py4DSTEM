@@ -791,21 +791,6 @@ class DataCube(DataObject):
         self.braggpeaks['dq'] = peaks
         self.bragg_calstate_dq = True
 
-    def calibrate_bragg_rotation(self):
-        """
-
-        """
-        from ...process.calibration import calibrate_Bragg_peaks_rotation
-        assert('dq' in self.braggpeaks.keys())
-        assert(self.bragg_calstate_dq)
-        assert(not self.bragg_calstate_rotflip)
-        #self.coordinates.set_QR_rotation(rot)
-        #self.coordinates.set_QR_flip(flip)
-        peaks = calibrate_Bragg_peaks_rotation(
-            self.braggpeaks['dq'],coords=self.coordinates)
-        self.braggpeaks['rotflip'] = peaks
-        self.bragg_calstate_rotflip = True
-
 
 
 
