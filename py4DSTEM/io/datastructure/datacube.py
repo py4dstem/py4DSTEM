@@ -395,7 +395,7 @@ class DataCube(DataObject):
         from ...process.calibration.origin import get_probe_size
         assert('probe_image' in self.diffractionslices.keys()), "First add a probe image!"
         qr,qx0,qy0 = get_probe_size(self.diffractionslices['probe_image'].data,**kwargs)
-        self.calibrations.set_alpha_pix(qr)
+        self.calibrations.set_convergence_semiangle_pixels(qr)
         self.calibrations.set_probe_center((qx0,qy0))
         return qr,(qx0,qy0)
 
@@ -405,9 +405,11 @@ class DataCube(DataObject):
         """
         from ...visualize import show_circles
         assert('probe_image' in self.diffractionslices.keys())
+        center = self.calibrations.get_probe_center()
+        alpha = self.calibrations.get_convergence_semiangle_pixels()
+        assert(all([x is not None for x in (center,alpha)]))
         show_circles(self.diffractionslices['probe_image'].data,
-                     self.calibrations.probe_center,
-                     self.calibrations.alpha_pix)
+            center,alpha)
 
     def get_probe_kernel(self,method='sigmoid',**kwargs):
         """
@@ -475,10 +477,8 @@ class DataCube(DataObject):
         from ...visualize import show_kernel
         assert('probe_kernel' in self.diffractionslices.keys())
         if R is None:
-            try:
-                R = int( 5*self.calibrations.alpha_pix )
-            except NameError:
-                R = self.Q_Nx // 4
+            alpha = self.calibrations.get_convergence_semiangle_pixels()
+            R = int(5*alpha) if alpha is not None else self.Q_Nx//4
         if L is None:
             L = 2*R
         if W is None:

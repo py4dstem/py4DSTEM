@@ -168,18 +168,17 @@ class Calibrations(DataObject):
     def get_QR_flip(self):
         return self._get_value('QR_flip')
 
-
-
-###mewowemow
-    def set_alpha_pix(self,alpha_pix):
-        self.alpha_pix = alpha_pix
-    def set_probe_center(self,probe_center):
-        self.probe_center = probe_center
-    def get_alpha_pix(self):
-        return self.alpha_pix
+    # probe
+    def set_convergence_semiangle_pixels(self,x):
+        self.params['convergence_semiangle_pixels'] = x
+    def get_convergence_semiangle_pixels(self):
+        return self._get_value('convergence_semiangle_pixels')
+    def set_probe_center(self,x):
+        self.params['probe_center'] = x
     def get_probe_center(self):
-        return self.probe_center
-        return (qx0,qy0,a,b,theta)
+        return self._get_value('probe_center')
+
+
 
     # show
     def show(self):
