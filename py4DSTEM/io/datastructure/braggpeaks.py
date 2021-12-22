@@ -320,18 +320,6 @@ class BraggPeaks(DataObject):
         ax.plot(q,gaussian(q,A,mu,sigma),color='r')
         plt.show()
 
-    def calculate_Q_pixel_size(self,q_meas,q_known,units='A'):
-        """
-        Computes the size of the Q-space pixels. Returns and also stores
-        the answer in self.calibrations.
-
-        Args:
-            q_meas (number): a measured distance in q-space in pixels
-            q_known (number): the corresponding known *real space* distance
-            unit (str): the units of the real space value of `q_known`
-        """
-        dq = self.calibrations.calculate_Q_pixel_size(q_meas,q_known,units)
-        return dq
 
 
     ####### bvm methods #######
