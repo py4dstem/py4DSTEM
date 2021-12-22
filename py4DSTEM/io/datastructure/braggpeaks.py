@@ -231,7 +231,7 @@ class BraggPeaks(DataObject):
 
     def get_radial_integral(self,which='ellipse',dq=0.25):
         """
-
+        TODO: use peaks instead of BVMs. also write a docstring ;ppppp
         """
         from ...process.utils import radial_integral
         assert(which in self.bvms.keys())

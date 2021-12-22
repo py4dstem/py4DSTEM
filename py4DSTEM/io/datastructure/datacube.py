@@ -592,38 +592,6 @@ class DataCube(DataObject):
 
 
 
-    ############## bragg vector maps ################
-
-    def get_bvm(self,which='raw',peaks='braggpeaks',Q_pixel_size=1):
-        """
-        Args:
-            which (str): Which bvm to compute, i.e. the Bragg peak positions
-                at which stage of calibration to use. Must be in
-                ('origin','ellipse','pixel','all').
-            peaks (str): specifies a BraggPeaks instance to use, which
-                must alread exist in datacube.braggpeaks
-            Q_pixel_size (number): the size of the diffraction space p[ixels
-        """
-        assert(peaks in self.braggpeaks.keys()), "Requested BraggPeaks can't be found"
-        peaks = self.braggpeaks[peaks]
-        assert(which in peaks.bvms.keys()), "Requested BVM can't be found"
-        bvm = peaks.get_bvm(which=which)
-        return bvm
-
-    def show_bvm(self,which='raw',peaks='braggpeaks',**vis_params):
-        """
-
-        Args:
-            which (str): Which bvm to show, i.e. the Bragg peak positions
-                at which stage of calibration to use. Must be in
-                ('origin','ellipse','pixel','all').
-            peaks (str): specifies a BraggPeaks instance to use
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        peaks.show_bvm(which=which,**vis_params)
-
-
 
     ############# Set default params #############
 
@@ -634,6 +602,7 @@ class DataCube(DataObject):
         self.bvm_vis_params = kwargs
         for key in self.braggpeaks.keys():
             self.braggpeaks[key].set_bvm_vis_params(**kwargs)
+
 
 
 
@@ -685,48 +654,6 @@ class DataCube(DataObject):
         """
         from ...visualize import show_origin_fit
         show_origin_fit(self)
-
-
-    # measure elliptical distortions
-
-
-
-    # measure the pixel size
-
-    def get_bvm_radial_integral(self,which='ellipse',peaks='braggpeaks',dq=0.25):
-        """
-
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        return peaks.get_radial_integral(which=which,dq=dq)
-
-    def fit_bvm_radial_peak(self,lims,which='ellipse',peaks='braggpeaks',
-                            show=False,ymax=None):
-        """
-
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        return peaks.fit_radial_peak(lims,which,show,ymax)
-
-
-
-
-
-
-
-
-
-
-
-
-######meowmixmeowmix#########meow#####mix######
-
-
-
-
-
 
 
 
@@ -848,30 +775,6 @@ class DataCube(DataObject):
 
 
 
-    def show_bvm_radial_profile(self,which='ellipse',peaks='braggpeaks',ymax=None,
-                                 q_ref=None,returnfig=False):
-        """
-        Args:
-            which (str): Which radial integral to show.  Must be in
-                ('origin','ellipse','pixel','all').
-            peaks (str): which set of Bragg peak positions to use
-            ymax (number or None): the upper limit of the y-axis
-            q_ref (number or tuple/list of numbers or None): if not None, plot
-                reference lines at these positions on the q-axis
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        f = peaks.show_radial_profile(which,ymax,q_ref,returnfig)
-        if returnfig: return f
-
-
-
-
-
-
-
-
-
 
 
 
@@ -944,12 +847,6 @@ class DataCube(DataObject):
         self = preprocess.bin_data_real(self, bin_factor)
         self.calibrations.R_Nx = self.R_Nx
         self.calibrations.R_Ny = self.R_Ny
-
-
-
-
-
-
 
 
 
