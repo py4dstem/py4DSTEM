@@ -160,22 +160,72 @@ class BraggPeaks(DataObject):
 
     # Elliptical distortions
 
-    def fit_elliptical_distortions(self,fitradii):
+    def select_radii(self,radii,which='origin',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple):
+            which (str): Which to show.  Must be in
+                ('origin','ellipse','pixel','all').
+        """
+        from ...visualize import show
+        assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
+        bvm = self.bvms[which].data
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
+                      'radii':radii,'fill':True,
+                      'alpha':0.3,'color':'y'},
+             title="selecting radii over bvm '{}'".format(which),
+             **vis_params)
+
+    def fit_elliptical_distortions(self,radii,which='origin'):
         """
         Fits the elliptical distortions using an annular region
         of a bragg vector map.
 
         TODO: update fn to use peaks, not bvm
+
+        Args:
+            radii (2-tuple): fit data within an annulus specified by
+                this inner/outer radius
+            which (str): Which data to fit to.  Must be in
+                ('origin','ellipse','pixel','all').
         """
         from ...process.calibration import fit_ellipse_1D
-        assert('origin' in self.peaks.keys()), "Calibrate the origin!"
-        assert('origin' in self.bvms.keys()), "Compute the origin-corrected BVM!"
-        peaks = self.peaks['origin']
-        bvm = self.bvms['origin'].data
-        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),fitradii)
+        assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
+        bvm = self.bvms[which].data
+        p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),radii)
         _,_,a,b,theta = p_ellipse
         self.calibrations.set_ellipse((a,b,theta))
         return p_ellipse
+
+    def show_elliptical_fit(self,radii,p_ellipse,which='origin',**vis_params):
+        """
+
+        Args:
+            radii (2-tuple): fit data within an annulus specified by
+                this inner/outer radius
+            p_ellipse (5-tuple): the ellipse params, (qx0.,qy0,a,b,theta). Note
+                that only (a,b,theta) are used in this function
+            which (str): Which data to fit to.  Must be in
+                ('origin','ellipse','pixel','all').
+        """
+        from ...visualize import show
+        assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
+        bvm = self.bvms[which].data
+        center = bvm.shape[0]/2,bvm.shape[1]/2
+        _,_,a,b,theta = p_ellipse
+        if len(vis_params)==0:
+            vis_params = self.bvm_vis_params
+        show(bvm,
+             annulus={'center':center,'radii':radii,'fill':True,
+                      'alpha':0.2,'color':'y'},
+             ellipse={'center':center,'a':a,'b':b,'theta':theta,
+                       'color':'r','alpha':0.7,'linewidth':2},
+             **vis_params)
+
 
     # Pixel size
 

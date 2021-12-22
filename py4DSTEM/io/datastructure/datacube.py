@@ -155,7 +155,9 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
-        im = self._get_best_im(im)
+        im,title = self._get_best_im(im)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position realspace lims"
         show_rectangles(im,geometry,alpha=alpha,**kwargs)
 
     def position_realspace_mask(self,mask,im=None,alpha=0.25,**kwargs):
@@ -173,7 +175,9 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show
-        im = self._get_best_im(im)
+        im,title = self._get_best_im(im)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position realspace mask"
         show(im,mask=np.logical_not(mask),mask_color='r',mask_alpha=alpha,**kwargs)
 
 
@@ -304,7 +308,9 @@ class DataCube(DataObject):
         """
         from ...visualize import show_circles
         center,radius = geometry
-        dp = self._get_best_dp(dp)
+        dp,title = self._get_best_dp(dp)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position circular detector"
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show_circles(dp,center=center,R=radius,alpha=alpha,**kwargs)
@@ -323,7 +329,9 @@ class DataCube(DataObject):
             alpha (number): the transparency of the overlay
         """
         from ...visualize import show_rectangles
-        dp = self._get_best_dp(dp)
+        dp,title = self._get_best_dp(dp)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position rectangular detector"
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show_rectangles(dp,geometry,alpha=alpha,**kwargs)
@@ -344,7 +352,9 @@ class DataCube(DataObject):
         """
         from ...visualize import show
         center,radii = geometry
-        dp = self._get_best_dp(dp)
+        dp,title = self._get_best_dp(dp)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position annular detector"
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show(dp,
@@ -366,7 +376,9 @@ class DataCube(DataObject):
         """
         from ...visualize import show_rectangles
         lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
-        dp = self._get_best_dp(dp)
+        dp,title = self._get_best_dp(dp)
+        if 'title' not in kwargs:
+            kwargs['title'] = title + ", position point detector"
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         show_rectangles(dp,lims,alpha=alpha,**kwargs)
@@ -514,7 +526,7 @@ class DataCube(DataObject):
                 *diffraction patterns*. Default is `scaling='log'`
         """
         from ...visualize.vis_special import show_selected_dps
-        im = self._get_best_im(im)
+        im,_ = self._get_best_im(im)
         show_selected_dps(self,positions,im=im,colors=colors,
                 HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
 
@@ -555,7 +567,7 @@ class DataCube(DataObject):
         assert('_some_braggpeaks' in self.braggpeaks.keys()), "First run find_some_bragg_disks!"
         braggpeaks = self.braggpeaks['_some_braggpeaks']['peaks']
         positions = self.braggpeaks['_some_braggpeaks']['positions']
-        im = self._get_best_im(im)
+        im,_ = self._get_best_im(im)
         show_selected_dps(self,positions,im=im,bragg_pos=braggpeaks,
                           colors=colors,HW=HW,figsize_dp=figsize_dp,**kwargs)
 
@@ -666,20 +678,6 @@ class DataCube(DataObject):
 
     # measure elliptical distortions
 
-    def fit_elliptical_distortions_bragg(self,fitradii,peaks='braggpeaks'):
-        """
-        Fits the elliptical distortions using an annular ragion
-        of a bragg vector map
-        """
-        assert(peaks in self.braggpeaks.keys())
-        peaks = self.braggpeaks[peaks]
-        p_ellipse = peaks.fit_elliptical_distortions(fitradii)
-
-        # check that the ellipse params correctly wrote into coords
-        _p_ellipse = self.calibrations.get_p_ellipse()
-
-        assert(all([p_ellipse[i]==p_ellipse[i] for i in (2,3,4)]))
-        return p_ellipse
 
 
     # measure the pixel size
@@ -816,20 +814,21 @@ class DataCube(DataObject):
 
     ############## visualize ###################
 
-    def show(self, dp=None, **kwargs):
+    def _get_best_dp(self,dp=None):
         """
-        Show a single *diffraction shaped* 2D slice of the dataset,
-        passing any **kwargs to the visualize.show function.
-        Default scaling is 'log'.
+        Find and returns a diffraction pattern like array using the input
+        argument `dp` to determine which array.
 
         Args:
             dp (None or 2-tuple or str): Specifies the data to show.
-            Behavior depends on the argument type:
-                - (None) the maximal dp, if it exists. else, the dp at (0,0)
-                - (2-tuple) the diffraction pattern at (rx,ry)
-                - (string) the attached DiffractionSlice of this name, if it exists
+                Behavior depends on the argument type:
+                    - (None) the maximal dp, if it exists. else, the dp at (0,0)
+                    - (2-tuple) the diffraction pattern at (rx,ry)
+                    - (string) the attached DiffractionSlice of this name, if it exists
+
+        Returns:
+            (2-tuple): (2d array, str), where the string is a title
         """
-        from ...visualize import show
         if dp is None:
             try:
                 dp = self.diffractionslices['max_dp'].data
@@ -849,7 +848,60 @@ class DataCube(DataObject):
                 raise Exception("This datacube has no image called '{}'".format(dp))
         else:
             raise Exception("Invalid type, {}".format(type(dp)))
+        return dp,title
 
+    def _get_best_im(self,im=None):
+        """
+        Find and returns a diffraction pattern like array using the input
+        argument `dp` to determine which array.
+
+        Args:
+            dp (None or 2-tuple or str): Specifies the data to show.
+                Behavior depends on the argument type:
+                    - (None) the maximal dp, if it exists. else, the dp at (0,0)
+                    - (2-tuple) the diffraction pattern at (rx,ry)
+                    - (string) the attached DiffractionSlice of this name, if it exists
+
+        Returns:
+            (2-tuple): (2d array, str), where the string is a title
+        """
+        if im is None:
+            try:
+                im = self.realslices['sum'].data
+                title = 'sum'
+            except KeyError:
+                x,y = self.Q_Nx//2,self.Q_Ny//2
+                im = self.data[:,:,x,y]
+                title = 'rx,ry = {},{}'.format(x,y)
+        elif isinstance(im,tuple):
+            assert(len(im)==2)
+            title = 'rx,ry = {},{}'.format(im[0],im[1])
+            im = self.data[:,:,im[0],im[1]]
+        elif isinstance(im,str):
+            try:
+                title = im
+                im = self.realslices[im].data
+            except KeyError:
+                raise Exception("This datacube has no image called '{}'".format(im))
+        else:
+            raise Exception("Invalid type, {}".format(type(im)))
+        return im,title
+
+    def show(self, dp=None, **kwargs):
+        """
+        Show a single *diffraction shaped* 2D slice of the dataset,
+        passing any **kwargs to the visualize.show function.
+        Default scaling is 'log'.
+
+        Args:
+            dp (None or 2-tuple or str): Specifies the data to show.
+            Behavior depends on the argument type:
+                - (None) the maximal dp, if it exists. else, the dp at (0,0)
+                - (2-tuple) the diffraction pattern at (rx,ry)
+                - (string) the attached DiffractionSlice of this name, if it exists
+        """
+        from ...visualize import show
+        dp,title = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
         if 'title' not in kwargs:
@@ -870,107 +922,12 @@ class DataCube(DataObject):
                 - (string) the attached RealSlice of this name, if it exists
         """
         from ...visualize import show
-        if im is None:
-            try:
-                im = self.realslices['sum_im'].data
-                title = 'sum_im'
-            except KeyError:
-                qx,qy = self.Q_Nx//2,self.Q_Ny//2
-                im = virtualimage.get_im(self,
-                                         geometry=(qx,qy),
-                                         detector='point')
-                title = 'im {},{}'.format(qx,qy)
-        elif isinstance(im,(tuple,list)):
-            assert(len(im)==2)
-            title = 'im {},{}'.format(im[0],im[1])
-            im = virtualimage.get_im(self,im,'point')
-        elif isinstance(im,str):
-            try:
-                title = im
-                im = self.realslices[im].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
-        else:
-            raise Exception("Invalid type, {}".format(type(im)))
-
+        im,title = self._get_best_im(im)
         if 'title' not in kwargs:
             kwargs['title'] = title
         show(im,**kwargs)
 
-    def _get_best_dp(self,dp=None):
-        if dp is None:
-            try:
-                dp = self.diffractionslices['max_dp'].data
-            except KeyError:
-                dp = self.data[0,0,:,:]
-        elif isinstance(dp,tuple):
-            assert(len(dp)==2)
-            dp = self.data[dp[0],dp[1],:,:]
-        elif isinstance(dp,str):
-            try:
-                dp = self.diffractionslices[dp].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(dp))
-        return dp
 
-    def _get_best_im(self,im=None):
-        if im is None:
-            try:
-                im = self.realslices['sum'].data
-            except KeyError:
-                im = self.data[:,:,self.Q_Nx//2,self.Q_Ny//2]
-        elif isinstance(im,tuple):
-            assert(len(im)==2)
-            im = self.data[:,:,im[0],im[1]]
-        elif isinstance(im,str):
-            try:
-                im = self.realslices[im].data
-            except KeyError:
-                raise Exception("This datacube has no image called '{}'".format(im))
-        return im
-
-    def bvm_fit_select_radii(self,radii,peaks='braggpeaks',**vis_params):
-        """
-
-        Args:
-            radii (2-tuple):
-            peaks (str): specifies a BraggPeaks instance to use
-        """
-        from ...visualize import show
-        assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
-        peaks = self.braggpeaks[peaks]
-        assert(peaks.bvms['origin'] is not None), "Center the braggpeaks!"
-        bvm = peaks.bvms['origin'].data
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,
-             annulus={'center':(bvm.shape[0]/2,bvm.shape[1]/2),
-                      'radii':radii,'fill':True,
-                      'alpha':0.3,'color':'y'},
-             **vis_params)
-
-    def show_elliptical_fit_bragg(self,radii,p_ellipse,peaks='braggpeaks',**vis_params):
-        """
-
-        Args:
-            radii (2-tuple):
-            peaks (str): specifies a BraggPeaks instance to use
-        """
-        from ...visualize import show
-        assert(peaks in self.braggpeaks.keys()), "Requested braggpeaks '{}' not found"
-        peaks = self.braggpeaks[peaks]
-        assert(peaks.bvms['origin'] is not None), "Center the braggpeaks and get the centered bvm!"
-        bvm = peaks.bvms['origin'].data
-        center = bvm.shape[0]/2,bvm.shape[1]/2
-        _,_,a,b,theta = p_ellipse
-        if len(vis_params)==0:
-            vis_params = self.bvm_vis_params
-        show(bvm,
-             annulus={'center':center,'radii':radii,'fill':True,
-                      'alpha':0.2,'color':'y'},
-             ellipse={'center':center,'a':a,'b':b,'theta':theta,
-                       'color':'r','alpha':0.7,'linewidth':2},
-             **vis_params)
 
     def show_bvm_radial_profile(self,which='ellipse',peaks='braggpeaks',ymax=None,
                                  q_ref=None,returnfig=False):
