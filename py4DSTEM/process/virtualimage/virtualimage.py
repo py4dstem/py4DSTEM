@@ -1,6 +1,7 @@
 # Functions for generating virtual images
 
 import numpy as np
+from ...io import DataCube
 from ..utils import tqdmnd
 
 def get_im(datacube,geometry=(0,0),detector='point'):
