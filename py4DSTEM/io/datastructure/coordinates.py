@@ -35,8 +35,8 @@ class Coordinates(DataObject):
             ``R_pixel_units``
         R_pixel_units (string): the real space pixel units
         qx0,qy0 (number or ndarray): the origin of diffraction space
-        a (number): the semimajor axis of the elliptical distortions
-        b (number): the semiminor axis of the elliptical distortions
+        a (number): semimajor axis length for elliptical distorions
+        b (number): semiminor axis length for elliptical distorions
         theta (number): the (positive, right handed) tilt of the semimajor axis of
             the elliptical distortions with respect to the x-axis, in radians
         QR_rotation (number): the (positive,right handed) rotational misalignment of
@@ -176,6 +176,7 @@ class Coordinates(DataObject):
         assert isinstance(p,Number) or isinstance(p,np.ndarray)
         if isinstance(p,np.ndarray):
             assert p.shape == (self.R_Nx,self.R_Ny) or len(p.shape)==0
+
     def _get_value(self,p,rx=None,ry=None):
         try:
             assert isinstance(p,Number) or isinstance(p,np.ndarray)
