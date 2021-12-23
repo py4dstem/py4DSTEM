@@ -116,7 +116,7 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
                     arrays are returned for qx0,qy0
 
     Returns:
-        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays):
+        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
     """
     if r is None:
         if dp_max is None:
@@ -412,13 +412,14 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
 
 def fit_origin(
-    data,
+    qx0_meas,
+    qy0_meas,
     mask=None,
     fitfunction="plane",
+    returnfitp=False,
     robust=False,
     robust_steps=3,
     robust_thresh=2,
-    returnfitp=False
 ):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
@@ -429,7 +430,8 @@ def fit_origin(
     passed, fitted origin and residuals are stored there directly.
 
     Args:
-        data (2-tuple of 2d arrays): the measured origin positions (q0x,qy0)
+        qx0_meas (2d array): measured origin x-position
+        qy0_meas (2d array): measured origin y-position
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp (bool, optional): if True, returns the fit parameters
@@ -442,23 +444,19 @@ def fit_origin(
             fitting.
 
     Returns:
-        (variable): Return value depends on returnfitp. If both are False
-        (default), returns nothing. If ``return_ans==True`` and ``returnfitp==False``,
-        returns a 4-tuple containing:
+        (variable): Return value depends on returnfitp. If ``returnfitp==False``
+        (default), returns a 4-tuple containing:
 
             * **qx0_fit**: *(ndarray)* the fit origin x-position
             * **qy0_fit**: *(ndarray)* the fit origin y-position
             * **qx0_residuals**: *(ndarray)* the x-position fit residuals
             * **qy0_residuals**: *(ndarray)* the y-position fit residuals
 
-        If ``return_ans==False`` and ``returnfitp==True``, returns a 4-tuplr containing
-        (popt_x,popt_y,pcov_x,pcov_y).
-
-        If both are True, returns a 2-tuple containing both of the aforementioned
-        4-tuples, in the order written above.
+        If ``returnfitp==True``, returns a 2-tuple.  The first element is the 4-tuple
+        described above.  The second element is a 4-tuple (popt_x,popt_y,pcov_x,pcov_y)
+        giving fit parameters and covariance matrices with respect to the chosen
+        fitting function.
     """
-    assert isinstance(data,tuple) and len(data)==2
-    qx0_meas,qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
@@ -513,12 +511,15 @@ def fit_origin(
     qy0_residuals = qy0_meas - qy0_fit
 
     # Return
-    ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
-    if returnfitp:
-        ans = ans,(popt_x,popt_y,pcov_x,pcov_y)
-    return ans
-
-
+    if not returnfitp:
+        return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
+    else:
+        return (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals), (
+            popt_x,
+            popt_y,
+            pcov_x,
+            pcov_y,
+        )
 
 
 ### Older / soon-to-be-deprecated functions for finding the origin
