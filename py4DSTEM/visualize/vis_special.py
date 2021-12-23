@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show, show_points
+from . import show
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
@@ -688,7 +688,4 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_y=lambda i:bragg_pos[i].data['qy'],
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
-
-
-
 
