@@ -96,34 +96,10 @@ class Coordinates(DataObject):
     def set_qy0(self,qy0):
         self._validate_input(qy0)
         self.qy0 = qy0
-    def set_qx0_meas(self,qx0_meas):
-        self._validate_input(qx0_meas)
-        self.qx0_meas = qx0_meas
-    def set_qy0_meas(self,qy0_meas):
-        self._validate_input(qy0_meas)
-        self.qy0_meas = qy0_meas
-    def set_qx0_residuals(self,qx0_residuals):
-        self._validate_input(qx0_residuals)
-        self.qx0_residuals = qx0_residuals
-    def set_qy0_residuals(self,qy0_residuals):
-        self._validate_input(qy0_residuals)
-        self.qy0_residuals = qy0_residuals
     def set_origin(self,qx0,qy0):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
-    def set_origin_meas(self,qx0_meas,qy0_meas):
-        self._validate_input(qx0_meas)
-        self._validate_input(qy0_meas)
-        self.qx0_meas,self.qy0_meas = qx0_meas,qy0_meas
-    def set_origin_residuals(self,qx0_residuals,qy0_residuals):
-        self._validate_input(qx0_residuals)
-        self._validate_input(qy0_residuals)
-        self.qx0_residuals,self.qy0_residuals = qx0_residuals,qy0_residuals
-    def set_alpha_pix(self,alpha_pix):
-        self.alpha_pix = alpha_pix
-    def set_probe_center(self,probe_center):
-        self.probe_center = probe_center
     def set_a(self,a):
         self._validate_input(a)
         self.a = a
@@ -146,7 +122,7 @@ class Coordinates(DataObject):
         self._validate_input(QR_rotation)
         self.QR_rotation = QR_rotation
     def set_QR_flip(self,QR_flip):
-        assert(isinstance(QR_flip,(bool,np.bool_)))
+        self._validate_input(QR_flip)
         self.QR_flip = QR_flip
 
     def get_R_Nx(self):
@@ -169,24 +145,8 @@ class Coordinates(DataObject):
         return self._get_value(self.qx0,rx,ry)
     def get_qy0(self,rx=None,ry=None):
         return self._get_value(self.qy0,rx,ry)
-    def get_qx0_meas(self,rx=None,ry=None):
-        return self._get_value(self.qx0_meas,rx,ry)
-    def get_qy0_meas(self,rx=None,ry=None):
-        return self._get_value(self.qy0_meas,rx,ry)
-    def get_qx0_residuals(self,rx=None,ry=None):
-        return self._get_value(self.qx0_residuals,rx,ry)
-    def get_qy0_residuals(self,rx=None,ry=None):
-        return self._get_value(self.qy0_residuals,rx,ry)
     def get_origin(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
-    def get_origin_meas(self,rx=None,ry=None):
-        return self.get_qx0_meas(rx,ry),self.get_qy0_meas(rx,ry)
-    def get_origin_residuals(self,rx=None,ry=None):
-        return self.get_qx0_residuals(rx,ry),self.get_qy0_residuals(rx,ry)
-    def get_alpha_pix(self):
-        return self.alpha_pix
-    def get_probe_center(self):
-        return self.probe_center
     def get_a(self,rx=None,ry=None):
         return self._get_value(self.a,rx,ry)
     def get_b(self,rx=None,ry=None):
