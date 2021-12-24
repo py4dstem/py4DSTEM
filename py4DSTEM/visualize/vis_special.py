@@ -5,6 +5,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 from . import show
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
+from .overlay import add_points
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..io import DataCube,Calibrations,PointList
@@ -677,7 +678,8 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
     if 'scaling' not in kwargs.keys():
         kwargs['scaling'] = 'log'
     if not show_disk_pos:
-        show_points(im,x=x,y=y,pointcolor=colors,figsize=figsize_im)
+        fig,ax = show(im,figsize=figsize_im,returnfig=True)
+        add_points(ax,d = {'x':x,'y':y,'pointcolor':colors})
         show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
                         get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
                         **kwargs)

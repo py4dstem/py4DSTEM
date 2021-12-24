@@ -454,7 +454,7 @@ def fit_origin(
         giving fit parameters and covariance matrices with respect to the chosen
         fitting function.
     """
-    assert isinstance(data,tuple), and len(data)==2
+    assert isinstance(data,tuple) and len(data)==2
     qx0_meas,qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
