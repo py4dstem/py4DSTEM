@@ -13,7 +13,7 @@ from .real import RealSlice
 from .calibrations import Calibrations
 from .braggpeaks import BraggPeaks
 from ...process import preprocess
-from ...process import virtualimage_viewer as virtualimage
+from ...process import virtualimage_viewer,virtualimage
 from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
