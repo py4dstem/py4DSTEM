@@ -1,4 +1,3 @@
-# TODO rm all copying of PLAs
 # Find the origin of diffraction space
 
 import numpy as np
@@ -412,8 +411,7 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
 
 def fit_origin(
-    qx0_meas,
-    qy0_meas,
+    data,
     mask=None,
     fitfunction="plane",
     returnfitp=False,
@@ -430,8 +428,7 @@ def fit_origin(
     passed, fitted origin and residuals are stored there directly.
 
     Args:
-        qx0_meas (2d array): measured origin x-position
-        qy0_meas (2d array): measured origin y-position
+        data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp (bool, optional): if True, returns the fit parameters
@@ -457,6 +454,8 @@ def fit_origin(
         giving fit parameters and covariance matrices with respect to the chosen
         fitting function.
     """
+    assert isinstance(data,tuple) and len(data)==2
+    qx0_meas,qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
@@ -511,15 +510,11 @@ def fit_origin(
     qy0_residuals = qy0_meas - qy0_fit
 
     # Return
-    if not returnfitp:
-        return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
+    ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
+    if returnfitp:
+        return ans,(popt_x,popt_y,pcov_x,pcov_y)
     else:
-        return (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals), (
-            popt_x,
-            popt_y,
-            pcov_x,
-            pcov_y,
-        )
+        return ans
 
 
 ### Older / soon-to-be-deprecated functions for finding the origin

@@ -1,7 +1,6 @@
 # Functions for generating virtual images
 
 import numpy as np
-from ...io import DataCube
 from ..utils import tqdmnd
 
 def get_im(datacube,geometry=(0,0),detector='point'):
@@ -162,8 +161,6 @@ def get_virtualimage_mask(
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
-
     # find range of True values in boolean mask
     x = np.where(np.max(mask, axis=1))
     y = np.where(np.max(mask, axis=0))
