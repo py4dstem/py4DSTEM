@@ -535,22 +535,9 @@ def generate_CBED(
 
         mask[xpix, ypix] = True
 
-        # Check for nonunique indices, since using the advanced slicing
-        # method of adding to the DP causes undefined behavior if the
-        # same index appears more than once. This would only be caused
-        # by errors in the xpix,ypix calculation, so the check is
-        # normally disabled. I'm leaving it here for debugging purposes.
-        # if True:
-        #     indices = np.ravel_multi_index([xpix,ypix],DP_size)
-        #     if len(indices) != len(xpix):
-        #         print(f"Nonunique indices!!! {i}")
-
         for patt, sim in zip(DP, bloch):
             patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
-    # Clear the cached dynamical matrix to be safe
-    if hasattr(self, "Ugmh_cached"):
-        delattr(self, "Ugmh_cached")
 
     if return_mask:
         return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
