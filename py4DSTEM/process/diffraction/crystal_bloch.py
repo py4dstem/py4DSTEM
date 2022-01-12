@@ -250,11 +250,10 @@ def generate_dynamical_diffraction_pattern(
     Less commonly used args:
         always_return_list (bool):      When True, the return is always a list of PointLists,
                                         even for a single thickness
-        dynamical_matrix_cache (bool):  When True, enable caching of the dynamical matrix.
-                                        The cached matrix is stored in self.Ugmh_cached. If
-                                        this matrix does not exist, it is created and stored.
-                                        Subsequent calls will use the cached matrix for the
-                                        off-diagonal components of the A matrix and overwrite
+        dynamical_matrix_cache:         (DyanmicalMatrixCache) Dataclass used for caching of the 
+                                        dynamical matrix. If the cached matrix does not exist, it is 
+                                        computed and stored. Subsequent calls will use the cached matrix 
+                                        for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
 
     Returns:
@@ -363,17 +362,6 @@ def generate_dynamical_diffraction_pattern(
 
     if verbose:
         print(f"Decomposing the A matrix took {(time()-t0)*1000.:.3f} ms.")
-
-    ######################################################
-    # Compute thickness matrix/matrices E (DeGraef 5.60) #
-    ######################################################
-
-    # t0 = time()
-
-    # E = [np.diag(np.exp(2.0j * np.pi * z * gamma)) for z in np.atleast_1d(thickness)]
-
-    # if verbose:
-    #     print(f"Constructing thickness matrices took {1000*(time()-t0)} ms.")
 
     ##############################################################################################
     # Compute diffraction intensities by calculating exit wave \Psi in DeGraef 5.60, and collect #
