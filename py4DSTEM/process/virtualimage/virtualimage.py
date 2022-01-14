@@ -17,22 +17,25 @@ import warnings
 # lifted from py4DSTEM old funcs
 #TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections 
 #TODO Add multiple mask maker, e.g. given list of coordinate tuples create circular masks at each point
-
-def make_circ_mask(datacube, x0, y0, R, return_crop_vals=False):
+#TODO Add assertion statements 
+def make_circ_mask(datacube, geometry, return_crop_vals=False):
     """
     Make a circular boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane. The mask returned is the same shape as each diffraction slice.
     If return_crop_vals is True, then they can be used to acceleate.  
     Args:
         datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+        and radius is a number
         return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
     Returns:
         (2D array): Boolean mask
         (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
     """
     assert isinstance(datacube, DataCube)
+
+    (x0,y0),R = geometry
+
     xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
     ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
 
@@ -52,19 +55,23 @@ def make_circ_mask(datacube, x0, y0, R, return_crop_vals=False):
     else:
         return full_mask
 
-def make_annular_mask(datacube, x0, y0, Ri, Ro):
+def make_annular_mask(datacube, geometry):
     """
     Make an annular boolean mask centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
     Args:
         datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        Ri,Ro (numbers): inner/outer detector radii
+        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
+        and radii is the 2-tuple (ri,ro)
     Returns:
         (2D array): Boolean mask
     """
+    
+    (x0,y0),(Ri,Ro) = geometry
+
     assert isinstance(datacube, DataCube)
     assert Ro>Ri, "Inner radius must be smaller than outer radius"
+
     xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
     ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
 
@@ -79,21 +86,24 @@ def make_annular_mask(datacube, x0, y0, Ri, Ro):
     full_mask[xmin:xmax,ymin:ymax] = mask
     return full_mask
 
-def make_rect_mask(datacube, xmin, xmax, ymin, ymax, return_crop_vals=False):
+def make_rect_mask(datacube, geometry, return_crop_vals=False):
     """
     Make a rectangular boolean mask with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
     
-    #TODO Should this be made more similar to other mask functions, i.e. pass a center coordinate and size of rectangle?
     Args:
         datacube (DataCube):
-        xmin,xmax (ints): x limits of the detector
-        ymin,ymax (ints): y limits of the detector
-
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
+        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
     Returns:
         (2D array): Boolean mask
+        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
     """
+
+    xmin,xmax,ymin,ymax = geometry
+
     assert isinstance(datacube, DataCube)
+
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
@@ -106,6 +116,7 @@ def make_rect_mask(datacube, xmin, xmax, ymin, ymax, return_crop_vals=False):
     else:
         return full_mask
 
+# TODO add logical_and, logical_not functions as well? 
 def combine_masks(masks, operator='or'):
     """
     Function to combine multiple masks into single boolean mask, using np.logical_or , np.logical_xor functions. 
@@ -124,6 +135,7 @@ def combine_masks(masks, operator='or'):
     elif operator.lower() == 'xor':
         return np.logical_xor.reduce(masks)
 
+# REMOVE THIS ?
 def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0.5, *args, **kwargs):
     """
     Function to plot the overaly of the mask on a diffraction slice. A diffraction slice or a datacube object may be passed to the function as dp, datacube.
@@ -195,43 +207,37 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 
 #### Virtual Imaging Functions ####
 
-##### old py4dSTEM funcs ####
-def get_virtualimage_rect(datacube, xmin, xmax, ymin, ymax, verbose=True):
+##### py4DSTEM funcs V0.13.0 ####
+def get_virtualimage_rect(datacube, geometry, verbose=True):
     """
-    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
-    in the diffraction plane. Floating point limits will be rounded and cast to ints.
-
+    Get a virtual image using a rectagular detector.
     Args:
         datacube (DataCube):
-        xmin,xmax (ints): x limits of the detector
-        ymin,ymax (ints): y limits of the detector
-
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
-    xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
-    ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
+    assert(len(geometry)==4 and all([isinstance(i,(int,np.integer)) for i in geometry])), "Detector geometry was specified incorrectly, must be a set of 4 of integers"
+    xmin,xmax,ymin,ymax = geometry
+    assert(xmax>xmin and ymax>ymin)
 
     virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
     for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny,disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
-def get_virtualimage_circ(datacube, x0, y0, R, verbose=True):
+def get_virtualimage_circ(datacube, geometry, verbose=True):
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
-
     Args:
         datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        R (number): radius of detector
-
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+            and radius is a number
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
+    (x0,y0),R = geometry
     xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
     ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
 
@@ -244,20 +250,18 @@ def get_virtualimage_circ(datacube, x0, y0, R, verbose=True):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
-def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
+def get_virtualimage_ann(datacube, geometry, verbose=True):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
-
     Args:
         datacube (DataCube):
-        x0,y0 (numbers): center of detector
-        Ri,Ro (numbers): inner/outer detector radii
-
+        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
+        and radii is the 2-tuple (ri,ro)
     Returns:
         (2D array): the virtual image
     """
-    assert isinstance(datacube, DataCube)
+    (x0,y0),(Ri,Ro) = geometry
     assert Ro>Ri, "Inner radius must be smaller than outer radius"
     xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
     ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
@@ -272,19 +276,10 @@ def get_virtualimage_ann(datacube, x0, y0, Ri, Ro, verbose=True):
     for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
-
-#### End of old py4DSTEM funcs ####
-
+#### End of py4DSTEM funcs V0.13.0 ####
 
 #### Dask Function #### 
 
-#TODO add complementary functions to above operating on dask e.g. BF, annular, circular etc. 
-#TODO change to passing datacube
-#TODO add automagic application of Dask or Numba functions depending on type(datacube.data)
-# can use a list of different output_dtype if that makes sense, I've set to np.uint for now which seems sensible to me
-# only works on dask array. 
-#TODO add extra wrapper functions for BF etc, all use this as the underlying function, creating masks inside
-#TODO change the output type so it is compaitable with floating data
 @da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
 def _get_virtual_image_dask(array, mask):
     """
@@ -325,7 +320,7 @@ def get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True):
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virtualimage_ann_dask(datacube,x0,x1, Ri, Ro, eager_compute=True):
+def get_virtualimage_ann_dask(datacube, geometry, eager_compute=True):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
@@ -334,8 +329,8 @@ def get_virtualimage_ann_dask(datacube,x0,x1, Ri, Ro, eager_compute=True):
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        Ri,Ro (numbers): inner/outer detector radii
+        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
+        and radii is the 2-tuple (ri,ro)
         eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
     Returns:
@@ -346,7 +341,7 @@ def get_virtualimage_ann_dask(datacube,x0,x1, Ri, Ro, eager_compute=True):
     """
     
     # make the annular mask
-    mask = make_annular_mask(datacube, x0, x1, Ri, Ro)
+    mask = make_annular_mask(datacube, geometry)
     
     if eager_compute:
             return _get_virtual_image_dask(datacube.data, mask).compute()
@@ -354,7 +349,7 @@ def get_virtualimage_ann_dask(datacube,x0,x1, Ri, Ro, eager_compute=True):
         
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virtualimage_circ_dask(datacube, x0, y0, R , eager_compute=True):
+def get_virtualimage_circ_dask(datacube, geometry , eager_compute=True):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -364,8 +359,8 @@ def get_virtualimage_circ_dask(datacube, x0, y0, R , eager_compute=True):
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        R (numbers): detector radii
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+        and radius is a number
         eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
     Returns:
@@ -377,23 +372,22 @@ def get_virtualimage_circ_dask(datacube, x0, y0, R , eager_compute=True):
 
     # make the circular mask
 
-    mask = make_circ_mask(datacube, x0, y0, R)
+    mask = make_circ_mask(datacube, geometry)
 
     if eager_compute:
         return _get_virtual_image_dask(datacube.data, mask).compute()
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virutalimage_rect_dask(datacube, xmin, xmax, ymin, ymax, eager_compute=True):
+def get_virutalimage_rect_dask(datacube, geometry, eager_compute=True):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
 
     Args:
-       datacube (DataCube):
-        xmin,xmax (ints): x limits of the detector
-        ymin,ymax (ints): y limits of the detector
+        datacube (DataCube):
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
         eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
     Returns:
@@ -404,7 +398,7 @@ def get_virutalimage_rect_dask(datacube, xmin, xmax, ymin, ymax, eager_compute=T
     """
 
     # make the rectangular mask
-    mask = make_rect_mask(datacube, xmin, xmax, ymin, ymax)
+    mask = make_rect_mask(datacube, geometry)
 
 
     if eager_compute:
@@ -416,204 +410,162 @@ def get_virutalimage_rect_dask(datacube, xmin, xmax, ymin, ymax, eager_compute=T
 #### End of Dask Functions ####
 
 #### Einsum Powered Functions ####
-# TODO possible quicker for circ, rectangular masks to do np.einsum('ijnm,nm->ij', data[:,:,xmin:xmax,ymin:ymax],mask[xmin:xmax, ymin:ymax]) or similar
-# I can get xmin,xmax etc from mask making functions
-# TODO I could probably use the boolean array indexes as well rather than multiplication
-
-
+# TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
 
 def get_virtualimage_from_mask_einsum(datacube, mask):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
-
-
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
         mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image 
+
     """
 
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def get_virtualimage_ann_einsum(datacube,x0,x1, Ri, Ro):
+def get_virtualimage_ann_einsum(datacube, geometry):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        Ri,Ro (numbers): inner/outer detector radii
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
+        and radii is the 2-tuple (ri,ro)
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image 
     """
     
     # make the annular mask
-    mask = make_annular_mask(datacube, x0, x1, Ri, Ro)
+    mask = make_annular_mask(datacube, geometry)
     
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def get_virtualimage_circ_einsum(datacube, x0, y0, R):
+def get_virtualimage_circ_einsum(datacube, geometry):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
     radius of Ri/Ro. 
 
-    This should only be used on datasets which are dask arrays. 
-
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        R (numbers): detector radii
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+        and radius is a number
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image  
     """
 
     # make the circular mask
 
-    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, x0, y0, R, return_crop_vals=True)
+    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
 
     return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
 
-def get_virutalimage_rect_einsum(datacube, xmin, xmax, ymin, ymax):
+def get_virutalimage_rect_einsum(datacube, geometry):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
-
     Args:
-       datacube (DataCube):
-        xmin,xmax (ints): x limits of the detector
-        ymin,ymax (ints): y limits of the detector
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        datacube (DataCube):
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image 
     """
 
     # make the rectangular mask
-    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, xmin, xmax, ymin, ymax, return_crop_vals=True)
+    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
 
     return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
 
 #### End of Einsum Powered Functions ####
 
 #### Tensordot Powered Functions ####
-
 def get_virtualimage_from_mask_tensordot(datacube, mask):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
-
-
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
         mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image 
     """
 
-    return np.tensordot(datacube.data, mask)
+    return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def get_virtualimage_ann_tensordot(datacube,x0,x1, Ri, Ro):
+def get_virtualimage_ann_tensordot(datacube, geometry):
     """
-    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro. 
+    Get a virtual image using an circular detector centered at (x0,y0), with a
+    radius of Ri/Ro. 
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        Ri,Ro (numbers): inner/outer detector radii
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+        and radius is a number
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image  
     """
     
     # make the annular mask
-    mask = make_annular_mask(datacube, x0, x1, Ri, Ro)
+    mask = make_annular_mask(datacube, geometry)
     
-    return np.tensordot(datacube.data, mask)
+    return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def get_virtualimage_circ_tensordot(datacube, x0, y0, R):
+def get_virtualimage_circ_tensordot(datacube, geometry, spicy=False):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
     radius of Ri/Ro. 
 
-    This should only be used on datasets which are dask arrays. 
-
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
-        x0,y0 (numbers): center of detector
-        R (numbers): detector radii
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
+        and radius is a number
+        spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image  
     """
 
     # make the circular mask
+    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
 
-    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, x0, y0, R, return_crop_vals=True)
+    if spicy:
+        return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
+    else:
+        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1))) 
 
-    return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
-
-def get_virutalimage_rect_tensordot(datacube, xmin, xmax, ymin, ymax):
+def get_virutalimage_rect_tensordot(datacube, geometry, spicy=False):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
-
     Args:
-       datacube (DataCube):
-        xmin,xmax (ints): x limits of the detector
-        ymin,ymax (ints): y limits of the detector
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        datacube (DataCube):
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
+        spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image 
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
+        (2D array): the virtual image 
     """
 
     # make the rectangular mask
-    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, xmin, xmax, ymin, ymax, return_crop_vals=True)
+    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
 
-    return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
-
+    if spicy:
+        return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
+    else:
+        return np.tensordor(datacube.data, mask, axes=((2,3),(0,1)))
 
 ### End of Tensordot Powered Functions ####
 
