@@ -10,7 +10,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
-from ...io.datastructure import PointList, PointListArray
+from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D,tqdmnd
 
 def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
@@ -361,7 +361,6 @@ def find_Bragg_disks_serial(datacube, probe,
             diffraction pattern. 'manual' Allows the user to threshold based on a
             predetermined intensity value manually determined. In this case,
             minIntensity should be an int.
-        verbose (bool): if True, prints completion updates
         name (str): name for the returned PointListArray
         filter_function (callable): filtering function to apply to each diffraction
             pattern before peakfinding. Must be a function of only one argument (the
@@ -430,7 +429,8 @@ def find_Bragg_disks(datacube, probe,
                      name = 'braggpeaks_raw',
                      filter_function = None,
                      _qt_progress_bar = None,
-                     distributed = None):
+                     distributed = None,
+                     CUDA = False):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
     phase correlation with probe.
@@ -460,7 +460,6 @@ def find_Bragg_disks(datacube, probe,
                 * 'multicorr': uses the multicorr algorithm with DFT upsampling
         upsample_factor (int): upsampling factor for subpixel fitting (only used when
              subpixel='multicorr')
-        verbose (bool): if True, prints completion updates for serial execution
         name (str): name for the returned PointListArray
         filter_function (callable): filtering function to apply to each diffraction
             pattern before peakfinding. Must be a function of only one argument (the
@@ -545,22 +544,41 @@ def find_Bragg_disks(datacube, probe,
         return connect, data_file, cluster_path
 
     if distributed is None:
-        return find_Bragg_disks_serial(
-            datacube,
-            probe,
-            corrPower=corrPower,
-            sigma=sigma,
-            edgeBoundary=edgeBoundary,
-            minRelativeIntensity=minRelativeIntensity,
-            minAbsoluteIntensity=minAbsoluteIntensity,
-            relativeToPeak=relativeToPeak,
-            minPeakSpacing=minPeakSpacing,
-            maxNumPeaks=maxNumPeaks,
-            subpixel=subpixel,
-            upsample_factor=upsample_factor,
-            name=name,
-            filter_function=filter_function,
-            _qt_progress_bar=_qt_progress_bar)
+        if not CUDA:
+            return find_Bragg_disks_serial(
+                datacube,
+                probe,
+                corrPower=corrPower,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                name=name,
+                filter_function=filter_function,
+                _qt_progress_bar=_qt_progress_bar)
+        else:
+            from .diskdetection_cuda import find_Bragg_disks_CUDA
+            return find_Bragg_disks_CUDA(
+                datacube,
+                probe,
+                corrPower=corrPower,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                name=name,
+                filter_function=filter_function,
+                _qt_progress_bar=_qt_progress_bar)
+
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
 
@@ -611,7 +629,7 @@ def find_Bragg_disks(datacube, probe,
 
 
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak,
-                         minPeakSpcing, maxNumPeaks):
+                         minPeakSpacing, maxNumPeaks):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional thresholding,
     returning the thresholded PointListArray. To skip a threshold, set that parameter to
