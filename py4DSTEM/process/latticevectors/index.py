@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io.datastructure import PointList, PointListArray
+from ...io import PointList, PointListArray
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     """
@@ -252,8 +252,6 @@ def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
                 else:
                     matches = np.logical_and(pl.data['h'] == h, pl.data['k'] == k)
 
-                # now apply the indexing mask
-                matches = np.logical_and(matches, pl.data['index_mask'])
                 if len(matches)>0:
                     intensity_map[Rx,Ry] = np.sum(pl.data['intensity'][matches])
 

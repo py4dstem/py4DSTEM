@@ -11,8 +11,6 @@ import numba as nb
 import h5py
 import dask.array as da
 
-from ncempy.io import emd
-
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage_viewer as virtualimage
@@ -302,8 +300,7 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
         stack_pointer = g['data']
         data = np.array(g['data'])
     elif (mem, binfactor) == ("MEMMAP", 1):
-        emdF = emd.fileEMD(g.file.filename)
-        data, dims = emdF.get_memmap(0)
+        data = g['data']
         stack_pointer = None
     elif (mem, binfactor) == ("DASK", 1):
         stack_pointer = g['data']

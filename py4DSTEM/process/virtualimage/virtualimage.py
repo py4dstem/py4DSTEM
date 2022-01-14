@@ -1,7 +1,7 @@
 # Functions for generating virtual images
 
 import numpy as np
-from ...io.datastructure import DataCube
+from ...io import DataCube
 from ..utils import tqdmnd
 import numba as nb
 import dask.array as da
@@ -747,6 +747,7 @@ def get_virutalimage_rect_tensordot(datacube, geometry, spicy=False):
 #         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask))# in a few tests it seems quicker to multiply than boolean index for ADF images 
 #         # out[rx,ry] = np.sum(arr[rx,ry][mask]) 
 #     return out
+
 
 #### End of Virtual Image Functions ####
 
