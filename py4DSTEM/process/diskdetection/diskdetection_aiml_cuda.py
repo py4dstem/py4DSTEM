@@ -142,8 +142,8 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
         image_num = datacube.R_Nx*datacube.R_Ny
         batch_num = int(image_num//batch_size)
 
-        for att in range(num_attmpts):
-            for i in tqdmnd(range(batch_num), desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts)):
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+            for i in range(batch_num):
                 prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
             if (i+1)*batch_size < image_num:
                 prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
@@ -279,7 +279,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
         prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
         
-        for att in range(num_attmpts):
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             print('attempt {} \n'.format(att+1))
             prediction += model.predict([DP,probe])
         print('Averaging over {} attempts \n'.format(num_attmpts))
