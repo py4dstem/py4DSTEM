@@ -102,11 +102,10 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     # Perform any prefiltering
     if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = DP if filter_function is None else filter_function(DP)
-    
-    assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
-    assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
 
     if predict:
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
         model = _get_latest_model(model_path = model_path)
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
@@ -117,6 +116,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         print('Averaging over {} attempts \n'.format(num_attmpts))
         pred = prediction[0,:,:,0]/num_attmpts
     else:
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
     
     maxima_x,maxima_y,maxima_int = get_maxima_2D(pred, 
@@ -233,11 +233,11 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         image_num = len(Rx)
         batch_num = int(image_num//batch_size)
         
-        for att in range(num_attmpts):
-            for i in tqdmnd(batch_num, desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts), unit='DP',unit_scale=True):
-                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+            for i in range(batch_num):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose=0)
             if (i+1)*batch_size < image_num:
-                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose=0)
         
         prediction = prediction/num_attmpts
         
@@ -380,11 +380,11 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
         image_num = datacube.R_N
         batch_num = int(image_num//batch_size)
 
-        for att in range(num_attmpts):
-            for i in tqdmnd(batch_num, desc='Neural network is predicting atomic potential: Attempt {}/{}'.format(att+1,num_attmpts), unit='DP',unit_scale=True):
-                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+            for i in range(batch_num):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose =0)
             if (i+1)*batch_size < image_num:
-                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose =0)
 
         prediction = prediction/num_attmpts
     
