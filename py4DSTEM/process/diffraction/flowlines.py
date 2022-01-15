@@ -65,60 +65,76 @@ def make_orientation_histogram(
         num_radii,
         num_theta_bins])
 
-    # Loop over all probe positions
-    for rx, ry in tqdmnd(
-            *bragg_peaks.shape, desc="Generating histogram",unit=" probe positions", disable=not progress_bar
-        ):
 
-        x = (rx + 0.5)*upsample_factor - 0.5
-        y = (ry + 0.5)*upsample_factor - 0.5
-        x = np.clip(x,0,size_output[0]-2)
-        y = np.clip(y,0,size_output[1]-2)
+    for a0 in range(num_radii):
+        orient = np.zeros([
+            size_output[0],
+            size_output[1],
+            num_theta_bins,
+            ])
 
-        xF = np.floor(x).astype('int')
-        yF = np.floor(y).astype('int')
-        dx = x - xF
-        dy = y - yF
+        # Loop over all probe positions
+        t = "Generating histogram " + str(a0)
+        for rx, ry in tqdmnd(
+                *bragg_peaks.shape, desc=t,unit=" probe positions", disable=not progress_bar
+            ):
+        # for rx, ry in tqdmnd(
+        #         *[2,2], desc='a',unit='a'
+        #     ):
 
-        p = bragg_peaks.get_pointlist(rx,ry)
-        r2 = p.data['qx']**2 + p.data['qy']**2
 
-        for a0 in range(num_radii):
+            x = (rx + 0.5)*upsample_factor - 0.5
+            y = (ry + 0.5)*upsample_factor - 0.5
+            x = np.clip(x,0,size_output[0]-2)
+            y = np.clip(y,0,size_output[1]-2)
+
+            xF = np.floor(x).astype('int')
+            yF = np.floor(y).astype('int')
+            dx = x - xF
+            dy = y - yF
+
+            p = bragg_peaks.get_pointlist(rx,ry)
+            r2 = p.data['qx']**2 + p.data['qy']**2
+
+            # for a0 in range(num_radii):
+
             sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])
-            
+
             if np.any(sub):
                 intensity = p.data['intensity'][sub]
                 t = np.arctan2(p.data['qy'][sub],p.data['qx'][sub]) / dtheta
                 tF = np.floor(t).astype('int')
                 dt = t - tF
 
-                orient_hist[    xF  ,yF  ,a0,:] = orient_hist[xF  ,yF  ,a0,:] + \
+                orient[    xF  ,yF  ,:] = orient[xF  ,yF  ,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(1-dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient_hist[    xF  ,yF  ,a0,:] = orient_hist[xF  ,yF  ,a0,:] + \
+                orient[    xF  ,yF  ,:] = orient[xF  ,yF  ,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(1-dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
 
-                orient_hist[    xF+1,yF  ,a0,:] = orient_hist[xF+1,yF  ,a0,:] + \
+                orient[    xF+1,yF  ,:] = orient[xF+1,yF  ,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(  dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient_hist[    xF+1,yF  ,a0,:] = orient_hist[xF+1,yF  ,a0,:] + \
+                orient[    xF+1,yF  ,:] = orient[xF+1,yF  ,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(  dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
  
-                orient_hist[    xF  ,yF+1,a0,:] = orient_hist[xF  ,yF+1,a0,:] + \
+                orient[    xF  ,yF+1,:] = orient[xF  ,yF+1,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(1-dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient_hist[    xF  ,yF+1,a0,:] = orient_hist[xF  ,yF+1,a0,:] + \
+                orient[    xF  ,yF+1,:] = orient[xF  ,yF+1,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(1-dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)
 
-                orient_hist[    xF+1,yF+1,a0,:] = orient_hist[xF+1,yF+1,a0,:] + \
+                orient[    xF+1,yF+1,:] = orient[xF+1,yF+1,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(  dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient_hist[    xF+1,yF+1,a0,:] = orient_hist[xF+1,yF+1,a0,:] + \
+                orient[    xF+1,yF+1,:] = orient[xF+1,yF+1,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
-                        weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)               
+                        weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)    
+
+        orient_hist[:,:,a0,:] = orient          
 
     # smoothing
     if sigma_x is not None and sigma_x > 0:
@@ -242,7 +258,8 @@ def make_flowline_map(
             t_inds = t_inds[inds_sort]    
 
         # for a1 in tqdmnd(range(0,40), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
-        for a1 in tqdmnd(range(0,x_inds.shape[0]), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
+        t = "Drawing flowlines " + str(a0)
+        for a1 in tqdmnd(range(0,x_inds.shape[0]), desc=t, unit=" seeds", disable=not progress_bar):
             # initial coordinate and intensity
             xy0 = np.array((x_inds[a1],y_inds[a1]))
             t0 = theta[t_inds[a1]]
