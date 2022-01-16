@@ -54,6 +54,7 @@ def make_orientation_histogram(
     # coordinates
     theta = np.arange(0,180,theta_step_deg) * np.pi / 180.0
     dtheta = theta[1] - theta[0]
+    dtheta_deg = dtheta * 180 / np.pi
     num_theta_bins = np.size(theta)
     size_input = bragg_peaks.shape
     size_output = np.round(np.array(size_input).astype('float') * upsample_factor).astype('int')
@@ -134,15 +135,29 @@ def make_orientation_histogram(
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)    
 
+        # if sigma_x is not None and sigma_x > 0:
+        #     orient = gaussian_filter1d(orient,sigma_x*upsample_factor,mode='nearest',axis=0)
+        # if sigma_y is not None and sigma_y > 0:
+        #     orient = gaussian_filter1d(orient,sigma_y*upsample_factor,mode='nearest',axis=1)
+        # if sigma_theta is not None and sigma_theta > 0:
+        #     orient = gaussian_filter1d(orient,sigma_theta,mode='wrap',axis=2)
+                    
+
         orient_hist[:,:,a0,:] = orient          
 
     # smoothing
-    if sigma_x is not None and sigma_x > 0:
-        orient_hist = gaussian_filter1d(orient_hist,sigma_x*upsample_factor,mode='nearest',axis=0)
-    if sigma_y is not None and sigma_y > 0:
-        orient_hist = gaussian_filter1d(orient_hist,sigma_y*upsample_factor,mode='nearest',axis=1)
-    if sigma_theta is not None and sigma_theta > 0:
-        orient_hist = gaussian_filter1d(orient_hist,sigma_theta,mode='wrap',axis=3)
+    if (sigma_x is not None) or (sigma_y is not None) or (sigma_theta is not None):
+        if num_radii > 1:
+            print('Interpolating orientation matrices ...', end='')
+        else:
+            print('Interpolating orientation matrix ...', end='')            
+        if sigma_x is not None and sigma_x > 0:
+            orient_hist = gaussian_filter1d(orient_hist,sigma_x*upsample_factor,mode='nearest',axis=0)
+        if sigma_y is not None and sigma_y > 0:
+            orient_hist = gaussian_filter1d(orient_hist,sigma_y*upsample_factor,mode='nearest',axis=1)
+        if sigma_theta is not None and sigma_theta > 0:
+            orient_hist = gaussian_filter1d(orient_hist,sigma_theta/dtheta_deg,mode='wrap',axis=3)
+        print(' done.')
 
     # normalization
     if normalize_intensity_stack is True:
