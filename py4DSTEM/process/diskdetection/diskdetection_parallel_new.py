@@ -1,4 +1,3 @@
-from py4DSTEM.process.utils.ellipticalCoords import compare_double_sided_gaussian
 import py4DSTEM
 import numpy as np
 import matplotlib.pyplot as plt
