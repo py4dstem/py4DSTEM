@@ -47,6 +47,38 @@ If you're running Windows, you should then also run
 conda install pywin32
 ```
 
+To install the py4dstem with the AI/ML functionality, follow the steps below.
+
+if you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, you should run
+
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install tensorflow-gpu==2.4.1
+conda install pip
+pip install py4dstem[aiml-cuda]
+```
+
+if you are running on Windows with Nvidia GPU and CUDA capability, you should run
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install pip
+pip install tensorflow-gpu==2.4.1
+pip install py4dstem[aiml-cuda]
+```
+
+if you are running on Windows without any CUDA capable device or any Mac OS X system, you should run
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install pip
+pip install py4dstem[aiml]
+```
+
 In order, these commands
 - ensure your installation of anaconda is up-to-date
 - make a virtual environment - see below!
