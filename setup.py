@@ -38,7 +38,8 @@ setup(
         'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0', 'dill >= 0.3.3'],
         'cuda': ['cupy'],
         'acom': ['pymatgen'],
-        'aiml': ['crystal4D','cupy']
+        'aiml': ['tensorflow == 2.4.1','tensorflow-addons','crystal4D'],
+        'aiml-cuda': ['tensorflow-addons''crystal4D','cupy']
         },
     entry_points={
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
