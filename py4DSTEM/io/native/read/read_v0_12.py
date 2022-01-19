@@ -39,7 +39,7 @@ def read_v0_12(fp, **kwargs):
                                     called splitext(fp)[0]+'.log'.
         mem         str             Only used if a single DataCube is loaded. In this case, mem
                                     specifies how the data should be stored; must be "RAM"
-                                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+                                    or "MEMMAP" or "DASK". See docstring for py4DSTEM.file.io.read. Default
                                     is "RAM".
         binfactor   int             Only used if a single DataCube is loaded. In this case,
                                     a binfactor of > 1 causes the data to be binned by this amount
@@ -94,7 +94,7 @@ def read_v0_12(fp, **kwargs):
         # Parse optional arguments
         if 'mem' in kwargs.keys():
             mem = kwargs['mem']
-            assert(mem in ('RAM','MEMMAP'))
+            assert(mem in ('RAM','MEMMAP', 'DASK'))
         else:
             mem='RAM'
         if 'binfactor' in kwargs.keys():
@@ -158,6 +158,12 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+    # ADDING STUFF IN HERE,
+    # I need to change datacube and counted datacube 
+    elif mem == "DASK":
+        f = h5py.File(filepath, 'r')
+        grp_data = f[group_name]
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
 
@@ -199,6 +205,10 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
             data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     if mem == "MEMMAP":
+        f = h5py.File(filepath,'r')
+        grp_data = f[group_name]
+        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+    elif mem == 'DASK':
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
