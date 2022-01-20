@@ -5,10 +5,11 @@ import numpy as np
 
 run_virt_diff = True
 run_virt_im = True
-run_probe = True
-run_disk_detection = True
-run_calibration = True
-show_plots = True
+run_probe = False
+run_disk_detection = False
+run_calibration = False
+show_plots = False
+show_imgrids = True
 
 
 # Load data
@@ -32,6 +33,7 @@ if run_virt_diff:
         py4DSTEM.visualize.show(dp.data,scaling='log',title='dp 2,3')
         datacube.show('dp 2,3')
         datacube.show((2,3))
+        pass
 
     # max, mean, median DP
     datacube.get_max_dp()
@@ -41,6 +43,28 @@ if run_virt_diff:
         datacube.show() # default argument is 'max_dp'
         datacube.show('median_dp')
         datacube.show('mean_dp')
+
+    if show_imgrids:
+        # Show all three together
+
+        if False:
+            # first with the visualize.show function
+            fig,axs = py4DSTEM.visualize.show(
+                [datacube.diffractionslices['max_dp'].data,
+                 datacube.diffractionslices['median_dp'].data,
+                 datacube.diffractionslices['mean_dp'].data],
+                scaling='log',returnfig=True
+            )
+            axs[0,0].set_title('max_dp')
+            axs[0,1].set_title('median_dp')
+            axs[0,2].set_title('mean_dp')
+            import matplotlib.pyplot as plt
+            plt.show()
+
+        # then with the datacube.show function
+        datacube.show(['max_dp','median_dp','mean_dp'])
+        datacube.show([[(0,0),(5,5),(4,3),(7,6)],
+                       [(2,2),(11,15),(6,1),(0,5)]])
 
     # max,mean,median - specify lims
     lims=(0,5,0,5)   #specify rectangular region
@@ -118,6 +142,10 @@ if run_virt_im:
         datacube.show_im('annular detector 1')
         datacube.show_im('annular detector 2')
         datacube.show_im('sum')
+
+    if show_imgrids:
+        datacube.show_im(['sum','rectangular detector 1',
+            'circular detector 2','point detector 1'])
 
 if run_probe:
     print('Running probe methods...........................')
