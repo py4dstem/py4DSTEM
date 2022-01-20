@@ -132,7 +132,6 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     get_maximal_points = kernels['maximal_pts_float64']
 
     if get_maximal_points.max_threads_per_block < DP.shape[1]:
-        # naive blocks/threads will not work, figure out an OK distribution
         blocks = ((np.prod(DP.shape)//get_maximal_points.max_threads_per_block + 1),)
         threads = ((get_maximal_points.max_threads_per_block))
     else:
@@ -300,6 +299,10 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                                     sigma=sigma,
                                                     edgeBoundary=edgeBoundary,
                                                     minRelativeIntensity=minRelativeIntensity,
+<<<<<<< Updated upstream
+=======
+                                                    minAbsoluteIntensity=minAbsoluteIntensity,
+>>>>>>> Stashed changes
                                                     relativeToPeak=relativeToPeak,
                                                     minSpacing=minPeakSpacing,
                                                     maxNumPeaks=maxNumPeaks,
@@ -317,13 +320,29 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
     else:
         assert(isinstance(peaks,PointList))
     peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
-    peaks.remove_points(peaks.data['intensity'] <  minAbsoluteIntensity)
 
     return peaks
 
+<<<<<<< Updated upstream
 def get_maxima_2D_cp(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
                   relativeToPeak=0, maxNumPeaks=0, subpixel='poly', upsample_factor=16,
                   get_maximal_points=None,blocks=None,threads=None):
+=======
+def get_maxima_2D_cp(ar, 
+                     sigma=0, 
+                     edgeBoundary=0, 
+                     minSpacing=0, 
+                     minRelativeIntensity=0,
+                     minAbsoluteIntensity=0,
+                     relativeToPeak=0, 
+                     maxNumPeaks=0, 
+                     subpixel='poly', 
+                     ar_FT = None,
+                     upsample_factor=16,
+                     get_maximal_points=None,
+                     blocks=None,
+                     threads=None):
+>>>>>>> Stashed changes
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -337,6 +356,8 @@ def get_maxima_2D_cp(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeInten
                                 is removed
         minRelativeIntensity    (float) maxima dimmer than minRelativeIntensity compared to the
                                 relativeToPeak'th brightest maximum are removed
+        minAbsoluteIntensity   (float) the minimum acceptable correlation peak intensity,
+                                on an absolute scale
         relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks             (int) return only the first maxNumPeaks maxima
         subpixel                (str)          'none': no subpixel fitting
@@ -408,12 +429,18 @@ def get_maxima_2D_cp(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeInten
             assert isinstance(relativeToPeak, (int, np.integer))
             deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+            
+        # Remove maxima which are too dim, absolute scale
+        if (minAbsoluteIntensity > 0):
+            deletemask = maxima['intensity'] < minAbsoluteIntensity
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
         # Remove maxima in excess of maxNumPeaks
         if maxNumPeaks > 0:
             assert isinstance(maxNumPeaks, (int, np.integer))
             if len(maxima) > maxNumPeaks:
                 maxima = maxima[:maxNumPeaks]
+                
 
         # Subpixel fitting 
         # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
@@ -432,7 +459,10 @@ def get_maxima_2D_cp(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeInten
                 maxima['intensity'][i] = linear_interpolation_2D_cp(ar, maxima['x'][i], maxima['y'][i])
         # Further refinement with fourier upsampling
         if subpixel == 'multicorr':
-            ar_FT = cp.conj(cp.array(ar))
+            if ar_FT is None:
+                ar_FT = cp.conj(cp.fft.fft2(cp.array(ar)))
+            else:
+                ar_FT = cp.conj(ar_FT)
             for ipeak in range(len(maxima['x'])):
                 xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
                 # we actually have to lose some precision and go down to half-pixel
