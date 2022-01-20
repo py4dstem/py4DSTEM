@@ -734,24 +734,70 @@ class DataCube(DataObject):
 
     def show(self, dp=None, **kwargs):
         """
-        Show a single *diffraction shaped* 2D slice of the dataset,
+        Show a *diffraction shaped* 2D slice of the dataset,
         passing any **kwargs to the visualize.show function.
         Default scaling is 'log'.
 
         Args:
-            dp (None or 2-tuple or str): Specifies the data to show.
+            dp (None or 2-tuple or str or list): Specifies the data to show.
             Behavior depends on the argument type:
                 - (None) the maximal dp, if it exists. else, the dp at (0,0)
                 - (2-tuple) the diffraction pattern at (rx,ry)
                 - (string) the attached DiffractionSlice of this name, if it exists
+                - (list) if a list is passed, the elements must all be strings or
+                  all 2-tuples. The function then shows multiple images corresponding
+                  to these selections.
         """
         from ...visualize import show
-        dp,title = self._get_best_dp(dp)
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
-        if 'title' not in kwargs:
-            kwargs['title'] = title
-        show(dp,**kwargs)
+
+        # plot one image
+        if not isinstance(dp,list):
+            dp,title = self._get_best_dp(dp)
+            if 'title' not in kwargs:
+                kwargs['title'] = title
+            show(dp,**kwargs)
+
+        # plot a grid of images
+        else:
+            # parse grid of inputs
+            dps,titles = [],[]
+            # 1D
+            if not isinstance(dp[0],list):
+                for i in range(len(dp)):
+                    d,t = self._get_best_dp(dp[i])
+                    dps.append(d)
+                    titles.append(t)
+                titles = [titles]
+            # 2D
+            else:
+                s = len(dp),len(dp[0])
+                dps,titles = [],[]
+                for i in range(s[0]):
+                    _dps,_titles = [],[]
+                    for j in range(s[1]):
+                        d,t = self._get_best_dp(dp[i][j])
+                        _dps.append(d)
+                        _titles.append(t)
+                    dps.append(_dps)
+                    titles.append(_titles)
+            # plot them
+            returnfig = kwargs['returnfig'] if 'returnfig' in kwargs.keys() else False
+            kwargs['returnfig'] = True
+            fig,axs = show(dps,**kwargs)
+            # label them
+            for i in range(axs.shape[0]):
+                for j in range(axs.shape[1]):
+                    axs[i,j].set_title(titles[i][j])
+
+        if returnfig:
+            return fig,axs
+        else:
+            import matplotlib.pyplot as plt
+            plt.show()
+            return
+
 
     def show_im(self, im=None, **kwargs):
         """
@@ -767,10 +813,52 @@ class DataCube(DataObject):
                 - (string) the attached RealSlice of this name, if it exists
         """
         from ...visualize import show
-        im,title = self._get_best_im(im)
-        if 'title' not in kwargs:
-            kwargs['title'] = title
-        show(im,**kwargs)
+
+        # plot one image
+        if not isinstance(im,list):
+            im,title = self._get_best_im(im)
+            if 'title' not in kwargs:
+                kwargs['title'] = title
+            show(im,**kwargs)
+
+        # plot a grid of images
+        else:
+            # parse grid of inputs
+            ims,titles = [],[]
+            # 1D
+            if not isinstance(im[0],list):
+                for i in range(len(im)):
+                    image,t = self._get_best_im(im[i])
+                    ims.append(image)
+                    titles.append(t)
+                titles = [titles]
+            # 2D
+            else:
+                s = len(im),len(im[0])
+                ims,titles = [],[]
+                for i in range(s[0]):
+                    _ims,_titles = [],[]
+                    for j in range(s[1]):
+                        image,t = self._get_best_im(im[i][j])
+                        _ims.append(image)
+                        _titles.append(t)
+                    ims.append(_ims)
+                    titles.append(_titles)
+            # plot them
+            returnfig = kwargs['returnfig'] if 'returnfig' in kwargs.keys() else False
+            kwargs['returnfig'] = True
+            fig,axs = show(ims,**kwargs)
+            # label them
+            for i in range(axs.shape[0]):
+                for j in range(axs.shape[1]):
+                    axs[i,j].set_title(titles[i][j])
+
+        if returnfig:
+            return fig,axs
+        else:
+            import matplotlib.pyplot as plt
+            plt.show()
+            return
 
 
 

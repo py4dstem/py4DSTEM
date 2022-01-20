@@ -187,7 +187,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
 
     Args:
-        ar (2D array): the array to plot
+        ar (2D array or a list of 2D arrays): the data to plot. Normally this
+            is a 2D array of the data.  If a list of 2D arrays is passed, plots
+            a corresponding grid of images.
         figsize (2-tuple): size of the plot
         cmap (colormap): any matplotlib cmap; default is gray
         scaling (str): selects a scaling scheme for the intensity values. Default is
@@ -238,6 +240,24 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
+    # plot a grid if `ar` is a list
+    if isinstance(ar,list):
+        args = locals()
+        if 'kwargs' in args.keys():
+            del args['kwargs']
+        rm = []
+        for k in args.keys():
+            if args[k] is None:
+                rm.append(k)
+        for k in rm:
+            del args[k]
+        from .show_extention import _show_grid
+        if returnfig:
+            return _show_grid(**args,**kwargs)
+        else:
+            _show_grid(**args,**kwargs)
+            return
+    # otherwise plot one image
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
