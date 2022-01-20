@@ -299,10 +299,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                                     sigma=sigma,
                                                     edgeBoundary=edgeBoundary,
                                                     minRelativeIntensity=minRelativeIntensity,
-<<<<<<< Updated upstream
-=======
                                                     minAbsoluteIntensity=minAbsoluteIntensity,
->>>>>>> Stashed changes
                                                     relativeToPeak=relativeToPeak,
                                                     minSpacing=minPeakSpacing,
                                                     maxNumPeaks=maxNumPeaks,
@@ -323,11 +320,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
 
     return peaks
 
-<<<<<<< Updated upstream
-def get_maxima_2D_cp(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', upsample_factor=16,
-                  get_maximal_points=None,blocks=None,threads=None):
-=======
+
 def get_maxima_2D_cp(ar, 
                      sigma=0, 
                      edgeBoundary=0, 
@@ -342,7 +335,6 @@ def get_maxima_2D_cp(ar,
                      get_maximal_points=None,
                      blocks=None,
                      threads=None):
->>>>>>> Stashed changes
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
