@@ -27,7 +27,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 
 
-## Installation
+## Basic installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
 First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
@@ -46,6 +46,20 @@ If you're running Windows, you should then also run
 ```
 conda install pywin32
 ```
+
+In order, these commands
+- ensure your installation of anaconda is up-to-date
+- make a virtual environment - see below!
+- enter the environment
+- make sure your new environment talks nicely to pip, a tool for installing Python packages
+- use pip to install py4DSTEM
+- on Windows: enable python to talk to the windows API
+
+Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
+Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
+
+## Advanced installation - ML functionality
 
 To install the py4dstem with the AI/ML functionality, follow the steps below.
 
@@ -78,18 +92,6 @@ conda activate py4dstem
 conda install pip
 pip install py4dstem[aiml]
 ```
-
-In order, these commands
-- ensure your installation of anaconda is up-to-date
-- make a virtual environment - see below!
-- enter the environment
-- make sure your new environment talks nicely to pip, a tool for installing Python packages
-- use pip to install py4DSTEM
-- on Windows: enable python to talk to the windows API
-
-Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
-Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
-You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
 
 
