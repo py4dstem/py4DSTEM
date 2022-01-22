@@ -27,7 +27,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 
 
-## Basic installation
+## Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
 First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
@@ -61,9 +61,9 @@ You can do this in the command line with `conda activate py4dstem`, or, if you'r
 
 ## Advanced installation - ML functionality
 
-To install the py4dstem with the AI/ML functionality, follow the steps below.
+To install the py4dstem with AI/ML functionality, follow the steps below.
 
-if you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, you should run
+If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, run
 
 ```
 conda update conda
@@ -74,7 +74,7 @@ conda install pip
 pip install py4dstem[aiml-cuda]
 ```
 
-if you are running on Windows with Nvidia GPU and CUDA capability, you should run
+If you are running on Windows with Nvidia GPU and CUDA capability, run
 ```
 conda update conda
 conda create -n py4dstem python==3.8
@@ -84,7 +84,7 @@ pip install tensorflow-gpu==2.4.1
 pip install py4dstem[aiml-cuda]
 ```
 
-if you are running on Windows without any CUDA capable device or any Mac OS X system, you should run
+If you are running on Windows without any CUDA capable device or any Mac OS X system, run
 ```
 conda update conda
 conda create -n py4dstem python==3.8
