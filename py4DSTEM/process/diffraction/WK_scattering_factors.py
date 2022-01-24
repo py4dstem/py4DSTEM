@@ -20,7 +20,7 @@ def compute_WK_factor(
     include_core: bool = True,
     include_phonon: bool = True,
     verbose=False,
-):
+) -> np.complex128:
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
     of the elastic part and computation of the inelastic part found in EMsoftLib/others.f90.
@@ -44,7 +44,8 @@ def compute_WK_factor(
                                         convention, 1/d_hkl in units of 1/Å
         Z (int):                        Atomic number. Data are available for H thru Cf (1 thru 98)
         accelerating_voltage (float):   Accelerating voltage in eV.
-        thermal_sigma (float):          RMS atomic displacement for TDS, in Å^2
+        thermal_sigma (float):          RMS atomic displacement for TDS, in Å
+                                        (This is often written as 〈u〉in papers)
         include_core (bool):            If True, include the core loss contribution to the absorptive
                                         form factors.
         include_phonon (bool):          If True, include the phonon/TDS contribution to the

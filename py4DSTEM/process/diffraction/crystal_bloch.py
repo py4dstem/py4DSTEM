@@ -50,7 +50,7 @@ def calculate_dynamical_structure_factors(
         thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
-                                        Units are Å^2.
+                                        Units are Å. (This is often written as 〈u〉in papers)
         tol_structure_factor (float):   tolerance for removing low-valued structure factors
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
