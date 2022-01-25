@@ -681,7 +681,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
         data_type = 'numpy'
     # handle unexpected type, this shouldn't be possible but just incase
     else:
-        raise Exception(f"Unexpected datacube array data type, {type(datacube.data)}"
+        raise Exception(f"Unexpected datacube array data type, {type(datacube.data)}")
 
     # if geometry settings are passed, this will take the highest prioirty compared to passing a mask
     if geometry != None:
