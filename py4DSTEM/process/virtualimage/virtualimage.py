@@ -8,7 +8,22 @@ import matplotlib.pyplot as plt
 import warnings
 
 
-__all__ = ['_get_virtualimage_from_mask_dask', '_get_virtualimage_from_mask_einsum', '_get_virtualimage_from_mask_tensordot']
+__all__ = [
+    'make_circ_mask',
+    'make_annular_mask',
+    'make_rect_mask',
+    'combine_masks',
+    'plot_mask_overlay',
+    'get_virtualimage_rect',
+    'get_virtualimage_circ',
+    'get_virtualimage_ann',
+    'get_virtualimage',
+    '_infer_image_type_from_geometry',
+    '_get_virtualimage_from_mask_dask', 
+    '_get_virtualimage_from_mask_einsum', 
+    '_get_virtualimage_from_mask_tensordot']
+
+    
 #TODO clean up all the old code snippets
 #TODO add automagic functions that will pick dask or normal depending on the array type. 
 #TODO add alias names for get get_BF, get_ADF? 
