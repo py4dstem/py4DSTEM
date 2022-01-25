@@ -309,7 +309,7 @@ def _get_virtual_image_dask(array, mask):
     Returns:
         out (2D numpy array): virtual image lazy virtual image, requires explict computation
     """    
-    val = np.sum(np.multiply(array,mask), dtype=np.uint)
+    val = np.sum(np.multiply(array,mask), dtype=np.float64)
     return val
 
 def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
