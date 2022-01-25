@@ -630,7 +630,7 @@ def _make_function_dict():
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : __get_virtualimage_rect_tensordot,
+                'numpy' : __get_virutalimage_rect_tensordot,
                 'dask' : __get_virutalimage_rect_dask
             }, 
         },
