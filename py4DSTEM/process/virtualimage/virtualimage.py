@@ -675,11 +675,8 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     Get a virtual image from a py4DSTEM datacube object, and will operate on in memory (np.ndarray), memory mapped (np.memmap) or dask arrays (da.Array)
     This function can be operated in two modes: 
         - passing a detector geometry, will generate a boolean mask corresponding to detector geometry these require a tuple to define the detector geometry: 
-
-
         - passing a mask: 
-            - a 2D boolean or non boolean mask may be passed, it must be the same size as the diffraction pattern
-    
+
     This function is a high level function and calls sub functions from within. Users may prefer to use these subfunctions:
 
     py4DSTEM.process.virtualimage._get_virtualimage_from_mask_dask - operating on dask array objects
@@ -698,9 +695,10 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
                     - 'circ':   (2-tuple) (center,radius) where center=(qx0,qy0)
                     - 'ann':    (2-tuple) (center,radii) where center=(qx0,qy0) and
                                 radii=(ri,ro)
-        mask (2D array, optional): numpy array defining a mask, either boolean or non-boolean
-        eager_compute(boolean, optional):   if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object, 
-                                            if datacube.data is numpy.ndarray this does nothing. 
+        mask (2D array, optional): numpy array defining a mask, either boolean or non-boolean.  Must be the same size as the
+            diffraction pattern
+        eager_compute(boolean, optional): if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object, 
+            or if datacube.data is numpy.ndarray this does nothing. 
     Returns:
         if dask.Array & eager_compute:
             (2D array): the virtual image
