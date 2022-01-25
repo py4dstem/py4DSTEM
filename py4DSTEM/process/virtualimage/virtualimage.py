@@ -617,21 +617,21 @@ def _make_function_dict():
             # detector_geometry
             'circ' : {
                 # data_type
-                'numpy' :_get_virtualimage_circ_tensordot,
-                'dask' : _get_virtualimage_circ_dask
+                'numpy' :__get_virtualimage_circ_tensordot,
+                'dask' : __get_virtualimage_circ_dask
             },
             # detector_geometry
             'ann' : {
                 # data_type
-                'numpy' : _get_virtualimage_ann_tensordot,
-                'dask' : _get_virutalimage_ann_dask,
+                'numpy' : __get_virtualimage_ann_tensordot,
+                'dask' : __get_virtualimage_ann_dask,
 
             },
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : _get_virtualimage_rect_tensordot,
-                'dask' : _get_virtualimage_rect_dask
+                'numpy' : __get_virtualimage_rect_tensordot,
+                'dask' : __get_virutalimage_rect_dask
             }, 
         },
         # mode
@@ -639,14 +639,14 @@ def _make_function_dict():
             # data_type
             'numpy' : {
                 # mask_type
-                'bool' : _get_virtualimage_from_mask_tensordot,
-                'non-bool' : _get_virtualimage_from_mask_einsum
+                'bool' : __get_virtualimage_from_mask_tensordot,
+                'non-bool' : __get_virtualimage_from_mask_einsum
             },
             # data_type
             'dask' : {
                 # mask_type
-                'bool' : _get_virtualimage_from_mask_dask,
-                'non-bool' : _get_virtualimage_from_mask_dask
+                'bool' : __get_virtualimage_from_mask_dask,
+                'non-bool' : __get_virtualimage_from_mask_dask
             }
         }
     }
