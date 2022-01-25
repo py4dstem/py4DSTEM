@@ -208,7 +208,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 #### Virtual Imaging Functions ####
 
 ##### py4DSTEM funcs V0.13.0 ####
-def get_virtualimage_rect(datacube, geometry, verbose=True):
+def get_virtualimage_rect(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector.
     Args:
@@ -226,7 +226,7 @@ def get_virtualimage_rect(datacube, geometry, verbose=True):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
-def get_virtualimage_circ(datacube, geometry, verbose=True):
+def get_virtualimage_circ(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
@@ -250,7 +250,7 @@ def get_virtualimage_circ(datacube, geometry, verbose=True):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
-def get_virtualimage_ann(datacube, geometry, verbose=True):
+def get_virtualimage_ann(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -296,7 +296,7 @@ def _get_virtual_image_dask(array, mask):
     val = np.sum(np.multiply(array,mask), dtype=np.uint)
     return val
 
-def get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True):
+def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean,  The mask and diffraction slices must be the same shape 
 
@@ -320,7 +320,7 @@ def get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True):
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virtualimage_ann_dask(datacube, geometry, eager_compute=True):
+def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
@@ -349,7 +349,7 @@ def get_virtualimage_ann_dask(datacube, geometry, eager_compute=True):
         
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virtualimage_circ_dask(datacube, geometry , eager_compute=True):
+def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -379,7 +379,7 @@ def get_virtualimage_circ_dask(datacube, geometry , eager_compute=True):
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def get_virutalimage_rect_dask(datacube, geometry, eager_compute=True):
+def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -412,7 +412,7 @@ def get_virutalimage_rect_dask(datacube, geometry, eager_compute=True):
 #### Einsum Powered Functions ####
 # TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
 
-def get_virtualimage_from_mask_einsum(datacube, mask):
+def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
@@ -427,7 +427,7 @@ def get_virtualimage_from_mask_einsum(datacube, mask):
 
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def get_virtualimage_ann_einsum(datacube, geometry):
+def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
@@ -446,7 +446,7 @@ def get_virtualimage_ann_einsum(datacube, geometry):
     
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def get_virtualimage_circ_einsum(datacube, geometry):
+def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -467,7 +467,7 @@ def get_virtualimage_circ_einsum(datacube, geometry):
 
     return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
 
-def get_virutalimage_rect_einsum(datacube, geometry):
+def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -488,7 +488,7 @@ def get_virutalimage_rect_einsum(datacube, geometry):
 #### End of Einsum Powered Functions ####
 
 #### Tensordot Powered Functions ####
-def get_virtualimage_from_mask_tensordot(datacube, mask):
+def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
@@ -502,7 +502,7 @@ def get_virtualimage_from_mask_tensordot(datacube, mask):
 
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def get_virtualimage_ann_tensordot(datacube, geometry):
+def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
     radius of Ri/Ro. 
@@ -521,7 +521,7 @@ def get_virtualimage_ann_tensordot(datacube, geometry):
     
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def get_virtualimage_circ_tensordot(datacube, geometry, spicy=False):
+def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -545,7 +545,7 @@ def get_virtualimage_circ_tensordot(datacube, geometry, spicy=False):
     else:
         return np.tensordot(datacube.data, mask, axes=((2,3),(0,1))) 
 
-def get_virutalimage_rect_tensordot(datacube, geometry, spicy=False):
+def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -569,185 +569,141 @@ def get_virutalimage_rect_tensordot(datacube, geometry, spicy=False):
 
 ### End of Tensordot Powered Functions ####
 
+### Facade Function and Helper Functions ####
 
+def _infer_image_type_from_geometry(geometry, *args, **kwargs):
 
+    """
+    Takes a geometry of nested tuples and infers the detector type and returns corresponding string. 
 
+    This isa hardcoded method reliant on the max depth of the nesting is 1 i.e. ((10,10), (20,20)) 
 
+    There is probably a nicer way to do this 
+    """
 
-# Leaving these in for now as they may be recoverable. 
-#### NUMBA Powered Functions ####
-# #TODO decide if fastmath is appropriate or not  
-# #TODO add assertions if desired about shape of mask and diffraction image being the same. a little tricky with numba
-# #TODO add ability to shift patterns from coordinates / calibration centers - after v 13.0 update
-# #TODO add simplified boolean functions i.e. abstract away passing mask,
-# #TODO add alias functions 
-# #TODO Jitted functions don't work, either need to restructure into 
+    # extract the 
+    shape = [np.array(a).shape for a  in np.array(geometry, dtype='object')]
 
-# # Most generalised function 
-# @nb.jit(nopython=True, parallel=True, fastmath=True)
-# def get_virtual_image_numba(datacube, mask):
-#     """
-#     Make a virutal for all probe posistions from a py4DSTEM datacube object. This is the most generalised and flexible method to make a virtual image, as any mask (boolean, int, float) may be passed. 
-#     There are other virtual image functions which are simpler to use and may be preferable for your use case. see:
-#         get_virtual_BF_numba
-#         get_virtual_ADF_numba
-#         get_virtual_rectangular_image_numba
-#         get_virtual_circular_image_numba
-#         get_virtual_annular_image_numba
-
-#     Note:
-#         this function is accelerated using numba.jit with the fastmath flag set as true. see https://numba.pydata.org/numba-doc/latest/user/performance-tips.html#fastmath) for more details.
-#     Args:
-#         datacube (DataCube): py4DSTEM datacube, rx,ry,qx,qy, 
-#         mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
-#         out (2D numpy array, optional): pre-allocated output array 
-#     Returns:
-#         out (2D numpy array): virtual image 
-#     """    
-
-#     # assert datacube.data.shape[-2:] == mask.shape, "mask and diffraction pattern sizes are mismatched"
-#     #TODO should we be using fastmath = True ? 
-
-#     # if out is None:
-#     out = np.zeros(datacube.data.shape[:-2], dtype=datacube.data.dtype)
-
-#     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-#         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask)) # multiply used here so that it can take any mask dtype
-#     return out
-
-
-# @nb.jit(nopython=True, parallel=False, cache=True, fastmath=True)
-# def get_virtual_BF_numba(datacube, R, center=None):
-#     """
-#     Make a virtual bright field image from a py4DSTEM datacube object, with a radius of R pixels.
-
-#     Note this function is accelerated using numba.jit with the fastmath flag set as true. see https://numba.pydata.org/numba-doc/latest/user/performance-tips.html#fastmath) for more details.
-#     Args:
-#         datacube (py4DSTEM.datacube): py4DSTEM datacube object 
-#         R (int): radius of the bright field detector
-#         center (tuple, optional): coordinates to center the BF detector, if None it will pick the center pixel via datacube.data.shape // 2 . Defaults to None.
-
-#     Returns:
-#         out (2D numpy array): BF image generated from the Datacube.
-#     """
+    # cycle through the mask types
+    # I could do this as a dictionary but this is simple as well
     
-#     #TODO accept center coordinates from datacube and roll mask to fit
-#     #TODO add ability to use function to get center pixel, instead of a constant center pixel value? 
-#     #TODO check if parallel = True is faster or not, a few tests I ran parallel = True was slower
+    # cicular detector
+    if shape == [(2,),()]:
+        return 'circ'
+    # annular dectector
+    elif shape == [(2,), (2,)]:
+        return 'ann'
+    # rectangular detector
+    elif shape == [(),(),(),()]:
+        return 'rect'
+    elif shape == [(),()]:
+        return 'point'
     
-#     # if no center is passed it will assume the center of the diffraction pattern
-#     if center is None:
-#         center = np.array(datacube.data.shape) // 2
-
-#     # create the array for the output image
-#     out = np.zeros(datacube.data.shape[:-2])
-
-#     # Create the BF mask and get the crop values 
-#     mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, x0=center[0], y0=center[1], R=R, return_crop_vals=True)
+    # TODO add square detector, but that should be formatted as (qx0,qy0,s) -> [(3,)] so as not to conflict with circular  
+    # elif shape == [(3,)]:
+    #     return 'square'
     
-#     # This might not be correct I need to look through the shapes... and see if it makes sense. 
-#     # Crop the mask to the required shape
-#     mask = mask[xmin:xmax,ymin:ymax]
-#     # Crop the data array to 
-#     arr = datacube.data[:,:,xmin:xmax,ymin:ymax]
-#     # Loop over the realspace coordinates and use boolean mask to index the array and sum
-#     for rx, ry in np.ndindex(arr.shape[:-2]):
-#         # out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask)) # Multiply by the mask and sum 
-#         out[rx,ry] = np.sum(arr[rx,ry][mask]) # in a few tests it seems quicker to use Boolean index and sum than multiply for BF images
+    # Raise Exception for incorrectly formatted geometries
+    else:
+        raise Exception("Could not infer the detector type from the geometry")
 
-#     return out
+def _make_function_dict():
+    """
+    Function which creates a dictionary with the prefered image functions for various datacube array dtype, mask/geometry, mask type etc.  
+    """
+    function_dict = {
+        # mode
+        'geometry' : {
+            # detector_geometry
+            'circ' : {
+                # data_type
+                'numpy' :_get_virtualimage_circ_tensordot,
+                'dask' : _get_virtualimage_circ_dask
+            },
+            # detector_geometry
+            'ann' : {
+                # data_type
+                'numpy' : _get_virtualimage_ann_tensordot,
+                'dask' : _get_virutalimage_ann_dask,
 
-# @nb.jit(nopython=True, parallel=True, fastmath=True)
-# def get_virtual_ADF_numba(datacube, Ri, Ro, center=None):
-#     """
-#     Make a virtual annular dark field image from a py4DSTEM datacube object with a inner radius of Ri, and a outer radius of R0. 
+            },
+            # detector_geometry
+            'rect' : {
+                # data_type
+                'numpy' : _get_virtualimage_rect_tensordot,
+                'dask' : _get_virtualimage_rect_dask
+            }, 
+        },
+        # mode
+        'mask' : {
+            # data_type
+            'numpy' : {
+                # mask_type
+                'bool' : _get_virtualimage_from_mask_tensordot,
+                'non-bool' : _get_virtualimage_from_mask_einsum
+            },
+            # data_type
+            'dask' : {
+                # mask_type
+                'bool' : _get_virtualimage_from_mask_dask,
+                'non-bool' : _get_virtualimage_from_mask_dask
+            }
+        }
+    }
+    return function_dict
 
-#     Note this function is accelerated using numba.jit with the fastmath flag set as true. see https://numba.pydata.org/numba-doc/latest/user/performance-tips.html#fastmath) for more details.
+def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True):
+    """
 
-#     Args:
-#         datacube (py4DSTEM datacube): py4DSTEM datacube object
-#         Ri (int): Inner detector angle radius in pixels
-#         Ro (int): Outter detector angle radius in pixels
-#         center (tuple, optional): coordinates to center the BF detector, if None it will pick the center pixel via datacube.data.shape // 2 . Defaults to None.
+    Placeholder
 
-#     Returns:
-#         out (2D numpy array): ADF image generated from the Datacube.
-#     """
-#     #TODO accept center coordinates from datacube and roll mask to fit
-#     #TODO use function to get center pixel, will be slower? 
-#     # if no center is passed it will assume the center of the diffraction pattern
-#     if center is None:
-#         center = np.array(datacube.data.shape) // 2
+    """
 
-#     # create the array for the output image
-#     out = np.zeros(datacube.data.shape[:-2])
+    # TODO add assertions and the such
+    # TODO add check or assert that one of geometry or mask is not None 
+    # TODO add check or assert that the mask is correct shape 
+    # TODO add check that geometry is valid shape and can be infered. 
 
-#     # if no center is passed it will assume the center of the diffraction pattern
-#     mask = make_annular_mask(datacube, x0=center[0],y0=center[1], Ri=Ri, Ro=Ro)
+    # I decided to do this with switch like statements, in python 3.10, we could use them explicitly. 
+    # This should make it easier to split into two functions if that is the prefered route
     
-#     # loop over 
-#     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-#         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask))# in a few tests it seems quicker to multiply than boolean index for ADF images 
-#         # out[rx,ry] = np.sum(arr[rx,ry][mask]) 
-#     return out
+    # create the dictionary with all prefered virutal image functions
+    function_dict = _make_function_dict()
+        
+    ### Set flags for deciding what function to use ### 
     
-    
-# @nb.jit(nopython=True, parallel=True, fastmath=True)
-# def get_virtual_circular_image_numba(datacube, R, center):
-#     """ 
-#     Make a virtual image from a py4DSTEM datacube object with a circular detector with radius R centere at center.
+    # check the datacube data type, three data types we should expect are, np.ndarray, np.memmap, da.Array 
+    # dask array
+    if type(datacube.data) == da.Array:
+        data_type = 'dask'
+    # numpy array or memory mapped array
+    elif type(datacube.data) == np.ndarray or type(datacube.data) == np.memmap:
+        data_type = 'numpy'
+    # handle unexpected type, this shouldn't be possible but just incase
+    else:
+        raise Exception(f"Unexpected datacube array data type, {type(datacube.data)}"
 
-#     Args:
-#         datacube (py4DSTEM datacube): py4DSTEM datacube object
-#         R (int): Radius of the circular detector 
-#         center (tuple): center coordinates for the circular detector
+    # if geometry settings are passed, this will take the highest prioirty compared to passing a mask
+    if geometry != None:
+        mode = 'geometry'
+        detector_geometry = _infer_image_type_from_geometry(geometry)
 
-#     Returns:
-#         out (2D numpy array: Virtual image generated
-#     """
-#     # create the array for the output image
-#     out = np.zeros(datacube.data.shape[:-2])
+        # key will be 'geometry','circ'/'ann'/'rect'..., 
+        image_function = function_dict[mode][detector_geometry][data_type]
 
-#     # make the mask center at the desired coordinates
-#     mask = make_circ_mask(datacube, x0=center[0],y0=center[1], R=R)
+        return image_function(datacube, geometry, eager_compute=eager_compute)
+    # if mask is passed and geometry is not passed
+    elif mask != None:
+        mode = 'mask'
+        # check if the mask is boolean or not
+        if mask.dtype == bool:
+            mask_type = 'bool'
+        else:
+            mask_type = 'non-bool'
 
-#     # loop over realspace coordinates
-#     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-#         # out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask)) # Multiply by the mask and sum 
-#         out[rx,ry] = np.sum(datacube.data[rx,ry][mask]) # in a few tests it seems quicker to use Boolean index and sum than multiply for BF images
-#     return out
+        # key will be 'mask','dask'/'numpy','bool'/'non-bool' to find corresponding function 
+        image_function = function_dict[mode][data_type][mask_type]
 
-# @nb.jit(nopython=True, parallel=True, fastmath=True)
-# def get_virtual_rectangular_image_numba(datacube, xmin, xmax, ymin, ymax, center):
-    
-#     # create the array for the output image
-#     out = np.zeros(datacube.data.shape[:-2])
-
-#     # make the mask center at the desired coordinates
-#     mask = make_rect_mask(datacube, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
-    
-#     # loop over realspace coordinates
-#     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-#         # out[rx,ry] = np.sum(np.multiply(arr[rx,ry],mask)) # Multiply by the mask and sum 
-#         out[rx,ry] = np.sum(datacube.data[rx,ry][mask]) # in a few tests it seems quicker to use Boolean index and sum than multiply for BF images
-#     return out
-
-
-# @nb.jit(nopython=True, parallel=True, fastmath=True)
-# def get_virtual_annular_image_numba(datacube, Ri, Ro, center):
-
-#     # create the array for the output image
-#     out = np.zeros(datacube.data.shape[:-2])
-
-#     # if no center is passed it will assume the center of the diffraction pattern
-#     mask = make_annular_mask(datacube, x0=center[0],y0=center[1], Ri=Ri, Ro=Ro)
-    
-#     # loop over 
-#     for rx, ry in np.ndindex(datacube.data.shape[:-2]):
-#         out[rx,ry] = np.sum(np.multiply(datacube.data[rx,ry],mask))# in a few tests it seems quicker to multiply than boolean index for ADF images 
-#         # out[rx,ry] = np.sum(arr[rx,ry][mask]) 
-#     return out
-
-
-#### End of Virtual Image Functions ####
-
+        return image_function(datacube, geometry, eager_compute=eager_compute)
+    else:
+        raise Exception("Neither Geometry or Mask were passed")
