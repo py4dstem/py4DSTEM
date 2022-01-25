@@ -24,8 +24,8 @@ __all__ = [
     '_get_virtualimage_from_mask_tensordot'
     ]
 
-#TODO clean up all the old code snippets
-#TODO add automagic functions that will pick dask or normal depending on the array type. 
+#TODO clean up all the old code snippets - in progress
+#TODO add automagic functions that will pick dask or normal depending on the array type - in progress 
 #TODO add alias names for get get_BF, get_ADF? 
 #TODO Work out how to handle name space to access underlying __functions__, use __all__ or something like that 
 
@@ -581,7 +581,7 @@ def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **k
     if spicy:
         return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
     else:
-        return np.tensordor(datacube.data, mask, axes=((2,3),(0,1)))
+        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
 ### End of Tensordot Powered Functions ####
 
@@ -670,9 +670,21 @@ def _make_function_dict():
 
 
 def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
+    
     """
-
-    Placeholder
+    Get a virtual image from a py4DSTEM datacube object. There are two methods of opperation:
+        - passing a detector geometry: 
+                - 'rect': (4-tuple) the corners (qx0,qxf,qy0,qyf)
+                - 'circ': (2-tuple) (center,radius) where center=(qx0,qy0)
+                - 'ann': (2-tuple) (center,radii) where center=(qx0,qy0) and
+                  radii=(ri,ro)
+                - 'mask': (2D boolean array)
+    Args:
+        datacube (DataCube):
+        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
+    Returns:
+        (2D array): the virtual image
+    
 
     """
 
