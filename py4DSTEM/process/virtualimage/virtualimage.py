@@ -14,10 +14,10 @@ __all__ = [
     'make_rect_mask',
     'combine_masks',
     'plot_mask_overlay',
-    'get_virtualimage_rect_old',
-    'get_virtualimage_circ_old',
-    'get_virtualimage_ann_old',
     'get_virtualimage',
+    '_get_virtualimage_rect_old',
+    '_get_virtualimage_circ_old',
+    '_get_virtualimage_ann_old',
     '_infer_image_type_from_geometry',
     '_get_virtualimage_from_mask_dask', 
     '_get_virtualimage_from_mask_einsum', 
@@ -224,7 +224,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 #### Virtual Imaging Functions ####
 
 ##### py4DSTEM funcs V0.13.0 ####
-def get_virtualimage_rect_old(datacube, geometry, verbose=True, *args, **kwargs):
+def _get_virtualimage_rect_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector.
     Args:
@@ -242,7 +242,7 @@ def get_virtualimage_rect_old(datacube, geometry, verbose=True, *args, **kwargs)
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
-def get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs):
+def _get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
@@ -266,7 +266,7 @@ def get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs)
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
-def get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs):
+def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -675,11 +675,8 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     Get a virtual image from a py4DSTEM datacube object, and will operate on in memory (np.ndarray), memory mapped (np.memmap) or dask arrays (da.Array)
     This function can be operated in two modes: 
         - passing a detector geometry, will generate a boolean mask corresponding to detector geometry these require a tuple to define the detector geometry: 
-            - 'rect': (4-tuple) the corners (qx0,qxf,qy0,qyf)
-            - 'circ': (2-tuple) (center,radius) where center=(qx0,qy0)
-            - 'ann': (2-tuple) (center,radii) where center=(qx0,qy0) and
-                radii=(ri,ro)
-            - 'mask': (2D boolean array)
+
+
         - passing a mask: 
             - a 2D boolean or non boolean mask may be passed, it must be the same size as the diffraction pattern
     
@@ -697,6 +694,10 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     Args:
         datacube (DataCube):
         geometry (nested tuple, optional): Tuple defining the geoemtry of the detector, 
+                    - 'rect':   (4-tuple) the corners (qx0,qxf,qy0,qyf)
+                    - 'circ':   (2-tuple) (center,radius) where center=(qx0,qy0)
+                    - 'ann':    (2-tuple) (center,radii) where center=(qx0,qy0) and
+                                radii=(ri,ro)
         mask (2D array, optional): numpy array defining a mask, either boolean or non-boolean
         eager_compute(boolean, optional):   if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object, 
                                             if datacube.data is numpy.ndarray this does nothing. 
@@ -710,13 +711,13 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     
 
     """
-
+    # TODO add ability to pass both mask and geometry where mask acts as bad pixels e.g. beam stop
     # I decided to do this with switch like statements using a dictionary, in python 3.10, we could use them explicitly. 
     # This should make it easier to split into two functions if that is the prefered route
     
     # check one of geometry or mask is passed
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
-    assert geometry != None or type(mask) == np.ndarray, "Neither geometry or mask passed"
+    assert (geometry is not None) ^ (mask is not None), "Either, neither or both geometry or mask passed"
 
     # create the dictionary with all prefered virutal image functions
     function_dict = _make_function_dict()
