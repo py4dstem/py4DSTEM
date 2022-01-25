@@ -10,21 +10,11 @@ import glob
 import json
 import shutil
 import numpy as np
-try:
-    import crystal4D
-except ImportError:
-    print('Please install crystal4D before proceeding')
-
-try:
-    import tensorflow as tf
-except ImportError:
-    print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
 
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
-from ...io.google_drive_downloader import download_file_from_google_drive
 from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
@@ -105,6 +95,18 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     Returns:
         (PointList): the Bragg peak positions and correlation intensities
     """
+    
+    try:
+        import crystal4D
+    except ImportError:
+        print('Please install crystal4D before proceeding')
+
+    try:
+        import tensorflow as tf
+    except ImportError:
+        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+
+    
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
     
     # Perform any prefiltering
@@ -222,6 +224,17 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         (n-tuple of PointLists, n=len(Rx)): the Bragg peak positions and
         correlation intensities at each scan position (Rx,Ry).
     """
+    
+    try:
+        import crystal4D
+    except ImportError:
+        print('Please install crystal4D before proceeding')
+
+    try:
+        import tensorflow as tf
+    except ImportError:
+        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+    
     assert(len(Rx)==len(Ry))
     peaks = []
     
@@ -364,6 +377,16 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
+    
+    try:
+        import crystal4D
+    except ImportError:
+        print('Please install crystal4D before proceeding')
+
+    try:
+        import tensorflow as tf
+    except ImportError:
+        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
 
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
@@ -528,6 +551,16 @@ def find_Bragg_disks_aiml(datacube, probe,
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
+    
+    try:
+        import crystal4D
+    except ImportError:
+        print('Please install crystal4D before proceeding')
+
+    try:
+        import tensorflow as tf
+    except ImportError:
+        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
 
     def _parse_distributed(distributed):
         import os
@@ -682,6 +715,9 @@ def _check_cuda_device_available():
     """
     Check if GPU is available to use by python/tensorflow.
     """
+
+    import tensorflow as tf
+    
     tf_recog_gpus = tf.config.experimental.list_physical_devices('GPU')
     
     if len(tf_recog_gpus) >0:
@@ -704,6 +740,7 @@ def _get_latest_model(model_path = None):
          model:    Trained tensorflow model for disk detection
     """
     
+    import tensorflow as tf
     from ...io.google_drive_downloader import download_file_from_google_drive
     tf.keras.backend.clear_session()
     
