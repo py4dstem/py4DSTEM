@@ -716,7 +716,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     
     # check one of geometry or mask is passed
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
-    assert geometry != None or type(mask) != np.ndarray, "Neither geometry or mask passed"
+    assert geometry != None or type(mask) == np.ndarray, "Neither geometry or mask passed"
 
     # create the dictionary with all prefered virutal image functions
     function_dict = _make_function_dict()
