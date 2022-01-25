@@ -32,10 +32,11 @@ setup(
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',
         'requests >= 2.25.1',
+        'dask >= 2.3.0',
+        'distributed >= 2.3.0'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
-        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0', 'dill >= 0.3.3'],
         'cuda': ['cupy'],
         'acom': ['pymatgen'],
         'aiml': ['tensorflow == 2.4.1','tensorflow-addons','crystal4D'],
