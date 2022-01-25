@@ -711,14 +711,13 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
 
     """
 
-    # TODO add assertions and the such
-    # TODO add check or assert that one of geometry or mask is not None 
-    # TODO add check or assert that the mask is correct shape 
-    # TODO add check that geometry is valid shape and can be infered. 
-
     # I decided to do this with switch like statements using a dictionary, in python 3.10, we could use them explicitly. 
     # This should make it easier to split into two functions if that is the prefered route
     
+    # check one of geometry or mask is passed
+    # I could use np.all(mask) != None, but I want to check its a numpy array as well
+    assert geometry != None or type(mask) != np.ndarray, "Neither geometry or mask passed"
+
     # create the dictionary with all prefered virutal image functions
     function_dict = _make_function_dict()
         
@@ -738,14 +737,19 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     # if geometry settings are passed, this will take the highest prioirty compared to passing a mask
     if geometry != None:
         mode = 'geometry'
+        # _infer_image_type_from_geometry will raise exception if it cannot parse the tupple
         detector_geometry = _infer_image_type_from_geometry(geometry)
 
         # key will be 'geometry','circ'/'ann'/'rect'..., 
         image_function = function_dict[mode][detector_geometry][data_type]
 
         return image_function(datacube, geometry, eager_compute=eager_compute)
+    
     # if mask is passed and geometry is not passed
     elif type(mask) == np.ndarray:
+        #check the mask is the same shape as the diffraction slices 
+
+        assert datacube.data[0,0].shape == mask.shape, "mask and diffraction pattern shapes do not match"
         mode = 'mask'
         # check if the mask is boolean or not
         if mask.dtype == bool:
