@@ -722,7 +722,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
 
         return image_function(datacube, geometry, eager_compute=eager_compute)
     # if mask is passed and geometry is not passed
-    elif mask != None:
+    elif type(mask) == np.ndarray:
         mode = 'mask'
         # check if the mask is boolean or not
         if mask.dtype == bool:
