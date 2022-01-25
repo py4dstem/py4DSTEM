@@ -11,14 +11,14 @@ from numba import cuda
 from time import time
 
 try:
-    import cupy as cp
-except ImportError:
-    print('Please install cupy before proceeding')
-    
+    import crystal4D
+except:
+    raise ImportError("Import Error: Please install crystal4D before proceeding")
+        
 try:
     import tensorflow as tf
-except ImportError:
-    print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+except:
+    raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
 from cupyx.scipy.ndimage import gaussian_filter
 

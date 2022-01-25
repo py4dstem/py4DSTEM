@@ -98,13 +98,13 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     
     try:
         import crystal4D
-    except ImportError:
-        print('Please install crystal4D before proceeding')
-
+    except:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        
     try:
         import tensorflow as tf
-    except ImportError:
-        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+    except:
+        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
@@ -227,13 +227,13 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
     
     try:
         import crystal4D
-    except ImportError:
-        print('Please install crystal4D before proceeding')
-
+    except:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        
     try:
         import tensorflow as tf
-    except ImportError:
-        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+    except:
+        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
     
     assert(len(Rx)==len(Ry))
     peaks = []
@@ -380,13 +380,13 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     
     try:
         import crystal4D
-    except ImportError:
-        print('Please install crystal4D before proceeding')
-
+    except:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        
     try:
         import tensorflow as tf
-    except ImportError:
-        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+    except:
+        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
@@ -554,13 +554,13 @@ def find_Bragg_disks_aiml(datacube, probe,
     
     try:
         import crystal4D
-    except ImportError:
-        print('Please install crystal4D before proceeding')
-
+    except:
+        raise ImportError("Please install crystal4D before proceeding")
+        
     try:
         import tensorflow as tf
-    except ImportError:
-        print('Please install tensorflow before proceeding - please check ' + "https://www.tensorflow.org/install" + 'for more information')
+    except:
+        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     def _parse_distributed(distributed):
         import os
