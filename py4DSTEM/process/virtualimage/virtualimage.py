@@ -652,7 +652,7 @@ def _make_function_dict():
     }
     return function_dict
 
-def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True):
+def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
     """
 
     Placeholder
@@ -664,7 +664,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True):
     # TODO add check or assert that the mask is correct shape 
     # TODO add check that geometry is valid shape and can be infered. 
 
-    # I decided to do this with switch like statements, in python 3.10, we could use them explicitly. 
+    # I decided to do this with switch like statements using a dictionary, in python 3.10, we could use them explicitly. 
     # This should make it easier to split into two functions if that is the prefered route
     
     # create the dictionary with all prefered virutal image functions
