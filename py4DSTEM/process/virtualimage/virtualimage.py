@@ -14,16 +14,16 @@ __all__ = [
     'make_rect_mask',
     'combine_masks',
     'plot_mask_overlay',
-    'get_virtualimage_rect',
-    'get_virtualimage_circ',
-    'get_virtualimage_ann',
+    'get_virtualimage_rect_old',
+    'get_virtualimage_circ_old',
+    'get_virtualimage_ann_old',
     'get_virtualimage',
     '_infer_image_type_from_geometry',
     '_get_virtualimage_from_mask_dask', 
     '_get_virtualimage_from_mask_einsum', 
-    '_get_virtualimage_from_mask_tensordot']
+    '_get_virtualimage_from_mask_tensordot'
+    ]
 
-    
 #TODO clean up all the old code snippets
 #TODO add automagic functions that will pick dask or normal depending on the array type. 
 #TODO add alias names for get get_BF, get_ADF? 
@@ -224,7 +224,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 #### Virtual Imaging Functions ####
 
 ##### py4DSTEM funcs V0.13.0 ####
-def get_virtualimage_rect(datacube, geometry, verbose=True, *args, **kwargs):
+def get_virtualimage_rect_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector.
     Args:
@@ -242,7 +242,7 @@ def get_virtualimage_rect(datacube, geometry, verbose=True, *args, **kwargs):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
     return virtual_image
 
-def get_virtualimage_circ(datacube, geometry, verbose=True, *args, **kwargs):
+def get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
@@ -266,7 +266,7 @@ def get_virtualimage_circ(datacube, geometry, verbose=True, *args, **kwargs):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
 
-def get_virtualimage_ann(datacube, geometry, verbose=True, *args, **kwargs):
+def get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -667,6 +667,7 @@ def _make_function_dict():
         }
     }
     return function_dict
+
 
 def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
     """
