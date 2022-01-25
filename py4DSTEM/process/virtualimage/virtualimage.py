@@ -672,18 +672,41 @@ def _make_function_dict():
 def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
     
     """
-    Get a virtual image from a py4DSTEM datacube object. There are two methods of opperation:
-        - passing a detector geometry: 
-                - 'rect': (4-tuple) the corners (qx0,qxf,qy0,qyf)
-                - 'circ': (2-tuple) (center,radius) where center=(qx0,qy0)
-                - 'ann': (2-tuple) (center,radii) where center=(qx0,qy0) and
-                  radii=(ri,ro)
-                - 'mask': (2D boolean array)
+    Get a virtual image from a py4DSTEM datacube object, and will operate on in memory (np.ndarray), memory mapped (np.memmap) or dask arrays (da.Array)
+    This function can be operated in two modes: 
+        - passing a detector geometry, will generate a boolean mask corresponding to detector geometry these require a tuple to define the detector geometry: 
+            - 'rect': (4-tuple) the corners (qx0,qxf,qy0,qyf)
+            - 'circ': (2-tuple) (center,radius) where center=(qx0,qy0)
+            - 'ann': (2-tuple) (center,radii) where center=(qx0,qy0) and
+                radii=(ri,ro)
+            - 'mask': (2D boolean array)
+        - passing a mask: 
+            - a 2D boolean or non boolean mask may be passed, it must be the same size as the diffraction pattern
+    
+    This function is a high level function and calls sub functions from within. Users may prefer to use these subfunctions:
+
+    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_dask - operating on dask array objects
+    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_einsum - operating on numpy objects with non-boolean masks
+    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_tensordot - operating on numpy objects with boolean masks
+    py4DSTEM.process.virtualimage.make_circ_mask - make a circular boolean mask
+    py4DSTEM.process.virtualimage.make_annular_mask' - make a annular boolean mask
+    py4DSTEM.process.virtualimage.make_rect_mask - make rectangular boolean mask
+    py4DSTEM.process.virtualimage.combine_masks - function to combine boolean masks
+    py4DSTEM.process.virtualimage.plot_mask_overlay - tool for visualising a detector boolean or non-boolean masks
+    
     Args:
         datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
+        geometry (nested tuple, optional): Tuple defining the geoemtry of the detector, 
+        mask (2D array, optional): numpy array defining a mask, either boolean or non-boolean
+        eager_compute(boolean, optional):   if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object, 
+                                            if datacube.data is numpy.ndarray this does nothing. 
     Returns:
-        (2D array): the virtual image
+        if dask.Array & eager_compute:
+            (2D array): the virtual image
+        if dask.Array & eager_compute ==False:
+            (lazy 2D array): Lazy dask object which maybe computed to generate virtual image
+        if numpy.ndarray or numpy.memmap:
+            (2D array): the virtual image
     
 
     """
