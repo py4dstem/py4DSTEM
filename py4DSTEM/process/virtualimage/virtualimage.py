@@ -733,6 +733,6 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
         # key will be 'mask','dask'/'numpy','bool'/'non-bool' to find corresponding function 
         image_function = function_dict[mode][data_type][mask_type]
 
-        return image_function(datacube, geometry, eager_compute=eager_compute)
+        return image_function(datacube, mask, eager_compute=eager_compute)
     else:
         raise Exception("Neither Geometry or Mask were passed")
