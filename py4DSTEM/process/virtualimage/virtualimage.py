@@ -296,7 +296,7 @@ def _get_virtual_image_dask(array, mask):
     val = np.sum(np.multiply(array,mask), dtype=np.uint)
     return val
 
-def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
+def __get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean,  The mask and diffraction slices must be the same shape 
 
@@ -320,7 +320,7 @@ def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, 
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
+def __get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
@@ -349,7 +349,7 @@ def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **
         
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, **kwargs):
+def __get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -379,7 +379,7 @@ def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, 
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
+def __get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -412,7 +412,7 @@ def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, *
 #### Einsum Powered Functions ####
 # TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
 
-def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
+def __get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
@@ -427,7 +427,7 @@ def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
 
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
+def __get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro. 
@@ -446,7 +446,7 @@ def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
     
     return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
+def __get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -467,7 +467,7 @@ def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
 
     return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
 
-def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
+def __get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -488,7 +488,7 @@ def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
 #### End of Einsum Powered Functions ####
 
 #### Tensordot Powered Functions ####
-def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
+def __get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
 
@@ -502,7 +502,7 @@ def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
 
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
+def __get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
     radius of Ri/Ro. 
@@ -521,7 +521,7 @@ def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
     
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
+def __get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -545,7 +545,7 @@ def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **k
     else:
         return np.tensordot(datacube.data, mask, axes=((2,3),(0,1))) 
 
-def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
+def __get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
