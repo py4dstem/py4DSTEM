@@ -11,9 +11,9 @@ from numba import cuda
 from time import time
 
 try:
-    import crystal4D
+    import cupy as cp
 except:
-    raise ImportError("Import Error: Please install crystal4D before proceeding")
+    raise ImportError("Import Error: Please install cupy before proceeding")
         
 try:
     import tensorflow as tf

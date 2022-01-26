@@ -740,6 +740,7 @@ def _get_latest_model(model_path = None):
          model:    Trained tensorflow model for disk detection
     """
     
+    import crystal4D
     import tensorflow as tf
     from ...io.google_drive_downloader import download_file_from_google_drive
     tf.keras.backend.clear_session()
