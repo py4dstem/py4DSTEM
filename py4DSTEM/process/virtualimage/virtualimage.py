@@ -6,7 +6,7 @@ from ..utils import tqdmnd
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
-
+import h5py
 
 __all__ = [
     'make_circ_mask',
@@ -726,8 +726,8 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     # dask array
     if type(datacube.data) == da.Array:
         data_type = 'dask'
-    # numpy array or memory mapped array
-    elif type(datacube.data) == np.ndarray or type(datacube.data) == np.memmap:
+    # numpy array or memory mapped array or h5py dataset which are conveted to numpy objects at operation
+    elif type(datacube.data) == np.ndarray or type(datacube.data) == np.memmap or type(datacube.data) == h5py.Dataset:
         data_type = 'numpy'
     # handle unexpected type, this shouldn't be possible but just incase
     else:
