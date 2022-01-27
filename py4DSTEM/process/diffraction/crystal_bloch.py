@@ -250,9 +250,9 @@ def generate_dynamical_diffraction_pattern(
     Less commonly used args:
         always_return_list (bool):      When True, the return is always a list of PointLists,
                                         even for a single thickness
-        dynamical_matrix_cache:         (DyanmicalMatrixCache) Dataclass used for caching of the 
-                                        dynamical matrix. If the cached matrix does not exist, it is 
-                                        computed and stored. Subsequent calls will use the cached matrix 
+        dynamical_matrix_cache:         (DyanmicalMatrixCache) Dataclass used for caching of the
+                                        dynamical matrix. If the cached matrix does not exist, it is
+                                        computed and stored. Subsequent calls will use the cached matrix
                                         for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
 
@@ -525,7 +525,6 @@ def generate_CBED(
 
         for patt, sim in zip(DP, bloch):
             patt[xpix, ypix] += sim.data["intensity"][keep_mask]
-
 
     if return_mask:
         return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
