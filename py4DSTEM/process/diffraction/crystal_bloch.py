@@ -407,6 +407,7 @@ def generate_CBED(
     DP_size_inv_A: Optional[float] = None,
     zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
     foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    LACBED: bool = False,
     dtype: np.dtype = np.float32,
     verbose: bool = False,
     progress_bar: bool = True,
@@ -430,6 +431,9 @@ def generate_CBED(
         zone_axis (np float vector):     3 element projection direction for sim pattern
                                          Can also be a 3x3 orientation matrix (zone axis 3rd column)
         foil_normal:                     3 element foil normal - set to None to use zone_axis
+        LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
+                                        keyed by tuples of (h,k,l). This mode is appropriate for convergence
+                                        angles larger than the Bragg spacing.
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
 
     Returns:
@@ -466,8 +470,8 @@ def generate_CBED(
 
     # remove those outside circular aperture
     keep_mask = np.hypot(tx_pixels, ty_pixels) < alpha_pix
-    tx_pixels = tx_pixels[keep_mask]
-    ty_pixels = ty_pixels[keep_mask]
+    tx_pixels = tx_pixels[keep_mask].astype(np.intp)
+    ty_pixels = ty_pixels[keep_mask].astype(np.intp)
 
     tx_mrad = tx_pixels / alpha_pix * alpha_rad
     ty_mrad = ty_pixels / alpha_pix * alpha_rad
@@ -475,23 +479,48 @@ def generate_CBED(
     # calculate plane waves as zone axes using small angle approximation for tilting
     tZA = ZA + (tx_mrad[:, None] * ZAx) + (ty_mrad[:, None] * ZAy)
 
-    # determine DP size based on beams present, plus a little extra
-    qx_max = np.max(np.abs(beams.data["qx"])) / pixel_size_inv_A
-    qy_max = np.max(np.abs(beams.data["qy"])) / pixel_size_inv_A
-
-    if DP_size_inv_A is None:
-        DP_size = [int(2 * (qx_max + 2 * alpha_pix)), int(2 * (qy_max + 2 * alpha_pix))]
+    if LACBED:
+        # In LACBED mode, the DP size is the same as one diffraction disk (2ɑ)
+        if DP_size_inv_A is None:
+            DP_size = [int(2 * alpha_pix), int(2 * alpha_pix)]
+        else:
+            DP_size = [
+                int(2 * DP_size_inv_A / pixel_size_inv_A),
+                int(2 * DP_size_inv_A / pixel_size_inv_A),
+            ]
     else:
-        DP_size = [
-            int(2 * DP_size_inv_A / pixel_size_inv_A),
-            int(2 * DP_size_inv_A / pixel_size_inv_A),
-        ]
+        # determine DP size based on beams present, plus a little extra
+        qx_max = np.max(np.abs(beams.data["qx"])) / pixel_size_inv_A
+        qy_max = np.max(np.abs(beams.data["qy"])) / pixel_size_inv_A
+
+        if DP_size_inv_A is None:
+            DP_size = [
+                int(2 * (qx_max + 2 * alpha_pix)),
+                int(2 * (qy_max + 2 * alpha_pix)),
+            ]
+        else:
+            DP_size = [
+                int(2 * DP_size_inv_A / pixel_size_inv_A),
+                int(2 * DP_size_inv_A / pixel_size_inv_A),
+            ]
 
     qx0 = DP_size[0] // 2
     qy0 = DP_size[1] // 2
 
     thickness = np.atleast_1d(thickness)
-    DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
+
+    if LACBED:
+        # In LACBED mode, the DP datastructure is a list of dicts of arrays
+        DP = [
+            {
+                (d["h"], d["k"], d["l"]): np.zeros(DP_size, dtype=dtype)
+                for d in beams.data
+            }
+            for _ in range(len(thickness))
+        ]
+    else:
+        # In CBED mode, the DP datastructure is a list of arrays
+        DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
@@ -507,24 +536,33 @@ def generate_CBED(
             dynamical_matrix_cache=Ugmh_cache,
         )
 
-        xpix = np.round(
-            bloch[0].data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
-        ).astype(np.intp)
-        ypix = np.round(
-            bloch[0].data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
-        ).astype(np.intp)
+        if LACBED:
+            # loop over each thickness
+            for patt, sim in zip(DP, bloch):
+                # loop over each beam
+                for refl in sim.data:
+                    patt[(refl["h"], refl["k"], refl["l"])][
+                        qx0 + tx_pixels[i], qy0 + ty_pixels[i]
+                    ] = refl["intensity"]
+        else:
+            xpix = np.round(
+                bloch[0].data["qx"] / pixel_size_inv_A + tx_pixels[i] + qx0
+            ).astype(np.intp)
+            ypix = np.round(
+                bloch[0].data["qy"] / pixel_size_inv_A + ty_pixels[i] + qy0
+            ).astype(np.intp)
 
-        keep_mask = np.logical_and.reduce(
-            (xpix >= 0, ypix >= 0, xpix < DP_size[0], ypix < DP_size[1])
-        )
+            keep_mask = np.logical_and.reduce(
+                (xpix >= 0, ypix >= 0, xpix < DP_size[0], ypix < DP_size[1])
+            )
 
-        xpix = xpix[keep_mask]
-        ypix = ypix[keep_mask]
+            xpix = xpix[keep_mask]
+            ypix = ypix[keep_mask]
 
-        mask[xpix, ypix] = True
+            mask[xpix, ypix] = True
 
-        for patt, sim in zip(DP, bloch):
-            patt[xpix, ypix] += sim.data["intensity"][keep_mask]
+            for patt, sim in zip(DP, bloch):
+                patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
     if return_mask:
         return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
