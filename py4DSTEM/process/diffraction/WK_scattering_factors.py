@@ -125,51 +125,23 @@ def compute_WK_factor(
         TB = G / (2.0 * k0)
 
         # "NORMALIZE"
-        omega = 2.0 * TB / TA
-        kappa = theta_e / TA
+        OMEGA = 2.*TB/TA
+        KAPPA = theta_e/TA
 
-        x1 = (
-            omega
-            / ((1.0 + omega ** 2) * np.sqrt(omega ** 2 + 4.0 * kappa ** 2))
-            * np.log((omega + np.sqrt(omega ** 2 + 4.0 * kappa ** 2)) / (2.0 * kappa))
-        )
+        K2 = KAPPA*KAPPA
+        O2 = OMEGA*OMEGA
 
-        x2 = (
-            1.0
-            / np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
-            * np.log(
-                (
-                    1.0
-                    + 2.0 * kappa ** 2
-                    + omega ** 2
-                    + np.sqrt((1.0 + omega ** 2) ** 2 + 4.0 * kappa ** 2 * omega ** 2)
-                )
-            )
-            / (2.0 * kappa * np.sqrt(1.0 + kappa ** 2))
-        )
-
-        if omega > 1.0e-2:
-            x3 = (
-                1.0
-                / (omega * np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
-                * np.log(
-                    (omega + np.sqrt(omega ** 2 + 4.0 * (1.0 + kappa ** 2)))
-                    / (2.0 * np.sqrt(1.0 + kappa ** 2))
-                )
-            )
+        X1 = OMEGA/((1.+O2)*np.sqrt(O2+4.*K2))*np.log((OMEGA + np.sqrt( O2+4.*K2 ))/(2.*KAPPA))
+        X2 = 1./np.sqrt((1.+O2)*(1.+O2)+4.*K2*O2)*np.log((1.+2.*K2+O2+np.sqrt((1.+O2)*(1.+O2)+4.*K2*O2))/(2.*KAPPA*np.sqrt(1.+K2))) 
+        if (OMEGA > 1E-2):
+            X3 = 1./(OMEGA*np.sqrt( O2+4.*(1.+K2)))* np.log((OMEGA + np.sqrt( O2+4.*(1.+K2)))/(2.*np.sqrt(1.+K2))) 
         else:
-            x3 = 1.0 / (4.0 * (1.0 + kappa ** 2))
+            X3 = 1./(4.*(1.+K2))
 
-        Fcore = (
-            4.0
-            / 0.5289 ** 2
-            * 2.0
-            * np.pi
-            / k0 ** 2
-            * (2 * Z)
-            / (TA ** 2)
-            * (x2 - x1 - x3)
-        )
+        HI = 2*Z/(TA*TA) * (-X1+X2-X3)
+
+        A0 = 0.5289
+        Fcore = 4./(A0*A0) * 2.*np.pi/(k0*k0) * HI
 
         if verbose:
             print(f"Fcore:{Fcore}")
