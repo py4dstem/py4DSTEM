@@ -1,7 +1,7 @@
 import warnings
 import numpy as np
 from scipy import linalg
-from typing import Union, Optional
+from typing import Union, Optional, Dict, Tuple, List
 from time import time
 from tqdm import tqdm
 from dataclasses import dataclass
@@ -46,7 +46,9 @@ def calculate_dynamical_structure_factors(
                     following H. Rose, Optik 45:2 (1976)
             "WK-P": WK form factors plus the phonon/TDS absorptive contribution
             "WK-CP": WK form factors plus core and phonon absorption (default)
-        k_max (float):                  max scattering length to compute structure factors to
+        k_max (float):                  max scattering length to compute structure factors to.
+                                        Setting this to 2x the k_max used in generating the beamsn
+                                        included in a simulation will retain all possible couplings
         thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
@@ -221,7 +223,7 @@ def generate_dynamical_diffraction_pattern(
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
-) -> PointList:
+) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
     using the Bloch wave method.
@@ -258,6 +260,10 @@ def generate_dynamical_diffraction_pattern(
 
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            or
+        [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                        a list of PointLists is returned.
+
     """
     t0 = time()  # start timer for matrix setup
 
@@ -287,7 +293,7 @@ def generate_dynamical_diffraction_pattern(
     ZA = zone_axis * k0
 
     ################################################################
-    # Compute the reduced structure matrix \hat{A} in DeGraef 5.52 #
+    # Compute the reduced structure matrix \bar{A} in DeGraef 5.52 #
     ################################################################
 
     hkl = np.vstack((beams.data["h"], beams.data["k"], beams.data["l"])).T
@@ -412,7 +418,7 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
-) -> np.ndarray:
+) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int],np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
 
@@ -433,11 +439,14 @@ def generate_CBED(
         foil_normal:                     3 element foil normal - set to None to use zone_axis
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
                                         keyed by tuples of (h,k,l). This mode is appropriate for convergence
-                                        angles larger than the Bragg spacing.
+                                        angles larger than half the Bragg spacing.
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
 
     Returns:
-        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+        If thickness is a scalar: CBED pattern as np.ndarray
+        If thickness is a sequence: CBED patterns for each thickness value as a list of np.ndarrays
+        If LACBED is True and thickness is scalar: Dictionary with tuples of ints (h,k,l) as keys, mapping to np.ndarray.
+        If LACBED is True and thickness is a sequence: List of dictionaries, structured as above.
     """
 
     alpha_rad = alpha_mrad / 1000.0
@@ -480,7 +489,7 @@ def generate_CBED(
     tZA = ZA + (tx_mrad[:, None] * ZAx) + (ty_mrad[:, None] * ZAy)
 
     if LACBED:
-        # In LACBED mode, the DP size is the same as one diffraction disk (2ɑ)
+        # In LACBED mode, the default DP size is the same as one diffraction disk (2ɑ)
         if DP_size_inv_A is None:
             DP_size = [int(2 * alpha_pix), int(2 * alpha_pix)]
         else:
@@ -510,7 +519,7 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
 
     if LACBED:
-        # In LACBED mode, the DP datastructure is a list of dicts of arrays
+        # In LACBED mode, the DP datastructure is a list of dicts mapping tuples of ints to numpy arrays
         DP = [
             {
                 (d["h"], d["k"], d["l"]): np.zeros(DP_size, dtype=dtype)

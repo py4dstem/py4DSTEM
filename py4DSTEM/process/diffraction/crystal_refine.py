@@ -47,10 +47,10 @@ def index_Bragg_peaks_from_orientation(
                                 in-plane rotation
         tol_distance        (float) distance threshold from ideal peaks to index an experimental peak
         The remaining args are passed on to Crystal.generate_diffraction_pattern:
-        sigma_excitation_error
-        tol_excitation_error_mult
-        tol_intensity
-        k_max
+            sigma_excitation_error
+            tol_excitation_error_mult
+            tol_intensity
+            k_max
 
     Note that to index kinematically forbidden peaks present in a pattern, you will
     likely need to set tol_intensity=0
