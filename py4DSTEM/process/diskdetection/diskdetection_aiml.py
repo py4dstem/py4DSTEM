@@ -752,16 +752,16 @@ def _get_latest_model(model_path = None):
             pass
         
         download_file_from_google_drive('1cmobCAp63gLuPMlRvYTj7tBX0ZbmXM9T','./tmp/model_metadata.json')
-        f = open('./tmp/model_metadata.json')
-        metadata = json.load(f)
-        file_id = metadata['file_id']
-        file_path = metadata['file_path']
-        file_type = metadata['file_type']
+        with open('./tmp/model_metadata.json') as f:
+            metadata = json.load(f)
+            file_id = metadata['file_id']
+            file_path = metadata['file_path']
+            file_type = metadata['file_type']
         
         try:
-            f_old = open('./tmp/model_metadata_old.json')
-            metaold = json.load(f_old)
-            file_id_old = metaold['file_id']
+            with open('./tmp/model_metadata_old.json') as f_old:
+                metaold = json.load(f_old)
+                file_id_old = metaold['file_id']
         except:
             file_id_old = file_id
         
