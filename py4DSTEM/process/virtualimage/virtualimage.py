@@ -2,7 +2,6 @@
 import numpy as np
 from ...io import DataCube
 from ..utils import tqdmnd
-# import numba as nb
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
