@@ -1,20 +1,24 @@
 # Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
 # Joydeep Munshi
-''' 
+'''
 
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 '''
 
 import numpy as np
-from numba import cuda
 from time import time
+
+try:
+    from numba import cuda
+except ImportError:
+    raise ImportError("Import Error: Please install numba before proceeding")
 
 try:
     import cupy as cp
 except:
     raise ImportError("Import Error: Please install cupy before proceeding")
-        
+
 try:
     import tensorflow as tf
 except:
