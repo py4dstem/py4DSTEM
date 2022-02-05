@@ -5,7 +5,7 @@ with open("README.md","r") as f:
 
 setup(
     name='py4DSTEM',
-    version='0.12.7',
+    version='0.12.8',
     packages=find_packages(),
     description='An open source python package for processing and analysis of 4D STEM data.',
     long_description=long_description,
@@ -25,19 +25,22 @@ setup(
         'matplotlib >= 3.4.2',
         'scikit-image >= 0.17.2',
         'scikit-learn >= 0.23.2',
-        'PyQt5 >= 5.13',
+        'PyQt5 >= 5.10',
         'pyqtgraph >= 0.11',
         'qtconsole >= 4.7.7',
         'ipywidgets >= 7.6.3',
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',
         'requests >= 2.25.1',
+        'dask >= 2.3.0',
+        'distributed >= 2.3.0'
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
-        'dask': ['dask >= 2.3.0', 'distributed >= 2.3.0', 'dill >= 0.3.3'],
         'cuda': ['cupy'],
         'acom': ['pymatgen'],
+        'aiml': ['tensorflow == 2.4.1','tensorflow-addons','crystal4D'],
+        'aiml-cuda': ['tensorflow-addons''crystal4D','cupy']
         },
     entry_points={
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']

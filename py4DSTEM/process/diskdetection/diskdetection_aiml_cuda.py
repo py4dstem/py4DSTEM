@@ -1,23 +1,43 @@
+# Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
+# Joydeep Munshi
 ''' 
-Functions for finding Braggdisks using cupy
+
+Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 '''
 
 import numpy as np
-import cupy as cp
-from cupyx.scipy.ndimage import gaussian_filter
+from numba import cuda
 from time import time
+
+try:
+    import cupy as cp
+except:
+    raise ImportError("Import Error: Please install cupy before proceeding")
+        
+try:
+    import tensorflow as tf
+except:
+    raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
+
+from cupyx.scipy.ndimage import gaussian_filter
+
+from .diskdetection_aiml import _get_latest_model
 
 from ...io import PointList, PointListArray
 from ..utils import tqdmnd
 from .kernels import kernels
 from .diskdetection import universal_threshold
 
-def find_Bragg_disks_CUDA(datacube, probe,
-                          corrPower = 1,
-                          sigma = 2,
+def find_Bragg_disks_aiml_CUDA(datacube, probe,
+                          num_attmpts = 5,
+                          int_window_radius = 1,
+                          predict = True,
+                          batch_size = 8,
+                          sigma = 0,
                           edgeBoundary = 20,
                           minRelativeIntensity = 0.005,
+                          minAbsoluteIntensity = 0,
                           relativeToPeak = 0,
                           minPeakSpacing = 60,
                           maxNumPeaks = 70,
@@ -28,23 +48,34 @@ def find_Bragg_disks_CUDA(datacube, probe,
                           metric = 'mean',
                           filter_function = None,
                           name = 'braggpeaks_raw',
-                          _qt_progress_bar = None):
+                          _qt_progress_bar = None,
+                          model_path=None):
     """
-    Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
-    phase correlation with probe. When hist = True, returns histogram of intensities in
-    the entire datacube.
-
-    Args:
-        DP (ndarray): a diffraction pattern
-        probe (ndarray): the vacuum probe template, in real space.
-        corrPower (float between 0 and 1, inclusive): the cross correlation power. A
-             value of 1 corresponds to a cross correaltion, and 0 corresponds to a
-             phase correlation, with intermediate values giving various hybrids.
-        sigma (float): the standard deviation for the gaussian smoothing applied to
-             the cross correlation
+    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method (CUDA version)
+    This method utilizes FCU-Net to predict Bragg disks from diffraction images.
+    
+     Args:
+        datacube (datacube): a diffraction datacube
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
+            will implement Dask parrlelization implementation of the serial function to boost up the 
+            performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
+            significant amount of time to predict for all the DPs in a datacube.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
         minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
-            relative to the intensity of the brightest peak
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
         relativeToPeak (int): specifies the peak against which the minimum relative
             intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
         minPeakSpacing (float): the minimum acceptable spacing between detected peaks
@@ -55,7 +86,7 @@ def find_Bragg_disks_CUDA(datacube, probe,
                 * 'poly': polynomial interpolation of correlogram peaks (default)
                 * 'multicorr': uses the multicorr algorithm with DFT upsampling
         upsample_factor (int): upsampling factor for subpixel fitting (only used when
-             subpixel='multicorr')
+            subpixel='multicorr')
         global_threshold (bool): if True, applies global threshold based on
             minGlobalIntensity and metric
         minGlobalThreshold (float): the minimum allowed peak intensity, relative to the
@@ -79,6 +110,11 @@ def find_Bragg_disks_CUDA(datacube, probe,
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommended to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
@@ -93,41 +129,52 @@ def find_Bragg_disks_CUDA(datacube, probe,
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
     assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
-    # Get the probe kernel FT as a cupy array
-    probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
-
-    # get the maximal array kernel
-    #if probe_kernel_FT.dtype == 'float64':
-    #    get_maximal_points = kernels['maximal_pts_float64']
-    #elif probe_kernel_FT.dtype == 'float32':
-    #    get_maximal_points = kernels['maximal_pts_float32']
-    #else:
-    #    raise TypeError("Maximal kernel only valid for float32 and float64 types...")
     get_maximal_points = kernels['maximal_pts_float64']
 
     if get_maximal_points.max_threads_per_block < DP.shape[1]:
-        # naive blocks/threads will not work, figure out an OK distribution
         blocks = ((np.prod(DP.shape)//get_maximal_points.max_threads_per_block + 1),)
         threads = ((get_maximal_points.max_threads_per_block))
     else:
         blocks = (DP.shape[0],)
         threads = (DP.shape[1],)
+        
+    if predict:
+        t0 = time()
+        model = _get_latest_model(model_path = model_path)
+        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
+                                             datacube.R_Nx*datacube.R_Ny, axis=0), axis=-1)
+        DP = tf.expand_dims(tf.reshape(datacube.data,
+                                      (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
+            
+        prediction = np.zeros(shape = (datacube.R_Nx*datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny, 1))
+        
+        image_num = datacube.R_Nx*datacube.R_Ny
+        batch_num = int(image_num//batch_size)
 
-    if _qt_progress_bar is not None:
-        from PyQt5.QtWidgets import QApplication
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+            for i in range(batch_num):
+                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
+            if (i+1)*batch_size < image_num:
+                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
+        
+        print('Averaging over {} attempts \n'.format(num_attmpts))
+        prediction = prediction/num_attmpts
+    
+        prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
+                                (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
+
 
     # Loop over all diffraction patterns
-    t0 = time()
-    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks',unit='DP',unit_scale=True):
-        if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
-            QApplication.processEvents()
-        DP = datacube.data[Rx,Ry,:,:]
-        _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
-                                      corrPower = corrPower,
+    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML CUDA',unit='DP',unit_scale=True):
+        DP = prediction[Rx,Ry,:,:]
+        _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
+                                      num_attmpts = num_attmpts,
+                                      int_window_radius = int_window_radius,
+                                      predict = False,
                                       sigma = sigma,
                                       edgeBoundary = edgeBoundary,
                                       minRelativeIntensity = minRelativeIntensity,
+                                      minAbsoluteIntensity=minAbsoluteIntensity,
                                       relativeToPeak = relativeToPeak,
                                       minPeakSpacing = minPeakSpacing,
                                       maxNumPeaks = maxNumPeaks,
@@ -138,20 +185,23 @@ def find_Bragg_disks_CUDA(datacube, probe,
                                       get_maximal_points = get_maximal_points,
                                       blocks = blocks,
                                       threads = threads)
-    t = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t/3600),
-                                                                   int(t/60), int(t%60)))
+    t2 = time()-t0
+    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
+                                                                   int(t2/60), int(t2%60)))
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name
     return peaks
 
-def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
-                                  corrPower = 1,
-                                  sigma = 2,
+def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
+                                  num_attmpts = 5,
+                                  int_window_radius = 1,
+                                  predict = True,
+                                  sigma = 0,
                                   edgeBoundary = 20,
                                   minRelativeIntensity = 0.005,
+                                  minAbsoluteIntensity = 0,
                                   relativeToPeak = 0,
                                   minPeakSpacing = 60,
                                   maxNumPeaks = 70,
@@ -164,91 +214,101 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
                                   blocks = None,
                                   threads = None):
     """
-     Finds the Bragg disks in DP by cross, hybrid, or phase correlation with probe_kernel_FT.
-
-     After taking the cross/hybrid/phase correlation, a gaussian smoothing is applied
-     with standard deviation sigma, and all local maxima are found. Detected peaks within
-     edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks with
-     intensities less than minRelativeIntensity of the brightest peak in the correaltion are
-     discarded. Then peaks which are within a distance of minPeakSpacing of their nearest neighbor
-     peak are found, and in each such pair the peak with the lesser correlation intensities is
-     removed. Finally, if the number of peaks remaining exceeds maxNumPeaks, only the maxNumPeaks
-     peaks with the highest correlation intensity are retained.
-
-     IMPORTANT NOTE: the argument probe_kernel_FT is related to the probe kernels generated by
-     functions like get_probe_kernel() by:
-
-             probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
-
-     if this function is simply passed a probe kernel, the results will not be meaningful! To run
-     on a single DP while passing the real space probe kernel as an argument, use
-     find_Bragg_disks_single_DP().
-
-     Accepts:
-         DP                   (ndarray) a diffraction pattern
-         probe_kernel_FT      (cparray) the vacuum probe template, in Fourier space. Related to the
-                              real space probe kernel by probe_kernel_FT = F(probe_kernel)*, where F
-                              indicates a Fourier Transform and * indicates complex conjugation.
-         corrPower            (float between 0 and 1, inclusive) the cross correlation power. A
-                              value of 1 corresponds to a cross correaltion, and 0 corresponds to a
-                              phase correlation, with intermediate values giving various hybrids.
-         sigma                (float) the standard deviation for the gaussian smoothing applied to
-                              the cross correlation
-         edgeBoundary         (int) minimum acceptable distance from the DP edge, in pixels
-         minRelativeIntensity (float) the minimum acceptable correlation peak intensity, relative to
-                              the intensity of the relativeToPeak'th peak
-         relativeToPeak       (int) specifies the peak against which the minimum relative intensity
-                              is measured -- 0=brightest maximum. 1=next brightest, etc.
-         minPeakSpacing       (float) the minimum acceptable spacing between detected peaks
-         maxNumPeaks          (int) the maximum number of peaks to return
-         subpixel             (str)          'none': no subpixel fitting
-                                   (default) 'poly': polynomial interpolation of correlogram peaks
-                                                     (fairly fast but not very accurate)
-                                             'multicorr': uses the multicorr algorithm with
-                                                         DFT upsampling
-         upsample_factor      (int) upsampling factor for subpixel fitting (only used when subpixel='multicorr')
-         filter_function      (callable) filtering function to apply to each diffraction pattern before peakfinding.
-                              Must be a function of only one argument (the diffraction pattern) and return
-                              the filtered diffraction pattern.
-                              The shape of the returned DP must match the shape of the probe kernel (but does
-                              not need to match the shape of the input diffraction pattern, e.g. the filter
-                              can be used to bin the diffraction pattern). If using distributed disk detection,
-                              the function must be able to be pickled with by dill.
-         return_cc            (bool) if True, return the cross correlation
-         peaks                (PointList) For internal use.
-                              If peaks is None, the PointList of peak positions is created here.
-                              If peaks is not None, it is the PointList that detected peaks are added
-                              to, and must have the appropriate coords ('qx','qy','intensity').
+    Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
+    to predict Bragg disks from diffraction images.
+    
+    The input DP and Probes need to be aligned before the prediction. Detected peaks within 
+    edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
+    with intensities less than minRelativeIntensity of the brightest peak in the
+    correlation are discarded. Then peaks which are within a distance of minPeakSpacing
+    of their nearest neighbor peak are found, and in each such pair the peak with the
+    lesser correlation intensities is removed. Finally, if the number of peaks remaining
+    exceeds maxNumPeaks, only the maxNumPeaks peaks with the highest correlation
+    intensity are retained.
+    
+    Args:
+        DP (ndarray): a diffraction pattern
+        probe (ndarray): the vacuum probe template
+        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attmpts the better (confident) the prediction will be
+            as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
+            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            the compute time significantly and it is advised to use GPU (CUDA) enabled environment
+            for fast prediction with num_attmpts > 1
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+            predicted atomic potentials array
+        predict (bool): Flag to determine if ML prediction is opted.
+        edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
+        minRelativeIntensity (float): the minimum acceptable correlation peak intensity,
+            relative to the intensity of the relativeToPeak'th peak
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak intensity,
+            on an absolute scale
+        relativeToPeak (int): specifies the peak against which the minimum relative
+            intensity is measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected peaks
+        maxNumPeaks (int): the maximum number of peaks to return
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        filter_function (callable): filtering function to apply to each diffraction
+            pattern before peakfinding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern. The shape
+            of the returned DP must match the shape of the probe kernel (but does not
+            need to match the shape of the input diffraction pattern, e.g. the filter
+            can be used to bin the diffraction pattern). If using distributed disk
+            detection, the function must be able to be pickled with by dill.
+        peaks (PointList): For internal use. If peaks is None, the PointList of peak
+            positions is created here. If peaks is not None, it is the PointList that
+            detected peaks are added to, and must have the appropriate coords
+            ('qx','qy','intensity').
+        model_path (str): filepath for the model weights (Tensorflow model) to load from.
+            By default, if the model_path is not provided, py4DSTEM will search for the 
+            latest model stored on cloud using metadata json file. It is not recommeded to
+            keep track of the model path and advised to keep this argument unchanged (None)
+            to always search for the latest updated training model weights.
 
      Returns:
          peaks                (PointList) the Bragg peak positions and correlation intensities
      """
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
-    # Perform any prefiltering
-    DP = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
-
-    # Get the cross correlation
-    if subpixel in ('none','poly'):
-        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-        ccc = None
-    # for multicorr subpixel fitting, we need both the real and complex cross correlation
+    if predict:
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert(len(probe.shape)==2), "Dimension of Probe should be 2 (Qx, Qy)"
+        
+        model = _get_latest_model(model_path = model_path)
+        DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
+        probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
+        prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
+        
+        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+            print('attempt {} \n'.format(att+1))
+            prediction += model.predict([DP,probe])
+        print('Averaging over {} attempts \n'.format(num_attmpts))
+        pred = cp.array(prediction[0,:,:,0]/num_attmpts,dtype='float64')
     else:
-        ccc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower, returnval='fourier')
-        cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)),0)
+        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        pred = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
 
     # Find the maxima
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                 edgeBoundary=edgeBoundary,
-                                                 minRelativeIntensity=minRelativeIntensity,
-                                                 relativeToPeak=relativeToPeak,
-                                                 minSpacing=minPeakSpacing,
-                                                 maxNumPeaks=maxNumPeaks,
-                                                 subpixel=subpixel,
-                                                 ar_FT = ccc,
-                                                 upsample_factor = upsample_factor,
-                                                 get_maximal_points=get_maximal_points,
-                                                 blocks=blocks, threads=threads)
+    maxima_x,maxima_y,maxima_int = get_maxima_2D_cp(pred,
+                                                    sigma=sigma,
+                                                    edgeBoundary=edgeBoundary,
+                                                    minRelativeIntensity=minRelativeIntensity,
+                                                    minAbsoluteIntensity=minAbsoluteIntensity,
+                                                    relativeToPeak=relativeToPeak,
+                                                    minSpacing=minPeakSpacing,
+                                                    maxNumPeaks=maxNumPeaks,
+                                                    subpixel=subpixel,
+                                                    upsample_factor = upsample_factor,
+                                                    get_maximal_points=get_maximal_points,
+                                                    blocks=blocks, threads=threads)
+    
+    maxima_x, maxima_y, maxima_int = _integrate_disks_cp(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
     # Make peaks PointList
     if peaks is None:
@@ -258,38 +318,23 @@ def _find_Bragg_disks_single_DP_FK_CUDA(DP, probe_kernel_FT,
         assert(isinstance(peaks,PointList))
     peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
 
-    if return_cc:
-        return peaks, gaussian_filter(cc,sigma)
-    else:
-        return peaks
+    return peaks
 
 
-def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval='cc'):
-    """
-    Calculates the cross correlation of ar with fourierkernel.
-    Here, fourierkernel = np.conj(np.fft.fft2(kernel)); speeds up computation when the same
-    kernel is to be used for multiple cross correlations.
-    corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
-    correlation, and values in between are hybrids.
-
-    The return value depends on the argument `returnval`:
-        if return=='cc' (default), returns the real part of the cross correlation in real
-        space.
-        if return=='fourier', returns the output in Fourier space, before taking the
-        inverse transform.
-    """
-    assert(returnval in ('cc','fourier'))
-    m = cp.fft.fft2(ar) * fourierkernel
-    ccc = cp.abs(m)**(corrPower) * cp.exp(1j*cp.angle(m))
-    if returnval=='fourier':
-        return ccc
-    else:
-        return cp.real(cp.fft.ifft2(ccc))
-
-
-def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel='poly', ar_FT=None, upsample_factor=16,
-                  get_maximal_points=None,blocks=None,threads=None):
+def get_maxima_2D_cp(ar, 
+                     sigma=0, 
+                     edgeBoundary=0, 
+                     minSpacing=0, 
+                     minRelativeIntensity=0,
+                     minAbsoluteIntensity=0,
+                     relativeToPeak=0, 
+                     maxNumPeaks=0, 
+                     subpixel='poly', 
+                     ar_FT = None,
+                     upsample_factor=16,
+                     get_maximal_points=None,
+                     blocks=None,
+                     threads=None):
     """
     Finds the indices where the 2D array ar is a local maximum.
     Optional parameters allow blurring of the array and filtering of the output;
@@ -297,12 +342,14 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
 
     Accepts:
         ar                      (ndarray) a 2D array
-        sigma                   (float) guassian blur std to applyu to ar before finding the maxima
+        sigma                   (float) guassian blur std to apply to ar before finding the maxima
         edgeBoundary            (int) ignore maxima within edgeBoundary of the array edge
         minSpacing              (float) if two maxima are found within minSpacing, the dimmer one
                                 is removed
         minRelativeIntensity    (float) maxima dimmer than minRelativeIntensity compared to the
                                 relativeToPeak'th brightest maximum are removed
+        minAbsoluteIntensity   (float) the minimum acceptable correlation peak intensity,
+                                on an absolute scale
         relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
         maxNumPeaks             (int) return only the first maxNumPeaks maxima
         subpixel                (str)          'none': no subpixel fitting
@@ -374,12 +421,18 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
             assert isinstance(relativeToPeak, (int, np.integer))
             deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
+            
+        # Remove maxima which are too dim, absolute scale
+        if (minAbsoluteIntensity > 0):
+            deletemask = maxima['intensity'] < minAbsoluteIntensity
+            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
 
         # Remove maxima in excess of maxNumPeaks
         if maxNumPeaks > 0:
             assert isinstance(maxNumPeaks, (int, np.integer))
             if len(maxima) > maxNumPeaks:
                 maxima = maxima[:maxNumPeaks]
+                
 
         # Subpixel fitting 
         # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
@@ -395,55 +448,31 @@ def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensit
                 deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
                 maxima['x'][i] += deltax
                 maxima['y'][i] += deltay
-                maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
+                maxima['intensity'][i] = linear_interpolation_2D_cp(ar, maxima['x'][i], maxima['y'][i])
         # Further refinement with fourier upsampling
         if subpixel == 'multicorr':
-            ar_FT = cp.conj(ar_FT)
+            if ar_FT is None:
+                ar_FT = cp.conj(cp.fft.fft2(cp.array(ar)))
+            else:
+                ar_FT = cp.conj(ar_FT)
             for ipeak in range(len(maxima['x'])):
                 xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
                 # we actually have to lose some precision and go down to half-pixel
                 # accuracy. this could also be done by a single upsampling at factor 2
-                # instead of get_maxima_2D.
+                # instead of get_maxima_2D_cp.
                 xyShift[0] = np.round(xyShift[0] * 2) / 2
                 xyShift[1] = np.round(xyShift[1] * 2) / 2
 
-                subShift = upsampled_correlation(ar_FT,upsample_factor,xyShift)
+                subShift = upsampled_correlation_cp(ar_FT,upsample_factor,xyShift)
                 maxima['x'][ipeak]=subShift[0]
                 maxima['y'][ipeak]=subShift[1]
 
     return maxima['x'], maxima['y'], maxima['intensity']
 
 
-def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
+def upsampled_correlation_cp(imageCorr, upsampleFactor, xyShift):
     '''
-    Refine the correlation peak of imageCorr around xyShift by DFT upsampling.
-
-    There are two approaches to Fourier upsampling for subpixel refinement: (a) one
-    can pad an (appropriately shifted) FFT with zeros and take the inverse transform,
-    or (b) one can compute the DFT by matrix multiplication using modified
-    transformation matrices. The former approach is straightforward but requires
-    performing the FFT algorithm (which is fast) on very large data. The latter method
-    trades one speedup for a slowdown elsewhere: the matrix multiply steps are expensive
-    but we operate on smaller matrices. Since we are only interested in a very small
-    region of the FT around a peak of interest, we use the latter method to get
-    a substantial speedup and enormous decrease in memory requirement. This
-    "DFT upsampling" approach computes the transformation matrices for the matrix-
-    multiply DFT around a small 1.5px wide region in the original `imageCorr`.
-
-    Following the matrix multiply DFT we use parabolic subpixel fitting to
-    get even more precision! (below 1/upsampleFactor pixels)
-
-    NOTE: previous versions of multiCorr operated in two steps: using the zero-
-    padding upsample method for a first-pass factor-2 upsampling, followed by the
-    DFT upsampling (at whatever user-specified factor). I have implemented it
-    differently, to better support iterating over multiple peaks. **The DFT is always
-    upsampled around xyShift, which MUST be specified to HALF-PIXEL precision
-    (no more, no less) to replicate the behavior of the factor-2 step.**
-    (It is possible to refactor this so that peak detection is done on a Fourier
-    upsampled image rather than using the parabolic subpixel and rounding as now...
-    I like keeping it this way because all of the parameters and logic will be identical
-    to the other subpixel methods.)
-
+    Refine the correlation peak of imageCorr around xyShift by DFT upsampling using cupy.
 
     Args:
         imageCorr (complex valued ndarray):
@@ -461,6 +490,34 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
     Returns:
         (2-element np array): Refined location of the peak in image coordinates.
     '''
+    
+    #-------------------------------------------------------------------------------------
+    #There are two approaches to Fourier upsampling for subpixel refinement: (a) one
+    #can pad an (appropriately shifted) FFT with zeros and take the inverse transform,
+    #or (b) one can compute the DFT by matrix multiplication using modified
+    #transformation matrices. The former approach is straightforward but requires
+    #performing the FFT algorithm (which is fast) on very large data. The latter method
+    #trades one speedup for a slowdown elsewhere: the matrix multiply steps are expensive
+    #but we operate on smaller matrices. Since we are only interested in a very small
+    #region of the FT around a peak of interest, we use the latter method to get
+    #a substantial speedup and enormous decrease in memory requirement. This
+    #"DFT upsampling" approach computes the transformation matrices for the matrix-
+    #multiply DFT around a small 1.5px wide region in the original `imageCorr`.
+
+    #Following the matrix multiply DFT we use parabolic subpixel fitting to
+    #get even more precision! (below 1/upsampleFactor pixels)
+
+    #NOTE: previous versions of multiCorr operated in two steps: using the zero-
+    #padding upsample method for a first-pass factor-2 upsampling, followed by the
+    #DFT upsampling (at whatever user-specified factor). I have implemented it
+    #differently, to better support iterating over multiple peaks. **The DFT is always
+    #upsampled around xyShift, which MUST be specified to HALF-PIXEL precision
+    #(no more, no less) to replicate the behavior of the factor-2 step.**
+    #(It is possible to refactor this so that peak detection is done on a Fourier
+    #upsampled image rather than using the parabolic subpixel and rounding as now...
+    #I like keeping it this way because all of the parameters and logic will be identical
+    #to the other subpixel methods.)
+    #-------------------------------------------------------------------------------------
 
     assert upsampleFactor > 2
 
@@ -471,7 +528,7 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     upsampleCenter = globalShift - upsampleFactor*xyShift
 
-    imageCorrUpsample = cp.conj(dftUpsample(imageCorr, upsampleFactor, upsampleCenter )).get()
+    imageCorrUpsample = cp.conj(dftUpsample_cp(imageCorr, upsampleFactor, upsampleCenter )).get()
 
     xySubShift = np.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
 
@@ -490,7 +547,7 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
     return xyShift
 
 
-def dftUpsample(imageCorr, upsampleFactor, xyShift):
+def dftUpsample_cp(imageCorr, upsampleFactor, xyShift):
     '''
     This performs a matrix multiply DFT around a small neighboring region of the inital
     correlation peak. By using the matrix multiply DFT to do the Fourier upsampling, the
@@ -536,7 +593,7 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     imageUpsample = cp.real(rowKern @ imageCorr @ colKern)
     return imageUpsample
 
-def linear_interpolation_2D(ar, x, y):
+def linear_interpolation_2D_cp(ar, x, y):
     """
     Calculates the 2D linear interpolation of array ar at position x,y using the four
     nearest array elements.
@@ -547,3 +604,20 @@ def linear_interpolation_2D(ar, x, y):
     dy = y - y0
     return (1 - dx) * (1 - dy) * ar[x0, y0] + (1 - dx) * dy * ar[x0, y1] + dx * (1 - dy) * ar[x1, y0] + dx * dy * ar[
         x1, y1]
+
+def _integrate_disks_cp(DP, maxima_x,maxima_y,maxima_int,int_window_radius=1):    
+    disks = []
+    DP = cp.asnumpy(DP)
+    img_size = DP.shape[0]
+    for x,y,i in zip(maxima_x,maxima_y,maxima_int):
+        r1,r2 = np.ogrid[-x:img_size-x, -y:img_size-y]
+        mask = r1**2 + r2**2 <= int_window_radius**2
+        mask_arr = np.zeros((img_size, img_size))
+        mask_arr[mask] = 1
+        disk = DP*mask_arr
+        disks.append(np.average(disk))
+    try:
+        disks = disks/max(disks)
+    except:
+        pass
+    return (maxima_x,maxima_y,disks)
