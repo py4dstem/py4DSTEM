@@ -37,8 +37,6 @@ class Crystal:
         calculate_dynamical_structure_factors,
     )
 
-    from .crystal_refine import index_Bragg_peaks_from_orientation, estimate_thickness
-
     def __init__(
         self,
         positions,
