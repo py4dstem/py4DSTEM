@@ -35,17 +35,20 @@ def calculate_dynamical_structure_factors(
     Args:
         accelerating_voltage (float):   accelerating voltage in eV
         method (str):                   Choose which parameterization of the structure factors to use:
-            "Lobato": Uses the kinematic structure factors from crystal.py
+            "Lobato": Uses the kinematic structure factors from crystal.py, using the parameterization from
+                Lobato & Van Dyck, Acta Cryst A 70:6 (2014)
             "Lobato-absorptive": Lobato factors plus an imaginary part
-                equal to 0.1•f, as a simple way to include absorption, per
+                equal to 0.1•f, as a simple but inaccurate way to include absorption, per
                 Hashimoto, Howie, & Whelan, Proc R Soc Lond A 269:80-103 (1962)
             "WK":   Uses the Weickenmeier-Kohl parameterization for
                     the elastic form factors, including Debye-Waller factor,
-                    with no absorption.
+                    with no absorption, as described in 
+                    Weickenmeier & Kohl, Acta Cryst A 47:5 (1991)
             "WK-C": WK form factors plus the "core" contribution to absorption
                     following H. Rose, Optik 45:2 (1976)
             "WK-P": WK form factors plus the phonon/TDS absorptive contribution
             "WK-CP": WK form factors plus core and phonon absorption (default)
+
         k_max (float):                  max scattering length to compute structure factors to.
                                         Setting this to 2x the k_max used in generating the beamsn
                                         included in a simulation will retain all possible couplings
@@ -53,7 +56,9 @@ def calculate_dynamical_structure_factors(
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
                                         Units are Å. (This is often written as 〈u〉in papers)
-        tol_structure_factor (float):   tolerance for removing low-valued structure factors
+        tol_structure_factor (float):   tolerance for removing low-valued structure factors. Reflections
+                                        with structure factor below the tolerance will have zero coupling
+                                        in the dynamical calculations (i.e. they are the ignored weak beams)
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
