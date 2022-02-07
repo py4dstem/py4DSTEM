@@ -298,7 +298,7 @@ def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs)
 @da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
 def _get_virtual_image_dask(array, mask):
     """
-    Make a virutal for all probe posistions from a dask array object using a mask in the diffraction plane.
+    Make a virtual for all probe posistions from a dask array object using a mask in the diffraction plane.
     Example:
     image = make_virtual_image_dask(dataset.data, mask).compute()
 
@@ -394,7 +394,7 @@ def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, 
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
+def _get_virtualimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -482,7 +482,7 @@ def _get_virtualimage_circ_einsum(datacube, geometry, dtype=np.float64, *args, *
 
     return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
 
-def _get_virutalimage_rect_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
+def _get_virtualimage_rect_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -560,7 +560,7 @@ def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **k
     else:
         return np.tensordot(datacube.data, mask, axes=((2,3),(0,1))) 
 
-def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
+def _get_virtualimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     """        
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -645,8 +645,8 @@ def _make_function_dict():
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : _get_virutalimage_rect_old, # changed from tensordot
-                'dask' : _get_virutalimage_rect_dask
+                'numpy' : _get_virtualimage_rect_old, # changed from tensordot
+                'dask' : _get_virtualimage_rect_dask
             }, 
         },
         # mode
@@ -716,7 +716,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
     assert (geometry is not None) ^ (mask is not None), "Either, neither or both geometry or mask passed"
 
-    # create the dictionary with all prefered virutal image functions
+    # create the dictionary with all prefered virtual image functions
     function_dict = _make_function_dict()
         
     ### Set flags for deciding what function to use ### 
