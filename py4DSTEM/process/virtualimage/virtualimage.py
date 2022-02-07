@@ -632,20 +632,20 @@ def _make_function_dict():
             # detector_geometry
             'circ' : {
                 # data_type
-                'numpy' :_get_virtualimage_circ_tensordot,
+                'numpy' :_get_virtualimage_circ_old, # changed from tensordot
                 'dask' : _get_virtualimage_circ_dask
             },
             # detector_geometry
             'ann' : {
                 # data_type
-                'numpy' : _get_virtualimage_ann_tensordot,
+                'numpy' : _get_virtualimage_ann_old, # changed from tensordot
                 'dask' : _get_virtualimage_ann_dask,
 
             },
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : _get_virutalimage_rect_tensordot,
+                'numpy' : _get_virutalimage_rect_old, # changed from tensordot
                 'dask' : _get_virutalimage_rect_dask
             }, 
         },
@@ -654,7 +654,7 @@ def _make_function_dict():
             # data_type
             'numpy' : {
                 # mask_type
-                'bool' : _get_virtualimage_from_mask_tensordot,
+                'bool' : _get_virtualimage_from_mask_einsum, # changed from tensordot
                 'non-bool' : _get_virtualimage_from_mask_einsum
             },
             # data_type
