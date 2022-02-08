@@ -2,7 +2,6 @@
 import numpy as np
 from ...io import DataCube
 from ..utils import tqdmnd
-# import numba as nb
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
@@ -19,8 +18,8 @@ __all__ = [
     '_get_virtualimage_circ_old',
     '_get_virtualimage_ann_old',
     '_infer_image_type_from_geometry',
-    '_get_virtualimage_from_mask_dask', 
-    '_get_virtualimage_from_mask_einsum', 
+    '_get_virtualimage_from_mask_dask',
+    '_get_virtualimage_from_mask_einsum',
     '_get_virtualimage_from_mask_tensordot'
     ]
 
@@ -38,7 +37,7 @@ def make_circ_mask(datacube, geometry, return_crop_vals=False):
     """
     Make a circular boolean mask centered at (x0,y0) and with radius R
     in the diffraction plane. The mask returned is the same shape as each diffraction slice.
-    If return_crop_vals is True, then they can be used to acceleate.  
+    If return_crop_vals is True, then they can be used to acceleate.
     Args:
         datacube (DataCube):
         geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
@@ -58,8 +57,8 @@ def make_circ_mask(datacube, geometry, return_crop_vals=False):
     xsize,ysize = xmax-xmin,ymax-ymin
     x0_s,y0_s = x0-xmin,y0-ymin
     mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
-    
-    
+
+
     full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
     full_mask[xmin:xmax,ymin:ymax] = mask
 
@@ -82,7 +81,7 @@ def make_annular_mask(datacube, geometry):
     Returns:
         (2D array): Boolean mask
     """
-    
+
     (x0,y0),(Ri,Ro) = geometry
 
     assert isinstance(datacube, DataCube)
@@ -96,8 +95,8 @@ def make_annular_mask(datacube, geometry):
     mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
     mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
     mask = np.logical_xor(mask_o,mask_i)
-    
-    
+
+
     full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
     full_mask[xmin:xmax,ymin:ymax] = mask
     return full_mask
@@ -106,7 +105,7 @@ def make_rect_mask(datacube, geometry, return_crop_vals=False):
     """
     Make a rectangular boolean mask with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
-    
+
     Args:
         datacube (DataCube):
         geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
@@ -123,10 +122,10 @@ def make_rect_mask(datacube, geometry, return_crop_vals=False):
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
-    
+
     full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
     full_mask[xmin:xmax,ymin:ymax] = True
-    
+
     if return_crop_vals:
         return full_mask, (xmin, xmax, ymin, ymax)
     else:
@@ -135,18 +134,18 @@ def make_rect_mask(datacube, geometry, return_crop_vals=False):
 # TODO add logical_and, logical_not functions as well? 
 def combine_masks(masks, operator='or'):
     """
-    Function to combine multiple masks into single boolean mask, using np.logical_or , np.logical_xor functions. 
+    Function to combine multiple masks into single boolean mask, using np.logical_or , np.logical_xor functions.
 
     Args:
         masks (list,tuple): collection of 2D boolean masks
-        operator (str): choice of operator either (or, xor) defaults to 'or'  
-    
+        operator (str): choice of operator either (or, xor) defaults to 'or'
+
     Returns:
         (2D array): Boolean mask
     """
     assert(operator.lower() in ('or', 'xor')), 'specified operator not supported, must be "or" or "xor"'
 
-    if operator.lower() == 'or': 
+    if operator.lower() == 'or':
         return np.logical_or.reduce(masks)
     elif operator.lower() == 'xor':
         return np.logical_xor.reduce(masks)
@@ -155,7 +154,7 @@ def combine_masks(masks, operator='or'):
 def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0.5, *args, **kwargs):
     """
     Function to plot the overaly of the mask on a diffraction slice. A diffraction slice or a datacube object may be passed to the function as dp, datacube.
-    If a datacube is passed the function diffraction pattern for the dataset will be calculated (note this could be expesnive for large datasets) 
+    If a datacube is passed the function diffraction pattern for the dataset will be calculated (note this could be expesnive for large datasets)
 
     Args:
         mask (numpy array): 2D array mask
@@ -171,10 +170,10 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
 
     #check that at least one of diffraction pattern (dp) or a datacube is passed
     assert dp is not None or datacube is not None, "Must pass a diffraction pattern (dp) or datacube object"
-    
+
     # check if the diffraction pattern is passed, if it isnt use the datacube and . 
     if dp is None:
-        
+
         # apply the function over the first to axes
         dp = np.apply_over_axes(reduce_func, datacube.data, axes=[0,1])
         # quick check that dp is 2D and or can trivally converted to 2D i.e. (1,1,n,m)
@@ -299,7 +298,7 @@ def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs)
 @da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
 def _get_virtual_image_dask(array, mask):
     """
-    Make a virutal for all probe posistions from a dask array object using a mask in the diffraction plane.
+    Make a virtual for all probe posistions from a dask array object using a mask in the diffraction plane.
     Example:
     image = make_virtual_image_dask(dataset.data, mask).compute()
 
@@ -308,15 +307,15 @@ def _get_virtual_image_dask(array, mask):
         mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
     Returns:
         out (2D numpy array): virtual image lazy virtual image, requires explict computation
-    """    
+    """
     val = np.sum(np.multiply(array,mask), dtype=np.float64)
     return val
 
 def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
     """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean,  The mask and diffraction slices must be the same shape 
+    Create a virtual image from a generic mask, i.e. both boolean or non-boolean,  The mask and diffraction slices must be the same shape
 
-    This should only be used on datasets which are dask arrays. 
+    This should only be used on datasets which are dask arrays.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -325,7 +324,7 @@ def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, 
 
     Returns:
         if eager_compute == True:
-            (2D array): the virtual image 
+            (2D array): the virtual image
         else:
             (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
     """
@@ -339,9 +338,9 @@ def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, 
 def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro. 
+    radii of Ri/Ro.
 
-    This should only be used on datasets which are dask arrays. 
+    This should only be used on datasets which are dask arrays.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -351,27 +350,27 @@ def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **
 
     Returns:
         if eager_compute == True:
-            (2D array): the virtual image 
+            (2D array): the virtual image
         else:
             (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
     """
-    
+
     # make the annular mask
     mask = make_annular_mask(datacube, geometry)
-    
+
     if eager_compute:
             return _get_virtual_image_dask(datacube.data, mask).compute()
     else:
-        
+
         return _get_virtual_image_dask(datacube.data, mask)
 
 def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, **kwargs):
-    
+
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro. 
+    radius of Ri/Ro.
 
-    This should only be used on datasets which are dask arrays. 
+    This should only be used on datasets which are dask arrays.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -381,7 +380,7 @@ def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, 
 
     Returns:
         if eager_compute == True:
-            (2D array): the virtual image 
+            (2D array): the virtual image
         else:
             (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
     """
@@ -395,8 +394,8 @@ def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, 
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
-    """        
+def _get_virtualimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
+    """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
@@ -408,7 +407,7 @@ def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, *
 
     Returns:
         if eager_compute == True:
-            (2D array): the virtual image 
+            (2D array): the virtual image
         else:
             (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
     """
@@ -428,25 +427,25 @@ def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, *
 #### Einsum Powered Functions ####
 # TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
 
-def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
+def _get_virtualimage_from_mask_einsum(datacube, mask, dtype=np.float64, *args, **kwargs):
     """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
+    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
         mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
 
     Returns:
-        (2D array): the virtual image 
+        (2D array): the virtual image
 
     """
 
-    return np.einsum('ijnm,nm->ij', datacube.data, mask)
+    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
 
-def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
+def _get_virtualimage_ann_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro. 
+    radii of Ri/Ro.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -454,19 +453,19 @@ def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
         and radii is the 2-tuple (ri,ro)
 
     Returns:
-        (2D array): the virtual image 
+        (2D array): the virtual image
     """
-    
+
     # make the annular mask
     mask = make_annular_mask(datacube, geometry)
-    
-    return np.einsum('ijnm,nm->ij', datacube.data, mask)
 
-def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
-    
+    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
+
+def _get_virtualimage_circ_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
+
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro. 
+    radius of Ri/Ro.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -474,17 +473,15 @@ def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
         and radius is a number
 
     Returns:
-        (2D array): the virtual image  
+        (2D array): the virtual image
     """
-
     # make the circular mask
-
     mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
 
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
+    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
 
-def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
-    """        
+def _get_virtualimage_rect_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
+    """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
@@ -493,27 +490,27 @@ def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
         geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
 
     Returns:
-        (2D array): the virtual image 
+        (2D array): the virtual image
     """
 
     # make the rectangular mask
     mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
 
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
+    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
 
 #### End of Einsum Powered Functions ####
 
 #### Tensordot Powered Functions ####
 def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
     """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape 
+    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
         mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
 
     Returns:
-        (2D array): the virtual image 
+        (2D array): the virtual image
     """
 
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
@@ -521,7 +518,7 @@ def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
 def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro. 
+    radius of Ri/Ro.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -529,19 +526,19 @@ def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
         and radius is a number
 
     Returns:
-        (2D array): the virtual image  
+        (2D array): the virtual image
     """
-    
+
     # make the annular mask
     mask = make_annular_mask(datacube, geometry)
-    
+
     return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
 def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
-    
+
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro. 
+    radius of Ri/Ro.
 
     Args:
         datacube (DataCube): DataCube object where datacube.data is a dask array
@@ -550,7 +547,7 @@ def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **k
         spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
 
     Returns:
-        (2D array): the virtual image  
+        (2D array): the virtual image
     """
 
     # make the circular mask
@@ -559,10 +556,10 @@ def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **k
     if spicy:
         return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
     else:
-        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1))) 
+        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
-    """        
+def _get_virtualimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
+    """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
 
@@ -572,7 +569,7 @@ def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **k
         spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
 
     Returns:
-        (2D array): the virtual image 
+        (2D array): the virtual image
     """
 
     # make the rectangular mask
@@ -590,11 +587,11 @@ def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **k
 def _infer_image_type_from_geometry(geometry, *args, **kwargs):
 
     """
-    Takes a geometry of nested tuples and infers the detector type and returns corresponding string. 
+    Takes a geometry of nested tuples and infers the detector type and returns corresponding string.
 
-    This isa hardcoded method reliant on the max depth of the nesting is 1 i.e. ((10,10), (20,20)) 
+    This isa hardcoded method reliant on the max depth of the nesting is 1 i.e. ((10,10), (20,20))
 
-    There is probably a nicer way to do this 
+    There is probably a nicer way to do this
     """
 
     # extract the 
@@ -602,7 +599,7 @@ def _infer_image_type_from_geometry(geometry, *args, **kwargs):
 
     # cycle through the mask types
     # I could do this as a dictionary but this is simple as well
-    
+
     # cicular detector
     if shape == [(2,),()]:
         return 'circ'
@@ -614,18 +611,18 @@ def _infer_image_type_from_geometry(geometry, *args, **kwargs):
         return 'rect'
     elif shape == [(),()]:
         return 'point'
-    
+
     # TODO add square detector, but that should be formatted as (qx0,qy0,s) -> [(3,)] so as not to conflict with circular  
     # elif shape == [(3,)]:
     #     return 'square'
-    
+
     # Raise Exception for incorrectly formatted geometries
     else:
         raise Exception("Could not infer the detector type from the geometry")
 
 def _make_function_dict():
     """
-    Function which creates a dictionary with the prefered image functions for various datacube array dtype, mask/geometry, mask type etc.  
+    Function which creates a dictionary with the prefered image functions for various datacube array dtype, mask/geometry, mask type etc.
     """
     function_dict = {
         # mode
@@ -633,29 +630,29 @@ def _make_function_dict():
             # detector_geometry
             'circ' : {
                 # data_type
-                'numpy' :_get_virtualimage_circ_tensordot,
+                'numpy' :_get_virtualimage_circ_old, # changed from tensordot
                 'dask' : _get_virtualimage_circ_dask
             },
             # detector_geometry
             'ann' : {
                 # data_type
-                'numpy' : _get_virtualimage_ann_tensordot,
+                'numpy' : _get_virtualimage_ann_old, # changed from tensordot
                 'dask' : _get_virtualimage_ann_dask,
 
             },
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : _get_virutalimage_rect_tensordot,
-                'dask' : _get_virutalimage_rect_dask
-            }, 
+                'numpy' : _get_virtualimage_rect_old, # changed from tensordot
+                'dask' : _get_virtualimage_rect_dask
+            },
         },
         # mode
         'mask' : {
             # data_type
             'numpy' : {
                 # mask_type
-                'bool' : _get_virtualimage_from_mask_tensordot,
+                'bool' : _get_virtualimage_from_mask_einsum, # changed from tensordot
                 'non-bool' : _get_virtualimage_from_mask_einsum
             },
             # data_type
@@ -670,12 +667,12 @@ def _make_function_dict():
 
 
 def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
-    
+
     """
     Get a virtual image from a py4DSTEM datacube object, and will operate on in memory (np.ndarray), memory mapped (np.memmap) or dask arrays (da.Array)
-    This function can be operated in two modes: 
-        - passing a detector geometry, will generate a boolean mask corresponding to detector geometry these require a tuple to define the detector geometry: 
-        - passing a mask: 
+    This function can be operated in two modes:
+        - passing a detector geometry, will generate a boolean mask corresponding to detector geometry these require a tuple to define the detector geometry:
+        - passing a mask:
 
     This function is a high level function and calls sub functions from within. Users may prefer to use these subfunctions:
 
@@ -687,18 +684,18 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     py4DSTEM.process.virtualimage.make_rect_mask - make rectangular boolean mask
     py4DSTEM.process.virtualimage.combine_masks - function to combine boolean masks
     py4DSTEM.process.virtualimage.plot_mask_overlay - tool for visualising a detector boolean or non-boolean masks
-    
+
     Args:
         datacube (DataCube):
-        geometry (nested tuple, optional): Tuple defining the geoemtry of the detector, 
+        geometry (nested tuple, optional): Tuple defining the geoemtry of the detector,
                     - 'rect':   (4-tuple) the corners (qx0,qxf,qy0,qyf)
                     - 'circ':   (2-tuple) (center,radius) where center=(qx0,qy0)
                     - 'ann':    (2-tuple) (center,radii) where center=(qx0,qy0) and
                                 radii=(ri,ro)
         mask (2D array, optional): numpy array defining a mask, either boolean or non-boolean.  Must be the same size as the
             diffraction pattern
-        eager_compute(boolean, optional): if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object, 
-            or if datacube.data is numpy.ndarray this does nothing. 
+        eager_compute(boolean, optional): if datacube.data is a dask.Array defines if it returns a 2D image or lazy dask object,
+            or if datacube.data is numpy.ndarray this does nothing.
     Returns:
         if dask.Array & eager_compute:
             (2D array): the virtual image
@@ -706,22 +703,22 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
             (lazy 2D array): Lazy dask object which maybe computed to generate virtual image
         if numpy.ndarray or numpy.memmap:
             (2D array): the virtual image
-    
+
 
     """
     # TODO add ability to pass both mask and geometry where mask acts as bad pixels e.g. beam stop
     # I decided to do this with switch like statements using a dictionary, in python 3.10, we could use them explicitly. 
     # This should make it easier to split into two functions if that is the prefered route
-    
+
     # check one of geometry or mask is passed
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
     assert (geometry is not None) ^ (mask is not None), "Either, neither or both geometry or mask passed"
 
-    # create the dictionary with all prefered virutal image functions
+    # create the dictionary with all prefered virtual image functions
     function_dict = _make_function_dict()
-        
+
     ### Set flags for deciding what function to use ### 
-    
+
     # check the datacube data type, three data types we should expect are, np.ndarray, np.memmap, da.Array 
     # dask array
     if type(datacube.data) == da.Array:
@@ -743,7 +740,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
         image_function = function_dict[mode][detector_geometry][data_type]
 
         return image_function(datacube, geometry, eager_compute=eager_compute)
-    
+
     # if mask is passed and geometry is not passed
     elif type(mask) == np.ndarray:
         #check the mask is the same shape as the diffraction slices 
