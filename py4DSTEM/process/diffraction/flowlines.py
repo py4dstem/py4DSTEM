@@ -32,7 +32,7 @@ def make_orientation_histogram(
     
     Args:
         bragg_peaks (PointListArray):    2D of pointlists containing centered peak locations.
-        radial_ranges (np array):       [N x 2] array for N radial bins.
+        radial_ranges (np array):       size (N x 2) array for N radial bins, or (2,) for a single bin.
         upsample_factor (float):          Upsample factor
         theta_step_deg (float):         Step size along annular direction in degrees
         sigma_x (float):                smoothing in x direction before upsample
@@ -43,11 +43,14 @@ def make_orientation_histogram(
         progress_bar (bool):          Enable progress bar
 
     Returns:
-        orient_hist (array):          3D or 4D array containing Bragg peaks
+        orient_hist (array):          4D array containing Bragg peak intensity histogram 
+                                      [radial_bin x_probe y_probe theta]
     """
 
     # Input bins
     radial_ranges = np.array(radial_ranges)
+    if radial_ranges.ndim == 1:
+        radial_ranges = radial_ranges[None,:]
     radial_ranges_2 = radial_ranges**2
     num_radii = radial_ranges.shape[0]
     
@@ -61,18 +64,13 @@ def make_orientation_histogram(
 
     # output init
     orient_hist = np.zeros([
+        num_radii,
         size_output[0],
         size_output[1],
-        num_radii,
         num_theta_bins])
 
 
     for a0 in range(num_radii):
-        orient = np.zeros([
-            size_output[0],
-            size_output[1],
-            num_theta_bins,
-            ])
 
         # Loop over all probe positions
         t = "Generating histogram " + str(a0)
@@ -82,8 +80,6 @@ def make_orientation_histogram(
         # for rx, ry in tqdmnd(
         #         *[2,2], desc='a',unit='a'
         #     ):
-
-
             x = (rx + 0.5)*upsample_factor - 0.5
             y = (ry + 0.5)*upsample_factor - 0.5
             x = np.clip(x,0,size_output[0]-2)
@@ -107,31 +103,31 @@ def make_orientation_histogram(
                 tF = np.floor(t).astype('int')
                 dt = t - tF
 
-                orient[    xF  ,yF  ,:] = orient[xF  ,yF  ,:] + \
+                orient_hist[a0,xF  ,yF  ,:] = orient_hist[a0,xF  ,yF  ,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(1-dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient[    xF  ,yF  ,:] = orient[xF  ,yF  ,:] + \
+                orient_hist[a0,xF  ,yF  ,:] = orient_hist[a0,xF  ,yF  ,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(1-dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
 
-                orient[    xF+1,yF  ,:] = orient[xF+1,yF  ,:] + \
+                orient_hist[a0,xF+1,yF  ,:] = orient_hist[a0,xF+1,yF  ,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(  dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient[    xF+1,yF  ,:] = orient[xF+1,yF  ,:] + \
+                orient_hist[a0,xF+1,yF  ,:] = orient_hist[a0,xF+1,yF  ,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(  dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
  
-                orient[    xF  ,yF+1,:] = orient[xF  ,yF+1,:] + \
+                orient_hist[a0,xF  ,yF+1,:] = orient_hist[a0,xF  ,yF+1,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(1-dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient[    xF  ,yF+1,:] = orient[xF  ,yF+1,:] + \
+                orient_hist[a0,xF  ,yF+1,:] = orient_hist[a0,xF  ,yF+1,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(1-dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)
 
-                orient[    xF+1,yF+1,:] = orient[xF+1,yF+1,:] + \
+                orient_hist[a0,xF+1,yF+1,:] = orient_hist[a0,xF+1,yF+1,:] + \
                     np.bincount(np.mod(tF  ,num_theta_bins),
                         weights=(  dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
-                orient[    xF+1,yF+1,:] = orient[xF+1,yF+1,:] + \
+                orient_hist[a0,xF+1,yF+1,:] = orient_hist[a0,xF+1,yF+1,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
                         weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)    
 
@@ -141,9 +137,7 @@ def make_orientation_histogram(
         #     orient = gaussian_filter1d(orient,sigma_y*upsample_factor,mode='nearest',axis=1)
         # if sigma_theta is not None and sigma_theta > 0:
         #     orient = gaussian_filter1d(orient,sigma_theta,mode='wrap',axis=2)
-                    
-
-        orient_hist[:,:,a0,:] = orient          
+        # orient_hist[:,:,a0,:] = orient          
 
     # smoothing
     if (sigma_x is not None) or (sigma_y is not None) or (sigma_theta is not None):
@@ -152,11 +146,23 @@ def make_orientation_histogram(
         else:
             print('Interpolating orientation matrix ...', end='')            
         if sigma_x is not None and sigma_x > 0:
-            orient_hist = gaussian_filter1d(orient_hist,sigma_x*upsample_factor,mode='nearest',axis=0)
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_x*upsample_factor,
+                mode='nearest',
+                axis=1,
+                truncate=3.0)
         if sigma_y is not None and sigma_y > 0:
-            orient_hist = gaussian_filter1d(orient_hist,sigma_y*upsample_factor,mode='nearest',axis=1)
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_y*upsample_factor,
+                mode='nearest',
+                axis=2,
+                truncate=3.0)
         if sigma_theta is not None and sigma_theta > 0:
-            orient_hist = gaussian_filter1d(orient_hist,sigma_theta/dtheta_deg,mode='wrap',axis=3)
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_theta/dtheta_deg,
+                mode='wrap',
+                axis=3,
+                truncate=2.0)
         print(' done.')
 
     # normalization
@@ -166,11 +172,7 @@ def make_orientation_histogram(
         for a0 in range(num_radii):
             orient_hist[:,:,a0,:] = orient_hist[:,:,a0,:] / np.max(orient_hist[:,:,a0,:])
 
-
-
     return orient_hist
-
-
 
 
 
@@ -182,7 +184,7 @@ def make_flowline_map(
     sep_seeds = None,
     sep_xy = 6.0,
     sep_theta = 5.0,
-    sort_seeds_intensity=False,
+    sort_seeds = 'intensity',
     linewidth = 2.0,
     step_size = 0.5,
     min_steps = 4,
@@ -196,27 +198,30 @@ def make_flowline_map(
     Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents diffraction data.
     
     Args:
-        orient_hist (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
-                                We assume theta bin ranges from 0 to 180 degrees and is periodic.
-        sep (float):            Separation of the flowlines in pixels.
-        progress_bar (bool):          Enable progress bar
+        orient_hist (array):        Histogram of all orientations with coordinates 
+                                    [radial_bin x_probe y_probe theta]
+                                    We assume theta bin ranges from 0 to 180 degrees and is periodic.
+        sep (float):                Separation of the flowlines in pixels.
+        progress_bar (bool):        Enable progress bar
 
     Returns:
-        orient_flowlines (array):          3D or 4D array containing flowlines
+        orient_flowlines (array):   4D array containing flowlines
+                                    [radial_bin x_probe y_probe theta]
     """
 
+    # Default seed separation
     if sep_seeds is None:
         sep_seeds = np.round(sep_xy / 2 + 0.5).astype('int')
 
     # number of radial bins
-    num_radii = orient_hist.shape[2]
+    num_radii = orient_hist.shape[0]
     
     # coordinates
     theta = np.linspace(0,np.pi,orient_hist.shape[3],endpoint=False)
     dtheta = theta[1] - theta[0]
     size_3D = np.array([
-        orient_hist.shape[0],
         orient_hist.shape[1],
+        orient_hist.shape[2],
         orient_hist.shape[3],
     ])
 
@@ -237,10 +242,10 @@ def make_flowline_map(
     cr = np.arange(-np.ceil(sep_xy),np.ceil(sep_xy)+1)
     ct = np.arange(-np.ceil(sep_theta),np.ceil(sep_theta)+1)
     ay,ax,at = np.meshgrid(cr,cr,ct)
-    c_mask = (ax**2 + ay**2)/sep_xy**2 + at**2/sep_theta**2 <= (1 + 1/sep_xy)**2
-    cx = cr[:,None,None].astype('int')
-    cy = cr[None,:,None].astype('int')
-    ct = ct[None,None,:].astype('int')
+    c_mask = ((ax**2 + ay**2)/sep_xy**2 + at**2/sep_theta**2 <= (1 + 1/sep_xy)**2)[None,:,:,:]
+    cx = cr[None,:,None,None].astype('int')
+    cy = cr[None,None,:,None].astype('int')
+    ct = ct[None,None,None,:].astype('int')
 
     # initalize flowline array
     orient_flowlines = np.zeros_like(orient_hist)
@@ -250,9 +255,9 @@ def make_flowline_map(
     xy_t_int_rev = np.zeros((max_steps+1,4))
 
     # Loop over radial bins
-    for a0 in np.arange(num_radii):
+    for a0 in range(num_radii):
         # Find all seed locations
-        orient = orient_hist[:,:,a0,:] # .copy()
+        orient = orient_hist[a0,:,:,:] 
         sub_seeds = np.logical_and(np.logical_and(
             orient >= np.roll(orient,1,axis=2),
             orient >= np.roll(orient,-1,axis=2)),
@@ -266,11 +271,14 @@ def make_flowline_map(
 
         # Index seeds
         x_inds,y_inds,t_inds = np.where(sub_seeds)
-        if sort_seeds_intensity is True:
-            inds_sort = np.argsort(orient[sub_seeds])[::-1]
+        if sort_seeds is not None:
+            if sort_seeds == 'intensity':
+                inds_sort = np.argsort(orient[sub_seeds])[::-1]  
+            elif sort_seeds == 'random':
+                inds_sort = np.random.permutation(np.count_nonzero(sub_seeds))
             x_inds = x_inds[inds_sort]
             y_inds = y_inds[inds_sort]
-            t_inds = t_inds[inds_sort]    
+            t_inds = t_inds[inds_sort]  
 
         # for a1 in tqdmnd(range(0,40), desc="Drawing flowlines",unit=" seeds", disable=not progress_bar):
         t = "Drawing flowlines " + str(a0)
@@ -309,9 +317,9 @@ def make_flowline_map(
 
                 # check for collision
                 flow_crop = orient_flowlines[
+                    a0,
                     np.clip(np.round(xy[0]).astype('int')+cx,0,orient.shape[0]-1),
                     np.clip(np.round(xy[1]).astype('int')+cy,0,orient.shape[1]-1),
-                    (a0).astype('int'),
                     np.mod(np.round(t/dtheta).astype('int')+ct,orient.shape[2])
                 ]
                 int_flow = np.max(flow_crop[c_mask])
@@ -362,9 +370,9 @@ def make_flowline_map(
 
                 # check for collision
                 flow_crop = orient_flowlines[
+                    a0,
                     np.clip(np.round(xy[0]).astype('int')+cx,0,orient.shape[0]-1),
                     np.clip(np.round(xy[1]).astype('int')+cy,0,orient.shape[1]-1),
-                    (a0).astype('int'),
                     np.mod(np.round(t/dtheta).astype('int')+ct,orient.shape[2])
                 ]
                 int_flow = np.max(flow_crop[c_mask])
@@ -394,35 +402,15 @@ def make_flowline_map(
                     if count_rev > max_steps-1:
                         grow=False
 
-            # xy_t_int_rev[0:count_rev,2] = xy_t_int_rev[0:count_rev,2] - np.pi/dtheta
-
-            # print(np.round(xy_t_int[0:100:10,:]))
-            # print(np.round(xy_t_int_rev[1:1001:100,:]))
-            # print(xy_t_int_rev[1:count_rev:17,3])
-            # print(xy_t_int_rev[1:count_rev,0])
-
-
-            # if count > 1 or count_rev > 2:
-
-            #     fig,ax = plt.subplots(1,1,figsize=(8,4))
-            #     ax.plot(
-            #         xy_t_int[0:count,0],
-            #         xy_t_int[0:count,3])
-            #     ax.plot(
-            #         xy_t_int_rev[0:count_rev,0],
-            #         xy_t_int_rev[0:count_rev,3])
-
-            #     plt.show()
-
             # write into output array
             if count + count_rev > min_steps:
                 if count > 0:
-                    orient_flowlines[:,:,a0,:] = set_intensity(
-                        orient_flowlines[:,:,a0,:],
+                    orient_flowlines[a0,:,:,:] = set_intensity(
+                        orient_flowlines[a0,:,:,:],
                         xy_t_int[1:count,:])
                 if count_rev > 1:
-                    orient_flowlines[:,:,a0,:] = set_intensity(
-                        orient_flowlines[:,:,a0,:],
+                    orient_flowlines[a0,:,:,:] = set_intensity(
+                        orient_flowlines[a0,:,:,:],
                         xy_t_int_rev[1:count_rev,:])
 
     # normalize to step size
@@ -430,10 +418,18 @@ def make_flowline_map(
 
     # linewidth
     if linewidth > 1.0:
-        s = linewidth - 1
+        s = linewidth - 1.0
         
-        orient_flowlines = gaussian_filter1d(orient_flowlines, s, axis=0)
-        orient_flowlines = gaussian_filter1d(orient_flowlines, s, axis=1)
+        orient_flowlines = gaussian_filter1d(
+            orient_flowlines, 
+            s, 
+            axis=1,
+            truncate=3.0)
+        orient_flowlines = gaussian_filter1d(
+            orient_flowlines, 
+            s, 
+            axis=2,
+            truncate=3.0)
         orient_flowlines = orient_flowlines * (s**2)
 
     return orient_flowlines
@@ -441,19 +437,21 @@ def make_flowline_map(
 
 
 
-def make_flowline_image(
+def make_flowline_rainbow_image(
     orient_flowlines,
-    int_range = [0,0.5],
+    int_range = [0,0.2],
     sym_rotation_order = 2,
     greyscale = False,
     greyscale_max = True,
     white_background = False,
     power_scaling = 1,
-    # cmap = 'hsv',
+    sum_radial_bins = False,
+    plot_images = True,
     # correct_luminosity = True,
     ):
     """
-    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents diffraction data.
+    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents
+    diffraction data. Color by orientation of each flowline, modulo the rotation symmetry specified.
     
     Args:
         orient_flowline (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
@@ -467,15 +465,15 @@ def make_flowline_image(
 
     # init array
     size_input = orient_flowlines.shape
-    size_output = np.array([size_input[0],size_input[1],3,size_input[2]])
+    size_output = np.array([size_input[0],size_input[1],size_input[2],3])
     im_flowline = np.zeros(size_output)
 
     if greyscale is True:
-        for a0 in np.arange(size_input[2]):
+        for a0 in range(size_input[0]):
             if greyscale_max is True:
-                im = np.max(orient_flowlines[:,:,a0,:],axis=2)
+                im = np.max(orient_flowlines[a0,:,:,:],axis=2)
             else:
-                im = np.mmean(orient_flowlines[:,:,a0,:],axis=2)
+                im = np.mean(orient_flowlines[a0,:,:,:],axis=2)
 
             sig = np.clip((im - int_range[0]) \
                 / (int_range[1] - int_range[0]),0,1)
@@ -484,10 +482,9 @@ def make_flowline_image(
                 sig = sig ** power_scaling
 
             if white_background is False:
-                im_flowline[:,:,:,a0] = sig[:,:,None]
+                im_flowline[a0,:,:,:] = sig[:,:,None]
             else:
-                im_flowline[:,:,:,a0] = 1-sig[:,:,None]
-
+                im_flowline[a0,:,:,:] = 1-sig[:,:,None]
 
     else:
         # Color basis
@@ -497,53 +494,143 @@ def make_flowline_image(
 
         # angles
         theta = np.linspace(0,np.pi,size_input[3],endpoint=False)
-        # dtheta = theta[1] - theta[0]
         theta_color = theta * sym_rotation_order
-        # print(theta_color*180/np.pi)
 
-        # color basis
+        # color projections
         b0 =  np.maximum(1 - np.abs(np.mod(theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
         b1 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
         b2 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
 
 
-        for a0 in np.arange(size_input[2]):
-            for a1 in np.arange(size_input[3]):
-                sig = np.clip(
-                    (orient_flowlines[:,:,a0,a1] - int_range[0]) \
-                    / (int_range[1] - int_range[0]),0,1)
+        for a0 in range(size_input[0]):
+            sig = np.clip(
+                (orient_flowlines[a0,:,:,:] - int_range[0]) \
+                / (int_range[1] - int_range[0]),0,1)
+            if power_scaling != 1:
+                sig = sig ** power_scaling
 
-                for a2 in np.arange(3):
-                    im_flowline[:,:,:,a0] = im_flowline[:,:,:,a0] + \
-                        sig[:,:,None]*(c0[None,None,:]*b0[a1]) + \
-                        sig[:,:,None]*(c1[None,None,:]*b1[a1]) + \
-                        sig[:,:,None]*(c2[None,None,:]*b2[a1])
-
-            # clip limit
-            im_flowline[:,:,:,a0] = np.clip(im_flowline[:,:,:,a0],0,1)
+            im_flowline[a0,:,:,:] = \
+                np.sum(sig * b0[None,None,:], axis=2)[:,:,None]*c0[None,None,:] + \
+                np.sum(sig * b1[None,None,:], axis=2)[:,:,None]*c1[None,None,:] + \
+                np.sum(sig * b2[None,None,:], axis=2)[:,:,None]*c2[None,None,:]
+                
+            # clip limits
+            im_flowline[a0,:,:,:] = np.clip(im_flowline[a0,:,:,:],0,1)
 
             # contrast flip
             if white_background is True:
-                im = rgb_to_hsv(im_flowline[:,:,:,a0])
+                im = rgb_to_hsv(im_flowline[a0,:,:,:])
                 # im_s = im[:,:,1]
                 im_v = im[:,:,2]
                 im[:,:,1] = im_v
                 im[:,:,2] = 1
-                im_flowline[:,:,:,a0] = hsv_to_rgb(im)
+                im_flowline[a0,:,:,:] = hsv_to_rgb(im)
 
-        # print(im_flowline.shape)
-        # print((sig[:,:,None] * c1[None,None,:]).shape)
+    if sum_radial_bins is True:
+        im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
 
-        # fig,ax = plt.subplots(1,1,figsize=(8,8))
-        # ax.plot(theta,b0)
-        # ax.plot(theta,b1)
-        # ax.plot(theta,b2)
-        # plt.show()
+    if plot_images is True:
+        fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
 
+        if im_flowline.shape[0] > 1:
+            for a0 in range(im_flowline.shape[0]):
+                ax[a0].imshow(im_flowline[a0])
+                ax[a0].axis('off')
+            plt.subplots_adjust(wspace=0, hspace=0.02)
+        else:
+            ax.imshow(im_flowline[0])
+            ax.axis('off')
+        plt.show()
 
     return im_flowline
 
 
+
+def make_flowline_combined_image(
+    orient_flowlines,
+    int_range = [0,0.2],
+    cvals = np.array([
+        [0.0,0.7,0.0],
+        [1.0,0.0,0.0],
+        [0.0,0.7,1.0],
+        ]),
+    white_background = False,
+    power_scaling = 1,
+    sum_radial_bins = True,
+    plot_images = True,
+    # correct_luminosity = True,
+    ):
+    """
+    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents
+    diffraction data. Color by orientation of each flowline, modulo the rotation symmetry specified.
+    
+    Args:
+        orient_flowline (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
+                                    We assume theta bin ranges from 0 to 180 degrees and is periodic.
+        int_range (float)           2 element array giving the intensity range
+
+    Returns:
+        im_flowline (array):         flowline images
+    """
+
+    # init array
+    size_input = orient_flowlines.shape
+    size_output = np.array([size_input[0],size_input[1],size_input[2],3])
+    im_flowline = np.zeros(size_output)
+
+    # Generate all color images
+    for a0 in range(size_input[0]):
+        sig = np.clip(
+            (np.sum(orient_flowlines[a0,:,:,:],axis=2) - int_range[0]) \
+            / (int_range[1] - int_range[0]),0,1)
+        if power_scaling != 1:
+            sig = sig ** power_scaling
+
+        im_flowline[a0,:,:,:] = sig[:,:,None]*cvals[a0,:][None,None,:]
+
+        # contrast flip
+        if white_background is True:
+            im = rgb_to_hsv(im_flowline[a0,:,:,:])
+            # im_s = im[:,:,1]
+            im_v = im[:,:,2]
+            im[:,:,1] = im_v
+            im[:,:,2] = 1
+            im_flowline[a0,:,:,:] = hsv_to_rgb(im)
+
+    if sum_radial_bins is True:
+        im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
+
+    if plot_images is True:
+        fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
+
+        if im_flowline.shape[0] > 1:
+            for a0 in range(im_flowline.shape[0]):
+                ax[a0].imshow(im_flowline[a0])
+                ax[a0].axis('off')
+            plt.subplots_adjust(wspace=0, hspace=0.02)
+        else:
+            ax.imshow(im_flowline[0])
+            ax.axis('off')
+        plt.show()
+
+    return im_flowline
+
+
+
+def make_correlation_plot(
+    orient_hist,
+    radius_max=None,    
+    ):
+    """
+    Take in the 4D orientation histogram, and compute the distance-angle correlations
+    
+    Args:
+        orient_hist (array):    3D or 4D histogram of all orientations with coordinates [x y radial_bin theta]
+        radius_max (float):    Maximum radial distance to compute correlogram out to
+
+    Returns:
+        orient_corr (array):          3D or 4D array containing correlation images as function of (dr,dtheta)
+    """
 
 
 def get_intensity(orient,x,y,t):
