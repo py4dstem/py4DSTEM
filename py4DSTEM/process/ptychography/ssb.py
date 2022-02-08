@@ -8,6 +8,7 @@ from py4DSTEM.io import DataCube
 if config.cupy_enabled:
     import cupy as cp
 import torch as th
+from numba import cuda
 import numpy as np
 from numpy.fft import fftfreq, fftshift
 
@@ -22,7 +23,6 @@ from tqdm import trange
 import math as m
 from math import sin, cos
 import cmath as cm
-from numba import cuda
 
 
 class ZernikeProbeSingle(nn.Module):

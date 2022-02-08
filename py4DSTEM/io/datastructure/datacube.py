@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
 import h5py
 import dask.array as da
 
