@@ -2,7 +2,6 @@
 import numpy as np
 from ...io import DataCube
 from ..utils import tqdmnd
-# import numba as nb
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
@@ -299,7 +298,7 @@ def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs)
 @da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
 def _get_virtual_image_dask(array, mask):
     """
-    Make a virutal for all probe posistions from a dask array object using a mask in the diffraction plane.
+    Make a virtual for all probe posistions from a dask array object using a mask in the diffraction plane.
     Example:
     image = make_virtual_image_dask(dataset.data, mask).compute()
 
@@ -395,7 +394,7 @@ def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, 
     else:
         return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
+def _get_virtualimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -428,7 +427,7 @@ def _get_virutalimage_rect_dask(datacube, geometry, eager_compute=True, *args, *
 #### Einsum Powered Functions ####
 # TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
 
-def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
+def _get_virtualimage_from_mask_einsum(datacube, mask, dtype=np.float64, *args, **kwargs):
     """
     Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape
 
@@ -441,9 +440,9 @@ def _get_virtualimage_from_mask_einsum(datacube, mask, *args, **kwargs):
 
     """
 
-    return np.einsum('ijnm,nm->ij', datacube.data, mask)
+    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
 
-def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
+def _get_virtualimage_ann_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
@@ -460,9 +459,9 @@ def _get_virtualimage_ann_einsum(datacube, geometry, *args, **kwargs):
     # make the annular mask
     mask = make_annular_mask(datacube, geometry)
 
-    return np.einsum('ijnm,nm->ij', datacube.data, mask)
+    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
 
-def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
+def _get_virtualimage_circ_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
 
     """
     Get a virtual image using an circular detector centered at (x0,y0), with a
@@ -476,14 +475,12 @@ def _get_virtualimage_circ_einsum(datacube, geometry, *args, **kwargs):
     Returns:
         (2D array): the virtual image
     """
-
     # make the circular mask
-
     mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
 
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
+    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
 
-def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
+def _get_virtualimage_rect_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -499,7 +496,7 @@ def _get_virutalimage_rect_einsum(datacube, geometry, *args, **kwargs):
     # make the rectangular mask
     mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
 
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax])
+    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
 
 #### End of Einsum Powered Functions ####
 
@@ -561,7 +558,7 @@ def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **k
     else:
         return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
 
-def _get_virutalimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
+def _get_virtualimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
     """
     Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
     in the diffraction plane. Floating point limits will be rounded and cast to ints.
@@ -633,21 +630,21 @@ def _make_function_dict():
             # detector_geometry
             'circ' : {
                 # data_type
-                'numpy' :_get_virtualimage_circ_tensordot,
+                'numpy' :_get_virtualimage_circ_old, # changed from tensordot
                 'dask' : _get_virtualimage_circ_dask
             },
             # detector_geometry
             'ann' : {
                 # data_type
-                'numpy' : _get_virtualimage_ann_tensordot,
+                'numpy' : _get_virtualimage_ann_old, # changed from tensordot
                 'dask' : _get_virtualimage_ann_dask,
 
             },
             # detector_geometry
             'rect' : {
                 # data_type
-                'numpy' : _get_virutalimage_rect_tensordot,
-                'dask' : _get_virutalimage_rect_dask
+                'numpy' : _get_virtualimage_rect_old, # changed from tensordot
+                'dask' : _get_virtualimage_rect_dask
             },
         },
         # mode
@@ -655,7 +652,7 @@ def _make_function_dict():
             # data_type
             'numpy' : {
                 # mask_type
-                'bool' : _get_virtualimage_from_mask_tensordot,
+                'bool' : _get_virtualimage_from_mask_einsum, # changed from tensordot
                 'non-bool' : _get_virtualimage_from_mask_einsum
             },
             # data_type
@@ -717,7 +714,7 @@ def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *ar
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
     assert (geometry is not None) ^ (mask is not None), "Either, neither or both geometry or mask passed"
 
-    # create the dictionary with all prefered virutal image functions
+    # create the dictionary with all prefered virtual image functions
     function_dict = _make_function_dict()
 
     ### Set flags for deciding what function to use ### 
