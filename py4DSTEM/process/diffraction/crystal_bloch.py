@@ -434,17 +434,18 @@ def generate_CBED(
                                         The main Bloch calculation can be reused for multiple thicknesses
                                         without much overhead.
         alpha_mrad (float):             Convergence angle for CBED pattern. Note that if disks in the calculation
-                                        overlap, they will be added incoherently (ie incorrectly)
+                                        overlap, they will be added incoherently, and the resulting CBED will
+                                        thus represent the average over the unit cell (i.e. a PACBED pattern,
+                                        as described in LeBeau et al., Ultramicroscopy 110(2): 2010.)
         pixel_size_inv_A (float):       CBED pixel size in 1/Å.
         DP_size_inv_A (optional float): If specified, defines the extents of the diffraction pattern.
                                         If left unspecified, the DP will be automatically scaled to
                                         fit all of the beams present in the input plus some small buffer.
-        zone_axis (np float vector):     3 element projection direction for sim pattern
-                                         Can also be a 3x3 orientation matrix (zone axis 3rd column)
-        foil_normal:                     3 element foil normal - set to None to use zone_axis
+        zone_axis (np float vector):    3 element projection direction for sim pattern
+                                        Can also be a 3x3 orientation matrix (zone axis 3rd column)
+        foil_normal:                    3 element foil normal - set to None to use zone_axis
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
-                                        keyed by tuples of (h,k,l). This mode is appropriate for convergence
-                                        angles larger than half the Bragg spacing.
+                                        keyed by tuples of (h,k,l).
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
 
     Returns:
