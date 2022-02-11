@@ -9,6 +9,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
+from matplotlib.colors import ListedColormap
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd
@@ -617,20 +618,262 @@ def make_flowline_combined_image(
 
 
 
-def make_correlation_plot(
+def orientation_correlation(
     orient_hist,
     radius_max=None,    
     ):
     """
-    Take in the 4D orientation histogram, and compute the distance-angle correlations
+    Take in the 4D orientation histogram, and compute the distance-angle (auto)correlations
     
     Args:
         orient_hist (array):    3D or 4D histogram of all orientations with coordinates [x y radial_bin theta]
-        radius_max (float):    Maximum radial distance to compute correlogram out to
+        radius_max (float):     Maximum radial distance for correlogram calculation. If set to None, the maximum 
+                                radius will be set to min(orient_hist.shape[0],orient_hist.shape[1])/2.
 
     Returns:
         orient_corr (array):          3D or 4D array containing correlation images as function of (dr,dtheta)
     """
+
+    # Array sizes
+    size_input = np.array(orient_hist.shape)
+    if radius_max is None:
+        radius_max = np.ceil(np.min(orient_hist.shape[1:2])/2).astype('int')
+    size_corr = np.array([
+        np.maximum(size_input[1],2*radius_max),
+        np.maximum(size_input[2],2*radius_max)])
+
+    # Pad and initialize orientation histogram
+    x_inds = np.concatenate((
+        np.arange(np.ceil(size_input[1]/2)),
+        np.arange(-np.floor(size_input[1]/2),0) + size_corr[0]
+        )).astype('int')
+    y_inds = np.concatenate((
+        np.arange(np.ceil(size_input[2]/2)),
+        np.arange(-np.floor(size_input[2]/2),0) + size_corr[1]
+        )).astype('int')
+    orient_hist_pad = np.zeros((
+        size_input[0],
+        size_corr[0],
+        size_corr[1],
+        size_input[3],        
+        ),dtype='complex')
+    orient_norm_pad = np.zeros((
+        size_input[0],
+        size_corr[0],
+        size_corr[1],
+        ),dtype='complex')
+    orient_hist_pad[:,x_inds[:,None],y_inds[None,:],:] = \
+        np.fft.fftn(orient_hist,axes=(1,2,3))
+    orient_norm_pad[:,x_inds[:,None],y_inds[None,:]]   = \
+        np.fft.fftn(np.sum(orient_hist,axis=3),axes=(1,2)) / np.sqrt(size_input[3])
+
+    # Radial coordinates for integration
+    x = np.mod(np.arange(size_corr[0])+size_corr[0]/2,size_corr[0])-size_corr[0]/2
+    y = np.mod(np.arange(size_corr[1])+size_corr[1]/2,size_corr[1])-size_corr[1]/2
+    ya,xa = np.meshgrid(y,x)
+    ra = np.sqrt(xa**2 + ya**2)
+
+    # coordinate subset
+    sub0 = ra <= radius_max
+    sub1 = ra <= radius_max-1
+    rF0 = np.floor(ra[sub0]).astype('int')
+    rF1 = np.floor(ra[sub1]).astype('int')
+    dr0 = ra[sub0] - rF0
+    dr1 = ra[sub1] - rF1
+    inds = np.concatenate((rF0,rF1+1))
+    weights = np.concatenate((1-dr0,dr1))
+
+    # init output
+    num_corr = (0.5*size_input[0]*(size_input[0]+1)).astype('int')
+    orient_corr = np.zeros((
+        num_corr,
+        (size_input[3]/2+1).astype('int'),
+        radius_max+1,
+        ))
+
+    # Main correlation calculation
+    ind_output = 0
+    for a0 in range(size_input[0]):
+        for a1 in range(size_input[0]):
+            if a0 <= a1:
+                # Correlation
+                c = np.real(np.fft.ifftn(
+                    orient_hist_pad[a0,:,:,:] * \
+                    np.conj(orient_hist_pad[a1,:,:,:]),
+                    axes=(0,1,2)))
+
+                # Loop over all angles from 0 to pi/2  (half of indices)
+                for a2 in range((size_input[3]/2+1).astype('int')):
+                    orient_corr[ind_output,a2,:] = \
+                        np.bincount(
+                            inds,
+                            weights=weights*np.concatenate((c[:,:,a2][sub0],c[:,:,a2][sub1])),
+                            minlength=radius_max,
+                            )
+                    
+
+                # normalize
+                c_norm = np.real(np.fft.ifftn(
+                    orient_norm_pad[a0,:,:] * \
+                    np.conj(orient_norm_pad[a1,:,:]),
+                    axes=(0,1)))
+                sig_norm = np.bincount(
+                    inds,
+                    weights=weights*np.concatenate((c_norm[sub0],c_norm[sub1])),
+                    minlength=radius_max,
+                    )
+                orient_corr[ind_output,:,:] /= sig_norm[None,:]
+    
+                # increment output index
+                ind_output += 1
+
+    return orient_corr
+
+
+def plot_orientation_correlation(
+    orient_corr,
+    prob_range=[0.1, 10.0],
+    inds_plot=None,
+    pixel_size=None,
+    pixel_units=None,
+    size_fig=[8,6],
+    return_fig=False,
+    ):
+
+    """
+    Take in the 4D orientation histogram, and compute the distance-angle (auto)correlations
+    
+    Args:
+        orient_corr (array):    3D or 4D array containing correlation images as function of (dr,dtheta)
+                                1st index represents each pair of rings.
+        prob_range (array):     Plotting range in units of "multiples of random distribution"
+        inds_plot (float):      Which indices to plot for orient_corr.  Set to "None" to plot all pairs
+        pixel_size (float):     Pixel size for x axis
+        pixel_units (str):      units of pixels
+        size_fig (array):       Size of the figure panels
+        return_fig (bool):      Whether to return figure axes 
+
+    Returns:
+        
+    """
+
+    # Make sure range is an numpy array
+    prob_range = np.array(prob_range)
+
+    if pixel_units is None:
+        pixel_units = 'pixels'
+
+    # Get the pair indices
+    size_input = orient_corr.shape
+    num_corr = (np.sqrt(8*size_input[0]+1)/2-1/2).astype('int')
+    ya,xa = np.meshgrid(np.arange(num_corr),np.arange(num_corr))
+    keep = ya >= xa
+    # row 0 is the first diff ring, row 1 is the second diff ring
+    pair_inds = np.vstack((xa[keep],ya[keep]))
+
+    if inds_plot is None:
+        inds_plot = np.arange(size_input[0])
+    elif np.ndim(inds_plot) == 0:
+        inds_plot = np.atleast_1d(inds_plot)
+    else:
+        inds_plot = np.array(inds_plot)
+
+    # Custom colormap
+    N = 256
+    cvals = np.zeros((N, 4))
+    cvals[:,3] = 1
+    c = np.linspace(0.0,1.0,int(N/4))
+
+    cvals[0:int(N/4),1] = c*0.4+0.3
+    cvals[0:int(N/4),2] = 1
+    
+    cvals[int(N/4):int(N/2),0] = c
+    cvals[int(N/4):int(N/2),1] = c*0.3+0.7
+    cvals[int(N/4):int(N/2),2] = 1
+
+    cvals[int(N/2):int(N*3/4),0] = 1
+    cvals[int(N/2):int(N*3/4),1] = 1-c
+    cvals[int(N/2):int(N*3/4),2] = 1-c
+
+    cvals[int(N*3/4):N,0] = 1-0.5*c
+
+    # cvals[:, 0] = np.linspace(90/256, 1, N)
+    # cvals[:, 1] = np.linspace(39/256, 1, N)
+    # cvals[:, 2] = np.linspace(41/256, 1, N)
+    new_cmap = ListedColormap(cvals)
+
+    # plotting
+    num_plot = inds_plot.shape[0]
+    fig,ax = plt.subplots(
+        num_plot,
+        1,
+        figsize=(size_fig[0],num_plot*size_fig[1]))
+
+    # loop over indices
+    for count,ind in enumerate(inds_plot):
+        if num_plot > 1:
+            p = ax[count].imshow(
+                np.log10(orient_corr[ind,:,:]),
+                vmin=np.log10(prob_range[0]), 
+                vmax=np.log10(prob_range[1]),
+                aspect='auto',
+                cmap=new_cmap
+                )
+            ax_handle = ax[count]
+        else:
+            p = ax.imshow(
+                np.log10(orient_corr[ind,:,:]),
+                vmin=np.log10(prob_range[0]), 
+                vmax=np.log10(prob_range[1]),
+                aspect='auto',
+                cmap=new_cmap
+                )
+            ax_handle = ax
+
+        cbar = fig.colorbar(p, ax=ax_handle)
+        t = cbar.get_ticks()
+        t_lab = []
+        for a1 in range(t.shape[0]):
+            t_lab.append(f"{10**t[a1]:.2g}")
+
+        cbar.set_ticks(t)
+        cbar.ax.set_yticklabels(t_lab)
+        cbar.ax.set_ylabel(
+            'Probability [mult. of rand. dist.]',
+            fontsize=12)
+
+
+        ind_0 = pair_inds[0,ind]
+        ind_1 = pair_inds[1,ind]
+
+        if ind_0 != ind_1:
+            ax_handle.set_title(
+                'Correlation of Rings ' + str(ind_0)  + ' and ' + str(ind_1),
+                fontsize=16)
+        else:
+            ax_handle.set_title(
+                'Autocorrelation of Ring ' + str(ind_0),
+                fontsize=16)
+
+
+        ax_handle.invert_yaxis()
+        ax_handle.set_xlabel(
+            'Radial Distance [' + pixel_units + ']',
+            fontsize=12)
+        ax_handle.set_ylabel(
+            'Relative Grain Orientation [degrees]',
+            fontsize=12)
+        ax_handle.set_yticks(
+            [0,10,20,30,40,50,60,70,80,90])
+        ax_handle.set_yticklabels(
+            ['0','','','30','','','60','','','90'])
+
+
+    plt.show()
+
+
+    if return_fig is True:
+        return fig, ax
 
 
 def get_intensity(orient,x,y,t):
