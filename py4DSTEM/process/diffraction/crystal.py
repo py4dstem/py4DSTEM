@@ -9,6 +9,7 @@ from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
 from .crystal_viz import plot_diffraction_pattern
 
+
 class Crystal:
     """
     A class storing a single crystal structure, and associated diffraction data.

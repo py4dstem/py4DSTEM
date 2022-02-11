@@ -42,7 +42,7 @@ def calculate_dynamical_structure_factors(
                 Hashimoto, Howie, & Whelan, Proc R Soc Lond A 269:80-103 (1962)
             "WK":   Uses the Weickenmeier-Kohl parameterization for
                     the elastic form factors, including Debye-Waller factor,
-                    with no absorption, as described in 
+                    with no absorption, as described in
                     Weickenmeier & Kohl, Acta Cryst A 47:5 (1991)
             "WK-C": WK form factors plus the "core" contribution to absorption
                     following H. Rose, Optik 45:2 (1976)
@@ -423,7 +423,7 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
-) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int],np.ndarray]]:
+) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
 

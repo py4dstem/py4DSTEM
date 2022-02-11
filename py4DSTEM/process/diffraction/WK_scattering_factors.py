@@ -125,23 +125,40 @@ def compute_WK_factor(
         TB = G / (2.0 * k0)
 
         # "NORMALIZE"
-        OMEGA = 2.*TB/TA
-        KAPPA = theta_e/TA
+        OMEGA = 2.0 * TB / TA
+        KAPPA = theta_e / TA
 
-        K2 = KAPPA*KAPPA
-        O2 = OMEGA*OMEGA
+        K2 = KAPPA * KAPPA
+        O2 = OMEGA * OMEGA
 
-        X1 = OMEGA/((1.+O2)*np.sqrt(O2+4.*K2))*np.log((OMEGA + np.sqrt( O2+4.*K2 ))/(2.*KAPPA))
-        X2 = 1./np.sqrt((1.+O2)*(1.+O2)+4.*K2*O2)*np.log((1.+2.*K2+O2+np.sqrt((1.+O2)*(1.+O2)+4.*K2*O2))/(2.*KAPPA*np.sqrt(1.+K2))) 
-        if (OMEGA > 1E-2):
-            X3 = 1./(OMEGA*np.sqrt( O2+4.*(1.+K2)))* np.log((OMEGA + np.sqrt( O2+4.*(1.+K2)))/(2.*np.sqrt(1.+K2))) 
+        X1 = (
+            OMEGA
+            / ((1.0 + O2) * np.sqrt(O2 + 4.0 * K2))
+            * np.log((OMEGA + np.sqrt(O2 + 4.0 * K2)) / (2.0 * KAPPA))
+        )
+        X2 = (
+            1.0
+            / np.sqrt((1.0 + O2) * (1.0 + O2) + 4.0 * K2 * O2)
+            * np.log(
+                (1.0 + 2.0 * K2 + O2 + np.sqrt((1.0 + O2) * (1.0 + O2) + 4.0 * K2 * O2))
+                / (2.0 * KAPPA * np.sqrt(1.0 + K2))
+            )
+        )
+        if OMEGA > 1e-2:
+            X3 = (
+                1.0
+                / (OMEGA * np.sqrt(O2 + 4.0 * (1.0 + K2)))
+                * np.log(
+                    (OMEGA + np.sqrt(O2 + 4.0 * (1.0 + K2))) / (2.0 * np.sqrt(1.0 + K2))
+                )
+            )
         else:
-            X3 = 1./(4.*(1.+K2))
+            X3 = 1.0 / (4.0 * (1.0 + K2))
 
-        HI = 2*Z/(TA*TA) * (-X1+X2-X3)
+        HI = 2 * Z / (TA * TA) * (-X1 + X2 - X3)
 
         A0 = 0.5289
-        Fcore = 4./(A0*A0) * 2.*np.pi/(k0*k0) * HI
+        Fcore = 4.0 / (A0 * A0) * 2.0 * np.pi / (k0 * k0) * HI
 
         if verbose:
             print(f"Fcore:{Fcore}")

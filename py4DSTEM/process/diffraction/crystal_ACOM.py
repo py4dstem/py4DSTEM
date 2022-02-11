@@ -1575,6 +1575,7 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
 
+
 # zone axis range arguments for orientation_plan corresponding
 # to the symmetric wedge for each pointgroup, in the order:
 #   [zone_axis_range, fiber_axis, fiber_angles]
