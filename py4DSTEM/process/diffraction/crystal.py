@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
+from .crystal_viz import plot_diffraction_pattern
 
 class Crystal:
     """
@@ -26,7 +27,6 @@ class Crystal:
         plot_structure_factors,
         plot_orientation_zones,
         plot_orientation_plan,
-        plot_diffraction_pattern,
         plot_orientation_maps,
     )
 
