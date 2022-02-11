@@ -9,6 +9,7 @@ from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
 
+
 def plot_structure(
     self,
     proj_dir: Union[list, np.ndarray] = [3, 2, 1],
@@ -73,9 +74,7 @@ def plot_structure(
             el = 90 * np.sign(proj_dir[2])
         else:
             el = (
-                np.arctan(
-                    proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2)
-                )
+                np.arctan(proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2))
                 * 180
                 / np.pi
             )
@@ -161,6 +160,7 @@ def plot_structure(
 
     plt.show()
 
+
 def plot_structure_factors(
     self,
     proj_dir: Union[list, tuple, np.ndarray] = [10, 30],
@@ -194,9 +194,7 @@ def plot_structure_factors(
             el = 90 * np.sign(proj_dir[2])
         else:
             el = (
-                np.arctan(
-                    proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2)
-                )
+                np.arctan(proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2))
                 * 180
                 / np.pi
             )
@@ -235,7 +233,6 @@ def plot_structure_factors(
         return fig, ax
 
 
-
 def plot_orientation_zones(
     self,
     proj_dir: Optional[Union[list, tuple, np.ndarray]] = None,
@@ -272,9 +269,7 @@ def plot_orientation_zones(
             el = 90 * np.sign(proj_dir[2])
         else:
             el = (
-                np.arctan(
-                    proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2)
-                )
+                np.arctan(proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2))
                 * 180
                 / np.pi
             )
@@ -344,9 +339,11 @@ def plot_orientation_zones(
     label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     label_0 = np.round(label_0, decimals=3)
 
-    if self.orientation_fiber is False \
-        and self.orientation_full is False \
-        and self.orientation_half is False:
+    if (
+        self.orientation_fiber is False
+        and self.orientation_full is False
+        and self.orientation_half is False
+    ):
 
         # label_1 = self.cartesian_to_crystal(
         #     self.orientation_zone_axis_range[1, :]
@@ -354,9 +351,7 @@ def plot_orientation_zones(
         if self.cartesian_directions:
             label_1 = self.orientation_zone_axis_range[1, :]
         else:
-            label_1 = self.cartesian_to_crystal(
-                self.orientation_zone_axis_range[1, :]
-            )
+            label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
         label_1 = np.round(label_1 * 1e3) * 1e-3
         label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
         label_1 = np.round(label_1 * 1e3) * 1e-3
@@ -367,9 +362,7 @@ def plot_orientation_zones(
         if self.cartesian_directions:
             label_2 = self.orientation_zone_axis_range[2, :]
         else:
-            label_2 = self.cartesian_to_crystal(
-                self.orientation_zone_axis_range[2, :]
-            )
+            label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
 
         label_2 = np.round(label_2 * 1e3) * 1e-3
         label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
@@ -417,9 +410,11 @@ def plot_orientation_zones(
         ha="center",
         **text_params,
     )
-    if self.orientation_fiber is False \
-        and self.orientation_full is False \
-        and self.orientation_half is False:
+    if (
+        self.orientation_fiber is False
+        and self.orientation_full is False
+        and self.orientation_half is False
+    ):
         ax.text(
             self.orientation_vecs[inds[1], 1] * text_scale_pos,
             self.orientation_vecs[inds[1], 0] * text_scale_pos,
@@ -467,12 +462,12 @@ def plot_orientation_zones(
 def plot_orientation_plan(
     self,
     index_plot: int = 0,
-    zone_axis_plot = None,
+    zone_axis_plot=None,
     figsize: Union[list, tuple, np.ndarray] = (14, 6),
     returnfig: bool = False,
 ):
     """
-    3D scatter plot of the structure factors using magnitude^2, 
+    3D scatter plot of the structure factors using magnitude^2,
     i.e. intensity.
 
     Args:
@@ -492,7 +487,7 @@ def plot_orientation_plan(
         index_plot = np.argmin(
             np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
         )
-        print('Orientation plan index ' + str(index_plot))
+        print("Orientation plan index " + str(index_plot))
 
     # initialize figure
     fig, ax = plt.subplots(1, 2, figsize=figsize)
@@ -526,9 +521,12 @@ def plot_orientation_plan(
     #     # ).astype("float"),
     #     #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
     # else:
-    im_plot = np.real(
-        np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)
-    ).astype("float") / self.orientation_ref_max
+    im_plot = (
+        np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
+            "float"
+        )
+        / self.orientation_ref_max
+    )
 
     # coordinates
     x = self.orientation_gamma * 180 / np.pi
@@ -906,9 +904,7 @@ def plot_orientation_maps(
     im_legend = np.zeros((leg_size[0], leg_size[1], 3))
     for a0 in range(3):
         im_legend[:, :, a0] = (
-            w0 * color_basis[0, a0]
-            + w1 * color_basis[1, a0]
-            + w2 * color_basis[2, a0]
+            w0 * color_basis[0, a0] + w1 * color_basis[1, a0] + w2 * color_basis[2, a0]
         )
         im_legend[:, :, a0] *= mask_legend
         im_legend[:, :, a0] += 1 - mask_legend
@@ -1068,6 +1064,7 @@ def plot_orientation_maps(
     else:
         return images_orientation
 
+
 # def crystal_to_cartesian(self, zone_axis):
 #     vec_cart = zone_axis @ self.lat_real
 #     return vec_cart / np.linalg.norm(vec_cart)
@@ -1076,13 +1073,16 @@ def plot_orientation_maps(
 #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
 #     return zone_axis / np.linalg.norm(zone_axis)
 
+
 def cartesian_to_crystal(self, zone_axis):
     vec_cart = zone_axis @ self.lat_real
     return vec_cart / np.linalg.norm(vec_cart)
 
+
 def crystal_to_cartesian(self, vec_cart):
     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
     return zone_axis / np.linalg.norm(zone_axis)
+
 
 def axisEqual3D(ax):
     extents = np.array([getattr(ax, "get_{}lim".format(dim))() for dim in "xyz"])
@@ -1094,7 +1094,7 @@ def axisEqual3D(ax):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
 
 
-def atomic_colors(Z, scheme='jmol'):
+def atomic_colors(Z, scheme="jmol"):
     """
     Return atomic colors for Z.
 
@@ -1104,7 +1104,7 @@ def atomic_colors(Z, scheme='jmol'):
         which includes all elements up to 109
     """
     if scheme == "jmol":
-        return np.array(jmol_colors.get(Z, (0.0,0.0,0.0)))
+        return np.array(jmol_colors.get(Z, (0.0, 0.0, 0.0)))
     else:
         return {
             1: np.array([0.8, 0.8, 0.8]),
@@ -1123,114 +1123,115 @@ def atomic_colors(Z, scheme='jmol'):
             79: np.array([1.0, 0.7, 0.0]),
         }.get(Z, np.array([0.0, 0.0, 0.0]))
 
+
 jmol_colors = {
-    1: (1.000,1.000,1.000),
-    2: (0.851,1.000,1.000),
-    3: (0.800,0.502,1.000),
-    4: (0.761,1.000,0.000),
-    5: (1.000,0.710,0.710),
-    6: (0.565,0.565,0.565),
-    7: (0.188,0.314,0.973),
-    8: (1.000,0.051,0.051),
-    9: (0.565,0.878,0.314),
-    10: (0.702,0.890,0.961),
-    11: (0.671,0.361,0.949),
-    12: (0.541,1.000,0.000),
-    13: (0.749,0.651,0.651),
-    14: (0.941,0.784,0.627),
-    15: (1.000,0.502,0.000),
-    16: (1.000,1.000,0.188),
-    17: (0.122,0.941,0.122),
-    18: (0.502,0.820,0.890),
-    19: (0.561,0.251,0.831),
-    20: (0.239,1.000,0.000),
-    21: (0.902,0.902,0.902),
-    22: (0.749,0.761,0.780),
-    23: (0.651,0.651,0.671),
-    24: (0.541,0.600,0.780),
-    25: (0.612,0.478,0.780),
-    26: (0.878,0.400,0.200),
-    27: (0.941,0.565,0.627),
-    28: (0.314,0.816,0.314),
-    29: (0.784,0.502,0.200),
-    30: (0.490,0.502,0.690),
-    31: (0.761,0.561,0.561),
-    32: (0.400,0.561,0.561),
-    33: (0.741,0.502,0.890),
-    34: (1.000,0.631,0.000),
-    35: (0.651,0.161,0.161),
-    36: (0.361,0.722,0.820),
-    37: (0.439,0.180,0.690),
-    38: (0.000,1.000,0.000),
-    39: (0.580,1.000,1.000),
-    40: (0.580,0.878,0.878),
-    41: (0.451,0.761,0.788),
-    42: (0.329,0.710,0.710),
-    43: (0.231,0.620,0.620),
-    44: (0.141,0.561,0.561),
-    45: (0.039,0.490,0.549),
-    46: (0.000,0.412,0.522),
-    47: (0.753,0.753,0.753),
-    48: (1.000,0.851,0.561),
-    49: (0.651,0.459,0.451),
-    50: (0.400,0.502,0.502),
-    51: (0.620,0.388,0.710),
-    52: (0.831,0.478,0.000),
-    53: (0.580,0.000,0.580),
-    54: (0.259,0.620,0.690),
-    55: (0.341,0.090,0.561),
-    56: (0.000,0.788,0.000),
-    57: (0.439,0.831,1.000),
-    58: (1.000,1.000,0.780),
-    59: (0.851,1.000,0.780),
-    60: (0.780,1.000,0.780),
-    61: (0.639,1.000,0.780),
-    62: (0.561,1.000,0.780),
-    63: (0.380,1.000,0.780),
-    64: (0.271,1.000,0.780),
-    65: (0.188,1.000,0.780),
-    66: (0.122,1.000,0.780),
-    67: (0.000,1.000,0.612),
-    68: (0.000,0.902,0.459),
-    69: (0.000,0.831,0.322),
-    70: (0.000,0.749,0.220),
-    71: (0.000,0.671,0.141),
-    72: (0.302,0.761,1.000),
-    73: (0.302,0.651,1.000),
-    74: (0.129,0.580,0.839),
-    75: (0.149,0.490,0.671),
-    76: (0.149,0.400,0.588),
-    77: (0.090,0.329,0.529),
-    78: (0.816,0.816,0.878),
-    79: (1.000,0.820,0.137),
-    80: (0.722,0.722,0.816),
-    81: (0.651,0.329,0.302),
-    82: (0.341,0.349,0.380),
-    83: (0.620,0.310,0.710),
-    84: (0.671,0.361,0.000),
-    85: (0.459,0.310,0.271),
-    86: (0.259,0.510,0.588),
-    87: (0.259,0.000,0.400),
-    88: (0.000,0.490,0.000),
-    89: (0.439,0.671,0.980),
-    90: (0.000,0.729,1.000),
-    91: (0.000,0.631,1.000),
-    92: (0.000,0.561,1.000),
-    93: (0.000,0.502,1.000),
-    94: (0.000,0.420,1.000),
-    95: (0.329,0.361,0.949),
-    96: (0.471,0.361,0.890),
-    97: (0.541,0.310,0.890),
-    98: (0.631,0.212,0.831),
-    99: (0.702,0.122,0.831),
-    100: (0.702,0.122,0.729),
-    101: (0.702,0.051,0.651),
-    102: (0.741,0.051,0.529),
-    103: (0.780,0.000,0.400),
-    104: (0.800,0.000,0.349),
-    105: (0.820,0.000,0.310),
-    106: (0.851,0.000,0.271),
-    107: (0.878,0.000,0.220),
-    108: (0.902,0.000,0.180),
-    109: (0.922,0.000,0.149),
-    }
+    1: (1.000, 1.000, 1.000),
+    2: (0.851, 1.000, 1.000),
+    3: (0.800, 0.502, 1.000),
+    4: (0.761, 1.000, 0.000),
+    5: (1.000, 0.710, 0.710),
+    6: (0.565, 0.565, 0.565),
+    7: (0.188, 0.314, 0.973),
+    8: (1.000, 0.051, 0.051),
+    9: (0.565, 0.878, 0.314),
+    10: (0.702, 0.890, 0.961),
+    11: (0.671, 0.361, 0.949),
+    12: (0.541, 1.000, 0.000),
+    13: (0.749, 0.651, 0.651),
+    14: (0.941, 0.784, 0.627),
+    15: (1.000, 0.502, 0.000),
+    16: (1.000, 1.000, 0.188),
+    17: (0.122, 0.941, 0.122),
+    18: (0.502, 0.820, 0.890),
+    19: (0.561, 0.251, 0.831),
+    20: (0.239, 1.000, 0.000),
+    21: (0.902, 0.902, 0.902),
+    22: (0.749, 0.761, 0.780),
+    23: (0.651, 0.651, 0.671),
+    24: (0.541, 0.600, 0.780),
+    25: (0.612, 0.478, 0.780),
+    26: (0.878, 0.400, 0.200),
+    27: (0.941, 0.565, 0.627),
+    28: (0.314, 0.816, 0.314),
+    29: (0.784, 0.502, 0.200),
+    30: (0.490, 0.502, 0.690),
+    31: (0.761, 0.561, 0.561),
+    32: (0.400, 0.561, 0.561),
+    33: (0.741, 0.502, 0.890),
+    34: (1.000, 0.631, 0.000),
+    35: (0.651, 0.161, 0.161),
+    36: (0.361, 0.722, 0.820),
+    37: (0.439, 0.180, 0.690),
+    38: (0.000, 1.000, 0.000),
+    39: (0.580, 1.000, 1.000),
+    40: (0.580, 0.878, 0.878),
+    41: (0.451, 0.761, 0.788),
+    42: (0.329, 0.710, 0.710),
+    43: (0.231, 0.620, 0.620),
+    44: (0.141, 0.561, 0.561),
+    45: (0.039, 0.490, 0.549),
+    46: (0.000, 0.412, 0.522),
+    47: (0.753, 0.753, 0.753),
+    48: (1.000, 0.851, 0.561),
+    49: (0.651, 0.459, 0.451),
+    50: (0.400, 0.502, 0.502),
+    51: (0.620, 0.388, 0.710),
+    52: (0.831, 0.478, 0.000),
+    53: (0.580, 0.000, 0.580),
+    54: (0.259, 0.620, 0.690),
+    55: (0.341, 0.090, 0.561),
+    56: (0.000, 0.788, 0.000),
+    57: (0.439, 0.831, 1.000),
+    58: (1.000, 1.000, 0.780),
+    59: (0.851, 1.000, 0.780),
+    60: (0.780, 1.000, 0.780),
+    61: (0.639, 1.000, 0.780),
+    62: (0.561, 1.000, 0.780),
+    63: (0.380, 1.000, 0.780),
+    64: (0.271, 1.000, 0.780),
+    65: (0.188, 1.000, 0.780),
+    66: (0.122, 1.000, 0.780),
+    67: (0.000, 1.000, 0.612),
+    68: (0.000, 0.902, 0.459),
+    69: (0.000, 0.831, 0.322),
+    70: (0.000, 0.749, 0.220),
+    71: (0.000, 0.671, 0.141),
+    72: (0.302, 0.761, 1.000),
+    73: (0.302, 0.651, 1.000),
+    74: (0.129, 0.580, 0.839),
+    75: (0.149, 0.490, 0.671),
+    76: (0.149, 0.400, 0.588),
+    77: (0.090, 0.329, 0.529),
+    78: (0.816, 0.816, 0.878),
+    79: (1.000, 0.820, 0.137),
+    80: (0.722, 0.722, 0.816),
+    81: (0.651, 0.329, 0.302),
+    82: (0.341, 0.349, 0.380),
+    83: (0.620, 0.310, 0.710),
+    84: (0.671, 0.361, 0.000),
+    85: (0.459, 0.310, 0.271),
+    86: (0.259, 0.510, 0.588),
+    87: (0.259, 0.000, 0.400),
+    88: (0.000, 0.490, 0.000),
+    89: (0.439, 0.671, 0.980),
+    90: (0.000, 0.729, 1.000),
+    91: (0.000, 0.631, 1.000),
+    92: (0.000, 0.561, 1.000),
+    93: (0.000, 0.502, 1.000),
+    94: (0.000, 0.420, 1.000),
+    95: (0.329, 0.361, 0.949),
+    96: (0.471, 0.361, 0.890),
+    97: (0.541, 0.310, 0.890),
+    98: (0.631, 0.212, 0.831),
+    99: (0.702, 0.122, 0.831),
+    100: (0.702, 0.122, 0.729),
+    101: (0.702, 0.051, 0.651),
+    102: (0.741, 0.051, 0.529),
+    103: (0.780, 0.000, 0.400),
+    104: (0.800, 0.000, 0.349),
+    105: (0.820, 0.000, 0.310),
+    106: (0.851, 0.000, 0.271),
+    107: (0.878, 0.000, 0.220),
+    108: (0.902, 0.000, 0.180),
+    109: (0.922, 0.000, 0.149),
+}
