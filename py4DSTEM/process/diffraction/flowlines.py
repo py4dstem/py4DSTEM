@@ -32,20 +32,20 @@ def make_orientation_histogram(
     from user-specified radial ranges.
     
     Args:
-        bragg_peaks (PointListArray):    2D of pointlists containing centered peak locations.
-        radial_ranges (np array):       size (N x 2) array for N radial bins, or (2,) for a single bin.
-        upsample_factor (float):          Upsample factor
-        theta_step_deg (float):         Step size along annular direction in degrees
-        sigma_x (float):                smoothing in x direction before upsample
-        sigma_y (float):                smoothing in x direction before upsample
-        sigma_theta (float):            smoothing in annular direction (units of bins, periodic)
+        bragg_peaks (PointListArray):       2D of pointlists containing centered peak locations.
+        radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
+        upsample_factor (float):            Upsample factor
+        theta_step_deg (float):             Step size along annular direction in degrees
+        sigma_x (float):                    Smoothing in x direction before upsample
+        sigma_y (float):                    Smoothing in x direction before upsample
+        sigma_theta (float):                Smoothing in annular direction (units of bins, periodic)
         normalize_intensity_image (bool):   Normalize to max peak intensity = 1, per image
         normalize_intensity_stack (bool):   Normalize to max peak intensity = 1, all images
-        progress_bar (bool):          Enable progress bar
+        progress_bar (bool):                Enable progress bar
 
     Returns:
-        orient_hist (array):          4D array containing Bragg peak intensity histogram 
-                                      [radial_bin x_probe y_probe theta]
+        orient_hist (array):                4D array containing Bragg peak intensity histogram 
+                                            [radial_bin x_probe y_probe theta]
     """
 
     # Input bins
@@ -70,17 +70,12 @@ def make_orientation_histogram(
         size_output[1],
         num_theta_bins])
 
-
     for a0 in range(num_radii):
-
         # Loop over all probe positions
         t = "Generating histogram " + str(a0)
         for rx, ry in tqdmnd(
                 *bragg_peaks.shape, desc=t,unit=" probe positions", disable=not progress_bar
             ):
-        # for rx, ry in tqdmnd(
-        #         *[2,2], desc='a',unit='a'
-        #     ):
             x = (rx + 0.5)*upsample_factor - 0.5
             y = (ry + 0.5)*upsample_factor - 0.5
             x = np.clip(x,0,size_output[0]-2)
@@ -93,8 +88,6 @@ def make_orientation_histogram(
 
             p = bragg_peaks.get_pointlist(rx,ry)
             r2 = p.data['qx']**2 + p.data['qy']**2
-
-            # for a0 in range(num_radii):
 
             sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])
 
@@ -130,17 +123,9 @@ def make_orientation_histogram(
                         weights=(  dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
                 orient_hist[a0,xF+1,yF+1,:] = orient_hist[a0,xF+1,yF+1,:] + \
                     np.bincount(np.mod(tF+1,num_theta_bins),
-                        weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)    
+                        weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)           
 
-        # if sigma_x is not None and sigma_x > 0:
-        #     orient = gaussian_filter1d(orient,sigma_x*upsample_factor,mode='nearest',axis=0)
-        # if sigma_y is not None and sigma_y > 0:
-        #     orient = gaussian_filter1d(orient,sigma_y*upsample_factor,mode='nearest',axis=1)
-        # if sigma_theta is not None and sigma_theta > 0:
-        #     orient = gaussian_filter1d(orient,sigma_theta,mode='wrap',axis=2)
-        # orient_hist[:,:,a0,:] = orient          
-
-    # smoothing
+    # smoothing / interpolation
     if (sigma_x is not None) or (sigma_y is not None) or (sigma_theta is not None):
         if num_radii > 1:
             print('Interpolating orientation matrices ...', end='')
@@ -202,7 +187,24 @@ def make_flowline_map(
         orient_hist (array):        Histogram of all orientations with coordinates 
                                     [radial_bin x_probe y_probe theta]
                                     We assume theta bin ranges from 0 to 180 degrees and is periodic.
-        sep (float):                Separation of the flowlines in pixels.
+        thresh_seed (float):        Threshold for seed generation in histogram.
+        thresh_grow (float):        Threshold for flowline growth in histogram.
+        thresh_collision (float):   Threshold for termination of flowline growth in histogram.
+        sep_seeds (float):          Initial seed separation in bins - set to None to use default value,
+                                    which is equal to 0.5*sep_xy.
+        sep_xy (float):             Search radius for flowline direction in x and y.
+        sep_theta = (float):        Search radius for flowline direction in theta.
+        sort_seeds (str):           How to sort the initial seeds for growth:
+                                        None - no sorting
+                                        'intensity' - sort by histogram intensity
+                                        'random' - random order
+        linewidth (float):          Thickness of the flowlines in pixels.
+        step_size (float):          Step size for flowline growth in pixels.
+        min_steps (int):            Minimum number of steps for a flowline to be drawn.
+        max_steps (int):            Maximum number of steps for a flowline to be drawn.
+        sigma_x (float):            Weighted sigma in x direction for direction update.
+        sigma_y (float):            Weighted sigma in y direction for direction update.
+        sigma_theta (float):        Weighted sigma in theta for direction update.
         progress_bar (bool):        Enable progress bar
 
     Returns:
@@ -445,23 +447,27 @@ def make_flowline_rainbow_image(
     greyscale = False,
     greyscale_max = True,
     white_background = False,
-    power_scaling = 1,
+    power_scaling = 1.0,
     sum_radial_bins = False,
     plot_images = True,
-    # correct_luminosity = True,
     ):
     """
-    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents
-    diffraction data. Color by orientation of each flowline, modulo the rotation symmetry specified.
+    Generate RGB output images from the flowline arrays.
     
     Args:
         orient_flowline (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
                                     We assume theta bin ranges from 0 to 180 degrees and is periodic.
         int_range (float)           2 element array giving the intensity range
         sym_rotation_order (int):   rotational symmety for colouring
+        greyscale (bool):           Set to False for color output, True for greyscale output.
+        greyscale_max (bool):       If output is greyscale, use max instead of mean for overlapping flowlines.
+        white_background (bool):    For either color or greyscale output, switch to white background (from black).
+        power_scaling (float):      Power law scaling for flowline intensity output.
+        sum_radial_bins (bool):     Sum all radial bins (alternative is to output separate images).
+        plot_images (bool):         Plot the outputs for quick visualization.
 
     Returns:
-        im_flowline (array):          3D or 4D array containing flowline images
+        im_flowline (array):        3D or 4D array containing flowline images
     """
 
     # init array
@@ -556,22 +562,25 @@ def make_flowline_combined_image(
         [0.0,0.7,1.0],
         ]),
     white_background = False,
-    power_scaling = 1,
+    power_scaling = 1.0,
     sum_radial_bins = True,
     plot_images = True,
-    # correct_luminosity = True,
     ):
     """
-    Create an 3D or 4D orientation flowline map - essentially a pixelated "stream map" which represents
-    diffraction data. Color by orientation of each flowline, modulo the rotation symmetry specified.
-    
+    Generate RGB output images from the flowline arrays.
+
     Args:
         orient_flowline (array):    Histogram of all orientations with coordinates [x y radial_bin theta]
                                     We assume theta bin ranges from 0 to 180 degrees and is periodic.
         int_range (float)           2 element array giving the intensity range
+        cvals (array):              Nx3 size array containing RGB colors for different radial ibns.
+        white_background (bool):    For either color or greyscale output, switch to white background (from black).
+        power_scaling (float):      Power law scaling for flowline intensities.
+        sum_radial_bins (bool):     Sum outputs over radial bins.
+        plot_images (bool):         Plot the output images for quick visualization.
 
     Returns:
-        im_flowline (array):         flowline images
+        im_flowline (array):        flowline images
     """
 
     # init array
@@ -711,7 +720,6 @@ def orientation_correlation(
                             minlength=radius_max,
                             )
                     
-
                 # normalize
                 c_norm = np.real(np.fft.ifftn(
                     orient_norm_pad[a0,:,:] * \
@@ -741,19 +749,20 @@ def plot_orientation_correlation(
     ):
 
     """
-    Take in the 4D orientation histogram, and compute the distance-angle (auto)correlations
+    Plot the distance-angle (auto)correlations in orient_corr.
     
     Args:
         orient_corr (array):    3D or 4D array containing correlation images as function of (dr,dtheta)
                                 1st index represents each pair of rings.
-        prob_range (array):     Plotting range in units of "multiples of random distribution"
-        inds_plot (float):      Which indices to plot for orient_corr.  Set to "None" to plot all pairs
-        pixel_size (float):     Pixel size for x axis
-        pixel_units (str):      units of pixels
-        size_fig (array):       Size of the figure panels
-        return_fig (bool):      Whether to return figure axes 
+        prob_range (array):     Plotting range in units of "multiples of random distribution".
+        inds_plot (float):      Which indices to plot for orient_corr.  Set to "None" to plot all pairs.
+        pixel_size (float):     Pixel size for x axis.
+        pixel_units (str):      units of pixels.
+        size_fig (array):       Size of the figure panels.
+        return_fig (bool):      Whether to return figure axes.
 
     Returns:
+        fig, ax                 Figure and axes handles (optional).
         
     """
 
@@ -778,7 +787,12 @@ def plot_orientation_correlation(
     else:
         inds_plot = np.array(inds_plot)
 
-    # Custom colormap
+    # Custom divergent colormap:
+    # dark blue
+    # light blue
+    # white
+    # red
+    # dark red
     N = 256
     cvals = np.zeros((N, 4))
     cvals[:,3] = 1
@@ -796,10 +810,6 @@ def plot_orientation_correlation(
     cvals[int(N/2):int(N*3/4),2] = 1-c
 
     cvals[int(N*3/4):N,0] = 1-0.5*c
-
-    # cvals[:, 0] = np.linspace(90/256, 1, N)
-    # cvals[:, 1] = np.linspace(39/256, 1, N)
-    # cvals[:, 2] = np.linspace(41/256, 1, N)
     new_cmap = ListedColormap(cvals)
 
     # plotting
@@ -871,12 +881,13 @@ def plot_orientation_correlation(
 
     plt.show()
 
-
     if return_fig is True:
         return fig, ax
 
 
 def get_intensity(orient,x,y,t):
+    # utility function to get histogram intensites
+
     x = np.clip(x,0,orient.shape[0]-2)
     y = np.clip(y,0,orient.shape[1]-2)
 
@@ -903,8 +914,7 @@ def get_intensity(orient,x,y,t):
 
 
 def set_intensity(orient,xy_t_int):
-    # x = np.clip(x,0,orient.shape[0]-1)
-    # y = np.clip(y,0,orient.shape[0]-1)
+    # utility function to set flowline intensites
 
     xF = np.floor(xy_t_int[:,0]).astype('int')
     yF = np.floor(xy_t_int[:,1]).astype('int')
@@ -953,6 +963,5 @@ def set_intensity(orient,xy_t_int):
         orient.shape[0:3], 
         mode=['clip','clip','wrap'])
     orient.ravel()[inds_1D] = orient.ravel()[inds_1D] + xy_t_int[:,3]*(  dx)*(  dy)*(  dt)
-
 
     return orient
