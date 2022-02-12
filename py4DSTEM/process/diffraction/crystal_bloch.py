@@ -246,7 +246,7 @@ def generate_dynamical_diffraction_pattern(
     Args:
         beams (PointList):              PointList from the kinematical diffraction generator
                                         which will define the beams included in the Bloch calculation
-        thickness (float or list/array) thickness to evaluate diffraction patterns at.
+        thickness (float or list/array) thickness in Ångström to evaluate diffraction patterns at.
                                         The main Bloch calculation can be reused for multiple thicknesses
                                         without much overhead.
         zone_axis (np float vector):     3 element projection direction for sim pattern
@@ -430,7 +430,7 @@ def generate_CBED(
     Args:
         beams (PointList):              PointList from the kinematical diffraction generator
                                         which will define the beams included in the Bloch calculation
-        thickness (float or list/array) thickness to evaluate diffraction patterns at.
+        thickness (float or list/array) thickness in Ångström to evaluate diffraction patterns at.
                                         The main Bloch calculation can be reused for multiple thicknesses
                                         without much overhead.
         alpha_mrad (float):             Convergence angle for CBED pattern. Note that if disks in the calculation
