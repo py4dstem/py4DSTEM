@@ -8,32 +8,36 @@ from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellip
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
 from ..io import PointList
-from ..process.utils import get_voronoi_vertices
-from ..process.calibration import double_sided_gaussian, convert_ellipse_params
+from ..process.utils import get_voronoi_vertices,convert_ellipse_params
+from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
 
-def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
+def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
                         linewidth_ann=2,linewidth_ell=2,returnfig=False,**kwargs):
     """
     Plots an elliptical curve over its annular fit region.
 
-    Accepts:
-        center      (2-tuple) the center
-        Ri,Ro       (numbers) the annulus radii
-        a,e,theta   (numbers) the ellipse params
-        fill        (bool) the fill value of the annulus
-        color_ann   (color) annulus color
-        color_ell   (color) ellipse color
-        alpha_ann
-        alpha_ell
-        linewidth_ann
-        linewidth_ell
+    Args:
+        center (2-tuple): the center
+        fitradii (2-tuple of numbers): the annulus inner and outer fit radii
+        p_ellipse (5-tuple): the parameters of the fit ellipse, (qx0,qy0,a,b,theta).
+            See the module docstring for utils.elliptical_coords for more details.
+        fill (bool): if True, fills in the annular fitting region,
+          else shows only inner/outer edges
+        color_ann (color): annulus color
+        color_ell (color): ellipse color
+        alpha_ann: transparency for the annulus
+        alpha_ell: transparency forn the fit ellipse
+        linewidth_ann:
+        linewidth_ell:
     """
+    Ri,Ro = fitradii
+    qx0,qy0,a,b,theta = p_ellipse
     fig,ax = show(ar,
-                  annulus={'center':(center[0],center[1]),'Ri':Ri,'Ro':Ro,'fill':fill,
+                  annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
                            'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
-                  ellipse={'center':(center[0],center[1]),'a':a,'e':e,'theta':theta,
+                  ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                            'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
                   returnfig=True,**kwargs)
 
@@ -44,7 +48,7 @@ def show_elliptical_fit(ar,center,Ri,Ro,a,e,theta,fill=True,
         return fig,ax
 
 
-def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
+def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
                             ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
@@ -52,34 +56,33 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
     the data and the fit in a pinwheel pattern.
 
-    Accepts:
-        dp              (array) the diffraction pattern
-        qmin,qmax       (numbers) the min/max distances of the fitting annulus
-        p_ellipse       (11-tuple) the fit parameters to the double-sided gaussian
-                        fit function returned by fit_ellipse_amorphous_ring
-        N               (int) the number of pinwheel sections
-        cmap            (colormap or 2-tuple of colormaps) if passed a single cmap,
-                        uses this colormap for both the data and the fit; if passed
-                        a 2-tuple of cmaps, uses the first for the data and the
-                        second for the fit
-        fitborder       (bool) if True, plots a border line around the fit data
-        fitbordercolor  (color) color of the fitborder
-        fitborderlw     (number) linewidth of the fitborder
-        scaling         (str) the normal scaling param -- see docstring for
-                        visualize.show
-        ellipse         (bool) if True, overlay an ellipse
-        returnfig       (bool) if True, returns the figure
+    Args:
+        dp (array): the diffraction pattern
+        fitradii (2-tuple of numbers): the min/max distances of the fitting annulus
+        p_dsg (11-tuple): the fit parameters to the double-sided gaussian
+            function returned by fit_ellipse_amorphous_ring
+        N (int): the number of pinwheel sections
+        cmap (colormap or 2-tuple of colormaps): if passed a single cmap, uses this
+            colormap for both the data and the fit; if passed a 2-tuple of cmaps, uses
+            the first for the data and the second for the fit
+        fitborder (bool): if True, plots a border line around the fit data
+        fitbordercolor (color): color of the fitborder
+        fitborderlw (number): linewidth of the fitborder
+        scaling (str): the normal scaling param -- see docstring for visualize.show
+        ellipse (bool): if True, overlay an ellipse
+        returnfig (bool): if True, returns the figure
     """
-    assert(len(p_ellipse)==11)
+    assert(len(p_dsg)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
         cmap_data,cmap_fit = cmap[0],cmap[1]
     else:
         cmap_data,cmap_fit = cmap,cmap
     Q_Nx,Q_Ny = dp.shape
+    qmin,qmax = fitradii
 
     # Make coords
-    qx0,qy0 = p_ellipse[7],p_ellipse[8]
+    qx0,qy0 = p_dsg[6],p_dsg[7]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qx,qy = qxx-qx0,qyy-qy0
     q = np.hypot(qx,qy)
@@ -93,7 +96,7 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     mask = pinwheel * (q>qmin) * (q<=qmax)
 
     # Get fit data
-    fit = double_sided_gaussian(p_ellipse, qxx, qyy)
+    fit = double_sided_gaussian(p_dsg, qxx, qyy)
 
     # Show
     (fig,ax),(vmin,vmax) = show(dp,scaling=scaling,cmap=cmap_data,
@@ -102,17 +105,18 @@ def show_amorphous_ring_fit(dp,qmin,qmax,p_ellipse,N=12,cmap=('gray','gray'),
     show(fit,scaling=scaling,figax=(fig,ax),clipvals='manual',min=vmin,max=vmax,
          cmap=cmap_fit,mask=mask,mask_color='empty',**kwargs)
     if fitborder:
-        _thetas = np.roll(thetas,-1)
+        if N%2==1: thetas += (thetas[1]-thetas[0])/2
+        if (N//2%2)==0: thetas = np.roll(thetas,-1)
         for i in range(N):
-            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(_thetas[2*i]),
-                         np.degrees(_thetas[2*i+1]),width=qmax-qmin,fill=None,
+            ax.add_patch(Wedge((qy0,qx0),qmax,np.degrees(thetas[2*i]),
+                         np.degrees(thetas[2*i+1]),width=qmax-qmin,fill=None,
                          color=fitbordercolor,lw=fitborderlw))
 
     # Add ellipse overlay
     if ellipse:
-        R,e,theta = convert_ellipse_params(1,p_ellipse[9],p_ellipse[10])
-        R *= p_ellipse[6]
-        ellipse={'center':(qx0,qy0),'a':R,'e':e,'theta':theta,
+        A,B,C = p_dsg[8],p_dsg[9],p_dsg[10]
+        a,b,theta = convert_ellipse_params(A,B,C)
+        ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
                  'color':ellipse_color,'alpha':ellipse_alpha,'linewidth':ellipse_lw}
         add_ellipses(ax,ellipse)
 
@@ -512,7 +516,7 @@ def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
     add_vector(ax2,dg2)
 
     if returnfig:
-        return g1,g2,fig,ax
+        return g1,g2,fig,(ax1,ax2)
     else:
         plt.show()
         return g1,g2

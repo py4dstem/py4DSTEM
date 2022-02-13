@@ -10,7 +10,6 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
-
 from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D,tqdmnd
 
@@ -27,7 +26,8 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
                                   upsample_factor = 16,
                                   filter_function = None,
                                   return_cc = False,
-                                  peaks = None):
+                                  peaks = None,
+                                  *args, **kwargs):
     """
     Finds the Bragg disks in DP by cross, hybrid, or phase correlation with
     probe_kernel_FT.
@@ -113,16 +113,17 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         ccc = None
 
     # Find the maxima
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                 edgeBoundary=edgeBoundary,
-                                                 minRelativeIntensity=minRelativeIntensity,
-                                                 minAbsoluteIntensity = minAbsoluteIntensity,
-                                                 relativeToPeak=relativeToPeak,
-                                                 minSpacing=minPeakSpacing,
-                                                 maxNumPeaks=maxNumPeaks,
-                                                 subpixel=subpixel,
-                                                 ar_FT = ccc,
-                                                 upsample_factor = upsample_factor)
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc,
+                             sigma=sigma,
+                             edgeBoundary=edgeBoundary,
+                             minRelativeIntensity=minRelativeIntensity,
+                             minAbsoluteIntensity=minAbsoluteIntensity,
+                             relativeToPeak=relativeToPeak,
+                             minSpacing=minPeakSpacing,
+                             maxNumPeaks=maxNumPeaks,
+                             subpixel=subpixel,
+                             ar_FT = ccc,
+                             upsample_factor = upsample_factor)
 
     # Make peaks PointList
     if peaks is None:
@@ -285,7 +286,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         DP = datacube.data[Rx[i],Ry[i],:,:]
         _peaks =  _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
            corrPower=corrPower,sigma=sigma,edgeBoundary=edgeBoundary,
-           minRelativeIntensity=minRelativeIntensity,minAbsoluteIntensity=minAbsoluteIntensity,
+           minRelativeIntensity=minRelativeIntensity,
+           minAbsoluteIntensity=minAbsoluteIntensity,
            relativeToPeak=relativeToPeak,
            minPeakSpacing=minPeakSpacing,maxNumPeaks=maxNumPeaks,subpixel=subpixel,
            upsample_factor=upsample_factor,filter_function=filter_function,
@@ -629,7 +631,7 @@ def find_Bragg_disks(datacube, probe,
 
 
 def threshold_Braggpeaks(pointlistarray, minRelativeIntensity, relativeToPeak,
-                         minPeakSpcing, maxNumPeaks):
+                         minPeakSpacing, maxNumPeaks):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional thresholding,
     returning the thresholded PointListArray. To skip a threshold, set that parameter to

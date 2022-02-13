@@ -507,10 +507,6 @@ class Crystal:
         )
         ax.add_collection(pc)
 
-        # # small shift of coordinates towards camera
-        # d = -0.0 * proj_dir / np.linalg.norm(proj_dir)
-        # print(d)
-
         # atoms
         ID_all = np.unique(ID)
         for ID_plot in ID_all:
@@ -2634,7 +2630,7 @@ class Crystal:
             foil_normal = zone_axis
         else:
             foil_normal = np.asarray(foil_normal, dtype="float")
-            if not cartesian_directions:
+            if not self.cartesian_directions:
                 foil_normal = self.crystal_to_cartesian(foil_normal)
             else:
                 foil_normal = foil_normal / np.linalg.norm(foil_normal)

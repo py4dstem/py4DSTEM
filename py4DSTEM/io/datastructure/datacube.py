@@ -7,8 +7,8 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
 import h5py
+import dask.array as da
 
 from .dataobject import DataObject
 from ...process import preprocess
@@ -30,7 +30,13 @@ class DataCube(DataObject):
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)
         self.data = data   #: the 4D dataset
-
+        
+        # Set h5 stack pointer, init without a pointer only passsed if dask dataset loaded
+        #TODO Should this be moved to DataObject class?  
+        if "stack_pointer" in kwargs:
+            self.stack_pointer = kwargs["stack_pointer"]
+        else:
+            self.stack_pointer = None 
         # Set shape
         assert (len(data.shape)==3 or len(data.shape)==4)
         if len(data.shape)==3:
@@ -246,6 +252,7 @@ def save_datacube_group(group, datacube, use_compression=False):
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
     """
     group.attrs.create("emd_group_type",1)
+    # Do I need to add DASK ARRAY thing in here 
     if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
         if use_compression:
             data_datacube = group.create_dataset("data", data=datacube.data,
@@ -289,11 +296,19 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
 
     if (mem, binfactor) == ("RAM", 1):
+        stack_pointer = g['data']
         data = np.array(g['data'])
     elif (mem, binfactor) == ("MEMMAP", 1):
         data = g['data']
+        stack_pointer = None
+    elif (mem, binfactor) == ("DASK", 1):
+        stack_pointer = g['data']
+        # sets default to 1 diffraction pattern per chunk... not maybe need a smarter way to do this
+        # get the size of each image and work out what gives ~ 100mb chunks.  
+        shape = (1, 1, *stack_pointer.shape[2:])
+        data = da.from_array(stack_pointer, chunks=shape)
     name = g.name.split('/')[-1]
-    return DataCube(data=data,name=name)
+    return DataCube(data=data,name=name, stack_pointer=stack_pointer)
 
 
 

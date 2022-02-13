@@ -4,7 +4,10 @@
 
 from collections.abc import Sequence
 import numpy as np
-import numba as nb
+try:
+    import numba as nb
+except ImportError:
+    pass
 from ...process.utils import tqdmnd
 from ..datastructure import DataCube
 
@@ -471,29 +474,60 @@ class K2DataArray(Sequence):
 
 
 # ======= UTILITIES OUTSIDE THE CLASS ======#
-@nb.njit(nb.int16[::1](nb.uint8[::1]), fastmath=False, parallel=False)
-def _convert_uint12(data_chunk):
-    """
-    data_chunk is a contigous 1D array of uint8 data)
-    eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
-    """
+import sys
+if 'numba' in sys.modules:
+    @nb.njit(nb.int16[::1](nb.uint8[::1]), fastmath=False, parallel=False)
+    def _convert_uint12(data_chunk):
+        """
+        data_chunk is a contigous 1D array of uint8 data)
+        eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
+        """
 
-    # ensure that the data_chunk has the right length
-    assert np.mod(data_chunk.shape[0], 3) == 0
+        # ensure that the data_chunk has the right length
+        assert np.mod(data_chunk.shape[0], 3) == 0
 
-    out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
+        out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
 
-    for i in nb.prange(data_chunk.shape[0] // 3):
-        fst_uint8 = np.uint16(data_chunk[i * 3])
-        mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
-        lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
+        for i in nb.prange(data_chunk.shape[0] // 3):
+            fst_uint8 = np.uint16(data_chunk[i * 3])
+            mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
+            lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
 
-        out[i * 2] = (
-            fst_uint8 | (mid_uint8 & 0x0F) << 8
-        )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
-        out[i * 2 + 1] = (
-            mid_uint8 & 0xF0
-        ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
+            out[i * 2] = (
+                fst_uint8 | (mid_uint8 & 0x0F) << 8
+            )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
+            out[i * 2 + 1] = (
+                mid_uint8 & 0xF0
+            ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
 
-    DP = out.astype(np.int16)
-    return DP
+        DP = out.astype(np.int16)
+        return DP
+else:
+    def _convert_uint12(data_chunk):
+        """
+        data_chunk is a contigous 1D array of uint8 data)
+        eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
+        """
+
+        # ensure that the data_chunk has the right length
+        assert np.mod(data_chunk.shape[0], 3) == 0
+
+        out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
+
+        for i in range(data_chunk.shape[0] // 3):
+            fst_uint8 = np.uint16(data_chunk[i * 3])
+            mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
+            lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
+
+            out[i * 2] = (
+                fst_uint8 | (mid_uint8 & 0x0F) << 8
+            )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
+            out[i * 2 + 1] = (
+                mid_uint8 & 0xF0
+            ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
+
+        DP = out.astype(np.int16)
+        return DP
+
+
+
