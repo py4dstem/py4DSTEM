@@ -30,7 +30,7 @@ def copy(filepath_orig, filepath_new, indices=None, delete=False,
     """
     assert(is_py4DSTEM_file(filepath_orig)), "Error: not recognized as a py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(filepath_orig)
-    assert(topgroup_orig in tgs), "Error: topgroup '{}' not found.".format(topgroup)
+    assert(topgroup_orig in tgs), "Error: topgroup '{}' not found.".format(topgroup_orig)
     if exists(filepath_new):
         assert(is_py4DSTEM_file(filepath_new)), "Error: a file with the target filename already exists, and is not recognized as a py4DSTEM file."
         tgs = get_py4DSTEM_topgroups(filepath_new)

@@ -2,7 +2,10 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
+try:
+    import numba as nb
+except ImportError:
+    pass
 import h5py
 
 import numpy as np
@@ -188,21 +191,40 @@ class Sparse4D(Sequence):
         return np.prod(self.shape)
 
 
-# Numba accelerated conversion of electron event lists
-# to full diffraction patterns
-@nb.njit
-def points_to_DP_numba_ravel(pl,sz1,sz2):
-    dp = np.zeros((sz1*sz2),dtype=np.uint8)
-    for i in nb.prange(len(pl)):
-        dp[pl[i]] += 1
-    return dp.reshape((sz1,sz2))
+# Conversion of electron event lists
+# with and without numba acceleration
+import sys
+if 'numba' in sys.modules:
 
-@nb.njit
-def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
-    dp = np.zeros((sz1,sz2),dtype=np.uint8)
-    for i in nb.prange(len(pl1)):
-        dp[pl1[i],pl2[i]] += 1
-    return dp
+    @nb.njit
+    def points_to_DP_numba_ravel(pl,sz1,sz2):
+        dp = np.zeros((sz1*sz2),dtype=np.uint8)
+        for i in nb.prange(len(pl)):
+            dp[pl[i]] += 1
+        return dp.reshape((sz1,sz2))
+
+    @nb.njit
+    def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
+        dp = np.zeros((sz1,sz2),dtype=np.uint8)
+        for i in nb.prange(len(pl1)):
+            dp[pl1[i],pl2[i]] += 1
+        return dp
+
+else:
+
+    def points_to_DP_numba_ravel(pl,sz1,sz2):
+        dp = np.zeros((sz1*sz2),dtype=np.uint8)
+        for i in np.arange(len(pl)):
+            dp[pl[i]] += 1
+        return dp.reshape((sz1,sz2))
+
+    def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
+        dp = np.zeros((sz1,sz2),dtype=np.uint8)
+        for i in np.arange(len(pl1)):
+            dp[pl1[i],pl2[i]] += 1
+        return dp
+
+
 
 
 
