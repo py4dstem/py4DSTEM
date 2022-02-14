@@ -1277,7 +1277,7 @@ class Crystal:
 
             # Normalization
             den_2 = np.sum(np.abs(self.orientation_ref[a0, :, :])**2)
-            if den > 0:
+            if den_2 > 0:
                 self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(den_2)
 
         # Maximum value
