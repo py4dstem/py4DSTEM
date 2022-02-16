@@ -5,6 +5,7 @@ from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, electron_wavelength_angstrom
+from . import Orientation
 
 
 def orientation_plan(
@@ -750,11 +751,11 @@ def match_single_pattern(
     num_matches_return: int = 1,
     multiple_corr_reset=True,
     inversion_symmetry=True,
-    subpixel_tilt: bool = False,
+    # subpixel_tilt: bool = False,
     plot_polar: bool = False,
     plot_corr: bool = False,
-    plot_corr_3D: bool = False,
-    return_corr: bool = False,
+    # plot_corr_3D: bool = False,
+    # return_corr: bool = False,
     returnfig: bool = False,
     figsize: Union[list, tuple, np.ndarray] = (12, 4),
     verbose: bool = False,
@@ -772,8 +773,8 @@ def match_single_pattern(
         plot_corr (bool):             set to true to plot the resulting correlogram
 
     Returns:
-        orientation_output (3x3xN float)    orienation matrix where zone axis is the 3rd column, 3rd dim for multiple matches
-        corr_value (float):                 (optional) return correlation values
+        orientation (Orientation):    Orientation class containing all outputs
+        fig, ax (handles):            Figure handles for the plotting output
     """
 
     # get bragg peak data
@@ -781,12 +782,14 @@ def match_single_pattern(
     qy = bragg_peaks.data["qy"]
     intensity = bragg_peaks.data["intensity"]
 
-    # init orientation output, delete distance threshold squared
-    if num_matches_return == 1:
-        orientation_output = np.zeros((3, 3))
-    else:
-        orientation_output = np.zeros((3, 3, num_matches_return))
-        corr_output = np.zeros((num_matches_return))
+    # init orientation output
+    orientation = Orientation(num_matches=num_matches_return)
+
+    # if num_matches_return == 1:
+    #     orientation_output = np.zeros((3, 3))
+    # else:
+    #     orientation_output = np.zeros((3, 3, num_matches_return))
+    #     corr_output = np.zeros((num_matches_return))
 
     # loop over the number of matches to return
     for match_ind in range(num_matches_return):
@@ -931,272 +934,272 @@ def match_single_pattern(
         if corr_value[ind_best_fit] > 0:
 
             # Get orientation matrix
-            if subpixel_tilt is False:
-                orientation_matrix = np.squeeze(
-                    self.orientation_rotation_matrices[ind_best_fit, :, :]
-                )
+            # if subpixel_tilt is False:
+            orientation_matrix = np.squeeze(
+                self.orientation_rotation_matrices[ind_best_fit, :, :]
+            )
 
-            else:
+            # else:
 
-                def ind_to_sub(ind):
-                    ind_x = np.floor(0.5 * np.sqrt(8.0 * ind + 1) - 0.5).astype("int")
-                    ind_y = ind - np.floor(ind_x * (ind_x + 1) / 2).astype("int")
-                    return ind_x, ind_y
+            #     def ind_to_sub(ind):
+            #         ind_x = np.floor(0.5 * np.sqrt(8.0 * ind + 1) - 0.5).astype("int")
+            #         ind_y = ind - np.floor(ind_x * (ind_x + 1) / 2).astype("int")
+            #         return ind_x, ind_y
 
-                def sub_to_ind(ind_x, ind_y):
-                    return (np.floor(ind_x * (ind_x + 1) / 2) + ind_y).astype("int")
+            #     def sub_to_ind(ind_x, ind_y):
+            #         return (np.floor(ind_x * (ind_x + 1) / 2) + ind_y).astype("int")
 
-                # Sub pixel refinement of zone axis orientation
-                if ind_best_fit == 0:
-                    # Zone axis is (0,0,1)
-                    orientation_matrix = np.squeeze(
-                        self.orientation_rotation_matrices[ind_best_fit, :, :]
-                    )
+            #     # Sub pixel refinement of zone axis orientation
+            #     if ind_best_fit == 0:
+            #         # Zone axis is (0,0,1)
+            #         orientation_matrix = np.squeeze(
+            #             self.orientation_rotation_matrices[ind_best_fit, :, :]
+            #         )
 
-                elif (
-                    ind_best_fit
-                    == self.orientation_num_zones - self.orientation_zone_axis_steps - 1
-                ):
-                    # Zone axis is 1st user provided direction
-                    orientation_matrix = np.squeeze(
-                        self.orientation_rotation_matrices[ind_best_fit, :, :]
-                    )
+            #     elif (
+            #         ind_best_fit
+            #         == self.orientation_num_zones - self.orientation_zone_axis_steps - 1
+            #     ):
+            #         # Zone axis is 1st user provided direction
+            #         orientation_matrix = np.squeeze(
+            #             self.orientation_rotation_matrices[ind_best_fit, :, :]
+            #         )
 
-                elif ind_best_fit == self.orientation_num_zones - 1:
-                    # Zone axis is the 2nd user-provided direction
-                    orientation_matrix = np.squeeze(
-                        self.orientation_rotation_matrices[ind_best_fit, :, :]
-                    )
+            #     elif ind_best_fit == self.orientation_num_zones - 1:
+            #         # Zone axis is the 2nd user-provided direction
+            #         orientation_matrix = np.squeeze(
+            #             self.orientation_rotation_matrices[ind_best_fit, :, :]
+            #         )
 
-                else:
-                    ind_x, ind_y = ind_to_sub(ind_best_fit)
-                    max_x, max_y = ind_to_sub(self.orientation_num_zones - 1)
+            #     else:
+            #         ind_x, ind_y = ind_to_sub(ind_best_fit)
+            #         max_x, max_y = ind_to_sub(self.orientation_num_zones - 1)
 
-                    if ind_y == 0:
-                        ind_x_prev = sub_to_ind(ind_x - 1, 0)
-                        ind_x_post = sub_to_ind(ind_x + 1, 0)
+            #         if ind_y == 0:
+            #             ind_x_prev = sub_to_ind(ind_x - 1, 0)
+            #             ind_x_post = sub_to_ind(ind_x + 1, 0)
 
-                        c = np.array(
-                            [
-                                corr_value[ind_x_prev],
-                                corr_value[ind_best_fit],
-                                corr_value[ind_x_post],
-                            ]
-                        )
-                        dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+            #             c = np.array(
+            #                 [
+            #                     corr_value[ind_x_prev],
+            #                     corr_value[ind_best_fit],
+            #                     corr_value[ind_x_post],
+            #                 ]
+            #             )
+            #             dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
 
-                        if dc > 0:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 - dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_post, :, :]
-                                )
-                                * dc
-                            )
-                        else:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 + dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_prev, :, :]
-                                )
-                                * -dc
-                            )
+            #             if dc > 0:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 - dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_post, :, :]
+            #                     )
+            #                     * dc
+            #                 )
+            #             else:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 + dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_prev, :, :]
+            #                     )
+            #                     * -dc
+            #                 )
 
-                    elif ind_x == max_x:
-                        ind_x_prev = sub_to_ind(max_x, ind_y - 1)
-                        ind_x_post = sub_to_ind(max_x, ind_y + 1)
+            #         elif ind_x == max_x:
+            #             ind_x_prev = sub_to_ind(max_x, ind_y - 1)
+            #             ind_x_post = sub_to_ind(max_x, ind_y + 1)
 
-                        c = np.array(
-                            [
-                                corr_value[ind_x_prev],
-                                corr_value[ind_best_fit],
-                                corr_value[ind_x_post],
-                            ]
-                        )
-                        dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+            #             c = np.array(
+            #                 [
+            #                     corr_value[ind_x_prev],
+            #                     corr_value[ind_best_fit],
+            #                     corr_value[ind_x_post],
+            #                 ]
+            #             )
+            #             dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
 
-                        if dc > 0:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 - dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_post, :, :]
-                                )
-                                * dc
-                            )
-                        else:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 + dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_prev, :, :]
-                                )
-                                * -dc
-                            )
+            #             if dc > 0:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 - dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_post, :, :]
+            #                     )
+            #                     * dc
+            #                 )
+            #             else:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 + dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_prev, :, :]
+            #                     )
+            #                     * -dc
+            #                 )
 
-                    elif ind_x == ind_y:
-                        ind_x_prev = sub_to_ind(ind_x - 1, ind_y - 1)
-                        ind_x_post = sub_to_ind(ind_x + 1, ind_y + 1)
+            #         elif ind_x == ind_y:
+            #             ind_x_prev = sub_to_ind(ind_x - 1, ind_y - 1)
+            #             ind_x_post = sub_to_ind(ind_x + 1, ind_y + 1)
 
-                        c = np.array(
-                            [
-                                corr_value[ind_x_prev],
-                                corr_value[ind_best_fit],
-                                corr_value[ind_x_post],
-                            ]
-                        )
-                        dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+            #             c = np.array(
+            #                 [
+            #                     corr_value[ind_x_prev],
+            #                     corr_value[ind_best_fit],
+            #                     corr_value[ind_x_post],
+            #                 ]
+            #             )
+            #             dc = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
 
-                        if dc > 0:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 - dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_post, :, :]
-                                )
-                                * dc
-                            )
-                        else:
-                            orientation_matrix = (
-                                np.squeeze(
-                                    self.orientation_rotation_matrices[
-                                        ind_best_fit, :, :
-                                    ]
-                                )
-                                * (1 + dc)
-                                + np.squeeze(
-                                    self.orientation_rotation_matrices[ind_x_prev, :, :]
-                                )
-                                * -dc
-                            )
+            #             if dc > 0:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 - dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_post, :, :]
+            #                     )
+            #                     * dc
+            #                 )
+            #             else:
+            #                 orientation_matrix = (
+            #                     np.squeeze(
+            #                         self.orientation_rotation_matrices[
+            #                             ind_best_fit, :, :
+            #                         ]
+            #                     )
+            #                     * (1 + dc)
+            #                     + np.squeeze(
+            #                         self.orientation_rotation_matrices[ind_x_prev, :, :]
+            #                     )
+            #                     * -dc
+            #                 )
 
-                    else:
-                        # # best fit point is not on any of the corners or edges
-                        ind_1 = sub_to_ind(ind_x - 1, ind_y - 1)
-                        ind_2 = sub_to_ind(ind_x - 1, ind_y)
-                        ind_3 = sub_to_ind(ind_x, ind_y - 1)
-                        ind_4 = sub_to_ind(ind_x, ind_y + 1)
-                        ind_5 = sub_to_ind(ind_x + 1, ind_y)
-                        ind_6 = sub_to_ind(ind_x + 1, ind_y + 1)
+            #         else:
+            #             # # best fit point is not on any of the corners or edges
+            #             ind_1 = sub_to_ind(ind_x - 1, ind_y - 1)
+            #             ind_2 = sub_to_ind(ind_x - 1, ind_y)
+            #             ind_3 = sub_to_ind(ind_x, ind_y - 1)
+            #             ind_4 = sub_to_ind(ind_x, ind_y + 1)
+            #             ind_5 = sub_to_ind(ind_x + 1, ind_y)
+            #             ind_6 = sub_to_ind(ind_x + 1, ind_y + 1)
 
-                        c = np.array(
-                            [
-                                (corr_value[ind_1] + corr_value[ind_2]) / 2,
-                                corr_value[ind_best_fit],
-                                (corr_value[ind_5] + corr_value[ind_6]) / 2,
-                            ]
-                        )
-                        dx = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+            #             c = np.array(
+            #                 [
+            #                     (corr_value[ind_1] + corr_value[ind_2]) / 2,
+            #                     corr_value[ind_best_fit],
+            #                     (corr_value[ind_5] + corr_value[ind_6]) / 2,
+            #                 ]
+            #             )
+            #             dx = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
 
-                        c = np.array(
-                            [
-                                corr_value[ind_3],
-                                corr_value[ind_best_fit],
-                                corr_value[ind_4],
-                            ]
-                        )
-                        dy = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
+            #             c = np.array(
+            #                 [
+            #                     corr_value[ind_3],
+            #                     corr_value[ind_best_fit],
+            #                     corr_value[ind_4],
+            #                 ]
+            #             )
+            #             dy = (c[2] - c[0]) / (4 * c[1] - 2 * c[0] - 2 * c[2])
 
-                        if dx > 0:
-                            if dy > 0:
-                                orientation_matrix = (
-                                    np.squeeze(
-                                        self.orientation_rotation_matrices[
-                                            ind_best_fit, :, :
-                                        ]
-                                    )
-                                    * (1 - dx)
-                                    * (1 - dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_4, :, :]
-                                    )
-                                    * (1 - dx)
-                                    * (dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_6, :, :]
-                                    )
-                                    * dx
-                                )
-                            else:
-                                orientation_matrix = (
-                                    np.squeeze(
-                                        self.orientation_rotation_matrices[
-                                            ind_best_fit, :, :
-                                        ]
-                                    )
-                                    * (1 - dx)
-                                    * (1 + dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_3, :, :]
-                                    )
-                                    * (1 - dx)
-                                    * (-dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_5, :, :]
-                                    )
-                                    * dx
-                                )
-                        else:
-                            if dy > 0:
-                                orientation_matrix = (
-                                    np.squeeze(
-                                        self.orientation_rotation_matrices[
-                                            ind_best_fit, :, :
-                                        ]
-                                    )
-                                    * (1 + dx)
-                                    * (1 - dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_4, :, :]
-                                    )
-                                    * (1 + dx)
-                                    * (dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_2, :, :]
-                                    )
-                                    * -dx
-                                )
-                            else:
-                                orientation_matrix = (
-                                    np.squeeze(
-                                        self.orientation_rotation_matrices[
-                                            ind_best_fit, :, :
-                                        ]
-                                    )
-                                    * (1 + dx)
-                                    * (1 + dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_3, :, :]
-                                    )
-                                    * (1 + dx)
-                                    * (-dy)
-                                    + np.squeeze(
-                                        self.orientation_rotation_matrices[ind_1, :, :]
-                                    )
-                                    * -dx
-                                )
+            #             if dx > 0:
+            #                 if dy > 0:
+            #                     orientation_matrix = (
+            #                         np.squeeze(
+            #                             self.orientation_rotation_matrices[
+            #                                 ind_best_fit, :, :
+            #                             ]
+            #                         )
+            #                         * (1 - dx)
+            #                         * (1 - dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_4, :, :]
+            #                         )
+            #                         * (1 - dx)
+            #                         * (dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_6, :, :]
+            #                         )
+            #                         * dx
+            #                     )
+            #                 else:
+            #                     orientation_matrix = (
+            #                         np.squeeze(
+            #                             self.orientation_rotation_matrices[
+            #                                 ind_best_fit, :, :
+            #                             ]
+            #                         )
+            #                         * (1 - dx)
+            #                         * (1 + dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_3, :, :]
+            #                         )
+            #                         * (1 - dx)
+            #                         * (-dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_5, :, :]
+            #                         )
+            #                         * dx
+            #                     )
+            #             else:
+            #                 if dy > 0:
+            #                     orientation_matrix = (
+            #                         np.squeeze(
+            #                             self.orientation_rotation_matrices[
+            #                                 ind_best_fit, :, :
+            #                             ]
+            #                         )
+            #                         * (1 + dx)
+            #                         * (1 - dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_4, :, :]
+            #                         )
+            #                         * (1 + dx)
+            #                         * (dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_2, :, :]
+            #                         )
+            #                         * -dx
+            #                     )
+            #                 else:
+            #                     orientation_matrix = (
+            #                         np.squeeze(
+            #                             self.orientation_rotation_matrices[
+            #                                 ind_best_fit, :, :
+            #                             ]
+            #                         )
+            #                         * (1 + dx)
+            #                         * (1 + dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_3, :, :]
+            #                         )
+            #                         * (1 + dx)
+            #                         * (-dy)
+            #                         + np.squeeze(
+            #                             self.orientation_rotation_matrices[ind_1, :, :]
+            #                         )
+            #                         * -dx
+            #                     )
 
             # apply in-plane rotation, and inversion if needed
             if multiple_corr_reset and match_ind > 0:
@@ -1499,71 +1502,77 @@ def match_single_pattern(
 
         plt.show()
 
-    if plot_corr_3D is True:
-        # 3D plotting
+    # if plot_corr_3D is True:
+    #     # 3D plotting
 
-        fig = plt.figure(figsize=[figsize[0], figsize[0]])
-        ax = fig.add_subplot(projection="3d", elev=90, azim=0)
+    #     fig = plt.figure(figsize=[figsize[0], figsize[0]])
+    #     ax = fig.add_subplot(projection="3d", elev=90, azim=0)
 
-        sig_zone_axis = np.max(corr, axis=1)
+    #     sig_zone_axis = np.max(corr, axis=1)
 
-        el = self.orientation_rotation_angles[:, 0, 0]
-        az = self.orientation_rotation_angles[:, 0, 1]
-        x = np.cos(az) * np.sin(el)
-        y = np.sin(az) * np.sin(el)
-        z = np.cos(el)
+    #     el = self.orientation_rotation_angles[:, 0, 0]
+    #     az = self.orientation_rotation_angles[:, 0, 1]
+    #     x = np.cos(az) * np.sin(el)
+    #     y = np.sin(az) * np.sin(el)
+    #     z = np.cos(el)
 
-        v = np.vstack((x.ravel(), y.ravel(), z.ravel()))
+    #     v = np.vstack((x.ravel(), y.ravel(), z.ravel()))
 
-        v_order = np.array(
-            [
-                [0, 1, 2],
-                [0, 2, 1],
-                [1, 0, 2],
-                [1, 2, 0],
-                [2, 0, 1],
-                [2, 1, 0],
-            ]
-        )
-        d_sign = np.array(
-            [
-                [1, 1, 1],
-                [-1, 1, 1],
-                [1, -1, 1],
-                [-1, -1, 1],
-            ]
-        )
+    #     v_order = np.array(
+    #         [
+    #             [0, 1, 2],
+    #             [0, 2, 1],
+    #             [1, 0, 2],
+    #             [1, 2, 0],
+    #             [2, 0, 1],
+    #             [2, 1, 0],
+    #         ]
+    #     )
+    #     d_sign = np.array(
+    #         [
+    #             [1, 1, 1],
+    #             [-1, 1, 1],
+    #             [1, -1, 1],
+    #             [-1, -1, 1],
+    #         ]
+    #     )
 
-        for a1 in range(d_sign.shape[0]):
-            for a0 in range(v_order.shape[0]):
-                ax.scatter(
-                    xs=v[v_order[a0, 0]] * d_sign[a1, 0],
-                    ys=v[v_order[a0, 1]] * d_sign[a1, 1],
-                    zs=v[v_order[a0, 2]] * d_sign[a1, 2],
-                    s=30,
-                    c=sig_zone_axis.ravel(),
-                    edgecolors=None,
-                )
+    #     for a1 in range(d_sign.shape[0]):
+    #         for a0 in range(v_order.shape[0]):
+    #             ax.scatter(
+    #                 xs=v[v_order[a0, 0]] * d_sign[a1, 0],
+    #                 ys=v[v_order[a0, 1]] * d_sign[a1, 1],
+    #                 zs=v[v_order[a0, 2]] * d_sign[a1, 2],
+    #                 s=30,
+    #                 c=sig_zone_axis.ravel(),
+    #                 edgecolors=None,
+    #             )
 
-        # axes limits
-        r = 1.05
-        ax.axes.set_xlim3d(left=-r, right=r)
-        ax.axes.set_ylim3d(bottom=-r, top=r)
-        ax.axes.set_zlim3d(bottom=-r, top=r)
-        axisEqual3D(ax)
+    #     # axes limits
+    #     r = 1.05
+    #     ax.axes.set_xlim3d(left=-r, right=r)
+    #     ax.axes.set_ylim3d(bottom=-r, top=r)
+    #     ax.axes.set_zlim3d(bottom=-r, top=r)
+    #     axisEqual3D(ax)
 
-        plt.show()
+    #     plt.show()
 
-    if return_corr:
-        if returnfig:
-            return orientation_output, corr_output, fig, ax
-        else:
-            return orientation_output, corr_output
+    # if return_corr:
+    #     if returnfig:
+    #         return orientation_output, corr_output, fig, ax
+    #     else:
+    #         return orientation_output, corr_output
+    # else:
+    #     if returnfig:
+    #         return orientation_output, fig, ax
+    #     else:
+    #         return orientation_output
+
+    if returnfig:
+        return orientation, fig, ax
     else:
-        if returnfig:
-            return orientation_output, fig, ax
-        else:
-            return orientation_output
+        return orientation
+
 
 
 def axisEqual3D(ax):
