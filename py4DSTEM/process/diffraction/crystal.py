@@ -594,17 +594,19 @@ class Orientation:
 
     """
     num_matches: int
-    orientation = None
+    matrix = None
     corr = None
-    index_zone_axis = None
-    rotation_angles = None
+    inds = None
+    mirror = None
+    angles = None
 
     def __post_init__(self):
         # initialize empty arrays
-        self.orientation       = np.zeros((self.num_matches,3,3))
-        self.corr              = np.zeros((self.num_matches))
-        self.orientation_index = np.zeros((self.num_matches,2), dtype='int')
-        self.rotation_angles   = np.zeros((self.num_matches,3))
+        self.matrix = np.zeros((self.num_matches,3,3))
+        self.corr   = np.zeros((self.num_matches))
+        self.inds   = np.zeros((self.num_matches,2), dtype='int')
+        self.mirror = np.zeros((self.num_matches), dtype='bool')
+        self.angles = np.zeros((self.num_matches,3))
 
 @dataclass
 class OrientationMap:
@@ -616,17 +618,20 @@ class OrientationMap:
     num_x: int
     num_y: int
     num_matches: int
-    orientation = None
+    matrix = None
     corr = None
-    index_zone_axis = None
+    inds = None
+    angles = None
+
     rotation_angles = None
 
     def __post_init__(self):
         # initialize empty arrays
-        self.orientation       = np.zeros((self.num_x,self.num_y,self.num_matches,3,3))
-        self.corr              = np.zeros((self.num_x,self.num_y,self.num_matches))
-        self.orientation_index = np.zeros((self.num_x,self.num_y,self.num_matches,2), dtype='int')
-        self.rotation_angles   = np.zeros((self.num_x,self.num_y,self.num_matches,3), dtype='float')
+        self.matrix = np.zeros((self.num_x,self.num_y,self.num_matches,3,3))
+        self.corr   = np.zeros((self.num_x,self.num_y,self.num_matches))
+        self.inds   = np.zeros((self.num_x,self.num_y,self.num_matches,2), dtype='int')
+        self.mirror = np.zeros((self.num_x,self.num_y,self.num_matches), dtype='bool')
+        self.angles = np.zeros((self.num_x,self.num_y,self.num_matches,3), dtype='float')
 
 
 
