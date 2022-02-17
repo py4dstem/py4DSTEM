@@ -634,7 +634,7 @@ class OrientationMap:
         self.angles = np.zeros((self.num_x,self.num_y,self.num_matches,3), dtype='float')
 
 
-
+    def add_orientation(self):
 
 
 
