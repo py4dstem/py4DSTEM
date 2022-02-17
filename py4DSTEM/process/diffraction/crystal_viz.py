@@ -160,6 +160,9 @@ def plot_structure(
 
     plt.show()
 
+    if returnfig:
+        return fig, ax
+
 
 def plot_structure_factors(
     self,
@@ -503,8 +506,8 @@ def plot_orientation_plan(
         bragg_peaks,
         figsize=(figsize[1], figsize[1]),
         plot_range_kx_ky=k_x_y_range,
-        scale_markers=10,
-        shift_labels=0.10,
+        # scale_markers=10,
+        # shift_labels=0.10,
         input_fig_handle=[fig, ax],
     )
 
@@ -584,7 +587,7 @@ def plot_orientation_plan(
 def plot_diffraction_pattern(
     bragg_peaks: PointList,
     bragg_peaks_compare: PointList = None,
-    scale_markers: float = 10,
+    scale_markers: float = 400,
     scale_markers_compare: Optional[float] = None,
     power_markers: float = 1,
     plot_range_kx_ky: Optional[Union[list, tuple, np.ndarray]] = None,
@@ -1092,6 +1095,8 @@ def axisEqual3D(ax):
     r = maxsize / 2
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
+    ax.set_box_aspect((1, 1, 1))
+
 
 
 def atomic_colors(Z, scheme="jmol"):
