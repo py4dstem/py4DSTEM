@@ -434,8 +434,8 @@ class Crystal:
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            zone_axis (np float vector):     3 element projection direction for sim pattern
-                                             Can also be a 3x3 orientation matrix (zone axis 3rd column)
+            zone_axis (np float vector):     3 element projection direction for pattern simulation
+                                             Can also be an Orientation class object returned by the single pattern fitting.
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
             sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
@@ -447,11 +447,10 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
-        zone_axis = np.asarray(zone_axis, dtype="float")
-
-        if zone_axis.ndim == 1:
-            zone_axis = np.asarray(zone_axis)
-            zone_axis = zone_axis / np.linalg.norm(zone_axis)
+        # Check type of input
+        if isinstance(zone_axis, (np.ndarray, list, tuple)):
+            # input is a 3 element zone axis
+            zone_axis = np.asarray(zone_axis, dtype="float")
 
             if not self.cartesian_directions:
                 zone_axis = self.cartesian_to_crystal(zone_axis)
@@ -467,12 +466,36 @@ class Crystal:
                 if not self.cartesian_directions:
                     proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
 
-        elif zone_axis.shape == (3, 3):
-            proj_x_axis = zone_axis[:, 0]
-            zone_axis = zone_axis[:, 2]
         else:
-            proj_x_axis = zone_axis[:, 0, 0]
-            zone_axis = zone_axis[:, 2, 0]
+            # input is an Orientation dataclass
+            proj_x_axis = zone_axis.matrix[0,:,0]
+            zone_axis = zone_axis.matrix[0,:,2]
+
+
+        # if zone_axis.ndim == 1:
+        #     zone_axis = np.asarray(zone_axis)
+        #     zone_axis = zone_axis / np.linalg.norm(zone_axis)
+
+        #     if not self.cartesian_directions:
+        #         zone_axis = self.cartesian_to_crystal(zone_axis)
+
+        #     if proj_x_axis is None:
+        #         if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
+        #             v0 = np.array([0.0, -1.0, 0.0])
+        #         else:
+        #             v0 = np.array([-1.0, 0.0, 0.0])
+        #         proj_x_axis = np.cross(zone_axis, v0)
+        #     else:
+        #         proj_x_axis = np.asarray(proj_x_axis, dtype="float")
+        #         if not self.cartesian_directions:
+        #             proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
+
+        # elif zone_axis.shape == (3, 3):
+        #     proj_x_axis = zone_axis[:, 0]
+        #     zone_axis = zone_axis[:, 2]
+        # else:
+        #     proj_x_axis = zone_axis[:, 0, 0]
+        #     zone_axis = zone_axis[:, 2, 0]
 
         # Set x and y projection vectors
         ky_proj = np.cross(zone_axis, proj_x_axis)
@@ -583,14 +606,3 @@ class Crystal:
         zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
         return zone_axis / np.linalg.norm(zone_axis)
 
-
-
-
-def axisEqual3D(ax):
-    extents = np.array([getattr(ax, "get_{}lim".format(dim))() for dim in "xyz"])
-    sz = extents[:, 1] - extents[:, 0]
-    centers = np.mean(extents, axis=1)
-    maxsize = max(abs(sz))
-    r = maxsize / 2
-    for ctr, dim in zip(centers, "xyz"):
-        getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
