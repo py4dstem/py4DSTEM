@@ -559,8 +559,16 @@ def orientation_plan(
             np.size(self.orientation_shell_radii),
             self.orientation_in_plane_steps,
         ),
-        dtype="complex64",
+        dtype="float",
     )
+    # self.orientation_ref = np.zeros(
+    #     (
+    #         self.orientation_num_zones,
+    #         np.size(self.orientation_shell_radii),
+    #         self.orientation_in_plane_steps,
+    #     ),
+    #     dtype="complex64",
+    # )
 
     # Calculate rotation matrices for zone axes
     # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
@@ -636,8 +644,8 @@ def orientation_plan(
                 )
 
         # Normalization
-        self.orientation_ref[a0, :, :] = self.orientation_ref[a0, :, :] / np.sqrt(
-            np.sum(np.abs(self.orientation_ref[a0, :, :]) ** 2)
+        self.orientation_ref[a0, :, :] /= np.sqrt(
+            np.sum(self.orientation_ref[a0, :, :] ** 2)
         )
 
     # Maximum value
@@ -757,6 +765,13 @@ def match_single_pattern(
     # init orientation output
     orientation = Orientation(num_matches=num_matches_return)
 
+    # other init
+    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]    
+    corr_value = np.zeros(self.orientation_num_zones)
+    corr_in_plane_angle = np.zeros(self.orientation_num_zones)
+    if inversion_symmetry:
+        corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
+
     # if num_matches_return == 1:
     #     orientation_output = np.zeros((3, 3))
     # else:
@@ -822,11 +837,6 @@ def match_single_pattern(
         # FFT along theta
         im_polar_fft = np.fft.fft(im_polar)
 
-        # init
-        dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-        corr_value = np.zeros(self.orientation_num_zones)
-        corr_in_plane_angle = np.zeros(self.orientation_num_zones)
-
         # Calculate orientation correlogram
         corr_full = np.maximum(
             np.sum(
@@ -852,6 +862,69 @@ def match_single_pattern(
             )
             ind_phi_inv = np.argmax(corr_full_inv, axis=1)
             corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
+
+        
+        # Testing of direct index correlogram computation
+        # # init
+        # corr_full = np.zeros((
+        #     self.orientation_num_zones,
+        #     self.orientation_in_plane_steps)) 
+        # if inversion_symmetry:
+        #     corr_full_inv = np.zeros((
+        #         self.orientation_num_zones,
+        #         self.orientation_in_plane_steps))
+
+
+        # for ind_peak, radius in enumerate(qr):
+        #     ip = qphi[ind_peak] / dphi
+        #     fp = np.floor(ip).astype('int')
+        #     dp = ip - fp
+
+        #     dqr_all = np.abs(self.orientation_shell_radii - radius)
+        #     sub = dqr_all < self.orientation_kernel_size
+
+        #     # for ind_radial, dqr in enumerate(dqr_all):
+        #         # if dqr < self.orientation_kernel_size:
+        #     weight = (1 - dqr_all[sub] / self.orientation_kernel_size) \
+        #         *  np.power(np.maximum(intensity[ind_peak], 0),self.orientation_intensity_power) \
+        #         *  np.power(qr[ind_peak],self.orientation_radial_power)
+
+        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
+        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)
+
+        #     if inversion_symmetry:
+        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
+        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)          
+
+
+
+        #     # inds = np.argwhere(dqr < self.orientation_kernel_size)
+
+        #     # ip = qphi[ind_peak] / dphi
+        #     # fp = np.floor(ip)
+        #     # dp = ip - fp
+
+        #     # for ind_radial in inds:
+
+        #     #     weight = (1 - dqr[ind_radial] / self.orientation_kernel_size) \
+        #     #         *  np.power(np.max(intensity[ind_peak], 0),self.orientation_intensity_power)
+
+        #     #     print(ind_radial)
+        #     #     # print(corr_full.shape)
+        #     #     # print(type(self.orientation_ref))
+        #     #     corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,ind_radial),:],-fp  ,axis=1)
+        #     #     corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],-fp-1,axis=1)
+
+        #     #     if inversion_symmetry:
+        #     #         corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp  ,axis=1)
+        #     #         corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp+1,axis=1)                    
+
+        # # Get best fit in-plane rotations
+        # ind_phi = np.argmax(corr_full, axis=1)
+        # if inversion_symmetry:
+        #     ind_phi_inv = np.argmax(corr_full_inv, axis=1)
+
+
 
         # Find best match for each zone axis
         for a0 in range(self.orientation_num_zones):
