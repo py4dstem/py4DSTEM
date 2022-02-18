@@ -722,12 +722,12 @@ def plot_orientation_maps(
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
-    # orientation_rotate_xy: bool = None,
+
     scale_legend: bool = None,
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figlayout: Union[list, tuple, np.ndarray] = np.array([1, 4]),
     returnfig: bool = False,
-    progress_bar = True,
+    progress_bar = False,
     ):
     """
     Generate and plot the orientation maps
@@ -742,7 +742,7 @@ def plot_orientation_maps(
         orientation_matrices (float):   numpy array containing orientations, with size (Rx, Ry, 3, 3) or (Rx, Ry, 3, 3, num_matches)
         corr_all(float):                numpy array containing the correlation values to use as a mask
         orientation_index_plot (int):   index of orientations to plot
-        orientation_rotate_xy (float):  rotation in radians for the xy directions of plots
+
         scale_legend (float):           2 elements, x and y scaling of legend panel
         figlayout (int)                 2 elements giving the # of rows and columns for the figure.
                                         Must be [1, 4], [2, 2] or [4,1] currently.
@@ -773,6 +773,10 @@ def plot_orientation_maps(
 
     # Generate reflection operators for symmetry reduction
     A_ref = np.zeros((3,3,3))
+    # A_ref[0] = np.array([
+    #     [-1, 0, 0],
+    #     [ 0,-1. 0],
+    #     [ 0, 0,-1]])
     for a0 in range(3):
         if a0 == 0:
             v = np.cross(
@@ -798,16 +802,34 @@ def plot_orientation_maps(
     dir_in_plane = np.deg2rad(dir_in_plane_degrees)
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
-    dir_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    dir_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    basis_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    basis_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    rgb_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
 
-    # Basis for fitting orientation projection
+    # Check crystal symmetry
+    if self.cell[0] == self.cell[1] and \
+        self.cell[0] == self.cell[2] and \
+        self.cell[1] == self.cell[2] and \
+        self.cell[3] == 90 and \
+        self.cell[4] == 90 and \
+        self.cell[5] == 90:
+        flag_in_plane = True
+    else:
+        flag_in_plane = False
+        warnings.warn("Warning - some crystal symmetries require pymatgen to be installed.")
+
+    # Basis for fitting orientation projections 
     A = self.orientation_zone_axis_range.T
 
-    # Generate crystal basis images.
-    # Each channel represents one vector of self.orientation_zone_axis_range.
-    # for ax in range(1):
-    #     for ay in range(1):
+    # Correlation masking
+    corr = orientation_map.corr[:,:,ind_orientation]
+    if corr_normalize:
+        corr = corr / np.mean(corr)
+    mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
+    mask = np.clip(mask, 0, 1)
+
+    # Generate zone axis basis and rgb image
     for rx, ry in tqdmnd(
         orientation_map.num_x,
         orientation_map.num_y,
@@ -815,75 +837,148 @@ def plot_orientation_maps(
         unit=" PointList",
         disable=not progress_bar,
         ):
-
-        # Reflect the in-plane direction into orientation triangle
-        v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
-            + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
-        w = np.linalg.solve(A, v)
-
-        if np.min(w) < 0:        
-            flip = True
-            while flip is True:
-                if np.min(w) < 0:
-                    v0 = v @ A_ref[0]
-                    v1 = v @ A_ref[1]
-                    v2 = v @ A_ref[2]
-                    w0 = np.linalg.solve(A, v0)
-                    w1 = np.linalg.solve(A, v1)
-                    w2 = np.linalg.solve(A, v2)
-                    ind = np.argmax([
-                        np.mean(w0),
-                        np.mean(w1),
-                        np.mean(w2)])
-                    if ind == 0:
-                        v = v0
-                        w = w0
-                    elif ind == 1:
-                        v = v1
-                        w = w1
-                    else:
-                        v = v2
-                        w = w2
-                else:
-                    flip = False
-        dir_x[rx,ry] = w
-
-        # Reflect the out-of-plane direction into orientation triangle
         v = orientation_map.matrix[rx,ry,ind_orientation,:,2]
         w = np.linalg.solve(A, v)
-        if np.min(w) < 0:        
-            flip = True
-            while flip is True:
-                if np.min(w) < 0:
-                    v0 = v @ A_ref[0]
-                    v1 = v @ A_ref[1]
-                    v2 = v @ A_ref[2]
-                    w0 = np.linalg.solve(A, v0)
-                    w1 = np.linalg.solve(A, v1)
-                    w2 = np.linalg.solve(A, v2)
-                    ind = np.argmax([
-                        np.mean(w0),
-                        np.mean(w1),
-                        np.mean(w2)])
-                    if ind == 0:
-                        v = v0
-                        w = w0
-                    elif ind == 1:
-                        v = v1
-                        w = w1
-                    else:
-                        v = v2
-                        w = w2
-                else:
-                    flip = False
-        dir_z[rx,ry] = w
+        if np.min(w) < 0:     
+            w = -w
+        basis_z[rx,ry,:] = w
+    basis_z = np.clip(basis_z,0,1)
+
+    basis_z_scale = mask[:,:,None] * basis_z / np.max(basis_z,axis=2)[:,:,None]
+    rgb_z = basis_z_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
+        + basis_z_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
+        + basis_z_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+
+    # Generate in-plane basis and rgb image
+    if flag_in_plane:
+        for rx, ry in tqdmnd(
+            orientation_map.num_x,
+            orientation_map.num_y,
+            desc="Generating orientation maps",
+            unit=" PointList",
+            disable=not progress_bar,
+            ):
+            v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
+                 + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
+            v = np.sort(np.abs(v))            
+            w = np.linalg.solve(A, v)
+            if np.min(w) < 0:     
+                w = -w
+            basis_x[rx,ry,:] = w
+        basis_x = np.clip(basis_x,0,1)
+
+        basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
+        rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
+            + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
+            + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+
+
+
+
+    # w = w / (1 - np.exp(-np.max(w)))
+    #                 rgb = (
+    #                     color_basis[0, :] * w[0]
+    #                     + color_basis[1, :] * w[1]
+    #                     + color_basis[2, :] * w[2]
+    #                 )
+    #                 images_orientation[ax, ay, :, a0] = rgb
+
+
 
 
     # plotting frame
     fig, ax = plt.subplots(1, 3, figsize=figsize)
 
-    ax[0].imshow(dir_x)
-    ax[1].imshow(dir_z)
+    if flag_in_plane:
+        ax[0].imshow(rgb_x)
+    ax[1].imshow(rgb_z)
+
+
+
+    # # Generate crystal basis images.
+    # # Each channel represents one vector of self.orientation_zone_axis_range.
+    # # for ax in range(1):
+    # #     for ay in range(1):
+    # count_max = 1
+    # for rx, ry in tqdmnd(
+    #     orientation_map.num_x,
+    #     10,#orientation_map.num_y,
+    #     desc="Generating orientation maps",
+    #     unit=" PointList",
+    #     disable=not progress_bar,
+    #     ):
+    #     if orientation_map.corr[rx,ry] > 0:
+
+    #         # Reflect the in-plane direction into orientation triangle
+    #         v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
+    #             + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
+    #         w = np.linalg.solve(A, v)
+    #         if np.min(w) < 0:        
+    #             count = 0
+    #             while count < count_max:
+    #                 if np.min(w) < 0:
+    #                     v0 = v @ A_ref[0]
+    #                     v1 = v @ A_ref[1]
+    #                     v2 = v @ A_ref[2]
+    #                     w0 = np.linalg.solve(A, v0)
+    #                     w1 = np.linalg.solve(A, v1)
+    #                     w2 = np.linalg.solve(A, v2)
+    #                     ind = np.argmax([
+    #                         np.mean(w0),
+    #                         np.mean(w1),
+    #                         np.mean(w2)])
+    #                     if ind == 0:
+    #                         v = v0
+    #                         w = w0
+    #                     elif ind == 1:
+    #                         v = v1
+    #                         w = w1
+    #                     else:
+    #                         v = v2
+    #                         w = w2
+    #                     # for a0 in range(A_ref.shape[0])
+    #                     #     v_test = v @ A_ref[a0]
+    #                     #     w_test = p.linalg.solve(A, v_test)
+    #                     #     if a0 == 0:
+    #                     #         v = v_test
+    #                     #         w = w_test
+    #                     #     else:
+    #                     #         if np.mean(w_test) > np.mean(w):
+    #                     #             v = v_test
+    #                     #             w = w_test
+    #                 else:
+    #                     count = count_max
+    #         dir_x[rx,ry] = w
+
+    #         # Reflect the out-of-plane direction into orientation triangle
+    #         v = orientation_map.matrix[rx,ry,ind_orientation,:,2]
+    #         w = np.linalg.solve(A, v)
+    #         if np.min(w) < 0:        
+    #             count = 0
+    #             while count < count_max:
+    #                 if np.min(w) < 0:
+    #                     v0 = v @ A_ref[0]
+    #                     v1 = v @ A_ref[1]
+    #                     v2 = v @ A_ref[2]
+    #                     w0 = np.linalg.solve(A, v0)
+    #                     w1 = np.linalg.solve(A, v1)
+    #                     w2 = np.linalg.solve(A, v2)
+    #                     ind = np.argmax([
+    #                         np.mean(w0),
+    #                         np.mean(w1),
+    #                         np.mean(w2)])
+    #                     if ind == 0:
+    #                         v = v0
+    #                         w = w0
+    #                     elif ind == 1:
+    #                         v = v1
+    #                         w = w1
+    #                     else:
+    #                         v = v2
+    #                         w = w2
+    #                 else:
+    #                     count = count_max
+    #         dir_z[rx,ry] = w
 
 
     # # Basis for fitting fiber texture
