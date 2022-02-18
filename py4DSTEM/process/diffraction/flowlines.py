@@ -444,6 +444,7 @@ def make_flowline_rainbow_image(
     orient_flowlines,
     int_range = [0,0.2],
     sym_rotation_order = 2,
+    theta_offset = 0.0,
     greyscale = False,
     greyscale_max = True,
     white_background = False,
@@ -504,9 +505,9 @@ def make_flowline_rainbow_image(
         theta_color = theta * sym_rotation_order
 
         # color projections
-        b0 =  np.maximum(1 - np.abs(np.mod(theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-        b1 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-        b2 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+        b0 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+        b1 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+        b2 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
 
 
         for a0 in range(size_input[0]):
@@ -526,12 +527,11 @@ def make_flowline_rainbow_image(
 
             # contrast flip
             if white_background is True:
-                im = rgb_to_hsv(im_flowline[a0,:,:,:])
-                # im_s = im[:,:,1]
+                im = rgb_to_hsv(im_flowline[a0])
                 im_v = im[:,:,2]
                 im[:,:,1] = im_v
                 im[:,:,2] = 1
-                im_flowline[a0,:,:,:] = hsv_to_rgb(im)
+                im_flowline[a0] = hsv_to_rgb(im)
 
     if sum_radial_bins is True:
         im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
@@ -551,6 +551,79 @@ def make_flowline_rainbow_image(
 
     return im_flowline
 
+
+
+def make_flowline_rainbow_legend(
+    im_size=np.array([256,256]),
+    sym_rotation_order = 2,
+    theta_offset = 0.0,
+    white_background = False,
+    return_image=False,
+    plot_legend=True,
+    radial_range=np.array([0.45,0.9]),
+    figsize=(4,4),
+    ):
+    """
+    This function generates a legend for a the rainbow colored flowline maps, and returns it as an RGB image.
+    """
+
+    # Color basis
+    c0 = np.array([1.0, 0.0, 0.0])
+    c1 = np.array([0.0, 0.7, 0.0])
+    c2 = np.array([0.0, 0.3, 1.0])
+
+    # Coordinates
+    x = np.linspace(-1,1,im_size[0])
+    y = np.linspace(-1,1,im_size[1])
+    ya,xa = np.meshgrid(y,x)
+    ra = np.sqrt(xa**2 + ya**2)
+    ta = np.arctan2(ya,xa)
+    ta_sym = ta*sym_rotation_order
+
+    # mask
+    dr = xa[1,0] - xa[0,0]
+    mask = np.clip((radial_range[1] - ra)/dr + 0.5,0,1) \
+        * np.clip((ra - radial_range[0])/dr + 0.5,0,1)
+
+    # rgb image
+    b0 =  np.maximum(1 - np.abs(np.mod(theta_offset + ta_sym + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+    b1 =  np.maximum(1 - np.abs(np.mod(theta_offset + ta_sym - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+    b2 =  np.maximum(1 - np.abs(np.mod(theta_offset + ta_sym - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+    im_legend = \
+        b0[:,:,None]*c0[None,None,:] + \
+        b1[:,:,None]*c1[None,None,:] + \
+        b2[:,:,None]*c2[None,None,:]
+    im_legend = im_legend * mask[:,:,None]
+
+    if white_background is True:
+        im_legend = rgb_to_hsv(im_legend)
+        im_v = im_legend[:,:,2]
+        im_legend[:,:,1] = im_v
+        im_legend[:,:,2] = 1
+        im_legend = hsv_to_rgb(im_legend)
+
+    # plotting
+    if plot_legend:
+        fig,ax = plt.subplots(1,1,figsize=figsize)
+        ax.imshow(im_legend)
+        ax.invert_yaxis()
+        # ax.set_axis_off()
+        ax.axis('off')
+
+
+
+    # # angles
+    # theta = np.linspace(0,np.pi,num_angle_bins,endpoint=False)
+    # theta_color = theta * sym_rotation_order
+
+    # # color projections
+    # b0 =  np.maximum(1 - np.abs(np.mod(theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+    # b1 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+    # b2 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+
+    # print(b0.shape)
+    if return_image:
+        return im_legend
 
 
 def make_flowline_combined_image(
