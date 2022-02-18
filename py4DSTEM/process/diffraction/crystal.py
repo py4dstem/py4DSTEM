@@ -425,6 +425,7 @@ class Crystal:
         zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
         foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
         proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
+        ind_orientation: int = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 0.001,
@@ -434,11 +435,15 @@ class Crystal:
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            zone_axis (np float vector):     3 element projection direction for pattern simulation
-                                             Can also be an Orientation class object returned by the single pattern fitting.
+            zone_axis (np float vector):     Can be any of:
+                                             -3 element projection direction for pattern simulation
+                                             -a 3x3 orientation matrix
+                                             -an Orientation class object 
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+            index_orientation                If input is an Orientation class object with multiple orientations,
+                                             this input can be used to select a specific orientation.
+            sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
             k_max (np float):                maximum scattering angle to keep in pattern
@@ -449,27 +454,37 @@ class Crystal:
 
         # Check type of input
         if isinstance(zone_axis, (np.ndarray, list, tuple)):
-            # input is a 3 element zone axis
-            zone_axis = np.asarray(zone_axis, dtype="float")
+            if zone_axis.ndim == 1:
+                # input is a 3 element zone axis
+                zone_axis = np.asarray(zone_axis, dtype="float")
 
-            if not self.cartesian_directions:
-                zone_axis = self.cartesian_to_crystal(zone_axis)
-
-            if proj_x_axis is None:
-                if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
-                    v0 = np.array([0.0, -1.0, 0.0])
-                else:
-                    v0 = np.array([-1.0, 0.0, 0.0])
-                proj_x_axis = np.cross(zone_axis, v0)
-            else:
-                proj_x_axis = np.asarray(proj_x_axis, dtype="float")
                 if not self.cartesian_directions:
-                    proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
+                    zone_axis = self.cartesian_to_crystal(zone_axis)
+
+                if proj_x_axis is None:
+                    if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
+                        v0 = np.array([0.0, -1.0, 0.0])
+                    else:
+                        v0 = np.array([-1.0, 0.0, 0.0])
+                    proj_x_axis = np.cross(zone_axis, v0)
+                else:
+                    proj_x_axis = np.asarray(proj_x_axis, dtype="float")
+                    if not self.cartesian_directions:
+                        proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
+
+            elif zone_axis.shape == (3, 3):
+                # input is a 3x3 orientation matrix
+                proj_x_axis = zone_axis[:, 0]
+                zone_axis = zone_axis[:, 2]
 
         else:
             # input is an Orientation dataclass
-            proj_x_axis = zone_axis.matrix[0,:,0]
-            zone_axis = zone_axis.matrix[0,:,2]
+            if ind_orientation is None:
+                proj_x_axis = zone_axis.matrix[0,:,0]
+                zone_axis = zone_axis.matrix[0,:,2]
+            else:
+                proj_x_axis = zone_axis.matrix[ind_orientation,:,0]
+                zone_axis = zone_axis.matrix[ind_orientation,:,2]
 
 
         # if zone_axis.ndim == 1:
