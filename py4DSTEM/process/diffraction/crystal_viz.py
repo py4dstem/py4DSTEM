@@ -524,6 +524,7 @@ def plot_orientation_plan(
     #     # ).astype("float"),
     #     #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
     # else:
+    # im_plot = self.orientation_ref[index_plot, :, :] / self.orientation_ref_max
     im_plot = (
         np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
             "float"
