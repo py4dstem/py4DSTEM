@@ -460,6 +460,7 @@ def make_flowline_rainbow_image(
                                     We assume theta bin ranges from 0 to 180 degrees and is periodic.
         int_range (float)           2 element array giving the intensity range
         sym_rotation_order (int):   rotational symmety for colouring
+        theta_offset (float):       Offset the anglular coloring by this value in radians.
         greyscale (bool):           Set to False for color output, True for greyscale output.
         greyscale_max (bool):       If output is greyscale, use max instead of mean for overlapping flowlines.
         white_background (bool):    For either color or greyscale output, switch to white background (from black).
@@ -534,7 +535,12 @@ def make_flowline_rainbow_image(
                 im_flowline[a0] = hsv_to_rgb(im)
 
     if sum_radial_bins is True:
-        im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
+        if white_background is False:
+            im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
+        else:
+            # im_flowline = np.clip(np.sum(im_flowline,axis=0)+1-im_flowline.shape[0],0,1)[None,:,:,:]
+            im_flowline = np.min(im_flowline,axis=0)[None,:,:,:]
+
 
     if plot_images is True:
         fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
@@ -542,11 +548,11 @@ def make_flowline_rainbow_image(
         if im_flowline.shape[0] > 1:
             for a0 in range(im_flowline.shape[0]):
                 ax[a0].imshow(im_flowline[a0])
-                ax[a0].axis('off')
+                # ax[a0].axis('off')
             plt.subplots_adjust(wspace=0, hspace=0.02)
         else:
             ax.imshow(im_flowline[0])
-            ax.axis('off')
+            # ax.axis('off')
         plt.show()
 
     return im_flowline
@@ -559,13 +565,28 @@ def make_flowline_rainbow_legend(
     theta_offset = 0.0,
     white_background = False,
     return_image=False,
-    plot_legend=True,
     radial_range=np.array([0.45,0.9]),
+    plot_legend=True,
     figsize=(4,4),
     ):
     """
     This function generates a legend for a the rainbow colored flowline maps, and returns it as an RGB image.
+    
+    Args:
+        im_size (np.array):         Size of legend image in pixels.
+        sym_rotation_order (int):   rotational symmety for colouring
+        theta_offset (float):       Offset the anglular coloring by this value in radians.
+        white_background (bool):    For either color or greyscale output, switch to white background (from black).
+        return_image (bool):        Return the image array.
+        radial_range (np.array):    Inner and outer radius for the legend ring.
+        plot_legend (bool):         Plot the generated legend.
+        figsize (tuple or list):    Size of the plotted legend.     
+
+    Returns:
+        im_legend (array):          Image array for the legend.
     """
+
+
 
     # Color basis
     c0 = np.array([1.0, 0.0, 0.0])
@@ -575,7 +596,7 @@ def make_flowline_rainbow_legend(
     # Coordinates
     x = np.linspace(-1,1,im_size[0])
     y = np.linspace(-1,1,im_size[1])
-    ya,xa = np.meshgrid(y,x)
+    ya,xa = np.meshgrid(-y,x)
     ra = np.sqrt(xa**2 + ya**2)
     ta = np.arctan2(ya,xa)
     ta_sym = ta*sym_rotation_order
