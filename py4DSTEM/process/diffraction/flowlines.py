@@ -541,7 +541,6 @@ def make_flowline_rainbow_image(
             # im_flowline = np.clip(np.sum(im_flowline,axis=0)+1-im_flowline.shape[0],0,1)[None,:,:,:]
             im_flowline = np.min(im_flowline,axis=0)[None,:,:,:]
 
-
     if plot_images is True:
         fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
 
@@ -690,19 +689,30 @@ def make_flowline_combined_image(
         if power_scaling != 1:
             sig = sig ** power_scaling
 
-        im_flowline[a0,:,:,:] = sig[:,:,None]*cvals[a0,:][None,None,:]
+        if white_background:
+            im_flowline[a0,:,:,:] = 1 - sig[:,:,None]*(1-cvals[a0,:][None,None,:])
+        else:
+            im_flowline[a0,:,:,:] = sig[:,:,None]*cvals[a0,:][None,None,:]
 
-        # contrast flip
-        if white_background is True:
-            im = rgb_to_hsv(im_flowline[a0,:,:,:])
-            # im_s = im[:,:,1]
-            im_v = im[:,:,2]
-            im[:,:,1] = im_v
-            im[:,:,2] = 1
-            im_flowline[a0,:,:,:] = hsv_to_rgb(im)
+        # # contrast flip
+        # if white_background is True:
+        #     im = rgb_to_hsv(im_flowline[a0,:,:,:])
+        #     # im_s = im[:,:,1]
+        #     im_v = im[:,:,2]
+        #     v_range = [np.min(im_v), np.max(im_v)]
+        #     print(v_range)
+
+        #     im[:,:,1] = im_v
+        #     im[:,:,2] = 1
+        #     im_flowline[a0,:,:,:] = hsv_to_rgb(im)
 
     if sum_radial_bins is True:
-        im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
+        if white_background is False:
+            im_flowline = np.clip(np.sum(im_flowline,axis=0),0,1)[None,:,:,:]
+        else:
+            # im_flowline = np.clip(np.sum(im_flowline,axis=0)+1-im_flowline.shape[0],0,1)[None,:,:,:]
+            im_flowline = np.min(im_flowline,axis=0)[None,:,:,:]
+
 
     if plot_images is True:
         fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
