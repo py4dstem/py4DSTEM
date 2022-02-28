@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
 
 import warnings
@@ -726,7 +727,8 @@ def plot_orientation_maps(
     scale_legend: bool = None,
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
-    marker_size = None,
+    plot_limit = None,
+    camera_dist = None,
 
     # figlayout: Union[list, tuple, np.ndarray] = np.array([1, 4]),
     returnfig: bool = False,
@@ -913,8 +915,8 @@ def plot_orientation_maps(
         0,1)
     # rgb_legend = np.clip( 
     #     w2[:,None]*color_basis[0,:],0,1)
-    if marker_size is None:
-        marker_size = self.orientation_zone_axis_steps**2/20
+    # if marker_size is None:
+    #     marker_size = self.orientation_zone_axis_steps**2/20
     # axis labels
     if self.cartesian_directions:
         label_0 = self.orientation_zone_axis_range[0, :]
@@ -991,19 +993,48 @@ def plot_orientation_maps(
             horizontalalignment='center')
     ax_z.imshow(rgb_z)
 
-    # # Legend
-    # # ax[2] = fig.add_subplot(
-    # #     projection="3d", 
-    # #     elev=45, 
-    # #     azim=45)
-    ax_l.scatter(
-        xs=self.orientation_vecs[:,1],
-        ys=self.orientation_vecs[:,0],
-        zs=self.orientation_vecs[:,2],
-        c=rgb_legend,
-        s=marker_size,
+
+    # Triangulate faces
+    p = self.orientation_vecs[:,(1,0,2)]
+    tri = mtri.Triangulation(
+        self.orientation_inds[:,1]-self.orientation_inds[:,0]*1e-3,
+        self.orientation_inds[:,0]-self.orientation_inds[:,1]*1e-3)
+    # convert rgb values of pixels to faces
+    rgb_faces = (
+        rgb_legend[tri.triangles[:,0],:] + \
+        rgb_legend[tri.triangles[:,1],:] + \
+        rgb_legend[tri.triangles[:,2],:] \
+        ) / 3
+    # Add triangulated surface plot to axes
+    pc = art3d.Poly3DCollection(
+        p[tri.triangles],
+        facecolors=rgb_faces,
         alpha=1,
+    )
+    pc.set_antialiased(False)
+    ax_l.add_collection(pc)
+
+    if plot_limit is None:
+        plot_limit = np.array(
+            [
+                [np.min(p[:, 0]), np.min(p[:, 1]), np.min(p[:, 2])],
+                [np.max(p[:, 0]), np.max(p[:, 1]), np.max(p[:, 2])],
+            ]
         )
+        plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.1 + np.mean(
+            plot_limit, axis=0
+        )
+
+    # ax_l.view_init(elev=el, azim=az)
+    ax_l.invert_yaxis()
+    ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
+    ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
+    ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
+    axisEqual3D(ax_l)
+    if camera_dist is not None:
+        ax.dist = camera_dist
+
+    # Add text labels
     ax_l.axis("off")
     text_scale_pos = 0.1
     text_params = {
@@ -1028,9 +1059,6 @@ def plot_orientation_maps(
         ha="center",
         **text_params,
     )
-    # print(f"{np.array2string(means, precision=2, floatmode='fixed')}")
-
-
     if (
         self.orientation_fiber is False
         and self.orientation_full is False
@@ -1064,6 +1092,44 @@ def plot_orientation_maps(
             ha="left",
             **text_params,
         )
+
+    plt.show()
+
+
+
+    # collection = art3d.PolyCollection(self.orientation_vecs)
+    # ax_l.add_collection(collection)
+
+    # print(tri.)
+    # print(type(tri))
+    # ax_l.plot_trisurf(
+    #     self.orientation_vecs[:,1],
+    #     self.orientation_vecs[:,0],
+    #     self.orientation_vecs[:,2],
+    #     triangles=tri.triangles, 
+    #     color=rgb_legend)
+    # maskedTris = tri.get_masked_triangles()
+    # verts = np.stack((tri.x[maskedTris], tri.y[maskedTris]), axis=-1)
+    # collection = art3d.PolyCollection(verts)
+    # # collection.set_vertexcolor(rgb_legend)
+    # ax_l.add_collection(collection)
+    # shading='gouraud'
+    # pc = art3d.Poly3DCollection(
+    #     self.orientation_vecs,
+    #     alpha=1,
+    # )
+    # ax_l.add_collection(pc)
+
+
+    # art3d.Poly3DCollection
+
+    # plt.gca().autoscale_view()
+    # ax_l.plot_surface(
+    #     self.orientation_vecs[:,1], 
+    #     self.orientation_vecs[:,0], 
+    #     self.orientation_vecs[:,2], 
+    #     )
+
 
 
     # # Generate crystal basis images.
