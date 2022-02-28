@@ -597,7 +597,7 @@ def plot_diffraction_pattern(
     shift_labels: float = 0.08,
     shift_marker: float = 0.005,
     min_marker_size: float = 1e-6,
-    figsize: Union[list, tuple, np.ndarray] = (8, 8),
+    figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
 ):
@@ -725,7 +725,10 @@ def plot_orientation_maps(
 
     scale_legend: bool = None,
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
-    figlayout: Union[list, tuple, np.ndarray] = np.array([1, 4]),
+    figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
+    marker_size = None,
+
+    # figlayout: Union[list, tuple, np.ndarray] = np.array([1, 4]),
     returnfig: bool = False,
     progress_bar = False,
     ):
@@ -884,15 +887,183 @@ def plot_orientation_maps(
     #                 images_orientation[ax, ay, :, a0] = rgb
 
 
+    # Legend init
+    # projection vector
+    # cam_dir = np.mean(self.orientation_vecs,axis=0)
+    cam_dir = np.mean(self.orientation_zone_axis_range,axis=0)
+    cam_dir = cam_dir / np.linalg.norm(cam_dir)
+    az = np.rad2deg(np.arctan2(cam_dir[0],cam_dir[1]))
+    el = np.rad2deg(np.arccos(cam_dir[2]))
+    # coloring
+    wx = self.orientation_inds[:,0] / self.orientation_zone_axis_steps
+    wy = self.orientation_inds[:,1] / self.orientation_zone_axis_steps
+    w0 = 1 - wx - 0.5*wy
+    w1 = wx - wy
+    w2 = wy
+    # w0 = 1 - w1/2 - w2/2
+    w_scale = np.maximum(np.maximum(w0, w1), w2)
+    w_scale = 1 - np.exp(-w_scale)
+    w0 = w0 / w_scale
+    w1 = w1 / w_scale
+    w2 = w2 / w_scale
+    rgb_legend = np.clip( 
+        w0[:,None]*color_basis[0,:] + \
+        w1[:,None]*color_basis[1,:] + \
+        w2[:,None]*color_basis[2,:],
+        0,1)
+    # rgb_legend = np.clip( 
+    #     w2[:,None]*color_basis[0,:],0,1)
+    if marker_size is None:
+        marker_size = self.orientation_zone_axis_steps**2/20
+    # axis labels
+    if self.cartesian_directions:
+        label_0 = self.orientation_zone_axis_range[0, :]
+    else:
+        label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+    label_0 = np.round(label_0, decimals=3)
+    label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
+    label_0 = np.round(label_0, decimals=3)
 
+    if (
+        self.orientation_fiber is False
+        and self.orientation_full is False
+        and self.orientation_half is False
+    ):
+        if self.cartesian_directions:
+            label_1 = self.orientation_zone_axis_range[1, :]
+        else:
+            label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
+        label_1 = np.round(label_1 * 1e3) * 1e-3
+        label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        label_1 = np.round(label_1 * 1e3) * 1e-3
+
+        if self.cartesian_directions:
+            label_2 = self.orientation_zone_axis_range[2, :]
+        else:
+            label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
+
+        label_2 = np.round(label_2 * 1e3) * 1e-3
+        label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+        label_2 = np.round(label_2 * 1e3) * 1e-3
+
+        inds_legend = np.array(
+            [
+                0,
+                self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
+                self.orientation_num_zones - 1,
+            ]
+        )
+    else:
+        inds_legend = np.array([0])
 
     # plotting frame
-    fig, ax = plt.subplots(1, 3, figsize=figsize)
+    # fig, ax = plt.subplots(1, 3, figsize=figsize)
+    fig = plt.figure(figsize=figsize)
+    ax_x = fig.add_axes(
+        [0.0+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
+    ax_z = fig.add_axes(
+        [0.4+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
+    ax_l = fig.add_axes(
+        [0.8+figbound[0], 0.0, 0.2-2*+figbound[0], 1.0],
+        projection='3d',
+        elev=el,
+        azim=az)
+    # ax[0] = fig.add_subplot(1, 3, 1, projection='2d')
+    # ax[1] = fig.add_subplot(1, 3, 1, projection='2d')
+    # ax[2] = fig.add_subplot(1, 3, 1, projection='3d')
 
+    # orientation images
     if flag_in_plane:
-        ax[0].imshow(rgb_x)
-    ax[1].imshow(rgb_z)
+        ax_x.imshow(rgb_x)
+    else:
+        ax_x.imshow(np.ones_like(rgb_z))
+        ax_x.text(
+            rgb_z.shape[1]/2,
+            rgb_z.shape[0]/2-5,
+            'in-plane orientation',
+            fontsize=14,
+            horizontalalignment='center')
+        ax_x.text(
+            rgb_z.shape[1]/2,
+            rgb_z.shape[0]/2+5,
+            'requires pymatgen',
+            fontsize=14,
+            horizontalalignment='center')
+    ax_z.imshow(rgb_z)
 
+    # # Legend
+    # # ax[2] = fig.add_subplot(
+    # #     projection="3d", 
+    # #     elev=45, 
+    # #     azim=45)
+    ax_l.scatter(
+        xs=self.orientation_vecs[:,1],
+        ys=self.orientation_vecs[:,0],
+        zs=self.orientation_vecs[:,2],
+        c=rgb_legend,
+        s=marker_size,
+        alpha=1,
+        )
+    ax_l.axis("off")
+    text_scale_pos = 0.1
+    text_params = {
+        "va": "center",
+        "family": "sans-serif",
+        "fontweight": "normal",
+        "color": "k",
+        "size": 14,
+    }
+    format_labels = "{0:.2g}"
+    vec = self.orientation_vecs[inds_legend[0], :] - cam_dir 
+    vec = vec / np.linalg.norm(vec)
+    ax_l.text(
+        self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+        self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+        self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+          '[' + format_labels.format(label_0[0])
+        + ' ' + format_labels.format(label_0[1])
+        + ' ' + format_labels.format(label_0[2]) + ']',
+        None,
+        zorder=11,
+        ha="center",
+        **text_params,
+    )
+    # print(f"{np.array2string(means, precision=2, floatmode='fixed')}")
+
+
+    if (
+        self.orientation_fiber is False
+        and self.orientation_full is False
+        and self.orientation_half is False
+    ):
+        vec = self.orientation_vecs[inds_legend[1], :] - cam_dir 
+        vec = vec / np.linalg.norm(vec)
+        ax_l.text(
+            self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_1[0])
+            + ' ' + format_labels.format(label_1[1])
+            + ' ' + format_labels.format(label_1[2]) + ']',
+            None,
+            zorder=12,
+            ha="right",
+            **text_params,
+        )
+        vec = self.orientation_vecs[inds_legend[2], :] - cam_dir 
+        vec = vec / np.linalg.norm(vec)
+        ax_l.text(
+            self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_2[0])
+            + ' ' + format_labels.format(label_2[1])
+            + ' ' + format_labels.format(label_2[2]) + ']',
+            None,
+            zorder=13,
+            ha="left",
+            **text_params,
+        )
 
 
     # # Generate crystal basis images.
