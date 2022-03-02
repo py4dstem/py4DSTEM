@@ -813,13 +813,20 @@ def plot_orientation_maps(
     rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
 
     # Check crystal symmetry
-    if self.cell[0] == self.cell[1] and \
-        self.cell[0] == self.cell[2] and \
-        self.cell[1] == self.cell[2] and \
-        self.cell[3] == 90 and \
-        self.cell[4] == 90 and \
-        self.cell[5] == 90:
+    tol = 1e-4
+    tol_degrees = 1e-2
+    if  np.abs(self.cell[0] - self.cell[1])<tol and \
+        np.abs(self.cell[0] - self.cell[2])<tol and \
+        np.abs(self.cell[1] - self.cell[2])<tol and \
+        np.abs(self.cell[3] - 90)<tol_degrees and \
+        np.abs(self.cell[4] - 90)<tol_degrees and \
+        np.abs(self.cell[5] - 90)<tol_degrees:
         flag_in_plane = True
+    # elif np.abs(self.cell[0] - self.cell[1])<tol and \
+    #     np.abs(self.cell[3] - 90)<tol_degrees and \
+    #     np.abs(self.cell[4] - 90)<tol_degrees and \
+    #     np.abs(self.cell[5] - 120)<tol_degrees:
+    #     flag_in_plane = True
     else:
         flag_in_plane = False
         warnings.warn("Warning - some crystal symmetries require pymatgen to be installed.")
@@ -877,18 +884,6 @@ def plot_orientation_maps(
             + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
             + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
 
-
-
-
-    # w = w / (1 - np.exp(-np.max(w)))
-    #                 rgb = (
-    #                     color_basis[0, :] * w[0]
-    #                     + color_basis[1, :] * w[1]
-    #                     + color_basis[2, :] * w[2]
-    #                 )
-    #                 images_orientation[ax, ay, :, a0] = rgb
-
-
     # Legend init
     # projection vector
     # cam_dir = np.mean(self.orientation_vecs,axis=0)
@@ -926,37 +921,79 @@ def plot_orientation_maps(
     label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     label_0 = np.round(label_0, decimals=3)
 
-    if (
-        self.orientation_fiber is False
-        and self.orientation_full is False
-        and self.orientation_half is False
-    ):
-        if self.cartesian_directions:
-            label_1 = self.orientation_zone_axis_range[1, :]
-        else:
-            label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
-        label_1 = np.round(label_1 * 1e3) * 1e-3
-        label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-        label_1 = np.round(label_1 * 1e3) * 1e-3
+    # if (
+    #     self.orientation_fiber is False
+    #     and self.orientation_full is False
+    #     and self.orientation_half is False
+    # ):
 
-        if self.cartesian_directions:
-            label_2 = self.orientation_zone_axis_range[2, :]
-        else:
-            label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
+    # if self.cartesian_directions:
+    #     label_1 = self.orientation_zone_axis_range[1, :]
+    # else:
+    #     label_1 = self.crystal_to_cartesian(self.orientation_zone_axis_range[1, :])
+    # label_1 = np.round(label_1 * 1e3) * 1e-3
+    # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+    # label_1 = np.round(label_1 * 1e3) * 1e-3
 
-        label_2 = np.round(label_2 * 1e3) * 1e-3
-        label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-        label_2 = np.round(label_2 * 1e3) * 1e-3
+    # if self.cartesian_directions:
+    #     label_2 = self.orientation_zone_axis_range[2, :]
+    # else:
+    #     label_2 = self.crystal_to_cartesian(self.orientation_zone_axis_range[2, :])
 
-        inds_legend = np.array(
-            [
-                0,
-                self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
-                self.orientation_num_zones - 1,
-            ]
-        )
+    # label_2 = np.round(label_2 * 1e3) * 1e-3
+    # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+    # label_2 = np.round(label_2 * 1e3) * 1e-3
+
+    if self.cartesian_directions:
+        label_1 = self.orientation_zone_axis_range[1, :]
     else:
-        inds_legend = np.array([0])
+        label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
+    label_1 = np.round(label_1 * 1e3) * 1e-3
+    label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+    label_1 = np.round(label_1 * 1e3) * 1e-3
+
+    if self.cartesian_directions:
+        label_2 = self.orientation_zone_axis_range[2, :]
+    else:
+        label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
+
+    label_2 = np.round(label_2 * 1e3) * 1e-3
+    label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+    label_2 = np.round(label_2 * 1e3) * 1e-3
+
+    # print(np.round(self.orientation_zone_axis_range[1, :],decimals=3))
+    # print(label_1)
+    # print('')
+
+    # print(np.round(self.orientation_zone_axis_range[2, :],decimals=3))
+    # print(label_2)
+
+    # print('')
+
+    # v = np.array([1,-1,0])
+    # v = v / np.linalg.norm(v)
+    # label_3 = self.cartesian_to_crystal(v)
+    # label_3 = np.round(label_2 * 1e3) * 1e-3
+    # label_3 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+    # label_3 = np.round(label_2 * 1e3) * 1e-3
+
+    # print(np.round(v,decimals=3))
+    # print(label_3)
+
+
+    # print('')
+    # print(np.round(self.crystal_to_cartesian(np.array((1,0,0))),decimals=3))
+    # print(np.round(self.cartesian_to_crystal(np.array((1,1,0))),decimals=3))
+
+    inds_legend = np.array(
+        [
+            0,
+            self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
+            self.orientation_num_zones - 1,
+        ]
+    )
+    # else:
+    #     inds_legend = np.array([0])
 
     # plotting frame
     # fig, ax = plt.subplots(1, 3, figsize=figsize)
@@ -981,13 +1018,19 @@ def plot_orientation_maps(
         ax_x.imshow(np.ones_like(rgb_z))
         ax_x.text(
             rgb_z.shape[1]/2,
-            rgb_z.shape[0]/2-5,
+            rgb_z.shape[0]/2-10,
             'in-plane orientation',
             fontsize=14,
             horizontalalignment='center')
         ax_x.text(
             rgb_z.shape[1]/2,
-            rgb_z.shape[0]/2+5,
+            rgb_z.shape[0]/2+0,
+            'for this crystal system',
+            fontsize=14,
+            horizontalalignment='center')
+        ax_x.text(
+            rgb_z.shape[1]/2,
+            rgb_z.shape[0]/2+10,
             'requires pymatgen',
             fontsize=14,
             horizontalalignment='center')
@@ -1032,7 +1075,7 @@ def plot_orientation_maps(
     ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
     axisEqual3D(ax_l)
     if camera_dist is not None:
-        ax.dist = camera_dist
+        ax_l.dist = camera_dist
 
     # Add text labels
     ax_l.axis("off")
@@ -1059,39 +1102,39 @@ def plot_orientation_maps(
         ha="center",
         **text_params,
     )
-    if (
-        self.orientation_fiber is False
-        and self.orientation_full is False
-        and self.orientation_half is False
-    ):
-        vec = self.orientation_vecs[inds_legend[1], :] - cam_dir 
-        vec = vec / np.linalg.norm(vec)
-        ax_l.text(
-            self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
-            self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
-            self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_1[0])
-            + ' ' + format_labels.format(label_1[1])
-            + ' ' + format_labels.format(label_1[2]) + ']',
-            None,
-            zorder=12,
-            ha="right",
-            **text_params,
-        )
-        vec = self.orientation_vecs[inds_legend[2], :] - cam_dir 
-        vec = vec / np.linalg.norm(vec)
-        ax_l.text(
-            self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
-            self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
-            self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_2[0])
-            + ' ' + format_labels.format(label_2[1])
-            + ' ' + format_labels.format(label_2[2]) + ']',
-            None,
-            zorder=13,
-            ha="left",
-            **text_params,
-        )
+    # if (
+    #     self.orientation_fiber is False
+    #     and self.orientation_full is False
+    #     and self.orientation_half is False
+    # ):
+    vec = self.orientation_vecs[inds_legend[1], :] - cam_dir 
+    vec = vec / np.linalg.norm(vec)
+    ax_l.text(
+        self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+        self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+        self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+          '[' + format_labels.format(label_1[0])
+        + ' ' + format_labels.format(label_1[1])
+        + ' ' + format_labels.format(label_1[2]) + ']',
+        None,
+        zorder=12,
+        ha="right",
+        **text_params,
+    )
+    vec = self.orientation_vecs[inds_legend[2], :] - cam_dir 
+    vec = vec / np.linalg.norm(vec)
+    ax_l.text(
+        self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+        self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+        self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+          '[' + format_labels.format(label_2[0])
+        + ' ' + format_labels.format(label_2[1])
+        + ' ' + format_labels.format(label_2[2]) + ']',
+        None,
+        zorder=13,
+        ha="left",
+        **text_params,
+    )
 
     plt.show()
 
@@ -1529,14 +1572,14 @@ def plot_orientation_maps(
 #     return zone_axis / np.linalg.norm(zone_axis)
 
 
-def cartesian_to_crystal(self, zone_axis):
-    vec_cart = zone_axis @ self.lat_real
-    return vec_cart / np.linalg.norm(vec_cart)
+# def cartesian_to_crystal(self, zone_axis):
+#     vec_cart = zone_axis @ self.lat_real
+#     return vec_cart / np.linalg.norm(vec_cart)
 
 
-def crystal_to_cartesian(self, vec_cart):
-    zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-    return zone_axis / np.linalg.norm(zone_axis)
+# def crystal_to_cartesian(self, vec_cart):
+#     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
+#     return zone_axis / np.linalg.norm(zone_axis)
 
 
 def axisEqual3D(ax):
