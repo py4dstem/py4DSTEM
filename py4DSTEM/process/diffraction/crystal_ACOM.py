@@ -801,7 +801,7 @@ def match_single_pattern(
                 im_polar[ind_radial, :] = np.sum(
                     np.power(radius, self.orientation_radial_power)
                     * np.power(
-                        np.max(intensity[sub, None], 0),
+                        np.max(intensity[sub, None], 1.0),
                         self.orientation_intensity_power,
                     )
                     * np.maximum(
