@@ -59,8 +59,8 @@ class Crystal:
         #: atomic numbers - if only one value is provided, assume all atoms are same species
         numbers = np.asarray(numbers, dtype="intp")
         if np.size(numbers) == 1:
-            self.numbers = np.ones(positions.shape[0], dtype="intp") * numbers
-        elif np.size(numbers) == positions.shape[0]:
+            self.numbers = np.ones(self.positions.shape[0], dtype="intp") * numbers
+        elif np.size(numbers) == self.positions.shape[0]:
             self.numbers = numbers
         else:
             raise Exception("Number of positions and atomic numbers do not match")
