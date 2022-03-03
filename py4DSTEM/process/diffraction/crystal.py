@@ -322,6 +322,17 @@ class Crystal:
 
         return Crystal.from_pymatgen_structure(structure)
 
+    def setup_diffraction(
+        self, accelerating_voltage: float, cartesian_directions: bool = True
+    ):
+        """
+        Set up attributes used for diffraction calculations without going
+        through the full ACOM pipeline.
+        """
+        self.accel_voltage = accelerating_voltage
+        self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+        self.cartesian_directions = cartesian_directions
+
     def calculate_structure_factors(
         self,
         k_max: float = 2.0,
