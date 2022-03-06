@@ -59,8 +59,8 @@ class Crystal:
         #: atomic numbers - if only one value is provided, assume all atoms are same species
         numbers = np.asarray(numbers, dtype="intp")
         if np.size(numbers) == 1:
-            self.numbers = np.ones(positions.shape[0], dtype="intp") * numbers
-        elif np.size(numbers) == positions.shape[0]:
+            self.numbers = np.ones(self.positions.shape[0], dtype="intp") * numbers
+        elif np.size(numbers) == self.positions.shape[0]:
             self.numbers = numbers
         else:
             raise Exception("Number of positions and atomic numbers do not match")
@@ -321,6 +321,17 @@ class Crystal:
             )
 
         return Crystal.from_pymatgen_structure(structure)
+
+    def setup_diffraction(
+        self, accelerating_voltage: float, cartesian_directions: bool = True
+    ):
+        """
+        Set up attributes used for diffraction calculations without going
+        through the full ACOM pipeline.
+        """
+        self.accel_voltage = accelerating_voltage
+        self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+        self.cartesian_directions = cartesian_directions
 
     def calculate_structure_factors(
         self,
