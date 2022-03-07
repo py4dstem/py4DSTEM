@@ -115,7 +115,7 @@ class Coordinates(DataObject):
         self._validate_input(theta)
         self.a,self.b,self.theta = a,b,theta
     def set_p_ellipse(self,p_ellipse):
-        assert(len(p_ellipse==5))
+        assert(len(p_ellipse)==5)
         _,_,a,b,theta = p_ellipse
         self.set_ellipse(a,b,theta)
     def set_QR_rotation(self,QR_rotation):
