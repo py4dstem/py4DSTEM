@@ -22,7 +22,7 @@ def orientation_plan(
     tol_distance: float = 0.01,
     fiber_axis=None,
     fiber_angles=None,
-    cartesian_directions=False,
+    # cartesian_directions=False,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
     progress_bar: bool = True,
 ):
@@ -67,7 +67,7 @@ def orientation_plan(
         self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
     self.orientation_fiber_axis = np.asarray(fiber_axis)
     self.orientation_fiber_angles = np.asarray(fiber_angles)
-    self.cartesian_directions = cartesian_directions
+    # self.cartesian_directions = cartesian_directions
 
     # Calculate wavelenth
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
@@ -129,12 +129,19 @@ def orientation_plan(
                 )
 
             # Generate 2 perpendicular vectors to self.orientation_fiber_axis
-            if np.all(np.abs(self.orientation_fiber_axis) == np.array([1.0, 0.0, 0.0])):
-                v0 = np.array([0.0, 1.0, 0.0])
-            else:
+            # TESTING - different defaults for the zone axis ranges
+            if np.sum(np.abs(
+                self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
+                )) < 1e-3:
                 v0 = np.array([1.0, 0.0, 0.0])
+            else:
+                v0 = np.array([0.0, -1.0, 0.0])
+            # v2 = np.cross(self.orientation_fiber_axis, v0)
+            # v3 = np.cross(v2, self.orientation_fiber_axis)
+            # v2 = v2 / np.linalg.norm(v2)
+            # v3 = v3 / np.linalg.norm(v3)
             v2 = np.cross(self.orientation_fiber_axis, v0)
-            v3 = np.cross(v2, self.orientation_fiber_axis)
+            v3 = np.cross(self.orientation_fiber_axis, v2)
             v2 = v2 / np.linalg.norm(v2)
             v3 = v3 / np.linalg.norm(v3)
 
@@ -591,7 +598,7 @@ def orientation_plan(
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0]]
 
     # init
-    k0 = np.array([0, 0, 1]) / self.wavelength
+    k0 = -np.array([0, 0, 1]) / self.wavelength
     dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
 
     # Calculate reference arrays for all orientations
@@ -801,7 +808,7 @@ def match_single_pattern(
                 im_polar[ind_radial, :] = np.sum(
                     np.power(radius, self.orientation_radial_power)
                     * np.power(
-                        np.max(intensity[sub, None], 1.0),
+                        np.maximum(intensity[sub, None], 0.0),
                         self.orientation_intensity_power,
                     )
                     * np.maximum(
