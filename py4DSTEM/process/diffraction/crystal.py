@@ -43,6 +43,7 @@ class Crystal:
         positions,
         numbers,
         cell,
+        cartesian_directions = False,
     ):
         """
         Args:
@@ -52,9 +53,12 @@ class Crystal:
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+            cartesian_directions (bool): specify directions in Cartesian format
+
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
+        self.cartesian_directions = cartesian_directions
 
         #: atomic numbers - if only one value is provided, assume all atoms are same species
         numbers = np.asarray(numbers, dtype="intp")
@@ -425,6 +429,7 @@ class Crystal:
         zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
         foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
         proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
+        accel_voltage = None,
         ind_orientation: int = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
@@ -441,7 +446,9 @@ class Crystal:
                                              -an Orientation class object 
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            index_orientation                If input is an Orientation class object with multiple orientations,
+            accel_voltage (float):           Accelerating voltage in Volts. If not specified,
+                                             we check to see if crystal already has voltage specified.
+            ind_orientation                  If input is an Orientation class object with multiple orientations,
                                              this input can be used to select a specific orientation.
             sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
@@ -452,8 +459,24 @@ class Crystal:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
         """
 
+        # Tolerance for angular tests
+        tol = 1e-6
+
+        # init voltage and wavelength if needed
+        if accel_voltage is not None:
+            self.accel_voltage = np.asarray(accel_voltage)
+        else:
+            # Check if voltage already exists, if not set to 300 kV
+            if not hasattr(self, 'accel_voltage'):
+                self.accel_voltage = 300.0e3
+
+                # Calculate wavelenth
+                self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+
         # Check type of input
         if isinstance(zone_axis, (np.ndarray, list, tuple)):
+            zone_axis = np.array(zone_axis)
+
             if zone_axis.ndim == 1:
                 # input is a 3 element zone axis
                 zone_axis = np.asarray(zone_axis, dtype="float")
@@ -462,11 +485,12 @@ class Crystal:
                     zone_axis = self.cartesian_to_crystal(zone_axis)
 
                 if proj_x_axis is None:
-                    if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
-                        v0 = np.array([0.0, -1.0, 0.0])
+                    if np.linalg.norm(np.abs(zone_axis) - np.array([0.0, 1.0, 0.0])) < tol:
+                        v0 = np.array([0.0, 0.0, -1.0])
+                        print(1)
                     else:
-                        v0 = np.array([-1.0, 0.0, 0.0])
-                    proj_x_axis = np.cross(zone_axis, v0)
+                        v0 = np.array([0.0, 1.0, 0.0])
+                    proj_x_axis = np.cross(v0, zone_axis)
                 else:
                     proj_x_axis = np.asarray(proj_x_axis, dtype="float")
                     if not self.cartesian_directions:
@@ -550,7 +574,7 @@ class Crystal:
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = zone_axis_norm / self.wavelength
+        k0 = -zone_axis_norm / self.wavelength
 
         # Excitation errors
         cos_alpha = np.sum(
@@ -613,11 +637,19 @@ class Crystal:
 
         return bragg_peaks
 
-    def cartesian_to_crystal(self, zone_axis):
-        vec_cart = zone_axis @ self.lat_real
+    # def cartesian_to_crystal(self, zone_axis):
+    #     vec_cart = zone_axis @ self.lat_real
+    #     return vec_cart / np.linalg.norm(vec_cart)
+
+    # def crystal_to_cartesian(self, vec_cart):
+    #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
+    #     return zone_axis / np.linalg.norm(zone_axis)
+
+
+    def cartesian_to_crystal(self, vec_cart):
+        vec_crys = vec_cart @ np.linalg.inv(self.lat_real)
+        return vec_crys / np.linalg.norm(vec_crys)
+
+    def crystal_to_cartesian(self, vec_crys):
+        vec_cart = vec_crys @ self.lat_real
         return vec_cart / np.linalg.norm(vec_cart)
-
-    def crystal_to_cartesian(self, vec_cart):
-        zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-        return zone_axis / np.linalg.norm(zone_axis)
-
