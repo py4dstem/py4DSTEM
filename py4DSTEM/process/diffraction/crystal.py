@@ -433,7 +433,7 @@ class Crystal:
         ind_orientation: int = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
-        tol_intensity: float = 0.001,
+        tol_intensity: float = 0.0001,
         k_max: float = None,
     ):
         """
@@ -485,9 +485,8 @@ class Crystal:
                     zone_axis = self.cartesian_to_crystal(zone_axis)
 
                 if proj_x_axis is None:
-                    if np.linalg.norm(np.abs(zone_axis) - np.array([0.0, 1.0, 0.0])) < tol:
+                    if np.linalg.norm(zone_axis * np.array([0.0, 1.0, 0.0])) > 1 - tol:
                         v0 = np.array([0.0, 0.0, -1.0])
-                        print(1)
                     else:
                         v0 = np.array([0.0, 1.0, 0.0])
                     proj_x_axis = np.cross(v0, zone_axis)
@@ -550,8 +549,8 @@ class Crystal:
             foil_normal = np.asarray(foil_normal, dtype="float")
             if not self.cartesian_directions:
                 foil_normal = self.crystal_to_cartesian(foil_normal)
-            else:
-                foil_normal = foil_normal / np.linalg.norm(foil_normal)
+            # else:
+        foil_normal = foil_normal / np.linalg.norm(foil_normal)
 
         # if proj_x_axis is None:
         #     if np.all(zone_axis == np.array([-1, 0, 0])):
@@ -578,7 +577,7 @@ class Crystal:
 
         # Excitation errors
         cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * foil_normal[:, None], axis=0
+            (k0[:, None] + self.g_vec_all) * (-foil_normal[:, None]), axis=0
         ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
         sg = (
             (-0.5)
@@ -594,7 +593,7 @@ class Crystal:
 
         # Diffracted peak intensities and labels
         g_int = self.struct_factors_int[keep] * np.exp(
-            sg[keep] ** 2 / (-2 * sigma_excitation_error ** 2)
+            (sg[keep] ** 2) / (-2 * sigma_excitation_error ** 2)
         )
         hkl = self.hkl[:, keep]
 

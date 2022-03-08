@@ -86,14 +86,16 @@ def orientation_plan(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
 
-        pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
-        self.pointgroup = pointgroup
+        # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
+        # self.pointgroup = pointgroup
+        self.pointgroup = SpacegroupAnalyzer(structure)
 
         assert (
-            pointgroup in orientation_ranges
+            self.pointgroup.get_point_group_symbol() in orientation_ranges
         ), "Unrecognized pointgroup returned by pymatgen!"
 
-        zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[pointgroup]
+        zone_axis_range, fiber_axis, fiber_angles = orientation_ranges[ \
+            self.pointgroup.get_point_group_symbol()]
         if isinstance(zone_axis_range, list):
             zone_axis_range = np.array(zone_axis_range)
         elif zone_axis_range == "fiber":
@@ -104,7 +106,7 @@ def orientation_plan(
         )
 
         print(
-            f"Automatically detected point group {pointgroup}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
+            f"Automatically detected point group {self.pointgroup.get_point_group_symbol()}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
 
     if isinstance(zone_axis_range, str):
@@ -611,12 +613,20 @@ def orientation_plan(
         p = np.linalg.inv(self.orientation_rotation_matrices[a0, :, :]) @ self.g_vec_all
 
         # Excitation errors
-        cos_alpha = (k0[2, None] + p[2, :]) / np.linalg.norm(k0[:, None] + p, axis=0)
+        # cos_alpha = (k0[2, None] + p[2, :]) / np.linalg.norm(k0[:, None] + p, axis=0)
+        # sg = (
+        #     (-0.5)
+        #     * np.sum((2 * k0[:, None] + p) * p, axis=0)
+        #     / (np.linalg.norm(k0[:, None] + p, axis=0))
+        #     / cos_alpha
+        #)
+        # cos_alpha = np.sum(
+        #     (k0[:, None] + self.g_vec_all) * -foil_normal[:, None], axis=0
+        # ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
         sg = (
             (-0.5)
             * np.sum((2 * k0[:, None] + p) * p, axis=0)
             / (np.linalg.norm(k0[:, None] + p, axis=0))
-            / cos_alpha
         )
 
         # in-plane rotation angle
@@ -837,7 +847,7 @@ def match_single_pattern(
 
         # Plot polar space image if needed
         if plot_polar is True and match_ind==0:
-            print(match_ind)
+            # print(match_ind)
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             ax.imshow(im_polar)
 
