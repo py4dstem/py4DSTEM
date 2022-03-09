@@ -101,9 +101,10 @@ def orientation_plan(
         elif zone_axis_range == "fiber":
             self.orientation_fiber_axis = np.asarray(fiber_axis)
             self.orientation_fiber_angles = np.asarray(fiber_angles)
-        self.cartesian_directions = (
-            True  # the entries in the orientation_ranges object assume cartesian zones
-        )
+        # this is wrong! -CO
+        # self.cartesian_directions = (
+        #     True  # the entries in the orientation_ranges object assume cartesian zones
+        # )
 
         print(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
@@ -1054,18 +1055,28 @@ def match_single_pattern(
             zone_axis_fit = orientation.matrix[match_ind][:, 2]
 
             if not self.cartesian_directions:
-                # TODO - I definitely think this should be cartesian--> zone,
-                # but that seems to return incorrect labels.  Not sure why! -CO
+                zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
 
-                # zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
-                zone_axis_fit = self.crystal_to_cartesian(zone_axis_fit)
+            zone_axis_fit = np.round(zone_axis_fit,decimals=3)
 
-            temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-            temp = np.round(temp, decimals=3)
-            # if multiple_corr_reset and match_ind > 0:
+            # if not self.cartesian_directions:
+            #     # TODO - I definitely think this should be cartesian--> zone,
+            #     # but that seems to return incorrect labels.  Not sure why! -CO
+
+            #     # zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
+            #     zone_axis_fit = self.crystal_to_cartesian(zone_axis_fit)
+
+            # temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
+            # temp = np.round(temp, decimals=3)
+            # # if multiple_corr_reset and match_ind > 0:
+            # if not self.cartesian_directions:
+            #     zone_fit = self.cartesian_to_crystal(orientation.corr[match_ind])
+            # else:
+            #     zone_fit = 
+            # print()
             print(
                 "Best fit zone axis = ("
-                + str(temp)
+                + str(zone_axis_fit)
                 + ")"
                 + " with corr value = "
                 + str(np.round(orientation.corr[match_ind], decimals=3))
@@ -1244,16 +1255,19 @@ def match_single_pattern(
             )
 
             label_0 = self.orientation_zone_axis_range[0, :]
-            label_0 = np.round(label_0 * 1e3) * 1e-3
+            label_0 = np.round(label_0, decimals=3)
             label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
+            label_0 = np.round(label_0, decimals=3)
 
             label_1 = self.orientation_zone_axis_range[1, :]
-            label_1 = np.round(label_1 * 1e3) * 1e-3
+            label_1 = np.round(label_1, decimals=3)
             label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+            label_1 = np.round(label_1, decimals=3)
 
             label_2 = self.orientation_zone_axis_range[2, :]
-            label_2 = np.round(label_2 * 1e3) * 1e-3
+            label_2 = np.round(label_2, decimals=3)
             label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            label_2 = np.round(label_2, decimals=3)
 
             ax[0].set_xticks([0, self.orientation_zone_axis_steps])
             ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)

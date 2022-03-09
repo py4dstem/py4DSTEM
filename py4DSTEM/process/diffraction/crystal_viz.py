@@ -489,6 +489,10 @@ def plot_orientation_plan(
     if zone_axis_plot is not None:
         zone_axis_plot = np.array(zone_axis_plot, dtype="float")
         zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
+
+        if not self.cartesian_directions:
+            zone_axis_plot = self.crystal_to_cartesian(zone_axis_plot)
+
         index_plot = np.argmin(
             np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
         )
