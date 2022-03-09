@@ -343,22 +343,24 @@ class Crystal:
         # Store k_max
         self.k_max = np.asarray(k_max)
 
-        # Inverse lattice vectors
-        lat_inv = np.linalg.inv(self.lat_real)
+        # Inverse lattice, metric tensors
+        self.metric_real = self.lat_real @ self.lat_real.T
+        self.metric_inv = np.linalg.inv(self.metric_real)
+        self.lat_inv = self.metric_inv @ self.lat_real
 
         # Find shortest lattice vector direction
         k_test = np.vstack(
             [
-                lat_inv[0, :],
-                lat_inv[1, :],
-                lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :],
-                lat_inv[0, :] + lat_inv[2, :],
-                lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] - lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :] - lat_inv[2, :],
-                lat_inv[0, :] - lat_inv[1, :] - lat_inv[2, :],
+                self.lat_inv[0, :],
+                self.lat_inv[1, :],
+                self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :],
+                self.lat_inv[0, :] + self.lat_inv[2, :],
+                self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] - self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] - self.lat_inv[2, :],
             ]
         )
         k_leng_min = np.min(np.linalg.norm(k_test, axis=1))
@@ -371,7 +373,8 @@ class Crystal:
             np.arange(-num_tile, num_tile + 1),
         )
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
-        g_vec_all = lat_inv @ hkl
+        # g_vec_all = self.lat_inv @ hkl
+        g_vec_all =  (hkl.T @ self.lat_inv).T
 
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
@@ -553,7 +556,8 @@ class Crystal:
                 foil_normal = self.crystal_to_cartesian(foil_normal)
             # else:
         foil_normal = foil_normal / np.linalg.norm(foil_normal)
-
+        # print(np.round(zone_axis,decimals=3))
+        # print(np.round(foil_normal,decimals=3))
         # if proj_x_axis is None:
         #     if np.all(zone_axis == np.array([-1, 0, 0])):
         #         proj_x_axis = np.array([0, -1, 0])
@@ -579,7 +583,7 @@ class Crystal:
 
         # Excitation errors
         cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * (-foil_normal[:, None]), axis=0
+            (k0[:, None] + self.g_vec_all) * (-1*foil_normal[:, None]), axis=0
         ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
         sg = (
             (-0.5)
@@ -654,10 +658,41 @@ class Crystal:
     #     vec_cart = vec_crys @ self.lat_real
     #     return vec_cart / np.linalg.norm(vec_cart)
 
+    # def cartesian_to_crystal(self, vec_cart):
+    #     vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
+    #     return vec_crys / np.linalg.norm(vec_crys)
+
+    # def crystal_to_cartesian(self, vec_crys):
+    #     vec_cart = np.linalg.inv(self.lat_real) @  vec_crys
+    #     return vec_cart / np.linalg.norm(vec_cart)
+
+
     def cartesian_to_crystal(self, vec_cart):
-        vec_crys = self.lat_real.dot(vec_cart) 
+        vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
         return vec_crys / np.linalg.norm(vec_crys)
 
     def crystal_to_cartesian(self, vec_crys):
-        vec_cart = np.linalg.inv(self.lat_real).dot(vec_crys) 
+        # vec_cart = self.lat_inv.T @ (self.metric_real @  vec_crys)
+        # vec_cart = (self.lat_real.T @ self.metric_real).T @  vec_crys
+        # vec_cart = (self.lat_real.T @ ( self.metric_inv @ vec_crys))
+        # bij = self.lat_inv.T
+        # print(np.round(bij,decimals=3))
+        # bij = self.lat_real.T @ self.metric_inv
+        # print(np.round(bij,decimals=3))
+
+
+        vec_cart = self.lat_inv.T @ vec_crys
+
+        # vec_cart = self.lat_real @ self.metric_inv @ vec_crys
+        # vec_cart = self.lat_real.T @ self.metric_inv @ vec_crys
+
+        # vec_cart = self.lat_inv.T @ vec_crys
+
+
+
+        # print(np.round(np.linalg.inv(self.lat_real),decimals=3))
+        # print(np.round(vec_crys,decimals=3))
+        # vec_cart = np.linalg.lstsq(
+        #     np.linalg.inv(self.lat_real),
+        #     vec_crys)
         return vec_cart / np.linalg.norm(vec_cart)

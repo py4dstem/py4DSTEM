@@ -203,7 +203,7 @@ def plot_structure_factors(
                 * 180
                 / np.pi
             )
-        az = np.arctan2(proj_dir[1], proj_dir[0]) * 180 / np.pi
+        az = np.arctan2(proj_dir[0], proj_dir[1]) * 180 / np.pi
     else:
         raise Exception(
             "Projection direction cannot contain " + np.size(proj_dir) + " elements"
@@ -214,8 +214,8 @@ def plot_structure_factors(
     ax = fig.add_subplot(projection="3d", elev=el, azim=az)
 
     ax.scatter(
-        xs=self.g_vec_all[0, :],
-        ys=self.g_vec_all[1, :],
+        xs=self.g_vec_all[1, :],
+        ys=self.g_vec_all[0, :],
         zs=self.g_vec_all[2, :],
         s=scale_markers * self.struct_factors_int,
     )
@@ -491,7 +491,9 @@ def plot_orientation_plan(
         zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
 
         if not self.cartesian_directions:
+            print(np.round(zone_axis_plot,decimals=6))
             zone_axis_plot = self.crystal_to_cartesian(zone_axis_plot)
+            print(np.round(zone_axis_plot,decimals=6))
 
         index_plot = np.argmin(
             np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
