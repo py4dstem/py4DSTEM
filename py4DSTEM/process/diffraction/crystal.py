@@ -475,20 +475,22 @@ class Crystal:
 
         # Check type of input
         if isinstance(zone_axis, (np.ndarray, list, tuple)):
-            zone_axis = np.array(zone_axis)
+            zone_axis = np.array(zone_axis, dtype='float')
 
             if zone_axis.ndim == 1:
                 # input is a 3 element zone axis
-                zone_axis = np.asarray(zone_axis, dtype="float")
 
                 if not self.cartesian_directions:
-                    zone_axis = self.cartesian_to_crystal(zone_axis)
+                    # print(np.round(zone_axis,decimals=3))
+                    zone_axis = self.crystal_to_cartesian(zone_axis)
+                    # zone_axis = self.cartesian_to_crystal(zone_axis)
+                    # print(np.round(zone_axis,decimals=3))
 
                 if proj_x_axis is None:
                     if np.linalg.norm(zone_axis * np.array([0.0, 1.0, 0.0])) > 1 - tol:
-                        v0 = np.array([0.0, 0.0, -1.0])
+                        v0 = np.array([-1.0, 0.0, 0.0])
                     else:
-                        v0 = np.array([0.0, 1.0, 0.0])
+                        v0 = np.array([ 0.0, 1.0, 0.0])
                     proj_x_axis = np.cross(v0, zone_axis)
                 else:
                     proj_x_axis = np.asarray(proj_x_axis, dtype="float")
@@ -644,11 +646,18 @@ class Crystal:
     #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
     #     return zone_axis / np.linalg.norm(zone_axis)
 
+    # def cartesian_to_crystal(self, vec_cart):
+    #     vec_crys = vec_cart @ np.linalg.inv(self.lat_real)
+    #     return vec_crys / np.linalg.norm(vec_crys)
+
+    # def crystal_to_cartesian(self, vec_crys):
+    #     vec_cart = vec_crys @ self.lat_real
+    #     return vec_cart / np.linalg.norm(vec_cart)
 
     def cartesian_to_crystal(self, vec_cart):
-        vec_crys = vec_cart @ np.linalg.inv(self.lat_real)
+        vec_crys = self.lat_real.dot(vec_cart) 
         return vec_crys / np.linalg.norm(vec_crys)
 
     def crystal_to_cartesian(self, vec_crys):
-        vec_cart = vec_crys @ self.lat_real
+        vec_cart = np.linalg.inv(self.lat_real).dot(vec_crys) 
         return vec_cart / np.linalg.norm(vec_cart)
