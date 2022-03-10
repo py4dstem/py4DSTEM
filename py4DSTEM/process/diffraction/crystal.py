@@ -590,7 +590,7 @@ class Crystal:
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = zone_axis_norm / self.wavelength
+        k0 = -zone_axis_norm / self.wavelength
 
         # foil normal vector
         if foil_normal is None:
