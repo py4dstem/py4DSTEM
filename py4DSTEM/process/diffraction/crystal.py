@@ -87,14 +87,33 @@ class Crystal:
         alpha = self.cell[3] * np.pi / 180
         beta = self.cell[4] * np.pi / 180
         gamma = self.cell[5] * np.pi / 180
-        t = (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+        # t = (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+        # self.lat_real = np.array(
+        #     [
+        #         [a, 0, 0],
+        #         [b * np.cos(gamma), b * np.sin(gamma), 0],
+        #         [c * np.cos(beta), c * t, c * np.sqrt(1 - np.cos(beta) ** 2 - t ** 2)],
+        #     ]
+        # )
+        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+        vol = a*b*c*np.sqrt(1 \
+            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
+        # self.lat_real = np.array(
+        #     [
+        #         [a, b*np.cos(gamma),  c*np.cos(beta)],
+        #         [0, b*np.sin(gamma), -c*f/np.sin(gamma)],
+        #         [0, 0,                vol/(a*b*np.sin(gamma))],
+        #     ]
+        # )
         self.lat_real = np.array(
             [
-                [a, 0, 0],
-                [b * np.cos(gamma), b * np.sin(gamma), 0],
-                [c * np.cos(beta), c * t, c * np.sqrt(1 - np.cos(beta) ** 2 - t ** 2)],
+                [a,               0,                 0],
+                [b*np.cos(gamma), b*np.sin(gamma),   0],
+                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
             ]
         )
+
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -540,6 +559,7 @@ class Crystal:
         #     proj_x_axis = zone_axis[:, 0, 0]
         #     zone_axis = zone_axis[:, 2, 0]
 
+
         # Set x and y projection vectors
         ky_proj = np.cross(zone_axis, proj_x_axis)
         kx_proj = np.cross(ky_proj, zone_axis)
@@ -547,15 +567,6 @@ class Crystal:
         kx_proj = kx_proj / np.linalg.norm(kx_proj)
         ky_proj = ky_proj / np.linalg.norm(ky_proj)
 
-        # Foil normal vector
-        if foil_normal is None:
-            foil_normal = zone_axis
-        else:
-            foil_normal = np.asarray(foil_normal, dtype="float")
-            if not self.cartesian_directions:
-                foil_normal = self.crystal_to_cartesian(foil_normal)
-            # else:
-        foil_normal = foil_normal / np.linalg.norm(foil_normal)
         # print(np.round(zone_axis,decimals=3))
         # print(np.round(foil_normal,decimals=3))
         # if proj_x_axis is None:
@@ -579,11 +590,21 @@ class Crystal:
 
         # wavevector
         zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = -zone_axis_norm / self.wavelength
+        k0 = zone_axis_norm / self.wavelength
+
+        # foil normal vector
+        if foil_normal is None:
+            foil_normal = zone_axis_norm
+        else:
+            foil_normal = np.asarray(foil_normal, dtype="float")
+            if not self.cartesian_directions:
+                foil_normal = self.crystal_to_cartesian(foil_normal)
+            # else:
+            foil_normal = foil_normal / np.linalg.norm(foil_normal)
 
         # Excitation errors
         cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * (-1*foil_normal[:, None]), axis=0
+            (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
         ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
         sg = (
             (-0.5)
@@ -672,27 +693,16 @@ class Crystal:
         return vec_crys / np.linalg.norm(vec_crys)
 
     def crystal_to_cartesian(self, vec_crys):
-        # vec_cart = self.lat_inv.T @ (self.metric_real @  vec_crys)
-        # vec_cart = (self.lat_real.T @ self.metric_real).T @  vec_crys
-        # vec_cart = (self.lat_real.T @ ( self.metric_inv @ vec_crys))
-        # bij = self.lat_inv.T
-        # print(np.round(bij,decimals=3))
-        # bij = self.lat_real.T @ self.metric_inv
-        # print(np.round(bij,decimals=3))
+        vec_cart = vec_crys @ self.metric_real @ self.lat_inv
+
+        # vec_cart =  self.lat_real @ self.metric_inv @ vec_crys 
+        # vec_cart =  self.lat_inv @ (self.metric_inv @ vec_crys )
+        # vec_cart =  vec_crys  @  self.metric_inv @ self.lat_real.T
 
 
-        vec_cart = self.lat_inv.T @ vec_crys
+        # vec_cart = vec_crys @ self.metric_real @ self.lat_inv
+        # vec_cart =  self.lat_inv.T @ self.metric_real @ vec_crys
+        # vec_cart =  (self.metric_real @ self.lat_inv).T @ vec_crys
+        # print(np.round(vec_cart,decimals=3))
 
-        # vec_cart = self.lat_real @ self.metric_inv @ vec_crys
-        # vec_cart = self.lat_real.T @ self.metric_inv @ vec_crys
-
-        # vec_cart = self.lat_inv.T @ vec_crys
-
-
-
-        # print(np.round(np.linalg.inv(self.lat_real),decimals=3))
-        # print(np.round(vec_crys,decimals=3))
-        # vec_cart = np.linalg.lstsq(
-        #     np.linalg.inv(self.lat_real),
-        #     vec_crys)
         return vec_cart / np.linalg.norm(vec_cart)

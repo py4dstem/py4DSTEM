@@ -601,9 +601,9 @@ def orientation_plan(
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0]]
 
     # init
-    k0 = -np.array([0, 0, 1]) / self.wavelength
+    k0 = -1*np.array([0, 0, 1]) / self.wavelength
     dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-    foil_normal = np.array([0, 0, 1])
+    foil_normal = -1*np.array([0, 0, 1])
 
     # Calculate reference arrays for all orientations
     for a0 in tqdmnd(
@@ -624,7 +624,7 @@ def orientation_plan(
         #)
 
         cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * (-1*foil_normal[:, None]), axis=0
+            (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
         ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
         sg = (
             (-0.5)
