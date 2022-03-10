@@ -594,7 +594,7 @@ class Crystal:
 
         # foil normal vector
         if foil_normal is None:
-            foil_normal = zone_axis_norm
+            foil_normal = -zone_axis_norm
         else:
             foil_normal = np.asarray(foil_normal, dtype="float")
             if not self.cartesian_directions:
