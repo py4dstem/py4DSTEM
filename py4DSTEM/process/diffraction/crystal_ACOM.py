@@ -582,6 +582,7 @@ def orientation_plan(
 
     # Calculate rotation matrices for zone axes
     # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
+    print(1)
     for a0 in np.arange(self.orientation_num_zones):
         m1z = np.array(
             [
@@ -594,7 +595,7 @@ def orientation_plan(
             [
                 [1, 0, 0],
                 [0, np.cos(elev[a0]), np.sin(elev[a0])],
-                [0, -np.sin(elev[a0]), np.cos(elev[a0])],
+                [0, np.sin(elev[a0]), np.cos(elev[a0])],
             ]
         )
         self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x
