@@ -99,13 +99,6 @@ class Crystal:
         vol = a*b*c*np.sqrt(1 \
             + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
             - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
-        # self.lat_real = np.array(
-        #     [
-        #         [a, b*np.cos(gamma),  c*np.cos(beta)],
-        #         [0, b*np.sin(gamma), -c*f/np.sin(gamma)],
-        #         [0, 0,                vol/(a*b*np.sin(gamma))],
-        #     ]
-        # )
         self.lat_real = np.array(
             [
                 [a,               0,                 0],
@@ -113,6 +106,13 @@ class Crystal:
                 [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
             ]
         )
+        # self.lat_real = np.array(
+        #     [
+        #         [a, b*np.cos(gamma),  c*np.cos(beta)],
+        #         [0, b*np.sin(gamma), -c*f/np.sin(gamma)],
+        #         [0, 0,                vol/(a*b*np.sin(gamma))],
+        #     ]
+        # )
 
 
     def from_CIF(CIF, conventional_standard_structure=True):
