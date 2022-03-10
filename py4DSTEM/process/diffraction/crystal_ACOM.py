@@ -582,7 +582,6 @@ def orientation_plan(
 
     # Calculate rotation matrices for zone axes
     # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
-    print(1)
     for a0 in np.arange(self.orientation_num_zones):
         m1z = np.array(
             [
@@ -595,16 +594,16 @@ def orientation_plan(
             [
                 [1, 0, 0],
                 [0, np.cos(elev[a0]), np.sin(elev[a0])],
-                [0, np.sin(elev[a0]), np.cos(elev[a0])],
+                [0, -np.sin(elev[a0]), np.cos(elev[a0])],
             ]
         )
         self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0]]
 
-    # init
-    k0 = -1*np.array([0, 0, 1]) / self.wavelength
+    # init wave vector and zone axis normal
+    k0 = np.array([0, 0, -1]) / self.wavelength
     dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-    foil_normal = -1*np.array([0, 0, 1])
+    foil_normal = np.array([0, 0, -1])
 
     # Calculate reference arrays for all orientations
     for a0 in tqdmnd(
@@ -675,6 +674,7 @@ def orientation_plan(
 
     # Fourier domain along angular axis
     self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+    # self.orientation_ref = np.fft.fft(self.orientation_ref)
 
     # # Init vectors for the 2D corr method
     # self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
