@@ -689,7 +689,14 @@ class Crystal:
 
 
     def cartesian_to_crystal(self, vec_cart):
-        vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
+        # vec_crys = vec_cart @ self.metric_inv @ self.lat_real.T
+        # vec_crys = vec_cart @ np.linalg.inv(self.metric_real @ self.lat_inv)
+        vec_crys = vec_cart @ self.lat_real.T @ self.metric_inv
+
+
+        # vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
+
+
         return vec_crys / np.linalg.norm(vec_crys)
 
     def crystal_to_cartesian(self, vec_crys):
