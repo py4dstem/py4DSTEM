@@ -109,14 +109,12 @@ def orientation_plan(
         print(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
-
     if isinstance(zone_axis_range, str):
         if (
             zone_axis_range == "fiber"
             and fiber_axis is not None
             and fiber_angles is not None
         ):
-
             # Determine vector ranges
             self.orientation_fiber_axis = np.array(
                 self.orientation_fiber_axis, dtype="float"
@@ -135,10 +133,11 @@ def orientation_plan(
             # TESTING - different defaults for the zone axis ranges
             if np.sum(np.abs(
                 self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
-                )) < 1e-3:
+                )) < 1e-6:
                 v0 = np.array([1.0, 0.0, 0.0])
             else:
                 v0 = np.array([0.0, -1.0, 0.0])
+
             # v2 = np.cross(self.orientation_fiber_axis, v0)
             # v3 = np.cross(v2, self.orientation_fiber_axis)
             # v2 = v2 / np.linalg.norm(v2)
@@ -593,17 +592,18 @@ def orientation_plan(
         m2x = np.array(
             [
                 [1, 0, 0],
-                [0, np.cos(elev[a0]), np.sin(elev[a0])],
-                [0, -np.sin(elev[a0]), np.cos(elev[a0])],
+                [0, np.cos(elev[a0]), -np.sin(elev[a0])],
+                [0, np.sin(elev[a0]), np.cos(elev[a0])],
             ]
         )
         self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x
+        # self.orientation_rotation_matrices[a0, :, :] = m2x @ m1z
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0]]
 
     # init wave vector and zone axis normal
-    k0 = np.array([0, 0, -1]) / self.wavelength
+    k0 = np.array([0.0, 0.0, -1.0]) / self.wavelength
     dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-    foil_normal = np.array([0, 0, -1])
+    foil_normal = np.array([0.0, 0.0, -1.0])
 
     # Calculate reference arrays for all orientations
     for a0 in tqdmnd(
@@ -613,6 +613,7 @@ def orientation_plan(
         disable=not progress_bar,
     ):
         p = np.linalg.inv(self.orientation_rotation_matrices[a0, :, :]) @ self.g_vec_all
+        # p = self.orientation_rotation_matrices[a0, :, :] @ self.g_vec_all
 
         # Excitation errors
         # cos_alpha = (k0[2, None] + p[2, :]) / np.linalg.norm(k0[:, None] + p, axis=0)
@@ -970,7 +971,7 @@ def match_single_pattern(
                     dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
                     corr_in_plane_angle[a0] = (
                         self.orientation_gamma[ind_phi_inv[a0]] + dc * dphi
-                    )
+                    ) + np.pi
             else:
                 inds = np.mod(
                     ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
@@ -1340,11 +1341,11 @@ orientation_ranges = {
     "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
     "6": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "-6": ["fiber", [0, 0, 1], [180.0, 60.0]],
-    "6/m": [[[1, 0, 0], [0.5, np.sqrt(3) / 2.0, 0]], None, None],
+    "6/m": [[[1, 0, 0], [0.5, 0.5*np.sqrt(3), 0]], None, None],
     "622": ["fiber", [0, 0, 1], [180.0, 30.0]],
     "6mm": ["fiber", [0, 0, 1], [180.0, 30.0]],
     "-6m2": ["fiber", [0, 0, 1], [90.0, 60.0]],
-    "6/mmm": [[[np.sqrt(3) / 2.0, 0.5, 0.0], [1, 0, 0]], None, None],
+    "6/mmm": [[[0.5*np.sqrt(3), 0.5, 0.0], [1, 0, 0]], None, None],
     "23": [
         [[1, 0, 0], [1, 1, 1]],
         None,
