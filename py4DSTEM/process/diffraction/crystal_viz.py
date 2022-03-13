@@ -14,12 +14,17 @@ from ..utils import tqdmnd
 
 def plot_structure(
     self,
-    proj_dir: Union[list, np.ndarray] = [3, 2, 1],
+    orientation_matrix: Optional[np.ndarray] = None,
+    zone_axis_miller: Optional[np.ndarray] = None,
+    proj_x_miller: Optional[np.ndarray] = None,
+    zone_axis_cartesian: Optional[np.ndarray] = None,
+    proj_x_cartesian: Optional[np.ndarray] = None,
     size_marker: float = 400,
     tol_distance: float = 0.001,
     plot_limit: Optional[np.ndarray] = None,
     camera_dist: Optional[float] = None,
     show_axes: bool = False,
+    perspective_axes: bool = True,
     figsize: Union[tuple, list, np.ndarray] = (8, 8),
     returnfig: bool = False,
 ):
@@ -27,19 +32,70 @@ def plot_structure(
     Quick 3D plot of the untit cell /atomic structure.
 
     Args:
-        proj_dir (float):           projection direction, either [elev azim] or normal vector
-        scale_markers (float):      size scaling for markers
-        tol_distance (float):       tolerance for repeating atoms on edges on cell boundaries
-        plot_limit (float):         2x3 numpy array containing x y z plot min and max in columns.
-                                    Default is 1.1* unit cell dimensions
-        camera_dist (float):        Move camera closer to the plot (relative to matplotlib default of 10)
-        show_axes (bool):           Whether to plot axes or not
-        figsize (2 element float):  size scaling of figure axes
-        returnfig (bool):           set to True to return figure and axes handles
+        orientation_matrix (array):  (3,3) orientation matrix, where columns represent projection directions.
+        zone_axis_miller (array):    (3,) projection direction in miller indices
+        proj_x_miller (array):       (3,) x-axis direction in miller indices
+        zone_axis_cartesian (array): (3,) cartesian projection direction
+        proj_x_cartesian (array):    (3,) cartesian projection direction
+        scale_markers (float):       Size scaling for markers
+        tol_distance (float):        Tolerance for repeating atoms on edges on cell boundaries.
+        plot_limit (float):          (2,3) numpy array containing x y z plot min and max in columns.
+                                     Default is 1.1* unit cell dimensions.
+        camera_dist (float):         Move camera closer to the plot (relative to matplotlib default of 10)
+        show_axes (bool):            Whether to plot axes or not.
+        perspective_axes (bool):     Select either perspective (true) or orthogonal (false) axes
+        figsize (2 element float):   Size scaling of figure axes.
+        returnfig (bool):            Return figure and axes handles.
 
     Returns:
         fig, ax                     (optional) figure and axes handles
     """
+
+    # projection directions
+    proj_x, proj_y, proj_z = self.parse_orientation(
+        orientation_matrix,
+        zone_axis_miller,
+        proj_x_miller,
+        zone_axis_cartesian,
+        proj_x_cartesian)
+    # if orientation_matrix is not None:
+    #     proj_x = orientation_matrix[:,0]
+    #     proj_z = orientation_matrix[:,2]
+    # else:
+    #     if zone_axis_miller is not None:
+    #         proj_z = np.array(zone_axis_miller)
+    #         proj_z = self.miller_to_cartesian(proj_z)
+    #     elif zone_axis_cartesian is not None:
+    #         proj_z = np.array(zone_axis_miller)
+    #     else:
+    #         proj_z = np.array([3,2,1])
+    #     if proj_x_miller is not None:
+    #         proj_x = np.array(proj_x_miller)
+    #         proj_x = self.miller_to_cartesian(proj_x)
+    #     elif zone_axis_cartesian is not None:
+    #         proj_x = np.array(proj_x_miller)
+    #     else:
+    #         proj_x = np.array([-2,3,0])
+    # # Generate orthogonal coordinate system, normalize
+    # proj_y = np.cross(proj_z, proj_x)
+    # proj_x = np.cross(proj_y, proj_z)
+    # proj_x = proj_x / np.linalg.norm(proj_x)
+    # proj_y = proj_y / np.linalg.norm(proj_y)
+    # proj_z = proj_z / np.linalg.norm(proj_z)
+
+    # matplotlib camera orientation
+    el = (
+        np.rad2deg(np.arctan(proj_z[2] / np.sqrt(proj_z[0] ** 2 + proj_z[1] ** 2)))
+    )
+    az = np.rad2deg(np.arctan2(proj_z[0], proj_z[1]))
+    # TODO roll is not yet implemented in matplot version 3.4.3
+    # matplotlib x projection direction (i.e. estimate the roll angle)
+    # init_y = np.cross(proj_z,np.array([0,1e-6,0]))
+    # init_x = np.cross(init_y,proj_z)
+    # init_x = init_x / np.linalg.norm(init_x)
+    # init_y = init_y / np.linalg.norm(init_y)
+    # beta = np.vstack((init_x,init_y)) @ proj_x[:,None]
+    # alpha = np.rad2deg(np.arctan2(beta[1], beta[0]))
 
     # unit cell vectors
     u = self.lat_real[0, :]
@@ -67,35 +123,19 @@ def plot_structure(
     # Cartesian atomic positions
     xyz = pos @ self.lat_real
 
-    # projection direction of the plot
-    if np.size(proj_dir) == 2:
-        el = proj_dir[0]
-        az = proj_dir[1]
-    elif np.size(proj_dir) == 3:
-        if proj_dir[0] == 0 and proj_dir[1] == 0:
-            el = 90 * np.sign(proj_dir[2])
-        else:
-            el = (
-                np.arctan(proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2))
-                * 180
-                / np.pi
-            )
-        az = np.arctan2(proj_dir[1], proj_dir[0]) * 180 / np.pi
-    else:
-        raise Exception(
-            "Projection direction cannot contain " + np.size(proj_dir) + " elements"
-        )
-    proj_dir = np.array(
-        [
-            np.cos(el * np.pi / 180) * np.cos(az * np.pi / 180),
-            np.cos(el * np.pi / 180) * np.sin(az * np.pi / 180),
-            np.sin(el * np.pi / 180),
-        ]
-    )
-
     # 3D plotting
     fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(projection="3d", elev=el, azim=az)
+    if perspective_axes:
+        ax = fig.add_subplot(
+            projection="3d", 
+            elev=el, 
+            azim=az)
+    else:
+        ax = fig.add_subplot(
+            projection="3d", 
+            elev=el, 
+            azim=az,
+            proj_type='ortho')
 
     # unit cell
     p = np.vstack([[0, 0, 0], u, u + v, v, w, u + w, u + v + w, v + w])
@@ -148,6 +188,7 @@ def plot_structure(
             plot_limit, axis=0
         )
 
+    # appearance
     ax.invert_yaxis()
     if show_axes is False:
         ax.set_axis_off()
@@ -168,9 +209,16 @@ def plot_structure(
 
 def plot_structure_factors(
     self,
-    proj_dir: Union[list, tuple, np.ndarray] = [10, 30],
+    orientation_matrix: Optional[np.ndarray] = None,
+    zone_axis_miller: Optional[np.ndarray] = None,
+    proj_x_miller: Optional[np.ndarray] = None,
+    zone_axis_cartesian: Optional[np.ndarray] = None,
+    proj_x_cartesian: Optional[np.ndarray] = None,
     scale_markers: float = 1e3,
     plot_limit: Optional[Union[list, tuple, np.ndarray]] = None,
+    camera_dist: Optional[float] = None,
+    show_axes: bool = True,
+    perspective_axes: bool = True,
     figsize: Union[list, tuple, np.ndarray] = (8, 8),
     returnfig: bool = False,
 ):
@@ -178,41 +226,84 @@ def plot_structure_factors(
     3D scatter plot of the structure factors using magnitude^2, i.e. intensity.
 
     Args:
-        dir_proj (float):           projection direction, either [elev azim] or normal vector
-        scale_markers (float):      size scaling for markers
-        plot_limit (float):         x y z plot limits, default is [-1 1]*self.k_max
-        figsize (2 element float):  size scaling of figure axes
-        returnfig (bool):           set to True to return figure and axes handles
+        orientation_matrix (array):  (3,3) orientation matrix, where columns represent projection directions.
+        zone_axis_miller (array):    (3,) projection direction in miller indices
+        proj_x_miller (array):       (3,) x-axis direction in miller indices
+        zone_axis_cartesian (array): (3,) cartesian projection direction
+        proj_x_cartesian (array):    (3,) cartesian projection direction
+        scale_markers (float):       size scaling for markers
+        plot_limit (float):          x y z plot limits, default is [-1 1]*self.k_max
+        camera_dist (float):         Move camera closer to the plot (relative to matplotlib default of 10)
+        show_axes (bool):            Whether to plot axes or not.
+        perspective_axes (bool):     Select either perspective (true) or orthogonal (false) axes
+        figsize (2 element float):   size scaling of figure axes
+        returnfig (bool):            set to True to return figure and axes handles
 
     Returns:
         fig, ax                     (optional) figure and axes handles
     """
 
-    if np.size(proj_dir) == 2:
-        el = proj_dir[0]
-        az = proj_dir[1]
-    elif np.size(proj_dir) == 3:
-        if hasattr(self, "cartesian_directions") and not self.cartesian_directions:
-            proj_dir = self.crystal_to_cartesian(proj_dir)
+    # projection directions
+    proj_x, proj_y, proj_z = self.parse_orientation(
+        orientation_matrix,
+        zone_axis_miller,
+        proj_x_miller,
+        zone_axis_cartesian,
+        proj_x_cartesian)
+    # if orientation_matrix is not None:
+    #     proj_x = orientation_matrix[:,0]
+    #     proj_z = orientation_matrix[:,2]
+    # else:
+    #     if zone_axis_miller is not None:
+    #         proj_z = np.array(zone_axis_miller)
+    #         proj_z = self.miller_to_cartesian(proj_z)
+    #     elif zone_axis_cartesian is not None:
+    #         proj_z = np.array(zone_axis_miller)
+    #     else:
+    #         proj_z = np.array([3,2,1])
+    #     if proj_x_miller is not None:
+    #         proj_x = np.array(proj_x_miller)
+    #         proj_x = self.miller_to_cartesian(proj_x)
+    #     elif zone_axis_cartesian is not None:
+    #         proj_x = np.array(proj_x_miller)
+    #     else:
+    #         proj_x = np.array([-2,3,0])
+    # # Generate orthogonal coordinate system, normalize
+    # proj_y = np.cross(proj_z, proj_x)
+    # proj_x = np.cross(proj_y, proj_z)
+    # proj_x = proj_x / np.linalg.norm(proj_x)
+    # proj_y = proj_y / np.linalg.norm(proj_y)
+    # proj_z = proj_z / np.linalg.norm(proj_z)
 
-        if proj_dir[0] == 0 and proj_dir[1] == 0:
-            el = 90 * np.sign(proj_dir[2])
-        else:
-            el = (
-                np.arctan(proj_dir[2] / np.sqrt(proj_dir[0] ** 2 + proj_dir[1] ** 2))
-                * 180
-                / np.pi
-            )
-        az = np.arctan2(proj_dir[0], proj_dir[1]) * 180 / np.pi
-    else:
-        raise Exception(
-            "Projection direction cannot contain " + np.size(proj_dir) + " elements"
-        )
+    # matplotlib camera orientation
+    el = (
+        np.rad2deg(np.arctan(proj_z[2] / np.sqrt(proj_z[0] ** 2 + proj_z[1] ** 2)))
+    )
+    az = np.rad2deg(np.arctan2(proj_z[0], proj_z[1]))
+    # TODO roll is not yet implemented in matplot version 3.4.3
+    # matplotlib x projection direction (i.e. estimate the roll angle)
+    # init_y = np.cross(proj_z,np.array([0,1e-6,0]))
+    # init_x = np.cross(init_y,proj_z)
+    # init_x = init_x / np.linalg.norm(init_x)
+    # init_y = init_y / np.linalg.norm(init_y)
+    # beta = np.vstack((init_x,init_y)) @ proj_x[:,None]
+    # alpha = np.rad2deg(np.arctan2(beta[1], beta[0]))
 
     # 3D plotting
     fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(projection="3d", elev=el, azim=az)
+    if perspective_axes:
+        ax = fig.add_subplot(
+            projection="3d", 
+            elev=el, 
+            azim=az)
+    else:
+        ax = fig.add_subplot(
+            projection="3d", 
+            elev=el, 
+            azim=az,
+            proj_type='ortho')
 
+    # plot all structure factor points
     ax.scatter(
         xs=self.g_vec_all[1, :],
         ys=self.g_vec_all[0, :],
@@ -224,13 +315,17 @@ def plot_structure_factors(
     if plot_limit is None:
         plot_limit = self.k_max * 1.05
 
+    # appearance
+    ax.invert_yaxis()
+    if show_axes is False:
+        ax.set_axis_off()
     ax.axes.set_xlim3d(left=-plot_limit, right=plot_limit)
     ax.axes.set_ylim3d(bottom=-plot_limit, top=plot_limit)
     ax.axes.set_zlim3d(bottom=-plot_limit, top=plot_limit)
-    ax.set_box_aspect((1, 1, 1))
-    # ax.set_axis_off()
-    # ax.setxticklabels([])
-    # fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    axisEqual3D(ax)
+
+    if camera_dist is not None:
+        ax.dist = camera_dist
 
     plt.show()
 

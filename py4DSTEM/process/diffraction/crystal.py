@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from fractions import Fraction
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
@@ -43,7 +44,6 @@ class Crystal:
         positions,
         numbers,
         cell,
-        cartesian_directions = False,
     ):
         """
         Args:
@@ -53,12 +53,10 @@ class Crystal:
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
-            cartesian_directions (bool): specify directions in Cartesian format
 
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
-        self.cartesian_directions = cartesian_directions
 
         #: atomic numbers - if only one value is provided, assume all atoms are same species
         numbers = np.asarray(numbers, dtype="intp")
@@ -106,13 +104,11 @@ class Crystal:
                 [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
             ]
         )
-        # self.lat_real = np.array(
-        #     [
-        #         [a, b*np.cos(gamma),  c*np.cos(beta)],
-        #         [0, b*np.sin(gamma), -c*f/np.sin(gamma)],
-        #         [0, 0,                vol/(a*b*np.sin(gamma))],
-        #     ]
-        # )
+
+        # Inverse lattice, metric tensors
+        self.metric_real = self.lat_real @ self.lat_real.T
+        self.metric_inv = np.linalg.inv(self.metric_real)
+        self.lat_inv = self.metric_inv @ self.lat_real
 
 
     def from_CIF(CIF, conventional_standard_structure=True):
@@ -362,11 +358,6 @@ class Crystal:
         # Store k_max
         self.k_max = np.asarray(k_max)
 
-        # Inverse lattice, metric tensors
-        self.metric_real = self.lat_real @ self.lat_real.T
-        self.metric_inv = np.linalg.inv(self.metric_real)
-        self.lat_inv = self.metric_inv @ self.lat_real
-
         # Find shortest lattice vector direction
         k_test = np.vstack(
             [
@@ -449,8 +440,8 @@ class Crystal:
     def generate_diffraction_pattern(
         self,
         zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
-        foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
         proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
+        foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
         accel_voltage = None,
         ind_orientation: int = None,
         sigma_excitation_error: float = 0.02,
@@ -663,53 +654,79 @@ class Crystal:
 
         return bragg_peaks
 
-    # def cartesian_to_crystal(self, zone_axis):
-    #     vec_cart = zone_axis @ self.lat_real
-    #     return vec_cart / np.linalg.norm(vec_cart)
 
-    # def crystal_to_cartesian(self, vec_cart):
-    #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-    #     return zone_axis / np.linalg.norm(zone_axis)
+    # Vector conversions
 
-    # def cartesian_to_crystal(self, vec_cart):
-    #     vec_crys = vec_cart @ np.linalg.inv(self.lat_real)
-    #     return vec_crys / np.linalg.norm(vec_crys)
+    def cartesian_to_miller(self, vec_cartesian):
+        vec_miller = vec_cartesian @ self.lat_real.T @ self.metric_inv
+        return vec_miller / np.linalg.norm(vec_miller)
 
-    # def crystal_to_cartesian(self, vec_crys):
-    #     vec_cart = vec_crys @ self.lat_real
-    #     return vec_cart / np.linalg.norm(vec_cart)
+    def miller_to_cartesian(self, vec_miller):
+        vec_cartesian = vec_miller @ self.metric_real @ self.lat_inv
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
 
-    # def cartesian_to_crystal(self, vec_cart):
-    #     vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
-    #     return vec_crys / np.linalg.norm(vec_crys)
+    def hexagonal_to_miller(self, vec_hexagonal):
+        return np.array([
+            2.0*vec_hexagonal[0] + vec_hexagonal[1],
+            2.0*vec_hexagonal[1] + vec_hexagonal[0] ,
+            vec_hexagonal[3]
+            ])
 
-    # def crystal_to_cartesian(self, vec_crys):
-    #     vec_cart = np.linalg.inv(self.lat_real) @  vec_crys
-    #     return vec_cart / np.linalg.norm(vec_cart)
+    def miller_to_hexagonal(self, vec_miller):
+        return np.array([
+            (2.0*vec_miller[0] - vec_miller[1])/3.0,
+            (2.0*vec_miller[1] - vec_miller[0])/3.0,
+            (-vec_miller[0] - vec_miller[1])/3.0,
+            vec_miller[2]
+            ])
 
-
-    def cartesian_to_crystal(self, vec_cart):
-        # vec_crys = vec_cart @ self.metric_inv @ self.lat_real.T
-        # vec_crys = vec_cart @ np.linalg.inv(self.metric_real @ self.lat_inv)
-        vec_crys = vec_cart @ self.lat_real.T @ self.metric_inv
-
-
-        # vec_crys = np.linalg.inv(self.lat_real.T) @ (vec_cart) 
-
-
-        return vec_crys / np.linalg.norm(vec_crys)
-
-    def crystal_to_cartesian(self, vec_crys):
-        vec_cart = vec_crys @ self.metric_real @ self.lat_inv
-
-        # vec_cart =  self.lat_real @ self.metric_inv @ vec_crys 
-        # vec_cart =  self.lat_inv @ (self.metric_inv @ vec_crys )
-        # vec_cart =  vec_crys  @  self.metric_inv @ self.lat_real.T
+    def rational_ind(self, vec):
+        # This function rationalizes the indices of a vector, up to some tolerance
+        tol_den = 1000
+        vec = np.array(vec,dtype='float64')
+        sub = np.abs(vec) > 0
+        if np.sum(sub) > 0:
+            for ind in np.argwhere(sub):
+                frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
+                vec *= frac.denominator
+            vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
+        return vec
 
 
-        # vec_cart = vec_crys @ self.metric_real @ self.lat_inv
-        # vec_cart =  self.lat_inv.T @ self.metric_real @ vec_crys
-        # vec_cart =  (self.metric_real @ self.lat_inv).T @ vec_crys
-        # print(np.round(vec_cart,decimals=3))
+    def parse_orientation(
+        self,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_miller: Optional[np.ndarray] = None,
+        proj_x_miller: Optional[np.ndarray] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+        ):
+        # This helper function parse the various types of orientation inputs,
+        # and returns the normalized, projected (x,y,z) cartesian vectors.
 
-        return vec_cart / np.linalg.norm(vec_cart)
+        if orientation_matrix is not None:
+            proj_x = orientation_matrix[:,0]
+            proj_z = orientation_matrix[:,2]
+        else:
+            if zone_axis_miller is not None:
+                proj_z = np.array(zone_axis_miller)
+                proj_z = self.miller_to_cartesian(proj_z)
+            elif zone_axis_cartesian is not None:
+                proj_z = np.array(zone_axis_miller)
+            else:
+                proj_z = np.array([3,2,1])
+            if proj_x_miller is not None:
+                proj_x = np.array(proj_x_miller)
+                proj_x = self.miller_to_cartesian(proj_x)
+            elif zone_axis_cartesian is not None:
+                proj_x = np.array(proj_x_miller)
+            else:
+                proj_x = np.array([-2,3,0])
+        # Generate orthogonal coordinate system, normalize
+        proj_y = np.cross(proj_z, proj_x)
+        proj_x = np.cross(proj_y, proj_z)
+        proj_x = proj_x / np.linalg.norm(proj_x)
+        proj_y = proj_y / np.linalg.norm(proj_y)
+        proj_z = proj_z / np.linalg.norm(proj_z)
+
+        return proj_x, proj_y, proj_z
