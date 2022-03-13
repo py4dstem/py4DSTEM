@@ -2,7 +2,7 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Union, Optional
-from dataclasses import dataclass
+# from dataclasses import dataclass
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, electron_wavelength_angstrom
