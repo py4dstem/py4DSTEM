@@ -52,42 +52,22 @@ def plot_structure(
     """
 
     # projection directions
-    proj_x, proj_y, proj_z = self.parse_orientation(
-        orientation_matrix,
-        zone_axis_miller,
-        proj_x_miller,
-        zone_axis_cartesian,
-        proj_x_cartesian)
-    # if orientation_matrix is not None:
-    #     proj_x = orientation_matrix[:,0]
-    #     proj_z = orientation_matrix[:,2]
-    # else:
-    #     if zone_axis_miller is not None:
-    #         proj_z = np.array(zone_axis_miller)
-    #         proj_z = self.miller_to_cartesian(proj_z)
-    #     elif zone_axis_cartesian is not None:
-    #         proj_z = np.array(zone_axis_miller)
-    #     else:
-    #         proj_z = np.array([3,2,1])
-    #     if proj_x_miller is not None:
-    #         proj_x = np.array(proj_x_miller)
-    #         proj_x = self.miller_to_cartesian(proj_x)
-    #     elif zone_axis_cartesian is not None:
-    #         proj_x = np.array(proj_x_miller)
-    #     else:
-    #         proj_x = np.array([-2,3,0])
-    # # Generate orthogonal coordinate system, normalize
-    # proj_y = np.cross(proj_z, proj_x)
-    # proj_x = np.cross(proj_y, proj_z)
-    # proj_x = proj_x / np.linalg.norm(proj_x)
-    # proj_y = proj_y / np.linalg.norm(proj_y)
-    # proj_z = proj_z / np.linalg.norm(proj_z)
+    if orientation_matrix is None:
+        orientation_matrix = self.parse_orientation(
+            zone_axis_miller,
+            proj_x_miller,
+            zone_axis_cartesian,
+            proj_x_cartesian)
 
     # matplotlib camera orientation
-    el = (
-        np.rad2deg(np.arctan(proj_z[2] / np.sqrt(proj_z[0] ** 2 + proj_z[1] ** 2)))
-    )
-    az = np.rad2deg(np.arctan2(proj_z[0], proj_z[1]))
+    if np.abs(abs(orientation_matrix[2,2])-1) > 1 - 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2,2])
+    else:
+        el = (np.rad2deg(np.arctan(orientation_matrix[2,2] \
+            / np.sqrt(orientation_matrix[0,2] ** 2 
+            + orientation_matrix[1,2] ** 2)))
+        )
+    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
     # init_y = np.cross(proj_z,np.array([0,1e-6,0]))
@@ -244,42 +224,24 @@ def plot_structure_factors(
     """
 
     # projection directions
-    proj_x, proj_y, proj_z = self.parse_orientation(
-        orientation_matrix,
-        zone_axis_miller,
-        proj_x_miller,
-        zone_axis_cartesian,
-        proj_x_cartesian)
-    # if orientation_matrix is not None:
-    #     proj_x = orientation_matrix[:,0]
-    #     proj_z = orientation_matrix[:,2]
-    # else:
-    #     if zone_axis_miller is not None:
-    #         proj_z = np.array(zone_axis_miller)
-    #         proj_z = self.miller_to_cartesian(proj_z)
-    #     elif zone_axis_cartesian is not None:
-    #         proj_z = np.array(zone_axis_miller)
-    #     else:
-    #         proj_z = np.array([3,2,1])
-    #     if proj_x_miller is not None:
-    #         proj_x = np.array(proj_x_miller)
-    #         proj_x = self.miller_to_cartesian(proj_x)
-    #     elif zone_axis_cartesian is not None:
-    #         proj_x = np.array(proj_x_miller)
-    #     else:
-    #         proj_x = np.array([-2,3,0])
-    # # Generate orthogonal coordinate system, normalize
-    # proj_y = np.cross(proj_z, proj_x)
-    # proj_x = np.cross(proj_y, proj_z)
-    # proj_x = proj_x / np.linalg.norm(proj_x)
-    # proj_y = proj_y / np.linalg.norm(proj_y)
-    # proj_z = proj_z / np.linalg.norm(proj_z)
+    if orientation_matrix is None:
+        orientation_matrix = self.parse_orientation(
+            zone_axis_miller,
+            proj_x_miller,
+            zone_axis_cartesian,
+            proj_x_cartesian)
 
     # matplotlib camera orientation
-    el = (
-        np.rad2deg(np.arctan(proj_z[2] / np.sqrt(proj_z[0] ** 2 + proj_z[1] ** 2)))
-    )
-    az = np.rad2deg(np.arctan2(proj_z[0], proj_z[1]))
+    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2,2])
+    else:
+        el = (np.rad2deg(np.arctan(
+            orientation_matrix[2,2] / np.sqrt(
+            orientation_matrix[0,2] ** 2 +
+            orientation_matrix[1,2] ** 2)))
+        )
+    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
+
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
     # init_y = np.cross(proj_z,np.array([0,1e-6,0]))

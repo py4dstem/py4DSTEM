@@ -9,6 +9,7 @@ from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
 from .crystal_viz import plot_diffraction_pattern
+from .utils import Orientation
 
 
 class Crystal:
@@ -82,17 +83,9 @@ class Crystal:
         a = self.cell[0]
         b = self.cell[1]
         c = self.cell[2]
-        alpha = self.cell[3] * np.pi / 180
-        beta = self.cell[4] * np.pi / 180
-        gamma = self.cell[5] * np.pi / 180
-        # t = (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
-        # self.lat_real = np.array(
-        #     [
-        #         [a, 0, 0],
-        #         [b * np.cos(gamma), b * np.sin(gamma), 0],
-        #         [c * np.cos(beta), c * t, c * np.sqrt(1 - np.cos(beta) ** 2 - t ** 2)],
-        #     ]
-        # )
+        alpha = np.deg2rad(self.cell[3])
+        beta = np.deg2rad(self.cell[4])
+        gamma = np.deg2rad(self.cell[5])
         f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
         vol = a*b*c*np.sqrt(1 \
             + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
@@ -439,34 +432,43 @@ class Crystal:
 
     def generate_diffraction_pattern(
         self,
-        zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
-        proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
-        foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+        orientation: Optional[Orientation] = None,
+        ind_orientation: Optional[int] = 0,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_miller: Optional[np.ndarray] = None,
+        proj_x_miller: Optional[np.ndarray] = None,
+        foil_normal_miller: Optional[Union[list, tuple, np.ndarray]] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+        foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
         accel_voltage = None,
-        ind_orientation: int = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
-        tol_intensity: float = 0.0001,
-        k_max: float = None,
+        tol_intensity: float = 1e-4,
+        keep_qz = False,
     ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            zone_axis (np float vector):     Can be any of:
-                                             -3 element projection direction for pattern simulation
-                                             -a 3x3 orientation matrix
-                                             -an Orientation class object 
+            orientation (Orientation):       an Orientation class object 
+            ind_orientation                  If input is an Orientation class object with multiple orientations,
+                                             this input can be used to select a specific orientation.
+            
+            orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
+            zone_axis_miller (array):        (3,) projection direction in miller indices
+            proj_x_miller (array):           (3,) x-axis direction in miller indices
+            zone_axis_cartesian (array):     (3,) cartesian projection direction
+            proj_x_cartesian (array):        (3,) cartesian projection direction
+
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
             accel_voltage (float):           Accelerating voltage in Volts. If not specified,
                                              we check to see if crystal already has voltage specified.
-            ind_orientation                  If input is an Orientation class object with multiple orientations,
-                                             this input can be used to select a specific orientation.
             sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
-            k_max (np float):                maximum scattering angle to keep in pattern
+            keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
 
         Returns:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
@@ -483,131 +485,47 @@ class Crystal:
             if not hasattr(self, 'accel_voltage'):
                 self.accel_voltage = 300.0e3
 
-                # Calculate wavelenth
+                # Calculate wavelength
                 self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
-        # Check type of input
-        if isinstance(zone_axis, (np.ndarray, list, tuple)):
-            zone_axis = np.array(zone_axis, dtype='float')
-
-            if zone_axis.ndim == 1:
-                # input is a 3 element zone axis
-
-                if not self.cartesian_directions:
-                    # print(np.round(zone_axis,decimals=3))
-                    zone_axis = self.crystal_to_cartesian(zone_axis)
-                    # zone_axis = self.cartesian_to_crystal(zone_axis)
-                    # print(np.round(zone_axis,decimals=3))
-
-                if proj_x_axis is None:
-                    if np.linalg.norm(zone_axis * np.array([0.0, 1.0, 0.0])) > 1 - tol:
-                        v0 = np.array([-1.0, 0.0, 0.0])
-                    else:
-                        v0 = np.array([ 0.0, 1.0, 0.0])
-                    proj_x_axis = np.cross(v0, zone_axis)
-                else:
-                    proj_x_axis = np.asarray(proj_x_axis, dtype="float")
-                    if not self.cartesian_directions:
-                        proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
-
-            elif zone_axis.shape == (3, 3):
-                # input is a 3x3 orientation matrix
-                proj_x_axis = zone_axis[:, 0]
-                zone_axis = zone_axis[:, 2]
-
-        else:
-            # input is an Orientation dataclass
+        # Parse orientation inputs
+        if orientation is not None:
             if ind_orientation is None:
-                proj_x_axis = zone_axis.matrix[0,:,0]
-                zone_axis = zone_axis.matrix[0,:,2]
+                orientation_matrix = orientation.matrix[0]
             else:
-                proj_x_axis = zone_axis.matrix[ind_orientation,:,0]
-                zone_axis = zone_axis.matrix[ind_orientation,:,2]
+                orientation_matrix = orientation.matrix[ind_orientation]
+        elif orientation_matrix is None:
+            orientation_matrix = self.parse_orientation(
+                zone_axis_miller,
+                proj_x_miller,
+                zone_axis_cartesian,
+                proj_x_cartesian)
 
-
-        # if zone_axis.ndim == 1:
-        #     zone_axis = np.asarray(zone_axis)
-        #     zone_axis = zone_axis / np.linalg.norm(zone_axis)
-
-        #     if not self.cartesian_directions:
-        #         zone_axis = self.cartesian_to_crystal(zone_axis)
-
-        #     if proj_x_axis is None:
-        #         if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
-        #             v0 = np.array([0.0, -1.0, 0.0])
-        #         else:
-        #             v0 = np.array([-1.0, 0.0, 0.0])
-        #         proj_x_axis = np.cross(zone_axis, v0)
-        #     else:
-        #         proj_x_axis = np.asarray(proj_x_axis, dtype="float")
-        #         if not self.cartesian_directions:
-        #             proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
-
-        # elif zone_axis.shape == (3, 3):
-        #     proj_x_axis = zone_axis[:, 0]
-        #     zone_axis = zone_axis[:, 2]
-        # else:
-        #     proj_x_axis = zone_axis[:, 0, 0]
-        #     zone_axis = zone_axis[:, 2, 0]
-
-
-        # Set x and y projection vectors
-        ky_proj = np.cross(zone_axis, proj_x_axis)
-        kx_proj = np.cross(ky_proj, zone_axis)
-
-        kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        ky_proj = ky_proj / np.linalg.norm(ky_proj)
-
-        # print(np.round(zone_axis,decimals=3))
-        # print(np.round(foil_normal,decimals=3))
-        # if proj_x_axis is None:
-        #     if np.all(zone_axis == np.array([-1, 0, 0])):
-        #         proj_x_axis = np.array([0, -1, 0])
-        #     elif np.all(zone_axis == np.array([1, 0, 0])):
-        #         proj_x_axis = np.array([0, 1, 0])
-        #     else:
-        #         proj_x_axis = np.array([-1, 0, 0])
-
-        # # Logic to set x axis for projected images
-        # Generate 2 zone_axis
-        # if np.all(zone_axis  == np.array([1.0,0.0,0.0])):
-        #     v0 = np.array([0.0,-1.0,0.0])
-        # else:
-        #     v0 = np.array([-1.0,0.0,0.0])
-        # kx_proj = np.cross(zone_axis, v0)
-        # ky_proj = np.cross(kx_proj, zone_axis)
-        # kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        # ky_proj = ky_proj / np.linalg.norm(ky_proj)
-
-        # wavevector
-        zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = -zone_axis_norm / self.wavelength
-
-        # foil normal vector
-        if foil_normal is None:
-            foil_normal = -zone_axis_norm
+        # Get foil normal direction
+        if foil_normal_miller is not None:
+            foil_normal = self.miller_to_cartesian(foil_normal_miller)
+        elif foil_normal_cartesian is not None:
+            foil_normal = foil_normal_cartesian
         else:
-            foil_normal = np.asarray(foil_normal, dtype="float")
-            if not self.cartesian_directions:
-                foil_normal = self.crystal_to_cartesian(foil_normal)
-            # else:
-            foil_normal = foil_normal / np.linalg.norm(foil_normal)
+            foil_normal = orientation_matrix[:,2]
+
+        # Rotate crystal into desired projection
+        g = orientation_matrix.T @ self.g_vec_all
+        n = orientation_matrix.T @ (-1*foil_normal)
 
         # Excitation errors
-        cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
-        ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
-        sg = (
-            (-0.5)
-            * np.sum((2 * k0[:, None] + self.g_vec_all) * self.g_vec_all, axis=0)
-            / (np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0))
-            / cos_alpha
-        )
+        k0 = np.array([0.0, 0.0, -1/self.wavelength])
+        k0_g = k0[:, None] + g
+        k0_g_norm_inv = 1 / np.linalg.norm(k0_g, axis=0)
+        cos_alpha = k0_g_norm_inv * np.sum(
+            (k0[:, None] + g) * n[:, None], axis=0)
+        sg = (-0.5)*k0_g_norm_inv \
+            * np.sum((2*k0[:, None] + g) * g, axis=0) / cos_alpha
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
         keep = np.abs(sg) <= sg_max
-        g_diff = self.g_vec_all[:, keep]
+        g_diff = g[:, keep]
 
         # Diffracted peak intensities and labels
         g_int = self.struct_factors_int[keep] * np.exp(
@@ -618,18 +536,10 @@ class Crystal:
         # Intensity tolerance
         keep_int = g_int > tol_intensity
 
-        # Diffracted peak locations
-        kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        ky_proj = ky_proj / np.linalg.norm(ky_proj)
-        gx_proj = np.sum(g_diff * kx_proj[:, None], axis=0)
-        gy_proj = np.sum(g_diff * ky_proj[:, None], axis=0)
-
-        if k_max is not None:
-            keep_kmax = np.hypot(gx_proj, gy_proj) < k_max
-            keep_int = np.logical_and(keep_int, keep_kmax)
-
-        gx_proj = gx_proj[keep_int]
-        gy_proj = gy_proj[keep_int]
+        # Output peaks
+        gx_proj = g_diff[0,keep_int]
+        gy_proj = g_diff[1,keep_int]
+        gz_proj = g_diff[2,keep_int]
 
         # Diffracted peak labels
         h = hkl[0, keep_int]
@@ -637,20 +547,50 @@ class Crystal:
         l = hkl[2, keep_int]
 
         # Output as PointList
-        bragg_peaks = PointList(
-            [
-                ("qx", "float64"),
-                ("qy", "float64"),
-                ("intensity", "float64"),
-                ("h", "int"),
-                ("k", "int"),
-                ("l", "int"),
-            ]
-        )
-        if np.any(keep_int):
-            bragg_peaks.add_pointarray(
-                np.vstack((gx_proj, gy_proj, g_int[keep_int], h, k, l)).T
+        if keep_qz:
+            bragg_peaks = PointList(
+                [
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("qz", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ]
             )
+            if np.any(keep_int):
+                bragg_peaks.add_pointarray(
+                    np.vstack((
+                        gx_proj,
+                        gy_proj,
+                        gz_proj,
+                        g_int[keep_int],
+                        h,
+                        k,
+                        l)).T
+                )
+        else:
+            bragg_peaks = PointList(
+                [
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ]
+            )
+            if np.any(keep_int):
+                bragg_peaks.add_pointarray(
+                    np.vstack((
+                        gx_proj,
+                        gy_proj,
+                        g_int[keep_int],
+                        h,
+                        k,
+                        l)).T
+                )
 
         return bragg_peaks
 
@@ -663,6 +603,7 @@ class Crystal:
 
     def miller_to_cartesian(self, vec_miller):
         vec_cartesian = vec_miller @ self.metric_real @ self.lat_inv
+        # vec_cartesian = (self.lat_real @ self.metric_inv).T @ vec_miller 
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
     def hexagonal_to_miller(self, vec_hexagonal):
@@ -692,36 +633,37 @@ class Crystal:
             vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
         return vec
 
-
     def parse_orientation(
         self,
-        orientation_matrix: Optional[np.ndarray] = None,
-        zone_axis_miller: Optional[np.ndarray] = None,
-        proj_x_miller: Optional[np.ndarray] = None,
-        zone_axis_cartesian: Optional[np.ndarray] = None,
-        proj_x_cartesian: Optional[np.ndarray] = None,
+        zone_axis_miller,
+        proj_x_miller,
+        zone_axis_cartesian,
+        proj_x_cartesian,
+        return_orientation_matrix=False
         ):
         # This helper function parse the various types of orientation inputs,
-        # and returns the normalized, projected (x,y,z) cartesian vectors.
+        # and returns the normalized, projected (x,y,z) cartesian vectors in
+        # the form of an orientation matrix.
 
-        if orientation_matrix is not None:
-            proj_x = orientation_matrix[:,0]
-            proj_z = orientation_matrix[:,2]
+        if zone_axis_miller is not None:
+            proj_z = np.array(zone_axis_miller)
+            if proj_z.shape[0] == 4:
+                proj_z = self.hexagonal_to_miller(proj_z)
+            proj_z = self.miller_to_cartesian(proj_z)
+        elif zone_axis_cartesian is not None:
+            proj_z = np.array(zone_axis_cartesian)
         else:
-            if zone_axis_miller is not None:
-                proj_z = np.array(zone_axis_miller)
-                proj_z = self.miller_to_cartesian(proj_z)
-            elif zone_axis_cartesian is not None:
-                proj_z = np.array(zone_axis_miller)
-            else:
-                proj_z = np.array([3,2,1])
-            if proj_x_miller is not None:
-                proj_x = np.array(proj_x_miller)
-                proj_x = self.miller_to_cartesian(proj_x)
-            elif zone_axis_cartesian is not None:
-                proj_x = np.array(proj_x_miller)
-            else:
-                proj_x = np.array([-2,3,0])
+            proj_z = np.array([3,2,1])
+        if proj_x_miller is not None:
+            proj_x = np.array(proj_x_miller)
+            if proj_x.shape[0] == 4:
+                proj_x = self.hexagonal_to_miller(proj_x)
+            proj_x = self.miller_to_cartesian(proj_x)
+        elif proj_x_cartesian is not None:
+            proj_x = np.array(proj_x_cartesian)
+        else:
+            proj_x = np.array([-2,3,0])
+
         # Generate orthogonal coordinate system, normalize
         proj_y = np.cross(proj_z, proj_x)
         proj_x = np.cross(proj_y, proj_z)
@@ -729,4 +671,4 @@ class Crystal:
         proj_y = proj_y / np.linalg.norm(proj_y)
         proj_z = proj_z / np.linalg.norm(proj_z)
 
-        return proj_x, proj_y, proj_z
+        return np.vstack((proj_x, proj_y, proj_z)).T
