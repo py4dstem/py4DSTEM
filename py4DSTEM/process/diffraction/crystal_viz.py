@@ -60,7 +60,7 @@ def plot_structure(
             proj_x_cartesian)
 
     # matplotlib camera orientation
-    if np.abs(abs(orientation_matrix[2,2])-1) > 1 - 1e-6:
+    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
         el = 90.0 * np.sign(orientation_matrix[2,2])
     else:
         el = (np.rad2deg(np.arctan(orientation_matrix[2,2] \
@@ -736,9 +736,15 @@ def plot_diffraction_pattern(
     if plot_range_kx_ky is not None:
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
+    else:
+        k_range = 1.05*np.sqrt(np.max(
+            bragg_peaks.data["qx"]**2 + 
+            bragg_peaks.data["qy"]**2))
+        ax.set_xlim((-k_range, k_range))
+        ax.set_ylim((-k_range, k_range))
 
     ax.invert_yaxis()
-    # ax.set_box_aspect(1)
+    ax.set_box_aspect(1)
     ax.xaxis.tick_top()
 
     # Labels for all peaks

@@ -270,7 +270,6 @@ def orientation_plan(
         self.orientation_inds = np.zeros((1, 3), dtype="int")
 
     else:
-
         # Generate points spanning the zone axis range
         # Calculate points along u and v using the SLERP formula
         # https://en.wikipedia.org/wiki/Slerp
@@ -560,7 +559,7 @@ def orientation_plan(
         self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
 
     # init storage arrays
-    self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 2))
+    self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 3))
     self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones, 3, 3))
     self.orientation_ref = np.zeros(
         (
@@ -596,14 +595,13 @@ def orientation_plan(
                 [0, np.sin(elev[a0]), np.cos(elev[a0])],
             ]
         )
-        self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x
-        # self.orientation_rotation_matrices[a0, :, :] = m2x @ m1z
-        self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0]]
+        self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z.T
+        self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0], -azim[a0]]
 
-    # init wave vector and zone axis normal
-    k0 = np.array([0.0, 0.0, -1.0]) / self.wavelength
-    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-    foil_normal = np.array([0.0, 0.0, -1.0])
+    # # init wave vector and zone axis normal
+    # k0 = np.array([0.0, 0.0, -1.0]) / self.wavelength
+    # dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
+    # foil_normal = np.array([0.0, 0.0, -1.0])
 
     # Calculate reference arrays for all orientations
     for a0 in tqdmnd(
@@ -612,7 +610,7 @@ def orientation_plan(
         unit=" zone axes",
         disable=not progress_bar,
     ):
-        p = np.linalg.inv(self.orientation_rotation_matrices[a0, :, :]) @ self.g_vec_all
+        # p = np.linalg.inv(self.orientation_rotation_matrices[a0, :, :]) @ self.g_vec_all
         # p = self.orientation_rotation_matrices[a0, :, :] @ self.g_vec_all
 
         # Excitation errors
@@ -624,15 +622,15 @@ def orientation_plan(
         #     / cos_alpha
         #)
 
-        cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
-        ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
-        sg = (
-            (-0.5)
-            * np.sum((2 * k0[:, None] + p) * p, axis=0)
-            / (np.linalg.norm(k0[:, None] + p, axis=0))
-            / cos_alpha
-        )
+        # cos_alpha = np.sum(
+        #     (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
+        # ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
+        # sg = (
+        #     (-0.5)
+        #     * np.sum((2 * k0[:, None] + p) * p, axis=0)
+        #     / (np.linalg.norm(k0[:, None] + p, axis=0))
+        #     / cos_alpha
+        # )
 
         # in-plane rotation angle
         phi = np.arctan2(p[1, :], p[0, :])
