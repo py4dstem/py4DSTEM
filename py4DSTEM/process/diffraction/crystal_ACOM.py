@@ -666,7 +666,7 @@ def orientation_plan(
 
     # Fourier domain along angular axis
     self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
-    # self.orientation_ref = np.fft.fft(self.orientation_ref)
+
 
 def match_orientations(
     self,
