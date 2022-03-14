@@ -393,10 +393,10 @@ def plot_orientation_zones(
 
     # zone axis range labels
     # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-    if self.cartesian_directions:
-        label_0 = self.orientation_zone_axis_range[0, :]
-    else:
-        label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+    # if self.cartesian_directions:
+    label_0 = self.orientation_zone_axis_range[0, :]
+    # else:
+    #     label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
     label_0 = np.round(label_0, decimals=3)
     label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     label_0 = np.round(label_0, decimals=3)
@@ -410,10 +410,10 @@ def plot_orientation_zones(
         # label_1 = self.cartesian_to_crystal(
         #     self.orientation_zone_axis_range[1, :]
         #     )
-        if self.cartesian_directions:
-            label_1 = self.orientation_zone_axis_range[1, :]
-        else:
-            label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
+        # if self.cartesian_directions:
+        label_1 = self.orientation_zone_axis_range[1, :]
+        # else:
+        #     label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
         label_1 = np.round(label_1 * 1e3) * 1e-3
         label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
         label_1 = np.round(label_1 * 1e3) * 1e-3
@@ -421,10 +421,10 @@ def plot_orientation_zones(
         # label_2 = self.cartesian_to_crystal(
         #     self.orientation_zone_axis_range[2, :]
         # )
-        if self.cartesian_directions:
-            label_2 = self.orientation_zone_axis_range[2, :]
-        else:
-            label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
+        # if self.cartesian_directions:
+        label_2 = self.orientation_zone_axis_range[2, :]
+        # else:
+        #     label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
 
         label_2 = np.round(label_2 * 1e3) * 1e-3
         label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
@@ -524,10 +524,11 @@ def plot_orientation_zones(
 def plot_orientation_plan(
     self,
     index_plot: int = 0,
-    zone_axis_plot=None,
+    zone_axis_miller: Optional[np.ndarray] = None,
+    zone_axis_cartesian: Optional[np.ndarray] = None,
     figsize: Union[list, tuple, np.ndarray] = (14, 6),
     returnfig: bool = False,
-):
+    ):
     """
     3D scatter plot of the structure factors using magnitude^2,
     i.e. intensity.
@@ -543,19 +544,30 @@ def plot_orientation_plan(
     """
 
     # Determine which index to plot if zone_axis_plot is specified
-    if zone_axis_plot is not None:
-        zone_axis_plot = np.array(zone_axis_plot, dtype="float")
-        zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
+    if zone_axis_miller is not None or zone_axis_cartesian is not None:
+        orientation_matrix = self.parse_orientation(
+            zone_axis_miller=zone_axis_miller,
+            proj_x_miller=None,
+            zone_axis_cartesian=zone_axis_cartesian,
+            proj_x_cartesian=None)
+        index_plot = np.argmin(np.sum(np.abs(
+            self.orientation_vecs - orientation_matrix[:,2]), axis=1)) 
 
-        if not self.cartesian_directions:
-            print(np.round(zone_axis_plot,decimals=6))
-            zone_axis_plot = self.crystal_to_cartesian(zone_axis_plot)
-            print(np.round(zone_axis_plot,decimals=6))
 
-        index_plot = np.argmin(
-            np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
-        )
-        print("Orientation plan index " + str(index_plot))
+
+    # if zone_axis_plot is not None:
+    #     zone_axis_plot = np.array(zone_axis_plot, dtype="float")
+    #     zone_axis_plot = zone_axis_plot / np.linalg.norm(zone_axis_plot)
+
+    #     if not self.cartesian_directions:
+    #         print(np.round(zone_axis_plot,decimals=6))
+    #         zone_axis_plot = self.crystal_to_cartesian(zone_axis_plot)
+    #         print(np.round(zone_axis_plot,decimals=6))
+
+    #     index_plot = np.argmin(
+    #         np.sum((self.orientation_vecs - zone_axis_plot) ** 2, axis=1)
+    #     )
+    #     print("Orientation plan index " + str(index_plot))
 
     # initialize figure
     fig, ax = plt.subplots(1, 2, figsize=figsize)
@@ -563,7 +575,7 @@ def plot_orientation_plan(
     # Generate and plot diffraction pattern
     k_x_y_range = np.array([1, 1]) * self.k_max * 1.2
     bragg_peaks = self.generate_diffraction_pattern(
-        zone_axis=self.orientation_vecs[index_plot, :],
+        orientation_matrix=self.orientation_rotation_matrices[index_plot, :],
         sigma_excitation_error=self.orientation_kernel_size / 3,
     )
 

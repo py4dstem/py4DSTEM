@@ -503,25 +503,24 @@ class Crystal:
 
         # Get foil normal direction
         if foil_normal_miller is not None:
-            foil_normal = self.miller_to_cartesian(foil_normal_miller)
+            foil_normal = self.miller_to_cartesian(np.array(foil_normal_miller))
         elif foil_normal_cartesian is not None:
-            foil_normal = foil_normal_cartesian
+            foil_normal = np.array(foil_normal_cartesian)
         else:
-            foil_normal = orientation_matrix[:,2]
+            foil_normal = None
+            # foil_normal = orientation_matrix[:,2]
 
         # Rotate crystal into desired projection
         g = orientation_matrix.T @ self.g_vec_all
-        n = orientation_matrix.T @ (-1*foil_normal)
-        print(np.round(n,decimals=3))
 
-        # Excitation errors
-        k0 = np.array([0.0, 0.0, -1/self.wavelength])
-        k0_g = k0[:, None] + g
-        k0_g_norm_inv = 1 / np.linalg.norm(k0_g, axis=0)
-        cos_alpha = k0_g_norm_inv * np.sum(
-            (k0[:, None] + g) * n[:, None], axis=0)
-        sg = (-0.5)*k0_g_norm_inv \
-            * np.sum((2*k0[:, None] + g) * g, axis=0) / cos_alpha
+
+        # Calculate excitation errors
+        if foil_normal is None:
+            sg = self.excitation_errors(g)
+        else:
+            foil_normal = (orientation_matrix.T \
+                @ (-1*foil_normal[:,None]/np.linalg.norm(foil_normal))).ravel()
+            sg = self.excitation_errors(g, foil_normal)
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
@@ -540,7 +539,6 @@ class Crystal:
         # Output peaks
         gx_proj = g_diff[0,keep_int]
         gy_proj = g_diff[1,keep_int]
-        gz_proj = g_diff[2,keep_int]
 
         # Diffracted peak labels
         h = hkl[0, keep_int]
@@ -549,6 +547,7 @@ class Crystal:
 
         # Output as PointList
         if keep_qz:
+            gz_proj = g_diff[2,keep_int]
             bragg_peaks = PointList(
                 [
                     ("qx", "float64"),
@@ -596,7 +595,8 @@ class Crystal:
         return bragg_peaks
 
 
-    # Vector conversions
+
+    # Vector conversions and other utilities in Crystal
 
     def cartesian_to_miller(self, vec_cartesian):
         vec_miller = vec_cartesian @ self.lat_real.T @ self.metric_inv
@@ -640,7 +640,6 @@ class Crystal:
         proj_x_miller,
         zone_axis_cartesian,
         proj_x_cartesian,
-        return_orientation_matrix=False
         ):
         # This helper function parse the various types of orientation inputs,
         # and returns the normalized, projected (x,y,z) cartesian vectors in
@@ -677,3 +676,21 @@ class Crystal:
         proj_z = proj_z / np.linalg.norm(proj_z)
 
         return np.vstack((proj_x, proj_y, proj_z)).T
+
+    def excitation_errors(
+        self,
+        g,
+        foil_normal=None,
+        ):
+        # Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda]
+
+        if foil_normal is None:
+            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
+                / (2 - 2*self.wavelength*g[2,:]) 
+        else:
+            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
+                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2]) 
+
+
+
+

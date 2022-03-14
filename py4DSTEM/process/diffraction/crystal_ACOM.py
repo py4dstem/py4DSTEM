@@ -119,15 +119,15 @@ def orientation_plan(
             self.orientation_fiber_axis = np.array(
                 self.orientation_fiber_axis, dtype="float"
             )
-            if self.cartesian_directions:
-                self.orientation_fiber_axis = (
-                    self.orientation_fiber_axis
-                    / np.linalg.norm(self.orientation_fiber_axis)
-                )
-            else:
-                self.orientation_fiber_axis = self.crystal_to_cartesian(
-                    self.orientation_fiber_axis
-                )
+            # if self.cartesian_directions:
+            self.orientation_fiber_axis = (
+                self.orientation_fiber_axis
+                / np.linalg.norm(self.orientation_fiber_axis)
+            )
+            # else:
+            #     self.orientation_fiber_axis = self.crystal_to_cartesian(
+            #         self.orientation_fiber_axis
+            #     )
 
             # Generate 2 perpendicular vectors to self.orientation_fiber_axis
             # TESTING - different defaults for the zone axis ranges
@@ -204,12 +204,11 @@ def orientation_plan(
 
     else:
         self.orientation_zone_axis_range = np.array(zone_axis_range, dtype="float")
-
-        if not self.cartesian_directions:
-            for a0 in range(zone_axis_range.shape[0]):
-                self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
-                    self.orientation_zone_axis_range[a0, :]
-                )
+        # if not self.cartesian_directions:
+        #     for a0 in range(zone_axis_range.shape[0]):
+        #         self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
+        #             self.orientation_zone_axis_range[a0, :]
+        #         )
 
         # Define 3 vectors which span zone axis orientation range, normalize
         if zone_axis_range.shape[0] == 3:
@@ -527,8 +526,11 @@ def orientation_plan(
         np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
         self.orientation_vecs[:, 2],
     )
-    azim = -np.pi / 2 + np.arctan2(
-        self.orientation_vecs[:, 1], self.orientation_vecs[:, 0]
+    # azim = np.pi / 2 + np.arctan2(
+    #     self.orientation_vecs[:, 1], self.orientation_vecs[:, 0]
+    # )
+    azim = np.arctan2(
+        self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]
     )
 
     # Solve for number of angular steps along in-plane rotation direction
@@ -583,19 +585,26 @@ def orientation_plan(
     for a0 in np.arange(self.orientation_num_zones):
         m1z = np.array(
             [
-                [np.cos(azim[a0]), -np.sin(azim[a0]), 0],
-                [np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                [np.cos(azim[a0]), np.sin(azim[a0]), 0],
+                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
                 [0, 0, 1],
             ]
         )
         m2x = np.array(
             [
                 [1, 0, 0],
-                [0, np.cos(elev[a0]), -np.sin(elev[a0])],
-                [0, np.sin(elev[a0]), np.cos(elev[a0])],
+                [0, np.cos(elev[a0]), np.sin(elev[a0])],
+                [0, -np.sin(elev[a0]), np.cos(elev[a0])],
             ]
         )
-        self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z.T
+        m3z = np.array(
+            [
+                [np.cos(azim[a0]), -np.sin(azim[a0]), 0],
+                [np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                [0, 0, 1],
+            ]
+        )
+        self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0], -azim[a0]]
 
     # # init wave vector and zone axis normal
@@ -604,37 +613,23 @@ def orientation_plan(
     # foil_normal = np.array([0.0, 0.0, -1.0])
 
     # Calculate reference arrays for all orientations
+    k0 = np.array([0.0, 0.0, -1.0/self.wavelength])
+    n = np.array([0.0, 0.0, -1.0])
+
     for a0 in tqdmnd(
         np.arange(self.orientation_num_zones),
         desc="Orientation plan",
         unit=" zone axes",
         disable=not progress_bar,
     ):
-        # p = np.linalg.inv(self.orientation_rotation_matrices[a0, :, :]) @ self.g_vec_all
-        # p = self.orientation_rotation_matrices[a0, :, :] @ self.g_vec_all
-
-        # Excitation errors
-        # cos_alpha = (k0[2, None] + p[2, :]) / np.linalg.norm(k0[:, None] + p, axis=0)
-        # sg = (
-        #     (-0.5)
-        #     * np.sum((2 * k0[:, None] + p) * p, axis=0)
-        #     / (np.linalg.norm(k0[:, None] + p, axis=0))
-        #     / cos_alpha
-        #)
-
-        # cos_alpha = np.sum(
-        #     (k0[:, None] + self.g_vec_all) * (foil_normal[:, None]), axis=0
-        # ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
-        # sg = (
-        #     (-0.5)
-        #     * np.sum((2 * k0[:, None] + p) * p, axis=0)
-        #     / (np.linalg.norm(k0[:, None] + p, axis=0))
-        #     / cos_alpha
-        # )
+        # reciprocal lattice spots and excitation errors
+        g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
+        sg = self.excitation_errors(g)
 
         # in-plane rotation angle
-        phi = np.arctan2(p[1, :], p[0, :])
+        phi = np.arctan2(g[1, :], g[0, :])
 
+        # Loop over all peaks
         for a1 in np.arange(self.g_vec_all.shape[1]):
             ind_radial = self.orientation_shell_index[a1]
 
@@ -760,7 +755,7 @@ def match_single_pattern(
     # subpixel_tilt: bool = False,
     # plot_corr_3D: bool = False,
     # return_corr: bool = False,
-):
+    ):
     """
     Solve for the best fit orientation of a single diffraction pattern.
 
@@ -995,7 +990,6 @@ def match_single_pattern(
 
         # Verify current match has a correlation > 0
         if corr_value[ind_best_fit] > 0:
-
             # Get orientation matrix
             orientation_matrix = np.squeeze(
                 self.orientation_rotation_matrices[ind_best_fit, :, :]
@@ -1009,9 +1003,9 @@ def match_single_pattern(
             if inversion_symmetry and corr_inv[ind_best_fit]:
                 m3z = np.array(
                     [
-                        [np.cos(phi), np.sin(phi), 0],
-                        [-np.sin(phi), np.cos(phi), 0],
-                        [0, 0, -1],
+                        [-np.cos(phi), np.sin(phi), 0],
+                        [np.sin(phi), np.cos(phi), 0],
+                        [0, 0, 1],
                     ]
                 )
             else:
@@ -1023,6 +1017,7 @@ def match_single_pattern(
                     ]
                 )
             orientation_matrix = orientation_matrix @ m3z
+
 
 
             # Output best fit values into Orientation class
@@ -1043,8 +1038,10 @@ def match_single_pattern(
             if inversion_symmetry:
                 orientation.mirror[match_ind] = corr_inv[ind_best_fit]
 
-            orientation.angles[match_ind,0:2] = self.orientation_rotation_angles[ind_best_fit,:]
-            orientation.angles[match_ind,2] = phi
+            orientation.angles[match_ind,:] = self.orientation_rotation_angles[ind_best_fit,:]
+            orientation.angles[match_ind,2] += phi
+            # orientation.angles[match_ind,0:2] = self.orientation_rotation_angles[ind_best_fit,:]
+            # orientation.angles[match_ind,2] = phi
 
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
@@ -1054,10 +1051,9 @@ def match_single_pattern(
         if verbose:
             zone_axis_fit = orientation.matrix[match_ind][:, 2]
 
-            if not self.cartesian_directions:
-                zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
-
-            zone_axis_fit = np.round(zone_axis_fit,decimals=3)
+            # if not self.cartesian_directions:
+            zone_axis_miller = self.cartesian_to_miller(zone_axis_fit)
+            zone_axis_miller = np.round(zone_axis_miller,decimals=3)
 
             # if not self.cartesian_directions:
             #     # TODO - I definitely think this should be cartesian--> zone,
@@ -1075,8 +1071,8 @@ def match_single_pattern(
             #     zone_fit = 
             # print()
             print(
-                "Best fit zone axis = ("
-                + str(zone_axis_fit)
+                "Best fit miller zone axis = ("
+                + str(zone_axis_miller)
                 + ")"
                 + " with corr value = "
                 + str(np.round(orientation.corr[match_ind], decimals=3))
