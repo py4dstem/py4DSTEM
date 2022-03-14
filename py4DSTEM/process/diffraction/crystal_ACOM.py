@@ -607,11 +607,6 @@ def orientation_plan(
         self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z
         self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0], -azim[a0]]
 
-    # # init wave vector and zone axis normal
-    # k0 = np.array([0.0, 0.0, -1.0]) / self.wavelength
-    # dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
-    # foil_normal = np.array([0.0, 0.0, -1.0])
-
     # Calculate reference arrays for all orientations
     k0 = np.array([0.0, 0.0, -1.0/self.wavelength])
     n = np.array([0.0, 0.0, -1.0])
@@ -626,6 +621,9 @@ def orientation_plan(
         g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
         sg = self.excitation_errors(g)
 
+        # Keep only points that will contribute to this orientation plan slice
+        keep = np.abs(sg) < self.orientation_kernel_size
+
         # in-plane rotation angle
         phi = np.arctan2(g[1, :], g[0, :])
 
@@ -633,7 +631,7 @@ def orientation_plan(
         for a1 in np.arange(self.g_vec_all.shape[1]):
             ind_radial = self.orientation_shell_index[a1]
 
-            if ind_radial >= 0:
+            if keep[a1] and ind_radial >= 0:
                 self.orientation_ref[a0, ind_radial, :] += (
                     np.power(self.orientation_shell_radii[ind_radial], radial_power)
                     * np.power(self.struct_factors_int[a1], intensity_power)
@@ -669,40 +667,6 @@ def orientation_plan(
     # Fourier domain along angular axis
     self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
     # self.orientation_ref = np.fft.fft(self.orientation_ref)
-
-    # # Init vectors for the 2D corr method
-    # self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
-    # self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
-    # self.orientation_gamma_shift = -2j*np.pi* \
-    #     np.fft.fftfreq(self.orientation_in_plane_steps)
-
-    # # Calculate perpendicular orientation reference if needed
-    # if self.orientation_corr_2D_method:
-    #     # self.orientation_ref_perp = np.real(np.fft.ifft(
-    #     #     self.orientation_ref)
-    #     # ).astype("complex64")
-    #     # self.orientation_ref_perp = self.orientation_ref.copy()
-
-    #     self.orientation_gamma_cos2 = np.cos(self.orientation_gamma)**2
-    #     self.orientation_gamma_cos2_fft = np.fft.fft(self.orientation_gamma_cos2)
-    #     self.orientation_gamma_shift = -2j*np.pi* \
-    #         np.fft.fftfreq(self.orientation_in_plane_steps)
-
-    # # if self.orientation_corr_2D_method:
-    # for a0 in range(self.orientation_num_zones):
-    #     cos2_corr = np.sum(np.real(np.fft.ifft(
-    #         np.fft.fft(self.orientation_ref[a0,:,:]) * self.orientation_gamma_cos2_fft
-    #     )), axis=0)
-    #     ind_shift = np.argmax(cos2_corr)
-    #     # self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-    #     #     * (1 - np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-    #     #     * np.exp(self.orientation_gamma_shift*ind_shift))))
-    #     self.orientation_ref_perp[a0,:,:] = self.orientation_ref_perp[a0,:,:] \
-    #         * (1-np.real(np.fft.ifft(self.orientation_gamma_cos2_fft \
-    #         * np.exp(self.orientation_gamma_shift*ind_shift))))
-
-    # self.orientation_ref_perp = np.conj(np.fft.fft(self.orientation_ref_perp))
-
 
 def match_orientations(
     self,
@@ -1018,8 +982,6 @@ def match_single_pattern(
                 )
             orientation_matrix = orientation_matrix @ m3z
 
-
-
             # Output best fit values into Orientation class
             orientation.matrix[match_ind] = orientation_matrix
             
@@ -1050,26 +1012,9 @@ def match_single_pattern(
 
         if verbose:
             zone_axis_fit = orientation.matrix[match_ind][:, 2]
-
-            # if not self.cartesian_directions:
             zone_axis_miller = self.cartesian_to_miller(zone_axis_fit)
             zone_axis_miller = np.round(zone_axis_miller,decimals=3)
 
-            # if not self.cartesian_directions:
-            #     # TODO - I definitely think this should be cartesian--> zone,
-            #     # but that seems to return incorrect labels.  Not sure why! -CO
-
-            #     # zone_axis_fit = self.cartesian_to_crystal(zone_axis_fit)
-            #     zone_axis_fit = self.crystal_to_cartesian(zone_axis_fit)
-
-            # temp = zone_axis_fit / np.linalg.norm(zone_axis_fit)
-            # temp = np.round(temp, decimals=3)
-            # # if multiple_corr_reset and match_ind > 0:
-            # if not self.cartesian_directions:
-            #     zone_fit = self.cartesian_to_crystal(orientation.corr[match_ind])
-            # else:
-            #     zone_fit = 
-            # print()
             print(
                 "Best fit miller zone axis = ("
                 + str(zone_axis_miller)

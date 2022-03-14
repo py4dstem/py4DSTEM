@@ -446,6 +446,7 @@ class Crystal:
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 1e-4,
         keep_qz = False,
+        return_orientation_matrix=False,
     ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
@@ -469,9 +470,11 @@ class Crystal:
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
             keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
+            return_orientation_matrix (bool): Return the orientation matrix
 
         Returns:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            orientation_matrix (array):      3x3 orientation matrix (optional)
         """
 
         # Tolerance for angular tests
@@ -592,7 +595,10 @@ class Crystal:
                         l)).T
                 )
 
-        return bragg_peaks
+        if return_orientation_matrix:
+            return bragg_peaks, orientation_matrix
+        else:
+            return bragg_peaks
 
 
 
