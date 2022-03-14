@@ -512,6 +512,7 @@ class Crystal:
         # Rotate crystal into desired projection
         g = orientation_matrix.T @ self.g_vec_all
         n = orientation_matrix.T @ (-1*foil_normal)
+        print(np.round(n,decimals=3))
 
         # Excitation errors
         k0 = np.array([0.0, 0.0, -1/self.wavelength])
@@ -653,7 +654,8 @@ class Crystal:
         elif zone_axis_cartesian is not None:
             proj_z = np.array(zone_axis_cartesian)
         else:
-            proj_z = np.array([3,2,1])
+            proj_z = np.array([0,0,1])
+
         if proj_x_miller is not None:
             proj_x = np.array(proj_x_miller)
             if proj_x.shape[0] == 4:
@@ -662,7 +664,10 @@ class Crystal:
         elif proj_x_cartesian is not None:
             proj_x = np.array(proj_x_cartesian)
         else:
-            proj_x = np.array([-2,3,0])
+            if np.abs(proj_z[2]) > 1-1e-6:
+                proj_x = np.cross(np.array([0,1,0]),proj_z)
+            else:
+                proj_x = np.array([0,0,-1])
 
         # Generate orthogonal coordinate system, normalize
         proj_y = np.cross(proj_z, proj_x)
