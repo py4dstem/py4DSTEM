@@ -629,7 +629,8 @@ class Crystal:
             ])
 
     def rational_ind(self, vec):
-        # This function rationalizes the indices of a vector, up to some tolerance
+        # This function rationalizes the indices of a vector, up to 
+        # some tolerance. Returns integers to prevent rounding errors.
         tol_den = 1000
         vec = np.array(vec,dtype='float64')
         sub = np.abs(vec) > 0
@@ -638,7 +639,7 @@ class Crystal:
                 frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
                 vec *= frac.denominator
             vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
-        return vec
+        return vec.astype('int')
 
     def parse_orientation(
         self,
