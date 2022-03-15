@@ -689,8 +689,10 @@ class Crystal:
         g,
         foil_normal=None,
         ):
-        # Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda]
-
+        '''
+        Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda].
+        If foil normal is not specified, we assume it is [0,0,-1].
+        '''
         if foil_normal is None:
             return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
                 / (2 - 2*self.wavelength*g[2,:]) 

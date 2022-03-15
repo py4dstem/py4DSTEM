@@ -2,12 +2,16 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Union, Optional
-# from dataclasses import dataclass
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
 
+try:
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure
+except ImportError:
+    pass
 
 def orientation_plan(
     self,
@@ -22,11 +26,9 @@ def orientation_plan(
     tol_distance: float = 0.01,
     fiber_axis=None,
     fiber_angles=None,
-    # cartesian_directions=False,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
     progress_bar: bool = True,
-):
-    # plot_corr_norm: bool = False,  # option removed due to new normalization
+    ):
 
     """
     Calculate the rotation basis arrays for an SO(3) rotation correlogram.
@@ -79,9 +81,10 @@ def orientation_plan(
     # Handle the "auto" case first, since it works by overriding zone_axis_range,
     #   fiber_axis, and fiber_angles then using the regular parser:
     if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
-        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        from pymatgen.core.structure import Structure
+        # from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        # from pymatgen.core.structure import Structure
 
+        # initialize structure
         structure = Structure(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
@@ -101,14 +104,36 @@ def orientation_plan(
         elif zone_axis_range == "fiber":
             self.orientation_fiber_axis = np.asarray(fiber_axis)
             self.orientation_fiber_angles = np.asarray(fiber_angles)
-        # this is wrong! -CO
-        # self.cartesian_directions = (
-        #     True  # the entries in the orientation_ranges object assume cartesian zones
-        # )
 
         print(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
+
+        # Set a flag so we know pymatgen is available
+        self.pymatgen_available = True
+
+        # Get symmetry operations for this spacegroup, store in tensor form
+        ops = self.pointgroup.get_point_group_operations()
+        num_sym = len(ops)
+        self.symmetry_operators = np.zeros((num_sym,3,3)) 
+        for a0 in range(len(ops)):
+            self.symmetry_operators[a0] = ops[a0].rotation_matrix.T @ self.lat_real
+
+        v = np.array([1,0,0])
+        test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
+
+        # print(self.symmetry_operators)        
+        r = np.sum(test**2,axis=1)
+        print(r.T)
+        t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
+        print(t.T)
+        
+
+        # self.sym
+
+
+
+
     if isinstance(zone_axis_range, str):
         if (
             zone_axis_range == "fiber"
@@ -1002,6 +1027,13 @@ def match_single_pattern(
 
             orientation.angles[match_ind,:] = self.orientation_rotation_angles[ind_best_fit,:]
             orientation.angles[match_ind,2] += phi
+            
+            # If point group is known, use pymatgen to caculate the symmetry-
+            # reduced orientation matrix, producing the crystal direction family.
+            # print(self.pointgroup.get_point_group_symbol())
+            if self.pymatgen_available:
+                self.pointgroup.get_orbit()
+
             # orientation.angles[match_ind,0:2] = self.orientation_rotation_angles[ind_best_fit,:]
             # orientation.angles[match_ind,2] = phi
 
