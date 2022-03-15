@@ -602,7 +602,7 @@ class Crystal:
 
 
 
-    # Vector conversions and other utilities in Crystal
+    # Vector conversions and other utilities for Crystal classes
 
     def cartesian_to_miller(self, vec_cartesian):
         vec_miller = vec_cartesian @ self.lat_real.T @ self.metric_inv
