@@ -112,24 +112,65 @@ def orientation_plan(
         # Set a flag so we know pymatgen is available
         self.pymatgen_available = True
 
-        # Get symmetry operations for this spacegroup, store in tensor form
+        # Get symmetry operations for this spacegroup, store in matrix form
         ops = self.pointgroup.get_point_group_operations()
         num_sym = len(ops)
         self.symmetry_operators = np.zeros((num_sym,3,3)) 
-        for a0 in range(len(ops)):
-            self.symmetry_operators[a0] = ops[a0].rotation_matrix.T @ self.lat_real
+        self.symmetry_reduction = np.zeros((num_sym,3,3)) 
+        for a0 in range(num_sym):
+            self.symmetry_operators[a0] = \
+                self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+            self.symmetry_reduction[a0] = \
+                self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
+            # self.symmetry_reduction[a0] = \
+            #     self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
+            # print(np.round(self.symmetry_operators[a0],decimals=3))
 
-        v = np.array([1,0,0])
-        test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
 
-        # print(self.symmetry_operators)        
-        r = np.sum(test**2,axis=1)
-        print(r.T)
-        t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
-        print(t.T)
+        # print(np.round(self.symmetry_operators[10],decimals=4))
+        # print('')
+        # print(np.round(self.symmetry_operators[11],decimals=4))
+
+        # v = np.array([1,0,0])
+        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
+        # r = np.sum(test**2,axis=1)
+        # # print(np.round(r.T,decimals=3))
+        # t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
+        # print(np.round(t.T,decimals=3))
+
+        # # v = np.array([0,1,0])
+        # v = np.array([np.sqrt(3)*0.5,0.5,0])
+        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
+        # r = np.sum(test**2,axis=1)
+        # # print(np.round(r.T,decimals=3))
+        # t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
+        # print(np.round(t.T,decimals=3))
         
+        # print(np.round(self.orientation_zone_axis_range,decimals=3))
 
-        # self.sym
+        v = np.array([-0.245,0.22,-0.17])
+        # v = self.miller_to_cartesian(
+        #     self.hexagonal_to_miller(
+        #         np.array([3,-3,0,1])))
+        # v = np.array([0.0, -1, 0.0])
+        print(v)
+        # v = np.array([0.9, 0.1, 0.2])
+        # print(np.round(v,decimals=2))        
+        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
+        # print(test>0)
+        test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
+        test2 = np.all(test>=0, axis=1);
+        for a0 in range(num_sym):
+            if test2[a0]:
+                # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
+                test3 = self.symmetry_operators[a0] @ v
+                test3 = np.round(test3,decimals=3)
+                # test3 = self.miller_to_hexagonal(self.cartesian_to_miller(test3))
+                # test3 = self.rational_ind(test3)
+                print(a0)    
+                print(np.round(test3,decimals=2))        
+
+        # print(self.lat_inv @ v)
 
 
 
