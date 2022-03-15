@@ -1195,20 +1195,50 @@ def match_single_pattern(
                 edgecolors="r",
             )
 
-            label_0 = self.orientation_zone_axis_range[0, :]
-            label_0 = np.round(label_0, decimals=3)
-            label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-            label_0 = np.round(label_0, decimals=3)
+            # label_0 = self.orientation_zone_axis_range[0, :]
+            # label_1 = self.orientation_zone_axis_range[1, :]
+            # label_2 = self.orientation_zone_axis_range[2, :]
 
-            label_1 = self.orientation_zone_axis_range[1, :]
-            label_1 = np.round(label_1, decimals=3)
-            label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-            label_1 = np.round(label_1, decimals=3)
+            # label_0 = np.round(label_0, decimals=3)
+            # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
+            # label_0 = np.round(label_0, decimals=3)
 
-            label_2 = self.orientation_zone_axis_range[2, :]
-            label_2 = np.round(label_2, decimals=3)
-            label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-            label_2 = np.round(label_2, decimals=3)
+            # label_1 = np.round(label_1, decimals=3)
+            # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+            # label_1 = np.round(label_1, decimals=3)
+
+            # label_2 = np.round(label_2, decimals=3)
+            # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+            # label_2 = np.round(label_2, decimals=3)
+
+
+            if np.abs(self.cell[5]-120.0) < 1e-6:
+                label_0 = self.rational_ind(
+                    self.miller_to_hexagonal(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[0, :])))
+                label_1 = self.rational_ind(
+                    self.miller_to_hexagonal(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[1, :])))
+                label_2 = self.rational_ind(
+                    self.miller_to_hexagonal(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[2, :])))
+            else:
+                label_0 = self.rational_ind(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[0, :]))
+                label_1 = self.rational_ind(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[1, :]))
+                label_2 = self.rational_ind(
+                    self.cartesian_to_miller(
+                    self.orientation_zone_axis_range[2, :]))
+            # label_0 = np.round(label_0, decimals=2)
+            # label_1 = np.round(label_1, decimals=2)
+            # label_2 = np.round(label_2, decimals=2)
+
 
             ax[0].set_xticks([0, self.orientation_zone_axis_steps])
             ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
