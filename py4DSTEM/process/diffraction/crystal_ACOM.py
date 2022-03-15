@@ -117,11 +117,20 @@ def orientation_plan(
         num_sym = len(ops)
         self.symmetry_operators = np.zeros((num_sym,3,3)) 
         self.symmetry_reduction = np.zeros((num_sym,3,3)) 
+        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
         for a0 in range(num_sym):
             self.symmetry_operators[a0] = \
                 self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+            # self.symmetry_operators[a0] /= np.linalg.det(self.symmetry_operators[a0])
             self.symmetry_reduction[a0] = \
-                self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
+                (zone_axis_range_inv.T @ self.symmetry_operators[a0].T).T
+                # @ np.linalg.inv(self.orientation_zone_axis_range)
+        # print(np.round(self.orientation_zone_axis_range,decimals=3))
+
+            # self.symmetry_operators[a0] = \
+            #     self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+            # self.symmetry_reduction[a0] = \
+            #     self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
             # self.symmetry_reduction[a0] = \
             #     self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
             # print(np.round(self.symmetry_operators[a0],decimals=3))
@@ -148,17 +157,24 @@ def orientation_plan(
         
         # print(np.round(self.orientation_zone_axis_range,decimals=3))
 
-        v = np.array([-0.245,0.22,-0.17])
+        # v = np.array([-0.245,0.22,-0.17])
         # v = self.miller_to_cartesian(
         #     self.hexagonal_to_miller(
         #         np.array([3,-3,0,1])))
         # v = np.array([0.0, -1, 0.0])
-        print(v)
+        # v = np.array([1.0, 0.0, 0.0]) + np.array([0.866, 0.5,   0.0])
+        t = 45*np.pi/180
+        v = np.array([np.cos(t), np.sin(t), 0.9])
+        v = v / np.linalg.norm(v)
+        print(np.round(v,decimals=3))
         # v = np.array([0.9, 0.1, 0.2])
         # print(np.round(v,decimals=2))        
         # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
         # print(test>0)
         test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
+        # test = self.symmetry_reduction @ v
+        # print(np.round(test,decimals=3))
+
         test2 = np.all(test>=0, axis=1);
         for a0 in range(num_sym):
             if test2[a0]:
@@ -168,7 +184,7 @@ def orientation_plan(
                 # test3 = self.miller_to_hexagonal(self.cartesian_to_miller(test3))
                 # test3 = self.rational_ind(test3)
                 print(a0)    
-                print(np.round(test3,decimals=2))        
+                print(np.round(test3,decimals=3))        
 
         # print(self.lat_inv @ v)
 
