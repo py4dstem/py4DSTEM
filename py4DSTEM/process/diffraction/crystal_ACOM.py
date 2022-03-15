@@ -106,89 +106,12 @@ def orientation_plan(
             self.orientation_fiber_angles = np.asarray(fiber_angles)
 
         print(
-            f"Automatically detected point group {self.pointgroup.get_point_group_symbol()}, using arguments: zone_axis_range={zone_axis_range}, fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
+            f"Automatically detected point group {self.pointgroup.get_point_group_symbol()},\n"
+            f" using arguments: zone_axis_range = \n{zone_axis_range}, \n fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
 
         # Set a flag so we know pymatgen is available
         self.pymatgen_available = True
-
-        # Get symmetry operations for this spacegroup, store in matrix form
-        ops = self.pointgroup.get_point_group_operations()
-        num_sym = len(ops)
-        self.symmetry_operators = np.zeros((num_sym,3,3)) 
-        self.symmetry_reduction = np.zeros((num_sym,3,3)) 
-        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
-        for a0 in range(num_sym):
-            self.symmetry_operators[a0] = \
-                self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
-            # self.symmetry_operators[a0] /= np.linalg.det(self.symmetry_operators[a0])
-            self.symmetry_reduction[a0] = \
-                (zone_axis_range_inv.T @ self.symmetry_operators[a0].T).T
-                # @ np.linalg.inv(self.orientation_zone_axis_range)
-        # print(np.round(self.orientation_zone_axis_range,decimals=3))
-
-            # self.symmetry_operators[a0] = \
-            #     self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
-            # self.symmetry_reduction[a0] = \
-            #     self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
-            # self.symmetry_reduction[a0] = \
-            #     self.symmetry_operators[a0] @ np.linalg.inv(self.orientation_zone_axis_range)
-            # print(np.round(self.symmetry_operators[a0],decimals=3))
-
-
-        # print(np.round(self.symmetry_operators[10],decimals=4))
-        # print('')
-        # print(np.round(self.symmetry_operators[11],decimals=4))
-
-        # v = np.array([1,0,0])
-        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
-        # r = np.sum(test**2,axis=1)
-        # # print(np.round(r.T,decimals=3))
-        # t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
-        # print(np.round(t.T,decimals=3))
-
-        # # v = np.array([0,1,0])
-        # v = np.array([np.sqrt(3)*0.5,0.5,0])
-        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
-        # r = np.sum(test**2,axis=1)
-        # # print(np.round(r.T,decimals=3))
-        # t = np.rad2deg(np.arctan2(test[:,1],test[:,0]))
-        # print(np.round(t.T,decimals=3))
-        
-        # print(np.round(self.orientation_zone_axis_range,decimals=3))
-
-        # v = np.array([-0.245,0.22,-0.17])
-        # v = self.miller_to_cartesian(
-        #     self.hexagonal_to_miller(
-        #         np.array([3,-3,0,1])))
-        # v = np.array([0.0, -1, 0.0])
-        # v = np.array([1.0, 0.0, 0.0]) + np.array([0.866, 0.5,   0.0])
-        t = 45*np.pi/180
-        v = np.array([np.cos(t), np.sin(t), 0.9])
-        v = v / np.linalg.norm(v)
-        print(np.round(v,decimals=3))
-        # v = np.array([0.9, 0.1, 0.2])
-        # print(np.round(v,decimals=2))        
-        # test = np.sum(self.symmetry_operators * v[None,:,None], axis=1)
-        # print(test>0)
-        test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
-        # test = self.symmetry_reduction @ v
-        # print(np.round(test,decimals=3))
-
-        test2 = np.all(test>=0, axis=1);
-        for a0 in range(num_sym):
-            if test2[a0]:
-                # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
-                test3 = self.symmetry_operators[a0] @ v
-                test3 = np.round(test3,decimals=3)
-                # test3 = self.miller_to_hexagonal(self.cartesian_to_miller(test3))
-                # test3 = self.rational_ind(test3)
-                print(a0)    
-                print(np.round(test3,decimals=3))        
-
-        # print(self.lat_inv @ v)
-
-
 
 
     if isinstance(zone_axis_range, str):
@@ -653,14 +576,45 @@ def orientation_plan(
         ),
         dtype="float",
     )
-    # self.orientation_ref = np.zeros(
-    #     (
-    #         self.orientation_num_zones,
-    #         np.size(self.orientation_shell_radii),
-    #         self.orientation_in_plane_steps,
-    #     ),
-    #     dtype="complex64",
-    # )
+
+
+    # If possible,  Get symmetry operations for this spacegroup, store in matrix form
+    if self.pymatgen_available:
+        ops = self.pointgroup.get_point_group_operations()
+        num_sym = len(ops)
+        self.symmetry_operators = np.zeros((num_sym,3,3)) 
+        self.symmetry_reduction = np.zeros((num_sym,3,3)) 
+        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
+        for a0 in range(num_sym):
+            self.symmetry_operators[a0] = \
+                self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+            self.symmetry_reduction[a0] = \
+                (zone_axis_range_inv.T @ self.symmetry_operators[a0].T).T
+
+        t = 190*np.pi/180
+        v = np.array([np.cos(t), np.sin(t), 0.23])
+        v = v / np.linalg.norm(v)
+
+
+        print(np.round(v,decimals=3))
+        test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
+
+        print(test.shape)
+
+        test2 = np.all(test>=0, axis=1);
+        for a0 in range(num_sym):
+            if test2[a0]:
+                # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
+                v_out = self.symmetry_operators[a0] @ v
+                v_out = np.round(v_out,decimals=3)
+
+                print(a0, 
+                    np.round(test[a0,:],decimals=2),
+                    np.round(v_out,decimals=2),
+                    )
+
+
+
 
     # Calculate rotation matrices for zone axes
     # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
@@ -1087,9 +1041,37 @@ def match_single_pattern(
             
             # If point group is known, use pymatgen to caculate the symmetry-
             # reduced orientation matrix, producing the crystal direction family.
-            # print(self.pointgroup.get_point_group_symbol())
+            
+
             if self.pymatgen_available:
-                self.pointgroup.get_orbit()
+                v = orientation.matrix[match_ind,:,2]
+
+
+                t = 190*np.pi/180
+                v = np.array([np.cos(t), np.sin(t), 0.23])
+                v = v / np.linalg.norm(v)
+
+                print(np.round(v,decimals=2))
+
+
+                # print(v.shape)
+                test = np.sum(self.symmetry_reduction * v[None,:,None], axis=2)
+                # basis = self.symmetry_reduction @ v
+                # print(np.all(basis>=0, axis=1))
+
+                print(test.shape)
+
+                # keep = np.all(self.symmetry_reduction @ v >=0, axis=1)
+                keep = np.all(test >=0, axis=1)
+                for a2 in range(keep.shape[0]):
+                    if keep[a2]:
+                        v_out = np.sum(self.symmetry_operators[a2] @ v[:,None], axis=1)
+
+                        print(a2, 
+                            np.round(test[a2,:],decimals=2),
+                            np.round(v_out,decimals=2),
+                            )
+
 
             # orientation.angles[match_ind,0:2] = self.orientation_rotation_angles[ind_best_fit,:]
             # orientation.angles[match_ind,2] = phi
