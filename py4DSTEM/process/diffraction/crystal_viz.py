@@ -297,7 +297,9 @@ def plot_structure_factors(
 
 def plot_orientation_zones(
     self,
-    proj_dir: Optional[Union[list, tuple, np.ndarray]] = None,
+    azim_elev: Optional[Union[list, tuple, np.ndarray]] = None,
+    proj_dir_miller: Optional[Union[list, tuple, np.ndarray]] = None,
+    proj_dir_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
     marker_size: float = 20,
     plot_limit: Union[list, tuple, np.ndarray] = np.array([-1.1, 1.1]),
     figsize: Union[list, tuple, np.ndarray] = (8, 8),
@@ -318,10 +320,14 @@ def plot_orientation_zones(
         fig, ax                     (optional) figure and axes handles
     """
 
-    if proj_dir is None:
-        proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
-    elif not self.cartesian_directions:
-        proj_dir = self.crystal_to_cartesian(proj_dir)
+    if azim_elev is not None:
+        proj_dir =  azim_elev
+    elif proj_dir_miller is not None:
+        proj_dir =  self.miller_to_cartesian(proj_dir_miller)
+    elif proj_dir_cartesian is not None:
+        proj_dir = proj_dir_cartesian
+    else:
+        proj_dir = np.mean(self.orientation_zone_axis_range,axis=0)
 
     if np.size(proj_dir) == 2:
         el = proj_dir[0]
@@ -392,43 +398,66 @@ def plot_orientation_zones(
     )
 
     # zone axis range labels
-    # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-    # if self.cartesian_directions:
-    label_0 = self.orientation_zone_axis_range[0, :]
-    # else:
-    #     label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-    label_0 = np.round(label_0, decimals=3)
-    label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-    label_0 = np.round(label_0, decimals=3)
+    if np.abs(self.cell[5]-120.0) < 1e-6:
+        label_0 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[0, :])))
+        label_1 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[1, :])))
+        label_2 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[2, :])))
+    else:
+        label_0 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[0, :]))
+        label_1 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[1, :]))
+        label_2 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[2, :]))
+
+
+    # # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+    # # if self.cartesian_directions:
+    # label_0 = self.orientation_zone_axis_range[0, :]
+    # # else:
+    # #     label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+    # label_0 = np.round(label_0, decimals=3)
+    # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
+    # label_0 = np.round(label_0, decimals=3)
 
     if (
-        self.orientation_fiber is False
-        and self.orientation_full is False
-        and self.orientation_half is False
-    ):
+        self.orientation_full is False and
+        self.orientation_half is False
+        ):
+        # # label_1 = self.cartesian_to_crystal(
+        # #     self.orientation_zone_axis_range[1, :]
+        # #     )
+        # # if self.cartesian_directions:
+        # label_1 = self.orientation_zone_axis_range[1, :]
+        # # else:
+        # #     label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
+        # label_1 = np.round(label_1 * 1e3) * 1e-3
+        # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+        # label_1 = np.round(label_1 * 1e3) * 1e-3
 
-        # label_1 = self.cartesian_to_crystal(
-        #     self.orientation_zone_axis_range[1, :]
-        #     )
-        # if self.cartesian_directions:
-        label_1 = self.orientation_zone_axis_range[1, :]
-        # else:
-        #     label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
-        label_1 = np.round(label_1 * 1e3) * 1e-3
-        label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-        label_1 = np.round(label_1 * 1e3) * 1e-3
+        # # label_2 = self.cartesian_to_crystal(
+        # #     self.orientation_zone_axis_range[2, :]
+        # # )
+        # # if self.cartesian_directions:
+        # label_2 = self.orientation_zone_axis_range[2, :]
+        # # else:
+        # #     label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
 
-        # label_2 = self.cartesian_to_crystal(
-        #     self.orientation_zone_axis_range[2, :]
-        # )
-        # if self.cartesian_directions:
-        label_2 = self.orientation_zone_axis_range[2, :]
-        # else:
-        #     label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
-
-        label_2 = np.round(label_2 * 1e3) * 1e-3
-        label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-        label_2 = np.round(label_2 * 1e3) * 1e-3
+        # label_2 = np.round(label_2 * 1e3) * 1e-3
+        # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+        # label_2 = np.round(label_2 * 1e3) * 1e-3
 
         inds = np.array(
             [
@@ -473,9 +502,8 @@ def plot_orientation_zones(
         **text_params,
     )
     if (
-        self.orientation_fiber is False
-        and self.orientation_full is False
-        and self.orientation_half is False
+        self.orientation_full is False and
+        self.orientation_half is False
     ):
         ax.text(
             self.orientation_vecs[inds[1], 1] * text_scale_pos,
@@ -484,7 +512,7 @@ def plot_orientation_zones(
             label_1,
             None,
             zorder=12,
-            ha="right",
+            ha="center",
             **text_params,
         )
         ax.text(
@@ -494,7 +522,7 @@ def plot_orientation_zones(
             label_2,
             None,
             zorder=13,
-            ha="left",
+            ha="center",
             **text_params,
         )
 
@@ -893,25 +921,6 @@ def plot_orientation_maps(
     rgb_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
     rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
 
-    # Check crystal symmetry
-    tol = 1e-4
-    tol_degrees = 1e-2
-    if  np.abs(self.cell[0] - self.cell[1])<tol and \
-        np.abs(self.cell[0] - self.cell[2])<tol and \
-        np.abs(self.cell[1] - self.cell[2])<tol and \
-        np.abs(self.cell[3] - 90)<tol_degrees and \
-        np.abs(self.cell[4] - 90)<tol_degrees and \
-        np.abs(self.cell[5] - 90)<tol_degrees:
-        flag_in_plane = True
-    # elif np.abs(self.cell[0] - self.cell[1])<tol and \
-    #     np.abs(self.cell[3] - 90)<tol_degrees and \
-    #     np.abs(self.cell[4] - 90)<tol_degrees and \
-    #     np.abs(self.cell[5] - 120)<tol_degrees:
-    #     flag_in_plane = True
-    else:
-        flag_in_plane = False
-        warnings.warn("Warning - some crystal symmetries require pymatgen to be installed.")
-
     # Basis for fitting orientation projections 
     A = self.orientation_zone_axis_range.T
 
@@ -922,7 +931,7 @@ def plot_orientation_maps(
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
     mask = np.clip(mask, 0, 1)
 
-    # Generate zone axis basis and rgb image
+    # Generate images
     for rx, ry in tqdmnd(
         orientation_map.num_x,
         orientation_map.num_y,
@@ -930,40 +939,102 @@ def plot_orientation_maps(
         unit=" PointList",
         disable=not progress_bar,
         ):
-        v = orientation_map.matrix[rx,ry,ind_orientation,:,2]
-        w = np.linalg.solve(A, v)
-        if np.min(w) < 0:     
-            w = -w
-        basis_z[rx,ry,:] = w
+
+        if self.pymatgen_available:
+            basis_x[rx,ry,:] = np.linalg.solve(A,
+                orientation_map.family[rx,ry,ind_orientation,:,0])
+            basis_z[rx,ry,:] = np.linalg.solve(A,
+                orientation_map.family[rx,ry,ind_orientation,:,2])
+        else:
+            basis_z[rx,ry,:] = np.linalg.solve(A,
+                orientation_map.matrix[rx,ry,ind_orientation,:,2])
+    basis_x = np.clip(basis_x,0,1)
     basis_z = np.clip(basis_z,0,1)
 
+    # Convert to RGB images
+    basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
+    rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
+        + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
+        + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
     basis_z_scale = mask[:,:,None] * basis_z / np.max(basis_z,axis=2)[:,:,None]
     rgb_z = basis_z_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
         + basis_z_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
         + basis_z_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+    # rgb_x[:,:,2] = basis_x[:,:,2]
 
-    # Generate in-plane basis and rgb image
-    if flag_in_plane:
-        for rx, ry in tqdmnd(
-            orientation_map.num_x,
-            orientation_map.num_y,
-            desc="Generating orientation maps",
-            unit=" PointList",
-            disable=not progress_bar,
-            ):
-            v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
-                 + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
-            v = np.sort(np.abs(v))            
-            w = np.linalg.solve(A, v)
-            if np.min(w) < 0:     
-                w = -w
-            basis_x[rx,ry,:] = w
-        basis_x = np.clip(basis_x,0,1)
 
-        basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
-        rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
-            + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
-            + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+    # # Check crystal symmetry
+    # tol = 1e-4
+    # tol_degrees = 1e-2
+    # if  np.abs(self.cell[0] - self.cell[1])<tol and \
+    #     np.abs(self.cell[0] - self.cell[2])<tol and \
+    #     np.abs(self.cell[1] - self.cell[2])<tol and \
+    #     np.abs(self.cell[3] - 90)<tol_degrees and \
+    #     np.abs(self.cell[4] - 90)<tol_degrees and \
+    #     np.abs(self.cell[5] - 90)<tol_degrees:
+    #     flag_cubic = True
+    # #     flag_in_plane = True
+    # # elif self.pymatgen_available:
+    # #     flag_in_plane = True
+    # # else:
+    # #     flag_in_plane = False
+    # #     warnings.warn("Warning - some crystal symmetries require pymatgen to be installed.")
+
+
+
+
+    # # flag for generating / plotting in-plane images
+
+
+    # Generate images
+    
+
+
+    # # Generate zone axis basis and rgb image
+    # for rx, ry in tqdmnd(
+    #     orientation_map.num_x,
+    #     orientation_map.num_y,
+    #     desc="Generating orientation maps",
+    #     unit=" PointList",
+    #     disable=not progress_bar,
+    #     ):
+
+    #     if self.pymatgen_available:
+
+    #     v = orientation_map.matrix[rx,ry,ind_orientation,:,2]
+    #     w = np.linalg.solve(A, v)
+    #     if np.min(w) < 0:     
+    #         w = -w
+    #     basis_z[rx,ry,:] = w
+    # basis_z = np.clip(basis_z,0,1)
+
+    # basis_z_scale = mask[:,:,None] * basis_z / np.max(basis_z,axis=2)[:,:,None]
+    # rgb_z = basis_z_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
+    #     + basis_z_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
+    #     + basis_z_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+
+    # # Generate in-plane basis and rgb image
+    # if flag_in_plane:
+    #     for rx, ry in tqdmnd(
+    #         orientation_map.num_x,
+    #         orientation_map.num_y,
+    #         desc="Generating orientation maps",
+    #         unit=" PointList",
+    #         disable=not progress_bar,
+    #         ):
+    #         v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
+    #              + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
+    #         v = np.sort(np.abs(v))            
+    #         w = np.linalg.solve(A, v)
+    #         if np.min(w) < 0:     
+    #             w = -w
+    #         basis_x[rx,ry,:] = w
+    #     basis_x = np.clip(basis_x,0,1)
+
+    #     basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
+    #     rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
+    #         + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
+    #         + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
 
     # Legend init
     # projection vector
@@ -989,29 +1060,73 @@ def plot_orientation_maps(
         w1[:,None]*color_basis[1,:] + \
         w2[:,None]*color_basis[2,:],
         0,1)
-    # rgb_legend = np.clip( 
-    #     w2[:,None]*color_basis[0,:],0,1)
-    # if marker_size is None:
-    #     marker_size = self.orientation_zone_axis_steps**2/20
-    # axis labels
-    if self.cartesian_directions:
-        label_0 = self.orientation_zone_axis_range[0, :]
-    else:
-        label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-    label_0 = np.round(label_0, decimals=3)
-    label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-    label_0 = np.round(label_0, decimals=3)
 
-    # if (
-    #     self.orientation_fiber is False
-    #     and self.orientation_full is False
-    #     and self.orientation_half is False
-    # ):
+    if np.abs(self.cell[5]-120.0) < 1e-6:
+        label_0 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[0, :])))
+        label_1 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[1, :])))
+        label_2 = self.rational_ind(
+            self.miller_to_hexagonal(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[2, :])))
+    else:
+        label_0 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[0, :]))
+        label_1 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[1, :]))
+        label_2 = self.rational_ind(
+            self.cartesian_to_miller(
+            self.orientation_zone_axis_range[2, :]))
+
+
+    # # rgb_legend = np.clip( 
+    # #     w2[:,None]*color_basis[0,:],0,1)
+    # # if marker_size is None:
+    # #     marker_size = self.orientation_zone_axis_steps**2/20
+    # # axis labels
+    # # if self.cartesian_directions:
+    # #     label_0 = self.orientation_zone_axis_range[0, :]
+    # # else:
+    # #     label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
+    # label_0 = self.crystal_to_miller(self.orientation_zone_axis_range[0,:])
+    # label_0 = np.round(label_0, decimals=3)
+    # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
+    # label_0 = np.round(label_0, decimals=3)
+
+    # # if (
+    # #     self.orientation_fiber is False
+    # #     and self.orientation_full is False
+    # #     and self.orientation_half is False
+    # # ):
+
+    # # if self.cartesian_directions:
+    # #     label_1 = self.orientation_zone_axis_range[1, :]
+    # # else:
+    # #     label_1 = self.crystal_to_cartesian(self.orientation_zone_axis_range[1, :])
+    # # label_1 = np.round(label_1 * 1e3) * 1e-3
+    # # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
+    # # label_1 = np.round(label_1 * 1e3) * 1e-3
+
+    # # if self.cartesian_directions:
+    # #     label_2 = self.orientation_zone_axis_range[2, :]
+    # # else:
+    # #     label_2 = self.crystal_to_cartesian(self.orientation_zone_axis_range[2, :])
+
+    # # label_2 = np.round(label_2 * 1e3) * 1e-3
+    # # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
+    # # label_2 = np.round(label_2 * 1e3) * 1e-3
 
     # if self.cartesian_directions:
     #     label_1 = self.orientation_zone_axis_range[1, :]
     # else:
-    #     label_1 = self.crystal_to_cartesian(self.orientation_zone_axis_range[1, :])
+    #     label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
     # label_1 = np.round(label_1 * 1e3) * 1e-3
     # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
     # label_1 = np.round(label_1 * 1e3) * 1e-3
@@ -1019,28 +1134,11 @@ def plot_orientation_maps(
     # if self.cartesian_directions:
     #     label_2 = self.orientation_zone_axis_range[2, :]
     # else:
-    #     label_2 = self.crystal_to_cartesian(self.orientation_zone_axis_range[2, :])
+    #     label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
 
     # label_2 = np.round(label_2 * 1e3) * 1e-3
     # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
     # label_2 = np.round(label_2 * 1e3) * 1e-3
-
-    if self.cartesian_directions:
-        label_1 = self.orientation_zone_axis_range[1, :]
-    else:
-        label_1 = self.cartesian_to_crystal(self.orientation_zone_axis_range[1, :])
-    label_1 = np.round(label_1 * 1e3) * 1e-3
-    label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-    label_1 = np.round(label_1 * 1e3) * 1e-3
-
-    if self.cartesian_directions:
-        label_2 = self.orientation_zone_axis_range[2, :]
-    else:
-        label_2 = self.cartesian_to_crystal(self.orientation_zone_axis_range[2, :])
-
-    label_2 = np.round(label_2 * 1e3) * 1e-3
-    label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-    label_2 = np.round(label_2 * 1e3) * 1e-3
 
     # print(np.round(self.orientation_zone_axis_range[1, :],decimals=3))
     # print(label_1)
@@ -1093,7 +1191,7 @@ def plot_orientation_maps(
     # ax[2] = fig.add_subplot(1, 3, 1, projection='3d')
 
     # orientation images
-    if flag_in_plane:
+    if self.pymatgen_available:
         ax_x.imshow(rgb_x)
     else:
         ax_x.imshow(np.ones_like(rgb_z))
@@ -1116,7 +1214,6 @@ def plot_orientation_maps(
             fontsize=14,
             horizontalalignment='center')
     ax_z.imshow(rgb_z)
-
 
     # Triangulate faces
     p = self.orientation_vecs[:,(1,0,2)]
