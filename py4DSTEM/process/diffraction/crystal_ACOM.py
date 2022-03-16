@@ -1095,7 +1095,7 @@ def match_single_pattern(
         # if needed, delete peaks for next iteration
         if num_matches_return > 1 and corr_value[ind_best_fit] > 0:
             bragg_peaks_fit = self.generate_diffraction_pattern(
-                orientation_matrix,
+                orientation,
                 sigma_excitation_error=self.orientation_kernel_size,
             )
 
