@@ -596,22 +596,22 @@ def orientation_plan(
         v = v / np.linalg.norm(v)
 
 
-        print(np.round(v,decimals=3))
-        test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
+        # print(np.round(v,decimals=3))
+        # test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
 
-        print(test.shape)
+        # print(test.shape)
 
-        test2 = np.all(test>=0, axis=1);
-        for a0 in range(num_sym):
-            if test2[a0]:
-                # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
-                v_out = self.symmetry_operators[a0] @ v
-                v_out = np.round(v_out,decimals=3)
+        # test2 = np.all(test>=0, axis=1);
+        # for a0 in range(num_sym):
+        #     if test2[a0]:
+        #         # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
+        #         v_out = self.symmetry_operators[a0] @ v
+        #         v_out = np.round(v_out,decimals=3)
 
-                print(a0, 
-                    np.round(test[a0,:],decimals=2),
-                    np.round(v_out,decimals=2),
-                    )
+        #         print(a0, 
+        #             np.round(test[a0,:],decimals=2),
+        #             np.round(v_out,decimals=2),
+        #             )
 
 
 
@@ -1041,40 +1041,15 @@ def match_single_pattern(
             
             # If point group is known, use pymatgen to caculate the symmetry-
             # reduced orientation matrix, producing the crystal direction family.
-            
-
             if self.pymatgen_available:
-                v = orientation.matrix[match_ind,:,2]
-
-
-                t = 190*np.pi/180
-                v = np.array([np.cos(t), np.sin(t), 0.23])
-                v = v / np.linalg.norm(v)
-
-                print(np.round(v,decimals=2))
-
-
-                # print(v.shape)
-                test = np.sum(self.symmetry_reduction * v[None,:,None], axis=2)
-                # basis = self.symmetry_reduction @ v
-                # print(np.all(basis>=0, axis=1))
-
-                print(test.shape)
-
-                # keep = np.all(self.symmetry_reduction @ v >=0, axis=1)
-                keep = np.all(test >=0, axis=1)
-                for a2 in range(keep.shape[0]):
-                    if keep[a2]:
-                        v_out = np.sum(self.symmetry_operators[a2] @ v[:,None], axis=1)
-
-                        print(a2, 
-                            np.round(test[a2,:],decimals=2),
-                            np.round(v_out,decimals=2),
-                            )
-
-
-            # orientation.angles[match_ind,0:2] = self.orientation_rotation_angles[ind_best_fit,:]
-            # orientation.angles[match_ind,2] = phi
+                for a0 in range(3):
+                    in_range = np.all(np.sum(self.symmetry_reduction * \
+                        orientation.matrix[match_ind,:,a0][None,:,None], 
+                        axis=1) >= 0,
+                        axis=1)
+                    ind = np.argmax(in_range)
+                    orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
+                        @ orientation.matrix[match_ind,:,a0]
 
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
@@ -1082,17 +1057,40 @@ def match_single_pattern(
 
 
         if verbose:
-            zone_axis_fit = orientation.matrix[match_ind][:, 2]
-            zone_axis_miller = self.cartesian_to_miller(zone_axis_fit)
-            zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+            if self.pymatgen_available:
+                if np.abs(self.cell[5]-120.0) < 1e-6:
+                    x_proj_miller = self.miller_to_hexagonal(self.cartesian_to_miller(orientation.family[match_ind][:, 0]))
+                    x_proj_miller = np.round(x_proj_miller,decimals=3)
+                    zone_axis_miller = self.miller_to_hexagonal(self.cartesian_to_miller(orientation.family[match_ind][:, 2]))
+                    zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+                else:
+                    x_proj_miller = self.cartesian_to_miller(orientation.family[match_ind][:, 0])
+                    x_proj_miller = np.round(x_proj_miller,decimals=3)
+                    zone_axis_miller = self.cartesian_to_miller(orientation.family[match_ind][:, 2])
+                    zone_axis_miller = np.round(zone_axis_miller,decimals=3)
 
-            print(
-                "Best fit miller zone axis = ("
-                + str(zone_axis_miller)
-                + ")"
-                + " with corr value = "
-                + str(np.round(orientation.corr[match_ind], decimals=3))
-            )
+                print(
+                    "Best fit miller directions: z axis = ("
+                    + str(zone_axis_miller)
+                    + "),"
+                    " x axis = ("
+                    + str(x_proj_miller)
+                    + "),"
+                    + " with corr value = "
+                    + str(np.round(orientation.corr[match_ind], decimals=3))
+                )
+
+            else:
+                zone_axis_fit = orientation.matrix[match_ind][:, 2]
+                zone_axis_miller = self.cartesian_to_miller(zone_axis_fit)
+                zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+                print(
+                    "Best fit zone axis (miller) = ("
+                    + str(zone_axis_miller)
+                    + "),"
+                    + " with corr value = "
+                    + str(np.round(orientation.corr[match_ind], decimals=3))
+                )
 
         # if needed, delete peaks for next iteration
         if num_matches_return > 1 and corr_value[ind_best_fit] > 0:
