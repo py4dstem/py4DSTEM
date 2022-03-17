@@ -136,21 +136,32 @@ def orientation_plan(
 
             # Generate 2 perpendicular vectors to self.orientation_fiber_axis
             # TESTING - different defaults for the zone axis ranges
-            if np.sum(np.abs(
-                self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
-                )) < 1e-6:
+            # if np.sum(np.abs(
+            #     self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
+            #     )) < 1e-6:
+            #     v0 = np.array([1.0, 0.0, 0.0])
+            # else:
+            #     v0 = np.array([0.0, -1.0, 0.0])
+            if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
+                - np.array([1.0, 0.0, 0.0])) < 1e-6:
+                v0 = np.array([0.0, -1.0, 0.0])
+            else:
+                v0 = np.array([1.0, 0.0, 0.0])
+            if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
+                - np.array([0.0, 1.0, 0.0])) < 1e-6:
                 v0 = np.array([1.0, 0.0, 0.0])
             else:
-                v0 = np.array([0.0, -1.0, 0.0])
+                v0 = np.array([0.0, 1.0, 0.0])
 
             # v2 = np.cross(self.orientation_fiber_axis, v0)
             # v3 = np.cross(v2, self.orientation_fiber_axis)
             # v2 = v2 / np.linalg.norm(v2)
             # v3 = v3 / np.linalg.norm(v3)
-            v2 = np.cross(self.orientation_fiber_axis, v0)
+            v2 = np.cross(v0, self.orientation_fiber_axis,)
             v3 = np.cross(self.orientation_fiber_axis, v2)
             v2 = v2 / np.linalg.norm(v2)
             v3 = v3 / np.linalg.norm(v3)
+            print(v2,v3)
 
             if self.orientation_fiber_angles[0] == 0:
                 self.orientation_zone_axis_range = np.vstack(
@@ -1047,9 +1058,19 @@ def match_single_pattern(
                         orientation.matrix[match_ind,:,a0][None,:,None], 
                         axis=1) >= 0,
                         axis=1)
-                    ind = np.argmax(in_range)
-                    orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
-                        @ orientation.matrix[match_ind,:,a0]
+                    if np.any(in_range):
+                        ind = np.argmax(in_range)
+                        orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
+                            @ orientation.matrix[match_ind,:,a0]
+                    else:
+                        # Note this is a quick fix for fiber_angles[0] = 180 degrees
+                        in_range = np.all(np.sum(self.symmetry_reduction * \
+                            (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0][None,:,None]), 
+                            axis=1) >= 0,
+                            axis=1)
+                        ind = np.argmax(in_range)
+                        orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
+                            @ (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0])
 
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
@@ -1119,6 +1140,7 @@ def match_single_pattern(
             qx = qx[~remove]
             qy = qy[~remove]
             intensity = intensity[~remove]
+
 
 
     # plotting correlation image
@@ -1236,13 +1258,42 @@ def match_single_pattern(
                 dtype="bool",
             )
 
+            # Image indices
             x_inds = (self.orientation_inds[:, 0] - self.orientation_inds[:, 1]).astype(
                 "int"
             )
             y_inds = self.orientation_inds[:, 1].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot
-            im_mask.ravel()[inds_1D] = False
+
+            # Check if orientation vertical range.
+            if np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
+                # Orientation covers only top of orientation sphere
+
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot
+                im_mask.ravel()[inds_1D] = False
+
+            else:
+                # Orientation covers full vertical range of orientation sphere.
+                # top half
+                sub = self.orientation_inds[:,2] == 0
+                inds_1D = np.ravel_multi_index([x_inds[sub], y_inds[sub]], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                im_mask.ravel()[inds_1D] = False
+                # bottom half
+                sub = self.orientation_inds[:,2] == 1
+                inds_1D = np.ravel_multi_index([
+                    self.orientation_zone_axis_steps - y_inds[sub], 
+                    self.orientation_zone_axis_steps - x_inds[sub]
+                    ],im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                im_mask.ravel()[inds_1D] = False
+
+
+
+            # print(self.orientation_inds)
+            # print(np.vstack((x_inds,y_inds)))
+
+
 
             im_plot = np.ma.masked_array(
                 (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
@@ -1376,7 +1427,7 @@ orientation_ranges = {
     "-3": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "32": ["fiber", [0, 0, 1], [90.0, 60.0]],
     "3m": ["fiber", [0, 0, 1], [180.0, 60.0]],
-    "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
+    "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
     "6": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "-6": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "6/m": [[[1, 0, 0], [0.5, 0.5*np.sqrt(3), 0]], None, None],
@@ -1394,3 +1445,7 @@ orientation_ranges = {
     "-43m": [[[1, -1, 1], [1, 1, 1]], None, None],
     "m-3m": [[[0, 1, 1], [1, 1, 1]], None, None],
 }
+
+    # "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
+    # "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
+

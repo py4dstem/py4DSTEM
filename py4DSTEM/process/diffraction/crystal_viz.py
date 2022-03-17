@@ -876,6 +876,9 @@ def plot_orientation_maps(
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
 
+    if ind_orientation is None:
+        ind_orientation = 0
+
     # Color of the 3 corners
     color_basis = np.array(
         [
@@ -922,7 +925,11 @@ def plot_orientation_maps(
     rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
 
     # Basis for fitting orientation projections 
-    A = self.orientation_zone_axis_range.T
+    A = np.linalg.inv(self.orientation_zone_axis_range).T
+    # A = self.orientation_zone_axis_range
+    # print(np.round(A,decimals=3))
+    # A = np.linalg.inv(self.orientation_zone_axis_range).T
+    # A = self.orientation_zone_axis_range
 
     # Correlation masking
     corr = orientation_map.corr[:,:,ind_orientation]
@@ -941,13 +948,16 @@ def plot_orientation_maps(
         ):
 
         if self.pymatgen_available:
-            basis_x[rx,ry,:] = np.linalg.solve(A,
-                orientation_map.family[rx,ry,ind_orientation,:,0])
-            basis_z[rx,ry,:] = np.linalg.solve(A,
-                orientation_map.family[rx,ry,ind_orientation,:,2])
+            basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,ind_orientation,:,0]
+            basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,ind_orientation,:,2]
+            # basis_x[rx,ry,:] = np.linalg.solve(A,
+            #     orientation_map.family[rx,ry,ind_orientation,:,0])
+            # basis_z[rx,ry,:] = np.linalg.solve(A,
+            #     orientation_map.family[rx,ry,ind_orientation,:,2])
         else:
-            basis_z[rx,ry,:] = np.linalg.solve(A,
-                orientation_map.matrix[rx,ry,ind_orientation,:,2])
+            basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,ind_orientation,:,2]
+            # basis_z[rx,ry,:] = np.linalg.solve(A,
+            #     orientation_map.matrix[rx,ry,ind_orientation,:,2])
     basis_x = np.clip(basis_x,0,1)
     basis_z = np.clip(basis_z,0,1)
 
