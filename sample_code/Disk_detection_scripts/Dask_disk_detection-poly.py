@@ -83,7 +83,7 @@ def main():
     print("starting disk detection")
     start = time.time()
     
-    quicker but less good method
+    # quicker but less good method
     peaks = py4DSTEM.process.diskdetection.beta_parallel_disk_detection(
             dataset,
             probe_kernel_FT,
