@@ -29,13 +29,12 @@ def main():
         'minAbsIntensity' : 0.01,
         'edgeBoundary' : 4,
         'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
-        'subpixel' : 'multicorr',
+        'subpixel' : 'multicorr',   # slower but more precise method
         'upsample_factor' : 32
     }
     
     start = time.time()
 
-    # slower but more precise method
     serial_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
                 dataset,
                 probe_kernel,
