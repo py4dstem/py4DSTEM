@@ -25,40 +25,22 @@ def main():
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
 
     # set parameters
-    corrPower = 0.8
-    sigma_gaussianFilter = 5
-    edgeBoundary = 20
-    maxNumPeaks = 100
-    minPeakSpacing = 125
-    minRelativeIntensity = 0.005
+    disk_detect_params = {
+        'minRelativeIntensity' : 0,
+        'minAbsIntensity' : 0.01,
+        'edgeBoundary' : 4,
+        'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
+        'subpixel' : 'multicorr',
+        'upsample_factor' : 32
+    }
     
     start = time.time()
     
-    # quicker but less good method 
-    # CUDA_peaks = find_Bragg_disks_CUDA(
-    #             dataset,
-    #             probe_kernel_FT,
-    #             corrPower=corrPower,
-    #             sigma=sigma_gaussianFilter,
-    #             edgeBoundary=edgeBoundary,
-    #             minRelativeIntensity=minRelativeIntensity,
-    #             minPeakSpacing=minPeakSpacing,
-    #             maxNumPeaks=maxNumPeaks,
-    #             subpixel='poly',
-    #             )
-    
-
-    # slower but better method
+    # slower but more precise method
     CUDA_peaks = find_Bragg_disks_CUDA(
                 dataset,
                 probe_kernel,
-                corrPower=corrPower,
-                sigma=sigma_gaussianFilter,
-                edgeBoundary=edgeBoundary,
-                minRelativeIntensity=minRelativeIntensity,
-                minPeakSpacing=minPeakSpacing,
-                maxNumPeaks=maxNumPeaks,
-                subpixel='multicorr',
+                **disk_detect_params
                 )
     end = time.time()
 
