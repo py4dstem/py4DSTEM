@@ -24,7 +24,7 @@ def main():
     # generate Fourier Transform of the probe 
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
 
-    # set hyperparameters
+    # set parameters
     corrPower = 0.8
     sigma_gaussianFilter = 5
     edgeBoundary = 20
