@@ -15,8 +15,8 @@ from ..utils import tqdmnd
 def plot_structure(
     self,
     orientation_matrix: Optional[np.ndarray] = None,
-    zone_axis_miller: Optional[np.ndarray] = None,
-    proj_x_miller: Optional[np.ndarray] = None,
+    zone_axis_lattice: Optional[np.ndarray] = None,
+    proj_x_lattice: Optional[np.ndarray] = None,
     zone_axis_cartesian: Optional[np.ndarray] = None,
     proj_x_cartesian: Optional[np.ndarray] = None,
     size_marker: float = 400,
@@ -33,8 +33,8 @@ def plot_structure(
 
     Args:
         orientation_matrix (array):  (3,3) orientation matrix, where columns represent projection directions.
-        zone_axis_miller (array):    (3,) projection direction in miller indices
-        proj_x_miller (array):       (3,) x-axis direction in miller indices
+        zone_axis_lattice (array):    (3,) projection direction in lattice indices
+        proj_x_lattice (array):       (3,) x-axis direction in lattice indices
         zone_axis_cartesian (array): (3,) cartesian projection direction
         proj_x_cartesian (array):    (3,) cartesian projection direction
         scale_markers (float):       Size scaling for markers
@@ -54,8 +54,8 @@ def plot_structure(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_miller,
-            proj_x_miller,
+            zone_axis_lattice,
+            proj_x_lattice,
             zone_axis_cartesian,
             proj_x_cartesian)
 
@@ -190,8 +190,8 @@ def plot_structure(
 def plot_structure_factors(
     self,
     orientation_matrix: Optional[np.ndarray] = None,
-    zone_axis_miller: Optional[np.ndarray] = None,
-    proj_x_miller: Optional[np.ndarray] = None,
+    zone_axis_lattice: Optional[np.ndarray] = None,
+    proj_x_lattice: Optional[np.ndarray] = None,
     zone_axis_cartesian: Optional[np.ndarray] = None,
     proj_x_cartesian: Optional[np.ndarray] = None,
     scale_markers: float = 1e3,
@@ -207,8 +207,8 @@ def plot_structure_factors(
 
     Args:
         orientation_matrix (array):  (3,3) orientation matrix, where columns represent projection directions.
-        zone_axis_miller (array):    (3,) projection direction in miller indices
-        proj_x_miller (array):       (3,) x-axis direction in miller indices
+        zone_axis_lattice (array):    (3,) projection direction in lattice indices
+        proj_x_lattice (array):       (3,) x-axis direction in lattice indices
         zone_axis_cartesian (array): (3,) cartesian projection direction
         proj_x_cartesian (array):    (3,) cartesian projection direction
         scale_markers (float):       size scaling for markers
@@ -226,8 +226,8 @@ def plot_structure_factors(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_miller,
-            proj_x_miller,
+            zone_axis_lattice,
+            proj_x_lattice,
             zone_axis_cartesian,
             proj_x_cartesian)
 
@@ -298,7 +298,7 @@ def plot_structure_factors(
 def plot_orientation_zones(
     self,
     azim_elev: Optional[Union[list, tuple, np.ndarray]] = None,
-    proj_dir_miller: Optional[Union[list, tuple, np.ndarray]] = None,
+    proj_dir_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
     proj_dir_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
     marker_size: float = 20,
     plot_limit: Union[list, tuple, np.ndarray] = np.array([-1.1, 1.1]),
@@ -322,8 +322,8 @@ def plot_orientation_zones(
 
     if azim_elev is not None:
         proj_dir =  azim_elev
-    elif proj_dir_miller is not None:
-        proj_dir =  self.miller_to_cartesian(proj_dir_miller)
+    elif proj_dir_lattice is not None:
+        proj_dir =  self.lattice_to_cartesian(proj_dir_lattice)
     elif proj_dir_cartesian is not None:
         proj_dir = proj_dir_cartesian
     else:
@@ -400,26 +400,26 @@ def plot_orientation_zones(
     # zone axis range labels
     if np.abs(self.cell[5]-120.0) < 1e-6:
         label_0 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[0, :])))
         label_1 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[1, :])))
         label_2 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[2, :])))
     else:
         label_0 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[0, :]))
         label_1 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[1, :]))
         label_2 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[2, :]))
 
 
@@ -552,7 +552,7 @@ def plot_orientation_zones(
 def plot_orientation_plan(
     self,
     index_plot: int = 0,
-    zone_axis_miller: Optional[np.ndarray] = None,
+    zone_axis_lattice: Optional[np.ndarray] = None,
     zone_axis_cartesian: Optional[np.ndarray] = None,
     figsize: Union[list, tuple, np.ndarray] = (14, 6),
     returnfig: bool = False,
@@ -572,10 +572,10 @@ def plot_orientation_plan(
     """
 
     # Determine which index to plot if zone_axis_plot is specified
-    if zone_axis_miller is not None or zone_axis_cartesian is not None:
+    if zone_axis_lattice is not None or zone_axis_cartesian is not None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_miller=zone_axis_miller,
-            proj_x_miller=None,
+            zone_axis_lattice=zone_axis_lattice,
+            proj_x_lattice=None,
             zone_axis_cartesian=zone_axis_cartesian,
             proj_x_cartesian=None)
         index_plot = np.argmin(np.sum(np.abs(
@@ -1074,26 +1074,26 @@ def plot_orientation_maps(
 
     if np.abs(self.cell[5]-120.0) < 1e-6:
         label_0 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[0, :])))
         label_1 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[1, :])))
         label_2 = self.rational_ind(
-            self.miller_to_hexagonal(
-            self.cartesian_to_miller(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[2, :])))
     else:
         label_0 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[0, :]))
         label_1 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[1, :]))
         label_2 = self.rational_ind(
-            self.cartesian_to_miller(
+            self.cartesian_to_lattice(
             self.orientation_zone_axis_range[2, :]))
 
     # # rgb_legend = np.clip( 
@@ -1105,7 +1105,7 @@ def plot_orientation_maps(
     # #     label_0 = self.orientation_zone_axis_range[0, :]
     # # else:
     # #     label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
-    # label_0 = self.crystal_to_miller(self.orientation_zone_axis_range[0,:])
+    # label_0 = self.crystal_to_lattice(self.orientation_zone_axis_range[0,:])
     # label_0 = np.round(label_0, decimals=3)
     # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     # label_0 = np.round(label_0, decimals=3)
