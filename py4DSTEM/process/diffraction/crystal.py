@@ -23,7 +23,12 @@ class Crystal:
     # (see https://stackoverflow.com/a/47562412)
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
-    from .crystal_ACOM import orientation_plan, match_orientations, match_single_pattern
+    from .crystal_ACOM import (
+        orientation_plan, 
+        match_orientations, 
+        match_single_pattern,
+        symmetry_reduce_directions,
+    )
 
     from .crystal_viz import (
         plot_structure,
@@ -610,7 +615,6 @@ class Crystal:
 
     def miller_to_cartesian(self, vec_miller):
         vec_cartesian = vec_miller @ self.metric_real @ self.lat_inv
-        # vec_cartesian = (self.lat_real @ self.metric_inv).T @ vec_miller 
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
     def hexagonal_to_miller(self, vec_hexagonal):
