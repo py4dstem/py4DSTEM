@@ -59,7 +59,7 @@ class OrientationMap:
     def set_orientation(self,orientation,ind_x,ind_y):
         # Add an orientation to the orientation map
         self.matrix[ind_x,ind_y] = orientation.matrix
-        self.family[ind_x,ind_y] = orientation.matrix
+        self.family[ind_x,ind_y] = orientation.family
         self.corr[ind_x,ind_y] = orientation.corr
         self.inds[ind_x,ind_y] = orientation.inds
         self.mirror[ind_x,ind_y] = orientation.mirror

@@ -129,39 +129,49 @@ def orientation_plan(
                 self.orientation_fiber_axis
                 / np.linalg.norm(self.orientation_fiber_axis)
             )
-            # else:
-            #     self.orientation_fiber_axis = self.crystal_to_cartesian(
-            #         self.orientation_fiber_axis
-            #     )
 
-            # Generate 2 perpendicular vectors to self.orientation_fiber_axis
-            # TESTING - different defaults for the zone axis ranges
-            # if np.sum(np.abs(
-            #     self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
-            #     )) < 1e-6:
-            #     v0 = np.array([1.0, 0.0, 0.0])
-            # else:
-            #     v0 = np.array([0.0, -1.0, 0.0])
-            if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
-                - np.array([1.0, 0.0, 0.0])) < 1e-6:
-                v0 = np.array([0.0, -1.0, 0.0])
-            else:
-                v0 = np.array([1.0, 0.0, 0.0])
-            if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
-                - np.array([0.0, 1.0, 0.0])) < 1e-6:
-                v0 = np.array([1.0, 0.0, 0.0])
-            else:
-                v0 = np.array([0.0, 1.0, 0.0])
-
-            # v2 = np.cross(self.orientation_fiber_axis, v0)
-            # v3 = np.cross(v2, self.orientation_fiber_axis)
-            # v2 = v2 / np.linalg.norm(v2)
-            # v3 = v3 / np.linalg.norm(v3)
-            v2 = np.cross(v0, self.orientation_fiber_axis,)
-            v3 = np.cross(self.orientation_fiber_axis, v2)
+            # update fiber axis to be centered on the 1st unit cell vector
+            v3 = np.cross(self.orientation_fiber_axis, self.lat_real[0,:])
+            v2 = np.cross(v3, self.orientation_fiber_axis,)
             v2 = v2 / np.linalg.norm(v2)
             v3 = v3 / np.linalg.norm(v3)
-            print(v2,v3)
+
+            # v2 = self.lat_real[0,:]
+            # v3 = np.cross(self.orientation_fiber_axis, v2)
+
+
+            # # else:
+            # #     self.orientation_fiber_axis = self.crystal_to_cartesian(
+            # #         self.orientation_fiber_axis
+            # #     )
+
+            # # Generate 2 perpendicular vectors to self.orientation_fiber_axis
+            # # TESTING - different defaults for the zone axis ranges
+            # # if np.sum(np.abs(
+            # #     self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
+            # #     )) < 1e-6:
+            # #     v0 = np.array([1.0, 0.0, 0.0])
+            # # else:
+            # #     v0 = np.array([0.0, -1.0, 0.0])
+            # if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
+            #     - np.array([1.0, 0.0, 0.0])) < 1e-6:
+            #     v0 = np.array([0.0, -1.0, 0.0])
+            # else:
+            #     v0 = np.array([1.0, 0.0, 0.0])
+            # if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
+            #     - np.array([0.0, 1.0, 0.0])) < 1e-6:
+            #     v0 = np.array([1.0, 0.0, 0.0])
+            # else:
+            #     v0 = np.array([0.0, 1.0, 0.0])
+
+            # # v2 = np.cross(self.orientation_fiber_axis, v0)
+            # # v3 = np.cross(v2, self.orientation_fiber_axis)
+            # # v2 = v2 / np.linalg.norm(v2)
+            # # v3 = v3 / np.linalg.norm(v3)
+            # v2 = np.cross(v0, self.orientation_fiber_axis,)
+            # v3 = np.cross(self.orientation_fiber_axis, v2)
+            # v2 = v2 / np.linalg.norm(v2)
+            # v3 = v3 / np.linalg.norm(v3)
 
             if self.orientation_fiber_angles[0] == 0:
                 self.orientation_zone_axis_range = np.vstack(
@@ -181,14 +191,32 @@ def orientation_plan(
                 else:
                     phi = self.orientation_fiber_angles[1] * np.pi / 180.0
 
-                v2output = self.orientation_fiber_axis * np.cos(theta) + v2 * np.sin(
-                    theta
-                )
+                # Generate zone axis range
+                v2output = self.orientation_fiber_axis * np.cos(theta) \
+                    + v2 * np.sin(theta)
                 v3output = (
                     self.orientation_fiber_axis * np.cos(theta)
                     + (v2 * np.sin(theta)) * np.cos(phi)
                     + (v3 * np.sin(theta)) * np.sin(phi)
                 )
+                v2output = (
+                    self.orientation_fiber_axis * np.cos(theta)
+                    + (v2 * np.sin(theta)) * np.cos(phi/2)
+                    - (v3 * np.sin(theta)) * np.sin(phi/2)
+                )
+                v3output = (
+                    self.orientation_fiber_axis * np.cos(theta)
+                    + (v2 * np.sin(theta)) * np.cos(phi/2)
+                    + (v3 * np.sin(theta)) * np.sin(phi/2)
+                )
+
+                print(
+                    np.round(v2output,decimals=2),
+                    np.round(v3output,decimals=2),
+                )
+
+
+
                 self.orientation_zone_axis_range = np.vstack(
                     (self.orientation_fiber_axis, v2output, v3output)
                 ).astype("float")
@@ -591,21 +619,58 @@ def orientation_plan(
 
     # If possible,  Get symmetry operations for this spacegroup, store in matrix form
     if self.pymatgen_available:
+        # get operators
         ops = self.pointgroup.get_point_group_operations()
+
+        # Inverse of lattice 
+        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
+
+        # init
         num_sym = len(ops)
         self.symmetry_operators = np.zeros((num_sym,3,3)) 
-        self.symmetry_reduction = np.zeros((num_sym,3,3)) 
-        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
+        self.symmetry_reduction = np.zeros((num_sym,3,3))
+
+        # calculate symmetry and reduction matrices
         for a0 in range(num_sym):
             self.symmetry_operators[a0] = \
                 self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
             self.symmetry_reduction[a0] = \
-                (zone_axis_range_inv.T @ self.symmetry_operators[a0].T).T
+                (zone_axis_range_inv.T @ self.symmetry_operators[a0]).T
 
-        t = 190*np.pi/180
-        v = np.array([np.cos(t), np.sin(t), 0.23])
-        v = v / np.linalg.norm(v)
+        # Remove duplicates
+        keep = np.ones(num_sym,dtype='bool')
+        for a0 in range(num_sym):
+            if keep[a0]:
+                diff = np.sum(np.abs(
+                    self.symmetry_operators - self.symmetry_operators[a0]),
+                    axis=(1,2))
+                sub = diff < 1e-3
+                sub[:a0+1] = False
+                keep[sub] = False
+        self.symmetry_operators = self.symmetry_operators[keep]
+        self.symmetry_reduction = self.symmetry_reduction[keep]
+    
+        if np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
+            zone_axis_range_flip = self.orientation_zone_axis_range.copy()
+            zone_axis_range_flip[0,:] = -1*zone_axis_range_flip[0,:]
+            zone_axis_range_inv = np.linalg.inv(zone_axis_range_flip)
 
+            num_sym = self.symmetry_operators.shape[0]
+            self.symmetry_operators = np.tile(self.symmetry_operators,[2,1,1])
+            self.symmetry_reduction = np.tile(self.symmetry_reduction,[2,1,1])
+
+            for a0 in range(num_sym):
+                self.symmetry_reduction[a0+num_sym] = \
+                    (zone_axis_range_inv.T @ self.symmetry_operators[a0+num_sym]).T
+
+        # for a0 in range(self.symmetry_operators.shape[0]):
+        #     print(a0)
+        #     print(np.round(self.symmetry_reduction[a0],decimals=2))
+
+
+        # t = 190*np.pi/180
+        # v = np.array([np.cos(t), np.sin(t), 0.23])
+        # v = v / np.linalg.norm(v)
 
         # print(np.round(v,decimals=3))
         # test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
@@ -1053,25 +1118,12 @@ def match_single_pattern(
             # If point group is known, use pymatgen to caculate the symmetry-
             # reduced orientation matrix, producing the crystal direction family.
             if self.pymatgen_available:
-                for a0 in range(3):
-                    in_range = np.all(np.sum(self.symmetry_reduction * \
-                        orientation.matrix[match_ind,:,a0][None,:,None], 
-                        axis=1) >= 0,
-                        axis=1)
-                    if np.any(in_range):
-                        ind = np.argmax(in_range)
-                        orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
-                            @ orientation.matrix[match_ind,:,a0]
-                    else:
-                        # Note this is a quick fix for fiber_angles[0] = 180 degrees
-                        in_range = np.all(np.sum(self.symmetry_reduction * \
-                            (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0][None,:,None]), 
-                            axis=1) >= 0,
-                            axis=1)
-                        ind = np.argmax(in_range)
-                        orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
-                            @ (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0])
-
+                orientation = self.symmetry_reduce_directions(
+                    orientation,
+                    match_ind=match_ind,
+                    plot_output=True,
+                    )
+                
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
             orientation.matrix[match_ind] = np.squeeze(self.orientation_rotation_matrices[0, :, :])
@@ -1402,6 +1454,172 @@ def match_single_pattern(
 
 
 
+def symmetry_reduce_directions(
+    self,
+    orientation,
+    match_ind = 0,
+    plot_output = False,
+    figsize=(15,6),
+    el_shift=0.0,
+    az_shift=-30.0,
+    ):
+    '''
+    This function calculates the symmetry-reduced cartesian directions from
+    and orientation matrix stored in orientation.matrix, and outputs them
+    into orientation.family. It optionally plots the 3D output.
+
+    '''
+
+    # optional plot
+    if plot_output:
+        bound = 1.05;
+        cam_dir = np.mean(self.orientation_zone_axis_range,axis=0)
+        cam_dir = cam_dir / np.linalg.norm(cam_dir)
+        az = np.rad2deg(np.arctan2(cam_dir[0],cam_dir[1])) + az_shift
+        # if np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
+        #     el = 10
+        # else:
+        el = np.rad2deg(np.arcsin(cam_dir[2])) + el_shift
+        el = 0
+        fig = plt.figure(figsize=figsize)
+
+        num_points = 10;
+        t = np.linspace(0,1,num=num_points+1,endpoint=True)
+        d = np.array([[0,1],[0,2],[1,2]])
+        orientation_zone_axis_range_flip = self.orientation_zone_axis_range.copy()
+        orientation_zone_axis_range_flip[0,:] = -1*orientation_zone_axis_range_flip[0,:]        
+
+
+    # loop over orientation matrix directions
+    for a0 in range(3):
+        in_range = np.all(np.sum(self.symmetry_reduction * \
+            orientation.matrix[match_ind,:,a0][None,:,None], 
+            axis=1) >= 0,
+            axis=1)
+
+        orientation.family[match_ind,:,a0] = \
+            self.symmetry_operators[np.argmax(in_range)] @ \
+            orientation.matrix[match_ind,:,a0]
+        
+
+        # in_range = np.all(np.sum(self.symmetry_reduction * \
+        #     orientation.matrix[match_ind,:,a0][None,:,None], 
+        #     axis=1) >= 0,
+        #     axis=1)
+        # if np.any(in_range):
+        #     ind = np.argmax(in_range)
+        #     orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
+        #         @ orientation.matrix[match_ind,:,a0]
+        # else:
+        #     # Note this is a quick fix for fiber_angles[0] = 180 degrees
+        #     in_range = np.all(np.sum(self.symmetry_reduction * \
+        #         (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0][None,:,None]), 
+        #         axis=1) >= 0,
+        #         axis=1)
+        #     ind = np.argmax(in_range)
+        #     orientation.family[match_ind,:,a0] = self.symmetry_operators[ind] \
+        #         @ (np.array([1,1,-1])*orientation.matrix[match_ind,:,a0])
+
+
+        if plot_output:
+            ax = fig.add_subplot(1, 3, a0+1, 
+                projection='3d',
+                elev=el, 
+                azim=az)
+
+            # draw orienation triangle
+            for a1 in range(d.shape[0]):
+                v = self.orientation_zone_axis_range[d[a1,0],:][None,:]*t[:,None] + \
+                    self.orientation_zone_axis_range[d[a1,1],:][None,:]*(1-t[:,None])
+                v = v / np.linalg.norm(v,axis=1)[:,None]
+                ax.plot(
+                    v[:,1],
+                    v[:,0],
+                    v[:,2],
+                    c='k',
+                    )
+                v = self.orientation_zone_axis_range[a1,:][None,:]*t[:,None]
+                ax.plot(
+                    v[:,1],
+                    v[:,0],
+                    v[:,2],
+                    c='k',
+                    )
+                
+
+            # if needed, draw orientation diamond
+            if np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
+                for a1 in range(d.shape[0]-1):
+                    v = orientation_zone_axis_range_flip[d[a1,0],:][None,:]*t[:,None] + \
+                        orientation_zone_axis_range_flip[d[a1,1],:][None,:]*(1-t[:,None])
+                    v = v / np.linalg.norm(v,axis=1)[:,None]
+                    ax.plot(
+                        v[:,1],
+                        v[:,0],
+                        v[:,2],
+                        c='k',
+                        )
+                v = orientation_zone_axis_range_flip[0,:][None,:]*t[:,None]
+                ax.plot(
+                    v[:,1],
+                    v[:,0],
+                    v[:,2],
+                    c='k',
+                    )
+
+            # add points
+            p = self.symmetry_operators @ \
+                orientation.matrix[match_ind,:,a0]
+            ax.scatter(
+                xs=p[:,1],
+                ys=p[:,0],
+                zs=p[:,2],
+                s=10,
+                marker='o',
+                # c='k',
+            )
+            v = orientation.family[match_ind,:,a0][None,:]*t[:,None]
+            ax.plot(
+                v[:,1],
+                v[:,0],
+                v[:,2],
+                c='k',
+                )
+            ax.scatter(
+                xs=orientation.family[match_ind,1,a0],
+                ys=orientation.family[match_ind,0,a0],
+                zs=orientation.family[match_ind,2,a0],
+                s=160,
+                marker='o',
+                facecolors="None",
+                edgecolors='r',
+            )
+            ax.scatter(
+                xs=orientation.matrix[match_ind,1,a0],
+                ys=orientation.matrix[match_ind,0,a0],
+                zs=orientation.matrix[match_ind,2,a0],
+                s=80,
+                marker='o',
+                facecolors="None",
+                edgecolors='c',
+            )
+
+
+
+            ax.invert_yaxis()
+            ax.axes.set_xlim3d(left=-bound, right=bound)
+            ax.axes.set_ylim3d(bottom=-bound, top=bound)
+            ax.axes.set_zlim3d(bottom=-bound, top=bound)
+            axisEqual3D(ax)
+
+
+
+    if plot_output:
+        plt.show()
+
+
+    return orientation
+
 
 
 # zone axis range arguments for orientation_plan corresponding
@@ -1427,7 +1645,7 @@ orientation_ranges = {
     "-3": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "32": ["fiber", [0, 0, 1], [90.0, 60.0]],
     "3m": ["fiber", [0, 0, 1], [180.0, 60.0]],
-    "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
+    "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
     "6": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "-6": ["fiber", [0, 0, 1], [180.0, 60.0]],
     "6/m": [[[1, 0, 0], [0.5, 0.5*np.sqrt(3), 0]], None, None],

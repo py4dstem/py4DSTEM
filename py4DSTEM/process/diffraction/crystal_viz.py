@@ -1052,7 +1052,8 @@ def plot_orientation_maps(
     cam_dir = np.mean(self.orientation_zone_axis_range,axis=0)
     cam_dir = cam_dir / np.linalg.norm(cam_dir)
     az = np.rad2deg(np.arctan2(cam_dir[0],cam_dir[1]))
-    el = np.rad2deg(np.arccos(cam_dir[2]))
+    # el = np.rad2deg(np.arccos(cam_dir[2]))
+    el = np.rad2deg(np.arcsin(cam_dir[2]))
     # coloring
     wx = self.orientation_inds[:,0] / self.orientation_zone_axis_steps
     wy = self.orientation_inds[:,1] / self.orientation_zone_axis_steps
@@ -1094,7 +1095,6 @@ def plot_orientation_maps(
         label_2 = self.rational_ind(
             self.cartesian_to_miller(
             self.orientation_zone_axis_range[2, :]))
-
 
     # # rgb_legend = np.clip( 
     # #     w2[:,None]*color_basis[0,:],0,1)
@@ -1252,21 +1252,28 @@ def plot_orientation_maps(
                 [np.max(p[:, 0]), np.max(p[:, 1]), np.max(p[:, 2])],
             ]
         )
-        plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.1 + np.mean(
-            plot_limit, axis=0
-        )
+        # plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.5 + np.mean(
+        #     plot_limit, axis=0
+        # )
+        plot_limit[:,0] = (plot_limit[:,0] - np.mean(plot_limit[:,0]))*1.5 \
+            + np.mean(plot_limit[:,0])
+        plot_limit[:,1] = (plot_limit[:,2] - np.mean(plot_limit[:,1]))*1.5 \
+            + np.mean(plot_limit[:,1])
+        plot_limit[:,2] = (plot_limit[:,1] - np.mean(plot_limit[:,2]))*1.1 \
+            + np.mean(plot_limit[:,2])
 
     # ax_l.view_init(elev=el, azim=az)
+    # Appearance
     ax_l.invert_yaxis()
-    ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
-    ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
+    ax_l.axes.set_xlim3d(left=plot_limit[0, 0], right=plot_limit[1, 0])
+    ax_l.axes.set_ylim3d(bottom=plot_limit[0, 1], top=plot_limit[1, 1])
     ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
     axisEqual3D(ax_l)
     if camera_dist is not None:
         ax_l.dist = camera_dist
+    ax_l.axis("off")
 
     # Add text labels
-    ax_l.axis("off")
     text_scale_pos = 0.1
     text_params = {
         "va": "center",
@@ -1278,51 +1285,91 @@ def plot_orientation_maps(
     format_labels = "{0:.2g}"
     vec = self.orientation_vecs[inds_legend[0], :] - cam_dir 
     vec = vec / np.linalg.norm(vec)
-    ax_l.text(
+    if np.abs(self.cell[5]-120.0) > 1e-6:
+        ax_l.text(
+            self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_0[0])
+            + ' ' + format_labels.format(label_0[1])
+            + ' ' + format_labels.format(label_0[2]) + ']',
+            None,
+            zorder=11,
+            ha="center",
+            **text_params,
+        )
+    else:
+        ax_l.text(
         self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
         self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
         self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
           '[' + format_labels.format(label_0[0])
         + ' ' + format_labels.format(label_0[1])
-        + ' ' + format_labels.format(label_0[2]) + ']',
+        + ' ' + format_labels.format(label_0[2])
+        + ' ' + format_labels.format(label_0[3]) + ']',
         None,
         zorder=11,
         ha="center",
         **text_params,
-    )
-    # if (
-    #     self.orientation_fiber is False
-    #     and self.orientation_full is False
-    #     and self.orientation_half is False
-    # ):
+        )
     vec = self.orientation_vecs[inds_legend[1], :] - cam_dir 
     vec = vec / np.linalg.norm(vec)
-    ax_l.text(
-        self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
-        self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
-        self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-          '[' + format_labels.format(label_1[0])
-        + ' ' + format_labels.format(label_1[1])
-        + ' ' + format_labels.format(label_1[2]) + ']',
-        None,
-        zorder=12,
-        ha="right",
-        **text_params,
-    )
+    if np.abs(self.cell[5]-120.0) > 1e-6:
+        ax_l.text(
+            self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_1[0])
+            + ' ' + format_labels.format(label_1[1])
+            + ' ' + format_labels.format(label_1[2]) + ']',
+            None,
+            zorder=12,
+            ha="left",
+            **text_params,
+        )
+    else:
+        ax_l.text(
+            self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_1[0])
+            + ' ' + format_labels.format(label_1[1])
+            + ' ' + format_labels.format(label_1[2])
+            + ' ' + format_labels.format(label_1[3]) + ']',
+            None,
+            zorder=12,
+            ha="left",
+            **text_params,
+        )
     vec = self.orientation_vecs[inds_legend[2], :] - cam_dir 
     vec = vec / np.linalg.norm(vec)
-    ax_l.text(
-        self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
-        self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
-        self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-          '[' + format_labels.format(label_2[0])
-        + ' ' + format_labels.format(label_2[1])
-        + ' ' + format_labels.format(label_2[2]) + ']',
-        None,
-        zorder=13,
-        ha="left",
-        **text_params,
-    )
+    if np.abs(self.cell[5]-120.0) > 1e-6:
+        ax_l.text(
+            self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_2[0])
+            + ' ' + format_labels.format(label_2[1])
+            + ' ' + format_labels.format(label_2[2]) + ']',
+            None,
+            zorder=13,
+            ha="right",
+            **text_params,
+        )
+    else:
+        ax_l.text(
+            self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+              '[' + format_labels.format(label_2[0])
+            + ' ' + format_labels.format(label_2[1])
+            + ' ' + format_labels.format(label_2[2])
+            + ' ' + format_labels.format(label_2[3]) + ']',
+            None,
+            zorder=13,
+            ha="right",
+            **text_params,
+        )
 
     plt.show()
 
