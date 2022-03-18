@@ -108,6 +108,9 @@ class Crystal:
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
+        # pymatgen flag
+        self.pymatgen_available = False
+        
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
