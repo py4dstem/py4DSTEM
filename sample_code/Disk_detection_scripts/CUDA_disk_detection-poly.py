@@ -30,13 +30,12 @@ def main():
         'minAbsIntensity' : 0.01,
         'edgeBoundary' : 4,
         'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
-        'subpixel' : 'poly',
+        'subpixel' : 'poly',    # quicker but less precise method
         'upsample_factor' : 32
     }
     
     start = time.time()
-    
-    # quicker but less good method 
+     
     CUDA_peaks = find_Bragg_disks_CUDA(
                 dataset,
                 probe_kernel,
