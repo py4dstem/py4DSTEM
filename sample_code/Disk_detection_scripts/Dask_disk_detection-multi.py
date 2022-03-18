@@ -75,7 +75,7 @@ def main():
         'minAbsIntensity' : 0.01,
         'edgeBoundary' : 4,
         'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
-        'subpixel' : 'multicorr',
+        'subpixel' : 'multicorr',    # slower but more precise method
         'upsample_factor' : 32
     }
     
@@ -83,7 +83,6 @@ def main():
     print("starting disk detection")
     start = time.time()
     
-    # slower but more precise method
     peaks = py4DSTEM.process.diskdetection.beta_parallel_disk_detection(
             dataset,
             probe_kernel_FT,
