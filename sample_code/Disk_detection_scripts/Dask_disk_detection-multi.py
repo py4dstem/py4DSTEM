@@ -32,12 +32,9 @@ def main():
 
     # register the serializer dill # not sure if this is nesercary everytime or just once
     register_serialization_family('dill', dill_dumps, dill_loads)
-    
-    
+  
     print("loading data")
 
-    
-    
     # load the data
     
     file_path_input = 'Ge_SiGe_ML_ideal.h5'
@@ -64,9 +61,7 @@ def main():
     # generate Fourier Transform of the probe 
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
     
-    
     print("starting client")
-    
     
     # start dask client, leaving to dask automagic to configure the LocalCluster. 
     # we're looking into optimizing dask client parameters, e.g.
@@ -74,46 +69,27 @@ def main():
     # nworkers:threads_per worker  
     client = Client()
     
-    # set hyperparameters
-    corrPower = 0.8
-    sigma_gaussianFilter = 5
-    edgeBoundary = 20
-    maxNumPeaks = 100
-    minPeakSpacing = 125
-    minRelativeIntensity = 0.005
+    # set parameters
+    disk_detect_params = {
+        'minRelativeIntensity' : 0,
+        'minAbsIntensity' : 0.01,
+        'edgeBoundary' : 4,
+        'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
+        'subpixel' : 'multicorr',
+        'upsample_factor' : 32
+    }
     
     
     print("starting disk detection")
     start = time.time()
     
-    # quicker but less good method
-#     peaks = py4DSTEM.process.diskdetection.beta_parallel_disk_detection(
-#             dataset,
-#             probe_kernel_FT,
-#             dask_client = client, 
-#             corrPower=corrPower,
-#             sigma=sigma_gaussianFilter,
-#             edgeBoundary=edgeBoundary,
-#             minRelativeIntensity=minRelativeIntensity,
-#             minPeakSpacing=minPeakSpacing,
-#             maxNumPeaks=maxNumPeaks,
-#             subpixel='poly', 
-#             return_dask_client=False)
-    
-    
-    # slower but better method
+    # slower but more precise method
     peaks = py4DSTEM.process.diskdetection.beta_parallel_disk_detection(
             dataset,
             probe_kernel_FT,
             dask_client = client, 
-            corrPower=corrPower,
-            sigma=sigma_gaussianFilter,
-            edgeBoundary=edgeBoundary,
-            minRelativeIntensity=minRelativeIntensity,
-            minPeakSpacing=minPeakSpacing,
-            maxNumPeaks=maxNumPeaks,
-            subpixel='multicorr', 
-            return_dask_client=False)
+            return_dask_client=False,
+            **disk_detect_params)
     
     end = time.time()
 
@@ -122,9 +98,6 @@ def main():
     
     file.close()
     return run_time, peaks
-
-
-
 
 if __name__ == '__main__':
     main()
