@@ -440,9 +440,9 @@ class Crystal:
         orientation: Optional[Orientation] = None,
         ind_orientation: Optional[int] = 0,
         orientation_matrix: Optional[np.ndarray] = None,
-        zone_axis_miller: Optional[np.ndarray] = None,
-        proj_x_miller: Optional[np.ndarray] = None,
-        foil_normal_miller: Optional[Union[list, tuple, np.ndarray]] = None,
+        zone_axis_lattice: Optional[np.ndarray] = None,
+        proj_x_lattice: Optional[np.ndarray] = None,
+        foil_normal_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
         zone_axis_cartesian: Optional[np.ndarray] = None,
         proj_x_cartesian: Optional[np.ndarray] = None,
         foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
@@ -462,8 +462,8 @@ class Crystal:
                                              this input can be used to select a specific orientation.
             
             orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
-            zone_axis_miller (array):        (3,) projection direction in miller indices
-            proj_x_miller (array):           (3,) x-axis direction in miller indices
+            zone_axis_lattice (array):        (3,) projection direction in lattice indices
+            proj_x_lattice (array):           (3,) x-axis direction in lattice indices
             zone_axis_cartesian (array):     (3,) cartesian projection direction
             proj_x_cartesian (array):        (3,) cartesian projection direction
 
@@ -504,14 +504,14 @@ class Crystal:
                 orientation_matrix = orientation.matrix[ind_orientation]
         elif orientation_matrix is None:
             orientation_matrix = self.parse_orientation(
-                zone_axis_miller,
-                proj_x_miller,
+                zone_axis_lattice,
+                proj_x_lattice,
                 zone_axis_cartesian,
                 proj_x_cartesian)
 
         # Get foil normal direction
-        if foil_normal_miller is not None:
-            foil_normal = self.miller_to_cartesian(np.array(foil_normal_miller))
+        if foil_normal_lattice is not None:
+            foil_normal = self.lattice_to_cartesian(np.array(foil_normal_lattice))
         elif foil_normal_cartesian is not None:
             foil_normal = np.array(foil_normal_cartesian)
         else:
@@ -609,27 +609,27 @@ class Crystal:
 
     # Vector conversions and other utilities for Crystal classes
 
-    def cartesian_to_miller(self, vec_cartesian):
-        vec_miller = vec_cartesian @ self.lat_real.T @ self.metric_inv
-        return vec_miller / np.linalg.norm(vec_miller)
+    def cartesian_to_lattice(self, vec_cartesian):
+        vec_lattice = vec_cartesian @ self.lat_real.T @ self.metric_inv
+        return vec_lattice / np.linalg.norm(vec_lattice)
 
-    def miller_to_cartesian(self, vec_miller):
-        vec_cartesian = vec_miller @ self.metric_real @ self.lat_inv
+    def lattice_to_cartesian(self, vec_lattice):
+        vec_cartesian = vec_lattice @ self.metric_real @ self.lat_inv
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
-    def hexagonal_to_miller(self, vec_hexagonal):
+    def hexagonal_to_lattice(self, vec_hexagonal):
         return np.array([
             2.0*vec_hexagonal[0] + vec_hexagonal[1],
             2.0*vec_hexagonal[1] + vec_hexagonal[0] ,
             vec_hexagonal[3]
             ])
 
-    def miller_to_hexagonal(self, vec_miller):
+    def lattice_to_hexagonal(self, vec_lattice):
         return np.array([
-            (2.0*vec_miller[0] - vec_miller[1])/3.0,
-            (2.0*vec_miller[1] - vec_miller[0])/3.0,
-            (-vec_miller[0] - vec_miller[1])/3.0,
-            vec_miller[2]
+            (2.0*vec_lattice[0] - vec_lattice[1])/3.0,
+            (2.0*vec_lattice[1] - vec_lattice[0])/3.0,
+            (-vec_lattice[0] - vec_lattice[1])/3.0,
+            vec_lattice[2]
             ])
 
     def rational_ind(self, vec):
@@ -647,8 +647,8 @@ class Crystal:
 
     def parse_orientation(
         self,
-        zone_axis_miller,
-        proj_x_miller,
+        zone_axis_lattice,
+        proj_x_lattice,
         zone_axis_cartesian,
         proj_x_cartesian,
         ):
@@ -656,21 +656,21 @@ class Crystal:
         # and returns the normalized, projected (x,y,z) cartesian vectors in
         # the form of an orientation matrix.
 
-        if zone_axis_miller is not None:
-            proj_z = np.array(zone_axis_miller)
+        if zone_axis_lattice is not None:
+            proj_z = np.array(zone_axis_lattice)
             if proj_z.shape[0] == 4:
-                proj_z = self.hexagonal_to_miller(proj_z)
-            proj_z = self.miller_to_cartesian(proj_z)
+                proj_z = self.hexagonal_to_lattice(proj_z)
+            proj_z = self.lattice_to_cartesian(proj_z)
         elif zone_axis_cartesian is not None:
             proj_z = np.array(zone_axis_cartesian)
         else:
             proj_z = np.array([0,0,1])
 
-        if proj_x_miller is not None:
-            proj_x = np.array(proj_x_miller)
+        if proj_x_lattice is not None:
+            proj_x = np.array(proj_x_lattice)
             if proj_x.shape[0] == 4:
-                proj_x = self.hexagonal_to_miller(proj_x)
-            proj_x = self.miller_to_cartesian(proj_x)
+                proj_x = self.hexagonal_to_lattice(proj_x)
+            proj_x = self.lattice_to_cartesian(proj_x)
         elif proj_x_cartesian is not None:
             proj_x = np.array(proj_x_cartesian)
         else:

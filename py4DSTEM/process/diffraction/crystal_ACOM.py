@@ -1132,22 +1132,22 @@ def match_single_pattern(
         if verbose:
             if self.pymatgen_available:
                 if np.abs(self.cell[5]-120.0) < 1e-6:
-                    x_proj_miller = self.miller_to_hexagonal(self.cartesian_to_miller(orientation.family[match_ind][:, 0]))
-                    x_proj_miller = np.round(x_proj_miller,decimals=3)
-                    zone_axis_miller = self.miller_to_hexagonal(self.cartesian_to_miller(orientation.family[match_ind][:, 2]))
-                    zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+                    x_proj_lattice = self.lattice_to_hexagonal(self.cartesian_to_lattice(orientation.family[match_ind][:, 0]))
+                    x_proj_lattice = np.round(x_proj_lattice,decimals=3)
+                    zone_axis_lattice = self.lattice_to_hexagonal(self.cartesian_to_lattice(orientation.family[match_ind][:, 2]))
+                    zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
                 else:
-                    x_proj_miller = self.cartesian_to_miller(orientation.family[match_ind][:, 0])
-                    x_proj_miller = np.round(x_proj_miller,decimals=3)
-                    zone_axis_miller = self.cartesian_to_miller(orientation.family[match_ind][:, 2])
-                    zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+                    x_proj_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 0])
+                    x_proj_lattice = np.round(x_proj_lattice,decimals=3)
+                    zone_axis_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 2])
+                    zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
 
                 print(
-                    "Best fit miller directions: z axis = ("
-                    + str(zone_axis_miller)
+                    "Best fit lattice directions: z axis = ("
+                    + str(zone_axis_lattice)
                     + "),"
                     " x axis = ("
-                    + str(x_proj_miller)
+                    + str(x_proj_lattice)
                     + "),"
                     + " with corr value = "
                     + str(np.round(orientation.corr[match_ind], decimals=3))
@@ -1155,11 +1155,11 @@ def match_single_pattern(
 
             else:
                 zone_axis_fit = orientation.matrix[match_ind][:, 2]
-                zone_axis_miller = self.cartesian_to_miller(zone_axis_fit)
-                zone_axis_miller = np.round(zone_axis_miller,decimals=3)
+                zone_axis_lattice = self.cartesian_to_lattice(zone_axis_fit)
+                zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
                 print(
-                    "Best fit zone axis (miller) = ("
-                    + str(zone_axis_miller)
+                    "Best fit zone axis (lattice) = ("
+                    + str(zone_axis_lattice)
                     + "),"
                     + " with corr value = "
                     + str(np.round(orientation.corr[match_ind], decimals=3))
@@ -1386,26 +1386,26 @@ def match_single_pattern(
 
             if np.abs(self.cell[5]-120.0) < 1e-6:
                 label_0 = self.rational_ind(
-                    self.miller_to_hexagonal(
-                    self.cartesian_to_miller(
+                    self.lattice_to_hexagonal(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[0, :])))
                 label_1 = self.rational_ind(
-                    self.miller_to_hexagonal(
-                    self.cartesian_to_miller(
+                    self.lattice_to_hexagonal(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[1, :])))
                 label_2 = self.rational_ind(
-                    self.miller_to_hexagonal(
-                    self.cartesian_to_miller(
+                    self.lattice_to_hexagonal(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[2, :])))
             else:
                 label_0 = self.rational_ind(
-                    self.cartesian_to_miller(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[0, :]))
                 label_1 = self.rational_ind(
-                    self.cartesian_to_miller(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[1, :]))
                 label_2 = self.rational_ind(
-                    self.cartesian_to_miller(
+                    self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[2, :]))
             # label_0 = np.round(label_0, decimals=2)
             # label_1 = np.round(label_1, decimals=2)
