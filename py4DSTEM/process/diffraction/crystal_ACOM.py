@@ -67,9 +67,16 @@ def orientation_plan(
         self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
     else:
         self.orientation_tol_peak_delete = np.asarray(tol_peak_delete)
-    self.orientation_fiber_axis = np.asarray(fiber_axis)
-    self.orientation_fiber_angles = np.asarray(fiber_angles)
-    # self.cartesian_directions = cartesian_directions
+    if fiber_axis is None:
+        self.orientation_fiber_axis = None
+    else:
+        self.orientation_fiber_axis = np.asarray(fiber_axis)
+    if fiber_angles is None:
+        self.orientation_fiber_angles = None
+    else:
+        self.orientation_fiber_angles = np.asarray(fiber_angles)
+
+    
 
     # Calculate wavelenth
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
@@ -208,11 +215,6 @@ def orientation_plan(
                     self.orientation_fiber_axis * np.cos(theta)
                     + (v2 * np.sin(theta)) * np.cos(phi/2)
                     + (v3 * np.sin(theta)) * np.sin(phi/2)
-                )
-
-                print(
-                    np.round(v2output,decimals=2),
-                    np.round(v3output,decimals=2),
                 )
 
 
@@ -650,7 +652,8 @@ def orientation_plan(
         self.symmetry_operators = self.symmetry_operators[keep]
         self.symmetry_reduction = self.symmetry_reduction[keep]
     
-        if np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
+        if self.orientation_fiber_angles is not None \
+            and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
             zone_axis_range_flip = self.orientation_zone_axis_range.copy()
             zone_axis_range_flip[0,:] = -1*zone_axis_range_flip[0,:]
             zone_axis_range_inv = np.linalg.inv(zone_axis_range_flip)
@@ -662,35 +665,6 @@ def orientation_plan(
             for a0 in range(num_sym):
                 self.symmetry_reduction[a0+num_sym] = \
                     (zone_axis_range_inv.T @ self.symmetry_operators[a0+num_sym]).T
-
-        # for a0 in range(self.symmetry_operators.shape[0]):
-        #     print(a0)
-        #     print(np.round(self.symmetry_reduction[a0],decimals=2))
-
-
-        # t = 190*np.pi/180
-        # v = np.array([np.cos(t), np.sin(t), 0.23])
-        # v = v / np.linalg.norm(v)
-
-        # print(np.round(v,decimals=3))
-        # test = np.sum(self.symmetry_reduction * v[None,:,None], axis=1)
-
-        # print(test.shape)
-
-        # test2 = np.all(test>=0, axis=1);
-        # for a0 in range(num_sym):
-        #     if test2[a0]:
-        #         # test3 = np.sum(self.symmetry_operators[a0] * v[:,None], axis=1)
-        #         v_out = self.symmetry_operators[a0] @ v
-        #         v_out = np.round(v_out,decimals=3)
-
-        #         print(a0, 
-        #             np.round(test[a0,:],decimals=2),
-        #             np.round(v_out,decimals=2),
-        #             )
-
-
-
 
     # Calculate rotation matrices for zone axes
     # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
@@ -1121,7 +1095,6 @@ def match_single_pattern(
                 orientation = self.symmetry_reduce_directions(
                     orientation,
                     match_ind=match_ind,
-                    plot_output=True,
                     )
                 
         else:
@@ -1316,8 +1289,9 @@ def match_single_pattern(
             )
             y_inds = self.orientation_inds[:, 1].astype("int")
 
-            # Check if orientation vertical range.
-            if np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
+            # Check vertical range of the orientation triangle.
+            if self.orientation_fiber_angles is not None \
+                and np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
                 # Orientation covers only top of orientation sphere
 
                 inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
@@ -1548,7 +1522,8 @@ def symmetry_reduce_directions(
                 
 
             # if needed, draw orientation diamond
-            if np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
+            if self.orientation_fiber_angles is not None \
+                and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
                 for a1 in range(d.shape[0]-1):
                     v = orientation_zone_axis_range_flip[d[a1,0],:][None,:]*t[:,None] + \
                         orientation_zone_axis_range_flip[d[a1,1],:][None,:]*(1-t[:,None])
