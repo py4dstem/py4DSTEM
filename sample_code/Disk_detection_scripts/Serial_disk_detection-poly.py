@@ -23,42 +23,25 @@ def main():
     # generate Fourier Transform of the probe 
     probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
 
-    # set hyperparameters
-    corrPower = 0.8
-    sigma_gaussianFilter = 5
-    edgeBoundary = 20
-    maxNumPeaks = 100
-    minPeakSpacing = 125
-    minRelativeIntensity = 0.005
+    # set parameters
+    disk_detect_params = {
+        'minRelativeIntensity' : 0,
+        'minAbsIntensity' : 0.01,
+        'edgeBoundary' : 4,
+        'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
+        'subpixel' : 'poly',
+        'upsample_factor' : 32
+    }
     
     start = time.time()
     
-    quicker but less good method 
+    # quicker but less precise method 
     serial_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
                 dataset,
                 probe_kernel,
-                corrPower=corrPower,
-                sigma=sigma_gaussianFilter,
-                edgeBoundary=edgeBoundary,
-                minRelativeIntensity=minRelativeIntensity,
-                minPeakSpacing=minPeakSpacing,
-                maxNumPeaks=maxNumPeaks,
-                subpixel='poly',
+                **disk_detect_params
                 )
-    
 
-    # # slower but better method
-    # serial_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
-    #             dataset,
-    #             probe_kernel,
-    #             corrPower=corrPower,
-    #             sigma=sigma_gaussianFilter,
-    #             edgeBoundary=edgeBoundary,
-    #             minRelativeIntensity=minRelativeIntensity,
-    #             minPeakSpacing=minPeakSpacing,
-    #             maxNumPeaks=maxNumPeaks,
-    #             subpixel='multicorr',
-    #             )
     end = time.time()
 
     run_time = end - start
