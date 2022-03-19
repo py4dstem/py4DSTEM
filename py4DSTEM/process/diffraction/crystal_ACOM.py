@@ -1115,16 +1115,17 @@ def match_single_pattern(
                     zone_axis_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 2])
                     zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
 
-                print(
-                    "Best fit lattice directions: z axis = ("
-                    + str(zone_axis_lattice)
-                    + "),"
-                    " x axis = ("
-                    + str(x_proj_lattice)
-                    + "),"
-                    + " with corr value = "
-                    + str(np.round(orientation.corr[match_ind], decimals=3))
-                )
+                if orientation.corr[match_ind] > 0:
+                    print(
+                        "Best fit lattice directions: z axis = ("
+                        + str(zone_axis_lattice)
+                        + "),"
+                        " x axis = ("
+                        + str(x_proj_lattice)
+                        + "),"
+                        + " with corr value = "
+                        + str(np.round(orientation.corr[match_ind], decimals=3))
+                    )
 
             else:
                 zone_axis_fit = orientation.matrix[match_ind][:, 2]
@@ -1140,8 +1141,9 @@ def match_single_pattern(
 
         # if needed, delete peaks for next iteration
         if num_matches_return > 1 and corr_value[ind_best_fit] > 0:
-            bragg_peaks_fit = self.generate_diffraction_pattern(
+            bragg_peaks_fit=self.generate_diffraction_pattern(
                 orientation,
+                ind_orientation=match_ind,
                 sigma_excitation_error=self.orientation_kernel_size,
             )
 
@@ -1165,7 +1167,6 @@ def match_single_pattern(
             qx = qx[~remove]
             qy = qy[~remove]
             intensity = intensity[~remove]
-
 
 
     # plotting correlation image
