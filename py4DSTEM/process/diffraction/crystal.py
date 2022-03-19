@@ -635,10 +635,21 @@ class Crystal:
             vec_lattice[2]
             ])
 
-    def rational_ind(self, vec):
+    def cartesian_to_miller(self, vec_cartesian):
+        vec_miller = self.lat_real.T @ self.metric_inv @ vec_cartesian 
+        return vec_miller / np.linalg.norm(vec_miller)
+
+    def miller_to_cartesian(self, vec_miller):
+        vec_cartesian = self.lat_inv.T @ self.metric_real @ vec_miller
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
+
+    def rational_ind(
+        self, 
+        vec,
+        tol_den = 1000,
+        ):
         # This function rationalizes the indices of a vector, up to 
         # some tolerance. Returns integers to prevent rounding errors.
-        tol_den = 1000
         vec = np.array(vec,dtype='float64')
         sub = np.abs(vec) > 0
         if np.sum(sub) > 0:
