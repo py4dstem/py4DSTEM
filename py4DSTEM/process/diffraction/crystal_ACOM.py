@@ -1,6 +1,7 @@
 import warnings
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
@@ -1427,6 +1428,161 @@ def match_single_pattern(
     else:
         return orientation
 
+
+
+
+def save_ang_file(
+    self,
+    file_name,
+    orientation_map,
+    ind_orientation = 0,
+    pixel_size: float = None,
+    ):
+    '''
+    This function outputs an ascii text file in the .ang format, containing 
+    the Euler angles of an orientation map. 
+
+    Args:
+        orientation_map (OrientationMap):   Class containing orientation matrices,
+                                            correlation values, etc.
+        ind_orientation (int):              Which orientation match to plot if num_matches > 1
+        pixel_size (float):                 Pixel size, if known.
+
+    Returns:
+        nothing
+
+    '''
+
+    num_dec = 4  # decimals of output numbers
+
+    if pixel_size is None:
+        pixel_size = 1.0
+    else:
+        pixel_size = np.array(pixel_size)
+
+    # Add orientation map index to file name
+    file_base = os.path.splitext(file_name)[0]
+    file_output = file_base + '_' + str(ind_orientation) + '.ang'
+
+    if self.pymatgen_available:
+        sym = self.pointgroup.get_point_group_symbol()
+    else:
+        sym = 'unknown'
+
+    # zone axis range
+    if np.abs(self.cell[5]-120.0) < 1e-6:
+        label_0 = self.rational_ind(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[0, :])))
+        label_1 = self.rational_ind(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[1, :])))
+        label_2 = self.rational_ind(
+            self.lattice_to_hexagonal(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[2, :])))
+    else:
+        label_0 = self.rational_ind(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[0, :]))
+        label_1 = self.rational_ind(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[1, :]))
+        label_2 = self.rational_ind(
+            self.cartesian_to_lattice(
+            self.orientation_zone_axis_range[2, :]))
+
+    # Generate header for file
+    header = '# ang file created by the py4DSTEM ACOM module\n' + \
+        '#     https://github.com/py4dstem/py4DSTEM\n' + \
+        '#     https://doi.org/10.1017/S1431927621000477\n' + \
+        '#\n' + \
+        '# lattice constants ' + \
+        str(np.round(self.cell,decimals=num_dec)) + \
+        '\n#\n' + \
+        '# pointgroup ' + \
+        sym + \
+        '\n#\n' + \
+        '# zone axis lattice range:' + \
+        '\n#     ' + str(label_0) + \
+        '\n#     ' + str(label_1) + \
+        '\n#     ' + str(label_2) + \
+        '\n#\n' + \
+        '# atomic species:\n' + \
+        '#     ' + str(np.unique(self.numbers)) + \
+        '\n#'
+
+    # Generate output data
+
+    # Angles 00
+    theta_0 = orientation_map.angles[:,:,ind_orientation,0].ravel()
+    phi___1 = orientation_map.angles[:,:,ind_orientation,1].ravel()
+    theta_2 = orientation_map.angles[:,:,ind_orientation,2].ravel()
+
+    # # Angles 01
+    # theta_0 = -1*orientation_map.angles[:,:,ind_orientation,0].ravel()
+    # phi___1 = -1*orientation_map.angles[:,:,ind_orientation,1].ravel()
+    # theta_2 = -1*orientation_map.angles[:,:,ind_orientation,2].ravel()
+
+    # # Angles 02
+    # theta_2 = orientation_map.angles[:,:,ind_orientation,0].ravel()
+    # phi___1 = orientation_map.angles[:,:,ind_orientation,1].ravel()
+    # theta_0 = orientation_map.angles[:,:,ind_orientation,2].ravel()
+
+    # # Angles 03
+    # theta_2 = -1*orientation_map.angles[:,:,ind_orientation,0].ravel()
+    # phi___1 = -1*orientation_map.angles[:,:,ind_orientation,1].ravel()
+    # theta_0 = -1*orientation_map.angles[:,:,ind_orientation,2].ravel()
+
+
+    if pixel_size.shape[0] == 2:
+        x = np.arange(orientation_map.num_x)*pixel_size[0]
+        y = np.arange(orientation_map.num_y)*pixel_size[1]
+    else:
+        x = np.arange(orientation_map.num_x)*pixel_size
+        y = np.arange(orientation_map.num_y)*pixel_size
+    ya,xa = np.meshgrid(y,x)
+    xa = xa.ravel()
+    ya = ya.ravel()
+
+    # image quality - contrast - TODO: perhaps use dark field intensity sum?
+    IQ = np.ones(orientation_map.num_x*orientation_map.num_y)
+
+    # confidence
+    CI = orientation_map.corr[:,:,ind_orientation].ravel()
+
+    # phase id - TODO: add ability to combine multiple phases in the future
+    ID = np.ones(orientation_map.num_x*orientation_map.num_y)
+
+    # detector intensity - TO: perhaps use sum of all bragg peak intensities?
+    DI = np.ones(orientation_map.num_x*orientation_map.num_y)
+
+    # fit - not sure how this is difference from confidence. 
+    # TODO: we could add an updated goodness of fit if we add tilt refine
+    fit = orientation_map.corr[:,:,ind_orientation].ravel()
+
+    data = np.vstack((
+        theta_0,
+        phi___1,
+        theta_2,
+        xa,
+        ya,
+        IQ,
+        CI,
+        ID,
+        DI,
+        fit,
+        )).T
+
+    # Write file
+    np.savetxt(
+        file_output,
+        data,
+        fmt='%.4g',
+        header=header,
+        )
 
 
 def symmetry_reduce_directions(
