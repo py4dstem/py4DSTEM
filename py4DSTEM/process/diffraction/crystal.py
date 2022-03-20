@@ -613,11 +613,11 @@ class Crystal:
     # Vector conversions and other utilities for Crystal classes
 
     def cartesian_to_lattice(self, vec_cartesian):
-        vec_lattice = vec_cartesian @ self.lat_real.T @ self.metric_inv
+        vec_lattice = self.lat_inv @ vec_cartesian
         return vec_lattice / np.linalg.norm(vec_lattice)
 
     def lattice_to_cartesian(self, vec_lattice):
-        vec_cartesian = vec_lattice @ self.metric_real @ self.lat_inv
+        vec_cartesian = self.lat_real.T @ vec_lattice
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
     def hexagonal_to_lattice(self, vec_hexagonal):
