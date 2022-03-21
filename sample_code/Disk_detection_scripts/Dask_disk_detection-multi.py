@@ -72,7 +72,7 @@ def main():
     # set parameters
     disk_detect_params = {
         'minRelativeIntensity' : 0,
-        'minAbsIntensity' : 0.01,
+        'minAbsoluteIntensity' : 0.01,
         'edgeBoundary' : 4,
         'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
         'subpixel' : 'multicorr',    # slower but more precise method
