@@ -274,11 +274,33 @@ class K2DataArray(Sequence):
         self._bin_files = np.empty(8, dtype=object)
         for i in range(8):
             binName = self._bin_prefix + str(i + 1) + ".bin"
+
+            # Synchronize to the magic sync word
+            # First, open the file in binary mode and read ~1 MB
+            with open(binName, 'rb') as f:
+                s = f.read(1_000_000)
+
+            # Scan the chunk and find everywhere the sync word appears
+            sync = [s.find(b'\xff\xff\x00\x55'),]
+            while sync[-1] >= 0:
+                sync.append(s.find(b'\xff\xff\x00\x55',sync[-1]+1))
+
+            # Since the sync word can conceivably occur within the data region,
+            # check that there is another sync word 22360 bytes away
+            sync_idx = 0
+            while 0 not in [s - sync[sync_idx] - 22360 for s in sync]:
+                sync_idx += 1
+
+            if sync_idx > 0:
+                print(f"Beginning file {i} at offset {sync[sync_idx]} due to incomplete data block!")
+
+            # Start the memmap at the offset of the sync byte
             self._bin_files[i] = np.memmap(
                 binName,
                 dtype=self._stripe_dtype,
                 mode="r",
                 shape=(self._guess_number_frames(),),
+                offset=sync[sync_idx],
             )
 
     def _find_offsets(self):
