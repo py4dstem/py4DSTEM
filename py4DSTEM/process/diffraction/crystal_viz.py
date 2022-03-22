@@ -3,6 +3,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
+from scipy.signal import medfilt
 
 import warnings
 import numpy as np
@@ -839,7 +840,7 @@ def plot_diffraction_pattern(
 def plot_orientation_maps(
     self,
     orientation_map,
-    ind_orientation: float = None,
+    ind_orientation: int = None,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
@@ -1654,10 +1655,20 @@ def plot_orientation_maps(
     #             ]
     #         ax[1].set_position(pos_new)
 
-    # if returnfig:
-    #     return images_orientation, fig, ax
-    # else:
-    #     return images_orientation
+
+    images_orientation = np.zeros((
+        orientation_map.num_x,
+        orientation_map.num_y,
+        3,2))
+    if self.pymatgen_available:
+        images_orientation[:,:,:,0] = rgb_x
+    images_orientation[:,:,:,0] = rgb_z
+
+    if returnfig:
+        ax = [ax_x,ax_z,ax_l]
+        return images_orientation, fig, ax
+    else:
+        return images_orientation
 
 
 # def crystal_to_cartesian(self, zone_axis):
@@ -1677,6 +1688,200 @@ def plot_orientation_maps(
 # def crystal_to_cartesian(self, vec_cart):
 #     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
 #     return zone_axis / np.linalg.norm(zone_axis)
+
+
+
+
+
+
+def plot_fiber_orientation_maps(
+    self,
+    orientation_map,
+    ind_orientation: int = None,
+    symmetry_order: int = None,
+    symmetry_mirror: bool = False,
+    dir_in_plane_degrees: float = 0.0,
+    corr_range: np.ndarray = np.array([0, 5]),
+    corr_normalize: bool = True,
+    medfilt_size: int = None,
+    cmap_out_of_plane: 'string' = 'plasma',
+    leg_size: int = 200,
+    figsize: Union[list, tuple, np.ndarray] = (12, 8),
+    figbound: Union[list, tuple, np.ndarray] = (0.005, 0.04),
+    returnfig: bool = False,
+    ):
+    """
+    Generate and plot the orientation maps from fiber texture plots.
+
+    Args:
+        orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
+        ind_orientation (int):              Which orientation match to plot if num_matches > 1
+        dir_in_plane_degrees (float):       Reference in-plane angle (degrees).  Default is 0 / x-axis / vertical down.
+        corr_range (np.ndarray):            Correlation intensity range for the plot
+        corr_normalize (bool):              If true, set mean correlation to 1.
+        figsize (array):                    2 elements defining figure size
+        figbound (array):                   2 elements defining figure boundary
+        returnfig (bool):                   set to True to return figure and axes handles
+
+    Returns:
+        images_orientation (int):       RGB images
+        fig, axs (handles):             Figure and axes handes for the
+
+    NOTE:
+        Currently, no symmetry reduction.  Therefore the x and y orientations
+        are going to be correct only for [001][011][111] orientation triangle.
+
+    """
+
+    # angular colormap
+    basis = np.array([
+        [1.0, 0.2, 0.2],
+        [1.0, 0.7, 0.0],
+        [0.0, 0.8, 0.0],
+        [0.0, 0.8, 1.0],
+        [0.2, 0.4, 1.0],
+        [0.9, 0.2, 1.0],
+    ])
+
+    # Correlation masking
+    corr = orientation_map.corr[:,:,ind_orientation]
+    if corr_normalize:
+        corr = corr / np.mean(corr)
+    if medfilt_size is not None:
+        corr = medfilt(corr,medfilt_size)
+    mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
+    mask = np.clip(mask, 0, 1)
+
+    # Get symmetry
+    if symmetry_order is None:
+        symmetry_order = np.round(360.0 / self.orientation_fiber_angles[1])
+    elif symmetry_mirror:
+        symmetry_order = 2 * symmetry_order
+
+    # Generate out-of-plane orientation signal
+    ang_op = orientation_map.angles[:,:,ind_orientation,1]
+    sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
+    if medfilt_size is not None:
+        sig_op = medfilt(sig_op,medfilt_size)
+
+    # Generate in-plane orientation signal
+    ang_ip = orientation_map.angles[:,:,ind_orientation,0] \
+        + orientation_map.angles[:,:,ind_orientation,2]
+    sig_ip = np.mod((symmetry_order/(2*np.pi))*ang_ip,1.0)
+    if symmetry_mirror:
+        sub = np.sin((symmetry_order/2)*ang_ip) < 0
+        sig_ip[sub] = np.mod(-sig_ip[sub],1)
+    if medfilt_size is not None:
+        sig_ip = medfilt(sig_ip,medfilt_size)
+
+    # out-of-plane RGB images
+    # im_op = plt.cm.blues(sig_op)
+    cmap = plt.get_cmap(cmap_out_of_plane)
+    im_op = cmap(sig_op)
+    im_op = np.delete(im_op, 3, axis=2)
+    im_op = im_op * mask[:,:,None]
+
+    # in-plane image
+    im_ip = np.zeros((
+        sig_ip.shape[0],
+        sig_ip.shape[1],
+        3))
+    for a0 in range(basis.shape[0]):
+        weight = np.maximum(1-np.abs(np.mod(
+            sig_ip - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
+        im_ip += basis[a0,:][None,None,:] * weight[:,:,None]
+    im_ip = np.clip(im_ip, 0, 1)
+    im_ip = im_ip * mask[:,:,None]
+
+    # draw in-plane legends
+    r = np.arange(leg_size) - leg_size/2 + 0.5
+    ya,xa = np.meshgrid(r,r)
+    ra = np.sqrt(xa**2 + ya**2)
+    ta = np.arctan2(ya,xa)
+    sig_leg = np.mod((symmetry_order/(2*np.pi))*ta,1.0)
+    if symmetry_mirror:
+        sub = np.sin((symmetry_order/2)*ta) < 0
+        sig_leg[sub] = np.mod(-sig_leg[sub],1)
+    # leg_ip = 
+    im_ip_leg = np.zeros((leg_size,leg_size,3))
+    for a0 in range(basis.shape[0]):
+        weight = np.maximum(1-np.abs(np.mod(
+            sig_leg - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
+        im_ip_leg += basis[a0,:][None,None,:] * weight[:,:,None]
+    im_ip_leg = np.clip(im_ip_leg, 0, 1)
+    mask = np.clip(leg_size/2 - ra + 0.5, 0, 1) \
+        * np.clip(ra - leg_size/4 + 0.5, 0, 1)
+    im_ip_leg = im_ip_leg*mask[:,:,None] + (1-mask)[:,:,None]
+
+    # t = np.linspace(0,2*np.pi,1001)
+    # y = np.mod((symmetry_order/(2*np.pi))*t,1.0)
+    # if symmetry_mirror:
+    #     sub = np.sin((symmetry_order/2)*t) < 0
+    #     y[sub] = np.mod(-y[sub],1)
+
+    # plotting frame
+    # fig, ax = plt.subplots(1, 3, figsize=figsize)
+    fig = plt.figure(figsize=figsize)
+
+    ax_ip = fig.add_axes(
+        [0.0+figbound[0], 0.25+figbound[1], 0.5-2*+figbound[0], 0.75-figbound[1]])
+    ax_op = fig.add_axes(
+        [0.5+figbound[0], 0.25+figbound[1], 0.5-2*+figbound[0], 0.75-figbound[1]])
+
+    ax_ip_l = fig.add_axes(
+        [0.1+figbound[0], 0.0+figbound[1], 0.3-2*+figbound[0], 0.25-figbound[1]])
+    ax_op_l = fig.add_axes(
+        [0.6+figbound[0], 0.0+figbound[1], 0.3-2*+figbound[0], 0.25-figbound[1]])
+
+    # in-plane
+    ax_ip.imshow(im_ip)
+    ax_ip.set_title("In-Plane Rotation", size=16)
+
+    #out of plane
+    ax_op.imshow(im_op)
+    ax_op.set_title("Out-of-Plane Tilt", size=16)
+
+    # in plane legend
+    ax_ip_l.imshow(im_ip_leg)
+    ax_ip_l.set_axis_off()
+
+    # out of plane legend
+    t = np.tile(np.linspace(0,1,leg_size,endpoint=True),(np.round(leg_size/10).astype('int'),1))
+    im_op_leg = cmap(t)
+    im_op_leg = np.delete(im_op_leg, 3, axis=2)
+    ax_op_l.imshow(im_op_leg)
+    ax_op_l.set_yticks([])
+
+    ticks = [
+        np.round(leg_size*0.0), 
+        np.round(leg_size*0.25), 
+        np.round(leg_size*0.5), 
+        np.round(leg_size*0.75), 
+        np.round(leg_size*1.0), 
+        ]
+    labels = [
+        str(np.round(self.orientation_fiber_angles[0]*0.00)) + '$\degree$', 
+        str(np.round(self.orientation_fiber_angles[0]*0.25)) + '$\degree$', 
+        str(np.round(self.orientation_fiber_angles[0]*0.50)) + '$\degree$', 
+        str(np.round(self.orientation_fiber_angles[0]*0.75)) + '$\degree$', 
+        str(np.round(self.orientation_fiber_angles[0]*1.00)) + '$\degree$', 
+        ]
+    ax_op_l.set_xticks(ticks)
+    ax_op_l.set_xticklabels(labels)
+
+    images_orientation = np.zeros((
+        orientation_map.num_x,
+        orientation_map.num_y,
+        3,2))
+    images_orientation[:,:,:,0] = im_ip
+    images_orientation[:,:,:,1] = im_op
+
+    if returnfig:
+        ax = [ax_ip, ax_op, ax_ip_l, ax_op_l]
+        return images_orientation, fig, ax
+    else:
+        return images_orientation
+
 
 
 def axisEqual3D(ax):
