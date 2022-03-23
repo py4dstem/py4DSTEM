@@ -38,8 +38,6 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    print(grp['test_datacube'].attrs['py4dstem_class'])
-
     datacube = py4DSTEM.io.datastructure.DataCube_from_h5(grp,'test_datacube')
     print(datacube)
     print(type(datacube))
