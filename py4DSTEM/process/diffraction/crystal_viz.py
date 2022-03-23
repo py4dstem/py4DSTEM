@@ -840,7 +840,7 @@ def plot_diffraction_pattern(
 def plot_orientation_maps(
     self,
     orientation_map,
-    ind_orientation: int = None,
+    orientation_ind: int = None,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
@@ -858,7 +858,7 @@ def plot_orientation_maps(
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
-        ind_orientation (int):              Which orientation match to plot if num_matches > 1
+        orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
         corr_normalize (bool):              If true, set mean correlation to 1.
@@ -885,8 +885,8 @@ def plot_orientation_maps(
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
 
-    if ind_orientation is None:
-        ind_orientation = 0
+    if orientation_ind is None:
+        orientation_ind = 0
 
     # Color of the 3 corners
     color_basis = np.array(
@@ -941,7 +941,7 @@ def plot_orientation_maps(
     # A = self.orientation_zone_axis_range
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,ind_orientation]
+    corr = orientation_map.corr[:,:,orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
@@ -957,10 +957,10 @@ def plot_orientation_maps(
         ):
 
         if self.pymatgen_available:
-            basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,ind_orientation,:,0]
-            basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,ind_orientation,:,2]
+            basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,0]
+            basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,2]
         else:
-            basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,ind_orientation,:,2]
+            basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,orientation_ind,:,2]
     basis_x = np.clip(basis_x,0,1)
     basis_z = np.clip(basis_z,0,1)
 
@@ -1288,8 +1288,8 @@ def plot_orientation_maps(
     #     if orientation_map.corr[rx,ry] > 0:
 
     #         # Reflect the in-plane direction into orientation triangle
-    #         v = orientation_map.matrix[rx,ry,ind_orientation,:,0] * ct \
-    #             + orientation_map.matrix[rx,ry,ind_orientation,:,1] * st
+    #         v = orientation_map.matrix[rx,ry,orientation_ind,:,0] * ct \
+    #             + orientation_map.matrix[rx,ry,orientation_ind,:,1] * st
     #         w = np.linalg.solve(A, v)
     #         if np.min(w) < 0:        
     #             count = 0
@@ -1329,7 +1329,7 @@ def plot_orientation_maps(
     #         dir_x[rx,ry] = w
 
     #         # Reflect the out-of-plane direction into orientation triangle
-    #         v = orientation_map.matrix[rx,ry,ind_orientation,:,2]
+    #         v = orientation_map.matrix[rx,ry,orientation_ind,:,2]
     #         w = np.linalg.solve(A, v)
     #         if np.min(w) < 0:        
     #             count = 0
@@ -1697,7 +1697,7 @@ def plot_orientation_maps(
 def plot_fiber_orientation_maps(
     self,
     orientation_map,
-    ind_orientation: int = None,
+    orientation_ind: int = None,
     symmetry_order: int = None,
     symmetry_mirror: bool = False,
     dir_in_plane_degrees: float = 0.0,
@@ -1715,7 +1715,7 @@ def plot_fiber_orientation_maps(
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
-        ind_orientation (int):              Which orientation match to plot if num_matches > 1
+        orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       Reference in-plane angle (degrees).  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
         corr_normalize (bool):              If true, set mean correlation to 1.
@@ -1744,7 +1744,7 @@ def plot_fiber_orientation_maps(
     ])
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,ind_orientation]
+    corr = orientation_map.corr[:,:,orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     if medfilt_size is not None:
@@ -1759,14 +1759,14 @@ def plot_fiber_orientation_maps(
         symmetry_order = 2 * symmetry_order
 
     # Generate out-of-plane orientation signal
-    ang_op = orientation_map.angles[:,:,ind_orientation,1]
+    ang_op = orientation_map.angles[:,:,orientation_ind,1]
     sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
     if medfilt_size is not None:
         sig_op = medfilt(sig_op,medfilt_size)
 
     # Generate in-plane orientation signal
-    ang_ip = orientation_map.angles[:,:,ind_orientation,0] \
-        + orientation_map.angles[:,:,ind_orientation,2]
+    ang_ip = orientation_map.angles[:,:,orientation_ind,0] \
+        + orientation_map.angles[:,:,orientation_ind,2]
     sig_ip = np.mod((symmetry_order/(2*np.pi))*ang_ip,1.0)
     if symmetry_mirror:
         sub = np.sin((symmetry_order/2)*ang_ip) < 0
