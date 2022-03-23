@@ -19,8 +19,9 @@ def make_orientation_histogram(
     bragg_peaks: PointList = None,
     radial_ranges: np.ndarray = None,
     orientation_map = None,
-    ind_orientation: int = 0, 
+    orientation_ind: int = 0, 
     orientation_growth_angles: np.array = 0.0,  
+    orientation_flip_sign: bool = False,  
     upsample_factor=4.0,
     theta_step_deg=1.0,
     sigma_x = 1.0,
@@ -39,7 +40,7 @@ def make_orientation_histogram(
         bragg_peaks (PointListArray):       2D of pointlists containing centered peak locations.
         radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
         orientation_map (OrientationMap):   Class containing the Euler angles to generate a flowline map. 
-        ind_orientation (int):              Index of the orientation map (default 0)
+        orientation_ind (int):              Index of the orientation map (default 0)
         upsample_factor (float):            Upsample factor
         theta_step_deg (float):             Step size along annular direction in degrees
         sigma_x (float):                    Smoothing in x direction before upsample
@@ -114,11 +115,16 @@ def make_orientation_histogram(
                     intensity = p.data['intensity'][sub]
                     t = np.arctan2(p.data['qy'][sub],p.data['qx'][sub]) / dtheta
             else:
-                if orientation_map.corr[rx,ry,ind_orientation] > 0:
-                    t = np.array([(-orientation_map.angles[rx,ry,ind_orientation,0] \
-                        - orientation_map.angles[rx,ry,ind_orientation,2]) \
-                        / dtheta]) + orientation_growth_angles
-                    intensity = np.ones(num_angles) * orientation_map.corr[rx,ry,ind_orientation]
+                if orientation_map.corr[rx,ry,orientation_ind] > 0:
+                    if orientation_flip_sign:
+                        t = np.array([(-orientation_map.angles[rx,ry,orientation_ind,0] \
+                            - orientation_map.angles[rx,ry,orientation_ind,2]) \
+                            / dtheta]) + orientation_growth_angles
+                    else:
+                        t = np.array([(orientation_map.angles[rx,ry,orientation_ind,0] \
+                            + orientation_map.angles[rx,ry,orientation_ind,2]) \
+                            / dtheta]) + orientation_growth_angles
+                    intensity = np.ones(num_angles) * orientation_map.corr[rx,ry,orientation_ind]
                     add_data = True
 
             if add_data:
