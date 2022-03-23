@@ -206,11 +206,11 @@ class Array:
 
 
     def __repr__(self):
-        string = f"Array( A {self.D}-dimensional array of shape {self.shape} called '{self.name}',"
-        string += f"\n       with dimensions:"
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( A {self.D}-dimensional array of shape {self.shape} called '{self.name}',"
+        string += "\n"+space+"with dimensions:"
         for n in range(self.D):
-            #string += f"\n       {dim_names[n]} = [{dims[n][0],dims[n][1],...] {dim_units[n]}"
-            string += f"\n       {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+            string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
         string += "\n)"
         return string
 
@@ -234,8 +234,9 @@ class Array:
             name: (Optional, str):
         """
         length = self.shape[n]
-        _dim = self._unpack_dim(dim,length)
+        _dim,is_linear = self._unpack_dim(dim,length)
         self.dims[n] = _dim
+        self.dim_is_linear[n] = is_linear
         if units is not None: self.dim_units[n] = units
         if name is not None: self._dim_names[n] = name
 
