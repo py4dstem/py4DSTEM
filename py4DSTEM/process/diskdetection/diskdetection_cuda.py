@@ -131,34 +131,50 @@ def find_Bragg_disks_CUDA(
     if batching:
         # compute the batch size based on available VRAM:
         max_num_bytes = cp.cuda.Device().mem_info[0]
-        # use a fudge factor to keep the batches smaller, which 
+        # use a fudge factor to keep the batches smaller, which
         # seems to result in slightly better performance
+        # (this is also needed to leave space for the Fourier transformed data)
         batch_size = max_num_bytes // (bytes_per_pattern * 10)
         num_batches = datacube.R_N // batch_size + 1
 
         print(f"Using {num_batches} batches of {batch_size} patterns each...")
 
-        for batch_idx in tqdmnd(range(num_batches),desc="Finding Bragg disks in batches",unit="batch"):
+        for batch_idx in tqdmnd(
+            range(num_batches), desc="Finding Bragg disks in batches", unit="batch"
+        ):
             # the final batch may be smaller than the other ones:
-            probes_remaining = datacube.R_N - (batch_idx*batch_size)
-            this_batch_size = probes_remaining if probes_remaining < batch_size else batch_size
+            probes_remaining = datacube.R_N - (batch_idx * batch_size)
+            this_batch_size = (
+                probes_remaining if probes_remaining < batch_size else batch_size
+            )
 
-            # allocate FFT array
-            batched_subcube = cp.zeros((this_batch_size,datacube.Q_Nx,datacube.Q_Ny),dtype=cp.float64)
+            # allocate array for batch of DPs
+            # potential optimization: allocate this only once
+            batched_subcube = cp.zeros(
+                (this_batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
+            )
 
             # fill in diffraction patterns, with filtering
             for subbatch_idx in range(this_batch_size):
                 patt_idx = batch_idx * batch_size + subbatch_idx
-                rx,ry = np.unravel_index(patt_idx,(datacube.R_Nx,datacube.R_Ny))
-                batched_subcube[subbatch_idx,:,:] = cp.array(datacube.data[rx,ry,:,:] if filter_function is None else filter_function(datacube.data[rx,ry,:,:]))
+                rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
+                batched_subcube[subbatch_idx, :, :] = cp.array(
+                    datacube.data[rx, ry, :, :]
+                    if filter_function is None
+                    else filter_function(datacube.data[rx, ry, :, :]),
+                    dtype=cp.float64,
+                )
 
-            # Perform the FFT on the batched array
-            batched_crosscorr = cufft.fft2(batched_subcube, overwrite_x=True) * probe_kernel_FT[None,:,:]
+            # Perform the FFT and multiplication by probe_kernel on the batched array
+            batched_crosscorr = (
+                cufft.fft2(batched_subcube, overwrite_x=True)
+                * probe_kernel_FT[None, :, :]
+            )
 
             # Iterate over the patterns in the batch and do the Bragg disk stuff
             for subbatch_idx in range(this_batch_size):
                 patt_idx = batch_idx * batch_size + subbatch_idx
-                rx,ry = np.unravel_index(patt_idx,(datacube.R_Nx,datacube.R_Ny))
+                rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
 
                 subFFT = batched_crosscorr[subbatch_idx]
                 ccc = cp.abs(subFFT) ** corrPower * cp.exp(1j * cp.angle(subFFT))
@@ -220,8 +236,7 @@ def find_Bragg_disks_CUDA(
             )
     t = time() - t0
     print(
-        f"Analyzed {datacube.R_N} diffraction patterns in {t//3600}h {t % 3600 // 60}m {t % 60:.2f}s\n(avg. speed {datacube.R_N/t:0.4f} patterns per second)".format(
-        )
+        f"Analyzed {datacube.R_N} diffraction patterns in {t//3600}h {t % 3600 // 60}m {t % 60:.2f}s\n(avg. speed {datacube.R_N/t:0.4f} patterns per second)".format()
     )
     peaks.name = name
     return peaks
