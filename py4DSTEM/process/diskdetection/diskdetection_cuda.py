@@ -129,9 +129,11 @@ def find_Bragg_disks_CUDA(
 
     t0 = time()
     if batching:
-        # estimate the max batch size: (this is probably wrong)
+        # compute the batch size based on available VRAM:
         max_num_bytes = cp.cuda.Device().mem_info[0]
-        batch_size = max_num_bytes // (bytes_per_pattern * 10) # what should this fudge factor be?
+        # use a fudge factor to keep the batches smaller, which 
+        # seems to result in slightly better performance
+        batch_size = max_num_bytes // (bytes_per_pattern * 10)
         num_batches = datacube.R_N // batch_size + 1
 
         print(f"Using {num_batches} batches of {batch_size} patterns each...")
