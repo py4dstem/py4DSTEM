@@ -486,8 +486,8 @@ def find_Bragg_disks(datacube, probe,
                 * cluster_path (str): defaults to the working directory during processing
             if distributed is None, which is the default, processing will be in serial
         CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk detection
-        CUDA_batching (bool): If True, and CUDA is selected, FFTs will be batched for greater
-            performance when using a relatively capable GPU. 
+        CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT steps of
+            disk detection are performed in batches to better utilize GPU resources. 
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
