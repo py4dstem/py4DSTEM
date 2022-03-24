@@ -82,6 +82,7 @@ def find_Bragg_disks_CUDA(
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
+        batching (bool): Whether to batch the FFT cross correlation steps. 
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
@@ -131,9 +132,9 @@ def find_Bragg_disks_CUDA(
     if batching:
         # compute the batch size based on available VRAM:
         max_num_bytes = cp.cuda.Device().mem_info[0]
-        # use a fudge factor to keep the batches smaller, which
-        # seems to result in slightly better performance
-        # (this is also needed to leave space for the Fourier transformed data)
+        # use a fudge factor to leave room for the fourier transformed data
+        # I have set this at 10, which results in underutilization of 
+        # VRAM, because this yielded better performance in my testing
         batch_size = max_num_bytes // (bytes_per_pattern * 10)
         num_batches = datacube.R_N // batch_size + 1
 
@@ -320,6 +321,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
                              If peaks is None, the PointList of peak positions is created here.
                              If peaks is not None, it is the PointList that detected peaks are added
                              to, and must have the appropriate coords ('qx','qy','intensity').
+        ccc and cc:         Precomputed complex and real-IFFT cross correlations. Used when called
+                            in batched mode only, causing local calculation of those to be skipped
 
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
