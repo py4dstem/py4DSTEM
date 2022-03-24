@@ -130,11 +130,13 @@ def find_Bragg_disks_CUDA(
     t0 = time()
     if batching:
         # estimate the max batch size: (this is probably wrong)
-        max_num_bytes = cp.get_default_memory_pool().get_limit()
-        num_batches = (bytes_per_pattern * 3) // max_num_bytes + 1 # what should this fudge factor be?
-        batch_size = datacube.R_N // num_batches + 1
+        max_num_bytes = cp.cuda.Device().mem_info[0]
+        batch_size = max_num_bytes // (bytes_per_pattern * 10) # what should this fudge factor be?
+        num_batches = datacube.R_N // batch_size + 1
 
-        for batch_idx in tqdmnd(range(num_batches),desc="Finding Bragg disks in batches",units="batch"):
+        print(f"Using {num_batches} batches of {batch_size} patterns each...")
+
+        for batch_idx in tqdmnd(range(num_batches),desc="Finding Bragg disks in batches",unit="batch"):
             # the final batch may be smaller than the other ones:
             probes_remaining = datacube.R_N - (batch_idx*batch_size)
             this_batch_size = probes_remaining if probes_remaining < batch_size else batch_size
@@ -146,7 +148,7 @@ def find_Bragg_disks_CUDA(
             for subbatch_idx in range(this_batch_size):
                 patt_idx = batch_idx * batch_size + subbatch_idx
                 rx,ry = np.unravel_index(patt_idx,(datacube.R_Nx,datacube.R_Ny))
-                batched_subcube[subbatch_idx] = datacube.data[rx,ry] if filter_function is None else filter_function(datacube.data[rx,ry])
+                batched_subcube[subbatch_idx,:,:] = cp.array(datacube.data[rx,ry,:,:] if filter_function is None else filter_function(datacube.data[rx,ry,:,:]))
 
             # Perform the FFT on the batched array
             batched_crosscorr = cufft.fft2(batched_subcube, overwrite_x=True) * probe_kernel_FT[None,:,:]
@@ -216,8 +218,7 @@ def find_Bragg_disks_CUDA(
             )
     t = time() - t0
     print(
-        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
-            datacube.R_N, int(t / 3600), int(t / 60), int(t % 60)
+        f"Analyzed {datacube.R_N} diffraction patterns in {t//3600}h {t % 3600 // 60}m {t % 60:.2f}s\n(avg. speed {datacube.R_N/t:0.4f} patterns per second)".format(
         )
     )
     peaks.name = name
