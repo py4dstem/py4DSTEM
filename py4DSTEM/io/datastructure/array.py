@@ -3,6 +3,7 @@
 from typing import Optional,Union
 import numpy as np
 import h5py
+from numbers import Number
 
 class Array:
     """
@@ -68,36 +69,6 @@ class Array:
 
     >>> plt.scatter(ar.dims[0], ar.data)
 
-
-    Accepts:
-        data (np.ndarray): the data
-        name (str): the name of the Array
-        units (str): units for the pixel values
-        dims (list): calibration vectors for each of the axes of the data
-            array.  If this isn't passed, dims will be automatically
-            populated with integer values representing the pixel numbers.
-            If dims is a list with length < the array dimensions, the passed
-            values are assumed to apply to the first N dimensions, and the
-            remaining dimensions are populated automatically as above. Each
-            passed dim vector must have either a length of 2, or a length
-            equal to the extent of the corresponding dimension of the data
-            array. If it has a length of 2, the entire calibration vector
-            will be extrapolated linearly from these initial two values.
-        dim_units (list): the units for the calibration dim vectors. If
-            nothing is passed, dims vectors which have been populated
-            automatically with integers corresponding to pixel numbers
-            will be assigned units of 'pixels', and any other dim vectors
-            will be assigned units of 'unknown'.  If a list with length <
-            the array dimensions, the passed values are assumed to apply
-            to the first N dimensions, and the remaining values are
-            populated with 'pixels' or 'unknown' as above.
-        dim_names (list): labels for each axis of the data array. Values
-            which are not passed, following the same logic as described
-            above, will be autopopulated with the name "dim#" where #
-            is the axis number.
-
-    Returns:
-        A new Array instance
     """
     def __init__(
         self,
@@ -108,7 +79,37 @@ class Array:
         dim_names: Optional[list] = None,
         dim_units: Optional[list] = None
         ):
+        """
+        Accepts:
+            data (np.ndarray): the data
+            name (str): the name of the Array
+            units (str): units for the pixel values
+            dims (list): calibration vectors for each of the axes of the data
+                array.  If this isn't passed, dims will be automatically
+                populated with integer values representing the pixel numbers.
+                If dims is a list with length < the array dimensions, the passed
+                values are assumed to apply to the first N dimensions, and the
+                remaining dimensions are populated automatically as above. Each
+                passed dim vector must have either a length of 2, or a length
+                equal to the extent of the corresponding dimension of the data
+                array. If it has a length of 2, the entire calibration vector
+                will be extrapolated linearly from these initial two values.
+            dim_units (list): the units for the calibration dim vectors. If
+                nothing is passed, dims vectors which have been populated
+                automatically with integers corresponding to pixel numbers
+                will be assigned units of 'pixels', and any other dim vectors
+                will be assigned units of 'unknown'.  If a list with length <
+                the array dimensions, the passed values are assumed to apply
+                to the first N dimensions, and the remaining values are
+                populated with 'pixels' or 'unknown' as above.
+            dim_names (list): labels for each axis of the data array. Values
+                which are not passed, following the same logic as described
+                above, will be autopopulated with the name "dim#" where #
+                is the axis number.
 
+        Returns:
+            A new Array instance
+        """
         self.data = data
         self.name = name
         self.units = units
@@ -209,8 +210,11 @@ class Array:
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( A {self.D}-dimensional array of shape {self.shape} called '{self.name}',"
         string += "\n"+space+"with dimensions:"
+        string += "\n"
         for n in range(self.D):
             string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+            if not self.dim_is_linear[n]:
+                string += "  (*non-linear*)"
         string += "\n)"
         return string
 
@@ -246,13 +250,18 @@ class Array:
     def _unpack_dim(dim,length):
         """
         Given a dim vector as passed at instantiation and the expected length of this
-        dimension of the array, this function checks the passed dim vector length, then:
+        dimension of the array, this function checks the passed dim vector length, and
+        checks the dim vector type.  For number-like dim-vectors:
 
-        if it has length 2, linearly extends the vector to its full length
+        -if it is a number, turns it into the list [0,number] and proceeds as below
 
-        if it has length `length`, returns the vector as is
+        -if it has length 2, linearly extends the vector to its full length
 
-        if it has any other length, raises an Exception.
+        -if it has length `length`, returns the vector as is
+
+        -if it has any other length, raises an Exception.
+
+        For string-like dim vectors, the length must match the array dimension length.
 
         Accepts:
             dim (list or array)
@@ -262,7 +271,17 @@ class Array:
             (2-tuple) the unpacked dim vector, and a boolean flag indicating if
             this vector was linearly extended
         """
+        # Expand single numbers
+        if isinstance(dim,Number):
+            dim = [0,dim]
+
         N = len(dim)
+
+        # for string dimensions:
+        if not isinstance(dim[0],Number):
+            assert(N == length), f"For non-numerical dims, the dim vector length must match the array dimension length. Recieved a dim vector of length {N} for an array dimension length of {length}."
+
+        # For number-like dimensions:
         if N == length:
             return dim,False
         elif N == 2:
