@@ -10,16 +10,6 @@ class DataCube(Array):
     """
     Stores 4D-STEM datasets.
 
-    Accepts:
-        data (np.ndarray): the data
-        name (str): the name of the datacube
-        rsize (float): the real space pixel size
-        runits (str): the real space pixel units
-        qsize (float): the diffraction space pixel size
-        qunits (str): the diffraction space pixel units
-
-    Returns:
-        A new DataCube instance
     """
     def __init__(
         self,
@@ -30,7 +20,18 @@ class DataCube(Array):
         qsize: Optional[Union[float,list]] = 1,
         qunits: Optional[Union[str,list]] = 'pixels'
         ):
+        """
+        Accepts:
+            data (np.ndarray): the data
+            name (str): the name of the datacube
+            rsize (float or length 2 list of floats): the real space pixel size
+            runits (str length 2 list of str): the real space pixel units
+            qsize (float or length 2 list of str): the diffraction space pixel size
+            qunits (str or length 2 list of str): the diffraction space pixel units
 
+        Returns:
+            A new DataCube instance
+        """
         # expand r/q inputs to include 2 dimensions
         if type(rsize) is not list: rsize = [rsize,rsize]
         if type(runits) is not list: runits = [runits,runits]
