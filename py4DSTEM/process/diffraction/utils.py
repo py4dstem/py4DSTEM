@@ -11,21 +11,12 @@ class Orientation:
     class orientation plan or Bloch wave pattern matching to a PointList.
     """
     num_matches: int
-    matrix = None
-    family = None
-    corr = None
-    inds = None
-    mirror = None
-    angles = None
-
-    def __post_init__(self):
-        # initialize empty arrays
-        self.matrix = np.zeros((self.num_matches,3,3))
-        self.family = np.zeros((self.num_matches,3,3))
-        self.corr   = np.zeros((self.num_matches))
-        self.inds   = np.zeros((self.num_matches,2), dtype='int')
-        self.mirror = np.zeros((self.num_matches), dtype='bool')
-        self.angles = np.zeros((self.num_matches,3))
+    matrix: np.ndarray = np.zeros((self.num_matches,3,3))
+    family: np.ndarray = np.zeros((self.num_matches,3,3))
+    corr: np.ndarray = np.zeros((self.num_matches))
+    inds: np.ndarray = np.zeros((self.num_matches,2), dtype='int')
+    mirror: np.ndarray = np.zeros((self.num_matches), dtype='bool')
+    angles: np.ndarray = np.zeros((self.num_matches,3))
 
 
 @dataclass
@@ -38,11 +29,6 @@ class OrientationMap:
     num_x: int
     num_y: int
     num_matches: int
-    matrix = None
-    family = None
-    corr = None
-    inds = None
-    angles = None
     # basis_zone_axis = None
     # basis_in_plane = None
     # map_fiber = None
