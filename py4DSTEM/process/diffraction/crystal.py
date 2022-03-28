@@ -1,13 +1,15 @@
 # Functions for calculating diffraction patterns, matching them to experiments, and creating orientation and phase maps.
 
 import numpy as np
-from typing import Union, Optional
 import matplotlib.pyplot as plt
+from fractions import Fraction
+from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
 
 from .crystal_viz import plot_diffraction_pattern
+from .utils import Orientation
 
 
 class Crystal:
@@ -21,7 +23,13 @@ class Crystal:
     # (see https://stackoverflow.com/a/47562412)
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
-    from .crystal_ACOM import orientation_plan, match_orientations, match_single_pattern
+    from .crystal_ACOM import (
+        orientation_plan, 
+        match_orientations, 
+        match_single_pattern,
+        save_ang_file,
+        symmetry_reduce_directions,
+    )
 
     from .crystal_viz import (
         plot_structure,
@@ -29,6 +37,7 @@ class Crystal:
         plot_orientation_zones,
         plot_orientation_plan,
         plot_orientation_maps,
+        plot_fiber_orientation_maps,
     )
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
@@ -52,6 +61,7 @@ class Crystal:
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
@@ -80,17 +90,29 @@ class Crystal:
         a = self.cell[0]
         b = self.cell[1]
         c = self.cell[2]
-        alpha = self.cell[3] * np.pi / 180
-        beta = self.cell[4] * np.pi / 180
-        gamma = self.cell[5] * np.pi / 180
-        t = (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+        alpha = np.deg2rad(self.cell[3])
+        beta = np.deg2rad(self.cell[4])
+        gamma = np.deg2rad(self.cell[5])
+        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+        vol = a*b*c*np.sqrt(1 \
+            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
         self.lat_real = np.array(
             [
-                [a, 0, 0],
-                [b * np.cos(gamma), b * np.sin(gamma), 0],
-                [c * np.cos(beta), c * t, c * np.sqrt(1 - np.cos(beta) ** 2 - t ** 2)],
+                [a,               0,                 0],
+                [b*np.cos(gamma), b*np.sin(gamma),   0],
+                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
             ]
         )
+
+        # Inverse lattice, metric tensors
+        self.metric_real = self.lat_real @ self.lat_real.T
+        self.metric_inv = np.linalg.inv(self.metric_real)
+        self.lat_inv = self.metric_inv @ self.lat_real
+
+        # pymatgen flag
+        self.pymatgen_available = False
+        
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -118,7 +140,7 @@ class Crystal:
         structure=None,
         formula=None,
         space_grp=None,
-        MaPKey=None,
+        MP_key=None,
         conventional_standard_structure=True,
     ):
         """
@@ -128,7 +150,7 @@ class Crystal:
         fetched through the MP API. For setup information see:
         https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file.
         Alternatively, Materials Porject API key can be pass as an argument through
-        the function (MaPKey). To get your API key, please visit Materials Project website
+        the function (MP_key). To get your API key, please visit Materials Project website
         and login/sign up using your email id. Once logged in, go to the dashboard
         to generate your own API key (https://materialsproject.org/dashboard).
 
@@ -148,7 +170,7 @@ class Crystal:
                             for all the available space groups for the formula provided and will consider the
                             one with lowest unit cell volume, only specify when using formula to search MP
                             database
-            MaPKey:         (str) Materials Project API key
+            MP_key:         (str) Materials Project API key
             conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
                             instead of the primitive unit cell pymatgen returns
 
@@ -158,7 +180,7 @@ class Crystal:
 
         if structure is not None:
             if isinstance(structure, str):
-                mpr = MPRester(MaPKey)
+                mpr = MPRester(MP_key)
                 structure = mpr.get_structure_by_material_id(structure)
 
             assert isinstance(
@@ -173,7 +195,7 @@ class Crystal:
                 else structure
             )
         else:
-            mpr = MPRester(MaPKey)
+            mpr = MPRester(MP_key)
             if formula is None:
                 raise Exception(
                     "Atleast a formula needs to be provided to query from MP database!!"
@@ -350,22 +372,19 @@ class Crystal:
         # Store k_max
         self.k_max = np.asarray(k_max)
 
-        # Inverse lattice vectors
-        lat_inv = np.linalg.inv(self.lat_real)
-
         # Find shortest lattice vector direction
         k_test = np.vstack(
             [
-                lat_inv[0, :],
-                lat_inv[1, :],
-                lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :],
-                lat_inv[0, :] + lat_inv[2, :],
-                lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] - lat_inv[1, :] + lat_inv[2, :],
-                lat_inv[0, :] + lat_inv[1, :] - lat_inv[2, :],
-                lat_inv[0, :] - lat_inv[1, :] - lat_inv[2, :],
+                self.lat_inv[0, :],
+                self.lat_inv[1, :],
+                self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :],
+                self.lat_inv[0, :] + self.lat_inv[2, :],
+                self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] - self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] - self.lat_inv[2, :],
             ]
         )
         k_leng_min = np.min(np.linalg.norm(k_test, axis=1))
@@ -378,7 +397,8 @@ class Crystal:
             np.arange(-num_tile, num_tile + 1),
         )
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
-        g_vec_all = lat_inv @ hkl
+        # g_vec_all = self.lat_inv @ hkl
+        g_vec_all =  (hkl.T @ self.lat_inv).T
 
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
@@ -433,135 +453,116 @@ class Crystal:
 
     def generate_diffraction_pattern(
         self,
-        zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
-        foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
-        proj_x_axis: Optional[Union[list, tuple, np.ndarray]] = None,
+        orientation: Optional[Orientation] = None,
+        ind_orientation: Optional[int] = 0,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_lattice: Optional[np.ndarray] = None,
+        proj_x_lattice: Optional[np.ndarray] = None,
+        foil_normal_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+        foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
+        accel_voltage = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
-        tol_intensity: float = 0.001,
-        k_max: float = None,
+        tol_intensity: float = 1e-4,
+        keep_qz = False,
+        return_orientation_matrix=False,
     ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            zone_axis (np float vector):     3 element projection direction for sim pattern
-                                             Can also be a 3x3 orientation matrix (zone axis 3rd column)
+            orientation (Orientation):       an Orientation class object 
+            ind_orientation                  If input is an Orientation class object with multiple orientations,
+                                             this input can be used to select a specific orientation.
+            
+            orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
+            zone_axis_lattice (array):        (3,) projection direction in lattice indices
+            proj_x_lattice (array):           (3,) x-axis direction in lattice indices
+            zone_axis_cartesian (array):     (3,) cartesian projection direction
+            proj_x_cartesian (array):        (3,) cartesian projection direction
+
             foil_normal:                     3 element foil normal - set to None to use zone_axis
             proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+            accel_voltage (float):           Accelerating voltage in Volts. If not specified,
+                                             we check to see if crystal already has voltage specified.
+            sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
-            k_max (np float):                maximum scattering angle to keep in pattern
+            keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
+            return_orientation_matrix (bool): Return the orientation matrix
 
         Returns:
             bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            orientation_matrix (array):      3x3 orientation matrix (optional)
         """
 
-        zone_axis = np.asarray(zone_axis, dtype="float")
+        # Tolerance for angular tests
+        tol = 1e-6
 
-        if zone_axis.ndim == 1:
-            zone_axis = np.asarray(zone_axis)
-            zone_axis = zone_axis / np.linalg.norm(zone_axis)
-
-            if not self.cartesian_directions:
-                zone_axis = self.cartesian_to_crystal(zone_axis)
-
-            if proj_x_axis is None:
-                if np.all(np.abs(zone_axis) == np.array([1.0, 0.0, 0.0])):
-                    v0 = np.array([0.0, -1.0, 0.0])
-                else:
-                    v0 = np.array([-1.0, 0.0, 0.0])
-                proj_x_axis = np.cross(zone_axis, v0)
-            else:
-                proj_x_axis = np.asarray(proj_x_axis, dtype="float")
-                if not self.cartesian_directions:
-                    proj_x_axis = self.crystal_to_cartesian(proj_x_axis)
-
-        elif zone_axis.shape == (3, 3):
-            proj_x_axis = zone_axis[:, 0]
-            zone_axis = zone_axis[:, 2]
+        # init voltage and wavelength if needed
+        if accel_voltage is not None:
+            self.accel_voltage = np.asarray(accel_voltage)
         else:
-            proj_x_axis = zone_axis[:, 0, 0]
-            zone_axis = zone_axis[:, 2, 0]
+            # Check if voltage already exists, if not set to 300 kV
+            if not hasattr(self, 'accel_voltage'):
+                self.accel_voltage = 300.0e3
 
-        # Set x and y projection vectors
-        ky_proj = np.cross(zone_axis, proj_x_axis)
-        kx_proj = np.cross(ky_proj, zone_axis)
+                # Calculate wavelength
+                self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
-        kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        ky_proj = ky_proj / np.linalg.norm(ky_proj)
+        # Parse orientation inputs
+        if orientation is not None:
+            if ind_orientation is None:
+                orientation_matrix = orientation.matrix[0]
+            else:
+                orientation_matrix = orientation.matrix[ind_orientation]
+        elif orientation_matrix is None:
+            orientation_matrix = self.parse_orientation(
+                zone_axis_lattice,
+                proj_x_lattice,
+                zone_axis_cartesian,
+                proj_x_cartesian)
 
-        # Foil normal vector
+        # Get foil normal direction
+        if foil_normal_lattice is not None:
+            foil_normal = self.lattice_to_cartesian(np.array(foil_normal_lattice))
+        elif foil_normal_cartesian is not None:
+            foil_normal = np.array(foil_normal_cartesian)
+        else:
+            foil_normal = None
+            # foil_normal = orientation_matrix[:,2]
+
+        # Rotate crystal into desired projection
+        g = orientation_matrix.T @ self.g_vec_all
+
+
+        # Calculate excitation errors
         if foil_normal is None:
-            foil_normal = zone_axis
+            sg = self.excitation_errors(g)
         else:
-            foil_normal = np.asarray(foil_normal, dtype="float")
-            if not self.cartesian_directions:
-                foil_normal = self.crystal_to_cartesian(foil_normal)
-            else:
-                foil_normal = foil_normal / np.linalg.norm(foil_normal)
-
-        # if proj_x_axis is None:
-        #     if np.all(zone_axis == np.array([-1, 0, 0])):
-        #         proj_x_axis = np.array([0, -1, 0])
-        #     elif np.all(zone_axis == np.array([1, 0, 0])):
-        #         proj_x_axis = np.array([0, 1, 0])
-        #     else:
-        #         proj_x_axis = np.array([-1, 0, 0])
-
-        # # Logic to set x axis for projected images
-        # Generate 2 zone_axis
-        # if np.all(zone_axis  == np.array([1.0,0.0,0.0])):
-        #     v0 = np.array([0.0,-1.0,0.0])
-        # else:
-        #     v0 = np.array([-1.0,0.0,0.0])
-        # kx_proj = np.cross(zone_axis, v0)
-        # ky_proj = np.cross(kx_proj, zone_axis)
-        # kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        # ky_proj = ky_proj / np.linalg.norm(ky_proj)
-
-        # wavevector
-        zone_axis_norm = zone_axis / np.linalg.norm(zone_axis)
-        k0 = zone_axis_norm / self.wavelength
-
-        # Excitation errors
-        cos_alpha = np.sum(
-            (k0[:, None] + self.g_vec_all) * foil_normal[:, None], axis=0
-        ) / np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0)
-        sg = (
-            (-0.5)
-            * np.sum((2 * k0[:, None] + self.g_vec_all) * self.g_vec_all, axis=0)
-            / (np.linalg.norm(k0[:, None] + self.g_vec_all, axis=0))
-            / cos_alpha
-        )
+            foil_normal = (orientation_matrix.T \
+                @ (-1*foil_normal[:,None]/np.linalg.norm(foil_normal))).ravel()
+            sg = self.excitation_errors(g, foil_normal)
 
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
         keep = np.abs(sg) <= sg_max
-        g_diff = self.g_vec_all[:, keep]
+        g_diff = g[:, keep]
 
         # Diffracted peak intensities and labels
         g_int = self.struct_factors_int[keep] * np.exp(
-            sg[keep] ** 2 / (-2 * sigma_excitation_error ** 2)
+            (sg[keep] ** 2) / (-2 * sigma_excitation_error ** 2)
         )
         hkl = self.hkl[:, keep]
 
         # Intensity tolerance
         keep_int = g_int > tol_intensity
 
-        # Diffracted peak locations
-        kx_proj = kx_proj / np.linalg.norm(kx_proj)
-        ky_proj = ky_proj / np.linalg.norm(ky_proj)
-        gx_proj = np.sum(g_diff * kx_proj[:, None], axis=0)
-        gy_proj = np.sum(g_diff * ky_proj[:, None], axis=0)
-
-        if k_max is not None:
-            keep_kmax = np.hypot(gx_proj, gy_proj) < k_max
-            keep_int = np.logical_and(keep_int, keep_kmax)
-
-        gx_proj = gx_proj[keep_int]
-        gy_proj = gy_proj[keep_int]
+        # Output peaks
+        gx_proj = g_diff[0,keep_int]
+        gy_proj = g_diff[1,keep_int]
 
         # Diffracted peak labels
         h = hkl[0, keep_int]
@@ -569,37 +570,167 @@ class Crystal:
         l = hkl[2, keep_int]
 
         # Output as PointList
-        bragg_peaks = PointList(
-            [
-                ("qx", "float64"),
-                ("qy", "float64"),
-                ("intensity", "float64"),
-                ("h", "int"),
-                ("k", "int"),
-                ("l", "int"),
-            ]
-        )
-        if np.any(keep_int):
-            bragg_peaks.add_pointarray(
-                np.vstack((gx_proj, gy_proj, g_int[keep_int], h, k, l)).T
+        if keep_qz:
+            gz_proj = g_diff[2,keep_int]
+            bragg_peaks = PointList(
+                [
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("qz", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ]
             )
+            if np.any(keep_int):
+                bragg_peaks.add_pointarray(
+                    np.vstack((
+                        gx_proj,
+                        gy_proj,
+                        gz_proj,
+                        g_int[keep_int],
+                        h,
+                        k,
+                        l)).T
+                )
+        else:
+            bragg_peaks = PointList(
+                [
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ]
+            )
+            if np.any(keep_int):
+                bragg_peaks.add_pointarray(
+                    np.vstack((
+                        gx_proj,
+                        gy_proj,
+                        g_int[keep_int],
+                        h,
+                        k,
+                        l)).T
+                )
 
-        return bragg_peaks
-
-    def cartesian_to_crystal(self, zone_axis):
-        vec_cart = zone_axis @ self.lat_real
-        return vec_cart / np.linalg.norm(vec_cart)
-
-    def crystal_to_cartesian(self, vec_cart):
-        zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-        return zone_axis / np.linalg.norm(zone_axis)
+        if return_orientation_matrix:
+            return bragg_peaks, orientation_matrix
+        else:
+            return bragg_peaks
 
 
-def axisEqual3D(ax):
-    extents = np.array([getattr(ax, "get_{}lim".format(dim))() for dim in "xyz"])
-    sz = extents[:, 1] - extents[:, 0]
-    centers = np.mean(extents, axis=1)
-    maxsize = max(abs(sz))
-    r = maxsize / 2
-    for ctr, dim in zip(centers, "xyz"):
-        getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
+
+    # Vector conversions and other utilities for Crystal classes
+
+    def cartesian_to_lattice(self, vec_cartesian):
+        vec_lattice = self.lat_inv @ vec_cartesian
+        return vec_lattice / np.linalg.norm(vec_lattice)
+
+    def lattice_to_cartesian(self, vec_lattice):
+        vec_cartesian = self.lat_real.T @ vec_lattice
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
+
+    def hexagonal_to_lattice(self, vec_hexagonal):
+        return np.array([
+            2.0*vec_hexagonal[0] + vec_hexagonal[1],
+            2.0*vec_hexagonal[1] + vec_hexagonal[0] ,
+            vec_hexagonal[3]
+            ])
+
+    def lattice_to_hexagonal(self, vec_lattice):
+        return np.array([
+            (2.0*vec_lattice[0] - vec_lattice[1])/3.0,
+            (2.0*vec_lattice[1] - vec_lattice[0])/3.0,
+            (-vec_lattice[0] - vec_lattice[1])/3.0,
+            vec_lattice[2]
+            ])
+
+    def cartesian_to_miller(self, vec_cartesian):
+        vec_miller = self.lat_real.T @ self.metric_inv @ vec_cartesian 
+        return vec_miller / np.linalg.norm(vec_miller)
+
+    def miller_to_cartesian(self, vec_miller):
+        vec_cartesian = self.lat_inv.T @ self.metric_real @ vec_miller
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
+
+    def rational_ind(
+        self, 
+        vec,
+        tol_den = 1000,
+        ):
+        # This function rationalizes the indices of a vector, up to 
+        # some tolerance. Returns integers to prevent rounding errors.
+        vec = np.array(vec,dtype='float64')
+        sub = np.abs(vec) > 0
+        if np.sum(sub) > 0:
+            for ind in np.argwhere(sub):
+                frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
+                vec *= frac.denominator
+            vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
+        return vec.astype('int')
+
+    def parse_orientation(
+        self,
+        zone_axis_lattice,
+        proj_x_lattice,
+        zone_axis_cartesian,
+        proj_x_cartesian,
+        ):
+        # This helper function parse the various types of orientation inputs,
+        # and returns the normalized, projected (x,y,z) cartesian vectors in
+        # the form of an orientation matrix.
+
+        if zone_axis_lattice is not None:
+            proj_z = np.array(zone_axis_lattice)
+            if proj_z.shape[0] == 4:
+                proj_z = self.hexagonal_to_lattice(proj_z)
+            proj_z = self.lattice_to_cartesian(proj_z)
+        elif zone_axis_cartesian is not None:
+            proj_z = np.array(zone_axis_cartesian)
+        else:
+            proj_z = np.array([0,0,1])
+
+        if proj_x_lattice is not None:
+            proj_x = np.array(proj_x_lattice)
+            if proj_x.shape[0] == 4:
+                proj_x = self.hexagonal_to_lattice(proj_x)
+            proj_x = self.lattice_to_cartesian(proj_x)
+        elif proj_x_cartesian is not None:
+            proj_x = np.array(proj_x_cartesian)
+        else:
+            if np.abs(proj_z[2]) > 1-1e-6:
+                proj_x = np.cross(np.array([0,1,0]),proj_z)
+            else:
+                proj_x = np.array([0,0,-1])
+
+        # Generate orthogonal coordinate system, normalize
+        proj_y = np.cross(proj_z, proj_x)
+        proj_x = np.cross(proj_y, proj_z)
+        proj_x = proj_x / np.linalg.norm(proj_x)
+        proj_y = proj_y / np.linalg.norm(proj_y)
+        proj_z = proj_z / np.linalg.norm(proj_z)
+
+        return np.vstack((proj_x, proj_y, proj_z)).T
+
+    def excitation_errors(
+        self,
+        g,
+        foil_normal=None,
+        ):
+        '''
+        Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda].
+        If foil normal is not specified, we assume it is [0,0,-1].
+        '''
+        if foil_normal is None:
+            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
+                / (2 - 2*self.wavelength*g[2,:]) 
+        else:
+            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
+                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2]) 
+
+
+
+
