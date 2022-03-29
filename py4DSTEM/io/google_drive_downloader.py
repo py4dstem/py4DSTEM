@@ -35,14 +35,15 @@ def download_file_from_google_drive(id_,destination, overwrite=False):
         return None
     elif os.path.exists(destination) and overwrite == True:
         print(f"File already existed, downloading and overwriting")
+        os.remove(destination)
 
     # Check if the id_ is a key pointing to a known sample dataset
     if id_ in sample_data_ids.keys():
         id_ = sample_data_ids[id_]
 
     # Check if `id_` is a file ID or a URL, and download
-    if id_[:4]=='http':
-        gdown.download(id_,destination,fuzzy=True)
+    if id_[:4].lower()=='http':
+        gdown.download(url=id_,output=destination,fuzzy=True)
     else:
         gdown.download(id=id_,output=destination,fuzzy=True)
 
