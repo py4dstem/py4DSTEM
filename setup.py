@@ -36,7 +36,7 @@ setup(
         'ipywidgets >= 7.6.3',
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',
-        'requests >= 2.25.1',
+        'gdown >= 4.4.0',
         'dask >= 2.3.0',
         'distributed >= 2.3.0'
         ],
