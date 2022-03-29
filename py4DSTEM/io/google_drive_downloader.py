@@ -7,9 +7,9 @@ import os
 # Built-in sample datasets
 
 sample_data_ids = {
-    '1' : "URL"
+    'FCUNet' : 'TODO-add url/id',
+    'sample_diffraction_pattern':'1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU'
 }
-
 
 
 def download_file_from_google_drive(id_,destination, overwrite=False):
@@ -34,16 +34,17 @@ def download_file_from_google_drive(id_,destination, overwrite=False):
         print("File already exists")
         return None
     elif os.path.exists(destination) and overwrite == True:
-        print(f"File already existed, downloading and overwriting to {destination}")
-    else:
-        print(f"Downloading to {destination}")
+        print(f"File already existed, downloading and overwriting")
 
     # Check if the id_ is a key pointing to a known sample dataset
     if id_ in sample_data_ids.keys():
         id_ = sample_data_ids[id_]
 
-    # Download
-    gdown.download(id_,destination,fuzzy=True)
+    # Check if `id_` is a file ID or a URL, and download
+    if id_[:4]=='http':
+        gdown.download(id_,destination,fuzzy=True)
+    else:
+        gdown.download(id=id_,output=destination,fuzzy=True)
 
     return None
 
