@@ -43,7 +43,9 @@ def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
     if metadata is True:
         return None
 
-    return DataCube(data=K2DataArray(fp))
+    block_sync = kwargs.get("K2_sync_block_IDs", True)
+    NR = kwargs.get("K2_hidden_stripe_noise_reduction",True)
+    return DataCube(data=K2DataArray(fp,sync_block_IDs=block_sync, hidden_stripe_noise_reduction=NR))
 
 
 class K2DataArray(Sequence):
@@ -76,7 +78,7 @@ class K2DataArray(Sequence):
         into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
     """
 
-    def __init__(self, filepath, hidden_stripe_noise_reduction=True):
+    def __init__(self, filepath, sync_block_IDs = True, hidden_stripe_noise_reduction=True):
         from ncempy.io import dm
         import os
         import glob
@@ -123,6 +125,7 @@ class K2DataArray(Sequence):
 
         self.shape = (int(R_Nx), int(R_Ny), int(Q_Nx), int(Q_Ny))
         self._hidden_stripe_noise_reduction = hidden_stripe_noise_reduction
+        self.sync_block_IDs = sync_block_IDs
 
         self._stripe_dtype = np.dtype(
             [
@@ -305,23 +308,27 @@ class K2DataArray(Sequence):
 
     def _find_offsets(self):
         # first, line up the block counts (LiberTEM calls this sync_sectors)
-        first_blocks = np.zeros((8,), dtype=np.uint32)
-        for i in range(8):
-            binfile = self._bin_files[i]
-            first_blocks[i] = binfile[0]["block"]
+        if self.sync_block_IDs:
+            print("Synchronizing block IDs.")
+            first_blocks = np.zeros((8,), dtype=np.uint32)
+            for i in range(8):
+                binfile = self._bin_files[i]
+                first_blocks[i] = binfile[0]["block"]
 
-        # find the first frame in each with the starting block
-        block_id = np.max(first_blocks)
-        print("First block syncs to block #", block_id)
-        for i in range(8):
-            sync = False
-            frame = 0
-            while sync == False:
-                sync = self._bin_files[i][frame]["block"] == block_id
-                if sync == False:
-                    frame += 1
-            self._shutter_offsets[i] += frame
-        print("Offsets are currently ", self._shutter_offsets)
+            # find the first frame in each with the starting block
+            block_id = np.max(first_blocks)
+            print("First block syncs to block #", block_id)
+            for i in range(8):
+                sync = False
+                frame = 0
+                while sync == False:
+                    sync = self._bin_files[i][frame]["block"] == block_id
+                    if sync == False:
+                        frame += 1
+                self._shutter_offsets[i] += frame
+            print("Offsets are currently ", self._shutter_offsets)
+        else:
+            print("Skipping block ID synchronization step...")
 
         first_frame = self._bin_files[0][self._shutter_offsets[0]]["frame"]
         # next, check if the frames are complete (the next 32 blocks should have the same block #)
