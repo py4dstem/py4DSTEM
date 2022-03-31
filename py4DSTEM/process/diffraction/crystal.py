@@ -674,10 +674,10 @@ class Crystal:
 
     def parse_orientation(
         self,
-        zone_axis_lattice,
-        proj_x_lattice,
-        zone_axis_cartesian,
-        proj_x_cartesian,
+        zone_axis_lattice=None,
+        proj_x_lattice=None,
+        zone_axis_cartesian=None,
+        proj_x_cartesian=None,
         ):
         # This helper function parse the various types of orientation inputs,
         # and returns the normalized, projected (x,y,z) cartesian vectors in

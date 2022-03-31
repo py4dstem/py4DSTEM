@@ -223,8 +223,10 @@ def generate_dynamical_diffraction_pattern(
     self,
     beams: PointList,
     thickness: Union[float, list, tuple, np.ndarray],
-    zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
-    foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    zone_axis_lattice: np.ndarray = None,
+    zone_axis_cartesian: np.ndarray = None,
+    foil_normal_lattice: np.ndarray = None,
+    foil_normal_cartesian: np.ndarray = None,
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
@@ -249,10 +251,10 @@ def generate_dynamical_diffraction_pattern(
         thickness (float or list/array) thickness in Ångström to evaluate diffraction patterns at.
                                         The main Bloch calculation can be reused for multiple thicknesses
                                         without much overhead.
-        zone_axis (np float vector):     3 element projection direction for sim pattern
-                                         Can also be a 3x3 orientation matrix (zone axis 3rd column)
-        foil_normal:                     3 element foil normal - set to None to use zone_axis
-        proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        zone_axis & foil_normal         Incident beam orientation and foil normal direction.
+                                        Each can be specified in the Cartesian or crystallographic basis,
+                                        using e.g. zone_axis_lattice or zone_axis_cartesian. These are
+                                        internally parsed by Crystal.parse_orientation
 
     Less commonly used args:
         always_return_list (bool):      When True, the return is always a list of PointLists,
@@ -276,26 +278,21 @@ def generate_dynamical_diffraction_pattern(
 
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
-    # Clean up zone axis input (same as in kinematic function)
-    zone_axis = np.asarray(zone_axis) / np.linalg.norm(zone_axis)
-    if not self.cartesian_directions:
-        zone_axis = self.cartesian_to_crystal(zone_axis)
-
-    # Foil normal vector
-    if foil_normal is None:
-        foil_normal = zone_axis
+    # Parse input orientations:
+    zone_axis = self.parse_orientation(zone_axis_lattice=zone_axis_lattice, 
+                                       zone_axis_cartesian=zone_axis_cartesian)
+    if foil_normal_lattice is not None or foil_normal_cartesian is not None:
+        foil_normal = self.parse_orientation(zone_axis_lattice=foil_normal_lattice,
+                                             zone_axis_cartesian=foil_normal_cartesian)
     else:
-        foil_normal = np.asarray(foil_normal, dtype="float")
-        if not self.cartesian_directions:
-            foil_normal = self.crystal_to_cartesian(foil_normal)
-        else:
-            foil_normal = foil_normal / np.linalg.norm(foil_normal)
+        foil_normal = zone_axis
+
+    foil_normal = foil_normal[:,2]
 
     # Note the difference in notation versus kinematic function:
     # k0 is the scalar magnitude of the wavevector, rather than
-    # a vector along the zone axis. That is instead called ``ZA``
+    # a vector along the zone axis.
     k0 = 1.0 / electron_wavelength_angstrom(self.accel_voltage)
-    ZA = zone_axis * k0
 
     ################################################################
     # Compute the reduced structure matrix \bar{A} in DeGraef 5.52 #
@@ -340,17 +337,8 @@ def generate_dynamical_diffraction_pattern(
         print(f"Bloch matrix has size {U_gmh.shape}")
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
-    g = np.linalg.inv(self.lat_real) @ hkl.T
-    cos_alpha = np.sum(
-        (ZA[:, None] + g) * foil_normal[:, None], axis=0
-    ) / np.linalg.norm(ZA[:, None] + g, axis=0)
-
-    sg = (
-        (-0.5)
-        * np.sum((2 * ZA[:, None] + g) * g, axis=0)
-        / (np.linalg.norm(ZA[:, None] + g, axis=0))
-        / cos_alpha
-    )
+    g = self.lat_inv @ hkl
+    sg = self.excitation_errors(g, foil_normal=foil_normal)
 
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
@@ -366,7 +354,7 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (2.0 * ZA @ foil_normal)  # divide by 2 k_n
+    gamma = v / (2.0 * k0 * zone_axis[:,2] @ foil_normal)  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -416,8 +404,10 @@ def generate_CBED(
     alpha_mrad: float,
     pixel_size_inv_A: float,
     DP_size_inv_A: Optional[float] = None,
-    zone_axis: Union[list, tuple, np.ndarray] = [0, 0, 1],
-    foil_normal: Optional[Union[list, tuple, np.ndarray]] = None,
+    zone_axis_lattice: np.ndarray = None,
+    zone_axis_cartesian: np.ndarray = None,
+    foil_normal_lattice: np.ndarray = None,
+    foil_normal_cartesian: np.ndarray = None,
     LACBED: bool = False,
     dtype: np.dtype = np.float32,
     verbose: bool = False,
@@ -464,13 +454,16 @@ def generate_CBED(
     qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
 
     proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
-    ZAx = proj[0] / np.linalg.norm(proj[0])
-    ZAy = proj[1] / np.linalg.norm(proj[1])
+    hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
+    hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
 
-    # unit vector in zone axis direction:
-    ZA = np.array(zone_axis) / np.linalg.norm(np.array(zone_axis))
-    if foil_normal is None:
-        foil_normal = ZA
+    # get unit vector in zone axis direction and projected x and y Cartesian directions:
+    zone_axis = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
+                                       zone_axis_cartesian=zone_axis_cartesian,
+                                       proj_x_lattice=hkl_proj_x)
+    ZA = np.array(zone_axis[:,2]) / np.linalg.norm(np.array(zone_axis[:,2]))
+    proj_x = ZA[:,0]
+    proj_y = ZA[:,1]
 
     # TODO: refine pixel size to center reflections on pixels
 
@@ -484,15 +477,15 @@ def generate_CBED(
     )  # plane waves in pixel units
 
     # remove those outside circular aperture
-    keep_mask = np.hypot(tx_pixels, ty_pixels) < alpha_pix
+    keep_mask = np.hypot(tx_pixels, ty_pixels) <= alpha_pix
     tx_pixels = tx_pixels[keep_mask].astype(np.intp)
     ty_pixels = ty_pixels[keep_mask].astype(np.intp)
 
-    tx_mrad = tx_pixels / alpha_pix * alpha_rad
-    ty_mrad = ty_pixels / alpha_pix * alpha_rad
+    tx_rad = tx_pixels / alpha_pix * alpha_rad
+    ty_rad = ty_pixels / alpha_pix * alpha_rad
 
     # calculate plane waves as zone axes using small angle approximation for tilting
-    tZA = ZA + (tx_mrad[:, None] * ZAx) + (ty_mrad[:, None] * ZAy)
+    tZA = ZA + (tx_rad[:, None] * proj_x) + (ty_rad[:, None] * proj_y)
 
     if LACBED:
         # In LACBED mode, the default DP size is the same as one diffraction disk (2ɑ)
@@ -545,8 +538,9 @@ def generate_CBED(
         bloch = self.generate_dynamical_diffraction_pattern(
             beams,
             thickness=thickness,
-            zone_axis=tZA[i],
-            foil_normal=foil_normal,
+            zone_axis_cartesian=tZA[i],
+            foil_normal_cartesian=foil_normal_cartesian,
+            foil_normal_lattice=foil_normal_lattice,
             always_return_list=True,
             dynamical_matrix_cache=Ugmh_cache,
         )
