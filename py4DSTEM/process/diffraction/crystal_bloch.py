@@ -335,8 +335,11 @@ def generate_dynamical_diffraction_pattern(
         print(f"Bloch matrix has size {U_gmh.shape}")
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
-    g = self.lat_inv @ hkl
-    sg = self.excitation_errors(g, foil_normal=foil_normal)
+    g = (hkl @ self.lat_inv) @ zone_axis
+    sg = self.excitation_errors(g.T, foil_normal=foil_normal)
+
+    # import matplotlib.pyplot as plt
+    # plt.scatter(g[:,0],g[:,1],np.abs(sg)*100)
 
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
@@ -376,8 +379,6 @@ def generate_dynamical_diffraction_pattern(
         np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
         for z in np.atleast_1d(thickness)
     ]
-
-    # set_trace()
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
@@ -460,8 +461,8 @@ def generate_CBED(
                                        zone_axis_cartesian=zone_axis_cartesian,
                                        proj_x_lattice=hkl_proj_x)
     ZA = np.array(zone_axis[:,2]) / np.linalg.norm(np.array(zone_axis[:,2]))
-    proj_x = ZA[:,0]
-    proj_y = ZA[:,1]
+    proj_x = zone_axis[:,0] / np.linalg.norm(zone_axis[:,0])
+    proj_y = zone_axis[:,1] / np.linalg.norm(zone_axis[:,1])
 
     # TODO: refine pixel size to center reflections on pixels
 
@@ -475,7 +476,7 @@ def generate_CBED(
     )  # plane waves in pixel units
 
     # remove those outside circular aperture
-    keep_mask = np.hypot(tx_pixels, ty_pixels) <= alpha_pix
+    keep_mask = np.hypot(tx_pixels, ty_pixels) < alpha_pix
     tx_pixels = tx_pixels[keep_mask].astype(np.intp)
     ty_pixels = ty_pixels[keep_mask].astype(np.intp)
 
@@ -483,7 +484,7 @@ def generate_CBED(
     ty_rad = ty_pixels / alpha_pix * alpha_rad
 
     # calculate plane waves as zone axes using small angle approximation for tilting
-    tZA = ZA + (tx_rad[:, None] * proj_x) + (ty_rad[:, None] * proj_y)
+    tZA = ZA - (tx_rad[:, None] * proj_x) - (ty_rad[:, None] * proj_y)
 
     if LACBED:
         # In LACBED mode, the default DP size is the same as one diffraction disk (2ɑ)
