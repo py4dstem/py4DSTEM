@@ -285,7 +285,7 @@ def generate_dynamical_diffraction_pattern(
     else:
         foil_normal = zone_axis
 
-    foil_normal = foil_normal[:,2]
+    foil_normal = -foil_normal[:,2]
 
     # Note the difference in notation versus kinematic function:
     # k0 is the scalar magnitude of the wavevector, rather than
@@ -339,7 +339,15 @@ def generate_dynamical_diffraction_pattern(
     sg = self.excitation_errors(g.T, foil_normal=foil_normal)
 
     # import matplotlib.pyplot as plt
-    # plt.scatter(g[:,0],g[:,1],np.abs(sg)*100)
+    # sgp = np.sign(sg) >= 0
+    # c = np.zeros_like(g)
+    # c[sgp,:] = np.array([1,0,0])
+    # c[~sgp,:] = np.array([0,0,1])
+    # fig,ax = plt.subplots(dpi=200)
+    # ax.scatter(g[:,0],g[:,1],np.abs(sg)*100,c=c)
+    # ax.axis('equal')
+    # plt.show()
+
 
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
@@ -463,6 +471,12 @@ def generate_CBED(
     ZA = np.array(zone_axis[:,2]) / np.linalg.norm(np.array(zone_axis[:,2]))
     proj_x = zone_axis[:,0] / np.linalg.norm(zone_axis[:,0])
     proj_y = zone_axis[:,1] / np.linalg.norm(zone_axis[:,1])
+
+    # the foil normal should be the zone axis if unspecified
+    if foil_normal_lattice is None:
+        foil_normal_lattice = zone_axis_lattice
+    if foil_normal_cartesian is None:
+        foil_normal_cartesian = zone_axis_cartesian
 
     # TODO: refine pixel size to center reflections on pixels
 
