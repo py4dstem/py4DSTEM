@@ -25,7 +25,6 @@ def calculate_dynamical_structure_factors(
     k_max: float = 2.0,
     thermal_sigma: float = None,
     tol_structure_factor: float = 1.0e-4,
-    cartesian_directions: bool = True,
     verbose=True,
 ):
     """
@@ -208,7 +207,6 @@ def calculate_dynamical_structure_factors(
 
     self.accel_voltage = accelerating_voltage
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
-    self.cartesian_directions = cartesian_directions
 
     self.Ug_dict = {
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
