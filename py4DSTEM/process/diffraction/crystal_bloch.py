@@ -336,7 +336,7 @@ def generate_dynamical_diffraction_pattern(
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
     g = (hkl @ self.lat_inv) @ zone_axis
-    sg = self.excitation_errors(g.T, foil_normal=-foil_normal)
+    sg = self.excitation_errors(g.T, foil_normal=-foil_normal @ zone_axis)
 
     # import matplotlib.pyplot as plt
     # sgp = np.sign(sg) >= 0
@@ -479,8 +479,6 @@ def generate_CBED(
         foil_normal_cartesian = zone_axis_cartesian
 
     # TODO: refine pixel size to center reflections on pixels
-    # from pdb import set_trace
-    # set_trace()
 
     # Generate list of plane waves inside aperture
     alpha_pix = np.round(
