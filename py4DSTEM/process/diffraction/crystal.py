@@ -722,8 +722,10 @@ class Crystal:
             return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
                 / (2 - 2*self.wavelength*g[2,:]) 
         else:
-            return np.nan_to_num((2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
-                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])) 
+            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
+                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])
+
+
 
 
 
