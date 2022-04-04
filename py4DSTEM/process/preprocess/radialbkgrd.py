@@ -63,8 +63,8 @@ def get_1D_polar_background(data,
 
     # Crop polar data to maximum distance which contains information from original image
     if (polarData.mask.sum(axis = (0))==polarData.shape[0]).any():
-            ii = polar.data.shape[1]
-            while(polar.mask[:,ii].all()==True):
+            ii = polarData.data.shape[1]
+            while(polarData.mask[:,ii].all()==True):
                 ii = ii-1
             maximalDistance = ii
             polarData = polarData[:,0:maximalDistance]
