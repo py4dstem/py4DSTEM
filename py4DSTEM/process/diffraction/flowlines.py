@@ -1003,11 +1003,19 @@ def plot_orientation_correlation(
                 'Autocorrelation of Ring ' + str(ind_0),
                 fontsize=16)
 
-
-        ax_handle.invert_yaxis()
+        # x axis labels
+        if pixel_size is not None:
+            x_t = ax_handle.get_xticks()
+            sub = np.logical_or(x_t < 0, x_t > orient_corr.shape[2])
+            x_t_new = np.delete(x_t, sub)
+            ax_handle.set_xticks(x_t_new)
+            ax_handle.set_xticklabels(x_t_new * pixel_size)
         ax_handle.set_xlabel(
             'Radial Distance [' + pixel_units + ']',
             fontsize=12)
+
+        # y axis labels
+        ax_handle.invert_yaxis()
         ax_handle.set_ylabel(
             'Relative Grain Orientation [degrees]',
             fontsize=12)
@@ -1015,7 +1023,6 @@ def plot_orientation_correlation(
             [0,10,20,30,40,50,60,70,80,90])
         ax_handle.set_yticklabels(
             ['0','','','30','','','60','','','90'])
-
 
     plt.show()
 
