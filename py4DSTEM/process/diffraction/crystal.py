@@ -345,7 +345,7 @@ class Crystal:
         return Crystal.from_pymatgen_structure(structure)
 
     def setup_diffraction(
-        self, accelerating_voltage: float, cartesian_directions: bool = True
+        self, accelerating_voltage: float
     ):
         """
         Set up attributes used for diffraction calculations without going
@@ -353,7 +353,6 @@ class Crystal:
         """
         self.accel_voltage = accelerating_voltage
         self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
-        self.cartesian_directions = cartesian_directions
 
     def calculate_structure_factors(
         self,
@@ -462,10 +461,10 @@ class Crystal:
         zone_axis_cartesian: Optional[np.ndarray] = None,
         proj_x_cartesian: Optional[np.ndarray] = None,
         foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
-        accel_voltage = None,
         sigma_excitation_error: float = 0.02,
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 1e-4,
+        k_max: Optional[float] = None,
         keep_qz = False,
         return_orientation_matrix=False,
     ):
@@ -500,17 +499,6 @@ class Crystal:
 
         # Tolerance for angular tests
         tol = 1e-6
-
-        # init voltage and wavelength if needed
-        if accel_voltage is not None:
-            self.accel_voltage = np.asarray(accel_voltage)
-        else:
-            # Check if voltage already exists, if not set to 300 kV
-            if not hasattr(self, 'accel_voltage'):
-                self.accel_voltage = 300.0e3
-
-                # Calculate wavelength
-                self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
         # Parse orientation inputs
         if orientation is not None:
@@ -549,6 +537,12 @@ class Crystal:
         # Threshold for inclusion in diffraction pattern
         sg_max = sigma_excitation_error * tol_excitation_error_mult
         keep = np.abs(sg) <= sg_max
+
+        # Maximum scattering angle cutoff
+        if k_max is not None:
+            keep_kmax = np.linalg.norm(g,axis=0) <= k_max
+            keep = np.logical_and(keep, keep_kmax)
+
         g_diff = g[:, keep]
 
         # Diffracted peak intensities and labels
@@ -674,10 +668,10 @@ class Crystal:
 
     def parse_orientation(
         self,
-        zone_axis_lattice,
-        proj_x_lattice,
-        zone_axis_cartesian,
-        proj_x_cartesian,
+        zone_axis_lattice=None,
+        proj_x_lattice=None,
+        zone_axis_cartesian=None,
+        proj_x_cartesian=None,
         ):
         # This helper function parse the various types of orientation inputs,
         # and returns the normalized, projected (x,y,z) cartesian vectors in
@@ -729,7 +723,9 @@ class Crystal:
                 / (2 - 2*self.wavelength*g[2,:]) 
         else:
             return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
-                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2]) 
+                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])
+
+
 
 
 
