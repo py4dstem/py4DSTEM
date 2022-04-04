@@ -277,13 +277,13 @@ def generate_dynamical_diffraction_pattern(
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
     # Parse input orientations:
-    zone_axis = self.parse_orientation(zone_axis_lattice=zone_axis_lattice, 
+    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice, 
                                        zone_axis_cartesian=zone_axis_cartesian)
     if foil_normal_lattice is not None or foil_normal_cartesian is not None:
         foil_normal = self.parse_orientation(zone_axis_lattice=foil_normal_lattice,
                                              zone_axis_cartesian=foil_normal_cartesian)
     else:
-        foil_normal = zone_axis
+        foil_normal = zone_axis_rotation_matrix
 
     foil_normal = foil_normal[:,2]
 
@@ -335,8 +335,8 @@ def generate_dynamical_diffraction_pattern(
         print(f"Bloch matrix has size {U_gmh.shape}")
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
-    g = (hkl @ self.lat_inv) @ zone_axis
-    sg = self.excitation_errors(g.T, foil_normal=-foil_normal @ zone_axis)
+    g = (hkl @ self.lat_inv) @ zone_axis_rotation_matrix
+    sg = self.excitation_errors(g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix)
 
     # import matplotlib.pyplot as plt
     # sgp = np.sign(sg) >= 0
@@ -363,7 +363,7 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (2.0 * k0 * zone_axis[:,2] @ foil_normal)  # divide by 2 k_n
+    gamma = v / (2.0 * k0 * zone_axis_rotation_matrix[:,2] @ foil_normal)  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -465,12 +465,12 @@ def generate_CBED(
     hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
-    zone_axis = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
+    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
                                        zone_axis_cartesian=zone_axis_cartesian,
                                        proj_x_lattice=hkl_proj_x)
-    ZA = np.array(zone_axis[:,2]) / np.linalg.norm(np.array(zone_axis[:,2]))
-    proj_x = zone_axis[:,0] / np.linalg.norm(zone_axis[:,0])
-    proj_y = zone_axis[:,1] / np.linalg.norm(zone_axis[:,1])
+    ZA = np.array(zone_axis_rotation_matrix[:,2]) / np.linalg.norm(np.array(zone_axis_rotation_matrix[:,2]))
+    proj_x = zone_axis_rotation_matrix[:,0] / np.linalg.norm(zone_axis_rotation_matrix[:,0])
+    proj_y = zone_axis_rotation_matrix[:,1] / np.linalg.norm(zone_axis_rotation_matrix[:,1])
 
     # the foil normal should be the zone axis if unspecified
     if foil_normal_lattice is None:
