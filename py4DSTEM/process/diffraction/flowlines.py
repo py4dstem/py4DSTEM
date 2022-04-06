@@ -790,31 +790,6 @@ def orientation_correlation(
         np.maximum(2*size_input[2],2*radius_max)])
 
     # Pad and initialize orientation histogram
-    # x_inds = np.concatenate((
-    #     np.arange(np.ceil(size_input[1]/2)),
-    #     np.arange(-np.floor(size_input[1]/2),0) + size_corr[0]
-    #     )).astype('int')
-    # y_inds = np.concatenate((
-    #     np.arange(np.ceil(size_input[2]/2)),
-    #     np.arange(-np.floor(size_input[2]/2),0) + size_corr[1]
-    #     )).astype('int')
-    # orient_hist_pad = np.zeros((
-    #     size_input[0],
-    #     size_corr[0],
-    #     size_corr[1],
-    #     size_input[3],        
-    #     ),dtype='complex')
-    # orient_norm_pad = np.zeros((
-    #     size_input[0],
-    #     size_corr[0],
-    #     size_corr[1],
-    #     ),dtype='complex')
-    # orient_hist_pad[:,x_inds[:,None],y_inds[None,:],:] = \
-    #     np.fft.fftn(orient_hist,axes=(1,2,3))
-    # orient_norm_pad[:,x_inds[:,None],y_inds[None,:]]   = \
-    #     np.fft.fftn(np.sum(orient_hist,axis=3),axes=(1,2)) / np.sqrt(size_input[3])
-
-    # Testing fix
     orient_hist_pad = np.zeros((
         size_input[0],
         size_corr[0],
