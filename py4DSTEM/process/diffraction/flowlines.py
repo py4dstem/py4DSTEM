@@ -784,7 +784,7 @@ def orientation_correlation(
     # Array sizes
     size_input = np.array(orient_hist.shape)
     if radius_max is None:
-        radius_max = np.ceil(np.min(orient_hist.shape[1:2])/2).astype('int')
+        radius_max = np.ceil(np.min(orient_hist.shape[1:3])/2).astype('int')
     size_corr = np.array([
         np.maximum(2*size_input[1],2*radius_max),
         np.maximum(2*size_input[2],2*radius_max)])
