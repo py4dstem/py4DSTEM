@@ -789,7 +789,7 @@ def orientation_correlation(
         np.maximum(2*size_input[1],2*radius_max),
         np.maximum(2*size_input[2],2*radius_max)])
 
-    # Pad and initialize orientation histogram
+    # Initialize orientation histogram
     orient_hist_pad = np.zeros((
         size_input[0],
         size_corr[0],
@@ -801,6 +801,8 @@ def orientation_correlation(
         size_corr[0],
         size_corr[1],
         ),dtype='complex')
+    
+    # Pad the histogram in real space
     x_inds = np.arange(size_input[1])
     y_inds = np.arange(size_input[2])
     orient_hist_pad[:,x_inds[:,None],y_inds[None,:],:] = orient_hist
