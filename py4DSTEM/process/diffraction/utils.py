@@ -13,12 +13,12 @@ class Orientation:
     num_matches: int
 
     def __post_init__(self):
-        matrix = np.zeros((self.num_matches,3,3))
-        family = np.zeros((self.num_matches,3,3))
-        corr = np.zeros((self.num_matches))
-        inds = np.zeros((self.num_matches,2), dtype='int')
-        mirror = np.zeros((self.num_matches), dtype='bool')
-        angles = np.zeros((self.num_matches,3))
+        self.matrix = np.zeros((self.num_matches,3,3))
+        self.family = np.zeros((self.num_matches,3,3))
+        self.corr = np.zeros((self.num_matches))
+        self.inds = np.zeros((self.num_matches,2), dtype='int')
+        self.mirror = np.zeros((self.num_matches), dtype='bool')
+        self.angles = np.zeros((self.num_matches,3))
 
 
 @dataclass
