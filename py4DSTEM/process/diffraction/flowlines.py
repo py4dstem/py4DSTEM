@@ -784,20 +784,12 @@ def orientation_correlation(
     # Array sizes
     size_input = np.array(orient_hist.shape)
     if radius_max is None:
-        radius_max = np.ceil(np.min(orient_hist.shape[1:2])/2).astype('int')
+        radius_max = np.ceil(np.min(orient_hist.shape[1:3])/2).astype('int')
     size_corr = np.array([
-        np.maximum(size_input[1],2*radius_max),
-        np.maximum(size_input[2],2*radius_max)])
+        np.maximum(2*size_input[1],2*radius_max),
+        np.maximum(2*size_input[2],2*radius_max)])
 
-    # Pad and initialize orientation histogram
-    x_inds = np.concatenate((
-        np.arange(np.ceil(size_input[1]/2)),
-        np.arange(-np.floor(size_input[1]/2),0) + size_corr[0]
-        )).astype('int')
-    y_inds = np.concatenate((
-        np.arange(np.ceil(size_input[2]/2)),
-        np.arange(-np.floor(size_input[2]/2),0) + size_corr[1]
-        )).astype('int')
+    # Initialize orientation histogram
     orient_hist_pad = np.zeros((
         size_input[0],
         size_corr[0],
@@ -809,10 +801,15 @@ def orientation_correlation(
         size_corr[0],
         size_corr[1],
         ),dtype='complex')
-    orient_hist_pad[:,x_inds[:,None],y_inds[None,:],:] = \
-        np.fft.fftn(orient_hist,axes=(1,2,3))
-    orient_norm_pad[:,x_inds[:,None],y_inds[None,:]]   = \
-        np.fft.fftn(np.sum(orient_hist,axis=3),axes=(1,2)) / np.sqrt(size_input[3])
+    
+    # Pad the histogram in real space
+    x_inds = np.arange(size_input[1])
+    y_inds = np.arange(size_input[2])
+    orient_hist_pad[:,x_inds[:,None],y_inds[None,:],:] = orient_hist
+    orient_norm_pad[:,x_inds[:,None],y_inds[None,:]] = \
+        np.sum(orient_hist, axis=3) / np.sqrt(size_input[3])
+    orient_hist_pad = np.fft.fftn(orient_hist_pad,axes=(1,2,3))
+    orient_norm_pad = np.fft.fftn(orient_norm_pad,axes=(1,2))
 
     # Radial coordinates for integration
     x = np.mod(np.arange(size_corr[0])+size_corr[0]/2,size_corr[0])-size_corr[0]/2
