@@ -13,7 +13,7 @@ from math import log
 from copy import copy
 
 def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
-         min=None,max=None,power=1,bordercolor=None,borderwidth=5,
+         vmin=None,vmax=None,min=None,max=None,power=1,bordercolor=None,borderwidth=5,
          returnclipvals=False,returncax=False,returnfig=False,figax=None,
          hist=False,n_bins=256,mask=None,mask_color='k',mask_alpha=0.,
          rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
@@ -206,6 +206,7 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
                   specified using the kwargs min/max -> c/m.
         min (number): behavior depends on clipvals
         max (number): behavior depends on clipvals
+        vmin,vmax: alias' for min,max
         power (number): when ``scaling='power'``, specifies the scaling power
         bordercolor (color or None): if not None, add a border of this color.
             The color can be anything matplotlib recognizes as a color.
@@ -236,6 +237,8 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
+    if vmin is not None: min=vmin
+    if vmax is not None: max=vmax
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
