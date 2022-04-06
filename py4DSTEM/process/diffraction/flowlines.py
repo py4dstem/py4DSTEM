@@ -866,7 +866,7 @@ def orientation_correlation(
                     minlength=radius_max,
                     )
                 orient_corr[ind_output,:,:] /= sig_norm[None,:]
-    
+
                 # increment output index
                 ind_output += 1
 
@@ -885,7 +885,7 @@ def plot_orientation_correlation(
 
     """
     Plot the distance-angle (auto)correlations in orient_corr.
-    
+
     Args:
         orient_corr (array):    3D or 4D array containing correlation images as function of (dr,dtheta)
                                 1st index represents each pair of rings.
@@ -898,7 +898,6 @@ def plot_orientation_correlation(
 
     Returns:
         fig, ax                 Figure and axes handles (optional).
-        
     """
 
     # Make sure range is an numpy array
@@ -935,7 +934,7 @@ def plot_orientation_correlation(
 
     cvals[0:int(N/4),1] = c*0.4+0.3
     cvals[0:int(N/4),2] = 1
-    
+
     cvals[int(N/4):int(N/2),0] = c
     cvals[int(N/4):int(N/2),1] = c*0.3+0.7
     cvals[int(N/4):int(N/2),2] = 1
@@ -959,7 +958,7 @@ def plot_orientation_correlation(
         if num_plot > 1:
             p = ax[count].imshow(
                 np.log10(orient_corr[ind,:,:]),
-                vmin=np.log10(prob_range[0]), 
+                vmin=np.log10(prob_range[0]),
                 vmax=np.log10(prob_range[1]),
                 aspect='auto',
                 cmap=new_cmap
@@ -968,7 +967,7 @@ def plot_orientation_correlation(
         else:
             p = ax.imshow(
                 np.log10(orient_corr[ind,:,:]),
-                vmin=np.log10(prob_range[0]), 
+                vmin=np.log10(prob_range[0]),
                 vmax=np.log10(prob_range[1]),
                 aspect='auto',
                 cmap=new_cmap
@@ -1021,10 +1020,10 @@ def plot_orientation_correlation(
         ax_handle.set_yticklabels(
             ['0','','','30','','','60','','','90'])
 
-    plt.show()
-
     if return_fig is True:
         return fig, ax
+    plt.show()
+
 
 
 def get_intensity(orient,x,y,t):
