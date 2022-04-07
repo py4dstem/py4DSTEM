@@ -1,4 +1,5 @@
 # Defines the Array class, which stores any N-dimensional array-like data.
+# Implements the EMD file standard - https://emdatasets.com/format
 
 from typing import Optional,Union
 import numpy as np
@@ -231,7 +232,7 @@ class Array:
         If `units` and/or `name` are passed, sets these values for the n'th dim vector.
 
         Accepts:
-            n (int)
+            n (int): specifies which dim vector
             dim (list or array): length must be either 2, or equal to the length of
                 the n'th axis of the data array
             units (Optional, str):
