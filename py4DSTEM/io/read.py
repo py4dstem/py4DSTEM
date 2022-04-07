@@ -20,10 +20,10 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     Args:
         fp (str or pathlib.Path): path to the file
         mem (str, optional): Specifies how the data should be stored; must be "RAM" or
-            "MEMMAP". "RAM" loads the entire dataset into memory. "MEMMAP" is useful for
+            "MEMMAP", or "DASK". "RAM" loads the entire dataset into memory. "MEMMAP" and "DASK" are useful for
             large datasets; it does not load the data into memory, but instead creates a
             map describing where each diffraction pattern lives in storage, and only
-            loads data into memory as needed.
+            loads data into memory as needed. "MEMMAP" is numpy implementation, "DASK" is a Dask implementation.
         binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
             On-load binning enables datasets which, in storage, are larger than the
             system RAM to still be loaded into RAM, provided the amount of binning is
@@ -72,7 +72,7 @@ def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
     """
     assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(exists(fp)), "Error: specified filepath does not exist."
-    assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert(mem in ['RAM','MEMMAP', 'DASK']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
     assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
     assert(binfactor>=1), "Error: binfactor must be >= 1"
     if binfactor > 1:

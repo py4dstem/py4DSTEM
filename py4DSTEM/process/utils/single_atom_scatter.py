@@ -47,7 +47,7 @@ class single_atom_scatter(object):
             fe +=ai[i]*(2+bi[i]*gsq)/(1+bi[i]*gsq)**2
 
         # Result can be returned in units of Volt Angstrom ('VA') or Angstrom ('A')
-        if units=='VA': return h**2/(2*np.pi*me*qe)*1e20*fe
+        if units=='VA': return h**2/(2*np.pi*me*qe)*1e18*fe
         elif units == 'A' : return fe
 
     def get_scattering_factor(self,elements=None,composition=None,q_coords=None,units=None):

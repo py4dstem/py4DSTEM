@@ -406,6 +406,88 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
     return qx0, qy0
 
+def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
+                                   max_dist=2,max_iter=1):
+    """
+    Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
+    pairs of conjugate peaks inside an annular region and finding their centers of mass.
+
+    Args:
+        braggpeaks (PointListArray):
+        center_guess (2-tuple): qx0,qy0
+        radii (2-tuple): the inner and outer radii of the specified annular region
+        Q_Nx,Q_Ny: the shape of diffraction space
+        max_dist (number): the maximum allowed distance between the reflection of two
+            peaks to consider them conjugate pairs
+        max_iter (integer): for values >1, repeats the algorithm after updating center_guess
+
+    Returns:
+        (2d masked array): the origins
+    """
+    assert(isinstance(braggpeaks,PointListArray))
+    R_Nx,R_Ny = braggpeaks.shape
+
+    # remove peaks outside the annulus
+    braggpeaks_masked = braggpeaks.copy()
+    for rx in range(R_Nx):
+        for ry in range(R_Ny):
+            pl = braggpeaks_masked.get_pointlist(rx,ry)
+            qr = np.hypot(pl.data['qx']-center_guess[0],
+                          pl.data['qy']-center_guess[1])
+            rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
+            pl.remove_points(rm)
+
+    # Find all matching conjugate pairs of peaks
+    center_curr = center_guess
+    for ii in range(max_iter):
+        centers = np.zeros((R_Nx,R_Ny,2))
+        found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
+        for rx in range(R_Nx):
+            for ry in range(R_Ny):
+
+                # Get data
+                pl = braggpeaks_masked.get_pointlist(rx,ry)
+                is_paired = np.zeros(len(pl.data),dtype=bool)
+                matches = []
+
+                # Find matching pairs
+                for i in range(len(pl.data)):
+                    if not is_paired[i]:
+                        x,y = pl.data['qx'][i],pl.data['qy'][i]
+                        x_r = -x+2*center_curr[0]
+                        y_r = -y+2*center_curr[1]
+                        dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
+                        dists[is_paired] = 2*max_dist
+                        matched = dists<=max_dist
+                        if(any(matched)):
+                            match = np.argmin(dists)
+                            matches.append((i,match))
+                            is_paired[i],is_paired[match] = True,True
+
+                # Find the center
+                if len(matches)>0:
+                    x0,y0 = [],[]
+                    for i in range(len(matches)):
+                        x0.append(np.mean(pl.data['qx'][list(matches[i])]))
+                        y0.append(np.mean(pl.data['qy'][list(matches[i])]))
+                    x0,y0 = np.mean(x0),np.mean(y0)
+                    centers[rx,ry,:] = x0,y0
+                    found_center[rx,ry] = True
+                else:
+                    found_center[rx,ry] = False
+
+        # Update current center guess
+        x0_curr = np.mean(centers[found_center,0])
+        y0_curr = np.mean(centers[found_center,1])
+        center_curr = x0_curr,y0_curr
+
+    # return
+    found_center = np.logical_not(np.dstack([found_center,found_center]))
+    origins = np.ma.array(data=centers, mask=found_center)
+    return origins
+
+
+
 
 ### Functions for fitting the origin
 

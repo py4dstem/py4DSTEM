@@ -5,11 +5,11 @@ from .array import Array, Array_from_h5
 from typing import Optional,Union
 import numpy as np
 import h5py
+import dask.array as da
 
 class DataCube(Array):
     """
     Stores 4D-STEM datasets.
-
     """
     def __init__(
         self,
@@ -120,7 +120,7 @@ def DataCube_from_h5(group:h5py.Group, name:str):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
     and a name.  Determines if an Array object of this name exists inside this group,
-    and if it does, loads and returns it as a DataCube. If it doesn't, exist, or if
+    and if it does, loads and returns it as a DataCube. If it doesn't exist, or if
     it exists but does not have 4 dimensions, raises an exception.
 
     Accepts:
