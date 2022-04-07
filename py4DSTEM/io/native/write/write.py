@@ -107,11 +107,16 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     else:
         md = None
 
+    # Function to patch HDF5 datacube compression back in
+    def save_datacube_compression_patch(grp,do):
+        save_datacube_group(grp,do,use_compression=use_compression)
+
     # Loop through and save all objects in the dataobjectlist
     names,grps,save_fns = [],[],[]
     lookupTable = {
             'DataCube':['datacube_',ind_dcs,grp_dc,
-                               save_datacube_group],
+                               save_datacube_compression_patch],
+                               #save_datacube_group],
             'CountedDataCube':['counted_data_cube_',ind_cdcs,grp_cdc,
                                          save_counted_datacube_group],
             'DiffractionSlice':['diffractionslice_',ind_dfs,grp_ds,

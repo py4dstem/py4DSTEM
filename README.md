@@ -59,6 +59,40 @@ Please note that virtual environments are used in the instructions above, to mak
 Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
 You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
+## Advanced installation - ML functionality
+
+To install the py4dstem with AI/ML functionality, follow the steps below.
+
+If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, run
+
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install tensorflow-gpu==2.4.1
+conda install pip
+pip install py4dstem[aiml-cuda]
+```
+
+If you are running on Windows with Nvidia GPU and CUDA capability, run
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install pip
+pip install tensorflow-gpu==2.4.1
+pip install py4dstem[aiml-cuda]
+```
+
+If you are running on Windows without any CUDA capable device or any Mac OS X system, run
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install pip
+pip install py4dstem[aiml]
+```
+
 
 
 ## Running the GUI
@@ -123,7 +157,7 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * qtconsole
 * ipywidgets
 * tqdm
-* requests
+* gdown
 
 
 ### Optional dependencies
@@ -131,10 +165,6 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * ipyparallel
 * dask
 
-
-### Versioning
-
-v. 0.13.0
 
 
 
