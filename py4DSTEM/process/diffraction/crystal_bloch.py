@@ -272,7 +272,7 @@ def generate_dynamical_diffraction_pattern(
     """
     t0 = time()  # start timer for matrix setup
 
-    n_beams = beams.length
+    n_beams = beams.data.shape[0]
 
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
@@ -420,6 +420,7 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
+    two_beam_zone_axis_lattice: np.ndarray = None,
 ) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -444,6 +445,10 @@ def generate_CBED(
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
                                         keyed by tuples of (h,k,l).
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        two_beam_zone_axis_lattice      When only two beams are present in the "beams" PointList,
+                                        the computation of the projected crystallographic directions
+                                        becomes ambiguous. In this case, you must specify the indices of
+                                        the zone axis used to generate the beams.
 
     Returns:
         If thickness is a scalar: CBED pattern as np.ndarray
@@ -460,9 +465,20 @@ def generate_CBED(
     )
     qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
 
-    proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
-    hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
-    hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
+    # If there are only two beams, augment the list with a third perpendicular spot
+    if qxy.shape[0] == 2:
+        assert two_beam_zone_axis_lattice is not None, "When only two beams are present, two_beam_zone_axis_lattice must be specified."
+        hkl_reflection = hkl[1] if np.all(qxy[0]==0.) else hkl[0]
+        qxy_reflection = qxy[1] if np.all(qxy[0]==0.) else qxy[0]
+        orthogonal_spot = np.cross(two_beam_zone_axis_lattice,hkl_reflection)
+        hkl_augmented = np.vstack((hkl,orthogonal_spot))
+        qxy_augmented = np.vstack((qxy,np.flipud(qxy_reflection)))
+        proj = np.linalg.lstsq(qxy_augmented, hkl_augmented, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
+    # Otherwise calculate them based on the pattern
+    else:
+        proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
     zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
