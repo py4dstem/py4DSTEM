@@ -11,9 +11,9 @@ py4dstem_array = py4DSTEM.io.datastructure.Array(
     name = 'test_array',
     units = 'intensity',
     dims = [
+        5,
         [0,5],
-        [0,5],
-        [0,0.123],
+        0.123,
         [0,2,3,4,5,10]
     ],
     dim_units = [

@@ -86,15 +86,20 @@ class Array:
             name (str): the name of the Array
             units (str): units for the pixel values
             dims (list): calibration vectors for each of the axes of the data
-                array.  If this isn't passed, dims will be automatically
-                populated with integer values representing the pixel numbers.
-                If dims is a list with length < the array dimensions, the passed
-                values are assumed to apply to the first N dimensions, and the
-                remaining dimensions are populated automatically as above. Each
-                passed dim vector must have either a length of 2, or a length
-                equal to the extent of the corresponding dimension of the data
-                array. If it has a length of 2, the entire calibration vector
-                will be extrapolated linearly from these initial two values.
+                array.  Valid values for each element of the list are None,
+                a number, a 2-element list/array, or an M-element list/array
+                where M is the data array.  If None is passed, the dim will be
+                populated with integer values starting at 0 and its units will
+                be set to pixels.  If a number is passed, the dim is populated
+                with a vector beginning at zero and increasing linearly by this
+                step size.  If a 2-element list/array is passed, the dim is
+                populated with a linear vector with these two numbers as the first
+                two elements.  If a list/array of length M is passed, this is used
+                as the dim vector.  If dims recieves a list of fewer than N
+                arguments for an N-dimensional data array, the extra dimensions
+                are populated as if None were passed, using integer pixel values.
+                If the `dims` parameter is not passed, all dim vectors are
+                populated this way.
             dim_units (list): the units for the calibration dim vectors. If
                 nothing is passed, dims vectors which have been populated
                 automatically with integers corresponding to pixel numbers
@@ -133,7 +138,7 @@ class Array:
 
         # if none were passed
         if self.dims is None:
-            self.dims = [np.arange(self.shape[i]) for i in range(self.D)]
+            self.dims = [self._unpack_dim(1,self,shape[n])[0] for n in range(self.D)]
             self.dim_is_linear[:] = True
             dim_in_pixels[:] = True
 
