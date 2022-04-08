@@ -145,7 +145,7 @@ def DataCube_from_Array(array):
     Returns:
         datacube (DataCube)
     """
-    assert(array.D == 4), "Array must have 4 dimensions"
+    assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
     array.__init__(
         data = array.data,
