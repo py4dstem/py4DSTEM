@@ -45,12 +45,13 @@ class ArrayStack(Array):
 
         # Populate labels
         if labels is None:
-            self.labels = np.arange(self.depth).astype(str)
+            labels = np.arange(self.depth).astype(str)
         elif len(labels) < self.depth:
-            self.labels = np.concatenate((labels,
+            labels = np.concatenate((labels,
                 [f'array{i}' for i in range(len(labels),self.depth)]))
         else:
-            self.labels = labels[:self.depth]
+            labels = labels[:self.depth]
+        self.labels = Labels(labels)
 
         # initialize as an Array
         Array.__init__(
@@ -71,15 +72,9 @@ class ArrayStack(Array):
             name = 'labels'
         )
 
-        # Create labels dict
-        self._labels = {}
-        for i,label in enumerate(labels):
-            self._labels[label] = i
-
-
 
     def get_data(self,label,name=None):
-        idx = self._labels[label]
+        idx = self.labels._dict[label]
         return Array(
             data = self.data[..., idx],
             name = name if name is not None else self.name+'_'+label,
@@ -90,8 +85,6 @@ class ArrayStack(Array):
         )
 
 
-
-    # TODO
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( A set of {self.depth} Arrays with {self.rank-1}-dimensions and shape {self.shape[:-1]}, called '{self.name}'"
@@ -110,6 +103,19 @@ class ArrayStack(Array):
         return string
 
 
+# List subclass for accessing data slices with a dict
+class Labels(list):
+    def __init__(self,x=[]):
+        list.__init__(self,x)
+        self.setup_labels_dict()
+    def __setitem__(self,idx,label):
+        list.__setitem__(self,idx,label)
+        self.setup_labels_dict()
+
+    def setup_labels_dict(self):
+        self._dict = {}
+        for idx,label in enumerate(self):
+            self._dict[label] = idx
 
 
 
