@@ -23,16 +23,31 @@ py4dstem_arraystack = py4DSTEM.io.datastructure.ArrayStack(
         'ry'
     ],
     labels = [
-        'meow',
-        'mix',
-        'quick',
-        'fix'
+        'the',
+        'cow',
+        'jumped',
+        'over'
     ]
 )
 
+print("__repr__:")
 print(py4dstem_arraystack)
 
-print(py4dstem_arraystack.get_data('meow'))
+print()
+print(".get_data({element}).__repr__:"
+print(py4dstem_arraystack.get_data('cow'))
+
+print()
+print(".labels and .labels._dict")
+print(py4dstem_arraystack.labels)
+print(py4dstem_arraystack.labels._dict)
+
+print()
+print(".labels and .labels._dict after element assignment")
+py4dstem_arraystack.labels[2] = 'meow'
+print(py4dstem_arraystack.labels)
+print(py4dstem_arraystack.labels._dict)
+
 
 
 # Write to and HDF5 file
