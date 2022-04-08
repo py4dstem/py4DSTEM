@@ -45,10 +45,10 @@ class DataCube(Array):
             name = name,
             units = 'intensity',
             dims = [
-                [0,rsize[0]],
-                [0,rsize[1]],
-                [0,qsize[0]],
-                [0,qsize[1]]
+                rsize[0],
+                rsize[1],
+                qsize[0],
+                qsize[1]
             ],
             dim_units = [
                 runits[0],

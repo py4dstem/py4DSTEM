@@ -9,12 +9,11 @@ import h5py
 class Slice2D(Array):
     """
     Stores 2D arrays and 3D stacks of named 2D arrays.
-
     """
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'datacube',
+        name: Optional[str] = 'dataslice2d',
         size: Optional[Union[float,list]] = 1,
         units: Optional[Union[str,list]] = 'pixels',
         slicelabels: Optional[list] = None
