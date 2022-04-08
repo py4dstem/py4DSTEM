@@ -1,4 +1,5 @@
 from .array import *
-from .datacube import *
 from .arraystack import *
+from .arrayio import *
+from .datacube import *
 

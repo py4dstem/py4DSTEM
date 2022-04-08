@@ -1,6 +1,7 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from .array import Array, Array_from_h5
+from .array import Array
+from .arrayio import Array_from_h5
 
 from typing import Optional,Union
 import numpy as np
