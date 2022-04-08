@@ -133,6 +133,9 @@ class Array:
         # flags to help assign dim names and units
         dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
+        # flag identifying a normal, non-stack array
+        self._isstack = False
+
 
         ## Set dim vectors
 
@@ -223,8 +226,6 @@ class Array:
         return string
 
 
-
-
     def set_dim(self,
                 n:int,
                 dim:Union[list,np.ndarray],
@@ -296,6 +297,7 @@ class Array:
             raise Exception(f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}")
 
 
+
     # Writing to an HDF5 file
 
     def to_h5(self,group):
@@ -328,7 +330,9 @@ class Array:
                 # TODO add an overwrite option
                 raise Exception(f"A group named {self.name} already exists in this file. Try using another name.")
 
-        # Write
+
+        ## Write
+
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",1) # this tag indicates an Array type object
         grp.attrs.create("py4dstem_class",self.__class__.__name__)
@@ -342,8 +346,14 @@ class Array:
         )
         data.attrs.create('units',self.units) # save 'units' but not 'name' - 'name' is the group name
 
-        # add the dim vectors
-        for n in range(self.rank):
+        # Determine if this is an arraystack
+        # such that the last dim is a list of names
+        normal_dims = self.rank
+        if self._isstack:
+            normal_dims -= 1
+
+        # Add the normal dim vectors
+        for n in range(normal_dims):
 
             # unpack info
             dim = self.dims[n]
@@ -363,91 +373,24 @@ class Array:
             dset.attrs.create('name',name)
             dset.attrs.create('units',units)
 
+        # Add stack dim vector, if present
+        if self._isstack:
+            n = self.rank-1
+            name = '_labels_'
+            dim = [s.encode('utf-8') for s in self.labels]
+
+            # write
+            dset = grp.create_dataset(
+                f"dim{n}",
+                data = dim
+            )
+            dset.attrs.create('name',name)
+
+
+
 ########### END OF CLASS ###########
 
 
-
-
-# Reading
-
-def Array_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if an Array object of this name exists inside this group,
-    and if it does, loads and returns it. If it doesn't, raises an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        An Array instance
-    """
-    assert(Array_exists(group,name)), f"No Array called {name} could be found in group {group} of this HDF5 file."
-    grp = group[name]
-
-    # get data
-    dset = grp['data']
-    data = dset[:]
-    units = dset.attrs['units']
-    rank = len(data.shape)
-
-    # get dim vectors
-    dims = []
-    dim_units = []
-    dim_names = []
-    for n in range(rank):
-        dim_dset = grp[f"dim{n}"]
-        dims.append(dim_dset[:])
-        dim_units.append(dim_dset.attrs['units'])
-        dim_names.append(dim_dset.attrs['name'])
-
-    # make Array
-    ar = Array(
-        data = data,
-        name = name,
-        units = units,
-        dims = dims,
-        dim_units = dim_units,
-        dim_names = dim_names
-    )
-
-    return ar
-
-
-def find_Arrays(group:h5py.Group):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and finds all Array groups inside this group at its top level. Does not do a search
-    for nested Array groups. Returns the names of all Array groups found.
-
-    Accepts:
-        group (HDF5 group)
-    """
-    keys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
-    return [k for k in keys if group[k].attrs["emd_group_type"] == 1]
-
-
-def Array_exists(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if an Array object of this name exists inside this group,
-    and returns a boolean.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        bool
-    """
-    if name in group.keys():
-        if "emd_group_type" in group[name].attrs.keys():
-            if group[name].attrs["emd_group_type"] == 1:
-                return True
-            return False
-        return False
-    return False
 
 
 
