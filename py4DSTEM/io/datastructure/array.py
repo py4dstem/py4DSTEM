@@ -124,26 +124,26 @@ class Array:
         self.dim_units = dim_units
 
         self.shape = self.data.shape
-        self.D = len(self.shape)
+        self.rank = len(self.shape)
 
         # flags to identify which dim vectors can be stored
         # with only two elements
-        self.dim_is_linear = np.zeros(self.D, dtype=bool)
+        self.dim_is_linear = np.zeros(self.rank, dtype=bool)
 
         # flags to help assign dim names and units
-        dim_in_pixels = np.zeros(self.D, dtype=bool)
+        dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
 
         ## Set dim vectors
 
         # if none were passed
         if self.dims is None:
-            self.dims = [self._unpack_dim(1,self,shape[n])[0] for n in range(self.D)]
+            self.dims = [self._unpack_dim(1,self,shape[n])[0] for n in range(self.rank)]
             self.dim_is_linear[:] = True
             dim_in_pixels[:] = True
 
         # if some but not all were passed
-        elif len(self.dims)<self.D:
+        elif len(self.dims)<self.rank:
             _dims = self.dims
             N = len(_dims)
             self.dims = []
@@ -151,44 +151,44 @@ class Array:
                 dim,flag = self._unpack_dim(_dims[n],self.shape[n])
                 self.dims.append(dim)
                 self.dim_is_linear[n] = flag
-            for n in range(N,self.D):
+            for n in range(N,self.rank):
                 self.dims.append(np.arange(self.shape[n]))
                 self.dim_is_linear[n] = True
                 dim_in_pixels[n] = True
 
         # if all were passed
-        elif len(self.dims)==self.D:
+        elif len(self.dims)==self.rank:
             _dims = self.dims
             self.dims = []
-            for n in range(self.D):
+            for n in range(self.rank):
                 dim,flag = self._unpack_dim(_dims[n],self.shape[n])
                 self.dims.append(dim)
                 self.dim_is_linear[n] = flag
 
         # otherwise
         else:
-            raise Exception(f"too many dim vectors were passed - expected {self.D}, received {len(self.dims)}")
+            raise Exception(f"too many dim vectors were passed - expected {self.rank}, received {len(self.dims)}")
 
 
         ## set dim vector names
 
         # if none were passed
         if self.dim_names is None:
-            self.dim_names = [f"dim{n}" for n in range(self.D)]
+            self.dim_names = [f"dim{n}" for n in range(self.rank)]
 
         # if some but not all were passed
-        elif len(self.dim_names)<self.D:
+        elif len(self.dim_names)<self.rank:
             N = len(self.dim_names)
             self.dim_names = [name for name in self.dim_names] + \
-                             [f"dim{n}" for n in range(N,self.D)]
+                             [f"dim{n}" for n in range(N,self.rank)]
 
         # if all were passed
-        elif len(self.dim_names)==self.D:
+        elif len(self.dim_names)==self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim names were passed - expected {self.D}, received {len(self.dim_names)}")
+            raise Exception(f"too many dim names were passed - expected {self.rank}, received {len(self.dim_names)}")
 
 
         ## set dim vector units
@@ -198,29 +198,27 @@ class Array:
             self.dim_units = [['unknown','pixels'][i] for i in dim_in_pixels]
 
         # if some but not all were passed
-        elif len(self.dim_units)<self.D:
+        elif len(self.dim_units)<self.rank:
             N = len(self.dim_units)
             self.dim_units = [units for units in self.dim_units] + \
-                             [['unknown','pixels'][dim_in_pixels[i]] for i in range(N,self.D)]
+                             [['unknown','pixels'][dim_in_pixels[i]] for i in range(N,self.rank)]
 
         # if all were passed
-        elif len(self.dim_units)==self.D:
+        elif len(self.dim_units)==self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim units were passed - expected {self.D}, received {len(self.dim_units)}")
+            raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( A {self.D}-dimensional array of shape {self.shape} called '{self.name}',"
+        string = f"{self.__class__.__name__}( A {self.rank}-dimensional array of shape {self.shape} called '{self.name}',"
         string += "\n"+space+"with dimensions:"
         string += "\n"
-        for n in range(self.D):
+        for n in range(self.rank):
             string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
-            if not self.dim_is_linear[n]:
-                string += "  (*non-linear*)"
         string += "\n)"
         return string
 
@@ -248,7 +246,7 @@ class Array:
         self.dims[n] = _dim
         self.dim_is_linear[n] = is_linear
         if units is not None: self.dim_units[n] = units
-        if name is not None: self._dim_names[n] = name
+        if name is not None: self.dim_names[n] = name
 
 
 
@@ -306,8 +304,8 @@ class Array:
         mode. Writes a new group with a name given by this Array's .name field nested
         inside the passed group, and saves the data there.
 
-        If the group has no name, it will be assigned the name "Array#" where # is the
-        lowest available integer.  If the group's name already exists here in this file,
+        If the Array has no name, it will be assigned the name "Array#" where # is the
+        lowest available integer.  If the Array's name already exists here in this file,
         raises and exception.
 
         TODO: add overwite option.
@@ -345,7 +343,7 @@ class Array:
         data.attrs.create('units',self.units) # save 'units' but not 'name' - 'name' is the group name
 
         # add the dim vectors
-        for n in range(self.D):
+        for n in range(self.rank):
 
             # unpack info
             dim = self.dims[n]
@@ -392,13 +390,13 @@ def Array_from_h5(group:h5py.Group, name:str):
     dset = grp['data']
     data = dset[:]
     units = dset.attrs['units']
-    D = len(data.shape)
+    rank = len(data.shape)
 
     # get dim vectors
     dims = []
     dim_units = []
     dim_names = []
-    for n in range(D):
+    for n in range(rank):
         dim_dset = grp[f"dim{n}"]
         dims.append(dim_dset[:])
         dim_units.append(dim_dset.attrs['units'])
