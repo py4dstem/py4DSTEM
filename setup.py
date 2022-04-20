@@ -45,7 +45,7 @@ setup(
         'cuda': ['cupy'],
         'acom': ['pymatgen'],
         'aiml': ['tensorflow == 2.4.1','tensorflow-addons','crystal4D'],
-        'aiml-cuda': ['tensorflow-addons''crystal4D','cupy','numba >= 0.49.1'],
+        'aiml-cuda': ['tensorflow-addons','crystal4D','cupy','numba >= 0.49.1'],
         'numba': ['numba >= 0.49.1']
         },
     entry_points={
