@@ -4,6 +4,7 @@ import numpy as np
 from numpy.linalg import lstsq
 
 from ...io import PointList, PointListArray
+from ..utils import tqdmnd
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     """
@@ -201,22 +202,21 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
         indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('k',int)])
 
     # loop over all the scan positions
-    for Rx in range(mask.shape[0]):
-        for Ry in range(mask.shape[1]):
-            if mask[Rx,Ry]:
-                pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
-                rm_peak_mask = np.zeros(pl.length,dtype=bool)
+    for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
+        if mask[Rx,Ry]:
+            pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
+            rm_peak_mask = np.zeros(pl.length,dtype=bool)
 
-                for i in range(pl.length):
-                    r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
-                         (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
-                    ind = np.argmin(r2)
-                    if r2[ind] <= maxPeakSpacing**2:
-                        pl.data['h'][i] = lattice.data['h'][ind]
-                        pl.data['k'][i] = lattice.data['k'][ind]
-                    else:
-                        rm_peak_mask[i] = True
-                pl.remove_points(rm_peak_mask)
+            for i in range(pl.length):
+                r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
+                     (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
+                ind = np.argmin(r2)
+                if r2[ind] <= maxPeakSpacing**2:
+                    pl.data['h'][i] = lattice.data['h'][ind]
+                    pl.data['k'][i] = lattice.data['k'][ind]
+                else:
+                    rm_peak_mask[i] = True
+            pl.remove_points(rm_peak_mask)
 
     indexed_braggpeaks.name = braggpeaks.name + "_indexed"
     return indexed_braggpeaks

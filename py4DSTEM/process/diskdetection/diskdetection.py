@@ -432,7 +432,8 @@ def find_Bragg_disks(datacube, probe,
                      filter_function = None,
                      _qt_progress_bar = None,
                      distributed = None,
-                     CUDA = False):
+                     CUDA = False,
+                     CUDA_batched = True,):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
     phase correlation with probe.
@@ -484,6 +485,9 @@ def find_Bragg_disks(datacube, probe,
                   file containing the datacube
                 * cluster_path (str): defaults to the working directory during processing
             if distributed is None, which is the default, processing will be in serial
+        CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk detection
+        CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT steps of
+            disk detection are performed in batches to better utilize GPU resources. 
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
@@ -580,7 +584,8 @@ def find_Bragg_disks(datacube, probe,
                 upsample_factor=upsample_factor,
                 name=name,
                 filter_function=filter_function,
-                _qt_progress_bar=_qt_progress_bar)
+                _qt_progress_bar=_qt_progress_bar,
+                batching=CUDA_batched)
 
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
