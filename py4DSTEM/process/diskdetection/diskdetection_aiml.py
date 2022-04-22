@@ -751,7 +751,7 @@ def _get_latest_model(model_path = None):
         except:
             pass
         # download the json file with the meta data
-        download_file_from_google_drive('1uofpSGy7PDlpRiSnuvS5XemnpVbzpcle','./tmp/model_metadata.json')
+        download_file_from_google_drive('1zlneUM88zBniFnymiIejHxEzAoYrK9ct','./tmp/model_metadata.json')
         with open('./tmp/model_metadata.json') as f:
             metadata = json.load(f)
             file_id = metadata['file_id']

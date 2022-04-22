@@ -10,11 +10,6 @@ import numpy as np
 from time import time
 
 try:
-    from numba import cuda
-except ImportError:
-    raise ImportError("Import Error: Please install numba before proceeding")
-
-try:
     import cupy as cp
 except:
     raise ImportError("Import Error: Please install cupy before proceeding")
