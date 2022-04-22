@@ -6,6 +6,7 @@ Functions for finding Braggdisks using cupy
 import numpy as np
 import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
+import cupyx.scipy.fft as cufft
 from time import time
 
 from ...io import PointList, PointListArray
@@ -29,6 +30,7 @@ def find_Bragg_disks_CUDA(
     filter_function=None,
     name="braggpeaks_raw",
     _qt_progress_bar=None,
+    batching=True,
 ):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
@@ -80,6 +82,7 @@ def find_Bragg_disks_CUDA(
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
+        batching (bool): Whether to batch the FFT cross correlation steps. 
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
@@ -103,6 +106,7 @@ def find_Bragg_disks_CUDA(
 
     # Get the probe kernel FT as a cupy array
     probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
+    bytes_per_pattern = probe_kernel_FT.nbytes
 
     # get the maximal array kernel
     # if probe_kernel_FT.dtype == 'float64':
@@ -124,43 +128,116 @@ def find_Bragg_disks_CUDA(
     if _qt_progress_bar is not None:
         from PyQt5.QtWidgets import QApplication
 
-    # Loop over all diffraction patterns
     t0 = time()
-    for (Rx, Ry) in tqdmnd(
-        datacube.R_Nx,
-        datacube.R_Ny,
-        desc="Finding Bragg Disks",
-        unit="DP",
-        unit_scale=True,
-    ):
-        if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(Rx * datacube.R_Ny + Ry + 1)
-            QApplication.processEvents()
-        DP = datacube.data[Rx, Ry, :, :]
-        _find_Bragg_disks_single_DP_FK_CUDA(
-            DP,
-            probe_kernel_FT,
-            corrPower=corrPower,
-            sigma=sigma,
-            edgeBoundary=edgeBoundary,
-            minRelativeIntensity=minRelativeIntensity,
-            minAbsoluteIntensity=minAbsoluteIntensity,
-            relativeToPeak=relativeToPeak,
-            minPeakSpacing=minPeakSpacing,
-            maxNumPeaks=maxNumPeaks,
-            subpixel=subpixel,
-            upsample_factor=upsample_factor,
-            filter_function=filter_function,
-            peaks=peaks.get_pointlist(Rx, Ry),
-            get_maximal_points=get_maximal_points,
-            blocks=blocks,
-            threads=threads,
-        )
+    if batching:
+        # compute the batch size based on available VRAM:
+        max_num_bytes = cp.cuda.Device().mem_info[0]
+        # use a fudge factor to leave room for the fourier transformed data
+        # I have set this at 10, which results in underutilization of 
+        # VRAM, because this yielded better performance in my testing
+        batch_size = max_num_bytes // (bytes_per_pattern * 10)
+        num_batches = datacube.R_N // batch_size + 1
+
+        print(f"Using {num_batches} batches of {batch_size} patterns each...")
+
+        for batch_idx in tqdmnd(
+            range(num_batches), desc="Finding Bragg disks in batches", unit="batch"
+        ):
+            # the final batch may be smaller than the other ones:
+            probes_remaining = datacube.R_N - (batch_idx * batch_size)
+            this_batch_size = (
+                probes_remaining if probes_remaining < batch_size else batch_size
+            )
+
+            # allocate array for batch of DPs
+            # potential optimization: allocate this only once
+            batched_subcube = cp.zeros(
+                (this_batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
+            )
+
+            # fill in diffraction patterns, with filtering
+            for subbatch_idx in range(this_batch_size):
+                patt_idx = batch_idx * batch_size + subbatch_idx
+                rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
+                batched_subcube[subbatch_idx, :, :] = cp.array(
+                    datacube.data[rx, ry, :, :]
+                    if filter_function is None
+                    else filter_function(datacube.data[rx, ry, :, :]),
+                    dtype=cp.float64,
+                )
+
+            # Perform the FFT and multiplication by probe_kernel on the batched array
+            batched_crosscorr = (
+                cufft.fft2(batched_subcube, overwrite_x=True)
+                * probe_kernel_FT[None, :, :]
+            )
+
+            # Iterate over the patterns in the batch and do the Bragg disk stuff
+            for subbatch_idx in range(this_batch_size):
+                patt_idx = batch_idx * batch_size + subbatch_idx
+                rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
+
+                subFFT = batched_crosscorr[subbatch_idx]
+                ccc = cp.abs(subFFT) ** corrPower * cp.exp(1j * cp.angle(subFFT))
+                cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)), 0)
+
+                _find_Bragg_disks_single_DP_FK_CUDA(
+                    None,
+                    None,
+                    ccc=ccc,
+                    cc=cc,
+                    corrPower=corrPower,
+                    sigma=sigma,
+                    edgeBoundary=edgeBoundary,
+                    minRelativeIntensity=minRelativeIntensity,
+                    minAbsoluteIntensity=minAbsoluteIntensity,
+                    relativeToPeak=relativeToPeak,
+                    minPeakSpacing=minPeakSpacing,
+                    maxNumPeaks=maxNumPeaks,
+                    subpixel=subpixel,
+                    upsample_factor=upsample_factor,
+                    filter_function=filter_function,
+                    peaks=peaks.get_pointlist(rx, ry),
+                    get_maximal_points=get_maximal_points,
+                    blocks=blocks,
+                    threads=threads,
+                )
+
+    else:
+        # Loop over all diffraction patterns
+        for (Rx, Ry) in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            desc="Finding Bragg Disks",
+            unit="DP",
+            unit_scale=True,
+        ):
+            if _qt_progress_bar is not None:
+                _qt_progress_bar.setValue(Rx * datacube.R_Ny + Ry + 1)
+                QApplication.processEvents()
+            DP = datacube.data[Rx, Ry, :, :]
+            _find_Bragg_disks_single_DP_FK_CUDA(
+                DP,
+                probe_kernel_FT,
+                corrPower=corrPower,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                filter_function=filter_function,
+                peaks=peaks.get_pointlist(Rx, Ry),
+                get_maximal_points=get_maximal_points,
+                blocks=blocks,
+                threads=threads,
+            )
     t = time() - t0
     print(
-        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
-            datacube.R_N, int(t / 3600), int(t / 60), int(t % 60)
-        )
+        f"Analyzed {datacube.R_N} diffraction patterns in {t//3600}h {t % 3600 // 60}m {t % 60:.2f}s\n(avg. speed {datacube.R_N/t:0.4f} patterns per second)".format()
     )
     peaks.name = name
     return peaks
@@ -185,6 +262,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
     get_maximal_points=None,
     blocks=None,
     threads=None,
+    ccc=None,
+    cc=None,
 ):
     """
     Finds the Bragg disks in DP by cross, hybrid, or phase correlation with probe_kernel_FT.
@@ -242,6 +321,8 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
                              If peaks is None, the PointList of peak positions is created here.
                              If peaks is not None, it is the PointList that detected peaks are added
                              to, and must have the appropriate coords ('qx','qy','intensity').
+        ccc and cc:         Precomputed complex and real-IFFT cross correlations. Used when called
+                            in batched mode only, causing local calculation of those to be skipped
 
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
@@ -254,21 +335,23 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
         subpixel
     )
 
-    # Perform any prefiltering
-    DP = cp.array(
-        DP if filter_function is None else filter_function(DP), dtype="float64"
-    )
-
-    # Get the cross correlation
-    if subpixel in ("none", "poly"):
-        cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
-        ccc = None
-    # for multicorr subpixel fitting, we need both the real and complex cross correlation
-    else:
-        ccc = get_cross_correlation_fk(
-            DP, probe_kernel_FT, corrPower, returnval="fourier"
+    # if we are in batching mode, cc and ccc will be provided. else, compute it
+    if ccc is None:
+        # Perform any prefiltering
+        DP = cp.array(
+            DP if filter_function is None else filter_function(DP), dtype="float64"
         )
-        cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)), 0)
+
+        # Get the cross correlation
+        if subpixel in ("none", "poly"):
+            cc = get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+            ccc = None
+        # for multicorr subpixel fitting, we need both the real and complex cross correlation
+        else:
+            ccc = get_cross_correlation_fk(
+                DP, probe_kernel_FT, corrPower, returnval="fourier"
+            )
+            cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)), 0)
 
     # Find the maxima
     maxima_x, maxima_y, maxima_int = get_maxima_2D(
