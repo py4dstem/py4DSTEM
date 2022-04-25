@@ -105,7 +105,7 @@ def find_Bragg_disks_CUDA(
     ), "Probe kernel shape must match filtered DP shape"
 
     # Get the probe kernel FT as a cupy array
-    probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe)))
+    probe_kernel_FT = cp.conj(cp.fft.fft2(cp.array(probe))).astype(cp.complex64)
     bytes_per_pattern = probe_kernel_FT.nbytes
 
     # get the maximal array kernel
@@ -115,7 +115,7 @@ def find_Bragg_disks_CUDA(
     #    get_maximal_points = kernels['maximal_pts_float32']
     # else:
     #    raise TypeError("Maximal kernel only valid for float32 and float64 types...")
-    get_maximal_points = kernels["maximal_pts_float64"]
+    get_maximal_points = kernels["maximal_pts_float32"]
 
     if get_maximal_points.max_threads_per_block < DP.shape[1]:
         # naive blocks/threads will not work, figure out an OK distribution
@@ -163,7 +163,7 @@ def find_Bragg_disks_CUDA(
                     datacube.data[rx, ry, :, :]
                     if filter_function is None
                     else filter_function(datacube.data[rx, ry, :, :]),
-                    dtype=cp.float64,
+                    dtype=cp.float32,
                 )
 
             # Perform the FFT and multiplication by probe_kernel on the batched array
@@ -339,7 +339,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
     if ccc is None:
         # Perform any prefiltering
         DP = cp.array(
-            DP if filter_function is None else filter_function(DP), dtype="float64"
+            DP if filter_function is None else filter_function(DP), dtype=cp.float32
         )
 
         # Get the cross correlation
