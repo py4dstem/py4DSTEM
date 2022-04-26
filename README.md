@@ -67,20 +67,16 @@ If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, ru
 
 ```
 conda update conda
-conda create -n py4dstem python==3.8
-conda activate py4dstem
-conda install tensorflow-gpu==2.4.1
-conda install pip
+conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install py4dstem[aiml-cuda]
 ```
 
 If you are running on Windows with Nvidia GPU and CUDA capability, run
 ```
 conda update conda
-conda create -n py4dstem python==3.8
-conda activate py4dstem
-conda install pip
-pip install tensorflow-gpu==2.4.1
+conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install py4dstem[aiml-cuda]
 ```
 
