@@ -7,7 +7,6 @@ from .array import Array
 from .arraystack import ArrayStack
 
 
-
 def Array_from_h5(group:h5py.Group, name:str):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
