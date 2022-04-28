@@ -1,4 +1,4 @@
-# Defines the DataCube class, which stores 4D-STEM datacubes
+# Defines the RealSlice class, which stores 2D real-space shaped data
 
 from .array import Array
 from .arrayio import Array_from_h5
