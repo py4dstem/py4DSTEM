@@ -1,4 +1,5 @@
-# Defines the DataCubeStack class, which stores a stack of multiple 4D-STEM datacubes
+# Defines the DataCubeStack class, which stores a 5D stack of multiple
+# 4D-STEM datacubes
 
 from .arraystack import ArrayStack
 from .arrayio import Array_from_h5
@@ -10,7 +11,7 @@ import dask.array as da
 
 class DataCubeStack(ArrayStack):
     """
-    Stores 4D-STEM datasets.
+    Stores multiple 4D-STEM datasets.
     """
     def __init__(
         self,
