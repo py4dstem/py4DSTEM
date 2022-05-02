@@ -26,28 +26,20 @@ class single_atom_scatter(object):
     def electron_scattering_factor(self,Z,gsq,units='A'):
         ai = self.e_scattering_factors[Z-1,0:10:2]
         bi = self.e_scattering_factors[Z-1,1:10:2]
-        # gsq = g**2
-        #Planck's constant in Js
-        h= 6.62607004e-34
-        #Electron rest mass in kg
+
+        # Planck's constant in Js
+        h = 6.62607004e-34
+        # Electron rest mass in kg
         me = 9.10938356e-31
-        #Electron charge in Coulomb
+        # Electron charge in Coulomb
         qe = 1.60217662e-19
-        #Electron wave number (reciprocal of wavelength) in Angstrom
-        # k0 = wavev(E)
-        #Relativistic electron mass correction
-        # gamma = relativistic_mass_correction(E)
-        # return 2*np.pi*gamma*me*qe/k0/h/h*1e-20
 
         fe = np.zeros_like(gsq)
-        a0=0.529177
-        eps0= 8.85418782e-42
-        qe= 1.60217e-19
         for i in range(5):
             fe +=ai[i]*(2+bi[i]*gsq)/(1+bi[i]*gsq)**2
 
-        # Result can be returned in units of Volt Angstrom ('VA') or Angstrom ('A')
-        if units=='VA': return h**2/(2*np.pi*me*qe)*1e18*fe
+        # Result can be returned in units of Volt Angstrom³ ('VA') or Angstrom ('A')
+        if units=='VA': return h**2/(8*np.pi*me*qe)*1e18*fe
         elif units == 'A' : return fe
 
     def get_scattering_factor(self,elements=None,composition=None,q_coords=None,units=None):

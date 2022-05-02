@@ -116,18 +116,23 @@ def calculate_dynamical_structure_factors(
 
     lobato_lookup = single_atom_scatter()
 
+    m0c2 = 5.109989461e5    # electron rest mass, in eV
+    relativistic_factor = (m0c2 + accelerating_voltage)/m0c2
+
     from functools import lru_cache
 
+    # get_f_e returns f^e in units of VÅ^3, with relativistic correction
+    # but not yet converted to 
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe + 0.1j * lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j))
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
