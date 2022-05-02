@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+
 class single_atom_scatter(object):
     """
     This class calculates the composition averaged single atom scattering factor for a
@@ -13,19 +14,20 @@ class single_atom_scatter(object):
     given in inverse Angstroms. Units is a string of 'VA' or 'A', which returns the
     scattering factor in volt angtroms or in angstroms.
     """
-    def __init__(self,elements=None,composition=None,q_coords=None,units=None):
+
+    def __init__(self, elements=None, composition=None, q_coords=None, units=None):
         self.elements = elements
         self.composition = composition
         self.q_coords = q_coords
         self.units = units
-        path = os.path.join(os.path.dirname(__file__),'scattering_factors.txt')
-        self.e_scattering_factors = np.loadtxt(path,dtype=np.float)
+        path = os.path.join(os.path.dirname(__file__), "scattering_factors.txt")
+        self.e_scattering_factors = np.loadtxt(path, dtype=np.float)
 
         return
 
-    def electron_scattering_factor(self,Z,gsq,units='A'):
-        ai = self.e_scattering_factors[Z-1,0:10:2]
-        bi = self.e_scattering_factors[Z-1,1:10:2]
+    def electron_scattering_factor(self, Z, gsq, units="A"):
+        ai = self.e_scattering_factors[Z - 1, 0:10:2]
+        bi = self.e_scattering_factors[Z - 1, 1:10:2]
 
         # Planck's constant in Js
         h = 6.62607004e-34
@@ -36,40 +38,53 @@ class single_atom_scatter(object):
 
         fe = np.zeros_like(gsq)
         for i in range(5):
-            fe +=ai[i]*(2+bi[i]*gsq)/(1+bi[i]*gsq)**2
+            fe += ai[i] * (2 + bi[i] * gsq) / (1 + bi[i] * gsq) ** 2
 
         # Result can be returned in units of Volt Angstrom³ ('VA') or Angstrom ('A')
-        if units=='VA': return h**2/(2*np.pi*me*qe)*1e18*fe
-        elif units == 'A' : return fe
+        if units == "VA":
+            return h ** 2 / (2 * np.pi * me * qe) * 1e18 * fe
+        elif units == "A":
+            return fe
 
-    def get_scattering_factor(self,elements=None,composition=None,q_coords=None,units=None):
+    def get_scattering_factor(
+        self, elements=None, composition=None, q_coords=None, units=None
+    ):
         if elements is None:
-            assert(not self.elements is None), "Must pass a list of atomic numbers in either class initialization or in call to get_scattering_factor()"
+            assert (
+                not self.elements is None
+            ), "Must pass a list of atomic numbers in either class initialization or in call to get_scattering_factor()"
             elements = self.elements
 
         if composition is None:
-            assert(not self.elements is None), "Must pass composition fractions in either class initialization or in call to get_scattering_factor()"
+            assert (
+                not self.elements is None
+            ), "Must pass composition fractions in either class initialization or in call to get_scattering_factor()"
             composition = self.composition
 
         if q_coords is None:
-            assert(not self.elements is None), "Must pass a q_space array in either class initialization or in call to get_scattering_factor()"
+            assert (
+                not self.elements is None
+            ), "Must pass a q_space array in either class initialization or in call to get_scattering_factor()"
             q_coords = self.q_coords
 
         if units is None:
             units = self.units
-            if(self.units is None):
+            if self.units is None:
                 print("Setting output units to Angstroms")
-                units = 'A'
+                units = "A"
 
-        assert(len(elements)==len(composition)), "Each element must have an associated composition."
+        assert len(elements) == len(
+            composition
+        ), "Each element must have an associated composition."
 
         if np.sum(composition) > 1:
-            #normalize composition if passed as stoichiometry instead of atomic fractions
+            # normalize composition if passed as stoichiometry instead of atomic fractions
             composition /= np.sum(composition)
 
         fe = np.zeros_like(q_coords)
         for i in range(len(elements)):
-            fe += composition[i]*self.electron_scattering_factor(elements[i],np.square(q_coords),units)
+            fe += composition[i] * self.electron_scattering_factor(
+                elements[i], np.square(q_coords), units
+            )
 
         self.fe = fe
-
