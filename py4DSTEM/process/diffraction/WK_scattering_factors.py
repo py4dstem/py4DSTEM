@@ -24,7 +24,7 @@ def compute_WK_factor(
     """
     Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
     of the elastic part and computation of the inelastic part found in EMsoftLib/others.f90.
-    Return value should be in VÅ.
+    Return value should be in VÅ^3.
 
     This implementation always returns the absorptive, relativistically corrected factors.
 
@@ -209,7 +209,7 @@ def compute_WK_factor(
 
     return (
         Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
-    )  # convert to Volts, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
+    )  # convert to Volt angstrom^3, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
     # I am really not certain about these factors! AARGH
 
 
