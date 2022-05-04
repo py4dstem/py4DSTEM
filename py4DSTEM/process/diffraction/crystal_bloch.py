@@ -174,11 +174,20 @@ def calculate_dynamical_structure_factors(
                 include_phonon=True,
             )
 
+    display_names = {
+        "Lobato": "Lobato-Van Dyck",
+        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
+        "WK": "Weickenmeier-Kohl",
+        "WK-C": "Weickenmeier-Kohl + Core",
+        "WK-P": "Weickenmeier-Kohl + Phonon",
+        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
+    }
+
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
     for i_hkl in tqdm(
         range(hkl.shape[1]),
-        desc=f"Computing {method} lookup table",
+        desc=f"Computing {display_names[method]} lookup table",
         disable=not verbose,
     ):
         Freal = 0.0
