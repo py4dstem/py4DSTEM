@@ -8,7 +8,7 @@ For additional information beyond what's decribed below, please see:
 - [our open access publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications
 
 
-## What is 4D-STEM?
+# What is 4D-STEM?
 
 In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
@@ -27,7 +27,7 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 
 
-## Installation
+# Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
 First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
@@ -59,7 +59,7 @@ Please note that virtual environments are used in the instructions above, to mak
 Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
 You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
-## Advanced installation - ML functionality
+# Advanced installation - ML functionality
 
 To install the py4dstem with AI/ML functionality, follow the steps below.
 
@@ -91,7 +91,7 @@ pip install "py4dstem[aiml]"
 
 
 
-## Running the GUI
+# Running the GUI
 
 At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
 Our intention is to support many of these analyses through the GUI eventually.
@@ -110,7 +110,7 @@ conda activate py4dstem
 py4dstem path/to/data/file.h5
 ```
 
-## Running the code
+# Running the code
 
 The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
 
@@ -128,16 +128,11 @@ Links to individual datasets are provided in the sample code files which make us
 Once you've selected a file of sample code to run, find the link in that file to the dataset it uses, download and place it somewhere in your filesystem, then edit the filepath in the code to indicate where you've put that data.
 
 
-
+# More information
 
 ## For contributors
 
 Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff4500535dba).
-
-
-
-
-## More information
 
 ### Dependencies
 
@@ -172,11 +167,11 @@ GNU GPLv3
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
 
-
 ## Papers which have used py4DSTEM
 
+Please email clophus@lbl.gov if you used py4DSTEM for analysis and your paper is not listed below!
 
-### 2022
+### 2022 (9)
 
 [Correlative image learning of chemo-mechanics in phase-transforming solids](https://www.nature.com/articles/s41563-021-01191-0), Nature Materials (2022)
 
@@ -198,9 +193,9 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 
 
-### 2021
+### 2021 (10)
 
-[Cryoforged nanotwinned titanium with ultrahigh strength and ductility](https://doi.org/10.1126/science.abe7252), Science 16 373, 1363 (2021).
+[Cryoforged nanotwinned titanium with ultrahigh strength and ductility](https://doi.org/10.1126/science.abe7252), Science 16, 373, 1363 (2021).
 
 [Strain fields in twisted bilayer graphene](https://doi.org/10.1038/s41563-021-00973-w), Nature Materials 20, 956 (2021).
 
@@ -221,7 +216,9 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 [4D-STEM of Beam-Sensitive Materials](https://doi.org/10.1021/acs.accounts.1c00073), Accounts of Chemical Research 54, 2543 (2021).
 
 
-### 2020
+### 2020 (3)
+
+[Patterned probes for high precision 4D-STEM bragg measurements](https://doi.org/10.1063/5.0015532), Ultramicroscopy 209, 112890 (2020).
 
 
 [Tilted fluctuation electron microscopy](https://doi.org/10.1063/5.0015532), Applied Physics Letters 117, 091903 (2020).
@@ -232,7 +229,7 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 
 
-## Acknowledgements
+# Acknowledgements
 
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
