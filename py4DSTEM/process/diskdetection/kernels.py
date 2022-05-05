@@ -26,13 +26,13 @@ void maximal_pts(const float *ar, bool *out, const long long sizex, const long l
     if (tid < N && x>0 && x<(sizex-1) && y>0 && y<(sizey-1)) {
         float val = ar[tid];
         
-        out[tid] = ( val > ar[tid + sizey]) &
-                    (val > ar[tid - sizey]) &
-                    (val > ar[tid + 1]) &
-                    (val > ar[tid - 1]) &
-                    (val > ar[tid - sizey - 1]) &
-                    (val > ar[tid - sizey + 1]) &
-                    (val > ar[tid + sizey - 1]) &
+        out[tid] = ( val > ar[tid + sizey]) &&
+                    (val > ar[tid - sizey]) &&
+                    (val > ar[tid + 1]) &&
+                    (val > ar[tid - 1]) &&
+                    (val > ar[tid - sizey - 1]) &&
+                    (val > ar[tid - sizey + 1]) &&
+                    (val > ar[tid + sizey - 1]) &&
                     (val > ar[tid+sizey + 1]);
     }
 }
@@ -50,13 +50,13 @@ void maximal_pts(const double *ar, bool *out, const long long sizex, const long 
     if (tid < N && x>0 && x<(sizex-1) && y>0 && y<(sizey-1)) {
         double val = ar[tid];
         
-        out[tid] = ( val > ar[tid + sizey]) &
-                    (val > ar[tid - sizey]) &
-                    (val > ar[tid + 1]) &
-                    (val > ar[tid - 1]) &
-                    (val > ar[tid - sizey - 1]) &
-                    (val > ar[tid - sizey + 1]) &
-                    (val > ar[tid + sizey - 1]) &
+        out[tid] = ( val > ar[tid + sizey]) &&
+                    (val > ar[tid - sizey]) &&
+                    (val > ar[tid + 1]) &&
+                    (val > ar[tid - 1]) &&
+                    (val > ar[tid - sizey - 1]) &&
+                    (val > ar[tid - sizey + 1]) &&
+                    (val > ar[tid + sizey - 1]) &&
                     (val > ar[tid+sizey + 1]);
     }
 }
