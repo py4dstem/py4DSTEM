@@ -26,11 +26,11 @@ def main():
     # set parameters
     disk_detect_params = {
         'minRelativeIntensity' : 0,
-        'minAbsoluteIntensity' : 0.01,
+        'minAbsoluteIntensity' : 1e-6,
         'edgeBoundary' : 4,
-        'minPeakSpacing' : 0.45/0.0217, # 0.0217 is the pixelSizeInvAng
-        'subpixel' : 'poly',   # quicker but less precise method
-        'upsample_factor' : 32
+        'minPeakSpacing' : 20,
+        'subpixel' : 'poly',
+        'maxNumPeaks': 100,
     }
     
     start = time.time()
