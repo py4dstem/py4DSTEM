@@ -135,10 +135,15 @@ def find_Bragg_disks_CUDA(
         # use a fudge factor to leave room for the fourier transformed data
         # I have set this at 10, which results in underutilization of 
         # VRAM, because this yielded better performance in my testing
-        batch_size = max_num_bytes // (bytes_per_pattern * 10)
+        batch_size = max_num_bytes // (bytes_per_pattern * 15)
         num_batches = datacube.R_N // batch_size + 1
 
         print(f"Using {num_batches} batches of {batch_size} patterns each...")
+
+        # allocate array for batch of DPs
+        batched_subcube = cp.zeros(
+            (batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
+        )
 
         for batch_idx in tqdmnd(
             range(num_batches), desc="Finding Bragg disks in batches", unit="batch"
@@ -147,12 +152,6 @@ def find_Bragg_disks_CUDA(
             probes_remaining = datacube.R_N - (batch_idx * batch_size)
             this_batch_size = (
                 probes_remaining if probes_remaining < batch_size else batch_size
-            )
-
-            # allocate array for batch of DPs
-            # potential optimization: allocate this only once
-            batched_subcube = cp.zeros(
-                (this_batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
             )
 
             # fill in diffraction patterns, with filtering
