@@ -542,8 +542,8 @@ def get_maxima_2D(
                 Iy1 = ar[int(maxima["x"][i]), int(maxima["y"][i]) + 1]
                 deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
                 deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
-                maxima["x"][i] += deltax
-                maxima["y"][i] += deltay
+                maxima["x"][i] += deltax if np.abs(deltax) <= 1. else 0.
+                maxima["y"][i] += deltay if np.abs(deltay) <= 1. else 0.
                 maxima["intensity"][i] = linear_interpolation_2D(
                     ar, maxima["x"][i], maxima["y"][i]
                 )
