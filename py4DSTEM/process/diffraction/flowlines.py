@@ -20,7 +20,8 @@ def make_orientation_histogram(
     radial_ranges: np.ndarray = None,
     orientation_map = None,
     orientation_ind: int = 0, 
-    orientation_growth_angles: np.array = 0.0,  
+    orientation_growth_angles: np.array = 0.0,
+    orientation_separate_bins: bool = False,  
     orientation_flip_sign: bool = False,  
     upsample_factor=4.0,
     theta_step_deg=1.0,
@@ -41,6 +42,8 @@ def make_orientation_histogram(
         radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
         orientation_map (OrientationMap):   Class containing the Euler angles to generate a flowline map. 
         orientation_ind (int):              Index of the orientation map (default 0)
+        orientation_growth_angles (array):  Angles to place into histogram, relative to orientation.
+        orientation_separate_bins (bool):   whether to place multiple angles into multiple radial bins.
         upsample_factor (float):            Upsample factor
         theta_step_deg (float):             Step size along annular direction in degrees
         sigma_x (float):                    Smoothing in x direction before upsample
@@ -72,9 +75,12 @@ def make_orientation_histogram(
         size_input = bragg_peaks.shape
     else:
         orientation_growth_angles = np.atleast_1d(orientation_growth_angles)
-        num_radii = 1
         num_angles = orientation_growth_angles.shape[0]
         size_input = [orientation_map.num_x, orientation_map.num_y]
+        if orientation_separate_bins is False:
+            num_radii = 1
+        else:
+            num_radii = num_angles
     
     size_output = np.round(np.array(size_input).astype('float') * upsample_factor).astype('int')
 
@@ -116,16 +122,28 @@ def make_orientation_histogram(
                     t = np.arctan2(p.data['qy'][sub],p.data['qx'][sub]) / dtheta
             else:
                 if orientation_map.corr[rx,ry,orientation_ind] > 0:
-                    if orientation_flip_sign:
-                        t = np.array([(-orientation_map.angles[rx,ry,orientation_ind,0] \
-                            - orientation_map.angles[rx,ry,orientation_ind,2]) \
-                            / dtheta]) + orientation_growth_angles
+                    if orientation_separate_bins is False:
+                        if orientation_flip_sign:
+                            t = np.array([(-orientation_map.angles[rx,ry,orientation_ind,0] \
+                                - orientation_map.angles[rx,ry,orientation_ind,2]) \
+                                / dtheta]) + orientation_growth_angles
+                        else:
+                            t = np.array([(orientation_map.angles[rx,ry,orientation_ind,0] \
+                                + orientation_map.angles[rx,ry,orientation_ind,2]) \
+                                / dtheta]) + orientation_growth_angles
+                        intensity = np.ones(num_angles) * orientation_map.corr[rx,ry,orientation_ind]
+                        add_data = True
                     else:
-                        t = np.array([(orientation_map.angles[rx,ry,orientation_ind,0] \
-                            + orientation_map.angles[rx,ry,orientation_ind,2]) \
-                            / dtheta]) + orientation_growth_angles
-                    intensity = np.ones(num_angles) * orientation_map.corr[rx,ry,orientation_ind]
-                    add_data = True
+                        if orientation_flip_sign:
+                            t = np.array([(-orientation_map.angles[rx,ry,orientation_ind,0] \
+                                - orientation_map.angles[rx,ry,orientation_ind,2]) \
+                                / dtheta]) + orientation_growth_angles[a0]
+                        else:
+                            t = np.array([(orientation_map.angles[rx,ry,orientation_ind,0] \
+                                + orientation_map.angles[rx,ry,orientation_ind,2]) \
+                                / dtheta]) + orientation_growth_angles[a0]
+                        intensity = orientation_map.corr[rx,ry,orientation_ind]
+                        add_data = True
 
             if add_data:
                 tF = np.floor(t).astype('int')
@@ -246,12 +264,25 @@ def make_flowline_map(
                                     [radial_bin x_probe y_probe theta]
     """
 
-    # Default seed separation
-    if sep_seeds is None:
-        sep_seeds = np.round(sep_xy / 2 + 0.5).astype('int')
+    # Ensure sep_xy and sep_theta are arrays
+    sep_xy = np.atleast_1d(sep_xy)
+    sep_theta = np.atleast_1d(sep_theta)
 
     # number of radial bins
     num_radii = orient_hist.shape[0]
+    if num_radii > 1 and len(sep_xy)==1:
+        sep_xy = np.ones(num_radii)*sep_xy
+    if num_radii > 1 and len(sep_theta)==1:
+        sep_theta = np.ones(num_radii)*sep_theta
+
+    # Default seed separation
+    if sep_seeds is None:
+        sep_seeds = np.round(np.min(sep_xy) / 2 + 0.5).astype('int')
+    else:
+        sep_seeds = np.atleast_1d(sep_seeds).astype('int')
+        if num_radii > 1 and len(sep_seeds)==1:
+            sep_seeds = (np.ones(num_radii)*sep_seeds).astype('int')
+
     
     # coordinates
     theta = np.linspace(0,np.pi,orient_hist.shape[3],endpoint=False)
@@ -275,15 +306,7 @@ def make_flowline_map(
     vy = vy[None,:,None].astype('int')
     vt = vt[None,None,:].astype('int')
 
-    # initialize collision check array
-    cr = np.arange(-np.ceil(sep_xy),np.ceil(sep_xy)+1)
-    ct = np.arange(-np.ceil(sep_theta),np.ceil(sep_theta)+1)
-    ay,ax,at = np.meshgrid(cr,cr,ct)
-    c_mask = ((ax**2 + ay**2)/sep_xy**2 + at**2/sep_theta**2 <= (1 + 1/sep_xy)**2)[None,:,:,:]
-    cx = cr[None,:,None,None].astype('int')
-    cy = cr[None,None,:,None].astype('int')
-    ct = ct[None,None,None,:].astype('int')
-
+    
     # initalize flowline array
     orient_flowlines = np.zeros_like(orient_hist)
 
@@ -293,6 +316,18 @@ def make_flowline_map(
 
     # Loop over radial bins
     for a0 in range(num_radii):
+        # initialize collision check array
+        cr = np.arange(-np.ceil(sep_xy[a0]),np.ceil(sep_xy[a0])+1)
+        ct = np.arange(-np.ceil(sep_theta[a0]),np.ceil(sep_theta[a0])+1)
+        ay,ax,at = np.meshgrid(cr,cr,ct)
+        c_mask = ((ax**2 + ay**2)/sep_xy[a0]**2 + \
+            at**2/sep_theta[a0]**2 <= (1 + 1/sep_xy[a0])**2)[None,:,:,:]
+        cx = cr[None,:,None,None].astype('int')
+        cy = cr[None,None,:,None].astype('int')
+        ct = ct[None,None,None,:].astype('int')
+
+
+
         # Find all seed locations
         orient = orient_hist[a0,:,:,:] 
         sub_seeds = np.logical_and(np.logical_and(
@@ -510,6 +545,7 @@ def make_flowline_rainbow_image(
     size_input = orient_flowlines.shape
     size_output = np.array([size_input[0],size_input[1],size_input[2],3])
     im_flowline = np.zeros(size_output)
+    theta_offset = np.atleast_1d(theta_offset)
 
     if greyscale is True:
         for a0 in range(size_input[0]):
@@ -539,13 +575,15 @@ def make_flowline_rainbow_image(
         theta = np.linspace(0,np.pi,size_input[3],endpoint=False)
         theta_color = theta * sym_rotation_order
 
-        # color projections
-        b0 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-        b1 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-        b2 =  np.maximum(1 - np.abs(np.mod(theta_offset + theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-
+        if size_input[0] > 1 and len(theta_offset) == 1:
+            theta_offset = np.ones(size_input[0])*theta_offset
 
         for a0 in range(size_input[0]):
+            # color projections
+            b0 =  np.maximum(1 - np.abs(np.mod(theta_offset[a0] + theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+            b1 =  np.maximum(1 - np.abs(np.mod(theta_offset[a0] + theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+            b2 =  np.maximum(1 - np.abs(np.mod(theta_offset[a0] + theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
+
             sig = np.clip(
                 (orient_flowlines[a0,:,:,:] - int_range[0]) \
                 / (int_range[1] - int_range[0]),0,1)
