@@ -185,7 +185,7 @@ Please email clophus@lbl.gov if you used py4DSTEM for analysis and your paper is
 
 [Microstructural dependence of defect formation in iron-oxide thin films](https://doi.org/10.1016/j.apsusc.2022.152844), Applied Surface Science 589, 152844 (2022).
 
-[Chemical and Structural Alterations in the Amorphous Structure of Obsidian due to Nanolites](https://doi.org/10.1017/S1431927621013957), 28, 289 (2022).
+[Chemical and Structural Alterations in the Amorphous Structure of Obsidian due to Nanolites](https://doi.org/10.1017/S1431927621013957), Microscopy and Microanalysis 28, 289 (2022).
 
 [Nanoscale characterization of crystalline and amorphous phases in silicon oxycarbide ceramics using 4D-STEM](https://doi.org/10.1016/j.matchar.2021.111512), Materials Characterization 181, 111512 (2021).
 
