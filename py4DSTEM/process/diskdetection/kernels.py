@@ -18,7 +18,7 @@ this is not considered a problem.
 
 maximal_pts_float32 = r'''
 extern "C" __global__
-void maximal_pts(const float *ar, bool *out, const long long sizex, const long long sizey, const long long N){
+void maximal_pts(const float *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
     int x = tid % sizex;
     int y = tid / sizey; // Floor divide
@@ -33,7 +33,8 @@ void maximal_pts(const float *ar, bool *out, const long long sizex, const long l
                     (val > ar[tid - sizey - 1]) &&
                     (val > ar[tid - sizey + 1]) &&
                     (val > ar[tid + sizey - 1]) &&
-                    (val > ar[tid+sizey + 1]);
+                    (val > ar[tid+sizey + 1] &&
+                    (val >= minAbsoluteIntensity));
     }
 }
 '''
@@ -42,7 +43,7 @@ kernels['maximal_pts_float32'] = cp.RawKernel(maximal_pts_float32,'maximal_pts')
 
 maximal_pts_float64 = r'''
 extern "C" __global__
-void maximal_pts(const double *ar, bool *out, const long long sizex, const long long sizey, const long long N){
+void maximal_pts(const double *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
     int x = tid % sizex;
     int y = tid / sizey; // Floor divide
@@ -57,7 +58,8 @@ void maximal_pts(const double *ar, bool *out, const long long sizex, const long 
                     (val > ar[tid - sizey - 1]) &&
                     (val > ar[tid - sizey + 1]) &&
                     (val > ar[tid + sizey - 1]) &&
-                    (val > ar[tid+sizey + 1]);
+                    (val > ar[tid+sizey + 1] &&
+                    (val >= minAbsoluteIntensity));
     }
 }
 '''
