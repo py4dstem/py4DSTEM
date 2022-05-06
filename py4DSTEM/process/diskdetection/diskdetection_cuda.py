@@ -142,7 +142,7 @@ def find_Bragg_disks_CUDA(
 
         # allocate array for batch of DPs
         batched_subcube = cp.zeros(
-            (batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
+            (batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float32
         )
 
         for batch_idx in tqdmnd(
@@ -468,7 +468,7 @@ def get_maxima_2D(
     sizex = ar.shape[0]
     sizey = ar.shape[1]
     N = sizex * sizey
-    get_maximal_points(blocks, threads, (ar, maxima_bool, sizex, sizey, N))
+    get_maximal_points(blocks, threads, (ar, maxima_bool, minAbsoluteIntensity, sizex, sizey, N))
 
     # Remove edges
     if edgeBoundary > 0:
