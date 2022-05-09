@@ -134,8 +134,7 @@ def get_pointlistarray_from_grp(g):
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         try:
             pla.get_pointlist(i,j).add_dataarray(dset[i,j])
-        except ValueError as e:
-            # print(f"Potentially empty PointList at {i},{j}")
+        except ValueError:
             pass
     return pla
 
