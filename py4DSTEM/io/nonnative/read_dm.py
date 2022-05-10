@@ -77,20 +77,26 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
             else:
                 dtype = memmap.dtype
             shape = memmap.shape
-            if len(shape)==4:
+            rank = len(shape)
+            if rank==4:
                 R_Nx, R_Ny, Q_Nx, Q_Ny = shape
-            elif len(shape)==3:
+            elif rank==3:
                 R_Nx, Q_Nx, Q_Ny = shape
                 R_Ny = 1
             else:
-                raise Exception(f"Data should be 4-dimensional; found {len(shape)} dimensions")
+                raise Exception(f"Data should be 4-dimensional; found {rank} dimensions")
             Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
             data = np.empty((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=dtype)
             for Rx in range(R_Nx):
                 for Ry in range(R_Ny):
-                    data[Rx, Ry, :, :] = bin2D(
-                        memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
-                    )
+                    if rank==4:
+                        data[Rx, Ry, :, :] = bin2D(
+                            memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
+                        )
+                    else:
+                        data[Rx, Ry, :, :] = bin2D(
+                            memmap[Rx, :, :,], binfactor, dtype=dtype
+                        )
             dc = DataCube(data=data)
     else:
         raise Exception(
