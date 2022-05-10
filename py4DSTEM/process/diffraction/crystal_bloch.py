@@ -116,18 +116,23 @@ def calculate_dynamical_structure_factors(
 
     lobato_lookup = single_atom_scatter()
 
+    m0c2 = 5.109989461e5    # electron rest mass, in eV
+    relativistic_factor = (m0c2 + accelerating_voltage)/m0c2
+
     from functools import lru_cache
 
+    # get_f_e returns f^e in units of VÅ^3, with relativistic correction
+    # but not yet converted to 
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe + 0.1j * lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j))
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
@@ -169,11 +174,20 @@ def calculate_dynamical_structure_factors(
                 include_phonon=True,
             )
 
+    display_names = {
+        "Lobato": "Lobato-Van Dyck",
+        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
+        "WK": "Weickenmeier-Kohl",
+        "WK-C": "Weickenmeier-Kohl + Core",
+        "WK-P": "Weickenmeier-Kohl + Phonon",
+        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
+    }
+
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
     for i_hkl in tqdm(
         range(hkl.shape[1]),
-        desc=f"Computing {method} lookup table",
+        desc=f"Computing {display_names[method]} lookup table",
         disable=not verbose,
     ):
         Freal = 0.0
@@ -272,7 +286,7 @@ def generate_dynamical_diffraction_pattern(
     """
     t0 = time()  # start timer for matrix setup
 
-    n_beams = beams.length
+    n_beams = beams.data.shape[0]
 
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
@@ -420,6 +434,7 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
+    two_beam_zone_axis_lattice: np.ndarray = None,
 ) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -444,6 +459,10 @@ def generate_CBED(
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
                                         keyed by tuples of (h,k,l).
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        two_beam_zone_axis_lattice      When only two beams are present in the "beams" PointList,
+                                        the computation of the projected crystallographic directions
+                                        becomes ambiguous. In this case, you must specify the indices of
+                                        the zone axis used to generate the beams.
 
     Returns:
         If thickness is a scalar: CBED pattern as np.ndarray
@@ -460,9 +479,20 @@ def generate_CBED(
     )
     qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
 
-    proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
-    hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
-    hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
+    # If there are only two beams, augment the list with a third perpendicular spot
+    if qxy.shape[0] == 2:
+        assert two_beam_zone_axis_lattice is not None, "When only two beams are present, two_beam_zone_axis_lattice must be specified."
+        hkl_reflection = hkl[1] if np.all(qxy[0]==0.) else hkl[0]
+        qxy_reflection = qxy[1] if np.all(qxy[0]==0.) else qxy[0]
+        orthogonal_spot = np.cross(two_beam_zone_axis_lattice,hkl_reflection)
+        hkl_augmented = np.vstack((hkl,orthogonal_spot))
+        qxy_augmented = np.vstack((qxy,np.flipud(qxy_reflection)))
+        proj = np.linalg.lstsq(qxy_augmented, hkl_augmented, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
+    # Otherwise calculate them based on the pattern
+    else:
+        proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
     zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,

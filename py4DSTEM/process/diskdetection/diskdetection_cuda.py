@@ -135,10 +135,15 @@ def find_Bragg_disks_CUDA(
         # use a fudge factor to leave room for the fourier transformed data
         # I have set this at 10, which results in underutilization of 
         # VRAM, because this yielded better performance in my testing
-        batch_size = max_num_bytes // (bytes_per_pattern * 10)
+        batch_size = max_num_bytes // (bytes_per_pattern * 15)
         num_batches = datacube.R_N // batch_size + 1
 
         print(f"Using {num_batches} batches of {batch_size} patterns each...")
+
+        # allocate array for batch of DPs
+        batched_subcube = cp.zeros(
+            (batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float32
+        )
 
         for batch_idx in tqdmnd(
             range(num_batches), desc="Finding Bragg disks in batches", unit="batch"
@@ -147,12 +152,6 @@ def find_Bragg_disks_CUDA(
             probes_remaining = datacube.R_N - (batch_idx * batch_size)
             this_batch_size = (
                 probes_remaining if probes_remaining < batch_size else batch_size
-            )
-
-            # allocate array for batch of DPs
-            # potential optimization: allocate this only once
-            batched_subcube = cp.zeros(
-                (this_batch_size, datacube.Q_Nx, datacube.Q_Ny), dtype=cp.float64
             )
 
             # fill in diffraction patterns, with filtering
@@ -469,7 +468,7 @@ def get_maxima_2D(
     sizex = ar.shape[0]
     sizey = ar.shape[1]
     N = sizex * sizey
-    get_maximal_points(blocks, threads, (ar, maxima_bool, sizex, sizey, N))
+    get_maximal_points(blocks, threads, (ar, maxima_bool, minAbsoluteIntensity, sizex, sizey, N))
 
     # Remove edges
     if edgeBoundary > 0:
@@ -543,8 +542,8 @@ def get_maxima_2D(
                 Iy1 = ar[int(maxima["x"][i]), int(maxima["y"][i]) + 1]
                 deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
                 deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
-                maxima["x"][i] += deltax
-                maxima["y"][i] += deltay
+                maxima["x"][i] += deltax if np.abs(deltax) <= 1. else 0.
+                maxima["y"][i] += deltay if np.abs(deltay) <= 1. else 0.
                 maxima["intensity"][i] = linear_interpolation_2D(
                     ar, maxima["x"][i], maxima["y"][i]
                 )
