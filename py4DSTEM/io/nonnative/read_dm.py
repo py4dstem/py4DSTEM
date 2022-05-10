@@ -76,7 +76,14 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
                 dtype = kwargs["dtype"]
             else:
                 dtype = memmap.dtype
-            R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
+            shape = memmap.shape
+            if len(shape)==4:
+                R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+            elif len(shape)==3:
+                R_Nx, Q_Nx, Q_Ny = shape
+                R_Ny = 1
+            else:
+                raise Exception(f"Data should be 4-dimensional; found {len(shape)} dimensions")
             Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
             data = np.empty((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=dtype)
             for Rx in range(R_Nx):
