@@ -759,13 +759,16 @@ def _get_latest_model(model_path = None):
         if os.path.exists(file_path) and file_id == file_id_old:
             print('Latest model weight is already available in the local system. Loading the model... \n')
             model_path = file_path
-            os.remove('./tmp/model_metadata_old.json')
+            #os.remove('./tmp/model_metadata_old.json')
             os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
         else:
             print('Checking the latest model on the cloud... \n')
             filename = file_path + file_type
             download_file_from_google_drive(file_id,filename)
-            shutil.unpack_archive(filename, './tmp' ,format="zip")
+            try:
+                shutil.unpack_archive(filename, './tmp' ,format="zip")
+            except:
+                pass
             model_path = file_path
             os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
             print('Loading the model... \n')

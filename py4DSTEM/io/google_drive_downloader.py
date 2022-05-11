@@ -7,7 +7,7 @@ import os
 # Built-in sample datasets
 
 sample_data_ids = {
-    'FCU-Net' : '1zlneUM88zBniFnymiIejHxEzAoYrK9ct',
+    'FCU-Net' : '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi',
     'sample_diffraction_pattern':'1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU'
 }
 
