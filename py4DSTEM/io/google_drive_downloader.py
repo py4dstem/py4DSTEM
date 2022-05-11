@@ -7,7 +7,7 @@ import os
 # Built-in sample datasets
 
 sample_data_ids = {
-    'FCUNet' : 'TODO-add url/id',
+    'FCU-Net' : '1zlneUM88zBniFnymiIejHxEzAoYrK9ct',
     'sample_diffraction_pattern':'1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU'
 }
 
