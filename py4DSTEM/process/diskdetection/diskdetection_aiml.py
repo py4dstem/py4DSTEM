@@ -1,8 +1,8 @@
 # Functions for finding Bragg disks using AI/ML pipeline
 # Joydeep Munshi
 
-''' 
-Functions for finding Braggdisks using AI/ML method using tensorflow 
+'''
+Functions for finding Braggdisks using AI/ML method using tensorflow
 '''
 
 import os
@@ -37,8 +37,8 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
-    
-    The input DP and Probes need to be aligned before the prediction. Detected peaks within 
+
+    The input DP and Probes need to be aligned before the prediction. Detected peaks within
     edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
     with intensities less than minRelativeIntensity of the brightest peak in the
     correlation are discarded. Then peaks which are within a distance of minPeakSpacing
@@ -46,7 +46,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     lesser correlation intensities is removed. Finally, if the number of peaks remaining
     exceeds maxNumPeaks, only the maxNumPeaks peaks with the highest correlation
     intensity are retained.
-    
+
     Args:
         DP (ndarray): a diffraction pattern
         probe (ndarray): the vacuum probe template
@@ -56,7 +56,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -87,7 +87,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
             detected peaks are added to, and must have the appropriate coords
             ('qx','qy','intensity').
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
-            By default, if the model_path is not provided, py4DSTEM will search for the 
+            By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommeded to
             keep track of the model path and advised to keep this argument unchanged (None)
             to always search for the latest updated training model weights.
@@ -95,20 +95,17 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     Returns:
         (PointList): the Bragg peak positions and correlation intensities
     """
-    
     try:
         import crystal4D
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
-        
     try:
         import tensorflow as tf
     except:
         raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
-    
     assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
-    
+
     # Perform any prefiltering
     if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = DP if filter_function is None else filter_function(DP)
@@ -120,7 +117,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
         prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
-        
+
         for i in tqdmnd(num_attmpts, desc='Neural network is predicting atomic potential', unit='ATTEMPTS',unit_scale=True):
             prediction += model.predict([DP,probe])
         print('Averaging over {} attempts \n'.format(num_attmpts))
@@ -128,8 +125,8 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     else:
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
-    
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(pred, 
+
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(pred,
                                                  sigma = sigma,
                                                  minRelativeIntensity=minRelativeIntensity,
                                                  minAbsoluteIntensity=minAbsoluteIntensity,
@@ -139,8 +136,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
                                                  minSpacing = minPeakSpacing,
                                                  subpixel=subpixel,
                                                  upsample_factor=upsample_factor)
-            
-    
+
     maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
     # Make peaks PointList
@@ -172,9 +168,9 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
                                    model_path = None):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions
-    (Rx,Ry) by AI/ML method. This method utilizes FCU-Net to predict Bragg 
+    (Rx,Ry) by AI/ML method. This method utilizes FCU-Net to predict Bragg
     disks from diffraction images.
-    
+
     Args:
         datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
@@ -184,7 +180,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -224,44 +220,43 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         (n-tuple of PointLists, n=len(Rx)): the Bragg peak positions and
         correlation intensities at each scan position (Rx,Ry).
     """
-    
+
     try:
         import crystal4D
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
-        
     try:
         import tensorflow as tf
     except:
         raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
-    
+
     assert(len(Rx)==len(Ry))
     peaks = []
-    
+
     if predict:
         model = _get_latest_model(model_path = model_path)
         t0= time()
-        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0), 
+        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0),
                                              len(Rx), axis=0), axis=-1)
         DP = np.expand_dims(np.expand_dims(datacube.data[Rx[0],Ry[0],:,:], axis=0), axis=-1)
         total_DP = len(Rx)
         for i in range(1,len(Rx)):
             DP_ = np.expand_dims(np.expand_dims(datacube.data[Rx[i],Ry[i],:,:], axis=0), axis=-1)
             DP = np.concatenate([DP,DP_], axis=0)
-            
+
         prediction = np.zeros(shape = (total_DP, datacube.Q_Nx, datacube.Q_Ny, 1))
-        
+
         image_num = len(Rx)
         batch_num = int(image_num//batch_size)
-        
+
         for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             for i in range(batch_num):
                 prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose=0)
             if (i+1)*batch_size < image_num:
                 prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose=0)
-        
+
         prediction = prediction/num_attmpts
-        
+
     # Loop over selected diffraction patterns
     for Rx in tqdmnd(image_num,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
         DP = prediction[Rx,:,:,0]
@@ -309,7 +304,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                  _qt_progress_bar = None,
                                  model_path = None,):
     """
-    Finds the Bragg disks in all diffraction patterns of datacube from AI/ML method. 
+    Finds the Bragg disks in all diffraction patterns of datacube from AI/ML method.
     When hist = True, returns histogram of intensities in the entire datacube.
 
     Args:
@@ -321,12 +316,12 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
-            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
-            will implement Dask parrlelization implementation of the serial function to boost up the 
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version
+            will implement Dask parrlelization implementation of the serial function to boost up the
             performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
             significant amount of time to predict for all the DPs in a datacube.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -369,20 +364,19 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
-            By default, if the model_path is not provided, py4DSTEM will search for the 
+            By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to
             keep track of the model path and advised to keep this argument unchanged (None)
             to always search for the latest updated training model weights.
-            
+
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
-    
+
     try:
         import crystal4D
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
-        
     try:
         import tensorflow as tf
     except:
@@ -396,17 +390,17 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     if filter_function: assert callable(filter_function), "filter_function must be callable"
     DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
     #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
-    
+
     if predict:
         t0=time()
         model = _get_latest_model(model_path = model_path)
-        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0), 
+        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0),
                                              datacube.R_N, axis=0), axis=-1)
         DP = np.expand_dims(np.reshape(datacube.data,
                                       (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
-            
+
         prediction = np.zeros(shape = (datacube.R_N, datacube.Q_Nx, datacube.Q_Ny, 1))
-        
+
         image_num = datacube.R_N
         batch_num = int(image_num//batch_size)
 
@@ -417,7 +411,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                 prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose =0)
 
         prediction = prediction/num_attmpts
-    
+
         prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
                                 (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
 
@@ -443,7 +437,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     t2 = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
                                                                    int(t2/60), int(t2%60)))
-        
+
     if global_threshold == True:
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
@@ -471,7 +465,7 @@ def find_Bragg_disks_aiml(datacube, probe,
                           distributed = None,
                           CUDA = True):
     """
-    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method 
+    Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method
     utilizes FCU-Net to predict Bragg disks from diffraction images.
 
     datacube (datacube): a diffraction datacube
@@ -482,12 +476,12 @@ def find_Bragg_disks_aiml(datacube, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
-            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
-            will implement Dask parrlelization implementation of the serial function to boost up the 
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version
+            will implement Dask parrlelization implementation of the serial function to boost up the
             performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
             significant amount of time to predict for all the DPs in a datacube.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -530,7 +524,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
-            By default, if the model_path is not provided, py4DSTEM will search for the 
+            By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to
             keep track of the model path and advised to keep this argument unchanged (None)
             to always search for the latest updated training model weights.
@@ -547,16 +541,14 @@ def find_Bragg_disks_aiml(datacube, probe,
                 * cluster_path (str): defaults to the working directory during processing
             if distributed is None, which is the default, processing will be in serial
         CUDA (bool): When True, py4DSTEM will use CUDA-enabled disk_detection_aiml function
-        
+
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
-    
     try:
         import crystal4D
     except:
         raise ImportError("Please install crystal4D before proceeding")
-        
     try:
         import tensorflow as tf
     except:
@@ -617,7 +609,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             cluster_path = None
 
         return connect, data_file, cluster_path
-    
+
     if distributed is None:
         import warnings
         if not CUDA:
@@ -717,34 +709,33 @@ def _check_cuda_device_available():
     """
 
     import tensorflow as tf
-    
+
     tf_recog_gpus = tf.config.experimental.list_physical_devices('GPU')
-    
+
     if len(tf_recog_gpus) >0:
         return True
     else:
         return False
-    
+
 def _get_latest_model(model_path = None):
     """
     get the latest tensorflow model and model weights for disk detection
-    
+
     Args:
         model_path (filepath string): File path for the tensorflow models stored in local system,
             if provided, disk detection will be performed loading the model provided by user.
             By default, there is no need to provide any file path unless specificly required for
             development/debug purpose. If None, _get_latest_model() will look up the latest model
-            from cloud and download and load them. 
+            from cloud and download and load them.
 
     Returns:
          model:    Trained tensorflow model for disk detection
     """
-    
     import crystal4D
     import tensorflow as tf
     from ...io.google_drive_downloader import download_file_from_google_drive
     tf.keras.backend.clear_session()
-    
+
     if model_path is None:
         try:
             os.mkdir('./tmp')
@@ -757,14 +748,14 @@ def _get_latest_model(model_path = None):
             file_id = metadata['file_id']
             file_path = metadata['file_path']
             file_type = metadata['file_type']
-        
+
         try:
             with open('./tmp/model_metadata_old.json') as f_old:
                 metaold = json.load(f_old)
                 file_id_old = metaold['file_id']
         except:
             file_id_old = file_id
-        
+
         if os.path.exists(file_path) and file_id == file_id_old:
             print('Latest model weight is already available in the local system. Loading the model... \n')
             model_path = file_path
@@ -786,5 +777,5 @@ def _get_latest_model(model_path = None):
         print('Loading the user provided model... \n')
         model = tf.keras.models.load_model(model_path,
                                            custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
-    
+
     return model
