@@ -724,7 +724,7 @@ def _get_latest_model(model_path = None):
     Args:
         model_path (filepath string): File path for the tensorflow models stored in local system,
             if provided, disk detection will be performed loading the model provided by user.
-            By default, there is no need to provide any file path unless specificly required for
+            By default, there is no need to provide any file path unless specifically required for
             development/debug purpose. If None, _get_latest_model() will look up the latest model
             from cloud and download and load them.
 
@@ -742,7 +742,7 @@ def _get_latest_model(model_path = None):
         except:
             pass
         # download the json file with the meta data
-        download_file_from_google_drive('1zlneUM88zBniFnymiIejHxEzAoYrK9ct','./tmp/model_metadata.json')
+        download_file_from_google_drive('FCU-Net','./tmp/model_metadata.json')
         with open('./tmp/model_metadata.json') as f:
             metadata = json.load(f)
             file_id = metadata['file_id']
@@ -767,12 +767,12 @@ def _get_latest_model(model_path = None):
             download_file_from_google_drive(file_id,filename)
             shutil.unpack_archive(filename, './tmp' ,format="zip")
             model_path = file_path
-            os.remove(filename)
             os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
             print('Loading the model... \n')
 
-        model = tf.keras.models.load_model(model_path,
-                                           custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
+        model = tf.keras.models.load_model(
+            model_path,
+            custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
     else:
         print('Loading the user provided model... \n')
         model = tf.keras.models.load_model(model_path,
