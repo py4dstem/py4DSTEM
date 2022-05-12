@@ -11,23 +11,24 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Read a digital micrograph 4D-STEM file.
 
-    Accepts:
-        fp          str or Path Path to the file
-        mem         (str) Specifies how the data should be stored; must be "RAM"
-                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
-                    is "RAM".
-        binfactor   (int) Bin the data, in diffraction space, as it's loaded. See
-                    docstring for py4DSTEM.file.io.read.  Default is 1.
-        metadata    (bool) iff True, returns the file metadata as a Metadata
-                    instance.
+    Args:
+        fp: str or Path Path to the file
+        mem (str, optional): Specifies how the data should be stored; must be "RAM",
+            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "RAM".
+        binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
+            See docstring for py4DSTEM.file.io.read.  Default is 1.
+        metadata (bool, optional): if True, returns the file metadata as a Metadata
+            instance.
 
     Returns:
-        data        iff metadata==False, returns the 4D-STEM dataset as a DataCube
-                    iff metadata==True, returns the metadata as a Metadata instance
+        (variable): The return value depends on usage:
 
-                    Note that metadata is read either way - in the latter case ONLY
-                    metadata is read and returned, in the former case a DataCube
-                    is returned with the metadata attached at datacube.metadata
+            * if metadata==False, returns the 4D-STEM dataset as a DataCube
+            * if metadata==True, returns the metadata as a Metadata instance
+
+        Note that metadata is read either way - in the latter case ONLY
+        metadata is read and returned, in the former case a DataCube
+        is returned with the metadata attached at datacube.metadata
     """
     assert(isinstance(fp,(str,Path))), "Error: filepath fp must be a string or pathlib.Path"
     assert(mem in ['RAM','MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
@@ -75,14 +76,27 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
                 dtype = kwargs["dtype"]
             else:
                 dtype = memmap.dtype
-            R_Nx, R_Ny, Q_Nx, Q_Ny = memmap.shape
+            shape = memmap.shape
+            rank = len(shape)
+            if rank==4:
+                R_Nx, R_Ny, Q_Nx, Q_Ny = shape
+            elif rank==3:
+                R_Nx, Q_Nx, Q_Ny = shape
+                R_Ny = 1
+            else:
+                raise Exception(f"Data should be 4-dimensional; found {rank} dimensions")
             Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
             data = np.empty((R_Nx, R_Ny, Q_Nx, Q_Ny), dtype=dtype)
             for Rx in range(R_Nx):
                 for Ry in range(R_Ny):
-                    data[Rx, Ry, :, :] = bin2D(
-                        memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
-                    )
+                    if rank==4:
+                        data[Rx, Ry, :, :] = bin2D(
+                            memmap[Rx, Ry, :, :,], binfactor, dtype=dtype
+                        )
+                    else:
+                        data[Rx, Ry, :, :] = bin2D(
+                            memmap[Rx, :, :,], binfactor, dtype=dtype
+                        )
             dc = DataCube(data=data)
     else:
         raise Exception(

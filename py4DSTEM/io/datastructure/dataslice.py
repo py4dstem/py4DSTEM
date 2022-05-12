@@ -27,23 +27,29 @@ class DataSlice(DataObject):
         """
         DataObject.__init__(self, **kwargs)
 
-        self.Nx = Nx
-        self.Ny = Ny
+        self.Nx = Nx  #: the extent in pixels of the data's first axis
+        self.Ny = Ny  #: the extent in pixels of the data's second axis
 
-        self.data = data
+        self.data = data  #: the 2D or 3D data array
         shape = data.shape
         assert (len(shape)==2) or (len(shape)==3)
         if len(shape)==2:
             assert shape==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
-            self.depth=1
+            self.depth=1   #: the extent in pixels of the data's third axis
         else:
             assert shape[:2]==(self.Nx,self.Ny), "Shape of data is {}, but (DataSlice.Nx, DataSlice.Ny) = ({}, {}).".format(shape, self.Nx, self.Ny)
             self.depth = shape[2]
             if slicelabels is None:
-                self.slicelabels = np.arange(self.depth)
+                self.slicelabels = np.arange(self.depth) #: (optional) string labels for the data's third axis
             else:
                 assert len(slicelabels)==self.depth
                 self.slicelabels = slicelabels
+            #: an OrderedDictionary allowing slicing into the data's third axis using its
+            #: string labels, i.e. if for some ``(Nx,Ny,3)`` shaped array with
+            #: ``self.slicelabels = (['a','b','c'])``, the first 2D slice can be
+            #: extracted with ``self.slices['a']``
+            #: NOTE: reassigning these slices/slicelabels is not advised - these are just
+            #: pointers, so you may get behavior you didn't want!
             self.slices = OrderedDict()
             for i in range(self.depth):
                 self.slices[self.slicelabels[i]]=self.data[:,:,i]

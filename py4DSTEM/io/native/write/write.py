@@ -24,15 +24,19 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     """
     Saves data to a new py4DSTEM .h5 file at filepath.
 
-    Accepts:
-        filepath            path where the file will be saved
-        data                a single DataObject or a list of DataObjects
-        overwrite           boolean controlling behavior when an existing file
-                            is found at filepath.  If overwrite is True, deletes the
-                            existing file and writes a new one. Otherwise,
-                            raises an error.
-        topgroup            name of the h5 toplevel group containing the py4DSTEM
-                            file of interest
+    Args:
+        filepath: path where the file will be saved
+        data: a single DataObject or a list of DataObjects
+        overwrite (bool, optional): controls behavior when an existing file is found at
+            filepath.  If True, deletes the existing file and writes a new one.
+            Otherwise, raises an error.
+        topgroup (str): name of the h5 toplevel group containing the py4DSTEM file of
+            interest
+
+    Raises:
+        Exception: If a file already exists at filepath, and overwrite is set to False
+        Exception: If an existing py4DSTEM formatted .h5 file is specified and the
+            topgroup chosen is already in use.
     """
     # Open the file
     if exists(filepath):
@@ -103,11 +107,16 @@ def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs
     else:
         md = None
 
+    # Function to patch HDF5 datacube compression back in
+    def save_datacube_compression_patch(grp,do):
+        save_datacube_group(grp,do,use_compression=use_compression)
+
     # Loop through and save all objects in the dataobjectlist
     names,grps,save_fns = [],[],[]
     lookupTable = {
             'DataCube':['datacube_',ind_dcs,grp_dc,
-                               save_datacube_group],
+                               save_datacube_compression_patch],
+                               #save_datacube_group],
             'CountedDataCube':['counted_data_cube_',ind_cdcs,grp_cdc,
                                          save_counted_datacube_group],
             'DiffractionSlice':['diffractionslice_',ind_dfs,grp_ds,

@@ -2,7 +2,10 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
+try:
+    import numba as nb
+except ImportError:
+    pass
 import h5py
 
 import numpy as np
@@ -14,42 +17,44 @@ from ...process.utils import tqdmnd, bin2D
 
 class CountedDataCube(DataObject):
     """
-    A 4D-STEM dataset using an electron event list as the data source. 
+    A 4D-STEM dataset using an electron event list as the data source.
 
-    Accepts:
-        electrons:      (PointListArray or h5py.Dataset) array of lists of 
-                        electron strike events. *DO NOT MODIFY THIS AFTER CREATION*
-        detector_shape: (list of ints) size Q_Nx and Q_Ny of detector
-        index_keys:     (list) if the data arrays in electrons are structured, specify
-                        the keys that correspond to the electron data. If electrons
-                        is unstructured, pass [None] (as a list!)
-        use_dask:       (bool) by default, the CountedDataCube.data object DOES NOT
-                        SUPPORT slicing along the realspace axes (i.e. you can ONLY
-                        pass single scan positions). By setting use_dask = True, 
-                        a Dask array will be created that enables all slicing modes
-                        supported by Dask. This can add substantial overhead.
+    Args:
+        electrons (PointListArray or h5py.Dataset): array of lists of electron strike
+            events. *DO NOT MODIFY THIS AFTER CREATION*
+        detector_shape (list of ints): size Q_Nx and Q_Ny of detector
+        index_keys (list): if the data arrays in electrons are structured, specify the
+            keys that correspond to the electron data. If electrons is unstructured, pass
+            [None] (as a list!)
+        use_dask (bool): by default, the CountedDataCube.data object DOES NOT SUPPORT
+            slicing along the realspace axes (i.e. you can ONLY pass single scan
+            positions). By setting use_dask = True, a Dask array will be created that
+            enables all slicing modes supported by Dask. This can add substantial overhead.
     """
 
     def __init__(self,electrons,detector_shape,index_keys='ind',
                     use_dask=False, **kwargs):
         DataObject.__init__(self,**kwargs)
 
+        #: array of lists of electron strike events. *DO NOT MODIFY THIS AFTER CREATION!*
         self.electrons = electrons
+        #: the size of the detector, ``(Q_Nx,Q_Ny)``
         self.detector_shape = detector_shape
 
         if use_dask:
             import dask.array as da
             sa = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
+            #: the data
             self.data = da.from_array(sa,chunks=(1,1,detector_shape[0],detector_shape[1]))
         else:
             self.data = Sparse4D(self.electrons,detector_shape,index_keys,**kwargs)
 
-        self.R_Nx = int(self.data.shape[0])
-        self.R_Ny = int(self.data.shape[1])
-        self.Q_Nx = int(self.data.shape[2])
-        self.Q_Ny = int(self.data.shape[3])
+        self.R_Nx = int(self.data.shape[0])  #: real space x pixels
+        self.R_Ny = int(self.data.shape[1])  #: real space y pixels
+        self.Q_Nx = int(self.data.shape[2])  #: diffraction space x pixels
+        self.Q_Ny = int(self.data.shape[3])  #: diffraction space y pixels
 
-        self.R_N = self.R_Nx * self.R_Ny
+        self.R_N = self.R_Nx * self.R_Ny     #: total number of real space pixels
 
     def bin_data_diffraction(self, bin_factor):
         # bin the underlying data (keeping in sparse storage)
@@ -61,7 +66,7 @@ class CountedDataCube(DataObject):
 
     def densify(self,bin_R=1, bin_Q=1, memmap=False, dtype=np.uint16):
         """
-        Convert to a fully dense DataCube object, with 
+        Convert to a fully dense DataCube object, with
         optional binning in real and reciprocal space.
         If memmap=True, the dense DC will be stored on disk
         in a temporary file (using numpy).
@@ -90,7 +95,7 @@ class CountedDataCube(DataObject):
 
 class Sparse4D(Sequence):
     """
-    A wrapper for a PointListArray or HDF5 dataset of electron events 
+    A wrapper for a PointListArray or HDF5 dataset of electron events
     that returns a reconstructed diffraction pattern when sliced.
     NOTE: This class is meant to be constructed by the
     CountedDataCube object, and should not be invoked directly.
@@ -186,21 +191,40 @@ class Sparse4D(Sequence):
         return np.prod(self.shape)
 
 
-# Numba accelerated conversion of electron event lists
-# to full diffraction patterns
-@nb.njit
-def points_to_DP_numba_ravel(pl,sz1,sz2):
-    dp = np.zeros((sz1*sz2),dtype=np.uint8)
-    for i in nb.prange(len(pl)):
-        dp[pl[i]] += 1
-    return dp.reshape((sz1,sz2))
+# Conversion of electron event lists
+# with and without numba acceleration
+import sys
+if 'numba' in sys.modules:
 
-@nb.njit
-def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
-    dp = np.zeros((sz1,sz2),dtype=np.uint8)
-    for i in nb.prange(len(pl1)):
-        dp[pl1[i],pl2[i]] += 1
-    return dp
+    @nb.njit
+    def points_to_DP_numba_ravel(pl,sz1,sz2):
+        dp = np.zeros((sz1*sz2),dtype=np.uint8)
+        for i in nb.prange(len(pl)):
+            dp[pl[i]] += 1
+        return dp.reshape((sz1,sz2))
+
+    @nb.njit
+    def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
+        dp = np.zeros((sz1,sz2),dtype=np.uint8)
+        for i in nb.prange(len(pl1)):
+            dp[pl1[i],pl2[i]] += 1
+        return dp
+
+else:
+
+    def points_to_DP_numba_ravel(pl,sz1,sz2):
+        dp = np.zeros((sz1*sz2),dtype=np.uint8)
+        for i in np.arange(len(pl)):
+            dp[pl[i]] += 1
+        return dp.reshape((sz1,sz2))
+
+    def points_to_DP_numba_unravel(pl1,pl2,sz1,sz2):
+        dp = np.zeros((sz1,sz2),dtype=np.uint8)
+        for i in np.arange(len(pl1)):
+            dp[pl1[i],pl2[i]] += 1
+        return dp
+
+
 
 
 

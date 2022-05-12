@@ -8,7 +8,8 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
-from ..utils import bin2D
+from ..utils import bin2D, tqdmnd, get_shifted_ar
+from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
 
@@ -30,9 +31,14 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
 def swap_RQ(datacube):
     """
     Swaps real and reciprocal space coordinates, so that if
-        datacube.data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> datacube.data.shape
+        (Rx,Ry,Qx,Qy)
+
     Then
-        swap_RQ(datacube).data.shape = (Qx,Qy,Rx,Ry)
+
+        >>> swap_RQ(datacube).data.shape
+        (Qx,Qy,Rx,Ry)
     """
     datacube.data = np.transpose(datacube.data, axes=(2, 3, 0, 1))
     datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Nx, datacube.Q_Ny, datacube.R_Nx, datacube.R_Ny
@@ -41,9 +47,14 @@ def swap_RQ(datacube):
 def swap_Rxy(datacube):
     """
     Swaps real space x and y coordinates, so that if
-        datacube.data.shape = (Ry,Rx,Qx,Qy)
+
+        >>> datacube.data.shape
+        (Ry,Rx,Qx,Qy)
+
     Then
-        swap_Rxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> swap_Rxy(datacube).data.shape
+        (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 1, 0)
     datacube.R_Nx, datacube.R_Ny = datacube.R_Ny, datacube.R_Nx
@@ -52,9 +63,14 @@ def swap_Rxy(datacube):
 def swap_Qxy(datacube):
     """
     Swaps reciprocal space x and y coordinates, so that if
-        datacube.data.shape = (Rx,Ry,Qy,Qx)
+
+        >>> datacube.data.shape
+        (Rx,Ry,Qy,Qx)
+
     Then
-        swap_Qxy(datacube).data.shape = (Rx,Ry,Qx,Qy)
+
+        >>> swap_Qxy(datacube).data.shape
+        (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 3, 2)
     datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Ny, datacube.Q_Nx
@@ -96,19 +112,17 @@ def bin_data_diffraction(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
-def bin_data_mmap(datacube, bin_factor):
+def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
     """
     Performs diffraction space binning of data by bin_factor.
 
-    Note that this function casts data
     """
     assert type(bin_factor) is int, "Error: binning factor {} is not an int.".format(bin_factor)
     R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny
 
-    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype=np.float64)
-    for Rx in range(datacube.R_Nx):
-        for Ry in range(datacube.R_Ny):
-            data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=np.float64)
+    data = np.zeros((datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx//bin_factor,datacube.Q_Ny//bin_factor),dtype=dtype)
+    for Rx, Ry in tqdmnd(datacube.R_Ny, datacube.R_Ny):
+        data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=dtype)
 
     datacube.data = data
     datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
@@ -136,5 +150,118 @@ def bin_data_real(datacube, bin_factor):
         datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
+def filter_hot_pixels(
+    datacube,
+    thresh,
+    ind_compare=1,
+    return_mask=False
+    ):
+    """
+    This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
+    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity 
+    values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
+    Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
+    Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
 
+    Args:
+            datacube (DataCube):      py4DSTEM Datacube
+            thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+            ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
 
+        Returns:
+            datacube                     datacube              
+            mask (bool):                 (optional) the bad pixel mask
+    """
+
+    # Mean image over all probe positions
+    diff_mean = np.mean(datacube.data,axis=(0,1))
+
+    # Moving local ordered pixel values
+    diff_local_med = np.sort(np.vstack([
+        np.roll(diff_mean,(-1,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 1),axis=(0,1)).ravel(),
+        \
+        np.roll(diff_mean,(-1,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1,-2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-1, 2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 0, 2),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 1, 2),axis=(0,1)).ravel(),
+        \
+        np.roll(diff_mean,(-2,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-2, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,(-2, 1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2,-1),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2, 0),axis=(0,1)).ravel(),
+        np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),        
+        ]), axis=0)
+    # arry of the ind_compare'th pixel intensity
+    diff_compare = np.reshape(diff_local_med[-ind_compare-1,:], diff_mean.shape)
+
+    # Generate mask
+    mask = diff_mean - diff_compare > thresh
+
+    # apply filtering
+    for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Cleaning pixels", unit=" images"):
+        # Calculate local 3x3 median images
+        im_med = median_filter(
+            datacube.data[ax,ay,:,:],
+            size=3,
+            mode='nearest')
+        datacube.data[ax,ay,:,:][mask] = im_med[mask]
+
+    if return_mask is True:
+        return datacube, mask
+    else:
+        return datacube
+
+def datacube_diffraction_shift(
+    datacube,
+    xshifts,
+    yshifts,
+    periodic=True,
+    bilinear=False,
+    ):
+    """
+    This function shifts each 2D diffraction image by the values defined by (xshifts,yshifts). 
+    The shift values can be scalars (same shift for all images) or arrays with the same dimensions as
+    the probe positions in datacube.
+
+    Args:
+            datacube (DataCube):   py4DSTEM DataCube
+            xshifts (float):       Array or scalar value for the x dim shifts
+            yshifts (float):       Array or scalar value for the y dim shifts
+            periodic (bool):       Flag for periodic boundary conditions. If set to false, boundaries are assumed to be periodic.
+            bilinear (bool):       Flag for bilinear image shifts. If set to False, Fourier shifting is used.
+
+        Returns:
+            datacube (DataCube):   py4DSTEM DataCube              
+    """
+
+    # if the shift values are constant, expand to arrays
+    xshifts = np.array(xshifts)
+    yshifts = np.array(yshifts)
+    if xshifts.ndim == 0:
+        xshifts = xshifts * np.ones((datacube.R_Nx,datacube.R_Ny))
+    if yshifts.ndim == 0:
+        yshifts = yshifts * np.ones((datacube.R_Nx,datacube.R_Ny))    
+
+    # Loop over all images
+    for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Shifting images", unit=" images"):
+        datacube.data[ax,ay,:,:] = get_shifted_ar(
+            datacube.data[ax,ay,:,:],
+            xshifts[ax,ay],
+            yshifts[ax,ay],
+            periodic=periodic,
+            bilinear=bilinear,
+        )
+
+    return datacube
+    

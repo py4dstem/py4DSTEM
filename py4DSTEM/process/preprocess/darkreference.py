@@ -8,13 +8,13 @@ def get_bksbtr_DP(datacube, darkref, Rx, Ry):
     """
     Returns a background subtracted diffraction pattern.
 
-    Accepts:
-        datacube        (DataCube) data to background subtract
-        darkref         (ndarray) dark reference. must have shape (datacube.Q_Nx, datacube.Q_Ny)
-        Rx, Ry          (ints) the scan position of the diffraction pattern of interest
+    Args:
+        datacube (DataCube): data to background subtract
+        darkref (ndarray): dark reference. must have shape (datacube.Q_Nx, datacube.Q_Ny)
+        Rx,Ry (int): the scan position of the diffraction pattern of interest
 
     Returns:
-        bksbtr_DP       (ndarray) the background subtracted diffraction pattern
+        (ndarray) the background subtracted diffraction pattern
     """
     assert darkref.shape==(datacube.Q_Nx,datacube.Q_Ny), "background must have shape (datacube.Q_Nx, datacube.Q_Ny)"
     return datacube.data[Rx,Ry,:,:].astype(float) - darkref.astype(float)
@@ -22,32 +22,34 @@ def get_bksbtr_DP(datacube, darkref, Rx, Ry):
 
 #### Get dark reference ####
 
-def get_darkreference(datacube, N_frames, width_x=0, width_y=0, side_x='end', side_y='end'):
+def get_darkreference(datacube, N_frames, width_x=0, width_y=0, side_x='end',
+                                                                side_y='end'):
     """
     Gets a dark reference image.
 
-    Select N_frames random frames (DPs) from datacube.  Find streaking noise in the horizontal
-    and vertical directions, by finding the average values along a thin strip of width_x/width_y
-    pixels along the detector edges. Which edges are used is controlled by side_x/side_y, which must
-    be 'start' or 'end'. Streaks along only one direction can be used by setting width_x or width_y
-    to 0, which disables correcting streaks in this direction.
+    Select N_frames random frames (DPs) from datacube.  Find streaking noise in the
+    horizontal and vertical directions, by finding the average values along a thin strip
+    of width_x/width_y pixels along the detector edges. Which edges are used is
+    controlled by side_x/side_y, which must be 'start' or 'end'. Streaks along only one
+    direction can be used by setting width_x or width_y to 0, which disables correcting
+    streaks in this direction.
 
-    Note that the data is cast to float before computing the background, and should similarly be
-    cast to float before performing a subtraction. This avoids integer clipping and wraparound
-    errors.
+    Note that the data is cast to float before computing the background, and should
+    similarly be cast to float before performing a subtraction. This avoids integer
+    clipping and wraparound errors.
 
-    Accepts:
-        datacube        (DataCube) data to background subtract
-        N_frames        (int) number of random diffraction patterns to use
-        width_x         (int) width of the ROI strip for finding streaking in x
-        width_y         (int) see above
-        side_x          (str) use a strip from the start or end of the array. Must be 'start' or
-                        'end', defaults to 'end'
-        side_y          (str) see above
+    Args:
+        datacube (DataCube): data to background subtract
+        N_frames (int): number of random diffraction patterns to use
+        width_x (int): width of the ROI strip for finding streaking in x
+        width_y (int): see above
+        side_x (str): use a strip from the start or end of the array. Must be 'start' or
+            'end', defaults to 'end'
+        side_y (str): see above
 
     Returns:
-        dark_reference  (ndarray) a 2D ndarray of shape (datacube.Q_Nx, datacube.Ny) giving the
-                        background.
+        (ndarray): a 2D ndarray of shape (datacube.Q_Nx, datacube.Ny) giving the
+        background.
     """
     if width_x==0 and width_y==0:
         print("Warning: either width_x or width_y should be a positive integer. Returning an empty dark reference.")
@@ -69,26 +71,26 @@ def get_darkreference(datacube, N_frames, width_x=0, width_y=0, side_x='end', si
 
 def get_background_streaks(datacube, N_frames, width, side='end', direction='x'):
     """
-    Gets background streaking in either the x- or y-direction, by finding the average of a strip of
-    pixels along the edge of the detector over a random selection of diffraction patterns, and
-    returns a dark reference array.
+    Gets background streaking in either the x- or y-direction, by finding the average of
+    a strip of pixels along the edge of the detector over a random selection of
+    diffraction patterns, and returns a dark reference array.
 
-    Note that the data is cast to float before computing the background, and should similarly be
-    cast to float before performing a subtraction. This avoids integer clipping and wraparound
-    errors.
+    Note that the data is cast to float before computing the background, and should
+    similarly be cast to float before performing a subtraction. This avoids integer
+    clipping and wraparound errors.
 
-    Accepts:
-        datacube        (DataCube) data to background subtract
-        N_frames        (int) number of random frames to use
-        width           (int) width of the ROI strip for background identification
-        side (optional) (str) use a strip from the start or end of the array. Must be 'start' or
-                        'end', defaults to 'end'
-        directions      (str) the direction of background streaks to find. Must be either 'x' or 'y'
-                        defaults to 'x'
+    Args:
+        datacube (DataCube): data to background subtract
+        N_frames (int): number of random frames to use
+        width (int): width of the ROI strip for background identification
+        side (str, optional): use a strip from the start or end of the array. Must be
+            'start' or 'end', defaults to 'end'
+        directions (str): the direction of background streaks to find. Must be either
+            'x' or 'y' defaults to 'x'
 
     Returns:
-        bkgrnd_streaks  (ndarray) a 2D ndarray of shape (datacube.Q_Nx,datacube.Q_Ny), giving the
-                        the x- or y-direction background streaking.
+        (ndarray): a 2D ndarray of shape (datacube.Q_Nx,datacube.Q_Ny), giving the
+        the x- or y-direction background streaking.
     """
     assert ((direction=='x') or (direction=='y')), "direction must be 'x' or 'y'."
     if direction=='x':
@@ -98,8 +100,8 @@ def get_background_streaks(datacube, N_frames, width, side='end', direction='x')
 
 def get_background_streaks_x(datacube, width, N_frames, side='start'):
     """
-    Gets background streaking, by finding the average of a strip of pixels along the y-edge of the
-    detector over a random selection of diffraction patterns.
+    Gets background streaking, by finding the average of a strip of pixels along the
+    y-edge of the detector over a random selection of diffraction patterns.
 
     See docstring for get_background_streaks() for more info.
     """
@@ -131,8 +133,8 @@ def get_background_streaks_x(datacube, width, N_frames, side='start'):
 
 def get_background_streaks_y(datacube, N_frames, width, side='start'):
     """
-    Gets background streaking, by finding the average of a strip of pixels along the x-edge of the
-    detector over a random selection of diffraction patterns.
+    Gets background streaking, by finding the average of a strip of pixels along the
+    x-edge of the detector over a random selection of diffraction patterns.
 
     See docstring for get_background_streaks_1D() for more info.
     """

@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle,Wedge,Ellipse
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
@@ -225,7 +224,7 @@ def add_ellipses(ax,d):
     Parameters:
         center
         a
-        e
+        b
         theta
         color
         fill
@@ -243,6 +242,14 @@ def add_ellipses(ax,d):
     assert(isinstance(a,list))
     N = len(a)
     assert(all([isinstance(i,Number) for i in a]))
+    # semiminor axis length
+    assert('b' in d.keys())
+    b = d['b']
+    if isinstance(b,Number):
+        b = [b]
+    assert(isinstance(b,list))
+    assert(len(b)==N)
+    assert(all([isinstance(i,Number) for i in b]))
     # center
     assert('center' in d.keys())
     center = d['center']
@@ -253,14 +260,6 @@ def add_ellipses(ax,d):
     assert(len(center)==N)
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
-    # ratio of axis lengths
-    assert('e' in d.keys())
-    e = d['e']
-    if isinstance(e,Number):
-        e = [e for i in range(N)]
-    assert(isinstance(e,list))
-    assert(len(e)==N)
-    assert(all([isinstance(i,Number) for i in e]))
     # theta
     assert('theta' in d.keys())
     theta = d['theta']
@@ -310,7 +309,7 @@ def add_ellipses(ax,d):
         assert(len(linestyle)==N)
         assert(all([isinstance(lw,(str)) for lw in linestyle]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
+    kws = [k for k in d.keys() if k not in ('center','a','b','theta','color',
                                             'fill','alpha','linewidth','linestyle')]
     kwargs = dict()
     for k in kws:
@@ -318,9 +317,9 @@ def add_ellipses(ax,d):
 
     # add the ellipses
     for i in range(N):
-        cent,_a,_e,_theta,col,f,_alpha,lw,ls = (center[i],a[i],e[i],theta[i],color[i],fill[i],
+        cent,_a,_b,_theta,col,f,_alpha,lw,ls = (center[i],a[i],b[i],theta[i],color[i],fill[i],
                                                 alpha[i],linewidth[i],linestyle[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,90-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_b,2*_a,-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,linestyle=ls,**kwargs)
         ax.add_patch(ellipse)
 
@@ -366,14 +365,21 @@ def add_points(ax,d):
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1.
     assert isinstance(alpha,Number)
+    # open_circles
+    open_circles = d['open_circles'] if 'open_circles' in d.keys() else False
+    assert isinstance(open_circles,bool)
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha')]
+    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha',
+                                            'open_circles')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the points
-    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
+    if open_circles:
+        ax.scatter(y,x,s=scale,edgecolor=color,facecolor='none',alpha=alpha,**kwargs)
+    else:
+        ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
 
     return
 
@@ -475,12 +481,12 @@ def add_bragg_index_labels(ax,d):
         h,k = braggdirections.data['h'][i],braggdirections.data['k'][i]
         h = str(h) if h>=0 else '$\overline{{{}}}$'.format(np.abs(h))
         k = str(k) if k>=0 else '$\overline{{{}}}$'.format(np.abs(k))
-        s = h+k
+        s = h+','+k
         if include_l:
             l = braggdirections.data['l'][i]
             l = str(l) if l>=0 else '$\overline{{{}}}$'.format(np.abs(l))
             s += l
-        ax.text(y,x,s,color=color,size=size,ha='center',va='center')
+        ax.text(y,x,s,color=color,size=size,ha='center',va='bottom')
 
     return
 
@@ -1001,10 +1007,17 @@ def add_rtheta_grid(ar,d):
 
 def get_nice_spacing(Nx,Ny,pixelsize):
     """ Get a nice distance for gridlines, scalebars, etc
-        Returns
-            spacing_units   the spacing in real units
-            spacing_pixels  the spacing in pixels
-            _spacing        the leading digits of the spacing
+
+        Args:
+            Nx,Nx (int): the image dimensions
+            pixelsize (float): the size of each pixel, in some units
+
+        Returns:
+            (3-tuple): A 3-tuple containing:
+
+                * **spacing_units**: the spacing in real units
+                * **spacing_pixels**:the spacing in pixels
+                * **spacing**: the leading digits of the spacing
     """
     D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
     exp = int(log(D,10))

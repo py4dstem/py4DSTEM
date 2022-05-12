@@ -10,30 +10,32 @@ class PointListArray(DataObject):
     An object containing an array of PointLists.
     Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
     as real space scan positions R_Nx,R_Ny.
+
+    Args:
+        coordinates: see PointList documentation
+        shape (2-tuple of ints): the array shape.  Typically the real space shape
+            ``(R_Nx, R_Ny)``.
     """
     def __init__(self, coordinates, shape, dtype=float, **kwargs):
         """
 		Instantiate a PointListArray object.
-		Creates a PointList with coordinates at each point of a 2D grid with a shape specified by
-        the shape argument.
-
-		Inputs:
-			coordinates - see PointList documentation
-            shape - a 2-tuple of ints specifying the array shape.  Often the desired shape
-                    will be the real space shape (R_Nx, R_Ny).
+		Creates a PointList with coordinates at each point of a 2D grid with a shape specified
+        by the shape argument.
         """
         DataObject.__init__(self, **kwargs)
 
-        self.coordinates = coordinates
-        self.default_dtype = dtype
+        self.coordinates = coordinates  #: the coordinates; see the PointList documentation
+        self.default_dtype = dtype      #: the default datatype; see the PointList documentation
 
         assert isinstance(shape,tuple), "Shape must be a tuple."
         assert len(shape) == 2, "Shape must be a length 2 tuple."
+        #: the shape of the 2D grid of positions populated with PointList instances;
+        #: typically, this will be ``(R_Nx,R_Ny)``
         self.shape = shape
 
         # Define the data type for the structured arrays in the PointLists
-        if type(coordinates) in (type, np.dtype):
-            self.dtype = coordinates
+        if isinstance(coordinates, np.dtype):
+            self.dtype = coordinates  # the custom datatype; see the PointList documentation
         elif type(coordinates[0])==str:
             self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
         elif type(coordinates[0])==tuple:
@@ -130,7 +132,10 @@ def get_pointlistarray_from_grp(g):
     coordinates = g['data'][0,0].dtype
     pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-        pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+        try:
+            pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+        except ValueError:
+            pass
     return pla
 
 

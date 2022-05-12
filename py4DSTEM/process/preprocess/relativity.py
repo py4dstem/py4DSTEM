@@ -17,24 +17,24 @@ import matplotlib.pyplot as plt
 from ipywidgets import FloatProgress
 from time import time
 from ..utils import get_shift
-from ...io.datastructure import DataCube
+from ...io import DataCube
 
 def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	"""
 	Slice a movie frame into subframes.
 
-    x_cent and y_cent are shape (N,M) arrays, where the camera frames have been divided into an NxM
-    grid of subframes.
+    x_cent and y_cent are shape (N,M) arrays, where the camera frames have been divided
+    into an NxM grid of subframes.
 
-    Accepts:
-        frame       (array) the original camera frame containing the tiled subframes
-        x_cent      (array) x coords of the centers of the frames
-        y_cent      (array) y coords of the centers of the frames
-        wx          (int) the x width of the subframes
-        wy          (int) the y width of the subframes
+    Args:
+        frame (array): the original camera frame containing the tiled subframes
+        x_cent (array): x coords of the centers of the frames
+        y_cent (array): y coords of the centers of the frames
+        wx (int): the x width of the subframes
+        wy (int): the y width of the subframes
 
 	Returns:
-        stack       (ndarray) a 3D stack of diffraction patterns
+        (ndarray) a 3D stack of diffraction patterns
 	"""
 	nDP = x_cent.shape[0] * x_cent.shape[1]
 	stack = np.zeros((wx,wy,nDP))
@@ -54,26 +54,28 @@ def subframe_align(testDP, xcent, ycent, wx=500, wy=500, niter=10, maxshift=80, 
 	"""
 	Determine the alignment of the subframes in a Relativity frame by gradient descent.
 
-    Accepts:
-        testDP			(array) a single frame from a Relativity movie, ideally with all subframes
-                        similarly illuminated
-        xcent           (array) initial guess at the x position of the frame of the centers
-        ycent           (array) initial guess at the y position of the frame of the centers
-        wx,wy           (ints) subframe x- and y-sizes
-        niter           (int) number of iterations of gradient descent to optimize shifts
-        maxshift        (int) maximum allowable shift. This only triggers an error if the shifts
-                        exceed it; it doesn't constrain fitting
-        anchorDP		(int) index of the DP that should be kept static. Other positions are fitted
-                        to align subframes with this one.
-        corrPower		(float) hybrid correlation power. Phase-y correlation works well when you
-                        have a beamstop
-        damping			(float) damps the update steps. Set to 1 for no damping (you can probably get
-                        away with no damping)
+    Args:
+        testDP (array): a single frame from a Relativity movie, ideally with all
+            subframes similarly illuminated
+        xcent (array): initial guess at the x position of the frame of the centers
+        ycent (array): initial guess at the y position of the frame of the centers
+        wx,wy (int): subframe x- and y-sizes
+        niter (int): number of iterations of gradient descent to optimize shifts
+        maxshift (int): maximum allowable shift. This only triggers an error if the
+            shifts exceed it; it doesn't constrain fitting
+        anchorDP (int): index of the DP that should be kept static. Other positions are
+            fitted to align subframes with this one.
+        corrPower (float): hybrid correlation power. Phase-y correlation works well when
+            you have a beamstop
+        damping	(float): damps the update steps. Set to 1 for no damping (you can
+            probably get away with no damping)
 
     Returns
-        bestx           (2D array) optimized subframe centers
-        besty           (2D array) optimized subframe centers
-        err             (1D array) fit error for each gradient descent step
+        (3-tuple) A 3-tuple containing:
+
+            * **bestx**: *(2D array)* optimized subframe centers
+            * **besty**: *(2D array)* optimized subframe centers
+            * **err**: *(1D array)* fit error for each gradient descent step
 	"""
 
 	err = np.zeros(niter)
@@ -141,21 +143,23 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, startframe=0, wx=500, w
 	"""
 	Slice the *.mrc movie into all of its subframes
 
-    Accepts:
-        mrc         (MrcMemmap) memory map into the mrc file (such as opened by
-                    py4DSTEM.file.io.read(...,load='relativity'))
-        scratch     (str) path to a scratch file where a numpy memmap containing the re-sliced stack
-                    will be buffered
-                    NOTE! this will overwrite whatever file is at this path! be careful!
-                    ALSO NOTE! this file is where the data in the DataCube will actually live!
-                    Either save the DataCube as a py4DSTEM *.h5 or use separate scratches for
-                    different data!
-        scanshape   (numpy array) 2-element array containing the scan shape (Rx, Ry)
-        optx, opty  (numpy meshgrids) the optimized centers of the subframes from subframeAlign(...)
-        wx,wy       (ints) subframe sizes x and y
+    Args:
+        mrc (MrcMemmap): memory map into the mrc file (such as opened by
+            py4DSTEM.file.io.read(...,load='relativity'))
+        scratch (str): path to a scratch file where a numpy memmap containing the
+            re-sliced stack will be buffered.
+            NOTE! this will overwrite whatever file is at this path! be careful!
+            ALSO NOTE! this file is where the data in the DataCube will actually live!
+            Either save the DataCube as a py4DSTEM *.h5 or use separate scratches for
+            different data!
+        scanshape (numpy array): 2-element array containing the scan shape (Rx, Ry)
+        optx, opty (numpy meshgrids): the optimized centers of the subframes from
+            subframeAlign(...)
+        wx,wy (ints): subframe sizes x and y
 
 	Returns:
-        dc          (DataCube) a py4DSTEM DataCube containing the sliced up stack, in the correct order
+        (DataCube): a py4DSTEM DataCube containing the sliced up stack, in the correct
+        order
 	"""
 
 	nframe = scanshape.prod()//optx.size
@@ -164,13 +168,9 @@ def slice_mrc_stack(mrc, scratch, scanshape, optx, opty, startframe=0, wx=500, w
 
 	vstack = np.memmap(scratch, mode='w+', dtype='<i2', shape=dshape)
 
-	f = FloatProgress(min=0,max=nframe-1)
-	display(f)
-
 	t0 = time()
 
 	for i in np.arange(startframe,startframe+nframe):
-		f.value = i-startframe
 		frame = mrc.data[int(i),:,:]
 		stack = slice_subframes(frame,optx,opty,wx,wy)
 		vstack[int(i-startframe),:,:,:] = np.transpose(stack,(2,0,1))

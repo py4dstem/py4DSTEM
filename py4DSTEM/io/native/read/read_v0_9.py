@@ -8,6 +8,7 @@ from .read_utils_v0_9 import get_py4DSTEM_dataobject_info
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
 from ....process.utils import tqdmnd
+from ..metadata import metadata_from_h5
 
 def read_v0_9(fp, **kwargs):
     """
@@ -124,6 +125,10 @@ def print_py4DSTEM_file(filepath,tg):
     """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
     """
     info = get_py4DSTEM_dataobject_info(filepath,tg)
+
+    version = get_py4DSTEM_version(filepath, tg)
+    print(f"py4DSTEM file version {version[0]}.{version[1]}.{version[2]}")
+
     print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
     print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
     for el in info:
@@ -159,7 +164,15 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         N = data_id-Ns[i]
         name = sorted(grp.keys())[N]
 
-        grp_data = f[grp.name+'/'+name]
+        group_name = grp.name+'/'+name
+
+        if mem == "RAM":
+            grp_data = f[group_name]
+            data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+
+    if mem == "MEMMAP":
+        f = h5py.File(filepath,'r')
+        grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
@@ -193,8 +206,17 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         Ns = np.cumsum([len(grp.keys()) for grp in grps])
         i_grp = np.nonzero(ind<Ns)[0][0]
         grp = grps[i_grp]
+        group_name = grp.name+'/'+data_id
 
-        grp_data = f[grp.name+'/'+data_id]
+        if mem == "RAM":
+            grp_data = f[group_name]
+            data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
+
+    # if using MEMMAP, file cannot be accessed from the context manager
+    # or else it will be closed before the data is accessed
+    if mem == "MEMMAP":
+        f = h5py.File(filepath,'r')
+        grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
@@ -238,8 +260,13 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
         and returns a DataCube.
     """
-    # TODO: add memmapping, binning
-    data = np.array(g['data'])
+    assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
+
+    if (mem, binfactor) == ("RAM", 1):
+        data = np.array(g['data'])
+    elif (mem, binfactor) == ("MEMMAP", 1):
+        data = g['data']
+
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
 

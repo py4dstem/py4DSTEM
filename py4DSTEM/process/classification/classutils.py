@@ -2,26 +2,29 @@
 
 import numpy as np
 from ..utils import get_shifted_ar, tqdmnd
-from ...io.datastructure import DataCube, PointListArray
+from ...io import DataCube, PointListArray
 
-def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None, darkref=None, intshifts=True):
+def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,
+                 darkref=None, intshifts=True):
     """
-    Get the average diffraction pattern for the class described in real space by class_image.
+    Get the average diffraction pattern for the class described in real space by
+    class_image.
 
-    Accepts:
-        datacube        (DataCube) a datacube
-        class_image     (2D array) the weight of the class at each position in real space
-        thresh          (float) only include diffraction patterns for scan positions with a value
-                        greater than or equal to thresh in class_image
-        xshifts         (2D array, or None) the x diffraction shifts at each real space pixel.
-                        If None, no shifting is performed.
-        yshifts         (2D array, or None) the y diffraction shifts at each real space pixel.
-                        If None, no shifting is performed.
-        darkref         (2D array, or None) background to remove from each diffraction pattern
-        intshifts       (bool) if True, round shifts to the nearest integer to speed up computation
+    Args:
+        datacube (DataCube): a datacube
+        class_image (2D array): the weight of the class at each position in real space
+        thresh (float): only include diffraction patterns for scan positions with a value
+            greater than or equal to thresh in class_image
+        xshifts (2D array, or None): the x diffraction shifts at each real space pixel.
+            If None, no shifting is performed.
+        yshifts (2D array, or None): the y diffraction shifts at each real space pixel.
+            If None, no shifting is performed.
+        darkref (2D array, or None): background to remove from each diffraction pattern
+        intshifts (bool): if True, round shifts to the nearest integer to speed up
+            computation
 
     Returns:
-        class_DP        (2D array) the average diffraction pattern for the class
+        (2D array): the average diffraction pattern for the class
     """
     assert isinstance(datacube,DataCube)
     assert class_image.shape == (datacube.R_Nx,datacube.R_Ny)
@@ -54,35 +57,39 @@ def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,
     class_DP = np.where(class_DP>0,class_DP,0)
     return class_DP
 
-def get_class_DP_without_Bragg_scattering(datacube, class_image, braggpeaks, radius, x0, y0, thresh=0.01, xshifts=None, yshifts=None, darkref=None, intshifts=True):
+def get_class_DP_without_Bragg_scattering(datacube,class_image,braggpeaks,radius,
+                                          x0,y0,thresh=0.01,xshifts=None,yshifts=None,
+                                          darkref=None,intshifts=True):
     """
-    Get the average diffraction pattern, removing any Bragg scattering, for the class described in
-    real space by class_image.
+    Get the average diffraction pattern, removing any Bragg scattering, for the class
+    described in real space by class_image.
 
-    Bragg scattering is eliminated by masking circles of size radius about each of the detected
-    peaks in braggpeaks in each diffraction pattern before adding to the average image. Importantly,
-    braggpeaks refers to the peak positions in the raw data - i.e. BEFORE any shift correction is
-    applied.  Passing shifted Bragg peaks will yield incorrect results.  For speed, the Bragg peaks
-    are removed with a binary mask, rather than a continuous sigmoid, so selecting a radius that is
-    slightly (~1 pix) larger than the disk size is recommended.
+    Bragg scattering is eliminated by masking circles of size radius about each of the
+    detected peaks in braggpeaks in each diffraction pattern before adding to the average
+    image. Importantly, braggpeaks refers to the peak positions in the raw data - i.e.
+    BEFORE any shift correction is applied.  Passing shifted Bragg peaks will yield
+    incorrect results.  For speed, the Bragg peaks are removed with a binary mask, rather
+    than a continuous sigmoid, so selecting a radius that is slightly (~1 pix) larger
+    than the disk size is recommended.
 
-    Accepts:
-        datacube        (DataCube) a datacube
-        class_image     (2D array) the weight of the class at each position in real space
-        braggpeaks      (PointListArray) the detected Bragg peak positions, with respect to the
-                        raw data (i.e. not diffraction shift or ellipse corrected)
-        radius          (number) the radius to mask about each detected Bragg peak - should be
-                        slightly larger than the disk radius
-        x0              (number) x-position of the optic axis
-        y0              (number) y-position of the optic axis
-        thresh          (float) only include diffraction patterns for scan positions with a value
-                        greater than or equal to thresh in class_image
-        xshifts         (2D array, or None) the x diffraction shifts at each real space pixel.
-                        If None, no shifting is performed.
-        yshifts         (2D array, or None) the y diffraction shifts at each real space pixel.
-                        If None, no shifting is performed.
-        darkref         (2D array, or None) background to remove from each diffraction pattern
-        intshifts       (bool) if True, round shifts to the nearest integer to speed up computation
+    Args:
+        datacube (DataCube): a datacube
+        class_image (2D array): the weight of the class at each position in real space
+        braggpeaks (PointListArray): the detected Bragg peak positions, with respect to
+            the raw data (i.e. not diffraction shift or ellipse corrected)
+        radius (number): the radius to mask about each detected Bragg peak - should be
+            slightly larger than the disk radius
+        x0 (number): x-position of the optic axis
+        y0 (number): y-position of the optic axis
+        thresh (float): only include diffraction patterns for scan positions with a value
+            greater than or equal to thresh in class_image
+        xshifts (2D array, or None): the x diffraction shifts at each real space pixel.
+            If None, no shifting is performed.
+        yshifts (2D array, or None): the y diffraction shifts at each real space pixel.
+            If None, no shifting is performed.
+        darkref (2D array, or None): background to remove from each diffraction pattern
+        intshifts (bool): if True, round shifts to the nearest integer to speed up
+            computation
 
     Returns:
         class_DP        (2D array) the average diffraction pattern for the class

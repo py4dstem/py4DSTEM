@@ -12,7 +12,7 @@ collectively contained in an LQCollection object. The key advantages of LoggedQu
 from os.path import join, dirname, expanduser
 from PyQt5 import QtCore, QtWidgets
 from numpy import nonzero
-from ..io.native import get_py4DSTEM_dataobject_info, read_py4DSTEM
+from ..io.native import read_py4DSTEM, get_py4DSTEM_topgroups, get_py4DSTEM_version, get_N_dataobjects
 import pyqtgraph as pg
 
 def datacube_selector(fp, data_id=0):
@@ -22,7 +22,27 @@ def datacube_selector(fp, data_id=0):
         - if there are multiple datacubes, return the one at index = data_id
         - if data_id=-1, return the names and indices of all the datacubes
     """
-    info = get_py4DSTEM_dataobject_info(fp)
+    topgroup = get_py4DSTEM_topgroups(fp)[0]
+    version_major, version_minor, version_release = get_py4DSTEM_version(fp,topgroup)
+
+    # this is very very bad, but it seems we have to manually
+    # go through this in order to specifically get the first
+    # datacube in a file...
+    if (version_major, version_minor) == (0,12):
+        from ..io.native.read.read_utils_v0_12 import get_py4DSTEM_dataobject_info
+    elif (version_major, version_minor) == (0,9):
+        from ..io.native.read.read_utils_v0_9 import get_py4DSTEM_dataobject_info
+    elif (version_major, version_minor) == (0,7):
+        from ..io.native.read.read_utils_v0_7 import get_py4DSTEM_dataobject_info
+    elif (version_major, version_minor) == (0,6):
+        from ..io.native.read.read_utils_v0_6 import get_py4DSTEM_dataobject_info
+    elif (version_major, version_minor) == (0,5):
+        from ..io.native.read.read_utils_v0_5 import get_py4DSTEM_dataobject_info
+    else:
+        raise Exception("This EMD file version is not supported by the GUI.")
+
+    print(f"Reading py4DSTEM EMD version {version_major}.{version_minor}.{version_release}")
+    info = get_py4DSTEM_dataobject_info(fp,topgroup)
     inds = nonzero(info['type']=='DataCube')[0]
     N_dc = len(inds)
 
@@ -33,40 +53,15 @@ def datacube_selector(fp, data_id=0):
             indices.appen(info[i]['index'])
             return names,indices
     if N_dc == 1:
-        i = inds[0]
-        dc,_ = read_py4DSTEM(fp, data_id=i)
+        i = int(inds[0])
+        dc = read_py4DSTEM(fp, data_id=i)
         return dc
     elif N_dc > 1:
         assert(data_id in inds), "No datacube found at index {}.".format(data_id)
-        dc,_ = read_py4DSTEM(fp, data_id=data_id)
+        dc = read_py4DSTEM(fp, data_id=data_id)
         return dc
     else:
         print("No datacubes found in this file.")
-
-
-def datacube_selector_dialog(fpath,window):
-    """
-    Presents the user with a dialog to choose one of the datacubes inside the file,
-    if more than one exists. Returns the selected DataCube object.
-    """
-    info = get_py4DSTEM_dataobject_info(fpath)
-    inds = np.nonzero(info['type']=='DataCube')[0]
-    N_dc = len(inds)
-
-    if N_dc == 1:
-        ind = inds[0]
-        dc,_ = read_py4DSTEM(fpath, data_id=ind)
-    elif N_dc > 1:
-        # there is more than one object, so we need to present the user with a chooser
-        #indices = (self.dataobject_lookup_arr=='DataCube' | 
-        #    self.dataobject_lookup_arr=='RawDataCube').nonzero()[0]
-        print('More than one datacube detected...')
-        print('Pls harass developers to add support feature.')
-
-    return dc
-
-
-
 
 def sibling_path(fpath, fname):
     """
@@ -200,7 +195,7 @@ class LoggedQuantity(QtCore.QObject):
                 self.update_value(widget.text())
             widget.editingFinished.connect(on_edit_finished)
 
-        elif type(widget) == QtWidget.QLabel:
+        elif type(widget) == QtWidgets.QLabel:
             self.updated_value.connect(widget.setText)
 
         elif type(widget) == pg.widgets.SpinBox.SpinBox:

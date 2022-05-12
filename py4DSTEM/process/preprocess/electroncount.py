@@ -1,14 +1,14 @@
 # Electron counting
 #
 # Includes functions for electron counting on either the CPU (electron_count) or the GPU
-# (electron_count_GPU).  For GPU electron counting, pytorch is used to interface between numpy and
-# the GPU, and the datacube is expected in numpy.memmap (memory mapped) form.
+# (electron_count_GPU).  For GPU electron counting, pytorch is used to interface between
+# numpy and the GPU, and the datacube is expected in numpy.memmap (memory mapped) form.
 
 import numpy as np
 from scipy import optimize
 
 from ..utils import get_maximal_points, print_progress_bar, bin2D
-from ...io.datastructure import PointListArray
+from ...io import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
@@ -20,39 +20,38 @@ def electron_count(datacube, darkreference, Nsamples=40,
     Performs electron counting.
 
     The algorithm is as follows:
-    From a random sampling of frames, calculate an x-ray and background threshold value. In each
-    frame, subtract the dark reference, then apply the two thresholds. Find all local maxima with
-    respect to the nearest neighbor pixels. These are considered electron strike events.
+    From a random sampling of frames, calculate an x-ray and background threshold value.
+    In each frame, subtract the dark reference, then apply the two thresholds. Find all
+    local maxima with respect to the nearest neighbor pixels. These are considered
+    electron strike events.
 
-    Thresholds are specified in units of standard deviations, either of a gaussian fit to the
-    histogram background noise (for thresh_bkgrnd) or of the histogram itself (for thresh_xray).
-    The background (lower) threshold is more important; we will always be missing some real
-    electron counts and incorrectly counting some noise as electron strikes - this threshold
-    controls their relative balance. The x-ray threshold may be set fairly high.
+    Thresholds are specified in units of standard deviations, either of a gaussian fit to
+    the histogram background noise (for thresh_bkgrnd) or of the histogram itself (for
+    thresh_xray). The background (lower) threshold is more important; we will always be
+    missing some real electron counts and incorrectly counting some noise as electron
+    strikes - this threshold controls their relative balance. The x-ray threshold may be
+    set fairly high.
 
-    Accepts:
-        datacube               a 4D numpy.ndarray pointing to the datacube
-                               note: the R/Q axes are flipped with respect to py4DSTEM DataCubes
-        darkreference          a 2D numpy.ndarray with the dark reference
-        Nsamples               the number of frames to use in dark reference
-                               and threshold calculation.
-        thresh_bkgrnd_Nsigma   background threshold is
-                                    mean(guassian fit) + (this #)*std(gaussian fit)
-                               where the gaussian fit is to the background noise.
-        thresh_xray_Nsigma     the X-ray threshold is
-                                    mean(hist) +/- (this #)*std(hist)
-                               where hist is the histogram of all pixel values in the
-                               Nsamples random frames
-        binfactor              the binnning factor
-        sub_pixel              (bool) controls whether subpixel refinement is performed
-        output                 (str) controls output format; must be 'datacube' or 'pointlist'
+    Args:
+        datacube: a 4D numpy.ndarray pointing to the datacube. Note: the R/Q axes are
+            flipped with respect to py4DSTEM DataCube objects
+        darkreference: a 2D numpy.ndarray with the dark reference
+        Nsamples: the number of frames to use in dark reference and threshold
+            calculation.
+        thresh_bkgrnd_Nsigma: the background threshold is
+            ``mean(guassian fit) + (this #)*std(gaussian fit)``
+            where the gaussian fit is to the background noise.
+        thresh_xray_Nsigma: the X-ray threshold is
+            ``mean(hist) +/- (this #)*std(hist)``
+            where hist is the histogram of all pixel values in the Nsamples random frames
+        binfactor: the binnning factor
+        sub_pixel (bool): controls whether subpixel refinement is performed
+        output (str): controls output format; must be 'datacube' or 'pointlist'
 
     Returns:
-        pointlist       if output=='pointlist', returns a PointListArray of all electron counts
-                        in each frame
-           - OR -
-        datacube        if output=='datacube', output a 4D array of bools, with True indicating
-                        electron strikes
+        (variable) if output=='pointlist', returns a PointListArray of all electron
+        counts in each frame. If output=='datacube', returns a 4D array of bools, with
+        True indicating electron strikes
     """
     assert isinstance(output, str), "output must be a str"
     assert output in ['pointlist', 'datacube'], "output must be 'pointlist' or 'datacube'"
@@ -62,11 +61,12 @@ def electron_count(datacube, darkreference, Nsamples=40,
 
     # Get threshholds
     print('Calculating threshholds')
-    thresh_bkgrnd, thresh_xray = calculate_thresholds(datacube,
-                                                      darkreference,
-                                                      Nsamples=Nsamples,
-                                                      thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
-                                                      thresh_xray_Nsigma=thresh_xray_Nsigma)
+    thresh_bkgrnd, thresh_xray = calculate_thresholds(
+                                      datacube,
+                                      darkreference,
+                                      Nsamples=Nsamples,
+                                      thresh_bkgrnd_Nsigma=thresh_bkgrnd_Nsigma,
+                                      thresh_xray_Nsigma=thresh_xray_Nsigma)
 
     # Save to a new datacube
     if output=='datacube':
@@ -98,11 +98,11 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
-                                                                                 length = 50)
+                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:',
+                                    suffix='Complete', length=50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
-                workingarray = frame-darkreference              # Subtract dark ref from frame
-                events = workingarray>thresh_bkgrnd             # Threshold electron events
+                workingarray = frame-darkreference        # Subtract dark ref from frame
+                events = workingarray>thresh_bkgrnd       # Threshold electron events
                 events *= thresh_xray>workingarray
 
                 ## Keep events which are greater than all NN pixels ##
@@ -193,7 +193,7 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
             else:
                 # I'm not sure I understand this - we're flipping coordinates to match what?
                 # TODO: check array flipping - may vary by camera
-                counted[Rx,Ry,:,:]=torch.transpose(events.type(torch_.cuda.ShortTensor),0,1).flip(0).flip(1)
+                counted[Rx,Ry,:,:]=torch.transpose(events.type(torch.cuda.ShortTensor),0,1).flip(0).flip(1)
 
     if output=='datacube':
         return counted.cpu().numpy()
@@ -211,34 +211,37 @@ def calculate_thresholds(datacube, darkreference,
     Calculate the upper and lower thresholds for thresholding what to register as
     an electron count.
 
-    Both thresholds are determined from the histogram of detector pixel values summed over
-    Nsamples frames. The thresholds are set to
+    Both thresholds are determined from the histogram of detector pixel values summed
+    over Nsamples frames. The thresholds are set to::
+
         thresh_xray_Nsigma =    mean(histogram)    + thresh_upper * std(histogram)
         thresh_bkgrnd_N_sigma = mean(guassian fit) + thresh_lower * std(gaussian fit)
+
     For more info, see the electron_count docstring.
 
-    Accepts:
-        datacube               a 4D numpy.ndarrau pointing to the datacube
-        darkreference          a 2D numpy.ndarray with the dark reference
-        Nsamples               the number of frames to use in dark reference
-                               and threshold calculation.
-        thresh_bkgrnd_Nsigma   background threshold is
-                                    mean(guassian fit) + (this #)*std(gaussian fit)
-                               where the gaussian fit is to the background noise.
-        thresh_xray_Nsigma     the X-ray threshold is
-                                    mean(hist) + (this #)*std(hist)
-                               where hist is the histogram of all pixel values in the
-                               Nsamples random frames
-        return_params          bool, if True return n,hist of the histogram and popt of the
-                               gaussian fit
+    Args:
+        datacube: a 4D numpy.ndarrau pointing to the datacube
+        darkreference: a 2D numpy.ndarray with the dark reference
+        Nsamples: the number of frames to use in dark reference and threshold
+            calculation.
+        thresh_bkgrnd_Nsigma: the background threshold is
+            ``mean(guassian fit) + (this #)*std(gaussian fit)``
+            where the gaussian fit is to the background noise.
+        thresh_xray_Nsigma: the X-ray threshold is
+            ``mean(hist) + (this #)*std(hist)``
+            where hist is the histogram of all pixel values in the Nsamples random frames
+        return_params: bool, if True return n,hist of the histogram and popt of the
+            gaussian fit
 
     Returns:
-        thresh_bkgrnd          the background threshold
-        thresh_xray            the X-ray threshold
-        n                      returned iff return_params==True. The histogram values
-        hist                   returned iff return_params==True. The histogram bin edges
-        popt                   returned iff return_params==True. The fit gaussian parameters,
-                               (A, mu, sigma).
+        (5-tuple): A 5-tuple containing:
+
+            * **thresh_bkgrnd**: the background threshold
+            * **thresh_xray**: the X-ray threshold
+            * **n**: returned iff return_params==True. The histogram values
+            * **hist**: returned iff return_params==True. The histogram bin edges
+            * **popt**: returned iff return_params==True. The fit gaussian parameters,
+              (A, mu, sigma).
     """
     R_Nx,R_Ny,Q_Nx,Q_Ny = datacube.shape
 
@@ -292,14 +295,17 @@ def torch_bin(array,device,factor=2):
     """
     Bin data on the GPU using torch.
 
-    Accepts:
-        array       a 2D numpy array
-        device      a torch device class instance
-        factor      (int) the binning factor
+    Args:
+        array: a 2D numpy array
+        device: a torch device class instance
+        factor (int): the binning factor
 
     Returns:
-        binned_ar   the binned array
+        (array): the binned array
     """
+
+    import torch
+
     x,y =  array.shape
     binx,biny = x//factor,y//factor
     xx,yy = binx*factor,biny*factor
@@ -317,12 +323,12 @@ def counted_datacube_to_pointlistarray(counted_datacube, subpixel=False):
     """
     Converts an electron counted datacube to PointListArray.
 
-    Accepts:
-        counted_datacube    a 4D array of bools, with true indicating an electron strike.
-        subpixel            (bool) controls if subpixel electron strike positions are expected
+    Args:
+        counted_datacube: a 4D array of bools, with true indicating an electron strike.
+        subpixel (bool): controls if subpixel electron strike positions are expected
 
     Returns:
-        pointlistarray      a PointListArray of electron strike events
+        (PointListArray): a PointListArray of electron strike events
     """
     # Get shape, initialize PointListArray
     R_Nx,R_Ny,Q_Nx,Q_Ny = counted_datacube.shape
@@ -346,13 +352,14 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
     """
     Converts an electron counted PointListArray to a datacube.
 
-    Accepts:
-        counted_pointlistarray      a PointListArray of electron strike events
-        shape                       a length 4 tuple of ints containing (R_Nx,R_Ny,Q_Nx,Q_Ny)
-        subpixel            (bool) controls if subpixel electron strike positions are expected
+    Args:
+        counted_pointlistarray (PointListArray): a PointListArray of electron strike
+            events
+        shape (4-tuple): a length 4 tuple of ints containing (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        subpixel (bool): controls if subpixel electron strike positions are expected
 
     Returns:
-        counted_datacube    a 4D array of bools, with true indicating an electron strike.
+        (4D array of bools): a 4D array of bools, with true indicating an electron strike.
     """
     assert len(shape)==4
     assert subpixel==False, "subpixel mode not presently supported."
@@ -372,6 +379,8 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
 if __name__=="__main__":
 
     from py4DSTEM.process.preprocess import get_darkreference
+    from py4DSTEM.io import DataCube, save
+    from ncempy.io import dm
 
     dm4_filepath = 'Capture25.dm4'
 
@@ -388,7 +397,7 @@ if __name__=="__main__":
 
 
     # Get memory mapped 4D datacube from dm file
-    datacube = dm.dmReader(dm4filename,dSetNum=0,verbose=False)['data']
+    datacube = dm.dmReader(dm4_filepath,dSetNum=0,verbose=False)['data']
     datacube = np.moveaxis(datacube,(0,1),(2,3))
 
     # Get dark reference
@@ -403,9 +412,9 @@ if __name__=="__main__":
 
     # For outputting datacubes, wrap counted into a py4DSTEM DataCube
     if output=='datacube':
-        electron_counted_data = DataCube(data=counted)
+        electron_counted_data = DataCube(data=electron_counted_data)
 
-    output_path = dm4filename.replace('.dm4','.h5')
+    output_path = dm4_filepath.replace('.dm4','.h5')
     save(electron_counted_data, output_path)
 
 

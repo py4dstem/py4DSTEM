@@ -25,11 +25,11 @@ class RealSlice(DataObject):
         """
         # Get shape
         if R_Nx is None:
-            self.R_Nx = data.shape[0]
+            self.R_Nx = data.shape[0]  #: the extent of the data along its first axis
         else:
             self.R_Nx = R_Nx
         if R_Ny is None:
-            self.R_Ny = data.shape[1]
+            self.R_Ny = data.shape[1]  #: the extent of the data along its second axis
         else:
             self.R_Ny = R_Ny
 

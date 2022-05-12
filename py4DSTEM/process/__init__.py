@@ -8,3 +8,4 @@ from . import classification
 from . import dpc
 from . import amorph
 from . import virtualimage
+from . import diffraction

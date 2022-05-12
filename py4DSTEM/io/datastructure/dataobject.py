@@ -25,20 +25,19 @@ def show_object_list(method):
 
 class DataObject(object):
     """
-    A DataObject:
-        -enables searching/listing all py4DSTEM dataobject instances in a session
+    Enables searching/listing all py4DSTEM DataObject instances in a session.
 
     If the searchable keyword is set to False, a dataobject will not be tracked by the DataObject
     class and will not be found or returned by its search methods.
+
+    Args:
+        name (str): used to identify the object in .h5 files and logs
     """
     _instances = []
 
-    def __init__(self, name='', searchable=True, **kwargs):
+    def __init__(self, name='', searchable=False, **kwargs):
         """
         Instantiate a DataObject instance.
-
-        Inputs:
-            name      a string which will be used to identify the object in .h5 files and logs
         """
         self.name = name
         if searchable==True:

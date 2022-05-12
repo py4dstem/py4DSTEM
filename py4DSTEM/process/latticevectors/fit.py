@@ -3,39 +3,43 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io.datastructure import PointList, PointListArray, RealSlice
+from ...io import PointList, PointListArray, RealSlice
 from ..utils import tqdmnd
 
 def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     Fits lattice vectors g1,g2 to braggpeaks given some known (h,k) indexing.
 
-    Accepts:
-        braggpeaks          (PointList) A 6 coordinate PointList containing the data to fit.
-                            Coords are 'qx','qy' (the bragg peak positions), 'intensity'
-                            (used as a weighting factor when fitting), 'h','k' (indexing) and
-                            'index_mask' (bool indicating if the peak has been indexed)
-        x0                  (float) x-coord of the origin
-        y0                  (float) y-coord of the origin
-        minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in braggpeaks
-                            which can be indexed, return None for all return parameters
+    Args:
+        braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
+            Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
+        x0 (float): x-coord of the origin
+        y0 (float): y-coord of the origin
+        minNumPeaks (int): if there are fewer than minNumPeaks peaks found in braggpeaks
+            which can be indexed, return None for all return parameters
 
     Returns:
-        x0                  (float) the x-coord of the origin of the best-fit lattice.
-        y0                  (float) the y-coord of the origin
-        g1x                 (float) x-coord of the first lattice vector
-        g1y                 (float) y-coord of the first lattice vector
-        g2x                 (float) x-coord of the second lattice vector
-        g2y                 (float) y-coord of the second lattice vector
-        error               (float) the fit error
+        (7-tuple) A 7-tuple containing:
+
+            * **x0**: *(float)* the x-coord of the origin of the best-fit lattice.
+            * **y0**: *(float)* the y-coord of the origin
+            * **g1x**: *(float)* x-coord of the first lattice vector
+            * **g1y**: *(float)* y-coord of the first lattice vector
+            * **g2x**: *(float)* x-coord of the second lattice vector
+            * **g2y**: *(float)* y-coord of the second lattice vector
+            * **error**: *(float)* the fit error
     """
     assert isinstance(braggpeaks, PointList)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
     braggpeaks = braggpeaks.copy()
 
     # Remove unindexed peaks
-    deletemask = braggpeaks.data['index_mask'] == False
-    braggpeaks.remove_points(deletemask)
+    if 'index_mask' in braggpeaks.dtype.names:
+        deletemask = braggpeaks.data['index_mask'] == False
+        braggpeaks.remove_points(deletemask)
 
     # Check to ensure enough peaks are present
     if braggpeaks.length < minNumPeaks:
@@ -68,32 +72,35 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
 
 def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
-    Fits lattice vectors g1,g2 to each diffraction pattern in braggpeaks, given some known (h,k)
-    indexing.
+    Fits lattice vectors g1,g2 to each diffraction pattern in braggpeaks, given some
+    known (h,k) indexing.
 
-    Accepts:
-        braggpeaks          (PointList) A 6 coordinate PointListArray containing the data to fit.
-                            Coords are 'qx','qy' (the bragg peak positions), 'intensity'
-                            (used as a weighting factor when fitting), 'h','k' (indexing) and
-                            'index_mask' (bool indicating if the peak has been indexed)
-        x0                  (float) x-coord of the origin
-        y0                  (float) y-coord of the origin
-        minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in braggpeaks
-                            which can be indexed, return None for all return parameters
+    Args:
+        braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
+            Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
+        x0 (float): x-coord of the origin
+        y0 (float): y-coord of the origin
+        minNumPeaks (int): if there are fewer than minNumPeaks peaks found in braggpeaks
+            which can be indexed, return None for all return parameters
 
     Returns:
-        g1g2_map                  (RealSlice) a RealSlice containing the following 6 arrays:
-        g1g2_map.slices['x0']     x-coord of the origin of the best fit lattice
-        g1g2_map.slices['y0']     y-coord of the origin
-        g1g2_map.slices['g1x']    x-coord of the first lattice vector
-        g1g2_map.slices['g1y']    y-coord of the first lattice vector
-        g1g2_map.slices['g2x']    x-coord of the second lattice vector
-        g1g2_map.slices['g2y']    y-coord of the second lattice vector
-        g1g2_map.slices['error']  the fit error
-        g1g2_map.slices['mask']   1 for successful fits, 0 for unsuccessful fits
+        (RealSlice): A RealSlice ``g1g2map`` containing the following 8 arrays:
+
+            * ``g1g2_map.slices['x0']``     x-coord of the origin of the best fit lattice
+            * ``g1g2_map.slices['y0']``     y-coord of the origin
+            * ``g1g2_map.slices['g1x']``    x-coord of the first lattice vector
+            * ``g1g2_map.slices['g1y']``    y-coord of the first lattice vector
+            * ``g1g2_map.slices['g2x']``    x-coord of the second lattice vector
+            * ``g1g2_map.slices['g2y']``    y-coord of the second lattice vector
+            * ``g1g2_map.slices['error']``  the fit error
+            * ``g1g2_map.slices['mask']``   1 for successful fits, 0 for unsuccessful
+              fits
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k','index_mask')])
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
 
     # Make RealSlice to contain outputs
     slicelabels = ('x0','y0','g1x','g1y','g2x','g2y','error','mask')
@@ -119,31 +126,34 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
 
 def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
     """
-    Fits lattice vectors g1,g2 to each diffraction pattern in braggpeaks corresponding to a scan
-    position for which mask==True.
+    Fits lattice vectors g1,g2 to each diffraction pattern in braggpeaks corresponding
+    to a scan position for which mask==True.
 
-    Accepts:
-        braggpeaks          (PointList) A 6 coordinate PointListArray containing the data to fit.
-                            Coords are 'qx','qy' (the bragg peak positions), 'intensity'
-                            (used as a weighting factor when fitting), 'h','k' (indexing) and
-                            'index_mask' (bool indicating if the peak has been indexed)
-        mask                (boolean array) real space shaped (R_Nx,R_Ny); fit lattice vectors where
-                            mask is True
-        x0                  (float) x-coord of the origin
-        y0                  (float) y-coord of the origin
-        minNumPeaks         (int) if there are fewer than minNumPeaks peaks found in braggpeaks
-                            which can be indexed, return None for all return parameters
+    Args:
+        braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
+            Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
+            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            contain 'index_mask' (bool), indicating which peaks have been successfully
+            indixed and should be used.
+        mask (boolean array): real space shaped (R_Nx,R_Ny); fit lattice vectors where
+            mask is True
+        x0 (float): x-coord of the origin
+        y0 (float): y-coord of the origin
+        minNumPeaks (int): if there are fewer than minNumPeaks peaks found in braggpeaks
+            which can be indexed, return None for all return parameters
 
     Returns:
-        g1g2_map                  (RealSlice) a RealSlice containing the following 6 arrays:
-        g1g2_map.slices['x0']     x-coord of the origin of the best fit lattice
-        g1g2_map.slices['y0']     y-coord of the origin
-        g1g2_map.slices['g1x']    x-coord of the first lattice vector
-        g1g2_map.slices['g1y']    y-coord of the first lattice vector
-        g1g2_map.slices['g2x']    x-coord of the second lattice vector
-        g1g2_map.slices['g2y']    y-coord of the second lattice vector
-        g1g2_map.slices['error']  the fit error
-        g1g2_map.slices['mask']   1 for successful fits, 0 for unsuccessful fits
+        (RealSlice): A RealSlice ``g1g2map`` containing the following 8 arrays:
+
+            * ``g1g2_map.slices['x0']``     x-coord of the origin of the best fit lattice
+            * ``g1g2_map.slices['y0']``     y-coord of the origin
+            * ``g1g2_map.slices['g1x']``    x-coord of the first lattice vector
+            * ``g1g2_map.slices['g1y']``    y-coord of the first lattice vector
+            * ``g1g2_map.slices['g2x']``    x-coord of the second lattice vector
+            * ``g1g2_map.slices['g2y']``    y-coord of the second lattice vector
+            * ``g1g2_map.slices['error']``  the fit error
+            * ``g1g2_map.slices['mask']``   1 for successful fits, 0 for unsuccessful
+              fits
     """
     assert isinstance(braggpeaks, PointListArray)
     assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])

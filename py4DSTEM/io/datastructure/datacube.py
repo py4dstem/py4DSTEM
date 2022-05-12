@@ -7,16 +7,21 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
 import h5py
+import dask.array as da
 
-import numpy as np
 from .dataobject import DataObject
 from ...process import preprocess
 from ...process import virtualimage_viewer as virtualimage
 from ...process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
+    """
+    A class storing a single 4D STEM dataset.
+
+    Args:
+        data (ndarray): the data, in a 4D array of shape ``(R_Nx,R_Ny,Q_Nx,Q_Ny)``
+    """
 
     def __init__(self, data, **kwargs):
         """
@@ -24,8 +29,14 @@ class DataCube(DataObject):
         """
         # Initialize DataObject
         DataObject.__init__(self, **kwargs)
-        self.data = data
-
+        self.data = data   #: the 4D dataset
+        
+        # Set h5 stack pointer, init without a pointer only passsed if dask dataset loaded
+        #TODO Should this be moved to DataObject class?  
+        if "stack_pointer" in kwargs:
+            self.stack_pointer = kwargs["stack_pointer"]
+        else:
+            self.stack_pointer = None 
         # Set shape
         assert (len(data.shape)==3 or len(data.shape)==4)
         if len(data.shape)==3:
@@ -33,8 +44,11 @@ class DataCube(DataObject):
             self.R_Nx, self.R_Ny = self.R_N, 1
             self.set_scan_shape(self.R_Nx,self.R_Ny)
         else:
-            self.R_Nx, self.R_Ny, self.Q_Nx, self.Q_Ny = data.shape
-            self.R_N = self.R_Nx*self.R_Ny
+            self.R_Nx = data.shape[0]  #: real space x pixels
+            self.R_Ny = data.shape[1]  #: real space y pixels
+            self.Q_Nx = data.shape[2]  #: diffraction space x pixels
+            self.Q_Ny = data.shape[3]  #: diffraction space y pixels
+            self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
 
         self.update_slice_parsers()
         # Set shape
@@ -51,9 +65,17 @@ class DataCube(DataObject):
     def set_scan_shape(self,R_Nx,R_Ny):
         """
         Reshape the data given the real space scan shape.
+
+        Args:
+            R_Nx,R_Ny (int): the scan shape
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
+
+        if hasattr(self,'coordinates'):
+
+            self.coordinates.R_Nx = self.R_Nx
+            self.coordinates.R_Ny = self.R_Ny
 
     def swap_RQ(self):
         """
@@ -84,8 +106,8 @@ class DataCube(DataObject):
     def bin_data_diffraction(self, bin_factor):
         self = preprocess.bin_data_diffraction(self, bin_factor)
 
-    def bin_data_mmap(self, bin_factor):
-        self = preprocess.bin_data_mmap(self, bin_factor)
+    def bin_data_mmap(self, bin_factor, dtype=np.float32):
+        self = preprocess.bin_data_mmap(self, bin_factor, dtype=dtype)
 
     def bin_data_real(self, bin_factor):
         self = preprocess.bin_data_real(self, bin_factor)
@@ -235,6 +257,7 @@ def save_datacube_group(group, datacube, use_compression=False):
     Expects an open .h5 group and a DataCube; saves the DataCube to the group
     """
     group.attrs.create("emd_group_type",1)
+    # Do I need to add DASK ARRAY thing in here 
     if (isinstance(datacube.data,np.ndarray) or isinstance(datacube.data,h5py.Dataset)):
         if use_compression:
             data_datacube = group.create_dataset("data", data=datacube.data,
@@ -274,13 +297,23 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
         and returns a DataCube.
     """
-    # TODO: add memmapping, binning
-    data = np.array(g['data'])
+    # TODO: add binning
+    assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
+
+    if (mem, binfactor) == ("RAM", 1):
+        stack_pointer = g['data']
+        data = np.array(g['data'])
+    elif (mem, binfactor) == ("MEMMAP", 1):
+        data = g['data']
+        stack_pointer = None
+    elif (mem, binfactor) == ("DASK", 1):
+        stack_pointer = g['data']
+        # sets default to 1 diffraction pattern per chunk... not maybe need a smarter way to do this
+        # get the size of each image and work out what gives ~ 100mb chunks.  
+        shape = (1, 1, *stack_pointer.shape[2:])
+        data = da.from_array(stack_pointer, chunks=shape)
     name = g.name.split('/')[-1]
-    return DataCube(data=data,name=name)
-
-
-
+    return DataCube(data=data,name=name, stack_pointer=stack_pointer)
 
 
 

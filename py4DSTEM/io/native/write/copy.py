@@ -19,19 +19,18 @@ def copy(filepath_orig, filepath_new, indices=None, delete=False,
     Copies DataObjects specified by indices from the py4DSTEM .h5 file at filepath_orig
     to avnew file at filepath_new.
 
-    Accepts:
-        filepath_orig       path to an existing py4DSTEM .h5 file to copy
-        filepath_new        path to the new file to write
-        indices             if None, copy the entire file.
-                            Otherwise must be either an int or a list of ints.
-                            Copies the DataObjects corresponding to these indices
-                            in the original file.
-        topgroup_orig       The toplevel group for the original file
-        topgroup_new        and for the new file
+    Args:
+        filepath_orig: path to an existing py4DSTEM .h5 file to copy
+        filepath_new: path to the new file to write
+        indices: if None, copy the entire file. Otherwise must be either an int or a list
+            of ints. Copies the DataObjects corresponding to these indices in the
+            original file.
+        topgroup_orig: The toplevel group for the original file
+        topgroup_new: The toplevel group for the new file
     """
     assert(is_py4DSTEM_file(filepath_orig)), "Error: not recognized as a py4DSTEM file."
     tgs = get_py4DSTEM_topgroups(filepath_orig)
-    assert(topgroup_orig in tgs), "Error: topgroup '{}' not found.".format(topgroup)
+    assert(topgroup_orig in tgs), "Error: topgroup '{}' not found.".format(topgroup_orig)
     if exists(filepath_new):
         assert(is_py4DSTEM_file(filepath_new)), "Error: a file with the target filename already exists, and is not recognized as a py4DSTEM file."
         tgs = get_py4DSTEM_topgroups(filepath_new)

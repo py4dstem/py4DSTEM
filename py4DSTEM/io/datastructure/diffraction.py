@@ -25,11 +25,11 @@ class DiffractionSlice(DataSlice):
         """
         # Get shape
         if Q_Nx is None:
-            self.Q_Nx = data.shape[0]
+            self.Q_Nx = data.shape[0]  #: the extent of the data along its first axis
         else:
             self.Q_Nx = Q_Nx
         if Q_Ny is None:
-            self.Q_Ny = data.shape[1]
+            self.Q_Ny = data.shape[1]  #: the extent of the data along its second axis
         else:
             self.Q_Ny = Q_Ny
 

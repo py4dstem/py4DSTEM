@@ -201,7 +201,8 @@ def _h5write(filename, mode, grouppath, *args, **kwargs):
             if h5options['UNSUPPORTED'] == 'fail':
                 raise RuntimeError('Unsupported data type : %s' % type(a))
             elif h5options['UNSUPPORTED'] == 'pickle':
-                dset = _store_pickle(group, a, name)
+                # dset = _store_pickle(group, a, name)
+                raise NotImplementedError("Pickling is not supported.")
             else:
                 dset = None
         return dset

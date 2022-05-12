@@ -13,18 +13,36 @@ class Coordinates(DataObject):
     where the parameter varies with scan position, e.g. the shifting of the optic axis as
     the beam is scanned.
 
-	Storing and accessing some parameter p is accomplished with get/set methods, e.g.:
-		```
-		coords = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
-		coords.set_p(p)
-		p = coords.get_p()
-		```
-	The get methods support retrieving numbers, arrays, or values at specified (rx,ry)
-	positions.  The code
-		```
-        p = coords.get_p(rx,ry)
-		```
-    will retrieve the value p if p is a number, and the value p[rx,ry] if p is an array.
+    Storing and accessing some parameter ``p`` is accomplished with the get/set methods, e.g.
+
+        >>> coords = Coordinates(R_Nx,R_Ny,Q_Nx,Q_Ny)
+        >>> coords.set_p(p)
+        >>> p = coords.get_p()
+
+    The get methods support retrieving numbers, arrays, or values at specified positions.
+    The code:
+
+        >>> p = coords.get_p(rx,ry)
+
+    will retrieve the value ``p`` if ``p`` is a number, and the value ``p[rx,ry]`` if ``p`` is an array.
+
+    Args:
+        Q_Nx,Q_Ny (int): the shape of diffraction space
+        R_Nx,R_Ny (int): the shape of real space
+        Q_pixel_size (number): the detector pixel size, in units of ``Q_pixel_units``
+        Q_pixel_units (string): the detector pixel size units
+        R_pixel_size (number): the spacing between beam raster positions, in units of
+            ``R_pixel_units``
+        R_pixel_units (string): the real space pixel units
+        qx0,qy0 (number or ndarray): the origin of diffraction space
+        a (number): the semimajor axis of the elliptical distortions
+        b (number): the semiminor axis of the elliptical distortions
+        theta (number): the (positive, right handed) tilt of the semimajor axis of
+            the elliptical distortions with respect to the x-axis, in radians
+        QR_rotation (number): the (positive,right handed) rotational misalignment of
+            image plane with respec diffraction plane, in radians
+        QR_flip (bool): descibes whether the image and diffraction plane's coordinate
+            systems are inverted with respect to one another
     """
     def __init__(self,R_Nx,R_Ny,Q_Nx,Q_Ny,
                  Q_pixel_size=1,Q_pixel_units='pixels',
@@ -32,26 +50,6 @@ class Coordinates(DataObject):
                  **kwargs):
         """
         Initialize a coordinate system.
-
-        Accepts:
-            Q_Nx,Q_Ny         (ints) the shape of diffraction space
-            R_Nx,R_Ny         (ints) the shape of real space
-            Q_pixel_size      (number)
-            Q_pixel_units     (string)
-            R_pixel_size      (number)
-            R_pixel_units     (string)
-            qx0,qy0           (numbers or ndarrays) the origin of diffraction space
-            e                 (number) the ratio of lengths of the semiminor to
-                              semimajor axes of the elliptical distortions
-            theta             (number) the (positive, right handed) tilt of the
-                              semimajor axis of the elliptical distortions with
-                              respect to the x-axis, in radians
-            QR_rotation       (number) the (positive,right handed) rotational
-                              misalignment of image plane with respect to the
-                              diffraction plane, in radians
-            QR_flip           (bool) descibes whether the image and diffraction
-                              plane's coordinate systems are inverted with
-                              respect to one another
         """
         DataObject.__init__(self, **kwargs)
 
@@ -102,16 +100,24 @@ class Coordinates(DataObject):
         self._validate_input(qx0)
         self._validate_input(qy0)
         self.qx0,self.qy0 = qx0,qy0
-    def set_e(self,e):
-        self._validate_input(e)
-        self.e = e
+    def set_a(self,a):
+        self._validate_input(a)
+        self.a = a
+    def set_b(self,b):
+        self._validate_input(b)
+        self.b = b
     def set_theta(self,theta):
         self._validate_input(theta)
         self.theta = theta
-    def set_ellipse(self,e,theta):
-        self._validate_input(e)
+    def set_ellipse(self,a,b,theta):
+        self._validate_input(a)
+        self._validate_input(b)
         self._validate_input(theta)
-        self.e,self.theta = e,theta
+        self.a,self.b,self.theta = a,b,theta
+    def set_p_ellipse(self,p_ellipse):
+        assert(len(p_ellipse)==5)
+        _,_,a,b,theta = p_ellipse
+        self.set_ellipse(a,b,theta)
     def set_QR_rotation(self,QR_rotation):
         self._validate_input(QR_rotation)
         self.QR_rotation = QR_rotation
@@ -141,12 +147,25 @@ class Coordinates(DataObject):
         return self._get_value(self.qy0,rx,ry)
     def get_origin(self,rx=None,ry=None):
         return self.get_qx0(rx,ry),self.get_qy0(rx,ry)
-    def get_e(self,rx=None,ry=None):
-        return self._get_value(self.e,rx,ry)
+    def get_a(self,rx=None,ry=None):
+        return self._get_value(self.a,rx,ry)
+    def get_b(self,rx=None,ry=None):
+        return self._get_value(self.b,rx,ry)
     def get_theta(self,rx=None,ry=None):
         return self._get_value(self.theta,rx,ry)
     def get_ellipse(self,rx=None,ry=None):
-        return self.get_e(rx,ry),self.get_theta(rx,ry)
+        return self.get_a(rx,ry),self.get_b(rx,ry),self.get_theta(rx,ry)
+    def get_p_ellipse(self,rx=None,ry=None):
+        qx0 = self.get_qx0(rx,ry)
+        qy0 = self.get_qy0(rx,ry)
+        a = self.get_a(rx,ry)
+        b = self.get_b(rx,ry)
+        theta = self.get_theta(rx,ry)
+        if rx is None and ry is None:
+            types = type(qx0),type(qy0),type(a),type(b),type(theta)
+            if any([isinstance(np.ndarray,t) for t in types]):
+                assert all([isinstance(np.ndarray,t) for t in types]), "Inconsistent types! Most likely the center (qx0,qy0) are arrays and the ellipse parameters (a,b,theta) are numbers. Try passing this function a position (rx,ry)."
+        return (qx0,qy0,a,b,theta)
     def get_QR_rotation(self):
         return self.QR_rotation
     def get_QR_flip(self):

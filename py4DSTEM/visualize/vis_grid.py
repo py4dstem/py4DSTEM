@@ -89,9 +89,9 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
     else:
         return fig,ax
 
-def show_image_grid(get_ar, H, W, axsize=(6,6), returnfig=False, title=None,
-                    titlesize=12, num=None, get_bordercolor=None, get_x=None, 
-                    get_y=None, get_pointcolors=None, get_s=None, **kwargs):
+def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
+                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None,
+                    get_s=None,open_circles=False,**kwargs):
     """
     Displays a set of images in a grid.
 

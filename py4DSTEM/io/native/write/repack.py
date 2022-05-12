@@ -6,10 +6,11 @@ def repack(filepath, topgroup='4DSTEM_experiment'):
     """
     Fully releases the storage space associated with any data blocks that have
     been 'removed' from this .h5 file but which are still allocated to the file.
+    See the docstring for ``io.write.append`` for more info.
 
-    Accepts:
-        filepath             the filepath to an existing py4DSTEM .h5 file
-        topgroup       The toplevel group
+    Args:
+        filepath: the filepath to an existing py4DSTEM .h5 file
+        topgroup: the toplevel group
     """
     _filepath = dirname(filepath)+'_'+basename(filepath)
     while exists(_filepath):

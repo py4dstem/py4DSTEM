@@ -1,11 +1,11 @@
 import h5py
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
 import py4DSTEM
-from py4DSTEM.process import amorph
-from py4DSTEM.process.calibration import ellipse
-from py4DSTEM.process.utils import bin2D
+from py4DSTEM.process.rdf import amorph
+import matplotlib
+from py4DSTEM.process.utils.elliptical_coords import *
+from tqdm import tqdm
+from scipy.signal import medfilt2d
+from scipy.ndimage.morphology import binary_closing
 from scipy.ndimage import affine_transform
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.morphology import binary_closing
@@ -21,7 +21,7 @@ linux = False
 mac = True
 # flags to control which part of the script to run
 run_test = False
-run_test2 = False
+run_test2 = True
 make_data = False
 load_data = False
 run_data = False
