@@ -52,7 +52,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method (CUDA version)
     This method utilizes FCU-Net to predict Bragg disks from diffraction images.
-    
+
      Args:
         datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
@@ -62,12 +62,12 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
             uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
             for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         batch_size (int): batch size for Tensorflow model.predict() function, by default batch_size = 2,
-            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version 
-            will implement Dask parrlelization implementation of the serial function to boost up the 
+            Note: if you are using CPU for model.predict(), please use batch_size < 2. Future version
+            will implement Dask parrlelization implementation of the serial function to boost up the
             performance of Tensorflow CPU predictions. Keep in mind that this funciton will take
             significant amount of time to predict for all the DPs in a datacube.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -110,7 +110,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
             detection, the function must be able to be pickled with by dill.
         _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
-            By default, if the model_path is not provided, py4DSTEM will search for the 
+            By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to
             keep track of the model path and advised to keep this argument unchanged (None)
             to always search for the latest updated training model weights.
@@ -136,29 +136,37 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     else:
         blocks = (DP.shape[0],)
         threads = (DP.shape[1],)
-        
+
     if predict:
         t0 = time()
         model = _get_latest_model(model_path = model_path)
-        probe = tf.expand_dims(tf.repeat(tf.expand_dims(probe, axis=0), 
-                                             datacube.R_Nx*datacube.R_Ny, axis=0), axis=-1)
-        DP = tf.expand_dims(tf.reshape(datacube.data,
-                                      (datacube.R_Nx*datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
-            
-        prediction = np.zeros(shape = (datacube.R_Nx*datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny, 1))
-        
-        image_num = datacube.R_Nx*datacube.R_Ny
+        prediction = np.zeros(shape = (datacube.R_N, datacube.Q_Nx, datacube.Q_Ny, 1))
+
+        image_num = datacube.R_N
         batch_num = int(image_num//batch_size)
 
+        datacube_flattened = datacube.data.view()
+        datacube_flattened.shape = (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)
+
         for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
-            for i in range(batch_num):
-                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]])
-            if (i+1)*batch_size < image_num:
-                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]])
-        
+            for batch_idx in range(batch_num):
+                # the final batch may be smaller than the other ones:
+                probes_remaining = datacube.R_N - (batch_idx * batch_size)
+                this_batch_size = (
+                    probes_remaining if probes_remaining < batch_size else batch_size
+                )
+                DP = tf.expand_dims(
+                    datacube_flattened[batch_idx*batch_size:batch_idx*batch_size + this_batch_size],
+                    axis = -1)
+                _probe = tf.expand_dims(
+                    tf.repeat(tf.expand_dims(probe, axis=0), this_batch_size, axis=0),
+                    axis = -1)
+                prediction[batch_idx*batch_size:batch_idx*batch_size+this_batch_size] += model.predict(
+                    [DP,_probe])
+
         print('Averaging over {} attempts \n'.format(num_attmpts))
         prediction = prediction/num_attmpts
-    
+
         prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
                                 (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
 
@@ -320,15 +328,15 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
     return peaks
 
 
-def get_maxima_2D_cp(ar, 
-                     sigma=0, 
-                     edgeBoundary=0, 
-                     minSpacing=0, 
+def get_maxima_2D_cp(ar,
+                     sigma=0,
+                     edgeBoundary=0,
+                     minSpacing=0,
                      minRelativeIntensity=0,
                      minAbsoluteIntensity=0,
-                     relativeToPeak=0, 
-                     maxNumPeaks=0, 
-                     subpixel='poly', 
+                     relativeToPeak=0,
+                     maxNumPeaks=0,
+                     subpixel='poly',
                      ar_FT = None,
                      upsample_factor=16,
                      get_maximal_points=None,
@@ -375,7 +383,8 @@ def get_maxima_2D_cp(ar,
     sizex = ar.shape[0]
     sizey = ar.shape[1]
     N = sizex*sizey
-    get_maximal_points(blocks,threads,(ar,maxima_bool,sizex,sizey,N))
+    get_maximal_points(blocks, threads, (ar, maxima_bool, minAbsoluteIntensity, sizex, sizey, N))
+    #get_maximal_points(blocks,threads,(ar,maxima_bool,sizex,sizey,N))
 
     # Remove edges
     if edgeBoundary > 0:
