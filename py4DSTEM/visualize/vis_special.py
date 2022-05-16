@@ -51,7 +51,8 @@ def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
 def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
-                            ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
+                            ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,
+                            maskcenter=False, mask=None,**kwargs):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
     the data and the fit in a pinwheel pattern.

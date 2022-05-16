@@ -91,9 +91,8 @@ def calculate_coef_strain(coef_cube, r_ref):
         sigma1      inner std of Janus gaussian
         sigma2      outer std of Janus gaussian
         c_bkgd      a constant offset
-        R           center of the Janus gaussian
         x0,y0       the origin
-        B,C         1x^2 + Bxy + Cy^2 = 1
+        A,B,C         x^2 + Bxy + Cy^2 = 1
 
     Accepts:
         coef_cube   - output from fit_stack
@@ -117,17 +116,17 @@ def calculate_coef_strain(coef_cube, r_ref):
                 "r_ref must be a 3 element tuple with elements(r_ref, B_ref, C_ref)."
             )
         # r_ref is a tuple with (r_ref, B_ref, C_ref)
-        A_ref, B_ref, C_ref = 1, r_ref[1], r_ref[2]
-        r_ref = r_ref[0]
+        A_ref, B_ref, C_ref = r_ref[0], r_ref[1], r_ref[2]
     else:
         raise ValueError("r_ref must be a number, or 3 element tuple")
 
-    R = coef_cube[:, :, 6]
-    r_ratio = (
-        R / r_ref
-    )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
+    # R = coef_cube[:, :, 6]
+    # r_ratio = (
+    #     R / r_ref
+    # )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
 
-    A = 1 / r_ratio ** 2
+    r_ratio=1
+    A = coef_cube[:, :, 8] / r_ratio ** 2
     B = coef_cube[:, :, 9] / r_ratio ** 2
     C = coef_cube[:, :, 10] / r_ratio ** 2
 
