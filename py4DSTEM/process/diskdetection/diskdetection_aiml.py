@@ -225,10 +225,6 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         import crystal4D
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
-    try:
-        import tensorflow as tf
-    except:
-        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     assert(len(Rx)==len(Ry))
     peaks = []
@@ -377,10 +373,6 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
         import crystal4D
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
-    try:
-        import tensorflow as tf
-    except:
-        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     # Make the peaks PointListArray
     coords = [('qx',float),('qy',float),('intensity',float)]
@@ -549,10 +541,6 @@ def find_Bragg_disks_aiml(datacube, probe,
         import crystal4D
     except:
         raise ImportError("Please install crystal4D before proceeding")
-    try:
-        import tensorflow as tf
-    except:
-        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
 
     def _parse_distributed(distributed):
         import os
@@ -732,7 +720,10 @@ def _get_latest_model(model_path = None):
          model:    Trained tensorflow model for disk detection
     """
     import crystal4D
-    import tensorflow as tf
+    try:
+        import tensorflow as tf
+    except:
+        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
     from ...io.google_drive_downloader import download_file_from_google_drive
     tf.keras.backend.clear_session()
 
