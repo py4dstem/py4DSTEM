@@ -29,7 +29,7 @@ from .kernels import kernels
 from .diskdetection import universal_threshold
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
-                          num_attmpts = 5,
+                          num_attempts = 5,
                           int_window_radius = 1,
                           predict = True,
                           batch_size = 8,
@@ -56,12 +56,12 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
      Args:
         datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
+            for fast prediction with num_attempts > 1
         int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
@@ -148,7 +148,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
         datacube_flattened = datacube.data.view()
         datacube_flattened.shape = (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)
 
-        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             for batch_idx in range(batch_num):
                 # the final batch may be smaller than the other ones:
                 probes_remaining = datacube.R_N - (batch_idx * batch_size)
@@ -164,8 +164,8 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
                 prediction[batch_idx*batch_size:batch_idx*batch_size+this_batch_size] += model.predict(
                     [DP,_probe])
 
-        print('Averaging over {} attempts \n'.format(num_attmpts))
-        prediction = prediction/num_attmpts
+        print('Averaging over {} attempts \n'.format(num_attempts))
+        prediction = prediction/num_attempts
 
         prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
                                 (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
@@ -175,7 +175,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML CUDA',unit='DP',unit_scale=True):
         DP = prediction[Rx,Ry,:,:]
         _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
-                                      num_attmpts = num_attmpts,
+                                      num_attempts = num_attempts,
                                       int_window_radius = int_window_radius,
                                       predict = False,
                                       sigma = sigma,
@@ -202,7 +202,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     return peaks
 
 def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
-                                  num_attmpts = 5,
+                                  num_attempts = 5,
                                   int_window_radius = 1,
                                   predict = True,
                                   sigma = 0,
@@ -223,8 +223,8 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
-    
-    The input DP and Probes need to be aligned before the prediction. Detected peaks within 
+
+    The input DP and Probes need to be aligned before the prediction. Detected peaks within
     edgeBoundary pixels of the diffraction plane edges are then discarded. Next, peaks
     with intensities less than minRelativeIntensity of the brightest peak in the
     correlation are discarded. Then peaks which are within a distance of minPeakSpacing
@@ -232,17 +232,17 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
     lesser correlation intensities is removed. Finally, if the number of peaks remaining
     exceeds maxNumPeaks, only the maxNumPeaks peaks with the highest correlation
     intensity are retained.
-    
+
     Args:
         DP (ndarray): a diffraction pattern
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
-        int_window_radius (int): window radius (in pixels) for disk intensity integration over the 
+            for fast prediction with num_attempts > 1
+        int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
         edgeBoundary (int): minimum acceptable distance from the DP edge, in pixels
@@ -286,17 +286,17 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
     if predict:
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         assert(len(probe.shape)==2), "Dimension of Probe should be 2 (Qx, Qy)"
-        
+
         model = _get_latest_model(model_path = model_path)
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
         prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
-        
-        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+
+        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             print('attempt {} \n'.format(att+1))
             prediction += model.predict([DP,probe])
-        print('Averaging over {} attempts \n'.format(num_attmpts))
-        pred = cp.array(prediction[0,:,:,0]/num_attmpts,dtype='float64')
+        print('Averaging over {} attempts \n'.format(num_attempts))
+        pred = cp.array(prediction[0,:,:,0]/num_attempts,dtype='float64')
     else:
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = cp.array(DP if filter_function is None else filter_function(DP),dtype='float64')
@@ -314,7 +314,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                                     upsample_factor = upsample_factor,
                                                     get_maximal_points=get_maximal_points,
                                                     blocks=blocks, threads=threads)
-    
+
     maxima_x, maxima_y, maxima_int = _integrate_disks_cp(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
     # Make peaks PointList
@@ -429,7 +429,7 @@ def get_maxima_2D_cp(ar,
             assert isinstance(relativeToPeak, (int, np.integer))
             deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
-            
+
         # Remove maxima which are too dim, absolute scale
         if (minAbsoluteIntensity > 0):
             deletemask = maxima['intensity'] < minAbsoluteIntensity
@@ -440,7 +440,7 @@ def get_maxima_2D_cp(ar,
             assert isinstance(maxNumPeaks, (int, np.integer))
             if len(maxima) > maxNumPeaks:
                 maxima = maxima[:maxNumPeaks]
-                
+
 
         # Subpixel fitting 
         # For all subpixel fitting, first fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
@@ -498,7 +498,7 @@ def upsampled_correlation_cp(imageCorr, upsampleFactor, xyShift):
     Returns:
         (2-element np array): Refined location of the peak in image coordinates.
     '''
-    
+
     #-------------------------------------------------------------------------------------
     #There are two approaches to Fourier upsampling for subpixel refinement: (a) one
     #can pad an (appropriately shifted) FFT with zeros and take the inverse transform,
@@ -613,7 +613,7 @@ def linear_interpolation_2D_cp(ar, x, y):
     return (1 - dx) * (1 - dy) * ar[x0, y0] + (1 - dx) * dy * ar[x0, y1] + dx * (1 - dy) * ar[x1, y0] + dx * dy * ar[
         x1, y1]
 
-def _integrate_disks_cp(DP, maxima_x,maxima_y,maxima_int,int_window_radius=1):    
+def _integrate_disks_cp(DP, maxima_x,maxima_y,maxima_int,int_window_radius=1):
     disks = []
     DP = cp.asnumpy(DP)
     img_size = DP.shape[0]

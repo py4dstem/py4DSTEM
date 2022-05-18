@@ -19,7 +19,7 @@ from ...io import PointList, PointListArray
 from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
-                                     num_attmpts = 5,
+                                     num_attempts = 5,
                                      int_window_radius = 1,
                                      predict = True,
                                      sigma = 0,
@@ -50,12 +50,12 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     Args:
         DP (ndarray): a diffraction pattern
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
+            for fast prediction with num_attempts > 1
         int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
@@ -118,10 +118,10 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
         prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
 
-        for i in tqdmnd(num_attmpts, desc='Neural network is predicting atomic potential', unit='ATTEMPTS',unit_scale=True):
+        for i in tqdmnd(num_attempts, desc='Neural network is predicting atomic potential', unit='ATTEMPTS',unit_scale=True):
             prediction += model.predict([DP,probe])
-        print('Averaging over {} attempts \n'.format(num_attmpts))
-        pred = prediction[0,:,:,0]/num_attmpts
+        print('Averaging over {} attempts \n'.format(num_attempts))
+        pred = prediction[0,:,:,0]/num_attempts
     else:
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
@@ -151,7 +151,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
 
 
 def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
-                                   num_attmpts = 5,
+                                   num_attempts = 5,
                                    int_window_radius = 1,
                                    batch_size = 1,
                                    predict =True,
@@ -174,12 +174,12 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
     Args:
         datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
+            for fast prediction with num_attempts > 1
         int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
@@ -245,13 +245,13 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
         image_num = len(Rx)
         batch_num = int(image_num//batch_size)
 
-        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             for i in range(batch_num):
                 prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose=0)
             if (i+1)*batch_size < image_num:
                 prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose=0)
 
-        prediction = prediction/num_attmpts
+        prediction = prediction/num_attempts
 
     # Loop over selected diffraction patterns
     for Rx in tqdmnd(image_num,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
@@ -279,7 +279,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
     return peaks
 
 def find_Bragg_disks_aiml_serial(datacube, probe,
-                                 num_attmpts = 5,
+                                 num_attempts = 5,
                                  int_window_radius = 1,
                                  predict =True,
                                  batch_size = 2,
@@ -306,12 +306,12 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     Args:
         datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
+            for fast prediction with num_attempts > 1
         int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
@@ -396,13 +396,13 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
         image_num = datacube.R_N
         batch_num = int(image_num//batch_size)
 
-        for att in tqdmnd(num_attmpts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             for i in range(batch_num):
                 prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose =0)
             if (i+1)*batch_size < image_num:
                 prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose =0)
 
-        prediction = prediction/num_attmpts
+        prediction = prediction/num_attempts
 
         prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
                                 (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
@@ -411,7 +411,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
         DP_ = prediction[Rx,Ry,:,:]
         find_Bragg_disks_aiml_single_DP(DP_, probe,
-                                         num_attmpts = num_attmpts,
+                                         num_attempts = num_attempts,
                                          int_window_radius = int_window_radius,
                                          predict = False,
                                          sigma = sigma,
@@ -437,7 +437,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     return peaks
 
 def find_Bragg_disks_aiml(datacube, probe,
-                          num_attmpts = 5,
+                          num_attempts = 5,
                           int_window_radius = 1,
                           predict = True,
                           batch_size = 8,
@@ -462,12 +462,12 @@ def find_Bragg_disks_aiml(datacube, probe,
 
     datacube (datacube): a diffraction datacube
         probe (ndarray): the vacuum probe template
-        num_attmpts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
-            Ideally, the more num_attmpts the better (confident) the prediction will be
+        num_attempts (int): Number of attempts to predict the Bragg disks. Recommended: 5.
+            Ideally, the more num_attempts the better (confident) the prediction will be
             as the ML prediction utilizes Monte Carlo Dropout technique to estimate model
-            uncertainty using Bayesian approach. Note: increasing num_attmpts will increase
+            uncertainty using Bayesian approach. Note: increasing num_attempts will increase
             the compute time significantly and it is advised to use GPU (CUDA) enabled environment
-            for fast prediction with num_attmpts > 1
+            for fast prediction with num_attempts > 1
         int_window_radius (int): window radius (in pixels) for disk intensity integration over the
             predicted atomic potentials array
         predict (bool): Flag to determine if ML prediction is opted.
@@ -603,11 +603,11 @@ def find_Bragg_disks_aiml(datacube, probe,
         if not CUDA:
             if _check_cuda_device_available():
                 warnings.warn('WARNING: CUDA = False is selected but py4DSTEM found available CUDA device to speed up. Going ahead anyway with non-CUDA mode (CPU only). You may want to abort and switch to CUDA = True to speed things up... \n')
-            if num_attmpts > 1:
-                warnings.warn('WARNING: num_attmpts > 1 will take significant amount of time with Non-CUDA mode ...')
+            if num_attempts > 1:
+                warnings.warn('WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ...')
             return find_Bragg_disks_aiml_serial(datacube,
                                                 probe,
-                                                num_attmpts = num_attmpts,
+                                                num_attempts = num_attempts,
                                                 int_window_radius = int_window_radius,
                                                 predict = predict,
                                                 batch_size = batch_size,
@@ -627,7 +627,7 @@ def find_Bragg_disks_aiml(datacube, probe,
             from .diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
             return find_Bragg_disks_aiml_CUDA(datacube,
                                               probe,
-                                              num_attmpts = num_attmpts,
+                                              num_attempts = num_attempts,
                                               int_window_radius = int_window_radius,
                                               predict = predict,
                                               batch_size = batch_size,
@@ -646,11 +646,11 @@ def find_Bragg_disks_aiml(datacube, probe,
         else:
             import warnings
             warnings.warn('WARNING: py4DSTEM attempted to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to Non-CUDA (CPU only) mode (Note it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n')
-            if num_attmpts > 1:
-                warnings.warn('WARNING: num_attmpts > 1 will take significant amount of time with Non-CUDA mode ...')
+            if num_attempts > 1:
+                warnings.warn('WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ...')
             return find_Bragg_disks_aiml_serial(datacube,
                                                 probe,
-                                                num_attmpts = num_attmpts,
+                                                num_attempts = num_attempts,
                                                 int_window_radius = int_window_radius,
                                                 predict = predict,
                                                 batch_size = batch_size,
