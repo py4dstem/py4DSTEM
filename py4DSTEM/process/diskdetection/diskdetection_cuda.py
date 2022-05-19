@@ -133,7 +133,7 @@ def find_Bragg_disks_CUDA(
         # compute the batch size based on available VRAM:
         max_num_bytes = cp.cuda.Device().mem_info[0]
         # use a fudge factor to leave room for the fourier transformed data
-        # I have set this at 10, which results in underutilization of 
+        # I have set this at 15, which results in underutilization of 
         # VRAM, because this yielded better performance in my testing
         batch_size = max_num_bytes // (bytes_per_pattern * 15)
         num_batches = datacube.R_N // batch_size + 1

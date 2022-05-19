@@ -4,6 +4,15 @@ __all__ = ['kernels']
 
 kernels = {}
 
+############################# multicorr kernels #################################
+
+import os
+with open(os.path.join(os.path.dirname(__file__), "multicorr_row_kernel.cu"), 'r') as f:
+    kernels['multicorr_row_kernel'] = cp.RawKernel(f.read(), 'multicorr_row_kernel')
+
+with open(os.path.join(os.path.dirname(__file__), "multicorr_col_kernel.cu"), 'r') as f:
+    kernels['multicorr_col_kernel'] = cp.RawKernel(f.read(), 'multicorr_col_kernel')
+
 
 ############################# get_maximal_points ################################
 
