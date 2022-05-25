@@ -100,15 +100,11 @@ class Array:
 
     will generate a single Array instance containing 4 arrays which each have
     a shape (50,50) and a common set of dim vectors ['rx','ry'], and which
-    can be indexed into with the names assigned in `slicelabels`.  Either
+    can be indexed into with the names assigned in `slicelabels` using
 
     >>> ar.get_slice('a')
 
-    or
-
-    >>> ar.slices['a']
-
-    will return a rank 2 (non-stack-like) Array instance with shape (50,50)
+    which will return a rank 2 (non-stack-like) Array instance with shape (50,50)
     and the dims assigned above.
 
     """
@@ -162,10 +158,10 @@ class Array:
                 it will index into functionally distinct arrays which share a set
                 of dimension attributes, and can be sliced into using the string
                 labels from the `slicelabels` list, with the syntax
-                array.get_slice('label') or array.slices['label']. If
-                `len(slicelabels)` is `True` or has length less than the final
-                dimension length, unassigned dimensions will be autopopulated with
-                labels `array{i}`. The flag array.is_stack will be set to True.
+                array.get_slice('label').  If `len(slicelabels)` is `True` or has
+                length less than the final dimension length, unassigned dimensions
+                will be autopopulated with labels `array{i}`. The flag array.is_stack
+                will be set to True.
 
         Returns:
             A new Array instance
