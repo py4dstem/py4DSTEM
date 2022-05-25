@@ -20,8 +20,8 @@ maximal_pts_float32 = r'''
 extern "C" __global__
 void maximal_pts(const float *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
-    int x = tid % sizex;
-    int y = tid / sizey; // Floor divide
+    int x = tid / sizey;
+    int y = tid % sizey;
     bool res = false;
     if (tid < N && x>0 && x<(sizex-1) && y>0 && y<(sizey-1)) {
         float val = ar[tid];
@@ -45,8 +45,8 @@ maximal_pts_float64 = r'''
 extern "C" __global__
 void maximal_pts(const double *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
-    int x = tid % sizex;
-    int y = tid / sizey; // Floor divide
+    int x = tid / sizey;
+    int y = tid % sizey;
     bool res = false;
     if (tid < N && x>0 && x<(sizex-1) && y>0 && y<(sizey-1)) {
         double val = ar[tid];
