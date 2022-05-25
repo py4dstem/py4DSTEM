@@ -22,7 +22,7 @@ class Array:
     Additional arguments may be passed to populate the object metadata:
 
     >>> ar = Array(
-    >>>     np.ones((20,20,256,256)
+    >>>     np.ones((20,20,256,256)),
     >>>     name = 'test_array',
     >>>     units = 'intensity',
     >>>     dims = [
@@ -70,6 +70,47 @@ class Array:
 
     >>> plt.scatter(ar.dims[0], ar.data)
 
+    If the `slicelabels` keyword is passed, the first N-1 dimensions of the
+    array are treated normally, while the final dimension is used to represent
+    distinct arrays which share a common shape and set of dim vectors.  Thus
+
+    >>> ar = Array(
+    >>>     np.ones((50,50,4)),
+    >>>     name = 'test_array_stack',
+    >>>     units = 'intensity',
+    >>>     dims = [
+    >>>         [0,2],
+    >>>         [0,2]
+    >>>     ],
+    >>>     dim_units = [
+    >>>         'nm',
+    >>>         'nm'
+    >>>     ],
+    >>>     dim_names = [
+    >>>         'rx',
+    >>>         'ry'
+    >>>     ],
+    >>>     slicelabels = [
+    >>>         'a',
+    >>>         'b',
+    >>>         'c',
+    >>>         'd'
+    >>>     ]
+    >>> )
+
+    will generate a single Array instance containing 4 arrays which each have
+    a shape (50,50) and a common set of dim vectors ['rx','ry'], and which
+    can be indexed into with the names assigned in `slicelabels`.  Either
+
+    >>> ar.get_slice('a')
+
+    or
+
+    >>> ar.slices['a']
+
+    will return a rank 2 (non-stack-like) Array instance with shape (50,50)
+    and the dims assigned above.
+
     """
     def __init__(
         self,
@@ -78,7 +119,8 @@ class Array:
         units: Optional[str] = '',
         dims: Optional[list] = None,
         dim_names: Optional[list] = None,
-        dim_units: Optional[list] = None
+        dim_units: Optional[list] = None,
+        slicelabels = None
         ):
         """
         Accepts:
@@ -112,6 +154,18 @@ class Array:
                 which are not passed, following the same logic as described
                 above, will be autopopulated with the name "dim#" where #
                 is the axis number.
+            slicelabels (None or True or list): if not None, must be True or a
+                list of strings. The array rank will be taken to be
+                `len(data.shape) - 1`, i.e. all dimensions except the last will be
+                treated normally with respect to populating dims, dim_names, and
+                dim_units, while the final dimension will be treated distinctly:
+                it will index into functionally distinct arrays which share a set
+                of dimension attributes, and can be sliced into using the string
+                labels from the `slicelabels` list, with the syntax
+                array.get_slice('label') or array.slices['label']. If
+                `len(slicelabels)` is `True` or has length less than the final
+                dimension length, unassigned dimensions will be autopopulated with
+                labels `array{i}`. The flag array.is_stack will be set to True.
 
         Returns:
             A new Array instance
@@ -129,8 +183,30 @@ class Array:
         # flags to help assign dim names and units
         dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
-        # flag identifying a normal, non-stack array
-        self._isstack = False
+
+        ## Handle array stacks
+
+        if slicelabels is None:
+            self.depth = 0
+            self.is_stack = False
+
+        else:
+            self.depth = self.shape[-1]
+            self.shape = self.shape[:-1]
+            self.rank -= 1
+            self.is_stack = True
+
+            # Populate labels
+            if slicelabels is True:
+                slicelabels = [f'array{i}' for i in range(self.depth)]
+            elif len(slicelabels) < self.depth:
+                slicelabels = np.concatenate((slicelabels,
+                    [f'array{i}' for i in range(len(slicelabels),self.depth)]))
+            else:
+                slicelabels = slicelabels[:self.depth]
+            slicelabels = Labels(slicelabels)
+
+        self.slicelabels = slicelabels
 
 
         ## Set dim vectors
@@ -207,22 +283,34 @@ class Array:
             raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
-    def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( A {self.rank}-dimensional array of shape {self.shape} called '{self.name}',"
-        string += "\n"+space+"with dimensions:"
-        string += "\n"
-        for n in range(self.rank):
-            string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
-        string += "\n)"
-        return string
 
 
-    def set_dim(self,
-                n:int,
-                dim:Union[list,np.ndarray],
-                units:Optional[str]=None,
-                name:Optional[str]=None):
+    #### Methods
+
+
+    ## For slicing into array stacks
+
+    def get_slice(self,label,name=None):
+        idx = self.slicelabels._dict[label]
+        return Array(
+            data = self.data[..., idx],
+            name = name if name is not None else self.name+'_'+label,
+            units = self.units[:-1],
+            dims = self.dims[:-1],
+            dim_units = self.dim_units[:-1],
+            dim_names = self.dim_names[:-1]
+        )
+
+
+    ## For dim vector handling
+
+    def set_dim(
+        self,
+        n:int,
+        dim:Union[list,np.ndarray],
+        units:Optional[str]=None,
+        name:Optional[str]=None
+        ):
         """
         Sets the n'th dim vector, using `dim` as described in the Array documentation.
         If `units` and/or `name` are passed, sets these values for the n'th dim vector.
@@ -239,6 +327,7 @@ class Array:
         self.dims[n] = _dim
         if units is not None: self.dim_units[n] = units
         if name is not None: self.dim_names[n] = name
+
 
 
     @staticmethod
@@ -294,8 +383,40 @@ class Array:
         return np.array_equal(dim,dim_expanded)
 
 
+    ## Representation to standard output
 
-    # Writing to an HDF5 file
+    def __repr__(self):
+
+        if not self.is_stack:
+            space = ' '*len(self.__class__.__name__)+'  '
+            string = f"{self.__class__.__name__}( A {self.rank}-dimensional array of shape {self.shape} called '{self.name}',"
+            string += "\n"+space+"with dimensions:"
+            string += "\n"
+            for n in range(self.rank):
+                string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+            string += "\n)"
+
+        else:
+            space = ' '*len(self.__class__.__name__)+'  '
+            string = f"{self.__class__.__name__}( A stack of {self.depth} Arrays with {self.rank}-dimensions and shape {self.shape[:-1]}, called '{self.name}'"
+            string += "\n"
+            string += "\n" +space + "The labels are:"
+            for label in self.slicelabels:
+                string += "\n" + space + f"    {label}"
+            string += "\n"
+            string += "\n"
+            string += "\n" + space + "The Array dimensions are:"
+            for n in range(self.rank):
+                string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+                if not self._dim_is_linear(self.dims[n],self.shape[n]):
+                    string += "  (*non-linear*)"
+            string += "\n)"
+
+        return string
+
+
+
+    ## Writing to an HDF5 file
 
     def to_h5(self,group):
         """
@@ -312,6 +433,7 @@ class Array:
         Accepts:
             group (HDF5 group)
         """
+
         # Detemine the name of the group
         if self.name == '':
             # Assign the name "Array#" for lowest available #
@@ -327,7 +449,6 @@ class Array:
                 # TODO add an overwrite option
                 raise Exception(f"A group named {self.name} already exists in this file. Try using another name.")
 
-
         ## Write
 
         grp = group.create_group(self.name)
@@ -337,20 +458,14 @@ class Array:
         # add the data
         data = grp.create_dataset(
             "data",
-            shape = self.shape,
+            shape = self.data.shape,
             data = self.data,
             #dtype = type(self.data)
         )
         data.attrs.create('units',self.units) # save 'units' but not 'name' - 'name' is the group name
 
-        # Determine if this is an arraystack
-        # such that the last dim is a list of names
-        normal_dims = self.rank
-        if self._isstack:
-            normal_dims -= 1
-
         # Add the normal dim vectors
-        for n in range(normal_dims):
+        for n in range(self.rank):
 
             # unpack info
             dim = self.dims[n]
@@ -371,10 +486,10 @@ class Array:
             dset.attrs.create('units',units)
 
         # Add stack dim vector, if present
-        if self._isstack:
-            n = self.rank-1
+        if self.is_stack:
+            n = self.rank
             name = '_labels_'
-            dim = [s.encode('utf-8') for s in self.labels]
+            dim = [s.encode('utf-8') for s in self.slicelabels]
 
             # write
             dset = grp.create_dataset(
@@ -386,6 +501,122 @@ class Array:
 
 
 ########### END OF CLASS ###########
+
+
+# List subclass for accessing data slices with a dict
+class Labels(list):
+    def __init__(self,x=[]):
+        list.__init__(self,x)
+        self.setup_labels_dict()
+    def __setitem__(self,idx,label):
+        list.__setitem__(self,idx,label)
+        self.setup_labels_dict()
+
+    def setup_labels_dict(self):
+        self._dict = {}
+        for idx,label in enumerate(self):
+            self._dict[label] = idx
+
+
+
+## Read Array objects
+
+def Array_from_h5(group:h5py.Group, name:str):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if a valid Array object of this name exists inside
+    this group, and if it does, loads and returns it. If it doesn't, raises
+    an exception.
+
+    Accepts:
+        group (HDF5 group)
+        name (string)
+
+    Returns:
+        An Array or ArrayStack instance
+    """
+    assert(Array_exists(group,name)), f"No Array called {name} could be found in group {group} of this HDF5 file."
+    grp = group[name]
+
+    # get data
+    dset = grp['data']
+    data = dset[:]
+    units = dset.attrs['units']
+    rank = len(data.shape)
+
+    # determine if this is a stack array
+    last_dim = grp[f"dim{rank-1}"]
+    if last_dim.attrs['name'] == '_labels_':
+        is_stack = True
+        normal_dims = rank-1
+    else:
+        is_stack = False
+        normal_dims = rank
+
+    # get dim vectors
+    dims = []
+    dim_units = []
+    dim_names = []
+    for n in range(normal_dims):
+        dim_dset = grp[f"dim{n}"]
+        dims.append(dim_dset[:])
+        dim_units.append(dim_dset.attrs['units'])
+        dim_names.append(dim_dset.attrs['name'])
+
+    # if it's a stack array, get the labels
+    if is_stack:
+        slicelabels = last_dim[:]
+        slicelabels = [s.decode('utf-8') for s in slicelabels]
+    else:
+        slicelabels = None
+
+    # make Array
+    ar = Array(
+        data = data,
+        name = name,
+        units = units,
+        dims = dims,
+        dim_names = dim_names,
+        dim_units = dim_units,
+        slicelabels = slicelabels
+    )
+
+    return ar
+
+
+def find_Arrays(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and finds all Array groups inside this group at its top level. Does not do a search
+    for nested Array groups. Returns the names of all Array groups found.
+
+    Accepts:
+        group (HDF5 group)
+    """
+    keys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
+    return [k for k in keys if group[k].attrs["emd_group_type"] == 1]
+
+
+def Array_exists(group:h5py.Group, name:str):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if an Array object of this name exists inside this group,
+    and returns a boolean.
+
+    Accepts:
+        group (HDF5 group)
+        name (string)
+
+    Returns:
+        bool
+    """
+    if name in group.keys():
+        if "emd_group_type" in group[name].attrs.keys():
+            if group[name].attrs["emd_group_type"] == 1:
+                return True
+            return False
+        return False
+    return False
 
 
 

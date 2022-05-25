@@ -1,7 +1,6 @@
 # Defines the DiffractionSlice class, which stores 2D, diffraction-shaped data
 
-from .array import Array
-from .arrayio import Array_from_h5
+from .array import Array, Array_from_h5
 
 from typing import Optional,Union
 import numpy as np
@@ -18,6 +17,7 @@ class DiffractionSlice(Array):
         name: Optional[str] = 'diffractionslice',
         pixelsize: Optional[Union[float,list]] = 1,
         pixelunits: Optional[Union[str,list]] = 'pixels',
+        slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
@@ -25,6 +25,8 @@ class DiffractionSlice(Array):
             name (str): the name of the datacube
             pixelsize (float or length 2 list of floats): the pixel size
             pixelunits (str length 2 list of str): the pixel units
+            slicelabels(None or list): names for slices if this is a stack of
+                diffractionslices
 
         Returns:
             A new DiffractionSlice instance
@@ -50,7 +52,8 @@ class DiffractionSlice(Array):
             dim_names = [
                 'Qx',
                 'Qy'
-            ]
+            ],
+            slicelabels = slicelabels
         )
 
         # setup the size/units with getter/setters
@@ -123,6 +126,7 @@ def DiffractionSlice_from_Array(array):
                      array.dims[1][1]-array.dims[1][0]],
         pixelunits = [array.dim_units[0],
                       array.dim_units[1]],
+        slicelabels = array.slicelabels
     )
     return array
 
