@@ -126,10 +126,6 @@ class Array:
         self.shape = self.data.shape
         self.rank = len(self.shape)
 
-        # flags to identify which dim vectors can be stored
-        # with only two elements
-        self.dim_is_linear = np.zeros(self.rank, dtype=bool)
-
         # flags to help assign dim names and units
         dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
@@ -141,8 +137,7 @@ class Array:
 
         # if none were passed
         if self.dims is None:
-            self.dims = [self._unpack_dim(1,self,shape[n])[0] for n in range(self.rank)]
-            self.dim_is_linear[:] = True
+            self.dims = [self._unpack_dim(1,self,shape[n]) for n in range(self.rank)]
             dim_in_pixels[:] = True
 
         # if some but not all were passed
@@ -151,12 +146,10 @@ class Array:
             N = len(_dims)
             self.dims = []
             for n in range(N):
-                dim,flag = self._unpack_dim(_dims[n],self.shape[n])
+                dim = self._unpack_dim(_dims[n],self.shape[n])
                 self.dims.append(dim)
-                self.dim_is_linear[n] = flag
             for n in range(N,self.rank):
                 self.dims.append(np.arange(self.shape[n]))
-                self.dim_is_linear[n] = True
                 dim_in_pixels[n] = True
 
         # if all were passed
@@ -164,9 +157,8 @@ class Array:
             _dims = self.dims
             self.dims = []
             for n in range(self.rank):
-                dim,flag = self._unpack_dim(_dims[n],self.shape[n])
+                dim = self._unpack_dim(_dims[n],self.shape[n])
                 self.dims.append(dim)
-                self.dim_is_linear[n] = flag
 
         # otherwise
         else:
@@ -243,12 +235,10 @@ class Array:
             name: (Optional, str):
         """
         length = self.shape[n]
-        _dim,is_linear = self._unpack_dim(dim,length)
+        _dim = self._unpack_dim(dim,length)
         self.dims[n] = _dim
-        self.dim_is_linear[n] = is_linear
         if units is not None: self.dim_units[n] = units
         if name is not None: self.dim_names[n] = name
-
 
 
     @staticmethod
@@ -273,8 +263,7 @@ class Array:
             length (int)
 
         Returns
-            (2-tuple) the unpacked dim vector, and a boolean flag indicating if
-            this vector was linearly extended
+            the unpacked dim vector
         """
         # Expand single numbers
         if isinstance(dim,Number):
@@ -288,13 +277,21 @@ class Array:
 
         # For number-like dimensions:
         if N == length:
-            return dim,False
+            return dim
         elif N == 2:
             start,step = dim[0],dim[1]-dim[0]
             stop = start + step*length
-            return np.arange(start,stop,step),True
+            return np.arange(start,stop,step)
         else:
             raise Exception(f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}")
+
+
+    def _dim_is_linear(self,dim,length):
+        """
+        Returns True if a dim is linear, else returns False
+        """
+        dim_expanded = self._unpack_dim(dim[:2],length)
+        return np.array_equal(dim,dim_expanded)
 
 
 
@@ -359,7 +356,7 @@ class Array:
             dim = self.dims[n]
             name = self.dim_names[n]
             units = self.dim_units[n]
-            is_linear = self.dim_is_linear[n]
+            is_linear = self._dim_is_linear(dim,self.shape[n])
 
             # compress the dim vector if it's linear
             if is_linear:
