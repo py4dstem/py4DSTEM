@@ -5,12 +5,12 @@ import numpy as np
 shape = (64,64,3)
 data = np.ones(shape)
 
-diffractionstack = py4DSTEM.io.datastructure.DiffractionStack(
+diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice(
     data = data,
     name = 'test_diffractionstack',
     pixelsize = 3,
     pixelunits = 'A^-1',
-    labels = [
+    slicelabels = [
         'im',
         'a',
         'teapot'
@@ -40,7 +40,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    diffractionstack = py4DSTEM.io.datastructure.DiffractionStack_from_h5(grp,'test_diffractionstack')
+    diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice_from_h5(grp,'test_diffractionstack')
     print(diffractionstack)
     print(type(diffractionstack))
 

@@ -5,12 +5,12 @@ import numpy as np
 shape = (64,64,3)
 data = np.ones(shape)
 
-realstack = py4DSTEM.io.datastructure.RealStack(
+realstack = py4DSTEM.io.datastructure.RealSlice(
     data = data,
     name = 'test_realstack',
     pixelsize = 3,
     pixelunits = 'nm',
-    labels = [
+    slicelabels = [
         'this',
         'being',
         'human'
@@ -40,7 +40,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    realstack = py4DSTEM.io.datastructure.RealStack_from_h5(grp,'test_realstack')
+    realstack = py4DSTEM.io.datastructure.RealSlice_from_h5(grp,'test_realstack')
     print(realstack)
     print(type(realstack))
 

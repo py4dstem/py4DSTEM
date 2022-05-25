@@ -5,14 +5,14 @@ import numpy as np
 shape = (8,8,64,64,3)
 data = np.ones(shape)
 
-datacubestack = py4DSTEM.io.datastructure.DataCubeStack(
+datacubestack = py4DSTEM.io.datastructure.DataCube(
     data = data,
     name = 'test_datacubestack',
     rsize = 5,
     runits = 'nm',
     qsize = [0.01,0.02],
     qunits = ['A^-1','nm^-1'],
-    labels = [
+    slicelabels = [
         'datacube1',
         'datacube2',
         'datacube3'
@@ -43,7 +43,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    datacubestack = py4DSTEM.io.datastructure.DataCubeStack_from_h5(grp,'test_datacubestack')
+    datacubestack = py4DSTEM.io.datastructure.DataCube_from_h5(grp,'test_datacubestack')
     print(datacubestack)
     print(type(datacubestack))
 

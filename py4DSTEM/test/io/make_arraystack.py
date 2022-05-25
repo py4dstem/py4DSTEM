@@ -6,7 +6,7 @@ shape = (10,10,4)
 data = np.arange(np.prod(shape)).reshape(shape)
 
 # Make the Array instance
-py4dstem_arraystack = py4DSTEM.io.datastructure.ArrayStack(
+py4dstem_arraystack = py4DSTEM.io.datastructure.Array(
     data = data,
     name = 'test_arraystack',
     units = 'intensity',
@@ -22,7 +22,7 @@ py4dstem_arraystack = py4DSTEM.io.datastructure.ArrayStack(
         'rx',
         'ry'
     ],
-    labels = [
+    slicelabels = [
         'the',
         'cow',
         'jumped',
@@ -34,19 +34,19 @@ print("__repr__:")
 print(py4dstem_arraystack)
 
 print()
-print(".get_data({element}).__repr__:")
-print(py4dstem_arraystack.get_data('cow'))
+print(".get_slice({element}).__repr__:")
+print(py4dstem_arraystack.get_slice('cow'))
 
 print()
 print(".labels and .labels._dict")
-print(py4dstem_arraystack.labels)
-print(py4dstem_arraystack.labels._dict)
+print(py4dstem_arraystack.slicelabels)
+print(py4dstem_arraystack.slicelabels._dict)
 
 print()
 print(".labels and .labels._dict after element assignment")
-py4dstem_arraystack.labels[2] = 'meow'
-print(py4dstem_arraystack.labels)
-print(py4dstem_arraystack.labels._dict)
+py4dstem_arraystack.slicelabels[2] = 'meow'
+print(py4dstem_arraystack.slicelabels)
+print(py4dstem_arraystack.slicelabels._dict)
 
 
 

@@ -1,7 +1,6 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from .array import Array
-from .arrayio import Array_from_h5
+from .array import Array, Array_from_h5
 
 from typing import Optional,Union
 import numpy as np
@@ -19,7 +18,8 @@ class DataCube(Array):
         rsize: Optional[Union[float,list]] = 1,
         runits: Optional[Union[str,list]] = 'pixels',
         qsize: Optional[Union[float,list]] = 1,
-        qunits: Optional[Union[str,list]] = 'pixels'
+        qunits: Optional[Union[str,list]] = 'pixels',
+        slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
@@ -29,6 +29,7 @@ class DataCube(Array):
             runits (str length 2 list of str): the real space pixel units
             qsize (float or length 2 list of str): the diffraction space pixel size
             qunits (str or length 2 list of str): the diffraction space pixel units
+            slicelabels(None or list): names for slices if this is a stack of datacubes
 
         Returns:
             A new DataCube instance
@@ -62,7 +63,8 @@ class DataCube(Array):
                 'Ry',
                 'Qx',
                 'Qy'
-            ]
+            ],
+            slicelabels = slicelabels
         )
 
         # setup the size/units with getter/setters
@@ -158,7 +160,8 @@ def DataCube_from_Array(array):
         qsize = [array.dims[2][1]-array.dims[2][0],
                  array.dims[3][1]-array.dims[3][0]],
         qunits = [array.dim_units[2],
-                  array.dim_units[3]]
+                  array.dim_units[3]],
+        slicelabels = array.slicelabels
     )
     return array
 
