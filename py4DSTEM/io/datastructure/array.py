@@ -6,6 +6,8 @@ import numpy as np
 import h5py
 from numbers import Number
 
+from .ioutils import determine_group_name
+
 class Array:
     """
     A class which stores any N-dimensional array-like data, plus basic metadata:
@@ -431,19 +433,10 @@ class Array:
         """
 
         # Detemine the name of the group
-        if self.name == '':
-            # Assign the name "Array#" for lowest available #
-            keys = [k for k in group.keys() if k[:5]=='Array']
-            i,found = -1,False
-            while not found:
-                i += 1
-                found = ~np.any([int(k[5:])==i for k in keys])
-            self.name = f"Array{i}"
-        else:
-            # Check if the name is already in the file
-            if self.name in group.keys():
-                # TODO add an overwrite option
-                raise Exception(f"A group named {self.name} already exists in this file. Try using another name.")
+        # if current name is invalid, raises and exception
+        # TODO: add overwrite option
+        determine_group_name(self, group)
+
 
         ## Write
 
@@ -529,7 +522,7 @@ def Array_from_h5(group:h5py.Group, name:str):
         name (string)
 
     Returns:
-        An Array or ArrayStack instance
+        An Array instance
     """
     assert(Array_exists(group,name)), f"No Array called {name} could be found in group {group} of this HDF5 file."
     grp = group[name]

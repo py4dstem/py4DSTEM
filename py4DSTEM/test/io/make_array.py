@@ -48,6 +48,8 @@ with h5py.File(fp,'r') as f:
     array_names = py4DSTEM.io.datastructure.find_Arrays(grp)
     exists = py4DSTEM.io.datastructure.Array_exists(grp,'test_array')
     ar = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
+    ar2 = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
+    ar3 = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
 
     print(array_names)
     print(exists)
@@ -56,5 +58,31 @@ with h5py.File(fp,'r') as f:
 
     ar.set_dim(1,[-25,25],'A')
     print(ar)
+
+
+print()
+print()
+print()
+
+ar2.name=''
+ar3.name=''
+print(ar2)
+print(ar3)
+
+with h5py.File(fp,'a') as f:
+    grp = f['experiment']
+    # write the array to the h5 file
+    ar2.to_h5(grp)
+    ar3.to_h5(grp)
+
+with h5py.File(fp,'r') as f:
+    grp = f['experiment']
+    array_names = py4DSTEM.io.datastructure.find_Arrays(grp)
+    print(array_names)
+    ar4 = py4DSTEM.io.datastructure.Array_from_h5(grp,'Array0')
+    ar5 = py4DSTEM.io.datastructure.Array_from_h5(grp,'Array1')
+
+print(ar4)
+print(ar5)
 
 
