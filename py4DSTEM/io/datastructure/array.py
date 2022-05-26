@@ -382,7 +382,6 @@ class Array:
 
 
     ## Representation to standard output
-
     def __repr__(self):
 
         if not self.is_stack:
@@ -441,7 +440,7 @@ class Array:
         ## Write
 
         grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",1) # this tag indicates an Array type object
+        grp.attrs.create("emd_group_type",1) # this tag indicates an Array
         grp.attrs.create("py4dstem_class",self.__class__.__name__)
 
         # add the data

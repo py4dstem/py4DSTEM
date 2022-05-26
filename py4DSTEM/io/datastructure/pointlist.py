@@ -8,7 +8,7 @@ from typing import Optional
 from .ioutils import determine_group_name
 
 
-class PointList(object):
+class PointList:
     """
     A wrapper around structured numpy arrays, with read/write functionality in/out of
     py4DSTEM formatted HDF5 files.
@@ -24,16 +24,19 @@ class PointList(object):
 
         Args:
             data (structured numpy ndarray): the data; the dtype of this array will
-                specify the coordinates of the PointList.
+                specify the fields of the PointList.
             name (str): name for the PointList
 
+        Returns:
+            a PointList instance
         """
         self.data = data
-        self.dtype = data.dtype
-        self.fields = self.dtype.names
         self.name = name
         self.length = len(self.data)
 
+        self.dtype = data.dtype
+        self.fields = self.dtype.names
+        self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
     ## Add, remove, sort data
 
@@ -53,18 +56,18 @@ class PointList(object):
         self.data = np.delete(self.data, inds)
         self.length -= len(inds)
 
-    def sort(self, coordinate, order='descending'):
+    def sort(self, field, order='descending'):
         """
-        Sorts the point list according to coordinate.
-        coordinate must be a field in self.dtype.
+        Sorts the point list according to field,
+        which must be a field in self.dtype.
         order should be 'descending' or 'ascending'.
         """
-        assert coordinate in self.dtype.names
+        assert field in self.fields
         assert (order=='descending') or (order=='ascending')
         if order=='ascending':
-            self.data = np.sort(self.data, order=coordinate)
+            self.data = np.sort(self.data, order=field)
         else:
-            self.data = np.sort(self.data, order=coordinate)[::-1]
+            self.data = np.sort(self.data, order=field)[::-1]
 
 
     ## Copy, copy+modify PointList
@@ -77,35 +80,37 @@ class PointList(object):
             data = np.copy(self.data),
             name = name)
 
-    def add_coordinates(self, new_coords):
+    def add_fields(self, new_fields, name=''):
         """
-        Creates a copy of the PointList, but with additional coordinates given by new_coords.
-        new_coords must be a string of 2-tuples, ('name', dtype)
+        Creates a copy of the PointList, but with additional fields given by new_fields.
+
+        Args:
+            new_fields: a list of 2-tuples, ('name', dtype)
+            name: a name for the new pointlist
         """
         dtype = []
-        for key in self.dtype.fields.keys():
-            dtype.append((key,self.dtype.fields[key][0]))
-        for coord in new_coords:
-            dtype.append((coord[0],coord[1]))
+        for f,t in zip(self.fields,self.types):
+            dtype.append((f,t))
+        for f,t in new_fields:
+            dtype.append((f,t))
 
         data = np.zeros(self.length, dtype=dtype)
-        for key in self.dtype.fields.keys():
-            data[key] = np.copy(self.data[key])
+        for f in self.fields:
+            data[f] = np.copy(self.data[f])
 
-        return PointList(data=data)
+        return PointList(data=data, name=name)
 
 
     ## Representation to standard output
-
     def __repr__(self):
 
         space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( A length {self.length} PointList with {len(self.fields)} coordinates called '{self.name}',"
-        string += "\n"+space+"with coordinates:"
+        string = f"{self.__class__.__name__}( A length {self.length} PointList called '{self.name}',"
+        string += "\n"+space+f"with {len(self.fields)} fields:"
         string += "\n"
         space2 = max([len(field) for field in self.fields])+3
-        for field in self.fields:
-            string += "\n"+space+f"{field}{(space2-len(field))*' '}({str(self.dtype.fields[field][0])})"
+        for f,t in zip(self.fields,self.types):
+            string += "\n"+space+f"{f}{(space2-len(f))*' '}({str(t)})"
         string += "\n)"
 
         return string
@@ -138,14 +143,14 @@ class PointList(object):
         ## Write
 
         grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",2) # this tag indicates an Array type object
+        grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
         grp.attrs.create("py4dstem_class",self.__class__.__name__)
 
         # Add data
-        for field in self.fields:
-            group_current_field = grp.create_group(field)
-            group_current_field.attrs.create("dtype", np.string_(self.dtype[field]))
-            group_current_field.create_dataset("data", data=self.data[field])
+        for f,t in zip(self.fields,self.types):
+            group_current_field = grp.create_group(f)
+            group_current_field.attrs.create("dtype", np.string_(t))
+            group_current_field.create_dataset("data", data=self.data[f])
 
 
 
