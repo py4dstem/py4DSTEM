@@ -5,7 +5,6 @@ from .array import Array, Array_from_h5
 from typing import Optional,Union
 import numpy as np
 import h5py
-import dask.array as da
 
 class RealSlice(Array):
     """

@@ -72,4 +72,8 @@ with h5py.File(fp,'r') as f:
 print(pl4)
 print(pl5)
 
+pl6 = pl5.add_fields([('q',float),('cows',int)], name='with_cows')
+
+print(pl6)
+
 
