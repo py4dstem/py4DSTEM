@@ -193,6 +193,8 @@ class Array:
         else:
             self.depth = self.shape[-1]
             self.shape = self.shape[:-1]
+            print("MEOWMEWOW")
+            print(self.shape)
             self.rank -= 1
             self.is_stack = True
 
@@ -301,8 +303,15 @@ class Array:
             dim_names = self.dim_names[:-1]
         )
 
-    def __getitem__(self,label):
-        return self.get_slice(label)
+    ## General array slicing
+
+    def __getitem__(self,x):
+        if isinstance(x,str):
+            return self.get_slice(x)
+        elif isinstance(x,tuple) and isinstance(x[0],str):
+            return self.get_slice(x[0])[x[1:]]
+        else:
+            return self.data[x]
 
 
     ## For dim vector handling
@@ -400,7 +409,7 @@ class Array:
 
         else:
             space = ' '*len(self.__class__.__name__)+'  '
-            string = f"{self.__class__.__name__}( A stack of {self.depth} Arrays with {self.rank}-dimensions and shape {self.shape[:-1]}, called '{self.name}'"
+            string = f"{self.__class__.__name__}( A stack of {self.depth} Arrays with {self.rank}-dimensions and shape {self.shape}, called '{self.name}'"
             string += "\n"
             string += "\n" +space + "The labels are:"
             for label in self.slicelabels:
