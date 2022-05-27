@@ -1,6 +1,7 @@
 # Utility functions for datastructure i/o
 
 import numpy as np
+import h5py
 
 def determine_group_name(obj, group):
     """
@@ -40,5 +41,55 @@ def determine_group_name(obj, group):
         if obj.name in group.keys():
             # TODO add an overwrite option
             raise Exception(f"A group named {obj.name} already exists in this file. Try using another name.")
+
+
+
+def find_EMD_groups(group:h5py.Group, emd_group_type):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and finds all groups inside this group at its top level matching `emd_group_type`.
+    Does not do a nested search. Returns the names of all groups found.
+
+    Accepts:
+        group (HDF5 group):
+        emd_group_type (int)
+    """
+    keys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
+    return [k for k in keys if group[k].attrs["emd_group_type"] == emd_group_type]
+
+
+def EMD_group_exists(group:h5py.Group, emd_group_type, name:str):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if an object of this `emd_group_type` and name exists
+    inside this group, and returns a boolean.
+
+    Accepts:
+        group (HDF5 group):
+        emd_group_type (int):
+        name (string):
+
+    Returns:
+        bool
+    """
+    if name in group.keys():
+        if "emd_group_type" in group[name].attrs.keys():
+            if group[name].attrs["emd_group_type"] == emd_group_type:
+                return True
+            return False
+        return False
+    return False
+
+
+EMD_group_types = {
+    'Calibration' : 0,
+    'Array' : 1,
+    'PointList' : 2,
+    'PointListArray': 3
+}
+
+
+
+
 
 

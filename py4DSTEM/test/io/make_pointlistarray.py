@@ -40,8 +40,13 @@ with h5py.File(fp,'w') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    names = py4DSTEM.io.datastructure.find_PointListArrays(grp)
-    exists = py4DSTEM.io.datastructure.PointListArray_exists(grp,'test_pla')
+    names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['PointListArray'])
+    exists = py4DSTEM.io.datastructure.EMD_group_exists(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['PointListArray'],
+        'test_pla')
     pla1 = py4DSTEM.io.datastructure.PointListArray_from_h5(grp,'test_pla')
 
     print(names)
@@ -68,7 +73,9 @@ with h5py.File(fp,'a') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    names = py4DSTEM.io.datastructure.find_PointListArrays(grp)
+    names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['PointListArray'])
     print(names)
     pla4 = py4DSTEM.io.datastructure.PointListArray_from_h5(grp,'PointListArray0')
     pla5 = py4DSTEM.io.datastructure.PointListArray_from_h5(grp,'PointListArray1')
