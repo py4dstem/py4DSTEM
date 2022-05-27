@@ -4,4 +4,6 @@ from .diffractionslice import *
 from .realslice import *
 from .pointlist import *
 from .pointlistarray import *
+from .calibration import *
+
 
