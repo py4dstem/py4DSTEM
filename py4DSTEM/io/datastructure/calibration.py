@@ -2,7 +2,10 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
+
 from .ioutils import determine_group_name
+from .ioutils import EMD_group_exists, EMD_group_types
+
 
 class Calibration:
     """
@@ -298,7 +301,11 @@ def Calibration_from_h5(group:h5py.Group, name:str):
     Returns:
         A Calibration instance
     """
-    assert(Calibration_exists(group,name)), f"No Calibration instance called {name} could be found in group {group} of this HDF5 file."
+    er = f"No Calibration instance called {name} could be found in group {group} of this HDF5 file."
+    assert(EMD_group_exists(
+            group,
+            EMD_group_types['Calibration'],
+            name)), er
     grp = group[name]
 
 
@@ -319,40 +326,5 @@ def Calibration_from_h5(group:h5py.Group, name:str):
 
     return cal
 
-
-def find_Calibration(group:h5py.Group):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and finds all Calibration groups inside this group at its top level. Does not
-    do a search for nested Calibration groups. Returns the names of all Calibration
-    groups found.
-
-    Accepts:
-        group (HDF5 group)
-    """
-    keys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
-    return [k for k in keys if group[k].attrs["emd_group_type"] == 0]
-
-
-def Calibration_exists(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if a Calibration object of this name exists inside
-    this group, and returns a boolean.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        bool
-    """
-    if name in group.keys():
-        if "emd_group_type" in group[name].attrs.keys():
-            if group[name].attrs["emd_group_type"] == 0:
-                return True
-            return False
-        return False
-    return False
 
 

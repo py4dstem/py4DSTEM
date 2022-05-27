@@ -45,8 +45,13 @@ with h5py.File(fp,'w') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    array_names = py4DSTEM.io.datastructure.find_Arrays(grp)
-    exists = py4DSTEM.io.datastructure.Array_exists(grp,'test_array')
+    array_names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Array'])
+    exists = py4DSTEM.io.datastructure.EMD_group_exists(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Array'],
+        'test_array')
     ar = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
     ar2 = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
     ar3 = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_array')
@@ -77,7 +82,9 @@ with h5py.File(fp,'a') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    array_names = py4DSTEM.io.datastructure.find_Arrays(grp)
+    array_names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Array'])
     print(array_names)
     ar4 = py4DSTEM.io.datastructure.Array_from_h5(grp,'Array0')
     ar5 = py4DSTEM.io.datastructure.Array_from_h5(grp,'Array1')

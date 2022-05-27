@@ -7,6 +7,8 @@ import h5py
 from numbers import Number
 
 from .ioutils import determine_group_name
+from .ioutils import EMD_group_exists, EMD_group_types
+
 
 class Array:
     """
@@ -523,7 +525,11 @@ def Array_from_h5(group:h5py.Group, name:str):
     Returns:
         An Array instance
     """
-    assert(Array_exists(group,name)), f"No Array called {name} could be found in group {group} of this HDF5 file."
+    er = f"No Array called {name} could be found in group {group} of this HDF5 file."
+    assert(EMD_group_exists(
+            group,
+            EMD_group_types['Array'],
+            name)), er
     grp = group[name]
 
     # get data
@@ -570,41 +576,6 @@ def Array_from_h5(group:h5py.Group, name:str):
     )
 
     return ar
-
-
-def find_Arrays(group:h5py.Group):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and finds all Array groups inside this group at its top level. Does not do a search
-    for nested Array groups. Returns the names of all Array groups found.
-
-    Accepts:
-        group (HDF5 group)
-    """
-    keys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
-    return [k for k in keys if group[k].attrs["emd_group_type"] == 1]
-
-
-def Array_exists(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if an Array object of this name exists inside this group,
-    and returns a boolean.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        bool
-    """
-    if name in group.keys():
-        if "emd_group_type" in group[name].attrs.keys():
-            if group[name].attrs["emd_group_type"] == 1:
-                return True
-            return False
-        return False
-    return False
 
 
 
