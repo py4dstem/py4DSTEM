@@ -82,10 +82,20 @@ with h5py.File(fp,'r') as f:
     print(exists)
     print(ar)
 
+print(py4dstem_arraystack.data.shape)
+print(ar.data.shape)
+
+
     #ar.set_dim(1,[-25,25],'A')
     #print(ar)
 
 
 
+# Test slicing
 
+print(ar['cow'])
+print(ar[3,4,1])
+print(ar[1:5,2:5,1])
+print(ar['cow',3,4])
+print(ar['cow',1:5,2:5])
 
