@@ -40,7 +40,7 @@ class PointListArray:
 
 
         # Populate with empty PointLists
-        self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype))
+        self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype), name=f"{i},{j}")
                              for j in range(self.shape[1])] for i in range(self.shape[0])]
 
 
@@ -51,6 +51,14 @@ class PointListArray:
         Returns the pointlist at i,j
         """
         return self._pointlists[i][j]
+
+    def __getitem__(self, tup):
+        l = len(tup) if isinstance(tup,tuple) else 1
+        assert(l==2), f"Expected 2 slice values, recieved {l}"
+        return self.get_pointlist(tup[0],tup[1])
+
+
+    ## Make copies
 
     def copy(self, name=''):
         """

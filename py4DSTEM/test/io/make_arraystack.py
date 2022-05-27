@@ -36,6 +36,9 @@ print(py4dstem_arraystack)
 print()
 print(".get_slice({element}).__repr__:")
 print(py4dstem_arraystack.get_slice('cow'))
+print()
+print("[{element}].__repr__:")
+print(py4dstem_arraystack['cow'])
 
 print()
 print(".labels and .labels._dict")
@@ -81,5 +84,8 @@ with h5py.File(fp,'r') as f:
 
     #ar.set_dim(1,[-25,25],'A')
     #print(ar)
+
+
+
 
 
