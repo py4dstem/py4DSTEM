@@ -88,3 +88,14 @@ pla6 = pla5.add_fields([('q',float),('cows',int)], name='with_cows')
 print(pla6)
 
 
+# Test grabbing a pointlist
+pl1 = pla.get_pointlist(3,4)
+print(pl1)
+
+# Test grabbing a pointlist with __getitem__ slicing
+pl2 = pla6[3,4]
+print(pl2)
+
+
+
+

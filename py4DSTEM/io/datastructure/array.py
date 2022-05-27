@@ -301,6 +301,9 @@ class Array:
             dim_names = self.dim_names[:-1]
         )
 
+    def __getitem__(self,label):
+        return self.get_slice(label)
+
 
     ## For dim vector handling
 
