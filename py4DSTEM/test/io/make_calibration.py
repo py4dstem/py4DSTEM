@@ -25,8 +25,13 @@ with h5py.File(fp,'w') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    names = py4DSTEM.io.datastructure.find_Calibration(grp)
-    exists = py4DSTEM.io.datastructure.Calibration_exists(grp,'calibration')
+    names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Calibration'])
+    exists = py4DSTEM.io.datastructure.EMD_group_exists(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Calibration'],
+        'calibration')
     cal1 = py4DSTEM.io.datastructure.Calibration_from_h5(grp,'calibration')
 
     print(names)
@@ -37,12 +42,10 @@ with h5py.File(fp,'r') as f:
 
 print()
 print()
-print()
 
-#pl2 = pl.copy(name='')
-#pl3 = pl.copy(name='')
+cal2 = cal1.copy()
 
-
+print(cal2)
 
 
 

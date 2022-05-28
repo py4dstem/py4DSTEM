@@ -228,7 +228,18 @@ class Calibration:
             return v[rx,ry]
 
 
-    ## Representation to standard output
+
+
+    def copy(self,name=None):
+        """
+        """
+        if name is None: name = self.name+"_copy"
+        cal = Calibration(name=name)
+        cal._params.update(self._params)
+        return cal
+
+
+
     def __repr__(self):
 
         space = ' '*len(self.__class__.__name__)+'  '
