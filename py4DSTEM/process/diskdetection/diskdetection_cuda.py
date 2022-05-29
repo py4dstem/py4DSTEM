@@ -585,12 +585,10 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
             Upsampling factor. Must be greater than 2. (To do upsampling
             with factor 2, use upsampleFFT, which is faster.)
         xyShift:
-            Location in original image coordinates around which to upsample the
-            FT. This should be given to exactly half-pixel precision to
-            replicate the initial FFT step that this implementation skips
+            Array of points around which to upsample, with shape [N-points, 2]
 
     Returns:
-        (2-element np array): Refined location of the peak in image coordinates.
+        (N_points, 2) cupy ndarray: Refined locations of the peaks in image coordinates.
     """
 
     xyShift = (cp.round(xyShift * upsampleFactor) / upsampleFactor).astype(cp.float32)
@@ -603,7 +601,7 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     xSubShift, ySubShift = np.unravel_index(imageCorrUpsample.reshape(imageCorrUpsample.shape[0],-1).argmax(axis=1), imageCorrUpsample.shape[1:3])
 
-    # add a subpixel shift via parabolic fitting
+    # add a subpixel shift via parabolic fitting, serially for each peak 
     for idx in range(xSubShift.shape[0]):
         try:
             icc = np.real(
@@ -646,13 +644,13 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
             Correlation image between two images in Fourier space.
         upsampleFactor (int):
             Scalar integer of how much to upsample.
-        xyShift (list of 2 floats):
+        xyShift (N_points,2) cp.ndarray, locations to upsample around:
             Coordinates in the UPSAMPLED GRID around which to upsample.
             These must be single-pixel IN THE UPSAMPLED GRID
 
     Returns:
         (ndarray):
-            Upsampled image from region around correlation peak.
+            Stack of upsampled images from region around correlation peak.
     """
     N_pts = xyShift.shape[0]
     imageSize = imageCorr.shape
@@ -662,7 +660,7 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     colKern = cp.zeros((N_pts, imageSize[1], kernel_size),dtype=cp.complex64) # N_pts * image_size[1] * kernel_size
     rowKern = cp.zeros((N_pts, kernel_size, imageSize[0]),dtype=cp.complex64) # N_pts * kernel_size * image_size[0]
 
-    # call the row and column kernels
+    # Fill in the DFT arrays using the CUDA kernels
     multicorr_col_kernel = kernels["multicorr_col_kernel"]
     blocks = ((np.prod(colKern.shape) // multicorr_col_kernel.max_threads_per_block + 1),)
     threads = (multicorr_col_kernel.max_threads_per_block,)
@@ -673,6 +671,7 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     threads = (multicorr_row_kernel.max_threads_per_block,)
     multicorr_row_kernel(blocks,threads,(rowKern, xyShift, N_pts, *imageSize, upsampleFactor))
 
+    # Apply the DFT arrays to the correlation image
     imageUpsample = cp.real(rowKern @ imageCorr @ colKern)
     return imageUpsample
 
