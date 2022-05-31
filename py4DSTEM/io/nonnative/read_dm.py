@@ -51,6 +51,8 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
                     dataSet = dmFile.getDataset(i)
                 i += 1
             dc = DataCube(data=dataSet["data"])
+            _process_NCEM_TitanX_Tags(dmFile, dc)
+            
     elif (mem, binfactor) == ("MEMMAP", 1):
         with dm.fileDM(fp, on_memory=False) as dmFile:
             # loop through the datasets until a >2D one is found:
@@ -62,6 +64,8 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
                     valid_data = True
                 i += 1
             dc = DataCube(data=memmap)
+            _process_NCEM_TitanX_Tags(dmFile, dc)
+            
     elif (mem) == ("RAM"):
         with dm.fileDM(fp, on_memory=True) as dmFile:
             # loop through the datasets until a >2D one is found:
@@ -81,8 +85,13 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
             if rank==4:
                 R_Nx, R_Ny, Q_Nx, Q_Ny = shape
             elif rank==3:
-                R_Nx, Q_Nx, Q_Ny = shape
-                R_Ny = 1
+                titanTags = _process_NCEM_TitanX_Tags(dmFile)
+                if titanTags is not None:
+                    R_Nx, R_Ny = titanTags
+                    Q_Nx, Q_Ny = shape[1:]
+                else:
+                    R_Nx, Q_Nx, Q_Ny = shape
+                    R_Ny = 1
             else:
                 raise Exception(f"Data should be 4-dimensional; found {rank} dimensions")
             Q_Nx, Q_Ny = Q_Nx // binfactor, Q_Ny // binfactor
@@ -106,6 +115,25 @@ def read_dm(fp, mem="RAM", binfactor=1, metadata=False, **kwargs):
 
     dc.metadata = md
     return dc
+
+def _process_NCEM_TitanX_Tags(dmFile, dc=None):
+    """
+    Check the metadata in the DM File for certain tags which are added by the NCEM TitanX,
+    and reshape the 3D datacube into 4D using these tags. Also fixes the two-pixel roll
+    issue present in TitanX data. If no datacube is passed, return R_Nx and R_Ny
+    """
+    scanx = [v for k,v in dmFile.allTags.items() if "4D STEM Tags.Scan shape X" in k]
+    scany = [v for k,v in dmFile.allTags.items() if "4D STEM Tags.Scan shape Y" in k]
+    if len(scanx) == 1 and len(scany) == 1:
+        # TitanX tags found!
+        R_Nx = int(scany[0]) # need to flip x/y
+        R_Ny = int(scanx[0])
+
+        if dc is not None:
+            dc.set_scan_shape(R_Nx,R_Ny)
+            dc.data = np.roll(dc.data,shift=-2,axis=1) # fix TitanX two-pixel roll issue
+        else:
+            return R_Nx, R_Ny
 
 
 def get_metadata_from_dmFile(fp):
