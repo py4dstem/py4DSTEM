@@ -46,11 +46,14 @@ class PointListArray:
 
     ## Retrieve pointlists
 
-    def get_pointlist(self, i, j):
+    def get_pointlist(self, i, j, name=None):
         """
         Returns the pointlist at i,j
         """
-        return self._pointlists[i][j]
+        pl = self._pointlists[i][j]
+        if name is not None:
+            pl = pl.copy(name=name)
+        return pl
 
     def __getitem__(self, tup):
         l = len(tup) if isinstance(tup,tuple) else 1

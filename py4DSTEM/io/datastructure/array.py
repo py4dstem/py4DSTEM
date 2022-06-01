@@ -193,8 +193,6 @@ class Array:
         else:
             self.depth = self.shape[-1]
             self.shape = self.shape[:-1]
-            print("MEOWMEWOW")
-            print(self.shape)
             self.rank -= 1
             self.is_stack = True
 
