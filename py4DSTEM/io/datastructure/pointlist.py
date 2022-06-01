@@ -118,6 +118,11 @@ class PointList:
         return string
 
 
+    # Slicing
+    def __getitem__(self, v):
+        return self.data[v]
+
+
     ## Writing to an HDF5 file
 
     def to_h5(self,group):
