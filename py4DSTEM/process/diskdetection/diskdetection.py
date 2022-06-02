@@ -493,6 +493,8 @@ def find_Bragg_disks(datacube, probe,
         (PointListArray): the Bragg peak positions and correlation intensities
     """
 
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+
     def _parse_distributed(distributed):
         import os
 
