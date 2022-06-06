@@ -10,8 +10,9 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt
-from ..utils import get_shifted_ar, get_shift, tqdmnd
+from ..utils import get_shifted_ar, get_shift
 from ..calibration import get_probe_size
+from ...tqdmnd import tqdmnd
 
 #### Get the vacuum probe ####
 
@@ -237,7 +238,7 @@ def get_probe_kernel(probe,origin=None):
 
 def get_probe_kernel_edge_gaussian(
         probe,
-        sigma_probe_scale,
+        sigma,
         origin=None):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian from the
@@ -246,7 +247,7 @@ def get_probe_kernel_edge_gaussian(
 
     Args:
         probe (ndarray): the diffraction pattern corresponding to the probe over vacuum
-        sigma_probe_scale (float): the width of the gaussian to subtract, relative to
+        sigma (float): the width of the gaussian to subtract, relative to
             the standard deviation of the probe
         origin (2-tuple or None): if None (default), finds the origin using
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying the
@@ -274,7 +275,7 @@ def get_probe_kernel_edge_gaussian(
     qr2 = (qx**2 + qy**2)
     # Calculate Gaussian normalization kernel
     qstd2 = np.sum(qr2*probe_kernel) / np.sum(probe_kernel)
-    kernel_norm = np.exp(-qr2 / (2*qstd2*sigma_probe_scale**2))
+    kernel_norm = np.exp(-qr2 / (2*qstd2*sigma**2))
 
     # Output normalized kernel
     probe_kernel = probe_kernel/np.sum(probe_kernel) - kernel_norm/np.sum(kernel_norm)

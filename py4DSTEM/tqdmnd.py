@@ -67,8 +67,8 @@ def tqdmnd(*args, **kwargs):
                     desc (str): message displayed in front of the progress bar
 
     Returns:
-        At each iteration, a tuple of indices is returned, corresponding to the 
-        values of each input iterator (in the same order as the inputs). 
+        At each iteration, a tuple of indices is returned, corresponding to the
+        values of each input iterator (in the same order as the inputs).
     """
     r = [range(i) if isinstance(i, (int, integer)) else i for i in args]
     return tqdm(nditer(*r), **kwargs)

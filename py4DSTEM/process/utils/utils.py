@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
 from .multicorr import upsampled_correlation
-from .tqdmnd import tqdmnd
+from ...tqdmnd import tqdmnd
 
 try:
     from IPython.display import clear_output
@@ -189,7 +189,7 @@ def get_shifted_ar(
         yF = (np.floor(yshift)).astype(int)
         wx = xshift - xF
         wy = yshift - yF
-            
+
         shifted_ar = \
             np.roll(ar,(xF  ,yF  ),axis=(0,1)) * ((1-wx)*(1-wy)) + \
             np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
@@ -204,11 +204,11 @@ def get_shifted_ar(
         if xR > 0:
             shifted_ar[0:xR,:] = 0
         elif xR < 0:
-            shifted_ar[xR:,:] = 0    
+            shifted_ar[xR:,:] = 0
         if yR > 0:
             shifted_ar[:,0:yR] = 0
         elif yR < 0:
-            shifted_ar[:,yR:] = 0    
+            shifted_ar[:,yR:] = 0
 
     return shifted_ar
 

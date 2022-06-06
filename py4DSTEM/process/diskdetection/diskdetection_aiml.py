@@ -15,8 +15,9 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
+from ..utils import get_cross_correlation_fk, get_maxima_2D
+from ...tqdmnd import tqdmnd
 from ...io import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attempts = 5,

@@ -157,19 +157,20 @@ def add_annuli(ax,d):
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
     # radii
-    assert('Ri' in d.keys())
-    assert('Ro' in d.keys())
-    Ri,Ro = d['Ri'],d['Ro']
-    if isinstance(Ri,Number):
-        Ri = [Ri for i in range(N)]
-    if isinstance(Ro,Number):
-        Ro = [Ro for i in range(N)]
-    assert(isinstance(Ri,list))
-    assert(isinstance(Ro,list))
-    assert(len(Ri)==N)
-    assert(len(Ro)==N)
-    assert(all([isinstance(i,Number) for i in Ri]))
-    assert(all([isinstance(i,Number) for i in Ro]))
+    assert('radii' in d.keys())
+    radii = d['radii']
+    if isinstance(radii,tuple):
+        assert(len(radii)==2)
+        ri = [radii[0] for i in range(N)]
+        ro = [radii[1] for i in range(N)]
+    else:
+        assert(isinstance(radii,list))
+        assert(all([isinstance(x,tuple) for x in radii]))
+        assert(len(radii)==N)
+        ri = [radii[i][0] for i in range(N)]
+        ro = [radii[i][1] for i in range(N)]
+    assert(all([isinstance(i,Number) for i in ri]))
+    assert(all([isinstance(i,Number) for i in ro]))
     # color
     color = d['color'] if 'color' in d.keys() else 'r'
     if isinstance(color,list):
@@ -203,15 +204,15 @@ def add_annuli(ax,d):
         assert(len(linewidth)==N)
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','Ri','Ro','color','fill','alpha','linewidth')]
+    kws = [k for k in d.keys() if k not in ('center','radii','color','fill','alpha','linewidth')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the annuli
     for i in range(N):
-        cent,ri,ro,col,f,a,lw = center[i],Ri[i],Ro[i],color[i],fill[i],alpha[i],linewidth[i]
-        annulus = Wedge((cent[1],cent[0]),ro,0,360,width=ro-ri,color=col,fill=f,alpha=a,
+        cent,Ri,Ro,col,f,a,lw = center[i],ri[i],ro[i],color[i],fill[i],alpha[i],linewidth[i]
+        annulus = Wedge((cent[1],cent[0]),Ro,0,360,width=Ro-Ri,color=col,fill=f,alpha=a,
                         linewidth=lw,**kwargs)
         ax.add_patch(annulus)
 

@@ -8,7 +8,7 @@ try:
     import numba as nb
 except ImportError:
     pass
-from ...process.utils import tqdmnd
+from ...tqdmnd import tqdmnd
 from ..datastructure import DataCube
 
 

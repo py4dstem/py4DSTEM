@@ -12,7 +12,6 @@ from ...datastructure import RealSlice, get_realslice_from_grp
 from ...datastructure import PointList, get_pointlist_from_grp
 from ...datastructure import PointListArray, get_pointlistarray_from_grp
 from ...datastructure import Coordinates, get_coordinates_from_grp
-from ....process.utils import tqdmnd
 from ..metadata import metadata_from_h5
 
 def read_v0_12(fp, **kwargs):
