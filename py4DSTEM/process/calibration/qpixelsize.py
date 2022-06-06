@@ -3,24 +3,24 @@
 import numpy as np
 from scipy.optimize import leastsq
 from typing import Union, Optional
-from py4DSTEM.process.utils import get_CoM, tqdmnd
-from ...io.datastructure import Coordinates, PointListArray
+from ..utils import get_CoM
+from ...tqdmnd import tqdmnd
+from ...io.datastructure import Calibrations, PointListArray
 
 
-def get_dq(q, d):
+def get_Q_pixel_size(q_meas, q_known, units='A'):
     """
-    Get dq, the size of the detector pixels in the diffraction plane, in inverse length
-    units.
+    Computes the size of the Q-space pixels.
 
     Args:
-        q (number): a measured diffraction space distance, in pixels
-        d (number): the known corresponding length, in *real space* length units (e.g.
-            in Angstroms)
+        q_meas (number): a measured distance in q-space in pixels
+        q_known (number): the corresponding known *real space* distance
+        unit (str): the units of the real space value of `q_known`
 
     Returns:
-        (number): the detector pixel size
+        (number,str): the detector pixel size, the associated units
     """
-    return 1 / (q * d)
+    return 1. / (q_meas * q_known), units+'^-1'
 
 
 def get_dq_from_indexed_peaks(qs, hkl, a):
@@ -68,18 +68,18 @@ def get_dq_from_indexed_peaks(qs, hkl, a):
 def calibrate_Bragg_peaks_pixel_size(
     braggpeaks: PointListArray,
     q_pixel_size: Optional[float] = None,
-    coords: Optional[Coordinates] = None,
+    calibrations: Optional[Calibrations] = None,
     name: Optional[str] = None,
 ) -> PointListArray:
     """
     Calibrate reciprocal space measurements of Bragg peak positions, using
     either `q_pixel_size` or the `Q_pixel_size` field of a
-    Coordinates object
+    Calibrations object
 
     Accepts:
-        braggpeaks  (PointListArray) the detected, unscaled bragg peaks
+        braggpeaks (PointListArray) the detected, unscaled bragg peaks
         q_pixel_size (float) Q pixel size in inverse Ångström
-        coords      (Coordinates) an object containing pixel size
+        calibrations (Calibrations) an object containing pixel size
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
                     if present at the end of the string, then appends
@@ -90,13 +90,13 @@ def calibrate_Bragg_peaks_pixel_size(
     """
     assert isinstance(braggpeaks, PointListArray)
     assert (q_pixel_size is not None) != (
-        coords is not None
-    ), "Either (qx0,qy0) or coords must be specified"
+        calibrations is not None
+    ), "Either (qx0,qy0) or calibrations must be specified"
 
-    if coords is not None:
-        assert isinstance(coords, Coordinates), "coords must be a Coordinates object."
-        q_pixel_size = coords.get_Q_pixel_size()
-        assert q_pixel_size is not None, "coords did not contain center position"
+    if calibrations is not None:
+        assert isinstance(calibrations, Calibrations), "calibrations must be a Calibrations object."
+        q_pixel_size = calibrations.get_Q_pixel_size()
+        assert q_pixel_size is not None, "calibrations did not contain center position"
 
     if q_pixel_size is not None:
         assert isinstance(q_pixel_size, float), "q_pixel_size must be a float."

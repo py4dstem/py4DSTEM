@@ -1,11 +1,10 @@
 # Functions for generating virtual images
 import numpy as np
-from ...io import DataCube
-from ..utils import tqdmnd
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
 import h5py
+from ...tqdmnd import tqdmnd
 
 __all__ = [
     'make_circ_mask',
@@ -33,6 +32,7 @@ __all__ = [
 #TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections 
 #TODO Add multiple mask maker, e.g. given list of coordinate tuples create circular masks at each point
 #TODO Add assertion statements 
+
 def make_circ_mask(datacube, geometry, return_crop_vals=False):
     """
     Make a circular boolean mask centered at (x0,y0) and with radius R
@@ -114,14 +114,12 @@ def make_rect_mask(datacube, geometry, return_crop_vals=False):
         (2D array): Boolean mask
         (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
     """
-
     xmin,xmax,ymin,ymax = geometry
 
     assert isinstance(datacube, DataCube)
 
     xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
     ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
-
 
     full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
     full_mask[xmin:xmax,ymin:ymax] = True
@@ -245,10 +243,12 @@ def _get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs
     """
     Get a virtual image using a circular detector centered at (x0,y0) and with radius R
     in the diffraction plane.
+
     Args:
         datacube (DataCube):
         geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
             and radius is a number
+
     Returns:
         (2D array): the virtual image
     """
@@ -269,10 +269,12 @@ def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs)
     """
     Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
     radii of Ri/Ro.
+
     Args:
         datacube (DataCube):
         geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
         and radii is the 2-tuple (ri,ro)
+
     Returns:
         (2D array): the virtual image
     """
@@ -305,6 +307,7 @@ def _get_virtual_image_dask(array, mask):
     Args:
         array (dask array): dask array of 4DSTEM data with shape rx,ry,qx,qy
         mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
+
     Returns:
         out (2D numpy array): virtual image lazy virtual image, requires explict computation
     """
@@ -439,7 +442,6 @@ def _get_virtualimage_from_mask_einsum(datacube, mask, dtype=np.float64, *args, 
         (2D array): the virtual image
 
     """
-
     return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
 
 def _get_virtualimage_ann_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):

@@ -1,139 +1,211 @@
 import numpy as np
 from copy import copy
 import h5py
-from .dataobject import DataObject
+
+from .ioutils import determine_group_name
+from .ioutils import EMD_group_exists, EMD_group_types
 from .pointlist import PointList
-from ...process.utils import tqdmnd
+from ...tqdmnd import tqdmnd
 
-class PointListArray(DataObject):
+class PointListArray:
     """
-    An object containing an array of PointLists.
-    Facilitates more rapid access of subpointlists which have known, well structured coordinates, such
-    as real space scan positions R_Nx,R_Ny.
-
-    Args:
-        coordinates: see PointList documentation
-        shape (2-tuple of ints): the array shape.  Typically the real space shape
-            ``(R_Nx, R_Ny)``.
+    An 2D array of PointLists which share common coordinates.
     """
-    def __init__(self, coordinates, shape, dtype=float, **kwargs):
+    def __init__(
+        self,
+        dtype,
+        shape,
+        name
+        ):
         """
-		Instantiate a PointListArray object.
-		Creates a PointList with coordinates at each point of a 2D grid with a shape specified
-        by the shape argument.
+		Creates an empty PointListArray.
+
+        Args:
+            dtype: the dtype of the numpy structured arrays which will comprise
+                the data of each PointList
+            shape (2-tuple of ints): the shape of the array of PointLists
+            name (str): a name for the PointListArray
+
+        Returns:
+            a PointListArray instance
         """
-        DataObject.__init__(self, **kwargs)
+        assert len(shape) == 2, "Shape must have length 2."
 
-        self.coordinates = coordinates  #: the coordinates; see the PointList documentation
-        self.default_dtype = dtype      #: the default datatype; see the PointList documentation
-
-        assert isinstance(shape,tuple), "Shape must be a tuple."
-        assert len(shape) == 2, "Shape must be a length 2 tuple."
-        #: the shape of the 2D grid of positions populated with PointList instances;
-        #: typically, this will be ``(R_Nx,R_Ny)``
+        self.name = name
         self.shape = shape
 
-        # Define the data type for the structured arrays in the PointLists
-        if isinstance(coordinates, np.dtype):
-            self.dtype = coordinates  # the custom datatype; see the PointList documentation
-        elif type(coordinates[0])==str:
-            self.dtype = np.dtype([(name,self.default_dtype) for name in coordinates])
-        elif type(coordinates[0])==tuple:
-            self.dtype = np.dtype(coordinates)
-        else:
-            raise TypeError("coordinates must be a list of strings, or a list of 2-tuples of structure (name, dtype).")
+        self.dtype = np.dtype(dtype)
+        self.fields = self.dtype.names
+        self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
-        kwargs['searchable']=False   # Ensure that the subpointlists don't all appear in searches
-        self.pointlists = [[PointList(coordinates=self.coordinates,
-                            dtype = self.default_dtype,
-                            **kwargs) for j in range(self.shape[1])] for i in range(self.shape[0])]
 
-    def get_pointlist(self, i, j):
+        # Populate with empty PointLists
+        self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype), name=f"{i},{j}")
+                             for j in range(self.shape[1])] for i in range(self.shape[0])]
+
+
+    ## Retrieve pointlists
+
+    def get_pointlist(self, i, j, name=None):
         """
         Returns the pointlist at i,j
         """
-        return self.pointlists[i][j]
+        pl = self._pointlists[i][j]
+        if name is not None:
+            pl = pl.copy(name=name)
+        return pl
 
-    def copy(self, **kwargs):
+    def __getitem__(self, tup):
+        l = len(tup) if isinstance(tup,tuple) else 1
+        assert(l==2), f"Expected 2 slice values, recieved {l}"
+        return self.get_pointlist(tup[0],tup[1])
+
+
+    ## Make copies
+
+    def copy(self, name=''):
         """
         Returns a copy of itself.
         """
-        new_pointlistarray = PointListArray(coordinates=self.coordinates,
-                                            shape=self.shape,
-                                            dtype=self.default_dtype,
-                                            **kwargs)
+        new_pla = PointListArray(
+            dtype=self.dtype,
+            shape=self.shape,
+            name=name)
 
-        for i in range(new_pointlistarray.shape[0]):
-            for j in range(new_pointlistarray.shape[1]):
-                curr_pointlist = new_pointlistarray.get_pointlist(i,j)
-                curr_pointlist.add_pointlist(self.get_pointlist(i,j).copy())
+        for i in range(new_pla.shape[0]):
+            for j in range(new_pla.shape[1]):
+                pl = new_pla.get_pointlist(i,j)
+                pl.append(np.copy(self.get_pointlist(i,j).data))
 
-        return new_pointlistarray
+        return new_pla
 
-    def add_coordinates(self, new_coords, **kwargs):
+    def add_fields(self, new_fields, name=''):
         """
-        Creates a copy of the PointListArray, but with additional coordinates given by new_coords.
-        new_coords must be a string of 2-tuples, ('name', dtype)
+        Creates a copy of the PointListArray, but with additional fields given
+        by new_fields.
+
+        Args:
+            new_fields: a list of 2-tuples, ('name', dtype)
+            name: a name for the new pointlist
         """
-        coords = []
-        for key in self.dtype.fields.keys():
-            coords.append((key,self.dtype.fields[key][0]))
-        for coord in new_coords:
-            coords.append((coord[0],coord[1]))
+        dtype = []
+        for f,t in zip(self.fields,self.types):
+            dtype.append((f,t))
+        for f,t in new_fields:
+            dtype.append((f,t))
 
-        new_pointlistarray = PointListArray(coordinates=coords,
-                                            shape=self.shape,
-                                            dtype=self.default_dtype,
-                                            **kwargs)
+        new_pla = PointListArray(
+            dtype=dtype,
+            shape=self.shape,
+            name=name)
 
-        for i in range(new_pointlistarray.shape[0]):
-            for j in range(new_pointlistarray.shape[1]):
-                curr_pointlist_new = new_pointlistarray.get_pointlist(i,j)
-                curr_pointlist_old = self.get_pointlist(i,j)
+        for i in range(new_pla.shape[0]):
+            for j in range(new_pla.shape[1]):
+                # Copy old data into a new structured array
+                pl_old = self.get_pointlist(i,j)
+                data = np.zeros(pl_old.length, np.dtype(dtype))
+                for f in self.fields:
+                    data[f] = np.copy(pl_old.data[f])
 
-                data = np.zeros(curr_pointlist_old.length, np.dtype(coords))
-                for key in self.dtype.fields.keys():
-                    data[key] = np.copy(curr_pointlist_old.data[key])
+                # Write into new pointlist
+                pl_new = new_pla.get_pointlist(i,j)
+                pl_new.append(data)
 
-                curr_pointlist_new.add_dataarray(data)
-
-        return new_pointlistarray
+        return new_pla
 
 
+    ## Representation to standard output
+    def __repr__(self):
 
-### Read/Write
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( A shape {self.shape} PointListArray called '{self.name}',"
+        string += "\n"+space+f"with {len(self.fields)} fields:"
+        string += "\n"
+        space2 = max([len(field) for field in self.fields])+3
+        for f,t in zip(self.fields,self.types):
+            string += "\n"+space+f"{f}{(space2-len(f))*' '}({str(t)})"
+        string += "\n)"
 
-def save_pointlistarray_group(group, pointlistarray):
+        return string
+
+
+    ## Writing to an HDF5 file
+
+    def to_h5(self,group):
+        """
+        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
+        mode. Writes a new group with a name given by this PointList's .name field nested
+        inside the passed group, and saves the data there.
+
+        If the PointList has no name, it will be assigned the name "PointList#" where #
+        is the lowest available integer.  If the PointList's name already exists here in
+        this file, raises and exception.
+
+        TODO: add overwite option.
+
+        Accepts:
+            group (HDF5 group)
+        """
+
+        # Detemine the name of the group
+        # if current name is invalid, raises and exception
+        # TODO: add overwrite option
+        determine_group_name(self, group)
+
+
+        ## Write
+
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
+        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+
+        # Add data
+        dtype = h5py.special_dtype(vlen=self.dtype)
+        dset = grp.create_dataset(
+            "data",
+            self.shape,
+            dtype
+        )
+        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+            dset[i,j] = self.get_pointlist(i,j).data
+        #for i in range(dset.shape[0]):
+        #    for j in range(dset.shape[1]):
+        #        dset[i,j] = self.get_pointlist(i,j).data
+
+
+
+## Read PointList objects
+
+def PointListArray_from_h5(group:h5py.Group, name:str):
     """
-    Expects an open .h5 group and a DataCube; saves the DataCube to the group
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if a valid PointListArray object of this name exists
+    inside this group, and if it does, loads and returns it. If it doesn't,
+    raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+        name (string)
+
+    Returns:
+        A PointListArray instance
     """
-    try:
-        n_coords = len(pointlistarray.dtype.names)
-    except:
-        n_coords = 1
-    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("coordinates", np.string_(str(pointlistarray.dtype)))
-    group.attrs.create("dimensions", n_coords)
+    er = f"No PointlistArray called {name} could be found in group {group} of this HDF5 file."
+    assert(EMD_group_exists(
+            group,
+            EMD_group_types['PointListArray'],
+            name)), er
+    grp = group[name]
 
-    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
-    name = "data"
-    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
 
-    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        dset[i,j] = pointlistarray.get_pointlist(i,j).data
-
-def get_pointlistarray_from_grp(g):
-    """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
-        and returns a PointListArray.
-    """
-    name = g.name.split('/')[-1]
-    dset = g['data']
-    shape = g['data'].shape
-    coordinates = g['data'][0,0].dtype
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    # Get data
+    dset = grp['data']
+    shape = grp['data'].shape
+    dtype = grp['data'][0,0].dtype
+    pla = PointListArray(dtype=dtype,shape=shape,name=name)
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         try:
-            pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+            pla.get_pointlist(i,j).append(dset[i,j])
         except ValueError:
             pass
     return pla
