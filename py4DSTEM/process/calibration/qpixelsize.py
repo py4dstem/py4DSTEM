@@ -3,7 +3,8 @@
 import numpy as np
 from scipy.optimize import leastsq
 from typing import Union, Optional
-from py4DSTEM.process.utils import get_CoM, tqdmnd
+from ..utils import get_CoM
+from ...tqdmnd import tqdmnd
 from ...io.datastructure import Calibrations, PointListArray
 
 

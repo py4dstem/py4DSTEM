@@ -17,7 +17,6 @@ from ...datastructure import PointListArray, save_pointlistarray_group
 from ...datastructure import CountedDataCube, save_counted_datacube_group
 from ...datastructure import Coordinates, save_coordinates_group
 from ...datastructure import DataObject, Metadata, Coordinates
-from ....process.utils import tqdmnd
 from ....version import __version__
 
 def save(filepath, data, overwrite=False, topgroup='4DSTEM_experiment', **kwargs):

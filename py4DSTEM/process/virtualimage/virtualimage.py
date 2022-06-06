@@ -1,10 +1,10 @@
 # Functions for generating virtual images
 import numpy as np
-from ..utils import tqdmnd
 import dask.array as da
 import matplotlib.pyplot as plt
 import warnings
 import h5py
+from ...tqdmnd import tqdmnd
 
 __all__ = [
     'make_circ_mask',

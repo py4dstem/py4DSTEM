@@ -1,7 +1,8 @@
 # Functions for calculating and making use of the Bragg vector map
 
 import numpy as np
-from ..utils import add_to_2D_array_from_floats, tqdmnd
+from ..utils import add_to_2D_array_from_floats
+from ...tqdmnd import tqdmnd
 
 def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     """

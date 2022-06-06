@@ -5,7 +5,7 @@ import h5py
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
 from .pointlist import PointList
-#from ...process.utils import tqdmnd
+from ...tqdmnd import tqdmnd
 
 class PointListArray:
     """
@@ -166,11 +166,11 @@ class PointListArray:
             self.shape,
             dtype
         )
-        #for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        #    dset[i,j] = self.get_pointlist(i,j).data
-        for i in range(dset.shape[0]):
-            for j in range(dset.shape[1]):
-                dset[i,j] = self.get_pointlist(i,j).data
+        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+            dset[i,j] = self.get_pointlist(i,j).data
+        #for i in range(dset.shape[0]):
+        #    for j in range(dset.shape[1]):
+        #        dset[i,j] = self.get_pointlist(i,j).data
 
 
 
@@ -203,11 +203,11 @@ def PointListArray_from_h5(group:h5py.Group, name:str):
     shape = grp['data'].shape
     dtype = grp['data'][0,0].dtype
     pla = PointListArray(dtype=dtype,shape=shape,name=name)
-    #for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-    #    pla.get_pointlist(i,j).append(dset[i,j])
-    for i in range(shape[0]):
-        for j in range(shape[1]):
-            pla.get_pointlist(i,j).append(dset[i,j])
+    for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
+        pla.get_pointlist(i,j).append(dset[i,j])
+    #for i in range(shape[0]):
+    #    for j in range(shape[1]):
+    #        pla.get_pointlist(i,j).append(dset[i,j])
     return pla
 
 
