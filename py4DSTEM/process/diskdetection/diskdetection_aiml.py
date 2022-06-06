@@ -1,8 +1,8 @@
 # Functions for finding Bragg disks using AI/ML pipeline
 # Joydeep Munshi
 
-''' 
-Functions for finding Braggdisks using AI/ML method using tensorflow 
+'''
+Functions for finding Braggdisks using AI/ML method using tensorflow
 '''
 
 import os
@@ -15,8 +15,9 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
+from ..utils import get_cross_correlation_fk, get_maxima_2D
+from ...tqdmnd import tqdmnd
 from ...io import PointList, PointListArray
-from ..utils import get_cross_correlation_fk, get_maxima_2D, tqdmnd
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attmpts = 5,

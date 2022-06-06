@@ -7,7 +7,7 @@ from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_v
 from .read_utils_v0_9 import get_py4DSTEM_dataobject_info
 from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
-from ....process.utils import tqdmnd
+from ....tqdmnd import tqdmnd
 from ..metadata import metadata_from_h5
 
 def read_v0_9(fp, **kwargs):

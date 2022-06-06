@@ -1,4 +1,4 @@
-""" 
+"""
 Functions for finding Braggdisks using cupy
 
 """
@@ -9,9 +9,9 @@ from cupyx.scipy.ndimage import gaussian_filter
 import cupyx.scipy.fft as cufft
 from time import time
 
-from ...io import PointList, PointListArray
-from ..utils import tqdmnd
 from .kernels import kernels
+from ...io import PointList, PointListArray
+from ...tqdmnd import tqdmnd
 
 
 def find_Bragg_disks_CUDA(

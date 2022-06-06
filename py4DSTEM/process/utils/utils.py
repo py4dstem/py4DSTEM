@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
 from .multicorr import upsampled_correlation
-from .tqdmnd import tqdmnd
+from ...tqdmnd import tqdmnd
 
 try:
     from IPython.display import clear_output

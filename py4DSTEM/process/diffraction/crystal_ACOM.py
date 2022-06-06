@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
+from ..utils import telectron_wavelength_angstrom
+from ...tqdmnd import tqdmnd
+from ...io.datastructure import PointList, PointListArray
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -651,7 +652,7 @@ def orientation_plan(
                 keep[sub] = False
         self.symmetry_operators = self.symmetry_operators[keep]
         self.symmetry_reduction = self.symmetry_reduction[keep]
-    
+
         if self.orientation_fiber_angles is not None \
             and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
             zone_axis_range_flip = self.orientation_zone_axis_range.copy()

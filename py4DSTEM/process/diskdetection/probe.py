@@ -10,8 +10,9 @@
 
 import numpy as np
 from scipy.ndimage.morphology import binary_opening, binary_dilation, distance_transform_edt
-from ..utils import get_shifted_ar, get_shift, tqdmnd
+from ..utils import get_shifted_ar, get_shift
 from ..calibration import get_probe_size
+from ...tqdmnd import tqdmnd
 
 #### Get the vacuum probe ####
 

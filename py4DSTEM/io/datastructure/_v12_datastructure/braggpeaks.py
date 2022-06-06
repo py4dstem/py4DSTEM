@@ -7,7 +7,7 @@ from .pointlistarray import PointListArray
 from .pointlist import PointList
 from .diffraction import DiffractionSlice
 from .calibrations import Calibrations
-from ...process.utils import tqdmnd
+from ...tqdmnd import tqdmnd
 
 class BraggPeaks(DataObject):
     """

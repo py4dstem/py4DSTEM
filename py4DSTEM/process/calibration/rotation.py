@@ -3,7 +3,7 @@
 import numpy as np
 from typing import Optional
 from ...io.datastructure import Calibrations, PointListArray
-from py4DSTEM.process.utils import tqdmnd
+from ...tqdmnd import tqdmnd
 
 
 def calibrate_bragg_peaks_rotation(
