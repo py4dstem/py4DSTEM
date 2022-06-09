@@ -418,7 +418,7 @@ def generate_dynamical_diffraction_pattern(
 
         # convert amplitudes as a structured array 
         # do we want complex64 or complex 32. 
-        amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c8')]))
+        amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c16')]))
 
     else: 
         intensities = [
