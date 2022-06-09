@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import numpy.lib.recfunctions as rfn
 from scipy import linalg
 from typing import Union, Optional, Dict, Tuple, List
 from time import time
@@ -280,7 +281,7 @@ def generate_dynamical_diffraction_pattern(
         return_complex (bool):          When True, returns the complex amplitude rather than intensity. Defaults to (False)
     Returns:
         if return_complex = True:
-            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, amplitude, h, k, l]
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
                 or
             [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
                                             a list of PointLists is returned.
@@ -402,15 +403,23 @@ def generate_dynamical_diffraction_pattern(
     psi_0 = np.zeros((n_beams,))
     psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
 
-    # calculate the diffraction intensities for each thichness matrix
+    # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
     if return_complex: 
-        # not an intensity but ... yolo 
-        # TODO refactor logic and fix the naming 
-        intensities = [
+  
+        # calculate the amplitudes 
+        amplitudes = [
             C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))
             for z in np.atleast_1d(thickness)
         ]
+        
+        # Do this first to avoid handling structured array 
+        intensities = np.abs(amplitudes) ** 2
+
+        # convert amplitudes as a structured array 
+        # do we want complex64 or complex 32. 
+        amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c8')]))
+
     else: 
         intensities = [
             np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
@@ -421,19 +430,11 @@ def generate_dynamical_diffraction_pattern(
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        # if we return the complex amplitude we need to change the dtype of the struct array
-        # TODO move this if statement outside of the loop and rename intensities) better 
         if return_complex: 
-            newpl.data = newpl.data.astype(dtype=[
-                ('qx', '<f8'),
-                ('qy', '<f8'),
-                ('amplitude', '<c8'),
-                ('h', '<i8'),
-                ('k', '<i8'),
-                ('l', '<i8')
-                ]
-            )
-            newpl.data["amplitude"] = intensities[i]
+            # overwrite the kinematical intensities with the dynamical intensities
+            newpl.data["intensity"] = intensities[i]
+            # merge amplitudes into the list 
+            newpl.data = rfn.rfn.merge_arrays((newpl.data, amplitudes), asrecarray=False, flatten=True)
         else:
             newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
