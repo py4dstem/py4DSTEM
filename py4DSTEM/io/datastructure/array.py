@@ -49,12 +49,11 @@ class Array:
     >>>     ],
     >>> )
 
-    will create an array with a name and units for its data, with its first two
-    dimensions in units of nanometers, with each pixel having a size of 5nm, and
-    described by the handles 'rx' and 'ry', here meant to represent the (x,y)
-    position in real space, and with its last two dimensions in units of inverse
-    Angstroms, with each pixel having a size of 0.01A^-1, and dsecribed by the
-    handles 'qx' and 'qy', representing the (x,y) position in diffraction space.
+    will create an array with a name and units for its data, where its first two
+    dimensions are in units of nanometers, have pixel sizes of 5nm, and are
+    described by the handles 'rx' and 'ry', and where its last two dimensions
+    are in units of inverse Angstroms, have pixels sizes of 0.01A^-1, and are
+    described by the handles 'qx' and 'qy'.
 
     Arrays in which the length of each pixel is non-constant are also
     supported.  For instance,
@@ -69,8 +68,8 @@ class Array:
     >>> )
 
     generates an array representing the values of the sine function sampled
-    along a logarithmic interval from 1 to 10. In this example, this data
-    could then be plotted with, e.g.
+    100 times along a logarithmic interval from 1 to 10. In this example,
+    this data could then be plotted with, e.g.
 
     >>> plt.scatter(ar.dims[0], ar.data)
 
@@ -108,8 +107,10 @@ class Array:
 
     >>> ar.get_slice('a')
 
-    which will return a rank 2 (non-stack-like) Array instance with shape (50,50)
-    and the dims assigned above.
+    which will return a 2D (non-stack-like) Array instance with shape (50,50)
+    and the dims assigned above.  The Array attribute .rank is equal to the
+    number of dimensions for a non-stack-like Array, and is equal to N-1
+    for stack-like arrays.
 
     """
     def __init__(
@@ -127,7 +128,7 @@ class Array:
             data (np.ndarray): the data
             name (str): the name of the Array
             units (str): units for the pixel values
-            dims (list): calibration vectors for each of the axes of the data
+            dims (variable): calibration vectors for each of the axes of the data
                 array.  Valid values for each element of the list are None,
                 a number, a 2-element list/array, or an M-element list/array
                 where M is the data array.  If None is passed, the dim will be
@@ -137,11 +138,11 @@ class Array:
                 step size.  If a 2-element list/array is passed, the dim is
                 populated with a linear vector with these two numbers as the first
                 two elements.  If a list/array of length M is passed, this is used
-                as the dim vector.  If dims recieves a list of fewer than N
-                arguments for an N-dimensional data array, the extra dimensions
-                are populated as if None were passed, using integer pixel values.
-                If the `dims` parameter is not passed, all dim vectors are
-                populated this way.
+                as the dim vector, (and must therefore match this dimension's
+                length). If dims recieves a list of fewer than N arguments for an
+                N-dimensional data array, the extra dimensions are populated as if
+                None were passed, using integer pixel values. If the `dims`
+                parameter is not passed, all dim vectors are populated this way.
             dim_units (list): the units for the calibration dim vectors. If
                 nothing is passed, dims vectors which have been populated
                 automatically with integers corresponding to pixel numbers
@@ -155,17 +156,17 @@ class Array:
                 above, will be autopopulated with the name "dim#" where #
                 is the axis number.
             slicelabels (None or True or list): if not None, must be True or a
-                list of strings. The array rank will be taken to be
-                `len(data.shape) - 1`, i.e. all dimensions except the last will be
-                treated normally with respect to populating dims, dim_names, and
-                dim_units, while the final dimension will be treated distinctly:
-                it will index into functionally distinct arrays which share a set
-                of dimension attributes, and can be sliced into using the string
-                labels from the `slicelabels` list, with the syntax
-                array.get_slice('label').  If `len(slicelabels)` is `True` or has
-                length less than the final dimension length, unassigned dimensions
-                will be autopopulated with labels `array{i}`. The flag array.is_stack
-                will be set to True.
+                list of strings, indicating a "stack-like" array.  In this case,
+                the first N-1 dimensions of the array are treated normally, in
+                the sense of populating dims, dim_names, and dim_units, while the
+                final dimension is treated distinctly: it indexes into
+                distinct arrays which share a set of dimension attributes, and
+                can be sliced into using the string labels from the `slicelabels`
+                list, with the syntax array['label'] or array.get_slice('label').
+                If `slicelabels` is `True` or is a list with length less than the
+                final dimension length, unassigned dimensions are autopopulated
+                with labels `array{i}`. The flag array.is_stack is set to True
+                and the array.rank attribute is set to N-1.
 
         Returns:
             A new Array instance
@@ -178,9 +179,9 @@ class Array:
         self.dim_units = dim_units
 
         self.shape = self.data.shape
-        self.rank = len(self.shape)
+        self.rank = self.data.ndim
 
-        # flags to help assign dim names and units
+        # flag to help assign dim names and units
         dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
 
@@ -193,6 +194,7 @@ class Array:
         else:
             self.depth = self.shape[-1]
             self.shape = self.shape[:-1]
+            dim_in_pixels = dim_in_pixels[:-1]
             self.rank -= 1
             self.is_stack = True
 
@@ -505,12 +507,16 @@ class Array:
 
 # List subclass for accessing data slices with a dict
 class Labels(list):
+
     def __init__(self,x=[]):
         list.__init__(self,x)
         self.setup_labels_dict()
+
     def __setitem__(self,idx,label):
+        label_old = self[idx]
+        del(self._dict[label_old])
         list.__setitem__(self,idx,label)
-        self.setup_labels_dict()
+        self._dict[label] = idx
 
     def setup_labels_dict(self):
         self._dict = {}
