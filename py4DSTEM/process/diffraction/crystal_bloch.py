@@ -278,7 +278,7 @@ def generate_dynamical_diffraction_pattern(
                                         computed and stored. Subsequent calls will use the cached matrix
                                         for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
-        return_complex (bool):          When True, returns the complex amplitude rather than intensity. Defaults to (False)
+        return_complex (bool):          When True, returns both the complex amplitude and intensity. Defaults to (False)
     Returns:
         if return_complex = True:
             bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
