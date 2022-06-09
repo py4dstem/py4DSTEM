@@ -424,14 +424,16 @@ def generate_dynamical_diffraction_pattern(
         # if we return the complex amplitude we need to change the dtype of the struct array
         # TODO move this if statement outside of the loop and rename intensities) better 
         if return_complex: 
-            newpl.data = newpl.data.astype((
-                dtype=[
+            newpl.data = newpl.data.astype(
+                    dtype=[
                     ('qx', '<f8'), 
                     ('qy', '<f8'), 
                     ('amplitude', '<c8'), 
                     ('h', '<i8'), 
                     ('k', '<i8'), 
-                    ('l', '<i8')]))
+                    ('l', '<i8')
+                    ]
+                )
             newpl.data["amplitude"] = intensities[i]
         else:
             newpl.data["intensity"] = intensities[i]
