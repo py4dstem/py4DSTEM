@@ -242,6 +242,7 @@ def generate_dynamical_diffraction_pattern(
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
+    return_complex: bool = False
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -276,12 +277,18 @@ def generate_dynamical_diffraction_pattern(
                                         computed and stored. Subsequent calls will use the cached matrix
                                         for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
-
+        return_complex (bool):          When True, returns the complex amplitude rather than intensity. Defaults to (False)
     Returns:
-        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
-            or
-        [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
-                                        a list of PointLists is returned.
+        if return_complex = True:
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, amplitude, h, k, l]
+                or
+            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                            a list of PointLists is returned.
+        else:
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+                or
+            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                            a list of PointLists is returned.
 
     """
     t0 = time()  # start timer for matrix setup
@@ -397,16 +404,37 @@ def generate_dynamical_diffraction_pattern(
 
     # calculate the diffraction intensities for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
-    intensities = [
-        np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
-        for z in np.atleast_1d(thickness)
-    ]
+    if return_complex: 
+        # not an intensity but ... yolo 
+        # TODO refactor logic and fix the naming 
+        intensities = [
+            C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))
+            for z in np.atleast_1d(thickness)
+        ]
+    else: 
+        intensities = [
+            np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
+            for z in np.atleast_1d(thickness)
+        ]
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        newpl.data["intensity"] = intensities[i]
+        # if we return the complex amplitude we need to change the dtype of the struct array
+        # TODO move this if statement outside of the loop and rename intensities) better 
+        if return_complex: 
+            newpl.data = newpl.data.astype((
+                dtype=[
+                    ('qx', '<f8'), 
+                    ('qy', '<f8'), 
+                    ('amplitude', '<c8'), 
+                    ('h', '<i8'), 
+                    ('k', '<i8'), 
+                    ('l', '<i8')]))
+            newpl.data["amplitude"] = intensities[i]
+        else:
+            newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
 
     if verbose:
