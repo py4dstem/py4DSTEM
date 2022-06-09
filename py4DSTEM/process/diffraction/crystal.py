@@ -176,12 +176,11 @@ class Crystal:
 
         """
         import pymatgen as mg
-        from pymatgen.ext.matproj import MPRester
-
+        from mp_api import MPRester
         if structure is not None:
             if isinstance(structure, str):
-                mpr = MPRester(MP_key)
-                structure = mpr.get_structure_by_material_id(structure)
+                with  MPRester(MP_key) as mpr:
+                    structure = mpr.get_structure_by_material_id(structure)
 
             assert isinstance(
                 structure, mg.core.Structure
@@ -195,36 +194,36 @@ class Crystal:
                 else structure
             )
         else:
-            mpr = MPRester(MP_key)
-            if formula is None:
-                raise Exception(
-                    "Atleast a formula needs to be provided to query from MP database!!"
+            with MPRester(MP_key) as mpr: 
+                if formula is None:
+                    raise Exception(
+                        "Atleast a formula needs to be provided to query from MP database!!"
+                    )
+                query = mpr.query(
+                    criteria={"pretty_formula": formula},
+                    properties=["structure", "icsd_ids", "spacegroup"],
                 )
-            query = mpr.query(
-                criteria={"pretty_formula": formula},
-                properties=["structure", "icsd_ids", "spacegroup"],
-            )
-            if space_grp:
-                query = [
-                    query[i]
-                    for i in range(len(query))
-                    if mg.symmetry.analyzer.SpacegroupAnalyzer(
-                        query[i]["structure"]
-                    ).get_space_group_number()
-                    == space_grp
+                if space_grp:
+                    query = [
+                        query[i]
+                        for i in range(len(query))
+                        if mg.symmetry.analyzer.SpacegroupAnalyzer(
+                            query[i]["structure"]
+                        ).get_space_group_number()
+                        == space_grp
+                    ]
+                selected = query[
+                    np.argmin(
+                        [query[i]["structure"].lattice.volume for i in range(len(query))]
+                    )
                 ]
-            selected = query[
-                np.argmin(
-                    [query[i]["structure"].lattice.volume for i in range(len(query))]
+                structure = (
+                    mg.symmetry.analyzer.SpacegroupAnalyzer(
+                        selected["structure"]
+                    ).get_conventional_standard_structure()
+                    if conventional_standard_structure
+                    else selected["structure"]
                 )
-            ]
-            structure = (
-                mg.symmetry.analyzer.SpacegroupAnalyzer(
-                    selected["structure"]
-                ).get_conventional_standard_structure()
-                if conventional_standard_structure
-                else selected["structure"]
-            )
 
         positions = structure.frac_coords  #: fractional atomic coordinates
 
