@@ -435,6 +435,7 @@ def generate_CBED(
     progress_bar: bool = True,
     return_mask: bool = False,
     two_beam_zone_axis_lattice: np.ndarray = None,
+    return_probe: bool = False,
 ) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -463,12 +464,14 @@ def generate_CBED(
                                         the computation of the projected crystallographic directions
                                         becomes ambiguous. In this case, you must specify the indices of
                                         the zone axis used to generate the beams.
+        return_probe (bool):            If True, the probe (np.ndarray) will be returned in additon to the CBED
 
     Returns:
         If thickness is a scalar: CBED pattern as np.ndarray
         If thickness is a sequence: CBED patterns for each thickness value as a list of np.ndarrays
         If LACBED is True and thickness is scalar: Dictionary with tuples of ints (h,k,l) as keys, mapping to np.ndarray.
         If LACBED is True and thickness is a sequence: List of dictionaries, structured as above.
+        If return_probe is True: will return a tuple (<CBED/LACBED object>, Probe)
     """
 
     alpha_rad = alpha_mrad / 1000.0
@@ -572,6 +575,9 @@ def generate_CBED(
     else:
         # In CBED mode, the DP datastructure is a list of arrays
         DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
+    
+    if return_probe:
+        probe = np.zeros(DP_size, dtype=dtype)
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
@@ -587,6 +593,9 @@ def generate_CBED(
             always_return_list=True,
             dynamical_matrix_cache=Ugmh_cache,
         )
+        if return_probe:
+            probe[tx_pixels[i] + qx0, ty_pixels[i] + qy0] = 1
+
 
         if LACBED:
             # loop over each thickness
@@ -616,7 +625,14 @@ def generate_CBED(
             for patt, sim in zip(DP, bloch):
                 patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
-    if return_mask:
-        return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
-    else:
-        return DP[0] if len(thickness) == 1 else DP
+    if not return_probe:
+        if return_mask:
+            return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
+        else:
+            return DP[0] if len(thickness) == 1 else DP
+    else: 
+        if return_mask:
+            return (DP[0], probe, mask) if len(thickness) == 1 else (DP, probe, mask)
+        else:
+            return (DP[0], probe) if len(thickness) == 1 else (DP, probe)
+
