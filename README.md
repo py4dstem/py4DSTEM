@@ -31,8 +31,9 @@ More information can also be found at [https://arxiv.org/abs/2003.09523](https:/
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
 First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
-Then open a terminal and run
+Then open a terminal and run one of the following sets of commands:
 
+**For x86 CPUS e.g. INTEL, AMD processors**
 ```
 conda update conda
 conda create -n py4dstem python==3.8
@@ -40,8 +41,17 @@ conda activate py4dstem
 conda install pip
 pip install py4dstem
 ```
+**For Apple Silicon CPUs e.g. M1, M1Pro, M1Max, M2 processors**
+```
+conda update conda
+conda create -n py4dstem python==3.8
+conda activate py4dstem
+conda install pyqt hdf5
+conda install pip
+pip install py4dstem
+```
 
-If you're running Windows, you should then also run
+**If you're running Windows, you should then also run:**
 
 ```
 conda install pywin32
