@@ -433,7 +433,8 @@ def find_Bragg_disks(datacube, probe,
                      _qt_progress_bar = None,
                      distributed = None,
                      CUDA = False,
-                     CUDA_batched = True,):
+                     CUDA_batched = True,
+                     CUDA_clear_mempool = True):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
     phase correlation with probe.
@@ -488,10 +489,15 @@ def find_Bragg_disks(datacube, probe,
         CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk detection
         CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT steps of
             disk detection are performed in batches to better utilize GPU resources. 
+        CUDA_clear_mempool (bool): Free up memory blocks allocated by cupy once
+            disk detection is complete. May cause interference with the memory of 
+            other cupy-accelerated code used in the same Python instance.
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
+
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
     def _parse_distributed(distributed):
         import os
@@ -569,7 +575,7 @@ def find_Bragg_disks(datacube, probe,
                 _qt_progress_bar=_qt_progress_bar)
         else:
             from .diskdetection_cuda import find_Bragg_disks_CUDA
-            return find_Bragg_disks_CUDA(
+            braggdisks = find_Bragg_disks_CUDA(
                 datacube,
                 probe,
                 corrPower=corrPower,
@@ -585,7 +591,13 @@ def find_Bragg_disks(datacube, probe,
                 name=name,
                 filter_function=filter_function,
                 _qt_progress_bar=_qt_progress_bar,
-                batching=CUDA_batched)
+                batching=CUDA_batched,)
+
+            if CUDA_clear_mempool:
+                import cupy as cp
+                cp.get_default_memory_pool().free_all_blocks()
+
+            return braggdisks
 
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)

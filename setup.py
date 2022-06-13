@@ -52,6 +52,8 @@ setup(
         'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
     },
     package_data={
-        'py4DSTEM':['process/utils/scattering_factors.txt']
+        'py4DSTEM':['process/utils/scattering_factors.txt',
+                    'process/diskdetection/multicorr_row_kernel.cu',
+                    'process/diskdetection/multicorr_col_kernel.cu']
     },
 )
