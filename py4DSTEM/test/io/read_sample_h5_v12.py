@@ -7,7 +7,7 @@ import numpy as np
 vis = True
 
 # Set the filepath
-fpath_h5 = "/Users/Ben/Work/Data/py4DSTEM_sampleData/smallDataSets/sample_h5_v12.h5"
+fpath_h5 = "/home/ben/Work/Data/py4DSTEM_sampleData/smallDataSets/sample_h5_v12.h5"
 
 # Read the data
 maximum_diffraction_image = py4DSTEM.io.read(fpath_h5,data_id='max_dp')

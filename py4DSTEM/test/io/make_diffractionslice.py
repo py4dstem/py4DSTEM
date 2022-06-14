@@ -19,7 +19,7 @@ py4dstem_diffractionslice = py4DSTEM.io.datastructure.DiffractionSlice(
 import h5py
 from os.path import exists
 from os import remove
-fp = "/Users/Ben/Desktop/test.h5"
+fp = "/home/ben/Desktop/test.h5"
 if exists(fp): remove(fp)
 
 with h5py.File(fp,'w') as f:
@@ -30,8 +30,13 @@ with h5py.File(fp,'w') as f:
 
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
-    array_names = py4DSTEM.io.datastructure.find_Arrays(grp)
-    exists = py4DSTEM.io.datastructure.Array_exists(grp,'test_diffractionslice')
+    array_names = py4DSTEM.io.datastructure.find_EMD_groups(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Array'])
+    exists = py4DSTEM.io.datastructure.EMD_group_exists(
+        grp,
+        py4DSTEM.io.datastructure.EMD_group_types['Array'],
+        'test_diffractionslice')
     ar = py4DSTEM.io.datastructure.DiffractionSlice_from_h5(grp,'test_diffractionslice')
 
     print(array_names)

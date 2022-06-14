@@ -58,7 +58,7 @@ print(py4dstem_arraystack.slicelabels._dict)
 import h5py
 from os.path import exists
 from os import remove
-fp = "/Users/Ben/Desktop/test.h5"
+fp = "/home/ben/Desktop/test.h5"
 if exists(fp): remove(fp)
 
 with h5py.File(fp,'w') as f:
