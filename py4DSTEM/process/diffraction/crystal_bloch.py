@@ -434,7 +434,7 @@ def generate_dynamical_diffraction_pattern(
             # overwrite the kinematical intensities with the dynamical intensities
             newpl.data["intensity"] = intensities[i]
             # merge amplitudes into the list 
-            newpl.data = rfn.merge_arrays((newpl.data, amplitudes), asrecarray=False, flatten=True)
+            newpl.data = rfn.merge_arrays((newpl.data, amplitudes[i]), asrecarray=False, flatten=True)
         else:
             newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
