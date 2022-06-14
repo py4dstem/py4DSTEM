@@ -215,7 +215,7 @@ class Array:
 
         # if none were passed
         if self.dims is None:
-            self.dims = [self._unpack_dim(1,self,shape[n]) for n in range(self.rank)]
+            self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
             dim_in_pixels[:] = True
 
         # if some but not all were passed
@@ -227,7 +227,7 @@ class Array:
                 dim = self._unpack_dim(_dims[n],self.shape[n])
                 self.dims.append(dim)
             for n in range(N,self.rank):
-                self.dims.append(np.arange(self.shape[n]))
+                self.dims.append(self._unpack_dim(1,self.shape[n]))
                 dim_in_pixels[n] = True
 
         # if all were passed

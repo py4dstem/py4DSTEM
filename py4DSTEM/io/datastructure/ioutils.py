@@ -7,7 +7,7 @@ def determine_group_name(obj, group):
     """
     Takes an instance of a py4DSTEM data class and a valid HDF5 group for an HDF5
     file object which is open in write or append mode. Determines an appropriate
-    name for store this object in the H5 file.
+    name for storing this object in the H5 file.
 
     If the object has no name, it will be assigned the name "{obj.__class__}#" where
     # is the lowest available integer.

@@ -7,8 +7,8 @@ import numpy as np
 vis = True
 
 # Set the filepath
-fpath_datacube = "/Users/Ben/Work/Data/py4DSTEM_sampleData/smallDataSets/small4DSTEMscan_10x10.dm3"
-fpath_h5 = "/Users/Ben/Work/Data/py4DSTEM_sampleData/smallDataSets/sample_h5_v12.h5"
+fpath_datacube = "/home/ben/Work/Data/py4DSTEM_sampleData/smallDataSets/small4DSTEMscan_10x10.dm3"
+fpath_h5 = "/home/ben/Work/Data/py4DSTEM_sampleData/smallDataSets/sample_h5_v12.h5"
 
 # Load a datacube
 datacube = py4DSTEM.io.read(fpath_datacube)

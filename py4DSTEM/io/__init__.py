@@ -1,7 +1,4 @@
 from . import datastructure
-
-
-#from . import datastructure
 #from . import native
 #from . import nonnative
 #from .datastructure import *
