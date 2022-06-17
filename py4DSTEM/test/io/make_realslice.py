@@ -9,8 +9,8 @@ data = np.arange(np.prod(shape)).reshape(shape)
 py4dstem_realslice = py4DSTEM.io.datastructure.RealSlice(
     data = data,
     name = 'test_realslice',
-    pixelsize = 5,
-    pixelunits = 'nm',
+    pixel_size = 5,
+    pixel_units = 'nm',
 )
 
 

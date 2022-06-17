@@ -9,8 +9,8 @@ data = np.arange(np.prod(shape)).reshape(shape)
 py4dstem_diffractionslice = py4DSTEM.io.datastructure.DiffractionSlice(
     data = data,
     name = 'test_diffractionslice',
-    pixelsize = 2,
-    pixelunits = 'A^-1',
+    pixel_size = 2,
+    pixel_units = 'A^-1',
 )
 
 

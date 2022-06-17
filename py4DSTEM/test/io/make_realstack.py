@@ -8,8 +8,8 @@ data = np.ones(shape)
 realstack = py4DSTEM.io.datastructure.RealSlice(
     data = data,
     name = 'test_realstack',
-    pixelsize = 3,
-    pixelunits = 'nm',
+    pixel_size = 3,
+    pixel_units = 'nm',
     slicelabels = [
         'this',
         'being',
@@ -19,7 +19,7 @@ realstack = py4DSTEM.io.datastructure.RealSlice(
 
 print(realstack)
 
-print(realstack.pixelunits)
+print(realstack.pixel_units)
 print(realstack.dim_units)
 print(realstack)
 
