@@ -8,6 +8,7 @@ from typing import Optional
 
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
+from .metadata import Metadata_from_h5
 
 
 class PointList:
@@ -19,7 +20,8 @@ class PointList:
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'pointlist'
+        name: Optional[str] = 'pointlist',
+        calibration: Optional = None,
         ):
         """
 		Instantiate a PointList.
@@ -28,6 +30,7 @@ class PointList:
             data (structured numpy ndarray): the data; the dtype of this array will
                 specify the fields of the PointList.
             name (str): name for the PointList
+            calibration (Calibration): a Calibration instance
 
         Returns:
             a PointList instance
@@ -35,6 +38,8 @@ class PointList:
         self.data = data
         self.name = name
         self.length = len(self.data)
+        self.calibration = calibration
+        self.metadata = None
 
         self.dtype = data.dtype
         self.fields = self.dtype.names
@@ -78,9 +83,15 @@ class PointList:
         """ Returns a copy of the PointList. If name=None, sets to `{name}_copy`
         """
         name = name if name is not None else self.name+"_copy"
-        return PointList(
+
+        pl = PointList(
             data = np.copy(self.data),
             name = name)
+
+        if self.metadata is not None:
+            pl.metadata = self.metadata.copy()
+
+        return pl
 
     def add_fields(self, new_fields, name=''):
         """
@@ -146,9 +157,7 @@ class PointList:
         # TODO: add overwrite option
         determine_group_name(self, group)
 
-
         ## Write
-
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
         grp.attrs.create("py4dstem_class",self.__class__.__name__)
@@ -158,6 +167,11 @@ class PointList:
             group_current_field = grp.create_group(f)
             group_current_field.attrs.create("dtype", np.string_(t))
             group_current_field.create_dataset("data", data=self.data[f])
+
+        # Add metadata
+        if self.metadata is not None:
+            self.metadata.name = 'metadata'
+            self.metadata.to_h5(grp)
 
 
 
@@ -188,6 +202,8 @@ def PointList_from_h5(group:h5py.Group, name:str):
     # Get metadata
     name = grp.name.split('/')[-1]
     fields = list(grp.keys())
+    if 'metadata' in fields:
+        fields.remove('metadata')
     dtype = []
     for field in fields:
         curr_dtype = grp[field].attrs["dtype"].decode('utf-8')
@@ -200,9 +216,17 @@ def PointList_from_h5(group:h5py.Group, name:str):
         for field in fields:
             data[field] = np.array(grp[field+'/data'])
 
-    return PointList(
+    # Make the PointList
+    pl = PointList(
         data=data,
         name=name)
 
+    # Add additional metadata
+    if 'metadata' in grp.keys():
+        pl.metadata = Metadata_from_h5(
+            grp,
+            name='metadata')
+
+    return pl
 
 

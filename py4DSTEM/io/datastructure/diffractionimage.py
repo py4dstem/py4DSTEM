@@ -17,7 +17,7 @@ class DiffractionImage(DiffractionSlice):
         name: Optional[str] = 'diffractionimage',
         pixelsize: Optional[Union[float,list]] = 1,
         pixelunits: Optional[Union[str,list]] = 'pixels',
-        type: Optional[str] = None,
+        kind: Optional[str] = None,
         region: Optional[str] = None,
         region_geometry: Optional[Union[tuple,np.ndarray]] = None,
         center_corrected: bool = False
@@ -42,8 +42,10 @@ class DiffractionImage(DiffractionSlice):
         )
 
         # Set metadata
-
-
+        self.kind = kind
+        self.region = region
+        self.region_geometry = region_geometry
+        self.center_corrected = center_corrected
 
 
 ############ END OF CLASS ###########

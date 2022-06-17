@@ -4,6 +4,7 @@ import h5py
 
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
+from .metadata import Metadata_from_h5
 from .pointlist import PointList
 from ...tqdmnd import tqdmnd
 
@@ -15,7 +16,8 @@ class PointListArray:
         self,
         dtype,
         shape,
-        name
+        name,
+        calibration = None,
         ):
         """
 		Creates an empty PointListArray.
@@ -25,6 +27,7 @@ class PointListArray:
                 the data of each PointList
             shape (2-tuple of ints): the shape of the array of PointLists
             name (str): a name for the PointListArray
+            calibration (Calibration): a Calibration instance
 
         Returns:
             a PointListArray instance
@@ -33,6 +36,8 @@ class PointListArray:
 
         self.name = name
         self.shape = shape
+        self.calibration = calibration
+        self.metadata = None
 
         self.dtype = np.dtype(dtype)
         self.fields = self.dtype.names
@@ -76,6 +81,9 @@ class PointListArray:
             for j in range(new_pla.shape[1]):
                 pl = new_pla.get_pointlist(i,j)
                 pl.append(np.copy(self.get_pointlist(i,j).data))
+
+        if self.metadata is not None:
+            new_pla.metadata = self.metadata.copy()
 
         return new_pla
 
@@ -152,9 +160,7 @@ class PointListArray:
         # TODO: add overwrite option
         determine_group_name(self, group)
 
-
         ## Write
-
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
         grp.attrs.create("py4dstem_class",self.__class__.__name__)
@@ -168,10 +174,11 @@ class PointListArray:
         )
         for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
             dset[i,j] = self.get_pointlist(i,j).data
-        #for i in range(dset.shape[0]):
-        #    for j in range(dset.shape[1]):
-        #        dset[i,j] = self.get_pointlist(i,j).data
 
+        # Add metadata
+        if self.metadata is not None:
+            self.metadata.name = 'metadata'
+            self.metadata.to_h5(grp)
 
 
 ## Read PointList objects
@@ -208,6 +215,13 @@ def PointListArray_from_h5(group:h5py.Group, name:str):
             pla.get_pointlist(i,j).append(dset[i,j])
         except ValueError:
             pass
+
+    # Add metadata
+    if 'metadata' in grp.keys():
+        pla.metadata = Metadata_from_h5(
+            grp,
+            name='metadata')
+
     return pla
 
 
