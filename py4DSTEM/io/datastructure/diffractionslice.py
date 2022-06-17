@@ -1,4 +1,5 @@
-# Defines the DiffractionSlice class, which stores 2D, diffraction-shaped data
+# Defines the DiffractionSlice class, which stores 2(+1)D,
+# diffraction-shaped data
 
 from .array import Array, Array_from_h5
 
