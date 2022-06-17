@@ -1,4 +1,4 @@
-# Defines the RealSlice class, which stores 2D real-space shaped data
+# Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
 from .array import Array, Array_from_h5
 
