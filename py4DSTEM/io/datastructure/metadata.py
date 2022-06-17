@@ -111,9 +111,7 @@ class Metadata:
         # TODO: add overwrite option
         determine_group_name(self, group)
 
-
         ## Write
-
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",EMD_group_types['Metadata'])
         grp.attrs.create("py4dstem_class",self.__class__.__name__)

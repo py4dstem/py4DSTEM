@@ -8,6 +8,7 @@ from numbers import Number
 
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
+from .metadata import Metadata_from_h5
 
 
 class Array:
@@ -121,6 +122,7 @@ class Array:
         dims: Optional[list] = None,
         dim_names: Optional[list] = None,
         dim_units: Optional[list] = None,
+        calibration: Optional = None,
         slicelabels = None
         ):
         """
@@ -155,6 +157,7 @@ class Array:
                 which are not passed, following the same logic as described
                 above, will be autopopulated with the name "dim#" where #
                 is the axis number.
+            calibration (Calibration): a Calibration instance
             slicelabels (None or True or list): if not None, must be True or a
                 list of strings, indicating a "stack-like" array.  In this case,
                 the first N-1 dimensions of the array are treated normally, in
@@ -177,6 +180,8 @@ class Array:
         self.dims = dims
         self.dim_names = dim_names
         self.dim_units = dim_units
+        self.calibration = calibration
+        self.metadata = None
 
         self.shape = self.data.shape
         self.rank = self.data.ndim
@@ -500,6 +505,21 @@ class Array:
             )
             dset.attrs.create('name',name)
 
+        # Add metadata
+        if self.metadata is not None:
+            self.metadata.name = 'metadata'
+            self.metadata.to_h5(grp)
+
+        # Add calibration
+        if self.calibration is not None:
+            # TODO: add logic to determine if this is the parent calibration?
+            #if is_parent_metadata:
+            #    self.calibration.name = 'calibration'
+            #    self.calibration.to_h5(grp)
+            # TODO: add logic that indicates this has parent metadata
+            # else:
+            #    #code
+            pass
 
 
 ########### END OF CLASS ###########
@@ -590,6 +610,12 @@ def Array_from_h5(group:h5py.Group, name:str):
         dim_units = dim_units,
         slicelabels = slicelabels
     )
+
+    # add metadata
+    if 'metadata' in grp.keys():
+        ar.metadata = Metadata_from_h5(
+            grp,
+            name='metadata')
 
     return ar
 
