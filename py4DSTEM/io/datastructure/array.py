@@ -181,7 +181,7 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
         self.calibration = calibration
-        self.metadata = None
+        self._metadata = None
 
         self.shape = self.data.shape
         self.rank = self.data.ndim
@@ -506,9 +506,9 @@ class Array:
             dset.attrs.create('name',name)
 
         # Add metadata
-        if self.metadata is not None:
-            self.metadata.name = 'metadata'
-            self.metadata.to_h5(grp)
+        if self._metadata is not None:
+            self._metadata.name = 'metadata'
+            self._metadata.to_h5(grp)
 
         # Add calibration
         if self.calibration is not None:
@@ -613,7 +613,7 @@ def Array_from_h5(group:h5py.Group, name:str):
 
     # add metadata
     if 'metadata' in grp.keys():
-        ar.metadata = Metadata_from_h5(
+        ar._metadata = Metadata_from_h5(
             grp,
             name='metadata')
 

@@ -39,7 +39,7 @@ class PointList:
         self.name = name
         self.length = len(self.data)
         self.calibration = calibration
-        self.metadata = None
+        self._metadata = None
 
         self.dtype = data.dtype
         self.fields = self.dtype.names
@@ -88,8 +88,8 @@ class PointList:
             data = np.copy(self.data),
             name = name)
 
-        if self.metadata is not None:
-            pl.metadata = self.metadata.copy()
+        if self._metadata is not None:
+            pl._metadata = self._metadata.copy()
 
         return pl
 
@@ -169,9 +169,9 @@ class PointList:
             group_current_field.create_dataset("data", data=self.data[f])
 
         # Add metadata
-        if self.metadata is not None:
-            self.metadata.name = 'metadata'
-            self.metadata.to_h5(grp)
+        if self._metadata is not None:
+            self._metadata.name = 'metadata'
+            self._metadata.to_h5(grp)
 
 
 
@@ -223,7 +223,7 @@ def PointList_from_h5(group:h5py.Group, name:str):
 
     # Add additional metadata
     if 'metadata' in grp.keys():
-        pl.metadata = Metadata_from_h5(
+        pl._metadata = Metadata_from_h5(
             grp,
             name='metadata')
 

@@ -20,10 +20,10 @@ pointlist = py4DSTEM.io.datastructure.PointList(
 # Add metadata
 md = py4DSTEM.io.datastructure.Metadata()
 md.set_p('cows','come home')
-pointlist.metadata = md
+pointlist._metadata = md
 
 print(pointlist)
-print(pointlist.metadata)
+print(pointlist._metadata)
 
 
 
@@ -57,7 +57,7 @@ with h5py.File(fp,'r') as f:
     print(pointlist)
     print(pl)
 
-print(pl.metadata)
+print(pl._metadata)
 
 print()
 print()
@@ -68,7 +68,7 @@ pl3 = pl.copy(name='')
 
 print(pl2)
 print(pl3)
-print(pl3.metadata)
+print(pl3._metadata)
 
 with h5py.File(fp,'a') as f:
     grp = f['experiment']

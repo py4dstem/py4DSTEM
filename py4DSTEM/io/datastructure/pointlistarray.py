@@ -37,7 +37,7 @@ class PointListArray:
         self.name = name
         self.shape = shape
         self.calibration = calibration
-        self.metadata = None
+        self._metadata = None
 
         self.dtype = np.dtype(dtype)
         self.fields = self.dtype.names
@@ -82,8 +82,8 @@ class PointListArray:
                 pl = new_pla.get_pointlist(i,j)
                 pl.append(np.copy(self.get_pointlist(i,j).data))
 
-        if self.metadata is not None:
-            new_pla.metadata = self.metadata.copy()
+        if self._metadata is not None:
+            new_pla._metadata = self._metadata.copy()
 
         return new_pla
 
@@ -176,9 +176,9 @@ class PointListArray:
             dset[i,j] = self.get_pointlist(i,j).data
 
         # Add metadata
-        if self.metadata is not None:
-            self.metadata.name = 'metadata'
-            self.metadata.to_h5(grp)
+        if self._metadata is not None:
+            self._metadata.name = 'metadata'
+            self._metadata.to_h5(grp)
 
 
 ## Read PointList objects
@@ -218,7 +218,7 @@ def PointListArray_from_h5(group:h5py.Group, name:str):
 
     # Add metadata
     if 'metadata' in grp.keys():
-        pla.metadata = Metadata_from_h5(
+        pla._metadata = Metadata_from_h5(
             grp,
             name='metadata')
 

@@ -31,8 +31,8 @@ py4dstem_array = py4DSTEM.io.datastructure.Array(
 metadata = py4DSTEM.io.datastructure.Metadata(name='some_metadata')
 metadata.set_p('toast','butter')
 
-py4dstem_array.metadata = metadata
-print(py4dstem_array.metadata)
+py4dstem_array._metadata = metadata
+print(py4dstem_array._metadata)
 
 
 
@@ -68,7 +68,7 @@ with h5py.File(fp,'r') as f:
 
 print()
 
-print(ar.metadata)
+print(ar._metadata)
 
 #with h5py.File(fp,'a') as f:
 #    grp = f['experiment']

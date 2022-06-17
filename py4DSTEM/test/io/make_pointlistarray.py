@@ -23,10 +23,10 @@ for rx in range(pla.shape[0]):
 
 md = py4DSTEM.io.datastructure.Metadata()
 md.set_p('bingo', 'bongo')
-pla.metadata = md
+pla._metadata = md
 
 print(pla)
-print(pla.metadata)
+print(pla._metadata)
 
 
 # Write to and HDF5 file
@@ -59,7 +59,7 @@ with h5py.File(fp,'r') as f:
     print(pla)
     print(pla1)
 
-print(pla1.metadata)
+print(pla1._metadata)
 
 print()
 print()
@@ -70,7 +70,7 @@ pla3 = pla.copy(name='')
 
 print(pla2)
 print(pla3)
-print(pla3.metadata)
+print(pla3._metadata)
 
 with h5py.File(fp,'a') as f:
     grp = f['experiment']
