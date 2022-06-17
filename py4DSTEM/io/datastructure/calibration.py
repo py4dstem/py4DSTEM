@@ -1,3 +1,7 @@
+# Defines the Calibration class, which stores calibration metadata
+
+from .metadata import Metadata, Metadata_from_h5
+
 import numpy as np
 from numbers import Number
 from typing import Optional
@@ -7,7 +11,7 @@ from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
 
 
-class Calibration:
+class Calibration(Metadata):
     """
     Stores calibration measurements.
 
@@ -39,15 +43,15 @@ class Calibration:
          Args:
             datacube_shape (Optional, 4-tuple): The datacube shape, (R_Nx,R_Ny,Q_Nx,Q_Ny)
         """
-        self.name = name
+        Metadata.__init__(
+            self,
+            name=name)
 
         # create parameter dictionary
-        self._params = {
-            'Q_pixel_size':1,
-            'Q_pixel_units':'pixels',
-            'R_pixel_size':1,
-            'R_pixel_units':'pixels'
-        }
+        self.set_Q_pixel_size(1)
+        self.set_R_pixel_size(1)
+        self.set_Q_pixel_units('pixels')
+        self.set_R_pixel_units('pixels')
 
         if datacube_shape is not None:
             self.set_datacube_shape(datacube_shape)
@@ -240,60 +244,60 @@ class Calibration:
 
 
 
-    def __repr__(self):
-
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( A Calibration metadata instance called '{self.name}', containing the following fields:"
-        string += "\n"
-
-        maxlen = 0
-        for k in self._params.keys():
-            if len(k)>maxlen: maxlen=len(k)
-
-        for k,v in self._params.items():
-            if isinstance(v,np.ndarray):
-                v = f"{v.ndim}D-array"
-            string += "\n"+space+f"{k}:{(maxlen-len(k)+3)*' '}{str(v)}"
-        string += "\n)"
-
-        return string
+#    def __repr__(self):
+#
+#        space = ' '*len(self.__class__.__name__)+'  '
+#        string = f"{self.__class__.__name__}( A Calibration metadata instance called '{self.name}', containing the following fields:"
+#        string += "\n"
+#
+#        maxlen = 0
+#        for k in self._params.keys():
+#            if len(k)>maxlen: maxlen=len(k)
+#
+#        for k,v in self._params.items():
+#            if isinstance(v,np.ndarray):
+#                v = f"{v.ndim}D-array"
+#            string += "\n"+space+f"{k}:{(maxlen-len(k)+3)*' '}{str(v)}"
+#        string += "\n)"
+#
+#        return string
 
 
 
     ## Writing to an HDF5 file
 
-    def to_h5(self,group):
-        """
-        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
-        mode. Writes a new group with a name given by this Calibration instance's .name
-        field nested inside the passed group, and saves the data there.
-
-        If the Calibration instance has no name, it will be assigned the name
-        Calibration"#" where # is the lowest available integer.  If the instance has a name
-        which already exists here in this file, raises and exception.
-
-        TODO: add overwite option.
-
-        Accepts:
-            group (HDF5 group)
-        """
-
-        # Detemine the name of the group
-        # if current name is invalid, raises and exception
-        # TODO: add overwrite option
-        determine_group_name(self, group)
-
-
-        ## Write
-
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",0) # this tag indicates a Calibration dictionary
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
-
-        # Save data
-        for k,v in self._params.items():
-            if isinstance(v,str): v = np.string_(v)
-            grp.create_dataset(k, data=v)
+#    def to_h5(self,group):
+#        """
+#        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
+#        mode. Writes a new group with a name given by this Calibration instance's .name
+#        field nested inside the passed group, and saves the data there.
+#
+#        If the Calibration instance has no name, it will be assigned the name
+#        Calibration"#" where # is the lowest available integer.  If the instance has a name
+#        which already exists here in this file, raises and exception.
+#
+#        TODO: add overwite option.
+#
+#        Accepts:
+#            group (HDF5 group)
+#        """
+#
+#        # Detemine the name of the group
+#        # if current name is invalid, raises and exception
+#        # TODO: add overwrite option
+#        determine_group_name(self, group)
+#
+#
+#        ## Write
+#
+#        grp = group.create_group(self.name)
+#        grp.attrs.create("emd_group_type",0) # this tag indicates a Calibration dictionary
+#        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+#
+#        # Save data
+#        for k,v in self._params.items():
+#            if isinstance(v,str): v = np.string_(v)
+#            grp.create_dataset(k, data=v)
 
 
 ## Read Calibration objects
@@ -312,30 +316,29 @@ def Calibration_from_h5(group:h5py.Group, name:str):
     Returns:
         A Calibration instance
     """
-    er = f"No Calibration instance called {name} could be found in group {group} of this HDF5 file."
-    assert(EMD_group_exists(
-            group,
-            EMD_group_types['Calibration'],
-            name)), er
-    grp = group[name]
-
-
-    # Get metadata
-    name = grp.name.split('/')[-1]
-
-    # Get data
-    data = {}
-    for k,v in grp.items():
-        v = np.array(v)
-        if v.ndim==0: v=v.item()
-        if isinstance(v,bytes):
-            v = v.decode('utf-8')
-        data[k] = v
-
-    cal = Calibration(name=name)
-    cal._params.update(data)
-
+    cal = Metadata_from_h5(group, name)
+    cal = Calibration_from_Metadata(cal)
     return cal
+
+def Calibration_from_Metadata(metadata):
+    """
+    Converts a Metadata instance to a Calibration instance.
+
+    Accepts:
+        metadata (Metadata)
+
+    Returns:
+        (Calibration)
+    """
+    p = metadata._params
+    metadata.__class__ = Calibration
+    metadata.__init__(
+        name = metadata.name
+    )
+    metadata._params.update(p)
+
+    return metadata
+
 
 
 
