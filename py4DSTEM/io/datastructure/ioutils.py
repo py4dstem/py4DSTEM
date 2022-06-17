@@ -82,7 +82,7 @@ def EMD_group_exists(group:h5py.Group, emd_group_type, name:str):
 
 
 EMD_group_types = {
-    'Calibration' : 0,
+    'Metadata' : 0,
     'Array' : 1,
     'PointList' : 2,
     'PointListArray': 3

@@ -1,13 +1,22 @@
 import py4DSTEM
 import numpy as np
 
-cal = py4DSTEM.io.datastructure.Calibration((10,10,50,50))
+md = py4DSTEM.io.datastructure.Metadata(name='test_metadata')
 
-origin = np.ones((10,10,2))*5.2
-cal.set_origin(origin)
+print(md)
 
-print(cal)
+md.set_p('x',10)
+md.set_p('y',1.234)
+md.set_p('cows','arecute')
+md.set_p('mice','arenice')
+md.set_p('z',[1,2,3])
+md.set_p('a',np.ones(5))
+md.set_p('names',['a','b','c'])
+md.set_p('xxx',np.ones((3,3)))
 
+print(md)
+print(f"z = {md.get_p('z')}")
+print(f"names = {md.get_p('names')}")
 
 # Write to and HDF5 file
 
@@ -20,7 +29,7 @@ if exists(fp): remove(fp)
 with h5py.File(fp,'w') as f:
     group = f.create_group('experiment')
     # write the array to the h5 file
-    cal.to_h5(group)
+    md.to_h5(group)
 
 
 with h5py.File(fp,'r') as f:
@@ -31,22 +40,25 @@ with h5py.File(fp,'r') as f:
     exists = py4DSTEM.io.datastructure.EMD_group_exists(
         grp,
         py4DSTEM.io.datastructure.EMD_group_types['Metadata'],
-        'calibration')
-    cal1 = py4DSTEM.io.datastructure.Calibration_from_h5(grp,'calibration')
+        'test_metadata')
+    md1 = py4DSTEM.io.datastructure.Metadata_from_h5(grp,'test_metadata')
 
     print(names)
     print(exists)
-    print(cal)
-    print(cal1)
+    print(md)
+    print(md1)
 
 
 print()
 print()
 
-cal2 = cal1.copy()
+md2 = md1.copy()
 
-print(cal2)
-
-
+print(md2)
 
 
+
+print(f"z = {md2.get_p('z')}")
+print(f"names = {md2.get_p('names')}")
+
+print(md2.get_p('xxx'))
