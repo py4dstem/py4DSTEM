@@ -8,10 +8,10 @@ data = np.ones(shape)
 datacubestack = py4DSTEM.io.datastructure.DataCube(
     data = data,
     name = 'test_datacubestack',
-    rsize = 5,
-    runits = 'nm',
-    qsize = [0.01,0.02],
-    qunits = ['A^-1','nm^-1'],
+    R_pixel_size = 5,
+    R_pixel_units = 'nm',
+    Q_pixel_size = [0.01,0.02],
+    Q_pixel_units = ['A^-1','nm^-1'],
     slicelabels = [
         'datacube1',
         'datacube2',

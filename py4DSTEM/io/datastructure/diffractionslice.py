@@ -15,16 +15,16 @@ class DiffractionSlice(Array):
         self,
         data: np.ndarray,
         name: Optional[str] = 'diffractionslice',
-        pixelsize: Optional[Union[float,list]] = 1,
-        pixelunits: Optional[Union[str,list]] = 'pixels',
+        pixel_size: Optional[Union[float,list]] = 1,
+        pixel_units: Optional[Union[str,list]] = 'pixels',
         slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
             data (np.ndarray): the data
             name (str): the name of the datacube
-            pixelsize (float or length 2 list of floats): the pixel size
-            pixelunits (str length 2 list of str): the pixel units
+            pixel_size (float or length 2 list of floats): the pixel size
+            pixel_units (str length 2 list of str): the pixel units
             slicelabels(None or list): names for slices if this is a stack of
                 diffractionslices
 
@@ -32,8 +32,8 @@ class DiffractionSlice(Array):
             A new DiffractionSlice instance
         """
         # expand pixel inputs to include 2 dimensions
-        if type(pixelsize) is not list: pixelsize = [pixelsize,pixelsize]
-        if type(pixelunits) is not list: pixelunits = [pixelunits,pixelunits]
+        if type(pixel_size) is not list: pixel_size = [pixel_size,pixel_size]
+        if type(pixel_units) is not list: pixel_units = [pixel_units,pixel_units]
 
         # initialize as an Array
         Array.__init__(
@@ -42,12 +42,12 @@ class DiffractionSlice(Array):
             name = name,
             units = 'intensity',
             dims = [
-                pixelsize[0],
-                pixelsize[1],
+                pixel_size[0],
+                pixel_size[1],
             ],
             dim_units = [
-                pixelunits[0],
-                pixelunits[1],
+                pixel_units[0],
+                pixel_units[1],
             ],
             dim_names = [
                 'Qx',
@@ -57,27 +57,27 @@ class DiffractionSlice(Array):
         )
 
         # setup the size/units with getter/setters
-        self._pixelsize = pixelsize
-        self._pixelunits = pixelunits
+        self._pixel_size = pixel_size
+        self._pixel_units = pixel_units
 
     @property
-    def pixelsize(self):
-        return self._pixelsize
-    @pixelsize.setter
-    def pixelsize(self,x):
+    def pixel_size(self):
+        return self._pixel_size
+    @pixel_size.setter
+    def pixel_size(self,x):
         if type(x) is not list: x = [x,x]
         self.set_dim(0,[0,x[0]])
         self.set_dim(1,[0,x[1]])
-        self._pixelsize = x
+        self._pixel_size = x
     @property
-    def pixelunits(self):
-        return self._pixelunits
-    @pixelunits.setter
-    def pixelunits(self,x):
+    def pixel_units(self):
+        return self._pixel_units
+    @pixel_units.setter
+    def pixel_units(self,x):
         if type(x) is not list: x = [x,x]
         self.dim_units[0] = x[0]
         self.dim_units[1] = x[1]
-        self._pixelunits = x
+        self._pixel_units = x
 
 
 
@@ -122,10 +122,10 @@ def DiffractionSlice_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
-        pixelsize = [array.dims[0][1]-array.dims[0][0],
-                     array.dims[1][1]-array.dims[1][0]],
-        pixelunits = [array.dim_units[0],
-                      array.dim_units[1]],
+        pixel_size = [array.dims[0][1]-array.dims[0][0],
+                      array.dims[1][1]-array.dims[1][0]],
+        pixel_units = [array.dim_units[0],
+                       array.dim_units[1]],
         slicelabels = array.slicelabels
     )
     return array

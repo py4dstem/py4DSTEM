@@ -8,8 +8,8 @@ data = np.ones(shape)
 diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice(
     data = data,
     name = 'test_diffractionstack',
-    pixelsize = 3,
-    pixelunits = 'A^-1',
+    pixel_size = 3,
+    pixel_units = 'A^-1',
     slicelabels = [
         'im',
         'a',
@@ -19,7 +19,7 @@ diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice(
 
 print(diffractionstack)
 
-print(diffractionstack.pixelunits)
+print(diffractionstack.pixel_units)
 print(diffractionstack.dim_units)
 print(diffractionstack)
 

@@ -14,30 +14,30 @@ class DataCube(Array):
         self,
         data: np.ndarray,
         name: Optional[str] = 'datacube',
-        rsize: Optional[Union[float,list]] = 1,
-        runits: Optional[Union[str,list]] = 'pixels',
-        qsize: Optional[Union[float,list]] = 1,
-        qunits: Optional[Union[str,list]] = 'pixels',
+        R_pixel_size: Optional[Union[float,list]] = 1,
+        R_pixel_units: Optional[Union[str,list]] = 'pixels',
+        Q_pixel_size: Optional[Union[float,list]] = 1,
+        Q_pixel_units: Optional[Union[str,list]] = 'pixels',
         slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
             data (np.ndarray): the data
             name (str): the name of the datacube
-            rsize (float or length 2 list of floats): the real space pixel size
-            runits (str length 2 list of str): the real space pixel units
-            qsize (float or length 2 list of str): the diffraction space pixel size
-            qunits (str or length 2 list of str): the diffraction space pixel units
+            R_pixel_size (float or length 2 list of floats): the real space pixel size
+            R_pixel_units (str length 2 list of str): the real space pixel units
+            Q_pixel_size (float or length 2 list of str): the diffraction space pixel size
+            Q_pixel_units (str or length 2 list of str): the diffraction space pixel units
             slicelabels(None or list): names for slices if this is a stack of datacubes
 
         Returns:
             A new DataCube instance
         """
         # expand r/q inputs to include 2 dimensions
-        if type(rsize) is not list: rsize = [rsize,rsize]
-        if type(runits) is not list: runits = [runits,runits]
-        if type(qsize) is not list: qsize = [qsize,qsize]
-        if type(qunits) is not list: qunits = [qunits,qunits]
+        if type(R_pixel_size) is not list: R_pixel_size = [R_pixel_size,R_pixel_size]
+        if type(R_pixel_units) is not list: R_pixel_units = [R_pixel_units,R_pixel_units]
+        if type(Q_pixel_size) is not list: Q_pixel_size = [Q_pixel_size,Q_pixel_size]
+        if type(Q_pixel_units) is not list: Q_pixel_units = [Q_pixel_units,Q_pixel_units]
 
         # initialize as an Array
         Array.__init__(
@@ -46,16 +46,16 @@ class DataCube(Array):
             name = name,
             units = 'intensity',
             dims = [
-                rsize[0],
-                rsize[1],
-                qsize[0],
-                qsize[1]
+                R_pixel_size[0],
+                R_pixel_size[1],
+                Q_pixel_size[0],
+                Q_pixel_size[1]
             ],
             dim_units = [
-                runits[0],
-                runits[1],
-                qunits[0],
-                qunits[1]
+                R_pixel_units[0],
+                R_pixel_units[1],
+                Q_pixel_units[0],
+                Q_pixel_units[1]
             ],
             dim_names = [
                 'Rx',
@@ -67,48 +67,48 @@ class DataCube(Array):
         )
 
         # setup the size/units with getter/setters
-        self._rsize = rsize
-        self._runits = runits
-        self._qsize = qsize
-        self._qunits = qunits
+        self._R_pixel_size = R_pixel_size
+        self._R_pixel_units = R_pixel_units
+        self._Q_pixel_size = Q_pixel_size
+        self._Q_pixel_units = Q_pixel_units
 
     @property
-    def rsize(self):
-        return self._rsize
-    @rsize.setter
-    def rsize(self,x):
+    def R_pixel_size(self):
+        return self._R_pixel_size
+    @R_pixel_size.setter
+    def R_pixel_size(self,x):
         if type(x) is not list: x = [x,x]
         self.set_dim(0,[0,x[0]])
         self.set_dim(1,[0,x[1]])
-        self._rsize = x
+        self._R_pixel_size = x
     @property
-    def runits(self):
-        return self._runits
-    @runits.setter
-    def runits(self,x):
+    def R_pixel_units(self):
+        return self._R_pixel_units
+    @R_pixel_units.setter
+    def R_pixel_units(self,x):
         if type(x) is not list: x = [x,x]
         self.dim_units[0] = x[0]
         self.dim_units[1] = x[1]
-        self._runits = x
+        self._R_pixel_units = x
 
     @property
-    def qsize(self):
-        return self._qsize
-    @qsize.setter
-    def qsize(self,x):
+    def Q_pixel_size(self):
+        return self._Q_pixel_size
+    @Q_pixel_size.setter
+    def Q_pixel_size(self,x):
         if type(x) is not list: x = [x,x]
         self.set_dim(2,[0,x[0]])
         self.set_dim(3,[0,x[1]])
-        self._qsize = x
+        self._Q_pixel_size = x
     @property
-    def qunits(self):
-        return self._qunits
-    @qunits.setter
-    def qunits(self,x):
+    def Q_pixel_units(self):
+        return self._Q_pixel_units
+    @Q_pixel_units.setter
+    def Q_pixel_units(self,x):
         if type(x) is not list: x = [x,x]
         self.dim_units[2] = x[0]
         self.dim_units[3] = x[1]
-        self._qunits = x
+        self._Q_pixel_units = x
 
 
 ############ END OF CLASS ###########
@@ -152,14 +152,14 @@ def DataCube_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
-        rsize = [array.dims[0][1]-array.dims[0][0],
-                 array.dims[1][1]-array.dims[1][0]],
-        runits = [array.dim_units[0],
-                  array.dim_units[1]],
-        qsize = [array.dims[2][1]-array.dims[2][0],
-                 array.dims[3][1]-array.dims[3][0]],
-        qunits = [array.dim_units[2],
-                  array.dim_units[3]],
+        R_pixel_size = [array.dims[0][1]-array.dims[0][0],
+                        array.dims[1][1]-array.dims[1][0]],
+        R_pixel_units = [array.dim_units[0],
+                         array.dim_units[1]],
+        Q_pixel_size = [array.dims[2][1]-array.dims[2][0],
+                        array.dims[3][1]-array.dims[3][0]],
+        Q_pixel_units = [array.dim_units[2],
+                         array.dim_units[3]],
         slicelabels = array.slicelabels
     )
     return array
