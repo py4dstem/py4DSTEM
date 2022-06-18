@@ -1,10 +1,11 @@
 import numpy as np
 from copy import copy
+from typing import Optional
 import h5py
 
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
-from .metadata import Metadata_from_h5
+from .metadata import Metadata, Metadata_from_h5
 from .pointlist import PointList
 from ...tqdmnd import tqdmnd
 
@@ -16,8 +17,8 @@ class PointListArray:
         self,
         dtype,
         shape,
-        name,
-        calibration = None,
+        name: Optional[str] = 'pointlistarray',
+        calibration: Optional = None,
         ):
         """
 		Creates an empty PointListArray.
@@ -37,12 +38,13 @@ class PointListArray:
         self.name = name
         self.shape = shape
         self.calibration = calibration
-        self._metadata = None
 
         self.dtype = np.dtype(dtype)
         self.fields = self.dtype.names
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
+        self._tree = {}
+        self._metadata = {}
 
         # Populate with empty PointLists
         self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype), name=f"{i},{j}")
@@ -82,8 +84,8 @@ class PointListArray:
                 pl = new_pla.get_pointlist(i,j)
                 pl.append(np.copy(self.get_pointlist(i,j).data))
 
-        if self._metadata is not None:
-            new_pla._metadata = self._metadata.copy()
+        for k,v in self.metadata.items():
+            new_pla.metadata = v.copy(name=k)
 
         return new_pla
 
@@ -122,6 +124,17 @@ class PointListArray:
         return new_pla
 
 
+    # set up metadata property
+
+    @property
+    def metadata(self):
+        return self._metadata
+    @metadata.setter
+    def metadata(self,x):
+        assert(isinstance(x,Metadata))
+        self._metadata[x.name] = x
+
+
     ## Representation to standard output
     def __repr__(self):
 
@@ -141,13 +154,15 @@ class PointListArray:
 
     def to_h5(self,group):
         """
-        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
-        mode. Writes a new group with a name given by this PointList's .name field nested
-        inside the passed group, and saves the data there.
+        Takes a valid HDF5 group for an HDF5 file object which is open in
+        write or append mode. Writes a new group with a name given by this
+        PointListArray's .name field nested inside the passed group, and
+        saves the data there.
 
-        If the PointList has no name, it will be assigned the name "PointList#" where #
-        is the lowest available integer.  If the PointList's name already exists here in
-        this file, raises and exception.
+        If the PointListArray has no name, it will be assigned the name
+        "PointListArray#" where # is the lowest available integer.  If the
+        PointListArray's name already exists here in this file, raises and
+        exception.
 
         TODO: add overwite option.
 
@@ -176,9 +191,15 @@ class PointListArray:
             dset[i,j] = self.get_pointlist(i,j).data
 
         # Add metadata
-        if self._metadata is not None:
-            self._metadata.name = 'metadata'
-            self._metadata.to_h5(grp)
+        grp_metadata = grp.create_group('metadata')
+        for name,md in self._metadata.items():
+            self._metadata[name].name = name
+            self._metadata[name].to_h5(grp_metadata)
+
+        # Add metadata
+        #if self._metadata is not None:
+        #    self._metadata.name = 'metadata'
+        #    self._metadata.to_h5(grp)
 
 
 ## Read PointList objects
@@ -217,10 +238,16 @@ def PointListArray_from_h5(group:h5py.Group, name:str):
             pass
 
     # Add metadata
-    if 'metadata' in grp.keys():
-        pla._metadata = Metadata_from_h5(
-            grp,
-            name='metadata')
+    grp_metadata = grp['metadata']
+    for key in grp_metadata.keys():
+        pla.metadata = Metadata_from_h5(
+            grp_metadata,
+            key
+        )
+    #if 'metadata' in grp.keys():
+    #    pla._metadata = Metadata_from_h5(
+    #        grp,
+    #        name='metadata')
 
     return pla
 
