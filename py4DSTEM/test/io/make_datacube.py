@@ -16,8 +16,8 @@ datacube = py4DSTEM.io.datastructure.DataCube(
 
 print(datacube)
 
-datacube.qunits = 'A^-1'
-print(datacube.qunits)
+datacube.Q_pixel_units = 'A^-1'
+print(datacube.Q_pixel_units)
 print(datacube.dim_units)
 print(datacube)
 

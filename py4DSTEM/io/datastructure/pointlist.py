@@ -8,7 +8,7 @@ from typing import Optional
 
 from .ioutils import determine_group_name
 from .ioutils import EMD_group_exists, EMD_group_types
-from .metadata import Metadata_from_h5
+from .metadata import Metadata, Metadata_from_h5
 
 
 class PointList:
@@ -38,12 +38,13 @@ class PointList:
         self.data = data
         self.name = name
         self.length = len(self.data)
-        self.calibration = calibration
-        self._metadata = None
 
         self.dtype = data.dtype
         self.fields = self.dtype.names
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
+
+        self._tree = {}
+        self._metadata = {}
 
     ## Add, remove, sort data
 
@@ -88,8 +89,8 @@ class PointList:
             data = np.copy(self.data),
             name = name)
 
-        if self._metadata is not None:
-            pl._metadata = self._metadata.copy()
+        for k,v in self.metadata.items():
+            pl.metadata = v.copy(name=k)
 
         return pl
 
@@ -112,6 +113,18 @@ class PointList:
             data[f] = np.copy(self.data[f])
 
         return PointList(data=data, name=name)
+
+
+    # set up metadata property
+
+    @property
+    def metadata(self):
+        return self._metadata
+    @metadata.setter
+    def metadata(self,x):
+        assert(isinstance(x,Metadata))
+        self._metadata[x.name] = x
+
 
 
     ## Representation to standard output
@@ -138,13 +151,14 @@ class PointList:
 
     def to_h5(self,group):
         """
-        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
-        mode. Writes a new group with a name given by this PointList's .name field nested
-        inside the passed group, and saves the data there.
+        Takes a valid HDF5 group for an HDF5 file object which is open in
+        write or append mode. Writes a new group with a name given by this
+        PointList's .name field nested inside the passed group, and saves
+        the data there.
 
-        If the PointList has no name, it will be assigned the name "PointList#" where #
-        is the lowest available integer.  If the PointList's name already exists here in
-        this file, raises and exception.
+        If the PointList has no name, it will be assigned the name "PointList#"
+        where # is the lowest available integer.  If the PointList's name
+        already exists here in this file, raises and exception.
 
         TODO: add overwite option.
 
@@ -169,9 +183,15 @@ class PointList:
             group_current_field.create_dataset("data", data=self.data[f])
 
         # Add metadata
-        if self._metadata is not None:
-            self._metadata.name = 'metadata'
-            self._metadata.to_h5(grp)
+        grp_metadata = grp.create_group('metadata')
+        for name,md in self._metadata.items():
+            self._metadata[name].name = name
+            self._metadata[name].to_h5(grp_metadata)
+
+        # Add metadata
+        #if self._metadata is not None:
+        #    self._metadata.name = 'metadata'
+        #    self._metadata.to_h5(grp)
 
 
 
@@ -222,10 +242,16 @@ def PointList_from_h5(group:h5py.Group, name:str):
         name=name)
 
     # Add additional metadata
-    if 'metadata' in grp.keys():
-        pl._metadata = Metadata_from_h5(
-            grp,
-            name='metadata')
+    grp_metadata = grp['metadata']
+    for key in grp_metadata.keys():
+        pl.metadata = Metadata_from_h5(
+            grp_metadata,
+            key
+        )
+    #if 'metadata' in grp.keys():
+    #    pl._metadata = Metadata_from_h5(
+    #        grp,
+    #        name='metadata')
 
     return pl
 

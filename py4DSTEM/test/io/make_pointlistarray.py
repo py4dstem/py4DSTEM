@@ -21,12 +21,18 @@ for rx in range(pla.shape[0]):
         p.append( np.zeros(10,dtype=dtype) )
 
 
-md = py4DSTEM.io.datastructure.Metadata()
-md.set_p('bingo', 'bongo')
-pla._metadata = md
+md1 = py4DSTEM.io.datastructure.Metadata('elephants')
+md1['bingo'] = 'bongo'
+md2 = py4DSTEM.io.datastructure.Metadata('rhinos')
+md2['dingo'] = 'dongo'
+
+pla.metadata = md1
+pla.metadata = md2
 
 print(pla)
-print(pla._metadata)
+print(pla.metadata.keys())
+print(pla.metadata['elephants'])
+print(pla.metadata['rhinos'])
 
 
 # Write to and HDF5 file
@@ -59,7 +65,9 @@ with h5py.File(fp,'r') as f:
     print(pla)
     print(pla1)
 
-print(pla1._metadata)
+print(pla1.metadata.keys())
+print(pla1.metadata['elephants'])
+print(pla1.metadata['rhinos'])
 
 print()
 print()

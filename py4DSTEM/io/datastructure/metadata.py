@@ -15,22 +15,11 @@ class Metadata:
 
     Usage:
 
-        >>> c = Metadata()
-        >>> c.set_p(p,v)
-        >>> v = c.get_p(p)
+        >>> meta = Metadata()
+        >>> meta['param'] = value
+        >>> val = meta['param']
 
-    If the parameter has not been set, the getter methods return None
-    The value of a parameter may be a number, representing the entire dataset,
-    or a 2D typically (R_Nx,R_Ny)-shaped array, representing values at each
-    detector pixel. For parameters with 2D array values,
-
-        >>> c.get_p()
-
-    will return the entire 2D array, and
-
-        >>> c.get_p(rx,ry)
-
-    will return the value of `p` at position `rx,ry`.
+    If the parameter has not been set, the getter methods return None.
     """
     def __init__(
         self,
@@ -47,15 +36,16 @@ class Metadata:
 
 
 
-    ### getter/setter methods
+    ### __get/setitem__
 
-    def set_p(self,p,v):
-        self._params[p] = v
-    def get_p(self,p):
-        return self._params[p]
-    def get_keys(self):
+    def __getitem__(self,x):
+        return self._params[x]
+    def __setitem__(self,k,v):
+        self._params[k] = v
+
+
+    def keys(self):
         return self._params.keys()
-
 
 
     def copy(self,name=None):
@@ -92,13 +82,15 @@ class Metadata:
 
     def to_h5(self,group):
         """
-        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
-        mode. Writes a new group with a name given by this Calibration instance's .name
-        field nested inside the passed group, and saves the data there.
+        Takes a valid HDF5 group for an HDF5 file object which is open
+        in write or append mode. Writes a new group with a name given by
+        this Calibration instance's .name field nested inside the passed
+        group, and saves the data there.
 
-        If the Calibration instance has no name, it will be assigned the name
-        Calibration"#" where # is the lowest available integer.  If the instance has a name
-        which already exists here in this file, raises and exception.
+        If the Calibration instance has no name, it will be assigned the
+        name Calibration"#" where # is the lowest available integer.  If the
+        instance has a name which already exists here in this file, raises
+        and exception.
 
         TODO: add overwite option.
 

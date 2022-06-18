@@ -18,13 +18,18 @@ pointlist = py4DSTEM.io.datastructure.PointList(
 
 
 # Add metadata
-md = py4DSTEM.io.datastructure.Metadata()
-md.set_p('cows','come home')
-pointlist._metadata = md
+md1 = py4DSTEM.io.datastructure.Metadata(name='a')
+md1['cows'] = 'come home'
+md2 = py4DSTEM.io.datastructure.Metadata(name='b')
+md2['doja'] = 'cat'
+
+pointlist.metadata = md1
+pointlist.metadata = md2
 
 print(pointlist)
-print(pointlist._metadata)
-
+print(pointlist.metadata.keys())
+print(pointlist.metadata['a'])
+print(pointlist.metadata['b'])
 
 
 # Write to and HDF5 file
@@ -57,7 +62,9 @@ with h5py.File(fp,'r') as f:
     print(pointlist)
     print(pl)
 
-print(pl._metadata)
+print(pl.metadata.keys())
+print(pl.metadata['a'])
+print(pl.metadata['b'])
 
 print()
 print()

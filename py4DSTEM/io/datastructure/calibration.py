@@ -36,25 +36,21 @@ class Calibration(Metadata):
     """
     def __init__(
         self,
-        datacube_shape: Optional[tuple] = None,
         name: Optional[str] ='calibration'
         ):
         """
-         Args:
-            datacube_shape (Optional, 4-tuple): The datacube shape, (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        Args:
+            name (optional, str):
         """
         Metadata.__init__(
             self,
             name=name)
 
-        # create parameter dictionary
+        # set initial pixel values
         self.set_Q_pixel_size(1)
         self.set_R_pixel_size(1)
         self.set_Q_pixel_units('pixels')
         self.set_R_pixel_units('pixels')
-
-        if datacube_shape is not None:
-            self.set_datacube_shape(datacube_shape)
 
 
     ### getter/setter methods
@@ -243,61 +239,6 @@ class Calibration(Metadata):
         return cal
 
 
-
-#    def __repr__(self):
-#
-#        space = ' '*len(self.__class__.__name__)+'  '
-#        string = f"{self.__class__.__name__}( A Calibration metadata instance called '{self.name}', containing the following fields:"
-#        string += "\n"
-#
-#        maxlen = 0
-#        for k in self._params.keys():
-#            if len(k)>maxlen: maxlen=len(k)
-#
-#        for k,v in self._params.items():
-#            if isinstance(v,np.ndarray):
-#                v = f"{v.ndim}D-array"
-#            string += "\n"+space+f"{k}:{(maxlen-len(k)+3)*' '}{str(v)}"
-#        string += "\n)"
-#
-#        return string
-
-
-
-    ## Writing to an HDF5 file
-
-#    def to_h5(self,group):
-#        """
-#        Takes a valid HDF5 group for an HDF5 file object which is open in write or append
-#        mode. Writes a new group with a name given by this Calibration instance's .name
-#        field nested inside the passed group, and saves the data there.
-#
-#        If the Calibration instance has no name, it will be assigned the name
-#        Calibration"#" where # is the lowest available integer.  If the instance has a name
-#        which already exists here in this file, raises and exception.
-#
-#        TODO: add overwite option.
-#
-#        Accepts:
-#            group (HDF5 group)
-#        """
-#
-#        # Detemine the name of the group
-#        # if current name is invalid, raises and exception
-#        # TODO: add overwrite option
-#        determine_group_name(self, group)
-#
-#
-#        ## Write
-#
-#        grp = group.create_group(self.name)
-#        grp.attrs.create("emd_group_type",0) # this tag indicates a Calibration dictionary
-#        grp.attrs.create("py4dstem_class",self.__class__.__name__)
-#
-#        # Save data
-#        for k,v in self._params.items():
-#            if isinstance(v,str): v = np.string_(v)
-#            grp.create_dataset(k, data=v)
 
 
 ## Read Calibration objects
