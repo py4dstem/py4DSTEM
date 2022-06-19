@@ -1,7 +1,8 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from .array import Array, Array_from_h5
-from .calibration import Calibration, Calibration_from_h5
+from .array import Array
+from .ioutils import Array_from_h5
+from .calibration import Calibration
 
 from typing import Optional,Union
 import numpy as np
@@ -19,8 +20,8 @@ class DataCube(Array):
         R_pixel_units: Optional[Union[str,list]] = 'pixels',
         Q_pixel_size: Optional[Union[float,list]] = 1,
         Q_pixel_units: Optional[Union[str,list]] = 'pixels',
+        slicelabels: Optional[Union[bool,list]] = None,
         calibration: Optional = None,
-        slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
@@ -28,14 +29,15 @@ class DataCube(Array):
             name (str): the name of the datacube
             R_pixel_size (float or length 2 list of floats): the real space
                 pixel size
-            R_pixel_units (str length 2 list of str): the real space
+            R_pixel_units (str or length 2 list of str): the real space
                 pixel units
             Q_pixel_size (float or length 2 list of str): the diffraction space
                 pixel size
             Q_pixel_units (str or length 2 list of str): the diffraction space
                 pixel units
-            slicelabels(None or list): names for slices if this is a
+            slicelabels (None or list): names for slices if this is a
                 stack of datacubes
+            calibration (Calibration):
 
         Returns:
             A new DataCube instance
@@ -85,23 +87,10 @@ class DataCube(Array):
         self.tree = self.calibration, 'calibration'
 
 
+
     ## properties
 
-    # calibration
-    #@property
-    #def calibration(self):
-    #    if self._calibration is not None:
-    #        return self._calibration
-    #    elif self._parent_calibration is not None:
-    #        return self._parent_calibration
-    #    else:
-    #        return None
-    #@calibration.setter
-    #def calibration(self,x):
-    #    self._calibration = x
-    #    self.tree = x,'calibration'
-
-    # pixel sizes/units
+    # R pixel sizes/units
     @property
     def R_pixel_size(self):
         return self.calibration.get_R_pixel_size()
@@ -121,6 +110,7 @@ class DataCube(Array):
         self.dim_units[1] = x[1]
         self.calibration.set_R_pixel_units(x)
 
+    # R pixel sizes/units
     @property
     def Q_pixel_size(self):
         return self.calibration.get_Q_pixel_size()
@@ -140,59 +130,38 @@ class DataCube(Array):
         self.dim_units[3] = x[1]
         self.calibration.set_Q_pixel_units(x)
 
+    # calibration
+    #@property
+    #def calibration(self):
+    #    if self._calibration is not None:
+    #        return self._calibration
+    #    elif self._parent_calibration is not None:
+    #        return self._parent_calibration
+    #    else:
+    #        return None
+    #@calibration.setter
+    #def calibration(self,x):
+    #    self._calibration = x
+    #    self.tree = x,'calibration'
+
+
+
+
+    # HDF5 read/write
+
+    # write is inherited from Array
+
+    # read
+    def from_h5(group):
+        from .ioutils import DataCube_from_h5
+        return DataCube_from_h5(group)
+
+
 
 ############ END OF CLASS ###########
 
 
 
-
-# Reading
-
-def DataCube_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if an Array object of this name exists inside this group,
-    and if it does, loads and returns it as a DataCube. If it doesn't exist, or if
-    it exists but does not have 4 dimensions, raises an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        A DataCube instance
-    """
-    datacube = Array_from_h5(group, name)
-    datacube = DataCube_from_Array(datacube)
-    return datacube
-
-
-def DataCube_from_Array(array):
-    """
-    Converts an Array to a DataCube.
-
-    Accepts:
-        array (Array)
-
-    Returns:
-        datacube (DataCube)
-    """
-    assert(array.rank == 4), "Array must have 4 dimensions"
-    array.__class__ = DataCube
-    array.__init__(
-        data = array.data,
-        name = array.name,
-        R_pixel_size = [array.dims[0][1]-array.dims[0][0],
-                        array.dims[1][1]-array.dims[1][0]],
-        R_pixel_units = [array.dim_units[0],
-                         array.dim_units[1]],
-        Q_pixel_size = [array.dims[2][1]-array.dims[2][0],
-                        array.dims[3][1]-array.dims[3][0]],
-        Q_pixel_units = [array.dim_units[2],
-                         array.dim_units[3]],
-        slicelabels = array.slicelabels
-    )
-    return array
 
 
 

@@ -29,6 +29,7 @@ from os import remove
 fp = "/home/ben/Desktop/test.h5"
 if exists(fp): remove(fp)
 
+
 with h5py.File(fp,'w') as f:
     group = f.create_group('experiment')
     # write the array to the h5 file
@@ -38,7 +39,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    datacube = py4DSTEM.io.datastructure.DataCube_from_h5(grp,'test_datacube')
+    datacube = py4DSTEM.io.datastructure.DataCube.from_h5(grp['test_datacube'])
     print(datacube)
     print(type(datacube))
 

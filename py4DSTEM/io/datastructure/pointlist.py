@@ -1,14 +1,13 @@
-# Defines a class - PointList - for storing / accessing / manipulating data in the form of
-# lists of vectors.
+# Defines a class, PointList, for storing / accessing / manipulating data
+# in the form of lists of vectors in named dimensions.  Wraps numpy
+# structured arrays.
 
 import numpy as np
 import h5py
 from copy import copy
 from typing import Optional
 
-from .ioutils import determine_group_name
-from .ioutils import EMD_group_exists, EMD_group_types
-from .metadata import Metadata, Metadata_from_h5
+from .metadata import Metadata
 
 
 class PointList:
@@ -147,112 +146,17 @@ class PointList:
         return self.data[v]
 
 
-    ## Writing to an HDF5 file
+
+    # HDF5 read/write
 
     def to_h5(self,group):
-        """
-        Takes a valid HDF5 group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with a name given by this
-        PointList's .name field nested inside the passed group, and saves
-        the data there.
+        from .ioutils import PointList_to_h5
+        PointList_to_h5(self,group)
 
-        If the PointList has no name, it will be assigned the name "PointList#"
-        where # is the lowest available integer.  If the PointList's name
-        already exists here in this file, raises and exception.
-
-        TODO: add overwite option.
-
-        Accepts:
-            group (HDF5 group)
-        """
-
-        # Detemine the name of the group
-        # if current name is invalid, raises and exception
-        # TODO: add overwrite option
-        determine_group_name(self, group)
-
-        ## Write
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
-
-        # Add data
-        for f,t in zip(self.fields,self.types):
-            group_current_field = grp.create_group(f)
-            group_current_field.attrs.create("dtype", np.string_(t))
-            group_current_field.create_dataset("data", data=self.data[f])
-
-        # Add metadata
-        grp_metadata = grp.create_group('metadata')
-        for name,md in self._metadata.items():
-            self._metadata[name].name = name
-            self._metadata[name].to_h5(grp_metadata)
-
-        # Add metadata
-        #if self._metadata is not None:
-        #    self._metadata.name = 'metadata'
-        #    self._metadata.to_h5(grp)
+    def from_h5(group):
+        from .ioutils import PointList_from_h5
+        return PointList_from_h5(group)
 
 
-
-## Read PointList objects
-
-def PointList_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if a valid PointList object of this name exists inside
-    this group, and if it does, loads and returns it. If it doesn't, raises
-    an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        A PointList instance
-    """
-    er = f"No Pointlist called {name} could be found in group {group} of this HDF5 file."
-    assert(EMD_group_exists(
-            group,
-            EMD_group_types['PointList'],
-            name)), er
-    grp = group[name]
-
-
-    # Get metadata
-    name = grp.name.split('/')[-1]
-    fields = list(grp.keys())
-    if 'metadata' in fields:
-        fields.remove('metadata')
-    dtype = []
-    for field in fields:
-        curr_dtype = grp[field].attrs["dtype"].decode('utf-8')
-        dtype.append((field,curr_dtype))
-    length = len(grp[fields[0]+'/data'])
-
-    # Get data
-    data = np.zeros(length,dtype=dtype)
-    if length > 0:
-        for field in fields:
-            data[field] = np.array(grp[field+'/data'])
-
-    # Make the PointList
-    pl = PointList(
-        data=data,
-        name=name)
-
-    # Add additional metadata
-    grp_metadata = grp['metadata']
-    for key in grp_metadata.keys():
-        pl.metadata = Metadata_from_h5(
-            grp_metadata,
-            key
-        )
-    #if 'metadata' in grp.keys():
-    #    pl._metadata = Metadata_from_h5(
-    #        grp,
-    #        name='metadata')
-
-    return pl
 
 

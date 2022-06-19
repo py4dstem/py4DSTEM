@@ -55,7 +55,7 @@ with h5py.File(fp,'r') as f:
         grp,
         py4DSTEM.io.datastructure.EMD_group_types['PointList'],
         'test_pointlist')
-    pl = py4DSTEM.io.datastructure.PointList_from_h5(grp,'test_pointlist')
+    pl = py4DSTEM.io.datastructure.PointList.from_h5(grp['test_pointlist'])
 
     print(names)
     print(exists)
@@ -89,8 +89,8 @@ with h5py.File(fp,'r') as f:
         grp,
         py4DSTEM.io.datastructure.EMD_group_types['PointList'])
     print(names)
-    pl4 = py4DSTEM.io.datastructure.PointList_from_h5(grp,'PointList0')
-    pl5 = py4DSTEM.io.datastructure.PointList_from_h5(grp,'PointList1')
+    pl4 = py4DSTEM.io.datastructure.PointList.from_h5(grp['PointList0'])
+    pl5 = py4DSTEM.io.datastructure.PointList.from_h5(grp['PointList1'])
 
 print(pl4)
 print(pl5)

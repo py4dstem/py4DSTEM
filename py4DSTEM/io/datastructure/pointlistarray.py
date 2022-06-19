@@ -3,11 +3,8 @@ from copy import copy
 from typing import Optional
 import h5py
 
-from .ioutils import determine_group_name
-from .ioutils import EMD_group_exists, EMD_group_types
-from .metadata import Metadata, Metadata_from_h5
+from .metadata import Metadata
 from .pointlist import PointList
-from ...tqdmnd import tqdmnd
 
 class PointListArray:
     """
@@ -150,105 +147,17 @@ class PointListArray:
         return string
 
 
-    ## Writing to an HDF5 file
+
+    # HDF5 read/write
 
     def to_h5(self,group):
-        """
-        Takes a valid HDF5 group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with a name given by this
-        PointListArray's .name field nested inside the passed group, and
-        saves the data there.
+        from .ioutils import PointListArray_to_h5
+        PointListArray_to_h5(self,group)
 
-        If the PointListArray has no name, it will be assigned the name
-        "PointListArray#" where # is the lowest available integer.  If the
-        PointListArray's name already exists here in this file, raises and
-        exception.
-
-        TODO: add overwite option.
-
-        Accepts:
-            group (HDF5 group)
-        """
-
-        # Detemine the name of the group
-        # if current name is invalid, raises and exception
-        # TODO: add overwrite option
-        determine_group_name(self, group)
-
-        ## Write
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
-
-        # Add data
-        dtype = h5py.special_dtype(vlen=self.dtype)
-        dset = grp.create_dataset(
-            "data",
-            self.shape,
-            dtype
-        )
-        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-            dset[i,j] = self.get_pointlist(i,j).data
-
-        # Add metadata
-        grp_metadata = grp.create_group('metadata')
-        for name,md in self._metadata.items():
-            self._metadata[name].name = name
-            self._metadata[name].to_h5(grp_metadata)
-
-        # Add metadata
-        #if self._metadata is not None:
-        #    self._metadata.name = 'metadata'
-        #    self._metadata.to_h5(grp)
+    def from_h5(group):
+        from .ioutils import PointListArray_from_h5
+        return PointListArray_from_h5(group)
 
 
-## Read PointList objects
-
-def PointListArray_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if a valid PointListArray object of this name exists
-    inside this group, and if it does, loads and returns it. If it doesn't,
-    raises an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        A PointListArray instance
-    """
-    er = f"No PointlistArray called {name} could be found in group {group} of this HDF5 file."
-    assert(EMD_group_exists(
-            group,
-            EMD_group_types['PointListArray'],
-            name)), er
-    grp = group[name]
-
-
-    # Get data
-    dset = grp['data']
-    shape = grp['data'].shape
-    dtype = grp['data'][0,0].dtype
-    pla = PointListArray(dtype=dtype,shape=shape,name=name)
-    for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-        try:
-            pla.get_pointlist(i,j).append(dset[i,j])
-        except ValueError:
-            pass
-
-    # Add metadata
-    grp_metadata = grp['metadata']
-    for key in grp_metadata.keys():
-        pla.metadata = Metadata_from_h5(
-            grp_metadata,
-            key
-        )
-    #if 'metadata' in grp.keys():
-    #    pla._metadata = Metadata_from_h5(
-    #        grp,
-    #        name='metadata')
-
-    return pla
 
 

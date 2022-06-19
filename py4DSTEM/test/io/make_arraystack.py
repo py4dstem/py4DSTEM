@@ -76,7 +76,7 @@ with h5py.File(fp,'r') as f:
         grp,
         py4DSTEM.io.datastructure.EMD_group_types['Array'],
         'test_arraystack')
-    ar = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_arraystack')
+    ar = py4DSTEM.io.datastructure.Array.from_h5(grp['test_arraystack'])
 
     print(array_names)
     print(exists)
