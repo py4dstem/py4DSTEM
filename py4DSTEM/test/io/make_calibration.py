@@ -1,8 +1,7 @@
 import py4DSTEM
 import numpy as np
 
-cal = py4DSTEM.io.datastructure.Calibration((10,10,50,50))
-
+cal = py4DSTEM.io.datastructure.Calibration(name='calibration')
 origin = np.ones((10,10,2))*5.2
 cal.set_origin(origin)
 
@@ -20,7 +19,10 @@ if exists(fp): remove(fp)
 with h5py.File(fp,'w') as f:
     group = f.create_group('experiment')
     # write the array to the h5 file
+    print(cal.name)
+    print('meow')
     cal.to_h5(group)
+print('meowmeow')
 
 
 with h5py.File(fp,'r') as f:
@@ -32,7 +34,7 @@ with h5py.File(fp,'r') as f:
         grp,
         py4DSTEM.io.datastructure.EMD_group_types['Metadata'],
         'calibration')
-    cal1 = py4DSTEM.io.datastructure.Calibration_from_h5(grp,'calibration')
+    cal1 = py4DSTEM.io.datastructure.Calibration.from_h5(grp['calibration'])
 
     print(names)
     print(exists)

@@ -1,6 +1,6 @@
 # Defines the Calibration class, which stores calibration metadata
 
-from .metadata import Metadata, Metadata_from_h5
+from .metadata import Metadata
 
 import numpy as np
 from numbers import Number
@@ -229,7 +229,6 @@ class Calibration(Metadata):
 
 
 
-
     def copy(self,name=None):
         """
         """
@@ -240,45 +239,20 @@ class Calibration(Metadata):
 
 
 
+    # HDF5 read/write
 
-## Read Calibration objects
+    # write inherited from Metadata
 
-def Calibration_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if a valid Calibration object of this name exists
-    inside this group, and if it does, loads and returns it. If it doesn't,
-    raises an exception.
+    # read
+    def from_h5(group):
+        from .ioutils import Calibration_from_h5
+        return Calibration_from_h5(group)
 
-    Accepts:
-        group (HDF5 group)
-        name (string)
 
-    Returns:
-        A Calibration instance
-    """
-    cal = Metadata_from_h5(group, name)
-    cal = Calibration_from_Metadata(cal)
-    return cal
 
-def Calibration_from_Metadata(metadata):
-    """
-    Converts a Metadata instance to a Calibration instance.
 
-    Accepts:
-        metadata (Metadata)
+########## End of class ##########
 
-    Returns:
-        (Calibration)
-    """
-    p = metadata._params
-    metadata.__class__ = Calibration
-    metadata.__init__(
-        name = metadata.name
-    )
-    metadata._params.update(p)
-
-    return metadata
 
 
 

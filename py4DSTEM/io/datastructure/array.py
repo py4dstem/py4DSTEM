@@ -6,9 +6,7 @@ import numpy as np
 import h5py
 from numbers import Number
 
-from .ioutils import determine_group_name
-from .ioutils import EMD_group_exists, EMD_group_types
-from .metadata import Metadata, Metadata_from_h5
+from .metadata import Metadata
 
 class Array:
     """
@@ -454,95 +452,17 @@ class Array:
 
 
 
-    ## Writing to an HDF5 file
+    # HDF5 read/write
 
     def to_h5(self,group):
-        """
-        Takes a valid HDF5 group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with a name given by this
-        Array's .name field nested inside the passed group, and saves the
-        data there.
+        from .ioutils import Array_to_h5
+        Array_to_h5(self,group)
 
-        If the Array has no name, it will be assigned the name "Array#" where
-        # is the lowest available integer.  If the Array's name already exists
-        here in this file, raises and exception.
-
-        TODO: add overwite option.
-
-        Accepts:
-            group (HDF5 group)
-        """
-
-        # Detemine the name of the group
-        # if current name is invalid, raises and exception
-        # TODO: add overwrite option
-        determine_group_name(self, group)
+    def from_h5(group):
+        from .ioutils import Array_from_h5
+        return Array_from_h5(group)
 
 
-        ## Write
-
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",1) # this tag indicates an Array
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
-
-        # add the data
-        data = grp.create_dataset(
-            "data",
-            shape = self.data.shape,
-            data = self.data,
-            #dtype = type(self.data)
-        )
-        data.attrs.create('units',self.units) # save 'units' but not 'name' - 'name' is the group name
-
-        # Add the normal dim vectors
-        for n in range(self.rank):
-
-            # unpack info
-            dim = self.dims[n]
-            name = self.dim_names[n]
-            units = self.dim_units[n]
-            is_linear = self._dim_is_linear(dim,self.shape[n])
-
-            # compress the dim vector if it's linear
-            if is_linear:
-                dim = dim[:2]
-
-            # write
-            dset = grp.create_dataset(
-                f"dim{n}",
-                data = dim
-            )
-            dset.attrs.create('name',name)
-            dset.attrs.create('units',units)
-
-        # Add stack dim vector, if present
-        if self.is_stack:
-            n = self.rank
-            name = '_labels_'
-            dim = [s.encode('utf-8') for s in self.slicelabels]
-
-            # write
-            dset = grp.create_dataset(
-                f"dim{n}",
-                data = dim
-            )
-            dset.attrs.create('name',name)
-
-        # Add metadata
-        grp_metadata = grp.create_group('metadata')
-        for name,md in self._metadata.items():
-            self._metadata[name].name = name
-            self._metadata[name].to_h5(grp_metadata)
-
-
-        #if self._metadata is not None:
-        #    self._metadata.name = 'metadata'
-        #    self._metadata.to_h5(grp)
-
-        # Add calibration
-        #if self._calibration is not None:
-        #    self._calibration.name = 'calibration'
-        #    self._calibration.to_h5(grp)
 
 
 
@@ -566,96 +486,5 @@ class Labels(list):
         self._dict = {}
         for idx,label in enumerate(self):
             self._dict[label] = idx
-
-
-
-## Read Array objects
-
-def Array_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if a valid Array object of this name exists inside
-    this group, and if it does, loads and returns it. If it doesn't, raises
-    an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        An Array instance
-    """
-    er = f"No Array called {name} could be found in group {group} of this HDF5 file."
-    assert(EMD_group_exists(
-            group,
-            EMD_group_types['Array'],
-            name)), er
-    grp = group[name]
-
-    # get data
-    dset = grp['data']
-    data = dset[:]
-    units = dset.attrs['units']
-    rank = len(data.shape)
-
-    # determine if this is a stack array
-    last_dim = grp[f"dim{rank-1}"]
-    if last_dim.attrs['name'] == '_labels_':
-        is_stack = True
-        normal_dims = rank-1
-    else:
-        is_stack = False
-        normal_dims = rank
-
-    # get dim vectors
-    dims = []
-    dim_units = []
-    dim_names = []
-    for n in range(normal_dims):
-        dim_dset = grp[f"dim{n}"]
-        dims.append(dim_dset[:])
-        dim_units.append(dim_dset.attrs['units'])
-        dim_names.append(dim_dset.attrs['name'])
-
-    # if it's a stack array, get the labels
-    if is_stack:
-        slicelabels = last_dim[:]
-        slicelabels = [s.decode('utf-8') for s in slicelabels]
-    else:
-        slicelabels = None
-
-    # make Array
-    ar = Array(
-        data = data,
-        name = name,
-        units = units,
-        dims = dims,
-        dim_names = dim_names,
-        dim_units = dim_units,
-        slicelabels = slicelabels
-    )
-
-    # add metadata
-    grp_metadata = grp['metadata']
-    for key in grp_metadata.keys():
-        ar.metadata = Metadata_from_h5(
-            grp_metadata,
-            key
-        )
-    #if 'metadata' in grp.keys():
-    #    ar._metadata = Metadata_from_h5(
-    #        grp,
-    #        name='metadata')
-
-    # add calibration
-    #if 'calibration' in grp.keys():
-    #    ar._calibration = Calibration_from_h5(
-    #        grp,
-    #        name='metadata')
-
-    return ar
-
-
-
 
 

@@ -1,6 +1,6 @@
 # Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
-from .array import Array, Array_from_h5
+from .array import Array
 
 from typing import Optional,Union
 import numpy as np
@@ -80,54 +80,23 @@ class RealSlice(Array):
 
 
 
+    # HDF5 read/write
+
+    # write inherited from Array
+
+    # read
+    def from_h5(group):
+        from .ioutils import DiffractionSlice_from_h5
+        return DiffractionSlice_from_h5(group)
+
+
+
+
+
+
 ############ END OF CLASS ###########
 
 
-
-
-# Reading
-
-def RealSlice_from_h5(group:h5py.Group, name:str):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
-    and a name.  Determines if an Array object of this name exists inside this group,
-    and if it does, loads and returns it as a RealSlice. If it doesn't exist, or if
-    it exists but does not have 2 dimensions, raises an exception.
-
-    Accepts:
-        group (HDF5 group)
-        name (string)
-
-    Returns:
-        A RealSlice instance
-    """
-    realslice = Array_from_h5(group, name)
-    realslice = RealSlice_from_Array(realslice)
-    return realslice
-
-
-def RealSlice_from_Array(array):
-    """
-    Converts an Array to a RealSlice.
-
-    Accepts:
-        array (Array)
-
-    Returns:
-        (RealSlice)
-    """
-    assert(array.rank == 2), "Array must have 2 dimensions"
-    array.__class__ = RealSlice
-    array.__init__(
-        data = array.data,
-        name = array.name,
-        pixel_size = [array.dims[0][1]-array.dims[0][0],
-                      array.dims[1][1]-array.dims[1][0]],
-        pixel_units = [array.dim_units[0],
-                       array.dim_units[1]],
-        slicelabels = array.slicelabels
-    )
-    return array
 
 
 
