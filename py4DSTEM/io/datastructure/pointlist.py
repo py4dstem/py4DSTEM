@@ -150,11 +150,11 @@ class PointList:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .ioutils import PointList_to_h5
+        from .io_emd import PointList_to_h5
         PointList_to_h5(self,group)
 
     def from_h5(group):
-        from .ioutils import PointList_from_h5
+        from .io_emd import PointList_from_h5
         return PointList_from_h5(group)
 
 

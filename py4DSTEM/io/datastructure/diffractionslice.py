@@ -88,7 +88,7 @@ class DiffractionSlice(Array):
 
     # read
     def from_h5(group):
-        from .ioutils import DiffractionSlice_from_h5
+        from .io_py4dstem import DiffractionSlice_from_h5
         return DiffractionSlice_from_h5(group)
 
 

@@ -1,14 +1,11 @@
 # Defines the Calibration class, which stores calibration metadata
 
-from .metadata import Metadata
-
 import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
 
-from .ioutils import determine_group_name
-from .ioutils import EMD_group_exists, EMD_group_types
+from .metadata import Metadata
 
 
 class Calibration(Metadata):
@@ -245,7 +242,7 @@ class Calibration(Metadata):
 
     # read
     def from_h5(group):
-        from .ioutils import Calibration_from_h5
+        from .io_py4dstem import Calibration_from_h5
         return Calibration_from_h5(group)
 
 

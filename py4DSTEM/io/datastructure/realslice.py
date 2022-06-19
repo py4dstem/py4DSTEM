@@ -86,8 +86,8 @@ class RealSlice(Array):
 
     # read
     def from_h5(group):
-        from .ioutils import DiffractionSlice_from_h5
-        return DiffractionSlice_from_h5(group)
+        from .io_py4dstem import RealSlice_from_h5
+        return RealSlice_from_h5(group)
 
 
 

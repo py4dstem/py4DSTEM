@@ -1,7 +1,6 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
 from .array import Array
-from .ioutils import Array_from_h5
 from .calibration import Calibration
 
 from typing import Optional,Union
@@ -153,7 +152,7 @@ class DataCube(Array):
 
     # read
     def from_h5(group):
-        from .ioutils import DataCube_from_h5
+        from .io_py4dstem import DataCube_from_h5
         return DataCube_from_h5(group)
 
 
