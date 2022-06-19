@@ -43,7 +43,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    datacubestack = py4DSTEM.io.datastructure.DataCube_from_h5(grp,'test_datacubestack')
+    datacubestack = py4DSTEM.io.datastructure.DataCube.from_h5(grp['test_datacubestack'])
     print(datacubestack)
     print(type(datacubestack))
 

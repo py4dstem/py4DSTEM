@@ -455,11 +455,11 @@ class Array:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .ioutils import Array_to_h5
+        from .io_emd import Array_to_h5
         Array_to_h5(self,group)
 
     def from_h5(group):
-        from .ioutils import Array_from_h5
+        from .io_emd import Array_from_h5
         return Array_from_h5(group)
 
 

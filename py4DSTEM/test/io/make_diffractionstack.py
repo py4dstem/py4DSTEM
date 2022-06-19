@@ -40,7 +40,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice_from_h5(grp,'test_diffractionstack')
+    diffractionstack = py4DSTEM.io.datastructure.DiffractionSlice.from_h5(grp['test_diffractionstack'])
     print(diffractionstack)
     print(type(diffractionstack))
 

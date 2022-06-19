@@ -151,11 +151,11 @@ class PointListArray:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .ioutils import PointListArray_to_h5
+        from .io_emd import PointListArray_to_h5
         PointListArray_to_h5(self,group)
 
     def from_h5(group):
-        from .ioutils import PointListArray_from_h5
+        from .io_emd import PointListArray_from_h5
         return PointListArray_from_h5(group)
 
 

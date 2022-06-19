@@ -40,7 +40,7 @@ with h5py.File(fp,'w') as f:
 with h5py.File(fp,'r') as f:
     grp = f['experiment']
 
-    realstack = py4DSTEM.io.datastructure.RealSlice_from_h5(grp,'test_realstack')
+    realstack = py4DSTEM.io.datastructure.RealSlice.from_h5(grp['test_realstack'])
     print(realstack)
     print(type(realstack))
 
