@@ -785,6 +785,9 @@ def plot_diffraction_pattern(
             facecolor="k",
         )
 
+    ax.set_xlabel("$q_y$ [Å$^{-1}$]")
+    ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+
     if plot_range_kx_ky is not None:
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
