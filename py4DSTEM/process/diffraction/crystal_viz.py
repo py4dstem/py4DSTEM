@@ -1254,28 +1254,6 @@ def plot_orientation_maps(
         return images_orientation
 
 
-# def crystal_to_cartesian(self, zone_axis):
-#     vec_cart = zone_axis @ self.lat_real
-#     return vec_cart / np.linalg.norm(vec_cart)
-
-# def cartesian_to_crystal(self, vec_cart):
-#     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-#     return zone_axis / np.linalg.norm(zone_axis)
-
-
-# def cartesian_to_crystal(self, zone_axis):
-#     vec_cart = zone_axis @ self.lat_real
-#     return vec_cart / np.linalg.norm(vec_cart)
-
-
-# def crystal_to_cartesian(self, vec_cart):
-#     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-#     return zone_axis / np.linalg.norm(zone_axis)
-
-
-
-
-
 
 def plot_fiber_orientation_maps(
     self,
