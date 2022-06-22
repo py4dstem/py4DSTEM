@@ -243,7 +243,8 @@ def generate_dynamical_diffraction_pattern(
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
-    return_complex: bool = False
+    return_complex: bool = False,
+    return_eigenvectors: bool = False,
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -443,9 +444,9 @@ def generate_dynamical_diffraction_pattern(
         print(f"Assembling outputs took {1000*(time()-t0):.3f} ms.")
 
     if len(pls) == 1 and not always_return_list:
-        return pls[0]
+        return pls[0] if not return_eigenvectors else (pls[0], gamma, C)
     else:
-        return pls
+        return pls if not return_eigenvectors else (pls, gamma, C)
 
 
 def generate_CBED(
