@@ -126,8 +126,8 @@ def parse_filetype(fp):
     if fext in [
         ".h5",
         ".H5",
-        "hdf5",
-        "HDF5",
+        ".hdf5",
+        ".HDF5",
         ".py4dstem",
         ".py4DSTEM",
         ".PY4DSTEM",
