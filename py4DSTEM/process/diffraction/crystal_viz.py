@@ -1332,6 +1332,7 @@ def plot_fiber_orientation_maps(
     if symmetry_mirror:
         sub = np.sin((symmetry_order/2)*ang_ip) < 0
         sig_ip[sub] = np.mod(-sig_ip[sub],1)
+    sig_ip = np.mod(sig_ip - (dir_in_plane_degrees/360.*symmetry_order),1.)
     if medfilt_size is not None:
         sig_ip = medfilt(sig_ip,medfilt_size)
 
