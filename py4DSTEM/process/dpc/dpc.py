@@ -485,7 +485,7 @@ def get_interaction_constant(E):
     qe = 1.60217662e-19     # Electron charge in C
     k0 = get_wavenumber(E)           # Electron wavenumber in inverse Angstroms
     gamma = get_relativistic_mass_correction(E)   # Relativistic mass correction
-    return 2*np.pi*gamma*me*qe/(k0*1e-20*h**2)
+    return 2*np.pi*gamma*me*qe*1e-20/(k0*h**2)
 
 
 ####################### Utility functions ##########################

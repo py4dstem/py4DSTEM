@@ -35,7 +35,7 @@ class DataObject(object):
     """
     _instances = []
 
-    def __init__(self, name='', searchable=True, **kwargs):
+    def __init__(self, name='', searchable=False, **kwargs):
         """
         Instantiate a DataObject instance.
         """

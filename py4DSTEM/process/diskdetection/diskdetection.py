@@ -113,16 +113,17 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         ccc = None
 
     # Find the maxima
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc, sigma=sigma,
-                                                 edgeBoundary=edgeBoundary,
-                                                 minRelativeIntensity=minRelativeIntensity,
-                                                 minAbsoluteIntensity = minAbsoluteIntensity,
-                                                 relativeToPeak=relativeToPeak,
-                                                 minSpacing=minPeakSpacing,
-                                                 maxNumPeaks=maxNumPeaks,
-                                                 subpixel=subpixel,
-                                                 ar_FT = ccc,
-                                                 upsample_factor = upsample_factor)
+    maxima_x,maxima_y,maxima_int = get_maxima_2D(cc,
+                             sigma=sigma,
+                             edgeBoundary=edgeBoundary,
+                             minRelativeIntensity=minRelativeIntensity,
+                             minAbsoluteIntensity=minAbsoluteIntensity,
+                             relativeToPeak=relativeToPeak,
+                             minSpacing=minPeakSpacing,
+                             maxNumPeaks=maxNumPeaks,
+                             subpixel=subpixel,
+                             ar_FT = ccc,
+                             upsample_factor = upsample_factor)
 
     # Make peaks PointList
     if peaks is None:
@@ -285,7 +286,8 @@ def find_Bragg_disks_selected(datacube, probe, Rx, Ry,
         DP = datacube.data[Rx[i],Ry[i],:,:]
         _peaks =  _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
            corrPower=corrPower,sigma=sigma,edgeBoundary=edgeBoundary,
-           minRelativeIntensity=minRelativeIntensity,minAbsoluteIntensity=minAbsoluteIntensity,
+           minRelativeIntensity=minRelativeIntensity,
+           minAbsoluteIntensity=minAbsoluteIntensity,
            relativeToPeak=relativeToPeak,
            minPeakSpacing=minPeakSpacing,maxNumPeaks=maxNumPeaks,subpixel=subpixel,
            upsample_factor=upsample_factor,filter_function=filter_function,
@@ -430,7 +432,9 @@ def find_Bragg_disks(datacube, probe,
                      filter_function = None,
                      _qt_progress_bar = None,
                      distributed = None,
-                     CUDA = False):
+                     CUDA = False,
+                     CUDA_batched = True,
+                     CUDA_clear_mempool = True):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by cross, hybrid, or
     phase correlation with probe.
@@ -482,10 +486,18 @@ def find_Bragg_disks(datacube, probe,
                   file containing the datacube
                 * cluster_path (str): defaults to the working directory during processing
             if distributed is None, which is the default, processing will be in serial
+        CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk detection
+        CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT steps of
+            disk detection are performed in batches to better utilize GPU resources. 
+        CUDA_clear_mempool (bool): Free up memory blocks allocated by cupy once
+            disk detection is complete. May cause interference with the memory of 
+            other cupy-accelerated code used in the same Python instance.
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
+
+    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
 
     def _parse_distributed(distributed):
         import os
@@ -563,13 +575,14 @@ def find_Bragg_disks(datacube, probe,
                 _qt_progress_bar=_qt_progress_bar)
         else:
             from .diskdetection_cuda import find_Bragg_disks_CUDA
-            return find_Bragg_disks_CUDA(
+            braggdisks = find_Bragg_disks_CUDA(
                 datacube,
                 probe,
                 corrPower=corrPower,
                 sigma=sigma,
                 edgeBoundary=edgeBoundary,
                 minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
                 relativeToPeak=relativeToPeak,
                 minPeakSpacing=minPeakSpacing,
                 maxNumPeaks=maxNumPeaks,
@@ -577,7 +590,14 @@ def find_Bragg_disks(datacube, probe,
                 upsample_factor=upsample_factor,
                 name=name,
                 filter_function=filter_function,
-                _qt_progress_bar=_qt_progress_bar)
+                _qt_progress_bar=_qt_progress_bar,
+                batching=CUDA_batched,)
+
+            if CUDA_clear_mempool:
+                import cupy as cp
+                cp.get_default_memory_pool().free_all_blocks()
+
+            return braggdisks
 
     elif isinstance(distributed, dict):
         connect, data_file, cluster_path = _parse_distributed(distributed)
