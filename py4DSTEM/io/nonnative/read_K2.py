@@ -4,7 +4,10 @@
 
 from collections.abc import Sequence
 import numpy as np
-import numba as nb
+try:
+    import numba as nb
+except ImportError:
+    pass
 from ...process.utils import tqdmnd
 from ..datastructure import DataCube
 
@@ -40,7 +43,9 @@ def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
     if metadata is True:
         return None
 
-    return DataCube(data=K2DataArray(fp))
+    block_sync = kwargs.get("K2_sync_block_IDs", True)
+    NR = kwargs.get("K2_hidden_stripe_noise_reduction",True)
+    return DataCube(data=K2DataArray(fp,sync_block_IDs=block_sync, hidden_stripe_noise_reduction=NR))
 
 
 class K2DataArray(Sequence):
@@ -73,7 +78,7 @@ class K2DataArray(Sequence):
         into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
     """
 
-    def __init__(self, filepath, hidden_stripe_noise_reduction=True):
+    def __init__(self, filepath, sync_block_IDs = True, hidden_stripe_noise_reduction=True):
         from ncempy.io import dm
         import os
         import glob
@@ -120,6 +125,7 @@ class K2DataArray(Sequence):
 
         self.shape = (int(R_Nx), int(R_Ny), int(Q_Nx), int(Q_Ny))
         self._hidden_stripe_noise_reduction = hidden_stripe_noise_reduction
+        self.sync_block_IDs = sync_block_IDs
 
         self._stripe_dtype = np.dtype(
             [
@@ -271,32 +277,58 @@ class K2DataArray(Sequence):
         self._bin_files = np.empty(8, dtype=object)
         for i in range(8):
             binName = self._bin_prefix + str(i + 1) + ".bin"
+
+            # Synchronize to the magic sync word
+            # First, open the file in binary mode and read ~1 MB
+            with open(binName, 'rb') as f:
+                s = f.read(1_000_000)
+
+            # Scan the chunk and find everywhere the sync word appears
+            sync = [s.find(b'\xff\xff\x00\x55'),]
+            while sync[-1] >= 0:
+                sync.append(s.find(b'\xff\xff\x00\x55',sync[-1]+1))
+
+            # Since the sync word can conceivably occur within the data region,
+            # check that there is another sync word 22360 bytes away
+            sync_idx = 0
+            while 0 not in [s - sync[sync_idx] - 22360 for s in sync]:
+                sync_idx += 1
+
+            if sync_idx > 0:
+                print(f"Beginning file {i} at offset {sync[sync_idx]} due to incomplete data block!")
+
+            # Start the memmap at the offset of the sync byte
             self._bin_files[i] = np.memmap(
                 binName,
                 dtype=self._stripe_dtype,
                 mode="r",
                 shape=(self._guess_number_frames(),),
+                offset=sync[sync_idx],
             )
 
     def _find_offsets(self):
         # first, line up the block counts (LiberTEM calls this sync_sectors)
-        first_blocks = np.zeros((8,), dtype=np.uint32)
-        for i in range(8):
-            binfile = self._bin_files[i]
-            first_blocks[i] = binfile[0]["block"]
+        if self.sync_block_IDs:
+            print("Synchronizing block IDs.")
+            first_blocks = np.zeros((8,), dtype=np.uint32)
+            for i in range(8):
+                binfile = self._bin_files[i]
+                first_blocks[i] = binfile[0]["block"]
 
-        # find the first frame in each with the starting block
-        block_id = np.max(first_blocks)
-        print("First block syncs to block #", block_id)
-        for i in range(8):
-            sync = False
-            frame = 0
-            while sync == False:
-                sync = self._bin_files[i][frame]["block"] == block_id
-                if sync == False:
-                    frame += 1
-            self._shutter_offsets[i] += frame
-        print("Offsets are currently ", self._shutter_offsets)
+            # find the first frame in each with the starting block
+            block_id = np.max(first_blocks)
+            print("First block syncs to block #", block_id)
+            for i in range(8):
+                sync = False
+                frame = 0
+                while sync == False:
+                    sync = self._bin_files[i][frame]["block"] == block_id
+                    if sync == False:
+                        frame += 1
+                self._shutter_offsets[i] += frame
+            print("Offsets are currently ", self._shutter_offsets)
+        else:
+            print("Skipping block ID synchronization step...")
 
         first_frame = self._bin_files[0][self._shutter_offsets[0]]["frame"]
         # next, check if the frames are complete (the next 32 blocks should have the same block #)
@@ -471,29 +503,60 @@ class K2DataArray(Sequence):
 
 
 # ======= UTILITIES OUTSIDE THE CLASS ======#
-@nb.njit(nb.int16[::1](nb.uint8[::1]), fastmath=False, parallel=False)
-def _convert_uint12(data_chunk):
-    """
-    data_chunk is a contigous 1D array of uint8 data)
-    eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
-    """
+import sys
+if 'numba' in sys.modules:
+    @nb.njit(nb.int16[::1](nb.uint8[::1]), fastmath=False, parallel=False)
+    def _convert_uint12(data_chunk):
+        """
+        data_chunk is a contigous 1D array of uint8 data)
+        eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
+        """
 
-    # ensure that the data_chunk has the right length
-    assert np.mod(data_chunk.shape[0], 3) == 0
+        # ensure that the data_chunk has the right length
+        assert np.mod(data_chunk.shape[0], 3) == 0
 
-    out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
+        out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
 
-    for i in nb.prange(data_chunk.shape[0] // 3):
-        fst_uint8 = np.uint16(data_chunk[i * 3])
-        mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
-        lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
+        for i in nb.prange(data_chunk.shape[0] // 3):
+            fst_uint8 = np.uint16(data_chunk[i * 3])
+            mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
+            lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
 
-        out[i * 2] = (
-            fst_uint8 | (mid_uint8 & 0x0F) << 8
-        )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
-        out[i * 2 + 1] = (
-            mid_uint8 & 0xF0
-        ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
+            out[i * 2] = (
+                fst_uint8 | (mid_uint8 & 0x0F) << 8
+            )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
+            out[i * 2 + 1] = (
+                mid_uint8 & 0xF0
+            ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
 
-    DP = out.astype(np.int16)
-    return DP
+        DP = out.astype(np.int16)
+        return DP
+else:
+    def _convert_uint12(data_chunk):
+        """
+        data_chunk is a contigous 1D array of uint8 data)
+        eg.data_chunk = np.frombuffer(data_chunk, dtype=np.uint8)
+        """
+
+        # ensure that the data_chunk has the right length
+        assert np.mod(data_chunk.shape[0], 3) == 0
+
+        out = np.empty(data_chunk.shape[0] // 3 * 2, dtype=np.uint16)
+
+        for i in range(data_chunk.shape[0] // 3):
+            fst_uint8 = np.uint16(data_chunk[i * 3])
+            mid_uint8 = np.uint16(data_chunk[i * 3 + 1])
+            lst_uint8 = np.uint16(data_chunk[i * 3 + 2])
+
+            out[i * 2] = (
+                fst_uint8 | (mid_uint8 & 0x0F) << 8
+            )  # (fst_uint8 << 4) + (mid_uint8 >> 4)
+            out[i * 2 + 1] = (
+                mid_uint8 & 0xF0
+            ) >> 4 | lst_uint8 << 4  # ((mid_uint8 % 16) << 8) + lst_uint8
+
+        DP = out.astype(np.int16)
+        return DP
+
+
+

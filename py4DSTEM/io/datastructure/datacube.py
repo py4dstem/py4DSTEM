@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from tempfile import TemporaryFile
 
 import numpy as np
-import numba as nb
 import h5py
 import dask.array as da
 
@@ -72,6 +71,11 @@ class DataCube(DataObject):
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
         self.update_slice_parsers()
+
+        if hasattr(self,'coordinates'):
+
+            self.coordinates.R_Nx = self.R_Nx
+            self.coordinates.R_Ny = self.R_Ny
 
     def swap_RQ(self):
         """

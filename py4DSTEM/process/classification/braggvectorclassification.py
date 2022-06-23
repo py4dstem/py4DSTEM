@@ -726,7 +726,7 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
         for Ry in range(braggpeaks.shape[1]):
             s = braggpeak_labels[Rx][Ry]
             pointlist = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(pointlist.length):
+            for i in range(len(pointlist.data)):
                 label = np.argmin(np.hypot(Qx-pointlist.data['qx'][i],Qy-pointlist.data['qy'][i]))
                 if max_dist is not None:
                     if np.hypot(Qx[label]-pointlist.data['qx'][i],Qy[label]-pointlist.data['qy'][i]) < max_dist:
