@@ -5,7 +5,7 @@ from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
 from fractions import Fraction
-from ..io import PointList
+from ..io.datastructure import PointList
 
 def add_rectangles(ax,d):
     """

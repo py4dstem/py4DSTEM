@@ -7,9 +7,7 @@ from scipy.optimize import leastsq
 from ..fit import plane,parabola,bezier_two,fit_2D
 from ..utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
 from ...tqdmnd import tqdmnd
-from ...io import PointListArray, DataCube
-from ..diskdetection.braggvectormap import get_bragg_vector_map
-from ..diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
+from ...io.datastructure import PointListArray, DataCube
 
 
 ### Functions for finding the origin
@@ -93,7 +91,7 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity. Stores the origin
-    positions in the Calibrations associated with datacube, and optionally also returns
+    positions in the Calibration associated with datacube, and optionally also returns
     them.
 
     Args:
@@ -210,6 +208,7 @@ def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=Non
 
     # Get guess at position of unscattered beam
     if bvm is None:
+        from ..diskdetection.braggvectormap import get_bragg_vector_map
         braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
     else:
         braggvectormap_all = bvm
@@ -289,6 +288,8 @@ def get_origin_brightest_disk(
     Returns:
         2 (R_Nx,R_Ny)-shaped ndarrays: the origin, (x,y) at each scan position
     """
+    from ..diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
+
     if probe_mask_size is None:
         probe_mask_size, px, py = get_probe_size(np.fft.fftshift(probe_kernel))
         probe_mask_size *= 2
@@ -506,8 +507,8 @@ def fit_origin(
     Fits the position of the origin of diffraction space to a plane or parabola,
     given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
     masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
-    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibrations
-    instance, they will be retreived automatically. If a DataCube or Calibrations are
+    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibration
+    instance, they will be retreived automatically. If a DataCube or Calibration are
     passed, fitted origin and residuals are stored there directly.
 
     Args:

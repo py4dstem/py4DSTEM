@@ -20,7 +20,7 @@ from scipy.optimize import leastsq
 from scipy.ndimage.filters import gaussian_filter
 from ..utils import convert_ellipse_params, convert_ellipse_params_r
 from ..utils import get_CoM, radial_integral
-from ...io import PointListArray
+from ...io.datastructure import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
 

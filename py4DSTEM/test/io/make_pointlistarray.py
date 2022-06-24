@@ -43,6 +43,7 @@ from os import remove
 fp = "/home/ben/Desktop/test.h5"
 if exists(fp): remove(fp)
 
+
 with h5py.File(fp,'w') as f:
     group = f.create_group('experiment')
     # write the array to the h5 file

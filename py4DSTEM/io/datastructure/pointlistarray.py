@@ -3,6 +3,7 @@ from copy import copy
 from typing import Optional
 import h5py
 
+from .tree import Tree
 from .metadata import Metadata
 from .pointlist import PointList
 
@@ -40,7 +41,7 @@ class PointListArray:
         self.fields = self.dtype.names
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
-        self._tree = {}
+        self.tree = Tree()
         self._metadata = {}
 
         # Populate with empty PointLists
@@ -150,9 +151,9 @@ class PointListArray:
 
     # HDF5 read/write
 
-    def to_h5(self,group):
+    def to_h5(self,group,include_data=True):
         from .io_emd import PointListArray_to_h5
-        PointListArray_to_h5(self,group)
+        PointListArray_to_h5(self,group,include_data)
 
     def from_h5(group):
         from .io_emd import PointListArray_from_h5

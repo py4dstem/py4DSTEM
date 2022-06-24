@@ -43,11 +43,13 @@ with h5py.File(fp,'r') as f:
         'test_metadata')
     md1 = py4DSTEM.io.datastructure.Metadata.from_h5(grp['test_metadata'])
 
+
     print(names)
     print(exists)
     print(md)
     print(md1)
 
+print(md1.__class__.__name__)
 
 print()
 print()

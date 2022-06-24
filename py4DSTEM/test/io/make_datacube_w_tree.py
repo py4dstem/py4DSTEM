@@ -17,43 +17,30 @@ datacube = py4DSTEM.io.datastructure.DataCube(
 print(datacube)
 print(datacube.calibration)
 
-print(datacube.Q_pixel_units)
-print(datacube.calibration['Q_pixel_units'])
-#datacube.Q_pixel_units = 'A^-1'
-datacube.calibration['Q_pixel_units'] = 'A^-1'
-print(datacube.Q_pixel_units)
-print(datacube.calibration['Q_pixel_units'])
-
-print(datacube.calibration)
 
 
 # Write to and HDF5 file
 
-#import h5py
-#from os.path import exists
-#from os import remove
-#fp = "/home/ben/Desktop/test.h5"
-#if exists(fp): remove(fp)
-#
-#with h5py.File(fp,'w') as f:
-#    group = f.create_group('experiment')
-#    # write the array to the h5 file
-#    datacube.to_h5(group)
-#
-#
-#with h5py.File(fp,'r') as f:
-#    grp = f['experiment']
-#
-#    datacube = py4DSTEM.io.datastructure.DataCube_from_h5(grp,'test_datacube')
-#    print(datacube)
-#    print(type(datacube))
-#
-#    #ar = py4DSTEM.io.datastructure.Array_from_h5(grp,'test_datacube')
-#    #print(ar)
-#    #print(datacube == ar)
-#
-#print(datacube.__class__.__name__)
-#print(type(datacube.__class__.__name__))
-#print(str(datacube.__class__.__name__))
-#
-#
+import h5py
+from os.path import exists
+from os import remove
+fp = "/home/ben/Desktop/test.h5"
+if exists(fp): remove(fp)
+
+with h5py.File(fp,'w') as f:
+    group = f.create_group('experiment')
+    datacube.to_h5(group)
+
+
+with h5py.File(fp,'r') as f:
+    grp = f['experiment']
+    dc = py4DSTEM.io.datastructure.DataCube.from_h5(grp['test_datacube'])
+
+
+print(dc)
+print(dc.calibration)
+
+
+
+
+

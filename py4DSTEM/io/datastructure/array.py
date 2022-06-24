@@ -6,6 +6,7 @@ import numpy as np
 import h5py
 from numbers import Number
 
+from .tree import Tree
 from .metadata import Metadata
 
 class Array:
@@ -179,7 +180,7 @@ class Array:
         self.shape = self.data.shape
         self.rank = self.data.ndim
 
-        self._tree = {}
+        self.tree = Tree()
         self._metadata = {}
 
         # flag to help assign dim names and units
@@ -395,17 +396,6 @@ class Array:
 
 
 
-    # set up tree property
-
-    @property
-    def tree(self):
-        return self._tree
-    @tree.setter
-    def tree(self,tup):
-        assert(len(tup)==2), "tree assignment must be to len 2 tuple"
-        self._tree[tup[1]] = tup[0]
-
-
     # set up metadata property
 
     @property
@@ -454,9 +444,9 @@ class Array:
 
     # HDF5 read/write
 
-    def to_h5(self,group):
+    def to_h5(self,group,include_data=True):
         from .io_emd import Array_to_h5
-        Array_to_h5(self,group)
+        Array_to_h5(self,group,include_data)
 
     def from_h5(group):
         from .io_emd import Array_from_h5

@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io import PointList, PointListArray, RealSlice
+from ...io.datastructure import PointList, PointListArray, RealSlice
 from ...tqdmnd import tqdmnd
 
 def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):

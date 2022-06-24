@@ -77,13 +77,13 @@ class DataCube(Array):
 
         # Make calibration container
         # set its size/units
-        # put it in tree
+        # add to tree
         self.calibration = Calibration()
-        self.calibration['R_pixel_size'], R_pixel_size
-        self.calibration['R_pixel_units'], R_pixel_units
-        self.calibration['Q_pixel_size'], Q_pixel_size
-        self.calibration['Q_pixel_units'], Q_pixel_units
-        self.tree = self.calibration, 'calibration'
+        self.calibration['R_pixel_size'] = R_pixel_size
+        self.calibration['R_pixel_units'] = R_pixel_units
+        self.calibration['Q_pixel_size'] = Q_pixel_size
+        self.calibration['Q_pixel_units'] = Q_pixel_units
+        self.tree['calibration'] = self.calibration
 
 
 
@@ -118,7 +118,7 @@ class DataCube(Array):
         if type(x) is not list: x = [x,x]
         self.set_dim(2,[0,x[0]])
         self.set_dim(3,[0,x[1]])
-        self.calibration.set_Q_pixel_units(x)
+        self.calibration.set_Q_pixel_size(x)
     @property
     def Q_pixel_units(self):
         return self.calibration.get_Q_pixel_units()
@@ -142,6 +142,13 @@ class DataCube(Array):
     #def calibration(self,x):
     #    self._calibration = x
     #    self.tree = x,'calibration'
+
+
+    #from ...process.virtualimage import (
+    #    get_max_dp,
+    #    get_mean_dp,
+    #    get_median_dp
+    #)
 
 
 

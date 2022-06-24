@@ -5,7 +5,7 @@ from scipy.optimize import leastsq
 from typing import Union, Optional
 from ..utils import get_CoM
 from ...tqdmnd import tqdmnd
-from ...io.datastructure import Calibrations, PointListArray
+from ...io.datastructure import Calibration, PointListArray
 
 
 def get_Q_pixel_size(q_meas, q_known, units='A'):
@@ -68,18 +68,18 @@ def get_dq_from_indexed_peaks(qs, hkl, a):
 def calibrate_Bragg_peaks_pixel_size(
     braggpeaks: PointListArray,
     q_pixel_size: Optional[float] = None,
-    calibrations: Optional[Calibrations] = None,
+    calibration: Optional[Calibration] = None,
     name: Optional[str] = None,
 ) -> PointListArray:
     """
     Calibrate reciprocal space measurements of Bragg peak positions, using
     either `q_pixel_size` or the `Q_pixel_size` field of a
-    Calibrations object
+    Calibration object
 
     Accepts:
         braggpeaks (PointListArray) the detected, unscaled bragg peaks
         q_pixel_size (float) Q pixel size in inverse Ångström
-        calibrations (Calibrations) an object containing pixel size
+        calibration (Calibration) an object containing pixel size
         name        (str, optional) a name for the returned PointListArray.
                     If unspecified, takes the old PLA name, removes '_raw'
                     if present at the end of the string, then appends
@@ -90,13 +90,13 @@ def calibrate_Bragg_peaks_pixel_size(
     """
     assert isinstance(braggpeaks, PointListArray)
     assert (q_pixel_size is not None) != (
-        calibrations is not None
-    ), "Either (qx0,qy0) or calibrations must be specified"
+        calibration is not None
+    ), "Either (qx0,qy0) or calibration must be specified"
 
-    if calibrations is not None:
-        assert isinstance(calibrations, Calibrations), "calibrations must be a Calibrations object."
-        q_pixel_size = calibrations.get_Q_pixel_size()
-        assert q_pixel_size is not None, "calibrations did not contain center position"
+    if calibration is not None:
+        assert isinstance(calibration, Calibration), "calibration must be a Calibration object."
+        q_pixel_size = calibration.get_Q_pixel_size()
+        assert q_pixel_size is not None, "calibration did not contain center position"
 
     if q_pixel_size is not None:
         assert isinstance(q_pixel_size, float), "q_pixel_size must be a float."

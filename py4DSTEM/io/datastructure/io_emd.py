@@ -10,6 +10,7 @@ from ...tqdmnd import tqdmnd
 # Define the EMD group types
 
 EMD_group_types = {
+    'Root' : 'root',
     'Metadata' : 0,
     'Array' : 1,
     'PointList' : 2,
@@ -124,6 +125,67 @@ def determine_group_name(obj, group):
 ####################
 
 
+## ROOT
+
+# write
+def Root_to_h5(root,group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open
+    in write or append mode. Writes a new group with a name given by
+    this Root instance's .name field nested inside the passed
+    group, and saves the data there.
+
+    If the Root instance has no name, it will be assigned the
+    name Root"#" where # is the lowest available integer.  If the
+    instance has a name which already exists here in this file, raises
+    and exception.
+
+    TODO: add overwite option.
+
+    Accepts:
+        group (HDF5 group)
+    """
+
+    # Detemine the name of the group
+    # if current name is invalid, raises and exception
+    # TODO: add overwrite option
+    determine_group_name(root, group)
+
+    ## Write
+    grp = group.create_group(root.name)
+    grp.attrs.create("emd_group_type",EMD_group_types['Root'])
+    grp.attrs.create("py4dstem_class",metadata.__class__.__name__)
+
+
+
+# read
+def Root_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if a valid Root object of this name exists
+    inside this group, and if it does, loads and returns it. If it doesn't,
+    raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A Root instance
+    """
+    from .root import Root
+    from os.path import basename
+
+    er = f"Group {group} is not a valid EMD Metadata group"
+    assert("emd_group_type" in group.attrs.keys()), er
+    assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
+
+    root = Root(basename(group.name))
+    return root
+
+
+
+
+
 ## METADATA
 
 # write
@@ -211,7 +273,11 @@ def Metadata_from_h5(group:h5py.Group):
 
 # write
 
-def Array_to_h5(array,group):
+def Array_to_h5(
+    array,
+    group,
+    include_data = True,
+    ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     write or append mode. Writes a new group with a name given by this
@@ -240,13 +306,25 @@ def Array_to_h5(array,group):
     grp.attrs.create("emd_group_type",1) # this tag indicates an Array
     grp.attrs.create("py4dstem_class",array.__class__.__name__)
 
+    # for saving "empty" data blocks, with metadata but no data
+    d = array.data if include_data is True else []
+
     # add the data
-    data = grp.create_dataset(
-        "data",
-        shape = array.data.shape,
-        data = array.data,
-        #dtype = type(array.data)
-    )
+    if include_data:
+        data = grp.create_dataset(
+            "data",
+            shape = array.data.shape,
+            data = array.data
+            #dtype = type(array.data)
+        )
+    # or add empty dataset
+    else:
+        data = grp.create_dataset(
+            "data",
+            shape = 0,
+            data = []
+            #dtype = type(array.data)
+        )
     data.attrs.create('units',array.units) # save 'units' but not 'name' - 'name' is the group name
 
     # Add the normal dim vectors
@@ -284,10 +362,12 @@ def Array_to_h5(array,group):
         dset.attrs.create('name',name)
 
     # Add metadata
-    grp_metadata = grp.create_group('metadata')
-    for name,md in array._metadata.items():
-        array._metadata[name].name = name
-        array._metadata[name].to_h5(grp_metadata)
+    items = array._metadata.items()
+    if len(items)>0:
+        grp_metadata = grp.create_group('_metadata')
+        for name,md in items:
+            array._metadata[name].name = name
+            array._metadata[name].to_h5(grp_metadata)
 
 
 ## read
@@ -355,9 +435,12 @@ def Array_from_h5(group:h5py.Group):
     )
 
     # add metadata
-    grp_metadata = group['metadata']
-    for key in grp_metadata.keys():
-        ar.metadata = Metadata_from_h5(grp_metadata[key])
+    try:
+        grp_metadata = group['_metadata']
+        for key in grp_metadata.keys():
+            ar.metadata = Metadata_from_h5(grp_metadata[key])
+    except KeyError:
+        pass
 
     return ar
 
@@ -369,7 +452,11 @@ def Array_from_h5(group:h5py.Group):
 
 
 # write
-def PointList_to_h5(pointlist,group):
+def PointList_to_h5(
+    pointlist,
+    group,
+    include_data = True
+    ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     write or append mode. Writes a new group with a name given by this
@@ -400,13 +487,18 @@ def PointList_to_h5(pointlist,group):
     for f,t in zip(pointlist.fields,pointlist.types):
         group_current_field = grp.create_group(f)
         group_current_field.attrs.create("dtype", np.string_(t))
-        group_current_field.create_dataset("data", data=pointlist.data[f])
+        group_current_field.create_dataset(
+            "data",
+            data = pointlist.data[f] if include_data is True else []
+        )
 
     # Add metadata
-    grp_metadata = grp.create_group('metadata')
-    for name,md in pointlist._metadata.items():
-        pointlist._metadata[name].name = name
-        pointlist._metadata[name].to_h5(grp_metadata)
+    items = pointlist._metadata.items()
+    if len(items)>0:
+        grp_metadata = grp.create_group('_metadata')
+        for name,md in items:
+            pointlist._metadata[name].name = name
+            pointlist._metadata[name].to_h5(grp_metadata)
 
 
 # read
@@ -434,8 +526,8 @@ def PointList_from_h5(group:h5py.Group):
 
     # Get metadata
     fields = list(group.keys())
-    if 'metadata' in fields:
-        fields.remove('metadata')
+    if '_metadata' in fields:
+        fields.remove('_metadata')
     dtype = []
     for field in fields:
         curr_dtype = group[field].attrs["dtype"].decode('utf-8')
@@ -454,9 +546,12 @@ def PointList_from_h5(group:h5py.Group):
         name=basename(group.name))
 
     # Add additional metadata
-    grp_metadata = group['metadata']
-    for key in grp_metadata.keys():
-        pl.metadata = Metadata_from_h5(grp_metadata[key])
+    try:
+        grp_metadata = group['_metadata']
+        for key in grp_metadata.keys():
+            pl.metadata = Metadata_from_h5(grp_metadata[key])
+    except KeyError:
+        pass
 
     return pl
 
@@ -466,7 +561,11 @@ def PointList_from_h5(group:h5py.Group):
 
 
 # write
-def PointListArray_to_h5(pointlistarray,group):
+def PointListArray_to_h5(
+    pointlistarray,
+    group,
+    include_data = True
+    ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     write or append mode. Writes a new group with a name given by this
@@ -501,14 +600,20 @@ def PointListArray_to_h5(pointlistarray,group):
         pointlistarray.shape,
         dtype
     )
-    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        dset[i,j] = pointlistarray.get_pointlist(i,j).data
+    if include_data is True:
+        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+            dset[i,j] = pointlistarray.get_pointlist(i,j).data
+    else:
+        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+            dset[i,j] = []
 
     # Add metadata
-    grp_metadata = grp.create_group('metadata')
-    for name,md in pointlistarray._metadata.items():
-        pointlistarray._metadata[name].name = name
-        pointlistarray._metadata[name].to_h5(grp_metadata)
+    items = pointlistarray._metadata.items()
+    if len(items)>0:
+        grp_metadata = grp.create_group('_metadata')
+        for name,md in items:
+            pointlistarray._metadata[name].name = name
+            pointlistarray._metadata[name].to_h5(grp_metadata)
 
 
 # read
@@ -550,9 +655,12 @@ def PointListArray_from_h5(group:h5py.Group):
             pass
 
     # Add metadata
-    grp_metadata = group['metadata']
-    for key in grp_metadata.keys():
-        pla.metadata = Metadata_from_h5(grp_metadata[key])
+    try:
+        grp_metadata = group['_metadata']
+        for key in grp_metadata.keys():
+            pla.metadata = Metadata_from_h5(grp_metadata[key])
+    except KeyError:
+        pass
 
     return pla
 

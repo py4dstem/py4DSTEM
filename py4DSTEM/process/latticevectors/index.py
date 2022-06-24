@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io import PointList, PointListArray
+from ...io.datastructure import PointList, PointListArray
 from ...tqdmnd import tqdmnd
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
