@@ -36,6 +36,6 @@ METADATA
 
 IV - Metadata (microscope and acquisition metadata)
 
-V - Calibrations (contains all calibrations and coordinate system information)
+V - Calibration (contains all calibration and coordinate system information)
 
 

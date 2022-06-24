@@ -3,6 +3,7 @@ from numbers import Number
 from typing import Optional
 import h5py
 
+from .tree import Tree
 
 
 class Metadata:
@@ -28,6 +29,7 @@ class Metadata:
             name (Optional, string):
         """
         self.name = name
+        self.tree = Tree()
 
         # create parameter dictionary
         self._params = {}

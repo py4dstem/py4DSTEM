@@ -8,7 +8,7 @@ from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellip
 from .overlay import add_points
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from ..io import DataCube,Calibrations,PointList
+from ..io.datastructure import DataCube,Calibration,PointList
 from ..process.utils import get_voronoi_vertices,convert_ellipse_params
 from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
@@ -587,17 +587,17 @@ def show_origin_meas(data):
     Show the measured positions of the origin.
 
     Args:
-        data (DataCube or Calibrations or 2-tuple of arrays (qx0,qy0))
+        data (DataCube or Calibration or 2-tuple of arrays (qx0,qy0))
     """
     if isinstance(data,tuple):
         assert len(data)==2
         qx,qy = data
     elif isinstance(data,DataCube):
-        qx,qy = data.calibrations.get_origin_meas()
-    elif isinstance(data,Calibrations):
+        qx,qy = data.calibration.get_origin_meas()
+    elif isinstance(data,Calibration):
         qx,qy = data.get_origin_meas()
     else:
-        raise Exception("data must be of type Datacube or Calibrations or tuple")
+        raise Exception("data must be of type Datacube or Calibration or tuple")
 
     show_image_grid(get_ar = lambda i:[qx,qy][i],H=1,W=2,cmap='RdBu')
 
@@ -606,7 +606,7 @@ def show_origin_fit(data):
     Show the measured, fit, and residuals of the origin positions.
 
     Args:
-        data (DataCube or Calibrations or (3,2)-tuple of arrays
+        data (DataCube or Calibration or (3,2)-tuple of arrays
             ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
     """
     if isinstance(data,tuple):
@@ -615,15 +615,15 @@ def show_origin_fit(data):
         qx0_fit,qy0_fit = data[1]
         qx0_residuals,qy0_residuals = data[2]
     elif isinstance(data,DataCube):
-        qx0_meas,qy0_meas = data.calibrations.get_origin_meas()
-        qx0_fit,qy0_fit = data.calibrations.get_origin()
-        qx0_residuals,qy0_residuals = data.calibrations.get_origin_residuals()
-    elif isinstance(data,Calibrations):
+        qx0_meas,qy0_meas = data.calibration.get_origin_meas()
+        qx0_fit,qy0_fit = data.calibration.get_origin()
+        qx0_residuals,qy0_residuals = data.calibration.get_origin_residuals()
+    elif isinstance(data,Calibration):
         qx0_meas,qy0_meas = data.get_origin_meas()
         qx0_fit,qy0_fit = data.get_origin()
         qx0_residuals,qy0_residuals = data.get_origin_residuals()
     else:
-        raise Exception("data must be of type Datacube or Calibrations or tuple")
+        raise Exception("data must be of type Datacube or Calibration or tuple")
 
     show_image_grid(get_ar = lambda i:[qx0_meas,qx0_fit,qx0_residuals,
                                        qy0_meas,qy0_fit,qy0_residuals][i],

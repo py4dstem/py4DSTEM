@@ -201,7 +201,7 @@ def filter_hot_pixels(
         np.roll(diff_mean,(-2, 1),axis=(0,1)).ravel(),
         np.roll(diff_mean,( 2,-1),axis=(0,1)).ravel(),
         np.roll(diff_mean,( 2, 0),axis=(0,1)).ravel(),
-        np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),        
+        np.roll(diff_mean,( 2, 1),axis=(0,1)).ravel(),
         ]), axis=0)
     # arry of the ind_compare'th pixel intensity
     diff_compare = np.reshape(diff_local_med[-ind_compare-1,:], diff_mean.shape)
@@ -231,9 +231,10 @@ def datacube_diffraction_shift(
     bilinear=False,
     ):
     """
-    This function shifts each 2D diffraction image by the values defined by (xshifts,yshifts). 
-    The shift values can be scalars (same shift for all images) or arrays with the same dimensions as
-    the probe positions in datacube.
+    This function shifts each 2D diffraction image by the values defined by
+    (xshifts,yshifts). The shift values can be scalars (same shift for all
+    images) or arrays with the same dimensions as the probe positions in
+    datacube.
 
     Args:
             datacube (DataCube):   py4DSTEM DataCube
@@ -243,7 +244,7 @@ def datacube_diffraction_shift(
             bilinear (bool):       Flag for bilinear image shifts. If set to False, Fourier shifting is used.
 
         Returns:
-            datacube (DataCube):   py4DSTEM DataCube              
+            datacube (DataCube):   py4DSTEM DataCube
     """
 
     # if the shift values are constant, expand to arrays
@@ -252,7 +253,7 @@ def datacube_diffraction_shift(
     if xshifts.ndim == 0:
         xshifts = xshifts * np.ones((datacube.R_Nx,datacube.R_Ny))
     if yshifts.ndim == 0:
-        yshifts = yshifts * np.ones((datacube.R_Nx,datacube.R_Ny))    
+        yshifts = yshifts * np.ones((datacube.R_Nx,datacube.R_Ny))
 
     # Loop over all images
     for ax, ay in tqdmnd(*(datacube.R_Nx,datacube.R_Ny), desc="Shifting images", unit=" images"):
@@ -265,4 +266,4 @@ def datacube_diffraction_shift(
         )
 
     return datacube
-    
+
