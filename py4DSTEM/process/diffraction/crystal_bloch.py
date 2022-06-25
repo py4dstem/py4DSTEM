@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import numpy.lib.recfunctions as rfn
 from scipy import linalg
 from typing import Union, Optional, Dict, Tuple, List
 from time import time
@@ -116,18 +117,23 @@ def calculate_dynamical_structure_factors(
 
     lobato_lookup = single_atom_scatter()
 
+    m0c2 = 5.109989461e5    # electron rest mass, in eV
+    relativistic_factor = (m0c2 + accelerating_voltage)/m0c2
+
     from functools import lru_cache
 
+    # get_f_e returns f^e in units of VÅ^3, with relativistic correction
+    # but not yet converted to 
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe + 0.1j * lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j))
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
@@ -169,11 +175,20 @@ def calculate_dynamical_structure_factors(
                 include_phonon=True,
             )
 
+    display_names = {
+        "Lobato": "Lobato-Van Dyck",
+        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
+        "WK": "Weickenmeier-Kohl",
+        "WK-C": "Weickenmeier-Kohl + Core",
+        "WK-P": "Weickenmeier-Kohl + Phonon",
+        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
+    }
+
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
     for i_hkl in tqdm(
         range(hkl.shape[1]),
-        desc=f"Computing {method} lookup table",
+        desc=f"Computing {display_names[method]} lookup table",
         disable=not verbose,
     ):
         Freal = 0.0
@@ -228,6 +243,7 @@ def generate_dynamical_diffraction_pattern(
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
+    return_complex: bool = False
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -262,17 +278,23 @@ def generate_dynamical_diffraction_pattern(
                                         computed and stored. Subsequent calls will use the cached matrix
                                         for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
-
+        return_complex (bool):          When True, returns both the complex amplitude and intensity. Defaults to (False)
     Returns:
-        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
-            or
-        [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
-                                        a list of PointLists is returned.
+        if return_complex = True:
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
+                or
+            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                            a list of PointLists is returned.
+        else:
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+                or
+            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                            a list of PointLists is returned.
 
     """
     t0 = time()  # start timer for matrix setup
 
-    n_beams = beams.length
+    n_beams = beams.data.shape[0]
 
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
@@ -381,18 +403,40 @@ def generate_dynamical_diffraction_pattern(
     psi_0 = np.zeros((n_beams,))
     psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
 
-    # calculate the diffraction intensities for each thichness matrix
+    # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
-    intensities = [
-        np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
-        for z in np.atleast_1d(thickness)
-    ]
+    if return_complex: 
+  
+        # calculate the amplitudes 
+        amplitudes = [
+            C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))
+            for z in np.atleast_1d(thickness)
+        ]
+        
+        # Do this first to avoid handling structured array 
+        intensities = np.abs(amplitudes) ** 2
+
+        # convert amplitudes as a structured array 
+        # do we want complex64 or complex 32. 
+        amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c16')]))
+
+    else: 
+        intensities = [
+            np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
+            for z in np.atleast_1d(thickness)
+        ]
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        newpl.data["intensity"] = intensities[i]
+        if return_complex: 
+            # overwrite the kinematical intensities with the dynamical intensities
+            newpl.data["intensity"] = intensities[i]
+            # merge amplitudes into the list 
+            newpl.data = rfn.merge_arrays((newpl.data, amplitudes[i]), asrecarray=False, flatten=True)
+        else:
+            newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
 
     if verbose:
@@ -420,6 +464,8 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
+    two_beam_zone_axis_lattice: np.ndarray = None,
+    return_probe: bool = False,
 ) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -444,12 +490,18 @@ def generate_CBED(
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
                                         keyed by tuples of (h,k,l).
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        two_beam_zone_axis_lattice      When only two beams are present in the "beams" PointList,
+                                        the computation of the projected crystallographic directions
+                                        becomes ambiguous. In this case, you must specify the indices of
+                                        the zone axis used to generate the beams.
+        return_probe (bool):            If True, the probe (np.ndarray) will be returned in additon to the CBED
 
     Returns:
         If thickness is a scalar: CBED pattern as np.ndarray
         If thickness is a sequence: CBED patterns for each thickness value as a list of np.ndarrays
         If LACBED is True and thickness is scalar: Dictionary with tuples of ints (h,k,l) as keys, mapping to np.ndarray.
         If LACBED is True and thickness is a sequence: List of dictionaries, structured as above.
+        If return_probe is True: will return a tuple (<CBED/LACBED object>, Probe)
     """
 
     alpha_rad = alpha_mrad / 1000.0
@@ -460,9 +512,20 @@ def generate_CBED(
     )
     qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
 
-    proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
-    hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
-    hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
+    # If there are only two beams, augment the list with a third perpendicular spot
+    if qxy.shape[0] == 2:
+        assert two_beam_zone_axis_lattice is not None, "When only two beams are present, two_beam_zone_axis_lattice must be specified."
+        hkl_reflection = hkl[1] if np.all(qxy[0]==0.) else hkl[0]
+        qxy_reflection = qxy[1] if np.all(qxy[0]==0.) else qxy[0]
+        orthogonal_spot = np.cross(two_beam_zone_axis_lattice,hkl_reflection)
+        hkl_augmented = np.vstack((hkl,orthogonal_spot))
+        qxy_augmented = np.vstack((qxy,np.flipud(qxy_reflection)))
+        proj = np.linalg.lstsq(qxy_augmented, hkl_augmented, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
+    # Otherwise calculate them based on the pattern
+    else:
+        proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
     zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
@@ -542,6 +605,9 @@ def generate_CBED(
     else:
         # In CBED mode, the DP datastructure is a list of arrays
         DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
+    
+    if return_probe:
+        probe = np.zeros(DP_size, dtype=dtype)
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
@@ -557,6 +623,9 @@ def generate_CBED(
             always_return_list=True,
             dynamical_matrix_cache=Ugmh_cache,
         )
+        if return_probe:
+            probe[tx_pixels[i] + qx0, ty_pixels[i] + qy0] = 1
+
 
         if LACBED:
             # loop over each thickness
@@ -586,7 +655,14 @@ def generate_CBED(
             for patt, sim in zip(DP, bloch):
                 patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
-    if return_mask:
-        return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
-    else:
-        return DP[0] if len(thickness) == 1 else DP
+    if not return_probe:
+        if return_mask:
+            return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
+        else:
+            return DP[0] if len(thickness) == 1 else DP
+    else: 
+        if return_mask:
+            return (DP[0], probe, mask) if len(thickness) == 1 else (DP, probe, mask)
+        else:
+            return (DP[0], probe) if len(thickness) == 1 else (DP, probe)
+
