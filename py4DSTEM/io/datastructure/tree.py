@@ -62,6 +62,7 @@ class Tree:
         """
         print('/')
         self._print_tree_to_screen(self)
+        print('\n')
 
     def _print_tree_to_screen(self, tree, tablevel=0, linelevels=[]):
         """

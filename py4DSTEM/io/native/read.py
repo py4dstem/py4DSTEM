@@ -185,6 +185,7 @@ def print_h5_tree(filepath):
     with h5py.File(filepath,'r') as f:
         print('/')
         print_h5pyFile_tree(f)
+        print('\n')
 
 def print_h5pyFile_tree(f, tablevel=0, linelevels=[]):
     """
