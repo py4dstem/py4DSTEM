@@ -132,7 +132,10 @@ def get_pointlistarray_from_grp(g):
     coordinates = g['data'][0,0].dtype
     pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-        pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+        try:
+            pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+        except ValueError:
+            pass
     return pla
 
 
