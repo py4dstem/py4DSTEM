@@ -4,8 +4,11 @@ import os
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
+from ...io import RealSlice
 from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
+
+from numpy.linalg import lstsq
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -1428,6 +1431,126 @@ def match_single_pattern(
         return orientation
 
 
+
+
+
+def calculate_strain(
+    self,
+    bragg_peaks_array: PointListArray,
+    orientation_map: OrientationMap,
+    corr_kernel_size = None,
+    sigma_excitation_error = 0.02,
+    min_num_peaks = 5,
+    rotation_range = None,
+    progress_bar = True,
+    ):
+    '''
+    This function takes in both a PointListArray containing Bragg peaks, and a 
+    corresponding OrientationMap, and uses least squares to compute the 
+    deformation tensor which transforms the simulated diffraction pattern
+    into the experimental pattern, for all probe positons.
+
+    TODO: add robust fitting?
+
+    Args: 
+        bragg_peaks_array (PointListArray):
+        orientation_map (OrientationMap):
+        corr_kernel_size (float):
+
+    Returns:
+        strain_map (RealSlice):  strain tensor
+
+    '''
+
+    # Initialize empty strain maps
+    strain_map = RealSlice(
+        data=np.zeros((
+            bragg_peaks_array.shape[0],
+            bragg_peaks_array.shape[1],
+            5)),
+        slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
+        name='strain_map')
+    strain_map.slices['mask'] = 1
+
+    # init values
+    if corr_kernel_size is None:
+        corr_kernel_size = self.orientation_kernel_size
+    radius_max_2 = corr_kernel_size**2
+
+    # Loop over all probe positions
+    for rx, ry in tqdmnd(
+        # 10,10,
+        # range(45,55),
+        # range(220,230),
+        # range(0,bragg_peaks_array.shape[0],1),
+        # range(120,130),
+        *bragg_peaks_array.shape,
+        desc="Calculating strains",
+        unit=" PointList",
+        disable=not progress_bar,
+        ):
+        # Get bragg peaks from experiment and reference
+        p = bragg_peaks_array.get_pointlist(rx,ry)
+
+        if p.data.shape[0] >= min_num_peaks:
+            p_ref = self.generate_diffraction_pattern(
+                orientation_map.get_orientation(rx,ry),
+                sigma_excitation_error = sigma_excitation_error,
+            )
+
+            # init
+            keep = np.zeros(p.data.shape[0],dtype='bool')
+            inds_match = np.zeros(p.data.shape[0],dtype='int')
+
+            # Pair off experimental Bragg peaks with reference peaks
+            for a0 in range(p.data.shape[0]):
+                dist_2 = (p.data['qx'][a0] - p_ref.data['qx'])**2 \
+                    +   (p.data['qy'][a0] - p_ref.data['qy'])**2
+                ind_min = np.argmin(dist_2)
+
+                if dist_2[ind_min] <= radius_max_2:
+                    inds_match[a0] = ind_min
+                    keep[a0] = True
+
+            # Get all paired peaks
+            qxy = np.vstack((
+                p.data['qx'][keep],
+                p.data['qy'][keep])).T
+            qxy_ref = np.vstack((
+                p_ref.data['qx'][inds_match[keep]],
+                p_ref.data['qy'][inds_match[keep]])).T
+
+            # Apply intensity weighting from experimental measurements
+            qxy *= p.data['intensity'][keep,None]
+            qxy_ref *= p.data['intensity'][keep,None]
+
+            # Fit transformation matrix
+            # Note - not sure about transpose here 
+            # (though it might not matter if rotation isn't included)
+            m = lstsq(qxy_ref, qxy, rcond=None)[0].T
+
+            # Get the infinitesimal strain matrix
+            strain_map.slices['e_xx'][rx,ry] = 1 - m[0,0]
+            strain_map.slices['e_yy'][rx,ry] = 1 - m[1,1]
+            strain_map.slices['e_xy'][rx,ry] = -(m[0,1]+m[1,0])/2.0
+            strain_map.slices['theta'][rx,ry] =  (m[0,1]-m[1,0])/2.0
+
+            # Add finite rotation from ACOM orientation map.
+            # I am not sure about the relative signs here:
+            strain_map.slices['theta'][rx,ry] \
+                -= (orientation_map.angles[rx,ry,0,0] \
+                + orientation_map.angles[rx,ry,0,2])
+
+        else:
+            strain_map.slices['mask'][rx,ry] = 0
+
+    if rotation_range is not None:
+        print(1)
+        strain_map.slices['theta'] \
+            = np.mod(strain_map.slices['theta'],rotation_range)
+
+
+    return strain_map
 
 
 def save_ang_file(

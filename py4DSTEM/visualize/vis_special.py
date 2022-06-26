@@ -335,7 +335,8 @@ def show_strain(strainmap,
     vmin_exx,vmax_exx = vrange_exx[0]/100.,vrange_exx[1]/100.
     vmin_eyy,vmax_eyy = vrange_eyy[0]/100.,vrange_eyy[1]/100.
     vmin_exy,vmax_exy = vrange_exy[0]/100.,vrange_exy[1]/100.
-    vmin_theta,vmax_theta = vrange_theta[0]/100.,vrange_theta[1]/100.
+    # theta is plotted in units of degrees
+    vmin_theta,vmax_theta = vrange_theta[0]/(180.0/np.pi),vrange_theta[1]/(180.0/np.pi)
 
     # Get images
     e_xx = np.ma.array(strainmap.slices['e_xx'],mask=strainmap.slices['mask']==False)
@@ -384,17 +385,24 @@ def show_strain(strainmap,
         cbax12 = divider12.append_axes(layout_p[1],size="4%",pad=0.15)
         cbax21 = divider21.append_axes(layout_p[2],size="4%",pad=0.15)
         cbax22 = divider22.append_axes(layout_p[3],size="4%",pad=0.15)
-        for (show_cbar,cax,cbax,vmin,vmax,tickside,tickunits) in zip(
-                                    show_cbars,
-                                    (cax11,cax12,cax21,cax22),
-                                    (cbax11,cbax12,cbax21,cbax22),
-                                    (vmin_exx,vmin_eyy,vmin_exy,vmin_theta),
-                                    (vmax_exx,vmax_eyy,vmax_exy,vmax_theta),
-                                    (layout_p[0],layout_p[1],layout_p[2],layout_p[3]),
-                                    ('% ',' %','% ',r' $^\circ$')):
+        for (ind,show_cbar,cax,cbax,vmin,vmax,tickside,tickunits) in zip(
+            range(4),
+            show_cbars,
+            (cax11,cax12,cax21,cax22),
+            (cbax11,cbax12,cbax21,cbax22),
+            (vmin_exx,vmin_eyy,vmin_exy,vmin_theta),
+            (vmax_exx,vmax_eyy,vmax_exy,vmax_theta),
+            (layout_p[0],layout_p[1],layout_p[2],layout_p[3]),
+            ('% ',' %','% ',r' $^\circ$')):
             if show_cbar:
                 ticks = np.linspace(vmin,vmax,ticknumber,endpoint=True)
-                ticklabels = (np.round(np.linspace(100*vmin,100*vmax,ticknumber,endpoint=True)*100)/100).astype(str)
+                if ind < 3:
+                    ticklabels = np.round(np.linspace(
+                        100*vmin,100*vmax,ticknumber,endpoint=True),decimals=2).astype(str)
+                else:
+                    ticklabels = np.round(np.linspace(
+                        (180/np.pi)*vmin,(180/np.pi)*vmax,ticknumber,endpoint=True),decimals=2).astype(str)
+
                 if tickside in ('left','right'):
                     cb = plt.colorbar(cax,cax=cbax,ticks=ticks,orientation='vertical')
                     cb.ax.set_yticklabels(ticklabels,size=ticklabelsize)
