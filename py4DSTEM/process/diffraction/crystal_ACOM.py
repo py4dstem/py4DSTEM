@@ -1536,10 +1536,16 @@ def calculate_strain(
             strain_map.slices['theta'][rx,ry] =  (m[0,1]-m[1,0])/2.0
 
             # Add finite rotation from ACOM orientation map.
-            # I am not sure about the relative signs here:
-            strain_map.slices['theta'][rx,ry] \
-                -= (orientation_map.angles[rx,ry,0,0] \
-                + orientation_map.angles[rx,ry,0,2])
+            # I am not sure about the relative signs here.
+            # Also, I need to add in the mirror operator.
+            if orientation_map.mirror[rx,ry,0]:
+                strain_map.slices['theta'][rx,ry] \
+                    += (orientation_map.angles[rx,ry,0,0] \
+                    + orientation_map.angles[rx,ry,0,2])
+            else:
+                strain_map.slices['theta'][rx,ry] \
+                    -= (orientation_map.angles[rx,ry,0,0] \
+                    + orientation_map.angles[rx,ry,0,2])
 
         else:
             strain_map.slices['mask'][rx,ry] = 0
