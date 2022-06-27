@@ -50,29 +50,50 @@ datacube.tree.print()
 
 # Virtual imaging
 
-#geometry_BF = {
-#    'keys' : vals
-#}
-#geometry_ADF = {
-#    'keys' : vals
-#}
-#datacube.get_virtual_image(**geometry_BF)
-#datacube.get_virtual_image(**geometry_ADF)
-#show(datacube.tree['BF'])
-#show(datacube.tree['ADF'])
-#
-#
-#print(datacube.tree)
-#
-#
-## load a vacuum scan
+geometry_BF = (
+    (432,432),
+    30
+)
+geometry_ADF = (
+    (432,432),
+    (80,300)
+)
+im_BF = py4DSTEM.process.virtualimage.get_virtualimage(
+    datacube,
+    geometry_BF,
+    name = 'vBF'
+)
+im_ADF = py4DSTEM.process.virtualimage.get_virtualimage(
+    datacube,
+    geometry_ADF,
+    name = 'vADF'
+)
+#show(datacube.tree['vBF'])
+#show(datacube.tree['vADF'])
+
+print("After virtual imaging")
+datacube.tree.print()
+
+
+
+
+# Probe
+
 ## make a probe
 ## put the probe in datacube's tree
-#
-#filepath_vacuum = "filepath"
-#datacube_vacuum = py4DSTEM.io.read(filepath_vacuum)
-#
-#datacube_vacuum.get_probe_ROI(lims)
+
+datacube_vacuum = py4DSTEM.io.read(
+    filepath_vacuum,
+    name = 'datacube_vacuum'
+)
+print('Loaded a vacuum datacube:')
+print(datacube_vacuum)
+
+
+probe = py4DSTEM.process.probe.get_vacuum_probe(
+    datacube_vacuum,
+    ROI = (6,10,6,10))
+
 #datacube_vacuum.get_probe_kernel(params)
 #show(datacube_vacuum.tree['probe'].probe)
 #show(datacube_vacuum.tree['probe'].kernel)
@@ -84,6 +105,9 @@ datacube.tree.print()
 #py4DSTEM.visualize.show_probe_kernel(datacube.tree['probe'].kernel)
 #
 #
+#print("After probe")
+#datacube.tree.print()
+
 ## ...
 ## ...
 ## ...

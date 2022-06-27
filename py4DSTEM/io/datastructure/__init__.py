@@ -8,6 +8,7 @@ from .pointlistarray import *
 
 from .calibration import *
 from .datacube import *
+from .probe import *
 from .diffractionslice import *
 from .realslice import *
 

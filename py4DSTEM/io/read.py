@@ -52,8 +52,8 @@ def read(
     """
     # parse filetype
 
-    er1 = "filepath must be a string or Path"
-    er2 = "specified filepath does not exist"
+    er1 = f"filepath must be a string or Path, not {type(filepath)}"
+    er2 = f"specified filepath '{filepath}' does not exist"
     assert(isinstance(filepath, (str,pathlib.Path) )), er1
     assert(exists(filepath)), er2
 

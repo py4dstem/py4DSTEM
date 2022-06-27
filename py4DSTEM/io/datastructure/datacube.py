@@ -43,17 +43,21 @@ class DataCube(Array):
         """
 
         # expand r/q inputs to include 2 dimensions
-        if type(R_pixel_size) is not list: R_pixel_size = [R_pixel_size,R_pixel_size]
-        if type(R_pixel_units) is not list: R_pixel_units = [R_pixel_units,R_pixel_units]
-        if type(Q_pixel_size) is not list: Q_pixel_size = [Q_pixel_size,Q_pixel_size]
-        if type(Q_pixel_units) is not list: Q_pixel_units = [Q_pixel_units,Q_pixel_units]
+        if type(R_pixel_size) is not list: R_pixel_size = [
+            R_pixel_size,R_pixel_size]
+        if type(R_pixel_units) is not list: R_pixel_units = [
+            R_pixel_units,R_pixel_units]
+        if type(Q_pixel_size) is not list: Q_pixel_size = [
+            Q_pixel_size,Q_pixel_size]
+        if type(Q_pixel_units) is not list: Q_pixel_units = [
+            Q_pixel_units,Q_pixel_units]
 
         # initialize as an Array
         Array.__init__(
             self,
             data = data,
             name = name,
-            units = 'intensity',
+            units = 'pixel intensity',
             dims = [
                 R_pixel_size[0],
                 R_pixel_size[1],
@@ -89,7 +93,35 @@ class DataCube(Array):
 
     ## properties
 
-    # R pixel sizes/units
+    # FOV
+    @property
+    def R_Nx(self):
+        return self.data.shape[0]
+    @property
+    def R_Ny(self):
+        return self.data.shape[1]
+    @property
+    def Q_Nx(self):
+        return self.data.shape[2]
+    @property
+    def Q_Ny(self):
+        return self.data.shape[3]
+
+    @property
+    def Rshape(self):
+        return (self.data.shape[0],self.data.shape[1])
+    @property
+    def Qshape(self):
+        return (self.data.shape[2],self.data.shape[3])
+
+    @property
+    def R_N(self):
+        return self.R_Nx*self.R_Ny
+
+
+    # pixel sizes/units
+
+    # R
     @property
     def R_pixel_size(self):
         return self.calibration.get_R_pixel_size()
@@ -109,7 +141,7 @@ class DataCube(Array):
         self.dim_units[1] = x[1]
         self.calibration.set_R_pixel_units(x)
 
-    # R pixel sizes/units
+    # Q 
     @property
     def Q_pixel_size(self):
         return self.calibration.get_Q_pixel_size()
@@ -129,27 +161,15 @@ class DataCube(Array):
         self.dim_units[3] = x[1]
         self.calibration.set_Q_pixel_units(x)
 
+
     # calibration
-    #@property
-    #def calibration(self):
-    #    if self._calibration is not None:
-    #        return self._calibration
-    #    elif self._parent_calibration is not None:
-    #        return self._parent_calibration
-    #    else:
-    #        return None
-    #@calibration.setter
-    #def calibration(self,x):
-    #    self._calibration = x
-    #    self.tree = x,'calibration'
-
-
-    #from ...process.virtualimage import (
-    #    get_max_dp,
-    #    get_mean_dp,
-    #    get_median_dp
-    #)
-
+    @property
+    def calibration(self):
+        return self.tree['calibration']
+    @calibration.setter
+    def calibration(self, x):
+        assert( isinstance( x, Calibration))
+        self.tree['calibration'] = x
 
 
 
@@ -165,6 +185,13 @@ class DataCube(Array):
 
 
 ############ END OF CLASS ###########
+
+    #from ...process.virtualimage import (
+    #    get_max_dp,
+    #    get_mean_dp,
+    #    get_median_dp
+    #)
+
 
 
 
