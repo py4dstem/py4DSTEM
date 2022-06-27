@@ -1,10 +1,11 @@
 from . import virtualimage
+from . import probe
 
+#from . import diskdetection
 
 
 #from . import utils
 #from . import fit
-#from . import diskdetection
 #from . import calibration
 #from . import latticevectors
 #from . import classification
