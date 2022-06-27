@@ -245,6 +245,7 @@ def generate_dynamical_diffraction_pattern(
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
     return_complex: bool = False,
     return_eigenvectors: bool = False,
+    return_Smatrix:bool = False,
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -406,7 +407,13 @@ def generate_dynamical_diffraction_pattern(
 
     # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
-    if return_complex: 
+    if return_Smatrix:
+        Smatrices = [
+                    C @ np.diag(np.exp(2.0j * np.pi * z * gamma)) @ C_inv
+                    for z in np.atleast_1d(thickness)
+                    ]
+        return Smatrices, psi_0
+    elif return_complex: 
   
         # calculate the amplitudes 
         amplitudes = [
@@ -420,7 +427,6 @@ def generate_dynamical_diffraction_pattern(
         # convert amplitudes as a structured array 
         # do we want complex64 or complex 32. 
         amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c16')]))
-
     else: 
         intensities = [
             np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
