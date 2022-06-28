@@ -284,16 +284,19 @@ def generate_dynamical_diffraction_pattern(
                                         the diagonal elements. This is used for CBED calculations.
         return_complex (bool):          When True, returns both the complex amplitude and intensity. Defaults to (False)
     Returns:
+        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            or
+        [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                        a list of PointLists is returned.
         if return_complex = True:
             bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
                 or
             [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
                                             a list of PointLists is returned.
-        else:
-            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
-                or
-            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
-                                            a list of PointLists is returned.
+        if return_Smatrix = True:
+            [S_matrix, ...], psi_0:     Returns a list of S-matrices for each thickness (this is always a list),
+                                        and the vector representing the incident plane wave. The beams of the
+                                        S-matrix have the same order as in the input `beams`.
 
     """
     t0 = time()  # start timer for matrix setup
