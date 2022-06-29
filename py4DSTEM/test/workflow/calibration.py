@@ -1,15 +1,7 @@
-# Sample workflow
-
-# creates a tree of data objects 
-# nested under a parent datacube
-# while running a sample
-# processing workflow
-# (calibration)
-# then saves the full tree 
-# into an HDF5 file.
+# Calibration workflow
 
 import py4DSTEM
-#from py4DSTEM.visualize import show
+from py4DSTEM.visualize import show
 import numpy as np
 
 
@@ -34,12 +26,12 @@ datacube.tree.print()
 
 # Virtual diffraction
 
-dp_max = py4DSTEM.process.virtualimage.get_dp_max(datacube)
-dp_mean = py4DSTEM.process.virtualimage.get_dp_mean(datacube)
-dp_median = py4DSTEM.process.virtualimage.get_dp_median(datacube)
-#show(datacube.tree['dp_max'])
-#show(datacube.tree['dp_mean'])
-#show(datacube.tree['dp_median'])
+dp_max = datacube.get_dp_max()
+dp_mean = datacube.get_dp_mean()
+dp_median = datacube.get_dp_median()
+#show(datacube.tree['dp_max'], scaling='log')
+#show(datacube.tree['dp_mean'], scaling='log')
+#show(datacube.tree['dp_median'], scaling='log')
 
 print("After virtual diffraction")
 datacube.tree.print()
@@ -49,30 +41,30 @@ datacube.tree.print()
 
 
 # Virtual imaging
-
-geometry_BF = (
-    (432,432),
-    30
-)
-geometry_ADF = (
-    (432,432),
-    (80,300)
-)
-im_BF = py4DSTEM.process.virtualimage.get_virtualimage(
-    datacube,
-    geometry_BF,
-    name = 'vBF'
-)
-im_ADF = py4DSTEM.process.virtualimage.get_virtualimage(
-    datacube,
-    geometry_ADF,
-    name = 'vADF'
-)
+#
+#geometry_BF = (
+#    (432,432),
+#    30
+#)
+#geometry_ADF = (
+#    (432,432),
+#    (80,300)
+#)
+#im_BF = py4DSTEM.process.virtualimage.get_virtualimage(
+#    datacube,
+#    geometry_BF,
+#    name = 'vBF'
+#)
+#im_ADF = py4DSTEM.process.virtualimage.get_virtualimage(
+#    datacube,
+#    geometry_ADF,
+#    name = 'vADF'
+#)
 #show(datacube.tree['vBF'])
 #show(datacube.tree['vADF'])
 
-print("After virtual imaging")
-datacube.tree.print()
+#print("After virtual imaging")
+#datacube.tree.print()
 
 
 
@@ -82,17 +74,19 @@ datacube.tree.print()
 ## make a probe
 ## put the probe in datacube's tree
 
-datacube_vacuum = py4DSTEM.io.read(
-    filepath_vacuum,
-    name = 'datacube_vacuum'
-)
-print('Loaded a vacuum datacube:')
-print(datacube_vacuum)
+#datacube_vacuum = py4DSTEM.io.read(
+#    filepath_vacuum,
+#    name = 'datacube_vacuum'
+#)
+#print('Loaded a vacuum datacube:')
+#print(datacube_vacuum)
 
 
-probe = py4DSTEM.process.probe.get_vacuum_probe(
-    datacube_vacuum,
-    ROI = (6,10,6,10))
+#probe = py4DSTEM.process.probe.get_vacuum_probe(
+#    datacube_vacuum,
+#    ROI = (7,10,7,10))
+
+#print(probe.calibration)
 
 #datacube_vacuum.get_probe_kernel(params)
 #show(datacube_vacuum.tree['probe'].probe)

@@ -5,7 +5,7 @@ from numbers import Number
 from typing import Optional
 import h5py
 
-from .metadata import Metadata
+from ..emd.metadata import Metadata
 
 
 class Calibration(Metadata):
@@ -87,6 +87,22 @@ class Calibration(Metadata):
         Q_Nx = self.get_Q_Nx()
         Q_Ny = self.get_Q_Ny()
         return (R_Nx,R_Ny,Q_Nx,Q_Ny)
+    def set_Qshape(self,x):
+        """
+        Args:
+            x (2-tuple): (Q_Nx,Q_Ny)
+        """
+        Q_Nx,Q_Ny = x
+        self._params['Q_Nx'] = Q_Nx
+        self._params['Q_Ny'] = Q_Ny
+    def set_Rshape(self,x):
+        """
+        Args:
+            x (2-tuple): (R_Nx,R_Ny)
+        """
+        R_Nx,R_Ny = x
+        self._params['R_Nx'] = R_Nx
+        self._params['R_Ny'] = R_Ny
 
     # pixel sizes
     def set_Q_pixel_size(self,x):
@@ -242,7 +258,7 @@ class Calibration(Metadata):
 
     # read
     def from_h5(group):
-        from .io_py4dstem import Calibration_from_h5
+        from .io import Calibration_from_h5
         return Calibration_from_h5(group)
 
 

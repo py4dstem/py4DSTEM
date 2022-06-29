@@ -1,7 +1,7 @@
 # Defines the Probe class, which stores vacuum probes
 # and cross-correlation kernels derived from them
 
-from .array import Array
+from ..emd.array import Array
 
 from typing import Optional,Union
 import numpy as np
@@ -44,19 +44,26 @@ class Probe(Array):
             ]
         )
 
-        # Make calibration container
-        # set its size/units
-        # add to tree
-        #self.calibration = Calibration()
-        #self.calibration['R_pixel_size'] = R_pixel_size
-        #self.calibration['R_pixel_units'] = R_pixel_units
-        #self.calibration['Q_pixel_size'] = Q_pixel_size
-        #self.calibration['Q_pixel_units'] = Q_pixel_units
-        #self.tree['calibration'] = self.calibration
-
 
 
     ## properties
+
+    @property
+    def probe(self):
+        return self.get_slice('probe').data
+    @probe.setter
+    def probe(self,x):
+        assert(x.shape == (self.data.shape[:2]))
+        self.data[:,:,0] = x
+    @property
+    def kernel(self):
+        return self.get_slice('kernel').data
+    @kernel.setter
+    def kernel(self,x):
+        assert(x.shape == (self.data.shape[:2]))
+        self.data[:,:,1] = x
+
+
 
     # FOV
     # @property
@@ -144,7 +151,7 @@ class Probe(Array):
 
     # read
     #def from_h5(group):
-    #    from .io_py4dstem import DataCube_from_h5
+    #    from .io import DataCube_from_h5
     #    return DataCube_from_h5(group)
 
 

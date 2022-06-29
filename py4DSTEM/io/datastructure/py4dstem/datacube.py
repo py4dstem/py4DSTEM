@@ -1,7 +1,8 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from .array import Array
+from ..emd.array import Array
 from .calibration import Calibration
+from .parenttree import ParentTree
 
 from typing import Optional,Union
 import numpy as np
@@ -11,6 +12,15 @@ class DataCube(Array):
     """
     Stores 4D-STEM datasets.
     """
+
+    from .datacube_fns import (
+        get_diffraction_image,
+        get_dp_max,
+        get_dp_mean,
+        get_dp_median
+    )
+
+
     def __init__(
         self,
         data: np.ndarray,
@@ -79,15 +89,20 @@ class DataCube(Array):
             slicelabels = slicelabels
         )
 
-        # Make calibration container
-        # set its size/units
-        # add to tree
-        self.calibration = Calibration()
-        self.calibration['R_pixel_size'] = R_pixel_size
-        self.calibration['R_pixel_units'] = R_pixel_units
-        self.calibration['Q_pixel_size'] = Q_pixel_size
-        self.calibration['Q_pixel_units'] = Q_pixel_units
-        self.tree['calibration'] = self.calibration
+
+
+        # make a tree
+        # we're overwriting the emd Tree with the py4DSTEM Tree
+        # which knows how to track the parent datacube
+        # also adds calibration to the tree
+        self.tree = ParentTree(self, Calibration())
+
+        # set size/units
+        self.tree['calibration'].set_R_pixel_size( R_pixel_size )
+        self.tree['calibration'].set_R_pixel_units( R_pixel_units )
+        self.tree['calibration'].set_Q_pixel_size( Q_pixel_size )
+        self.tree['calibration'].set_Q_pixel_units( Q_pixel_units )
+
 
 
 
@@ -173,13 +188,20 @@ class DataCube(Array):
 
 
 
+    # for parent datacube tracking
+    def track_parent(self, x):
+        x._parent = self
+        x.calibration = self.calibration
+
+
+
     # HDF5 read/write
 
     # write is inherited from Array
 
     # read
     def from_h5(group):
-        from .io_py4dstem import DataCube_from_h5
+        from .io import DataCube_from_h5
         return DataCube_from_h5(group)
 
 

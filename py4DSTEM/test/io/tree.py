@@ -167,10 +167,6 @@ py4DSTEM.io.save(
 )
 
 
-py4DSTEM.io.print_h5_tree(
-    filepath_h5
-)
-
 datacube.tree.print()
 
 
@@ -191,6 +187,7 @@ print(loaded_data_tree)
 print(loaded_data_tree.tree)
 
 loaded_data_tree.tree.print()
+
 
 
 #### append

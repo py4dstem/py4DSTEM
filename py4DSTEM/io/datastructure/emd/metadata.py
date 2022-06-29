@@ -82,11 +82,11 @@ class Metadata:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .io_emd import Metadata_to_h5
+        from .io import Metadata_to_h5
         Metadata_to_h5(self,group)
 
     def from_h5(group):
-        from .io_emd import Metadata_from_h5
+        from .io import Metadata_from_h5
         return Metadata_from_h5(group)
 
 
