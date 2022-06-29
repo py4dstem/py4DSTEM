@@ -14,6 +14,7 @@ __all__ = [
     'combine_masks',
     'plot_mask_overlay',
     'get_virtualimage',
+    'get_virtualimage_pointlistarray',
     '_get_virtualimage_rect_old',
     '_get_virtualimage_circ_old',
     '_get_virtualimage_ann_old',
@@ -28,7 +29,64 @@ __all__ = [
 #TODO add alias names for get get_BF, get_ADF? 
 #TODO Work out how to handle name space to access underlying __functions__, use __all__ or something like that 
 
-#### Mask Making Functions ####
+
+#### Mask making functions for PointListArrays)
+# TODO - add pointlistarrays as a possible input for the overall fascade function
+def get_virtualimage_pointlistarray(
+    peaks,
+    geometry = None,
+    ):
+    """
+    Make an annular boolean mask centered at (x0,y0), with inner/outer
+    radii of Ri/Ro.
+    Args:
+        peaks (PointListArray): List of all peaks and intensities.
+        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
+                            and radii is either max angle, or a 2-tuple (ri,ro)
+                            describing the inner and outer radial ranges.
+    Returns:
+        im_virtual (2D numpy array): the output virtual image
+    """
+
+    # Set geometry
+    if geometry is None:
+        radial_range = None
+    else:
+        if len(geometry[0]) == 0:
+            origin = None
+        else:
+            origin = np.array(geometry[0])
+        if isinstance(geometry[1], int) or isinstance(geometry[1], float):
+            radial_range = np.array((0,geometry[1]))
+        elif len(geometry[1]) == 0:
+            radial_range = None
+        else:
+            radial_range = np.array(geometry[1])
+
+    # init
+    im_virtual = np.zeros(peaks.shape)
+
+    # Generate image
+    for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
+        p = peaks.get_pointlist(rx,ry)
+        if p.data.shape[0] > 0:
+            if radial_range is None:
+                im_virtual[rx,ry] = np.sum(p.data['intensity'])
+            else:
+                if origin is None:
+                    qr = np.hypot(p.data['qx'],p.data['qy'])
+                else:
+                    qr = np.hypot(p.data['qx'] - origin[0],p.data['qy'] - origin[1])
+                sub = np.logical_and(
+                    qr >= radial_range[0],
+                    qr <  radial_range[1])
+                if np.sum(sub) > 0:
+                    im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+
+    return im_virtual
+
+
+#### Mask Making Functions for datacubes / arrays ####
 # lifted from py4DSTEM old funcs
 #TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections 
 #TODO Add multiple mask maker, e.g. given list of coordinate tuples create circular masks at each point
@@ -666,7 +724,13 @@ def _make_function_dict():
     return function_dict
 
 
-def get_virtualimage(datacube, geometry=None, mask=None, eager_compute=True, *args, **kwargs):
+def get_virtualimage(
+    datacube, 
+    geometry=None, 
+    mask=None, 
+    eager_compute=True, 
+    *args, 
+    **kwargs):
 
     """
     Get a virtual image from a py4DSTEM datacube object, and will operate on in memory (np.ndarray), memory mapped (np.memmap) or dask arrays (da.Array)
