@@ -9,6 +9,7 @@ from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
 
 from numpy.linalg import lstsq
+import cupy as cp
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -30,6 +31,7 @@ def orientation_plan(
     fiber_axis=None,
     fiber_angles=None,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
+    CUDA: bool = True,
     progress_bar: bool = True,
     ):
 
@@ -60,6 +62,7 @@ def orientation_plan(
         cartesian_directions (bool): When set to true, all zone axes and projection directions
                                      are specified in Cartesian directions.
         figsize (float):            (2,) vector giving the figure size
+        CUDA (bool):             Use CUDA for the Fourier operations.
         progress_bar (bool):    If false no progress bar is displayed
     """
 
@@ -78,7 +81,7 @@ def orientation_plan(
         self.orientation_fiber_angles = None
     else:
         self.orientation_fiber_angles = np.asarray(fiber_angles)
-
+    self.CUDA = CUDA
     
 
     # Calculate wavelenth
@@ -748,7 +751,11 @@ def orientation_plan(
     self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
     # Fourier domain along angular axis
-    self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+    if self.CUDA:
+        self.orientation_ref = cp.asarray(self.orientation_ref)
+        self.orientation_ref = cp.conj(cp.fft.fft(self.orientation_ref))
+    else:
+        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
 def match_orientations(
@@ -814,6 +821,10 @@ def match_single_pattern(
         subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
         plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
         plot_corr (bool):             set to true to plot the resulting correlogram
+        returnfig (bool):             Return figure handles
+        figsize (list):               size of figure
+        verbose (bool):               Print the fitted zone axes, correlation scores.
+        CUDA (bool):                  Enable CUDA for the FFT steps.
 
     Returns:
         orientation (Orientation):    Orientation class containing all outputs
@@ -855,11 +866,6 @@ def match_single_pattern(
             ),
             dtype="float",
         )
-        if fraction_pre_match is not None:
-            im_1D = np.zeros(
-                np.size(self.orientation_shell_radii),
-                dtype="float",
-            )
 
         for ind_radial, radius in enumerate(self.orientation_shell_radii):
             dqr = np.abs(qr - radius)
@@ -895,159 +901,68 @@ def match_single_pattern(
                     ),
                     axis=0,
                 )
-                # if fraction_pre_match is not None:
-                #     im_1D[ind_radial] = np.sum(
-                #         np.power(radius, self.orientation_radial_power)
-                #         * np.power(
-                #             np.maximum(intensity[sub, None], 0.0),
-                #             self.orientation_intensity_power
-                #         )
-                #         * np.maximum(1 - dqr[sub, None] / self.orientation_kernel_size, 0.0),
-                #         axis=0,
-                #     )
-  
-
 
         # Plot polar space image if needed
         if plot_polar is True and match_ind==0:
-            # print(match_ind)
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             ax.imshow(im_polar)
+            plt.show()
 
         # FFT along theta
-        im_polar_fft = np.fft.fft(im_polar)
+        if self.CUDA:
+            im_polar_fft = cp.fft.fft(cp.asarray(im_polar))        
+        else:
+            im_polar_fft = np.fft.fft(im_polar)
 
         # Calculate full orientation correlogram
-        # if fraction_pre_match is None:
-        corr_full = np.maximum(
-            np.sum(
-                np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
-                axis=1,
-            ),
-            0,
-        )
+        if self.CUDA:
+            corr_full = np.maximum(
+                np.sum(
+                    np.real(cp.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
+                    axis=1,
+                ),
+                0,
+            ).get()
+        else:
+            corr_full = np.maximum(
+                np.sum(
+                    np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
+                    axis=1,
+                ),
+                0,
+            )
 
         # Get maximum (non inverted) correlation value
         ind_phi = np.argmax(corr_full, axis=1)
 
         # Calculate orientation correlogram for inverse pattern (in-plane mirror)
         if inversion_symmetry:
-            corr_full_inv = np.maximum(
-                np.sum(
-                    np.real(
-                        np.fft.ifft(
-                            self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
-                        )
+            if self.CUDA:
+                corr_full_inv = np.maximum(
+                    np.sum(
+                        np.real(
+                            cp.fft.ifft(
+                                self.orientation_ref * cp.conj(im_polar_fft)[None, :, :]
+                            )
+                        ),
+                        axis=1,
                     ),
-                    axis=1,
-                ),
-                0,
-            )
+                    0,
+                ).get()
+            else:
+                corr_full_inv = np.maximum(
+                    np.sum(
+                        np.real(
+                            np.fft.ifft(
+                                self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
+                            )
+                        ),
+                        axis=1,
+                    ),
+                    0,
+                )
             ind_phi_inv = np.argmax(corr_full_inv, axis=1)
             corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
-
-
-
-
-        # else:
-        #     im_1D -= np.mean(im_1D)
-        #     corr_1D = self.orientation_ref_1D @ im_1D
-        #     inds = np.argsort(corr_1D)
-        #     # inds_keep = inds
-        #     inds_keep = inds[-np.round(inds.shape[0] * fraction_pre_match).astype('int'):]
-
-        #     corr_full = np.zeros((
-        #         self.orientation_ref.shape[0],
-        #         self.orientation_ref.shape[2]))
-        #     corr_full[inds_keep,:] = np.maximum(
-        #         np.sum(
-        #             np.real(np.fft.ifft(self.orientation_ref[inds_keep,:,:] * im_polar_fft[None, :, :])),
-        #             axis=1,
-        #         ),
-        #         0,
-        #     )
-        #     # Calculate orientation correlogram for inverse pattern
-        #     if inversion_symmetry:
-        #         corr_full_inv = np.zeros((
-        #             self.orientation_ref.shape[0],
-        #             self.orientation_ref.shape[2]))
-        #         corr_full_inv[inds_keep,:] = np.maximum(
-        #             np.sum(
-        #                 np.real(
-        #                     np.fft.ifft(
-        #                         self.orientation_ref[inds_keep,:,:] * np.conj(im_polar_fft)[None, :, :]
-        #                     )
-        #                 ),
-        #                 axis=1,
-        #             ),
-        #             0,
-        #         )
-        #         ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-        #         corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
-
-
-        
-        # Testing of direct index correlogram computation
-        # # init
-        # corr_full = np.zeros((
-        #     self.orientation_num_zones,
-        #     self.orientation_in_plane_steps)) 
-        # if inversion_symmetry:
-        #     corr_full_inv = np.zeros((
-        #         self.orientation_num_zones,
-        #         self.orientation_in_plane_steps))
-
-
-        # for ind_peak, radius in enumerate(qr):
-        #     ip = qphi[ind_peak] / dphi
-        #     fp = np.floor(ip).astype('int')
-        #     dp = ip - fp
-
-        #     dqr_all = np.abs(self.orientation_shell_radii - radius)
-        #     sub = dqr_all < self.orientation_kernel_size
-
-        #     # for ind_radial, dqr in enumerate(dqr_all):
-        #         # if dqr < self.orientation_kernel_size:
-        #     weight = (1 - dqr_all[sub] / self.orientation_kernel_size) \
-        #         *  np.power(np.maximum(intensity[ind_peak], 0),self.orientation_intensity_power) \
-        #         *  np.power(qr[ind_peak],self.orientation_radial_power)
-
-        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
-        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)
-
-        #     if inversion_symmetry:
-        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
-        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)          
-
-
-
-        #     # inds = np.argwhere(dqr < self.orientation_kernel_size)
-
-        #     # ip = qphi[ind_peak] / dphi
-        #     # fp = np.floor(ip)
-        #     # dp = ip - fp
-
-        #     # for ind_radial in inds:
-
-        #     #     weight = (1 - dqr[ind_radial] / self.orientation_kernel_size) \
-        #     #         *  np.power(np.max(intensity[ind_peak], 0),self.orientation_intensity_power)
-
-        #     #     print(ind_radial)
-        #     #     # print(corr_full.shape)
-        #     #     # print(type(self.orientation_ref))
-        #     #     corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,ind_radial),:],-fp  ,axis=1)
-        #     #     corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],-fp-1,axis=1)
-
-        #     #     if inversion_symmetry:
-        #     #         corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp  ,axis=1)
-        #     #         corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp+1,axis=1)                    
-
-        # # Get best fit in-plane rotations
-        # ind_phi = np.argmax(corr_full, axis=1)
-        # if inversion_symmetry:
-        #     ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-
-
 
         # Find best match for each zone axis
         for a0 in range(self.orientation_num_zones):
@@ -1083,12 +998,6 @@ def match_single_pattern(
                         self.orientation_gamma[ind_phi[a0]] + dc * dphi
                     )
 
-        # keep plotting image if needed 
-        if plot_corr and match_ind == 0:
-            corr_plot = corr_value
-            # corr_plot = corr_1D
-
-
         # If needed, keep correlation values for additional matches
         if multiple_corr_reset and num_matches_return > 1 and match_ind == 0:
             corr_value_keep = corr_value.copy()
@@ -1096,6 +1005,11 @@ def match_single_pattern(
 
         # Determine the best fit orientation
         ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
+
+        # keep plotting image if needed 
+        if plot_corr and match_ind == 0:
+            corr_plot = corr_value.copy()
+            sig_in_plane = np.squeeze(corr_full[ind_best_fit, :]).copy()
 
         # Verify current match has a correlation > 0
         if corr_value[ind_best_fit] > 0:
@@ -1458,8 +1372,10 @@ def match_single_pattern(
 
 
         # In-plane rotation
-        sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
-        sig_in_plane = sig_in_plane / np.max(sig_in_plane)
+        # sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
+        sig_in_plane_max = np.max(sig_in_plane)
+        if sig_in_plane_max > 0:
+            sig_in_plane /= sig_in_plane_max
         ax[1].plot(
             self.orientation_gamma * 180 / np.pi,
             sig_in_plane,
