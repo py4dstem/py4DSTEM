@@ -17,6 +17,7 @@ from ..datastructure import (
     Calibration,
     DataCube,
     DiffractionSlice,
+    DiffractionImage,
     RealSlice
 )
 
@@ -153,48 +154,28 @@ def _populate_tree(tree,grp):
 
 
 
-def _get_class(grp):
-
-    lookup = {
-        'Metadata' : Metadata,
-        'Array' : Array,
-        'PointList' : PointList,
-        'PointListArray' : PointListArray,
-        'Calibration' : Calibration,
-        'DataCube' : DataCube,
-        'DiffractionSlice' : DiffractionSlice,
-        'RealSlice' : RealSlice
-    }
-    try:
-        classname = grp.attrs['py4dstem_class']
-        __class__ = lookup[classname]
-        return __class__
-    except KeyError:
-        return None
 
 
 
-
-
-
-def print_h5_tree(filepath):
+def print_h5_tree(filepath, show_metadata=False):
     """
     Prints the contents of an h5 file from a filepath.
     """
 
     with h5py.File(filepath,'r') as f:
         print('/')
-        print_h5pyFile_tree(f)
+        print_h5pyFile_tree(f, show_metadata=show_metadata)
         print('\n')
 
-def print_h5pyFile_tree(f, tablevel=0, linelevels=[]):
+def print_h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
     """
     Prints the contents of an h5 file from an open h5py File instance.
     """
     if tablevel not in linelevels:
         linelevels.append(tablevel)
     keys = [k for k in f.keys() if isinstance(f[k],h5py.Group)]
-    keys = [k for k in keys if k != 'metadata']
+    if not show_metadata:
+        keys = [k for k in keys if k != '_metadata']
     N = len(keys)
     for i,k in enumerate(keys):
         string = ''
@@ -209,12 +190,38 @@ def print_h5pyFile_tree(f, tablevel=0, linelevels=[]):
         print_h5pyFile_tree(
             f[k],
             tablevel=tablevel+1,
-            linelevels=linelevels)
+            linelevels=linelevels,
+            show_metadata=show_metadata)
 
     pass
 
 
 
+
+
+
+
+
+def _get_class(grp):
+
+    lookup = {
+        'Metadata' : Metadata,
+        'Array' : Array,
+        'PointList' : PointList,
+        'PointListArray' : PointListArray,
+        'Calibration' : Calibration,
+        'DataCube' : DataCube,
+        'DiffractionSlice' : DiffractionSlice,
+        'DiffractionImage' : DiffractionImage,
+        'RealSlice' : RealSlice
+    }
+    try:
+        classname = grp.attrs['py4dstem_class']
+        __class__ = lookup[classname]
+        return __class__
+    except KeyError:
+        return None
+        #raise Exception(f"Unknown classname {classname}")
 
 
 

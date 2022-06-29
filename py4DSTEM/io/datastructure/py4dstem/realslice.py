@@ -1,20 +1,19 @@
-# Defines the DiffractionSlice class, which stores 2(+1)D,
-# diffraction-shaped data
+# Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
-from .array import Array
+from ..emd.array import Array
 
 from typing import Optional,Union
 import numpy as np
 import h5py
 
-class DiffractionSlice(Array):
+class RealSlice(Array):
     """
-    Stores a diffraction-space shaped 2D data array.
+    Stores a real-space shaped 2D data array.
     """
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'diffractionslice',
+        name: Optional[str] = 'realslice',
         pixel_size: Optional[Union[float,list]] = 1,
         pixel_units: Optional[Union[str,list]] = 'pixels',
         slicelabels: Optional[Union[bool,list]] = None
@@ -22,14 +21,14 @@ class DiffractionSlice(Array):
         """
         Accepts:
             data (np.ndarray): the data
-            name (str): the name of the datacube
+            name (str): the name of the realslice
             pixel_size (float or length 2 list of floats): the pixel size
             pixel_units (str length 2 list of str): the pixel units
             slicelabels(None or list): names for slices if this is a stack of
-                diffractionslices
+                realslices
 
         Returns:
-            A new DiffractionSlice instance
+            A new RealSlice instance
         """
         # expand pixel inputs to include 2 dimensions
         if type(pixel_size) is not list: pixel_size = [pixel_size,pixel_size]
@@ -50,8 +49,8 @@ class DiffractionSlice(Array):
                 pixel_units[1],
             ],
             dim_names = [
-                'Qx',
-                'Qy'
+                'Rx',
+                'Ry'
             ],
             slicelabels = slicelabels
         )
@@ -81,15 +80,14 @@ class DiffractionSlice(Array):
 
 
 
-
     # HDF5 read/write
 
     # write inherited from Array
 
     # read
     def from_h5(group):
-        from .io_py4dstem import DiffractionSlice_from_h5
-        return DiffractionSlice_from_h5(group)
+        from .io import RealSlice_from_h5
+        return RealSlice_from_h5(group)
 
 
 

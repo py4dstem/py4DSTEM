@@ -51,11 +51,11 @@ class Root:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .io_emd import Root_to_h5
+        from .io import Root_to_h5
         Root_to_h5(self,group)
 
     def from_h5(group):
-        from .io_emd import Root_from_h5
+        from .io import Root_from_h5
         return Root_from_h5(group)
 
 

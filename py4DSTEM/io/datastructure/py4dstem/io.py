@@ -3,9 +3,53 @@
 import numpy as np
 import h5py
 
-from .io_emd import Array_from_h5, Metadata_from_h5
+from ..emd.io import Array_from_h5, Metadata_from_h5
 
-from ...tqdmnd import tqdmnd
+
+
+
+
+# Calibration
+
+# read
+def Calibration_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Metadata representation, and
+    if so loads and returns it as a Calibration instance. Otherwise,
+    raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A Calibration instance
+    """
+    cal = Metadata_from_h5(group)
+    cal = Calibration_from_Metadata(cal)
+    return cal
+
+def Calibration_from_Metadata(metadata):
+    """
+    Converts a Metadata instance to a Calibration instance.
+
+    Accepts:
+        metadata (Metadata)
+
+    Returns:
+        (Calibration)
+    """
+    from .calibration import Calibration
+    p = metadata._params
+    metadata.__class__ = Calibration
+    metadata.__init__(
+        name = metadata.name
+    )
+    metadata._params.update(p)
+
+    return metadata
+
+
 
 
 
@@ -100,10 +144,6 @@ def DiffractionSlice_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
-        pixel_size = [array.dims[0][1]-array.dims[0][0],
-                      array.dims[1][1]-array.dims[1][0]],
-        pixel_units = [array.dim_units[0],
-                       array.dim_units[1]],
         slicelabels = array.slicelabels
     )
     return array
@@ -148,56 +188,68 @@ def RealSlice_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
-        pixel_size = [array.dims[0][1]-array.dims[0][0],
-                      array.dims[1][1]-array.dims[1][0]],
-        pixel_units = [array.dim_units[0],
-                       array.dim_units[1]],
         slicelabels = array.slicelabels
     )
     return array
 
 
 
-
-# Calibration
+# DiffractionImage
 
 # read
-def Calibration_from_h5(group:h5py.Group):
+
+def DiffractionImage_from_h5(group:h5py.Group):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
-    read mode. Determines if it's a valid Metadata representation, and
-    if so loads and returns it as a Calibration instance. Otherwise,
-    raises an exception.
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a DiffractionImage. Otherwise, raises an exception.
 
     Accepts:
         group (HDF5 group)
 
     Returns:
-        A Calibration instance
+        A DiffractionImage instance
     """
-    cal = Metadata_from_h5(group)
-    cal = Calibration_from_Metadata(cal)
-    return cal
+    diffractionimage = Array_from_h5(group)
+    diffractionimage = DiffractionImage_from_Array(diffractionimage)
+    return diffractionimage
 
-def Calibration_from_Metadata(metadata):
+
+def DiffractionImage_from_Array(array):
     """
-    Converts a Metadata instance to a Calibration instance.
+    Converts an Array to a DiffractionImage.
 
     Accepts:
-        metadata (Metadata)
+        array (Array)
 
     Returns:
-        (Calibration)
+        (DiffractionImage)
     """
-    from .calibration import Calibration
-    p = metadata._params
-    metadata.__class__ = Calibration
-    metadata.__init__(
-        name = metadata.name
-    )
-    metadata._params.update(p)
+    from .diffractionimage import DiffractionImage
+    assert(array.rank == 2), "Array must have 2 dimensions"
 
-    return metadata
+    # get diffraction image metadata
+    try:
+        md = array.metadata['diffractionimage']
+        mode = md['mode']
+        geo = md['geometry']
+        shift_corr = md['shift_corr']
+    except KeyError:
+        er = "DiffractionImage metadata could not be found"
+        raise Exception(er)
+
+
+    # instantiate as a DiffractionImage
+    array.__class__ = DiffractionImage
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        mode = mode,
+        geometry = geo,
+        shift_corr = shift_corr
+    )
+    return array
+
 
 
 

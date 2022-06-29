@@ -44,7 +44,8 @@ class PointList:
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
         self.tree = Tree()
-        self._metadata = {}
+        if not hasattr(self, "_metadata"):
+            self._metadata = {}
 
     ## Add, remove, sort data
 
@@ -151,11 +152,11 @@ class PointList:
     # HDF5 read/write
 
     def to_h5(self,group,include_data=True):
-        from .io_emd import PointList_to_h5
+        from .io import PointList_to_h5
         PointList_to_h5(self,group,include_data)
 
     def from_h5(group):
-        from .io_emd import PointList_from_h5
+        from .io import PointList_from_h5
         return PointList_from_h5(group)
 
 

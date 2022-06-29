@@ -159,6 +159,55 @@ def get_probe_from_vacuum_4Dscan(
 
 
 
+def get_probe_from_4Dscan_ROI_lims(
+    datacube,
+    ROI,
+    mask_threshold=0.2,
+    mask_expansion=12,
+    mask_opening=3,
+    verbose=False,
+    align=True
+    ):
+    """
+    Averages all diffraction patterns within a specified ROI of a datacube to
+    create an average vacuum probe. Optionally (default) aligns the patterns.
+
+    See documentation for get_average_probe_from_vacuum_scan for more detailed
+    discussion of the algorithm.
+
+    Args:
+        datacube (DataCube): a vacuum scan
+        ROI (len 4 list or tuple): the limits (rx_min, rx_max, ry_min, ry_max)
+            of the selected region.
+        mask_threshold (float): threshold determining mask which zeros values
+            outside of probe
+        mask_expansion (int): number of pixels by which the zeroing mask is
+            expanded to capture the full probe
+        mask_opening (int): size of binary opening used to eliminate stray
+            bright pixels
+        verbose (bool): if True, prints progress updates
+        align (bool): if True, aligns the probes before averaging
+        DP_mask (array): array of same shape as diffraction pattern to mask
+            probes
+
+    Returns:
+        (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)): the average probe
+    """
+    assert len(ROI) == 4
+
+    datacube = DataCube(
+        data = datacube.data[ROI[0]:ROI[1],ROI[2]:ROI[3]]
+    )
+    return get_probe_from_vacuum_4Dscan(
+        datacube,
+        mask_threshold = mask_threshold,
+        mask_expansion = mask_expansion,
+        mask_opening = mask_opening,
+        verbose = verbose,
+        align = align)
+
+
+
 
 def get_probe_from_4Dscan_ROI_mask(
     datacube,
@@ -215,54 +264,6 @@ def get_probe_from_4Dscan_ROI_mask(
     return probe*mask
 
 
-
-
-def get_probe_from_4Dscan_ROI_lims(
-    datacube,
-    ROI,
-    mask_threshold=0.2,
-    mask_expansion=12,
-    mask_opening=3,
-    verbose=False,
-    align=True
-    ):
-    """
-    Averages all diffraction patterns within a specified ROI of a datacube to
-    create an average vacuum probe. Optionally (default) aligns the patterns.
-
-    See documentation for get_average_probe_from_vacuum_scan for more detailed
-    discussion of the algorithm.
-
-    Args:
-        datacube (DataCube): a vacuum scan
-        ROI (len 4 list or tuple): the limits (rx_min, rx_max, ry_min, ry_max)
-            of the selected region.
-        mask_threshold (float): threshold determining mask which zeros values
-            outside of probe
-        mask_expansion (int): number of pixels by which the zeroing mask is
-            expanded to capture the full probe
-        mask_opening (int): size of binary opening used to eliminate stray
-            bright pixels
-        verbose (bool): if True, prints progress updates
-        align (bool): if True, aligns the probes before averaging
-        DP_mask (array): array of same shape as diffraction pattern to mask
-            probes
-
-    Returns:
-        (ndarray of shape (datacube.Q_Nx,datacube.Q_Ny)): the average probe
-    """
-    assert len(ROI) == 4
-
-    datacube = DataCube(
-        data = datacube.data[ROI[0]:ROI[1],ROI[2]:ROI[3]]
-    )
-    return get_probe_from_vacuum_4Dscan(
-        datacube,
-        mask_threshold = mask_threshold,
-        mask_expansion = mask_expansion,
-        mask_opening = mask_opening,
-        verbose = verbose,
-        align = align)
 
 
 

@@ -181,7 +181,8 @@ class Array:
         self.rank = self.data.ndim
 
         self.tree = Tree()
-        self._metadata = {}
+        if not hasattr(self, "_metadata"):
+            self._metadata = {}
 
         # flag to help assign dim names and units
         dim_in_pixels = np.zeros(self.rank, dtype=bool)
@@ -445,11 +446,11 @@ class Array:
     # HDF5 read/write
 
     def to_h5(self,group,include_data=True):
-        from .io_emd import Array_to_h5
+        from .io import Array_to_h5
         Array_to_h5(self,group,include_data)
 
     def from_h5(group):
-        from .io_emd import Array_from_h5
+        from .io import Array_from_h5
         return Array_from_h5(group)
 
 

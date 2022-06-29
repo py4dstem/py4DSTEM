@@ -42,7 +42,8 @@ class PointListArray:
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
         self.tree = Tree()
-        self._metadata = {}
+        if not hasattr(self, "_metadata"):
+            self._metadata = {}
 
         # Populate with empty PointLists
         self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype), name=f"{i},{j}")
@@ -152,11 +153,11 @@ class PointListArray:
     # HDF5 read/write
 
     def to_h5(self,group,include_data=True):
-        from .io_emd import PointListArray_to_h5
+        from .io import PointListArray_to_h5
         PointListArray_to_h5(self,group,include_data)
 
     def from_h5(group):
-        from .io_emd import PointListArray_from_h5
+        from .io import PointListArray_from_h5
         return PointListArray_from_h5(group)
 
 
