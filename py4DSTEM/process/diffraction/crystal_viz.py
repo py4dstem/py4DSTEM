@@ -642,12 +642,20 @@ def plot_orientation_plan(
     #     #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
     # else:
     # im_plot = self.orientation_ref[index_plot, :, :] / self.orientation_ref_max
-    im_plot = (
-        np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
-            "float"
+    if self.CUDA:
+        im_plot = (
+            np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :].get(), axis=1)).astype(
+                "float"
+            )
+            / self.orientation_ref_max
         )
-        / self.orientation_ref_max
-    )
+    else:
+        im_plot = (
+            np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
+                "float"
+            )
+            / self.orientation_ref_max
+        )
 
     # coordinates
     x = self.orientation_gamma * 180 / np.pi
@@ -965,11 +973,22 @@ def plot_orientation_maps(
     basis_z = np.clip(basis_z,0,1)
 
     # Convert to RGB images
-    basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
+    basis_x_max = np.max(basis_x,axis=2)
+    sub = basis_x_max > 0
+    basis_x_scale = basis_x * mask[:,:,None] 
+    for a0 in range(3):
+        basis_x_scale[:,:,a0][sub] /= basis_x_max[sub]
+        basis_x_scale[:,:,a0][np.logical_not(sub)] = 0
     rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
         + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
         + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
-    basis_z_scale = mask[:,:,None] * basis_z / np.max(basis_z,axis=2)[:,:,None]
+
+    basis_z_max = np.max(basis_z,axis=2)
+    sub = basis_z_max > 0
+    basis_z_scale = basis_z * mask[:,:,None]
+    for a0 in range(3):
+        basis_z_scale[:,:,a0][sub] /= basis_z_max[sub]
+        basis_z_scale[:,:,a0][np.logical_not(sub)] = 0
     rgb_z = basis_z_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
         + basis_z_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
         + basis_z_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
