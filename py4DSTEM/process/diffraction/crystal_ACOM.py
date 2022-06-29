@@ -578,13 +578,13 @@ def orientation_plan(
         ),
         dtype="float",
     )
-    self.orientation_ref_1D = np.zeros(
-        (
-            self.orientation_num_zones,
-            np.size(self.orientation_shell_radii),
-        ),
-        dtype="float",
-    )
+    # self.orientation_ref_1D = np.zeros(
+    #     (
+    #         self.orientation_num_zones,
+    #         np.size(self.orientation_shell_radii),
+    #     ),
+    #     dtype="float",
+    # )
 
     # If possible,  Get symmetry operations for this spacegroup, store in matrix form
     if self.pymatgen_available:
@@ -709,11 +709,11 @@ def orientation_plan(
                         0,
                     )
                 )
-                # 1D orientation plan
-                self.orientation_ref_1D[a0, ind_radial] += (
-                    np.power(self.orientation_shell_radii[ind_radial], radial_power)
-                    * np.power(self.struct_factors_int[a1], intensity_power)
-                    )
+                # # 1D orientation plan
+                # self.orientation_ref_1D[a0, ind_radial] += (
+                #     np.power(self.orientation_shell_radii[ind_radial], radial_power)
+                #     * np.power(self.struct_factors_int[a1], intensity_power)
+                #     )
 
 
         # Normalization
@@ -729,11 +729,11 @@ def orientation_plan(
         # if orientation_ref_norm > 0:
         #     self.orientation_ref[a0, :, :] /= orientation_ref_norm
 
-        orientation_ref_1D_mean = np.mean(self.orientation_ref_1D[a0, :])
-        if orientation_ref_1D_mean > 0:
-            self.orientation_ref_1D[a0, :] -= orientation_ref_1D_mean
-            self.orientation_ref_1D[a0, :] /= \
-                np.sqrt(np.mean(self.orientation_ref_1D[a0, :]**2))
+        # orientation_ref_1D_mean = np.mean(self.orientation_ref_1D[a0, :])
+        # if orientation_ref_1D_mean > 0:
+        #     self.orientation_ref_1D[a0, :] -= orientation_ref_1D_mean
+        #     self.orientation_ref_1D[a0, :] /= \
+        #         np.sqrt(np.mean(self.orientation_ref_1D[a0, :]**2))
 
         # orientation_ref_1D_norm = np.sqrt(np.sum(
         #     self.orientation_ref_1D[a0, :] ** 2))
@@ -792,7 +792,6 @@ def match_single_pattern(
     self,
     bragg_peaks: PointList,
     num_matches_return: int = 1,
-    fraction_pre_match = None,
     multiple_corr_reset=True,
     inversion_symmetry=True,
     plot_polar: bool = False,
@@ -810,8 +809,6 @@ def match_single_pattern(
     Args:
         bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
-        fraction_pre_match (float):   This is the fraction number of matches to keep when using
-                                      1D pre-matching to sieve correlation output, from 0 to 1.
         multiple_corr_reset (bool):   keep original correlation score for multiple matches
         inversion_symmetry (bool):    check for inversion symmetry in the matches
         subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
@@ -898,16 +895,16 @@ def match_single_pattern(
                     ),
                     axis=0,
                 )
-                if fraction_pre_match is not None:
-                    im_1D[ind_radial] = np.sum(
-                        np.power(radius, self.orientation_radial_power)
-                        * np.power(
-                            np.maximum(intensity[sub, None], 0.0),
-                            self.orientation_intensity_power
-                        )
-                        * np.maximum(1 - dqr[sub, None] / self.orientation_kernel_size, 0.0),
-                        axis=0,
-                    )
+                # if fraction_pre_match is not None:
+                #     im_1D[ind_radial] = np.sum(
+                #         np.power(radius, self.orientation_radial_power)
+                #         * np.power(
+                #             np.maximum(intensity[sub, None], 0.0),
+                #             self.orientation_intensity_power
+                #         )
+                #         * np.maximum(1 - dqr[sub, None] / self.orientation_kernel_size, 0.0),
+                #         axis=0,
+                #     )
   
 
 
@@ -921,68 +918,73 @@ def match_single_pattern(
         im_polar_fft = np.fft.fft(im_polar)
 
         # Calculate full orientation correlogram
-        if fraction_pre_match is None:
-            corr_full = np.maximum(
-                np.sum(
-                    np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
-                    axis=1,
-                ),
-                0,
-            )
-            # Calculate orientation correlogram for inverse pattern
-            if inversion_symmetry:
-                corr_full_inv = np.maximum(
-                    np.sum(
-                        np.real(
-                            np.fft.ifft(
-                                self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
-                            )
-                        ),
-                        axis=1,
-                    ),
-                    0,
-                )
-                ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-                corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
-
-        else:
-            im_1D -= np.mean(im_1D)
-            corr_1D = self.orientation_ref_1D @ im_1D
-            inds = np.argsort(corr_1D)
-            # inds_keep = inds
-            inds_keep = inds[-np.round(inds.shape[0] * fraction_pre_match).astype('int'):]
-
-            corr_full = np.zeros((
-                self.orientation_ref.shape[0],
-                self.orientation_ref.shape[2]))
-            corr_full[inds_keep,:] = np.maximum(
-                np.sum(
-                    np.real(np.fft.ifft(self.orientation_ref[inds_keep,:,:] * im_polar_fft[None, :, :])),
-                    axis=1,
-                ),
-                0,
-            )
-            # Calculate orientation correlogram for inverse pattern
-            if inversion_symmetry:
-                corr_full_inv = np.zeros((
-                    self.orientation_ref.shape[0],
-                    self.orientation_ref.shape[2]))
-                corr_full_inv[inds_keep,:] = np.maximum(
-                    np.sum(
-                        np.real(
-                            np.fft.ifft(
-                                self.orientation_ref[inds_keep,:,:] * np.conj(im_polar_fft)[None, :, :]
-                            )
-                        ),
-                        axis=1,
-                    ),
-                    0,
-                )
-                ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-                corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
+        # if fraction_pre_match is None:
+        corr_full = np.maximum(
+            np.sum(
+                np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
+                axis=1,
+            ),
+            0,
+        )
 
         # Get maximum (non inverted) correlation value
         ind_phi = np.argmax(corr_full, axis=1)
+
+        # Calculate orientation correlogram for inverse pattern (in-plane mirror)
+        if inversion_symmetry:
+            corr_full_inv = np.maximum(
+                np.sum(
+                    np.real(
+                        np.fft.ifft(
+                            self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
+                        )
+                    ),
+                    axis=1,
+                ),
+                0,
+            )
+            ind_phi_inv = np.argmax(corr_full_inv, axis=1)
+            corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
+
+
+
+
+        # else:
+        #     im_1D -= np.mean(im_1D)
+        #     corr_1D = self.orientation_ref_1D @ im_1D
+        #     inds = np.argsort(corr_1D)
+        #     # inds_keep = inds
+        #     inds_keep = inds[-np.round(inds.shape[0] * fraction_pre_match).astype('int'):]
+
+        #     corr_full = np.zeros((
+        #         self.orientation_ref.shape[0],
+        #         self.orientation_ref.shape[2]))
+        #     corr_full[inds_keep,:] = np.maximum(
+        #         np.sum(
+        #             np.real(np.fft.ifft(self.orientation_ref[inds_keep,:,:] * im_polar_fft[None, :, :])),
+        #             axis=1,
+        #         ),
+        #         0,
+        #     )
+        #     # Calculate orientation correlogram for inverse pattern
+        #     if inversion_symmetry:
+        #         corr_full_inv = np.zeros((
+        #             self.orientation_ref.shape[0],
+        #             self.orientation_ref.shape[2]))
+        #         corr_full_inv[inds_keep,:] = np.maximum(
+        #             np.sum(
+        #                 np.real(
+        #                     np.fft.ifft(
+        #                         self.orientation_ref[inds_keep,:,:] * np.conj(im_polar_fft)[None, :, :]
+        #                     )
+        #                 ),
+        #                 axis=1,
+        #             ),
+        #             0,
+        #         )
+        #         ind_phi_inv = np.argmax(corr_full_inv, axis=1)
+        #         corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
+
 
         
         # Testing of direct index correlogram computation
