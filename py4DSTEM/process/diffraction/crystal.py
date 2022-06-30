@@ -662,9 +662,12 @@ class Crystal:
         if np.sum(sub) > 0:
             for ind in np.argwhere(sub):
                 frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
-                vec *= frac.denominator
-            vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
-        return vec.astype('int')
+                vec *= np.round(frac.denominator)
+            vec = np.round(vec \
+                / np.gcd.reduce(np.round(np.abs(vec[sub])).astype('int'))
+                ).astype('int')
+
+        return vec
 
     def parse_orientation(
         self,
