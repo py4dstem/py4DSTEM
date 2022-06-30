@@ -739,6 +739,7 @@ def plot_diffraction_pattern(
         min_marker_size (float):        minimum marker size for the comparison peaks
         figsize (2 element float):      size scaling of figure axes
         returnfig (bool):               set to True to return figure and axes handles
+        input_fig_handle (fig,ax)       Tuple containing a figure / axes handle for the plot.
     """
 
     # 2D plotting
@@ -855,6 +856,7 @@ def plot_orientation_maps(
     scale_legend: bool = None,
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
+    show_axes: bool = True,
     camera_dist = None,
     plot_limit = None,
     swap_axes_xy_limits = False,
@@ -873,6 +875,7 @@ def plot_orientation_maps(
         scale_legend (float):               2 elements, x and y scaling of legend panel
         figsize (array):                    2 elements defining figure size
         figbound (array):                   2 elements defining figure boundary
+        show_axes (bool):                   Flag setting whether orienation map axes are visible.
         camera_dist (float):                distance of camera from legend
         plot_limit (array):                 2x3 array defining plot boundaries of egend
         swap_axes_xy_limits (bool):         swap x and y boundaries for legend (not sure why we need this in some cases)
@@ -937,16 +940,13 @@ def plot_orientation_maps(
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
     basis_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    basis_y = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
     basis_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
     rgb_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
     rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
 
     # Basis for fitting orientation projections 
     A = np.linalg.inv(self.orientation_zone_axis_range).T
-    # A = self.orientation_zone_axis_range
-    # print(np.round(A,decimals=3))
-    # A = np.linalg.inv(self.orientation_zone_axis_range).T
-    # A = self.orientation_zone_axis_range
 
     # Correlation masking
     corr = orientation_map.corr[:,:,orientation_ind]
@@ -966,6 +966,9 @@ def plot_orientation_maps(
 
         if self.pymatgen_available:
             basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,0]
+            basis_y[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,1]
+            basis_x[rx,ry,:] = basis_x[rx,ry,:]*ct + basis_y[rx,ry,:]*st
+
             basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,2]
         else:
             basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,orientation_ind,:,2]
@@ -1101,6 +1104,14 @@ def plot_orientation_maps(
             fontsize=14,
             horizontalalignment='center')
     ax_z.imshow(rgb_z)
+
+    # Labels for orientation images
+    ax_x.set_title("In-Plane Orientation", size=20)
+    ax_z.set_title("Out-of-Plane Orientation", size=20)
+    if show_axes is False:
+        ax_x.axis("off")
+        ax_z.axis("off")
+
 
     # Triangulate faces
     p = self.orientation_vecs[:,(1,0,2)]
