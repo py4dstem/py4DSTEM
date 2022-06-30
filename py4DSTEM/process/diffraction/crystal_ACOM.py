@@ -25,6 +25,7 @@ def orientation_plan(
     zone_axis_range: np.ndarray = np.array([[0, 1, 1], [1, 1, 1]]),
     angle_step_zone_axis: float = 2.0,
     angle_coarse_zone_axis: float = None,
+    angle_refine_range: float = None,
     angle_step_in_plane: float = 2.0,
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
@@ -52,8 +53,12 @@ def orientation_plan(
                                  Setting to 'fiber' as a string will make a spherical cap around a given vector.
                                  Setting to 'auto' will use pymatgen to determine the point group symmetry
                                     of the structure and choose an appropriate zone_axis_range
-        angle_step_zone_axis (float): Approximate angular step size for zone axis coarse steach [degrees]
-        angle_refine_zone_axis (float): Approximate angular step size for zone axis fine search [degrees]
+        angle_step_zone_axis (float): Approximate angular step size for zone axis search [degrees]
+        angle_coarse_zone_axis (float): Coarse step size for zone axis search [degrees]. Setting to 
+                                        None uses the same value as angle_step_zone_axis.
+        angle_refine_range (float):   Range of angles to use for zone axis refinement. Setting to
+                                      None uses same value as angle_coarse_zone_axis.
+
         angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
         accel_voltage (float):        Accelerating voltage for electrons [Volts]
         corr_kernel_size (float):        Correlation kernel size length in Angstroms
@@ -101,6 +106,10 @@ def orientation_plan(
         self.orientation_refine_ratio = np.round(
             angle_coarse_zone_axis/angle_step_zone_axis).astype('int')
         self.orientation_angle_coarse = angle_coarse_zone_axis
+        if angle_refine_range is None:
+            self.orientation_refine_range = angle_coarse_zone_axis
+        else:
+            self.orientation_refine_range = angle_refine_range
     else:
         self.orientation_refine = False
 
@@ -754,8 +763,8 @@ def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
-    inversion_symmetry=True,
-    multiple_corr_reset=True,
+    inversion_symmetry = True,
+    multiple_corr_reset = False,
     progress_bar: bool = True,
 ):
     '''
@@ -792,8 +801,8 @@ def match_single_pattern(
     bragg_peaks: PointList,
     num_matches_return: int = 1,
     min_number_peaks = 3,
-    multiple_corr_reset=True,
     inversion_symmetry=True,
+    multiple_corr_reset=False,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,
@@ -808,8 +817,8 @@ def match_single_pattern(
         bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
         min_number_peaks (int):       Minimum number of peaks required to perform ACOM matching
-        multiple_corr_reset (bool):   keep original correlation score for multiple matches
         inversion_symmetry (bool):    check for inversion symmetry in the matches
+        multiple_corr_reset (bool):   keep original correlation score for multiple matches
         subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
         plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
         plot_corr (bool):             set to true to plot the resulting correlogram
@@ -890,8 +899,20 @@ def match_single_pattern(
                     ),
                     axis=0,
                 )
+        
+        # Determine the RMS signal from im_polar for the first match.
+        # Note that we use scaling slightly below RMS so that following matches 
+        # don't have higher correlating scores than previous matches.
+        if multiple_corr_reset is False and num_matches_return > 1:
+            if match_ind == 0:
+                im_polar_scale_0 = np.mean(im_polar**2)**0.4
+            else:
+                im_polar_scale = np.mean(im_polar**2)**0.4
+                im_polar *= im_polar_scale_0 / im_polar_scale
+                # im_polar /= np.sqrt(np.mean(im_polar**2))
+                # im_polar *= im_polar_0_rms
 
-        # If later refinement is performed, we need to keep the original image's polar tranform
+        # If later refinement is performed, we need to keep the original image's polar tranform if corr reset is enabled
         if self.orientation_refine:
             if multiple_corr_reset:
                 if match_ind == 0:
@@ -1082,27 +1103,27 @@ def match_single_pattern(
         # If needed, perform fine step refinement of the zone axis #
         ############################################################
         if self.orientation_refine:
-            mask = np.arccos(np.clip(np.sum(self.orientation_vecs \
+            mask_refine = np.arccos(np.clip(np.sum(self.orientation_vecs \
                 * self.orientation_vecs[ind_best_fit,:],axis=1),-1,1)) \
-                < np.deg2rad(self.orientation_angle_coarse)
+                < np.deg2rad(self.orientation_refine_range)
             if self.CUDA:
-                mask_CUDA = cp.asarray(mask)
+                mask_refine_CUDA = cp.asarray(mask_refine)
 
             if self.CUDA:
-                corr_full[mask,:] = cp.maximum(
+                corr_full[mask_refine,:] = cp.maximum(
                     cp.sum(
                         cp.real(cp.fft.ifft(
-                            self.orientation_ref[mask_CUDA,:,:] \
+                            self.orientation_ref[mask_refine_CUDA,:,:] \
                             * im_polar_refine_fft[None, :, :])),
                         axis=1,
                     ),
                     0,
                 ).get()
             else:
-                corr_full[mask,:] = np.maximum(
+                corr_full[mask_refine,:] = np.maximum(
                     np.sum(
                         np.real(np.fft.ifft(
-                            self.orientation_ref[mask,:,:] \
+                            self.orientation_ref[mask_refine,:,:] \
                             * im_polar_refine_fft[None, :, :])),
                         axis=1,
                     ),
@@ -1115,11 +1136,11 @@ def match_single_pattern(
             # Inversion symmetry
             if inversion_symmetry:
                 if self.CUDA:
-                    corr_full_inv[mask,:] = cp.maximum(
+                    corr_full_inv[mask_refine,:] = cp.maximum(
                         cp.sum(
                             cp.real(
                                 cp.fft.ifft(
-                                    self.orientation_ref[mask_CUDA,:,:] \
+                                    self.orientation_ref[mask_refine_CUDA,:,:] \
                                     * cp.conj(im_polar_refine_fft)[None, :, :]
                                 )
                             ),
@@ -1128,11 +1149,11 @@ def match_single_pattern(
                         0,
                     ).get()
                 else:
-                    corr_full_inv[mask,:] = np.maximum(
+                    corr_full_inv[mask_refine,:] = np.maximum(
                         np.sum(
                             np.real(
                                 np.fft.ifft(
-                                    self.orientation_ref[mask,:,:] \
+                                    self.orientation_ref[mask_refine,:,:] \
                                     * np.conj(im_polar_refine_fft)[None, :, :]
                                 )
                             ),
@@ -1144,7 +1165,7 @@ def match_single_pattern(
 
 
             # Determine best in-plane correlation
-            for a0 in np.argwhere(mask):
+            for a0 in np.argwhere(mask_refine):
                 # Correlation score
                 if inversion_symmetry:
                     if corr_full_inv[a0, ind_phi_inv[a0]] > corr_full[a0, ind_phi[a0]]:
@@ -1178,15 +1199,7 @@ def match_single_pattern(
                         )
 
             # Determine the new best fit orientation
-            ind_best_fit = np.unravel_index(np.argmax(corr_value * mask[None,:]), corr_value.shape)[0]
-
-            # ind_phi = np.argmax(corr_full, axis=1)
-            # ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-
-        # keep plotting image if needed 
-        if plot_corr  and match_ind == 1:
-            corr_plot = corr_value.copy() # * mask.copy()
-            sig_in_plane = np.squeeze(corr_full[ind_best_fit, :]).copy()
+            ind_best_fit = np.unravel_index(np.argmax(corr_value * mask_refine[None,:]), corr_value.shape)[0]
 
         # Verify current match has a correlation > 0
         if corr_value[ind_best_fit] > 0:
@@ -1321,234 +1334,236 @@ def match_single_pattern(
             intensity = intensity[~remove]
 
 
-    # plotting correlation image
-    if plot_corr is True:
+        # plotting correlation image
+        if plot_corr is True:
+            corr_plot = corr_value.copy()
+            sig_in_plane = np.squeeze(corr_full[ind_best_fit, :]).copy()
 
-        if self.orientation_full:
-            fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 2]))
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
+            if self.orientation_full:
+                fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 2]))
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
 
-            im_corr_zone_axis = np.zeros(
-                (
-                    2 * self.orientation_zone_axis_steps + 1,
-                    2 * self.orientation_zone_axis_steps + 1,
+                im_corr_zone_axis = np.zeros(
+                    (
+                        2 * self.orientation_zone_axis_steps + 1,
+                        2 * self.orientation_zone_axis_steps + 1,
+                    )
                 )
-            )
 
-            sub = self.orientation_inds[:, 2] == 0
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 1
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 2
-            x_inds = (
-                self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 3
-            x_inds = (
-                self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-
-        elif self.orientation_half:
-            fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 1]))
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
-
-            im_corr_zone_axis = np.zeros(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps * 2 + 1,
+                sub = self.orientation_inds[:, 2] == 0
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
                 )
-            )
-
-            sub = self.orientation_inds[:, 2] == 0
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int")
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 1
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int")
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-
-        else:
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
-
-            im_corr_zone_axis = np.zeros(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps + 1,
-                )
-            )
-            im_mask = np.ones(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps + 1,
-                ),
-                dtype="bool",
-            )
-
-            # Image indices
-            x_inds = (self.orientation_inds[:, 0] - self.orientation_inds[:, 1]).astype(
-                "int"
-            )
-            y_inds = self.orientation_inds[:, 1].astype("int")
-
-            # Check vertical range of the orientation triangle.
-            if self.orientation_fiber_angles is not None \
-                and np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
-                # Orientation covers only top of orientation sphere
-
                 inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-                im_corr_zone_axis.ravel()[inds_1D] = corr_plot
-                im_mask.ravel()[inds_1D] = False
-
-            else:
-                # Orientation covers full vertical range of orientation sphere.
-                # top half
-                sub = self.orientation_inds[:,2] == 0
-                inds_1D = np.ravel_multi_index([x_inds[sub], y_inds[sub]], im_corr_zone_axis.shape)
                 im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-                im_mask.ravel()[inds_1D] = False
-                # bottom half
-                sub = self.orientation_inds[:,2] == 1
-                inds_1D = np.ravel_multi_index([
-                    self.orientation_zone_axis_steps - y_inds[sub], 
-                    self.orientation_zone_axis_steps - x_inds[sub]
-                    ],im_corr_zone_axis.shape)
-                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-                im_mask.ravel()[inds_1D] = False
 
-            if cmax > cmin:
-                im_plot = np.ma.masked_array(
-                    (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
+                sub = self.orientation_inds[:, 2] == 1
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 2
+                x_inds = (
+                    self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
                 )
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 3
+                x_inds = (
+                    self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+
+            elif self.orientation_half:
+                fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 1]))
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
+
+                im_corr_zone_axis = np.zeros(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps * 2 + 1,
+                    )
+                )
+
+                sub = self.orientation_inds[:, 2] == 0
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int")
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
+                )
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 1
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int")
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+
             else:
-                im_plot = im_corr_zone_axis
+                fig, ax = plt.subplots(1, 2, figsize=figsize)
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
+
+                im_corr_zone_axis = np.zeros(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps + 1,
+                    )
+                )
+                im_mask = np.ones(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps + 1,
+                    ),
+                    dtype="bool",
+                )
+
+                # Image indices
+                x_inds = (self.orientation_inds[:, 0] - self.orientation_inds[:, 1]).astype(
+                    "int"
+                )
+                y_inds = self.orientation_inds[:, 1].astype("int")
+
+                # Check vertical range of the orientation triangle.
+                if self.orientation_fiber_angles is not None \
+                    and np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
+                    # Orientation covers only top of orientation sphere
+
+                    inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot
+                    im_mask.ravel()[inds_1D] = False
+
+                else:
+                    # Orientation covers full vertical range of orientation sphere.
+                    # top half
+                    sub = self.orientation_inds[:,2] == 0
+                    inds_1D = np.ravel_multi_index([x_inds[sub], y_inds[sub]], im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                    im_mask.ravel()[inds_1D] = False
+                    # bottom half
+                    sub = self.orientation_inds[:,2] == 1
+                    inds_1D = np.ravel_multi_index([
+                        self.orientation_zone_axis_steps - y_inds[sub], 
+                        self.orientation_zone_axis_steps - x_inds[sub]
+                        ],im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                    im_mask.ravel()[inds_1D] = False
+
+                if cmax > cmin:
+                    im_plot = np.ma.masked_array(
+                        (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
+                    )
+                else:
+                    im_plot = im_corr_zone_axis
 
 
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-            ax[0].spines["left"].set_color("none")
-            ax[0].spines["right"].set_color("none")
-            ax[0].spines["top"].set_color("none")
-            ax[0].spines["bottom"].set_color("none")
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+                ax[0].spines["left"].set_color("none")
+                ax[0].spines["right"].set_color("none")
+                ax[0].spines["top"].set_color("none")
+                ax[0].spines["bottom"].set_color("none")
 
-            inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
-            ax[0].scatter(
-                inds_plot[1],
-                inds_plot[0],
-                s=120,
-                linewidth=2,
-                facecolors="none",
-                edgecolors="r",
+                inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
+                ax[0].scatter(
+                    inds_plot[1],
+                    inds_plot[0],
+                    s=120,
+                    linewidth=2,
+                    facecolors="none",
+                    edgecolors="r",
+                )
+
+                if np.abs(self.cell[5]-120.0) < 1e-6:
+                    label_0 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[0, :])))
+                    label_1 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[1, :])))
+                    label_2 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[2, :])))
+                else:
+                    label_0 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[0, :]))
+                    label_1 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[1, :]))
+                    label_2 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[2, :]))
+
+                ax[0].set_xticks([0, self.orientation_zone_axis_steps])
+                ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
+                ax[0].xaxis.tick_top()
+
+                ax[0].set_yticks([self.orientation_zone_axis_steps])
+                ax[0].set_yticklabels([str(label_1)], size=14)
+
+            # In-plane rotation
+            # sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
+            sig_in_plane_max = np.max(sig_in_plane)
+            if sig_in_plane_max > 0:
+                sig_in_plane /= sig_in_plane_max
+            ax[1].plot(
+                self.orientation_gamma * 180 / np.pi,
+                sig_in_plane,
             )
 
-            if np.abs(self.cell[5]-120.0) < 1e-6:
-                label_0 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[0, :])))
-                label_1 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[1, :])))
-                label_2 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[2, :])))
-            else:
-                label_0 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[0, :]))
-                label_1 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[1, :]))
-                label_2 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[2, :]))
+            # Add markers for the best fit 
+            tol = 0.01
+            sub = sig_in_plane > 1 - tol
+            ax[1].scatter(
+                    self.orientation_gamma[sub] * 180 / np.pi,
+                    sig_in_plane[sub],
+                    s=120,
+                    linewidth=2,
+                    facecolors="none",
+                    edgecolors="r",
+                )
 
-            ax[0].set_xticks([0, self.orientation_zone_axis_steps])
-            ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
-            ax[0].xaxis.tick_top()
+            ax[1].set_xlabel("In-plane rotation angle [deg]", size=16)
+            ax[1].set_ylabel("Corr. of Best Fit Zone Axis", size=16)
+            ax[1].set_ylim([0, 1.03])
 
-            ax[0].set_yticks([self.orientation_zone_axis_steps])
-            ax[0].set_yticklabels([str(label_1)], size=14)
-
-        # In-plane rotation
-        # sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
-        sig_in_plane_max = np.max(sig_in_plane)
-        if sig_in_plane_max > 0:
-            sig_in_plane /= sig_in_plane_max
-        ax[1].plot(
-            self.orientation_gamma * 180 / np.pi,
-            sig_in_plane,
-        )
-
-        # Add markers for the best fit 
-        tol = 0.01
-        sub = sig_in_plane > 1 - tol
-        ax[1].scatter(
-                self.orientation_gamma[sub] * 180 / np.pi,
-                sig_in_plane[sub],
-                s=120,
-                linewidth=2,
-                facecolors="none",
-                edgecolors="r",
-            )
-
-        ax[1].set_xlabel("In-plane rotation angle [deg]", size=16)
-        ax[1].set_ylabel("Corr. of Best Fit Zone Axis", size=16)
-        ax[1].set_ylim([0, 1.03])
-
-        plt.show()
+            plt.show()
 
     if returnfig:
         return orientation, fig, ax
