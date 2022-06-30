@@ -9,7 +9,10 @@ from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
 
 from numpy.linalg import lstsq
-import cupy as cp
+try:
+    import cupy as cp
+except:
+    cp = None
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -788,6 +791,7 @@ def match_single_pattern(
     self,
     bragg_peaks: PointList,
     num_matches_return: int = 1,
+    min_number_peaks = 3,
     multiple_corr_reset=True,
     inversion_symmetry=True,
     plot_polar: bool = False,
@@ -803,6 +807,7 @@ def match_single_pattern(
     Args:
         bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
+        min_number_peaks (int):       Minimum number of peaks required to perform ACOM matching
         multiple_corr_reset (bool):   keep original correlation score for multiple matches
         inversion_symmetry (bool):    check for inversion symmetry in the matches
         subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
@@ -810,21 +815,24 @@ def match_single_pattern(
         plot_corr (bool):             set to true to plot the resulting correlogram
         returnfig (bool):             Return figure handles
         figsize (list):               size of figure
-        verbose (bool):               Print the fitted zone axes, correlation scores.
-        CUDA (bool):                  Enable CUDA for the FFT steps.
+        verbose (bool):               Print the fitted zone axes, correlation scores
+        CUDA (bool):                  Enable CUDA for the FFT steps
 
     Returns:
         orientation (Orientation):    Orientation class containing all outputs
         fig, ax (handles):            Figure handles for the plotting output
     """
 
+
+    # init orientation output
+    orientation = Orientation(num_matches=num_matches_return)
+    if bragg_peaks.data.shape[0] < min_number_peaks:
+        return orientation
+
     # get bragg peak data
     qx = bragg_peaks.data["qx"]
     qy = bragg_peaks.data["qy"]
     intensity = bragg_peaks.data["intensity"]
-
-    # init orientation output
-    orientation = Orientation(num_matches=num_matches_return)
 
     # other init
     dphi = self.orientation_gamma[1] - self.orientation_gamma[0]    
@@ -832,12 +840,6 @@ def match_single_pattern(
     corr_in_plane_angle = np.zeros(self.orientation_num_zones)
     if inversion_symmetry:
         corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
-
-    # if num_matches_return == 1:
-    #     orientation_output = np.zeros((3, 3))
-    # else:
-    #     orientation_output = np.zeros((3, 3, num_matches_return))
-    #     corr_output = np.zeros((num_matches_return))
 
     # loop over the number of matches to return
     for match_ind in range(num_matches_return):
@@ -903,14 +905,6 @@ def match_single_pattern(
                 else:
                     im_polar_refine = im_polar.copy()                
 
-
-            #  and match_ind == 0:
-            #     if self.CUDA:
-            #         im_polar_refine = cp.asarray(im_polar.copy())
-            #     else:
-            #         im_polar_refine = im_polar.copy()
-            # else:
-
         # Plot polar space image if needed
         if plot_polar is True: # and match_ind==0:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -927,7 +921,7 @@ def match_single_pattern(
                 im_polar_refine_fft = cp.fft.fft(cp.asarray(im_polar_refine))        
             else:
                 im_polar_refine_fft = np.fft.fft(im_polar_refine)
-                
+
 
         # Calculate full orientation correlogram
         if self.orientation_refine:
@@ -1473,12 +1467,6 @@ def match_single_pattern(
                 im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
                 im_mask.ravel()[inds_1D] = False
 
-
-
-            # print(self.orientation_inds)
-            # print(np.vstack((x_inds,y_inds)))
-
-
             if cmax > cmin:
                 im_plot = np.ma.masked_array(
                     (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
@@ -1503,23 +1491,6 @@ def match_single_pattern(
                 edgecolors="r",
             )
 
-            # label_0 = self.orientation_zone_axis_range[0, :]
-            # label_1 = self.orientation_zone_axis_range[1, :]
-            # label_2 = self.orientation_zone_axis_range[2, :]
-
-            # label_0 = np.round(label_0, decimals=3)
-            # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-            # label_0 = np.round(label_0, decimals=3)
-
-            # label_1 = np.round(label_1, decimals=3)
-            # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-            # label_1 = np.round(label_1, decimals=3)
-
-            # label_2 = np.round(label_2, decimals=3)
-            # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-            # label_2 = np.round(label_2, decimals=3)
-
-
             if np.abs(self.cell[5]-120.0) < 1e-6:
                 label_0 = self.rational_ind(
                     self.lattice_to_hexagonal(
@@ -1543,10 +1514,6 @@ def match_single_pattern(
                 label_2 = self.rational_ind(
                     self.cartesian_to_lattice(
                     self.orientation_zone_axis_range[2, :]))
-            # label_0 = np.round(label_0, decimals=2)
-            # label_1 = np.round(label_1, decimals=2)
-            # label_2 = np.round(label_2, decimals=2)
-
 
             ax[0].set_xticks([0, self.orientation_zone_axis_steps])
             ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
@@ -1554,7 +1521,6 @@ def match_single_pattern(
 
             ax[0].set_yticks([self.orientation_zone_axis_steps])
             ax[0].set_yticklabels([str(label_1)], size=14)
-
 
         # In-plane rotation
         # sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
@@ -1583,7 +1549,6 @@ def match_single_pattern(
         ax[1].set_ylim([0, 1.03])
 
         plt.show()
-
 
     if returnfig:
         return orientation, fig, ax
