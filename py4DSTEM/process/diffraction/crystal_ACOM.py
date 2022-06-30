@@ -1619,11 +1619,6 @@ def calculate_strain(
 
     # Loop over all probe positions
     for rx, ry in tqdmnd(
-        # 10,10,
-        # range(45,55),
-        # range(220,230),
-        # range(0,bragg_peaks_array.shape[0],1),
-        # range(120,130),
         *bragg_peaks_array.shape,
         desc="Calculating strains",
         unit=" PointList",
@@ -1691,10 +1686,8 @@ def calculate_strain(
             strain_map.slices['mask'][rx,ry] = 0
 
     if rotation_range is not None:
-        print(1)
         strain_map.slices['theta'] \
             = np.mod(strain_map.slices['theta'],rotation_range)
-
 
     return strain_map
 
