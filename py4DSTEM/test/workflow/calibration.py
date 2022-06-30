@@ -41,16 +41,16 @@ datacube.tree.print()
 
 
 # Virtual imaging
-#
-#geometry_BF = (
-#    (432,432),
-#    30
-#)
-#geometry_ADF = (
-#    (432,432),
-#    (80,300)
-#)
-#im_BF = py4DSTEM.process.virtualimage.get_virtualimage(
+
+geometry_BF = (
+    (432,432),
+    30
+)
+geometry_ADF = (
+    (432,432),
+    (80,300)
+)
+#im_BF = py4DSTEM.process.virtualimage.get_virtual_image(
 #    datacube,
 #    geometry_BF,
 #    name = 'vBF'

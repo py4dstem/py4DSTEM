@@ -12,9 +12,9 @@ def get_diffraction_image(
     ):
     """
     Computes and returns a diffraction image from `datacube`. The
-    kind of diffractin image (max, mean, median) is specifie by the
+    kind of diffraction image (max, mean, median) is specified by the
     `mode` argument, and the region it is computed over is specified
-    by the `region` and `geometry` arguments.
+    by the `geometry` argument.
 
     Args:
         datacube (Datacube)

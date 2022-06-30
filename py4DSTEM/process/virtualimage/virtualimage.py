@@ -1,5 +1,7 @@
 # Functions for generating virtual images
 
+# Functions for generating virtual images
+
 import numpy as np
 import dask.array as da
 import h5py
@@ -10,221 +12,295 @@ from ...tqdmnd import tqdmnd
 
 
 
-
-def get_virtualimage(
+def get_virtual_image(
     datacube,
-    geometry=None,
-    mask=None,
-    eager_compute=True,
-    *args,
-    **kwargs
+    mode,
+    geometry,
+    shift_corr = False,
+    eager_compute = True
     ):
     """
-    Get a virtual image from a Datacube.
-
-    This function can be operated in two modes:
-        - passing the `geometry` argument, which generates a boolean mask
-            corresponding to some specificed detector geometry. The
-            geometry of the mask is determined by the structure of the
-            tuple passed - see below for details.
-        - passing an array to the `mask` argument, which generates
-            a virtual image from that mask directly.
-
-    Operates on data either in memory (np.ndarray), memory mapped (np.memmap)
-    or dask arrays (da.Array), depending on how data is stored in the
-    Datacube.
+    Computes and returns a virtual image from `datacube`. The
+    kind of virtual image (max, mean, median) is specified by the
+    `mode` argument, and the detector geometry is specified
+    by the `geometry` argument.
 
     Args:
-        datacube (DataCube):
-        geometry (nested tuple, optional): Tuple defining the geoemtry of
-            the detector.  The following options are valid:
-                - rectangluar detector: a (4-tuple), the corners
-                    (qx0,qxf,qy0,qyf)
-                - circular detector: a (2-tuple), (center,radius) where
-                    center=(qx0,qy0) and radius is a number
-                - annular detector: a (2-tuple), (center,radii) where
-                    center=(qx0,qy0) and radii=(r_inner,r_outer)
-        mask (2D array, optional): numpy array defining a mask, either boolean
-            or non-boolean.  Must be the same size as the diffraction pattern
-        eager_compute (boolean, optional): if datacube.data is a dask.Array
-            defines if it returns a 2D image or lazy dask object,
-            or if datacube.data is numpy.ndarray this does nothing.
+        datacube (Datacube)
+        mode (str): must be in
+            ('point','circle','annulus','rectangle',
+            'cpoint','ccircle','cannulus','csquare',
+            'qpoint','qcircle','qannulus','qsquare',
+            'mask').  The first four modes represent point, circular,
+            annular, and rectangular detectors with geomtries specified
+            in pixels, relative to the uncalibrated origin, i.e. the upper
+            left corner of the diffraction plane. The next four modes
+            represent point, circular, annular, and square detectors with
+            geometries specified in pixels, relative to the calibrated origin,
+            taken to be the mean posiion of the origin over all scans.
+            'ccircle','cannulus', and 'csquare' are automatically centered
+            about the origin. The next four modes are identical to these,
+            except that the geometry is specified in q-space units, rather
+            than pixels. In the last mode the geometry is specified with a
+            user provided mask, which can be either boolean or floating point.
+            Floating point masks are normalized by setting their maximum value
+            to 1.
+        geometry (variable): valid entries are determined by the `mode`
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy)
+                - 'circle': nested 2-tuple, ((qx,qy),r)
+                - 'annulus': nested 2-tuple, ((qx,qy),(ri,ro))
+                - 'rectangle': 4-tuple, (xmin,xmax,ymin,ymax)
+                - 'cpoint': 2-tuple, (qx,qy)
+                - 'ccircle': number, r
+                - 'cannulus': 2-tuple, (ri,ro)
+                - 'csquare': number, s
+                - 'qpoint': 2-tuple, (qx,qy)
+                - 'qcircle': number, r
+                - 'qannulus': 2-tuple, (ri,ro)
+                - 'qsquare': number, s
+                - `mask`: 2D array
+        shift_corr (bool): if True, correct for beam shift. Works only with
+            'c' and 'q' modes - uses the calibrated origin for each pixel,
+            instead of the mean origin position.
 
     Returns:
-        if dask.Array & eager_compute:
-            (2D array): the virtual image
-        if dask.Array & eager_compute ==False:
-            (lazy 2D array): Lazy dask object which maybe computed to
-                generate virtual image
-        if numpy.ndarray or numpy.memmap:
-            (2D array): the virtual image
-
+        (2D array): the virtual image
 
     """
-    er = "Geometry or mask must be passed, not both!"
-    assert (geometry is not None) ^ (mask is not None), er
-
-
-    # create a dictionary of functions
-    function_dict = _make_function_dict()
-
-
-    # set flags for function selection
-
-    # data type
-
-    # dask array
-    if type(datacube.data) == da.Array:
-        data_type = 'dask'
-
-    # numpy array /
-    # mem mapped np.array /
-    # h5py dataset 
-    elif (type(datacube.data) == np.ndarray or
-          type(datacube.data) == np.memmap or
-          type(datacube.data) == h5py.Dataset):
-        data_type = 'numpy'
-
-    else:
-        er = f"Unexpected datacube array data type, {type(datacube.data)}"
-        raise Exception(er)
-
-    # geometry or mask mode
-
-    mode = 'geometry' if geometry != None else 'mask'
-
-
-
-    # select imaging function
-
-    if mode == 'geometry':
-
-        detector_geometry = _infer_detector_geometry(geometry)
-        image_function = function_dict[
-            mode][detector_geometry][data_type]
-        x = geometry
-
-
-    # mask mode
-    else:
-
+    # parse args
+    modes = ('point','circle','annulus','rectangle',
+             'cpoint','ccircle','cannulus','csquare',
+             'qpoint','qcircle','qannulus','qsquare',
+             'mask')
+    assert( mode in modes), f"`mode` was {mode}; must be in {modes}"
+    g=geometry
+    er = 'mode/geometry are mismatched'
+    if mode in ('ccircle','csquare','qcircle','qsquare'):
+        assert(isinstance(g,Number)), er
+    elif mode in ('point','cpoint','cannulus','qpoint','qannulus'):
+        assert(isinstance(g,tuple) and len(g)==2), er
+    elif mode in ('circle'):
+        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2), er
+    elif mode in ('annulus'):
+        assert(isinstance(g,tuple) and len(g)==2 and
+               all([len(g[i])==2 for i in (0,1)])), er
+    elif mode in ('mask'):
+        assert type(mask) == np.ndarray, "`mask` type should be `np.ndarray`"
         er = "mask and diffraction pattern shapes do not match"
         assert mask.shape == datacube.Qshape, er
-        er = "`mask` type should be `np.ndarray`"
-        assert type(mask) == np.ndarray, er
-
-        mask_type = 'bool' if mask.dtype == bool else 'non-bool'
-        image_function = function_dict[mode][data_type][mask_type]
-        x = mask
-
-
-    # perform computation
-    im = image_function(
-        datacube,
-        x,
-        eager_compute=eager_compute)
-
-
-    # update the datacube's tree
-    if 'name' in kwargs.keys():
-        name = kwargs['name']
+        mode = 'mask' if g.dtype==bool else 'mask_float'
     else:
-        name = 'virtual_image'
-    datacube.tree[name] = im
+        raise Exception(f"Unknown mode {mode}")
 
 
-    # return
+
+    # select a function
+    dtype = _infer_dtype(datacube)
+    fn_dict = _make_function_dict()
+    fn = function_dict[mode][shift_corr][dtype]
+
+
+    # run and return
+    im = fn(datacube, geometry)
     return im
 
-
-
-# Helper functions
-
-def _infer_detector_geometry(geometry, *args, **kwargs):
-
-    """
-    Takes a geometry of nested tuples and infers the detector type and
-    returns corresponding string.
-
-    This is a hardcoded method reliant on the max depth of the nesting
-    is 1 i.e. ((10,10), (20,20))
-
-    There is probably a nicer way to do this
-    """
-
-    # extract the 
-    shape = [np.array(a).shape for a  in np.array(geometry, dtype='object')]
-
-    # cycle through the mask types
-    # I could do this as a dictionary but this is simple as well
-
-    # cicular detector
-    if shape == [(2,),()]:
-        return 'circ'
-    # annular dectector
-    elif shape == [(2,), (2,)]:
-        return 'ann'
-    # rectangular detector
-    elif shape == [(),(),(),()]:
-        return 'rect'
-    elif shape == [(),()]:
-        return 'point'
-
-    # TODO add square detector, but that should be formatted as (qx0,qy0,s) -> [(3,)] so as not to conflict with circular  
-    # elif shape == [(3,)]:
-    #     return 'square'
-
-    # Raise Exception for incorrectly formatted geometries
-    else:
-        raise Exception("Could not infer the detector type from the geometry")
 
 
 
 def _make_function_dict():
     """
-    Function which creates a dictionary with the prefered image functions
-    for various datacube array dtype, mask/geometry, mask type etc.
+    Creates a dictionary for selecting an imaging function
     """
     function_dict = {
         # mode
-        'geometry' : {
-            # detector_geometry
-            'circ' : {
+        'point' : {
+            # shift corr
+            True : {
                 # data_type
-                'numpy' :_get_virtualimage_circ_old, # changed from tensordot
-                'dask' : _get_virtualimage_circ_dask
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
             },
-            # detector_geometry
-            'ann' : {
-                # data_type
-                'numpy' : _get_virtualimage_ann_old, # changed from tensordot
-                'dask' : _get_virtualimage_ann_dask,
-
-            },
-            # detector_geometry
-            'rect' : {
-                # data_type
-                'numpy' : _get_virtualimage_rect_old, # changed from tensordot
-                'dask' : _get_virtualimage_rect_dask
+            False : {
+                'numpy' : lambda d:d.data[g[0],g[1],:,:],
+                'dask' : _get_virtual_image_fn
             },
         },
-        # mode
-        'mask' : {
-            # data_type
-            'numpy' : {
-                # mask_type
-                'bool' : _get_virtualimage_from_mask_einsum, # changed from tensordot
-                'non-bool' : _get_virtualimage_from_mask_einsum
+
+        'circle' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
             },
-            # data_type
-            'dask' : {
-                # mask_type
-                'bool' : _get_virtualimage_from_mask_dask,
-                'non-bool' : _get_virtualimage_from_mask_dask
-            }
+            False : {
+                'numpy' : _get_virtualimage_circ_old,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'annulus' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtualimage_circ_ann,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'rectangle' : {
+            True : {
+                'numpy' : _get_virtualimage_rect_old,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        # c modes
+        'cpoint' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'ccircle' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'cannulus' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'csquare' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        # q modes
+        'qpoint' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'qcircle' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'qannulus' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'qsquare' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'mask' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+        },
+
+        'mask_float' : {
+            True : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
+            False : {
+                'numpy' : _get_virtual_image_fn,
+                'dask' : _get_virtual_image_fn
+            },
         }
     }
     return function_dict
+
+
+
+def _infer_dtype(datacube):
+
+    # numpy array /
+    # mem mapped np.array /
+    # h5py dataset 
+    if (type(datacube.data) == np.ndarray or
+          type(datacube.data) == np.memmap or
+          type(datacube.data) == h5py.Dataset):
+        data_type = 'numpy'
+
+    # dask array
+    if type(datacube.data) == da.Array:
+        data_type = 'dask'
+
+    else:
+        er = f"Unexpected datacube array data type, {type(datacube.data)}"
+        raise Exception(er)
+
+
+def _get_virtual_image_fn(datacube):
+    raise Exception("This functions doesn't exist yet!")
+
+
+
+
 
 
 
@@ -891,6 +967,5 @@ __all__ = [
 
     # check one of geometry or mask is passed
     # I could use np.all(mask) != None, but I want to check its a numpy array as well
-
 
 
