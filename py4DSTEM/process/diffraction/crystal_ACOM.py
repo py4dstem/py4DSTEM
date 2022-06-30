@@ -111,6 +111,7 @@ def orientation_plan(
         else:
             self.orientation_refine_range = angle_refine_range
     else:
+        self.orientation_refine_ratio = 1.0
         self.orientation_refine = False
 
     # Handle the "auto" case first, since it works by overriding zone_axis_range,
@@ -1580,6 +1581,9 @@ def calculate_strain(
     orientation_map: OrientationMap,
     corr_kernel_size = None,
     sigma_excitation_error = 0.02,
+    tol_excitation_error_mult: float = 3,
+    tol_intensity: float = 1e-4,
+    k_max: Optional[float] = None,
     min_num_peaks = 5,
     rotation_range = None,
     progress_bar = True,
@@ -1593,9 +1597,16 @@ def calculate_strain(
     TODO: add robust fitting?
 
     Args: 
-        bragg_peaks_array (PointListArray):
-        orientation_map (OrientationMap):
-        corr_kernel_size (float):
+        bragg_peaks_array (PointListArray):   All Bragg peaks
+        orientation_map (OrientationMap):     Orientation map generated from ACOM
+        corr_kernel_size (float):           Correlation kernel size - if user does
+                                            not specify, uses self.corr_kernel_size.
+        sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+        tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
+        tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+        k_max (float):                   Maximum scattering vector
+        min_num_peaks (int):             Minimum number of peaks required.
+        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).      
 
     Returns:
         strain_map (RealSlice):  strain tensor
@@ -1631,6 +1642,9 @@ def calculate_strain(
             p_ref = self.generate_diffraction_pattern(
                 orientation_map.get_orientation(rx,ry),
                 sigma_excitation_error = sigma_excitation_error,
+                tol_excitation_error_mult = tol_excitation_error_mult,
+                tol_intensity = tol_intensity,
+                k_max = k_max,
             )
 
             # init

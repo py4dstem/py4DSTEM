@@ -849,7 +849,7 @@ def plot_diffraction_pattern(
 def plot_orientation_maps(
     self,
     orientation_map,
-    orientation_ind: int = None,
+    orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
@@ -895,9 +895,6 @@ def plot_orientation_maps(
     # Inputs
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
-
-    if orientation_ind is None:
-        orientation_ind = 0
 
     # Color of the 3 corners
     color_basis = np.array(
@@ -1727,12 +1724,13 @@ def plot_orientation_maps(
 def plot_fiber_orientation_maps(
     self,
     orientation_map,
-    orientation_ind: int = None,
+    orientation_ind: int = 0,
     symmetry_order: int = None,
     symmetry_mirror: bool = False,
     dir_in_plane_degrees: float = 0.0,
-    corr_range: np.ndarray = np.array([0, 5]),
+    corr_range: np.ndarray = np.array([0, 2]),
     corr_normalize: bool = True,
+    show_axes: bool = True,
     medfilt_size: int = None,
     cmap_out_of_plane: 'string' = 'plasma',
     leg_size: int = 200,
@@ -1749,6 +1747,7 @@ def plot_fiber_orientation_maps(
         dir_in_plane_degrees (float):       Reference in-plane angle (degrees).  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
         corr_normalize (bool):              If true, set mean correlation to 1.
+        show_axes (bool):                   Flag setting whether orienation map axes are visible.
         figsize (array):                    2 elements defining figure size
         figbound (array):                   2 elements defining figure boundary
         returnfig (bool):                   set to True to return figure and axes handles
@@ -1782,6 +1781,7 @@ def plot_fiber_orientation_maps(
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
     mask = np.clip(mask, 0, 1)
 
+
     # Get symmetry
     if symmetry_order is None:
         symmetry_order = np.round(360.0 / self.orientation_fiber_angles[1])
@@ -1790,7 +1790,10 @@ def plot_fiber_orientation_maps(
 
     # Generate out-of-plane orientation signal
     ang_op = orientation_map.angles[:,:,orientation_ind,1]
-    sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
+    if self.orientation_fiber_angles[0] > 0:
+        sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
+    else:
+        sig_op = ang_op
     if medfilt_size is not None:
         sig_op = medfilt(sig_op,medfilt_size)
 
@@ -1867,37 +1870,47 @@ def plot_fiber_orientation_maps(
     ax_ip.imshow(im_ip)
     ax_ip.set_title("In-Plane Rotation", size=16)
 
-    #out of plane
-    ax_op.imshow(im_op)
-    ax_op.set_title("Out-of-Plane Tilt", size=16)
+    # out of plane
+    if self.orientation_fiber_angles[0] > 0:
+        ax_op.imshow(im_op)
+        ax_op.set_title("Out-of-Plane Tilt", size=16)
+    else:
+        ax_op.axis('off')
+
+    if show_axes is False:
+        ax_ip.axis("off")
+        ax_op.axis("off")
 
     # in plane legend
     ax_ip_l.imshow(im_ip_leg)
     ax_ip_l.set_axis_off()
 
     # out of plane legend
-    t = np.tile(np.linspace(0,1,leg_size,endpoint=True),(np.round(leg_size/10).astype('int'),1))
-    im_op_leg = cmap(t)
-    im_op_leg = np.delete(im_op_leg, 3, axis=2)
-    ax_op_l.imshow(im_op_leg)
-    ax_op_l.set_yticks([])
+    if self.orientation_fiber_angles[0] > 0:
+        t = np.tile(np.linspace(0,1,leg_size,endpoint=True),(np.round(leg_size/10).astype('int'),1))
+        im_op_leg = cmap(t)
+        im_op_leg = np.delete(im_op_leg, 3, axis=2)
+        ax_op_l.imshow(im_op_leg)
+        ax_op_l.set_yticks([])
 
-    ticks = [
-        np.round(leg_size*0.0), 
-        np.round(leg_size*0.25), 
-        np.round(leg_size*0.5), 
-        np.round(leg_size*0.75), 
-        np.round(leg_size*1.0), 
-        ]
-    labels = [
-        str(np.round(self.orientation_fiber_angles[0]*0.00)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.25)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.50)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.75)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*1.00)) + '$\degree$', 
-        ]
-    ax_op_l.set_xticks(ticks)
-    ax_op_l.set_xticklabels(labels)
+        ticks = [
+            np.round(leg_size*0.0), 
+            np.round(leg_size*0.25), 
+            np.round(leg_size*0.5), 
+            np.round(leg_size*0.75), 
+            np.round(leg_size*1.0), 
+            ]
+        labels = [
+            str(np.round(self.orientation_fiber_angles[0]*0.00)) + '$\degree$', 
+            str(np.round(self.orientation_fiber_angles[0]*0.25)) + '$\degree$', 
+            str(np.round(self.orientation_fiber_angles[0]*0.50)) + '$\degree$', 
+            str(np.round(self.orientation_fiber_angles[0]*0.75)) + '$\degree$', 
+            str(np.round(self.orientation_fiber_angles[0]*1.00)) + '$\degree$', 
+            ]
+        ax_op_l.set_xticks(ticks)
+        ax_op_l.set_xticklabels(labels)
+    else:
+        ax_op_l.axis('off')
 
     images_orientation = np.zeros((
         orientation_map.num_x,

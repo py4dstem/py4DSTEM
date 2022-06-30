@@ -489,6 +489,7 @@ class Crystal:
             sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+            k_max (float):                   Maximum scattering vector
             keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
             return_orientation_matrix (bool): Return the orientation matrix
 
