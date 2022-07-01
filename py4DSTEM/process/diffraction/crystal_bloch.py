@@ -372,16 +372,6 @@ def generate_dynamical_diffraction_pattern(
         g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix
     )
 
-    # import matplotlib.pyplot as plt
-    # sgp = np.sign(sg) >= 0
-    # c = np.zeros_like(g)
-    # c[sgp,:] = np.array([1,0,0])
-    # c[~sgp,:] = np.array([0,0,1])
-    # fig,ax = plt.subplots(dpi=200)
-    # ax.scatter(g[:,0],g[:,1],np.abs(sg)*100,c=c)
-    # ax.axis('equal')
-    # plt.show()
-
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
 
