@@ -180,7 +180,7 @@ def compute_WK_factor(
                 * A1[jj]
                 * (
                     DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL)
-                )  # should this be + or - ? others.f90 appears to disagree with WK paper...
+                )
             )
             for ii in range(jj + 1):
                 Fphon += (
@@ -189,7 +189,7 @@ def compute_WK_factor(
                     * A1[ii]
                     * (
                         DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL)
-                    )  # should this be + or - ? others.f90 appears to disagree with WK paper...
+                    )
                 )
         if verbose:
             print(f"Fphon:{Fphon}")
@@ -210,7 +210,6 @@ def compute_WK_factor(
     return (
         Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
     )  # convert to Å, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
-    # I am really not certain about these factors! AARGH
 
 
 ##############################################
