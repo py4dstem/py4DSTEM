@@ -117,13 +117,13 @@ def calculate_dynamical_structure_factors(
 
     lobato_lookup = single_atom_scatter()
 
-    m0c2 = 5.109989461e5    # electron rest mass, in eV
-    relativistic_factor = (m0c2 + accelerating_voltage)/m0c2
+    m0c2 = 5.109989461e5  # electron rest mass, in eV
+    relativistic_factor = (m0c2 + accelerating_voltage) / m0c2
 
     from functools import lru_cache
 
     # get_f_e returns f^e in units of VÅ^3, with relativistic correction
-    # but not yet converted to 
+    # but not yet converted to
     @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, B, method):
         if method == "Lobato":
@@ -133,7 +133,9 @@ def calculate_dynamical_structure_factors(
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
             lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
-            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j))
+            return np.complex128(
+                relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j)
+            )
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
@@ -245,6 +247,7 @@ def generate_dynamical_diffraction_pattern(
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
     return_complex: bool = False,
     return_eigenvectors: bool = False,
+    return_Smatrix: bool = False,
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -281,16 +284,19 @@ def generate_dynamical_diffraction_pattern(
                                         the diagonal elements. This is used for CBED calculations.
         return_complex (bool):          When True, returns both the complex amplitude and intensity. Defaults to (False)
     Returns:
+        bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            or
+        [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                        a list of PointLists is returned.
         if return_complex = True:
             bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
                 or
             [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
                                             a list of PointLists is returned.
-        else:
-            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
-                or
-            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
-                                            a list of PointLists is returned.
+        if return_Smatrix = True:
+            [S_matrix, ...], psi_0:     Returns a list of S-matrices for each thickness (this is always a list),
+                                        and the vector representing the incident plane wave. The beams of the
+                                        S-matrix have the same order as in the input `beams`.
 
     """
     t0 = time()  # start timer for matrix setup
@@ -300,15 +306,18 @@ def generate_dynamical_diffraction_pattern(
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
     # Parse input orientations:
-    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice, 
-                                       zone_axis_cartesian=zone_axis_cartesian)
+    zone_axis_rotation_matrix = self.parse_orientation(
+        zone_axis_lattice=zone_axis_lattice, zone_axis_cartesian=zone_axis_cartesian
+    )
     if foil_normal_lattice is not None or foil_normal_cartesian is not None:
-        foil_normal = self.parse_orientation(zone_axis_lattice=foil_normal_lattice,
-                                             zone_axis_cartesian=foil_normal_cartesian)
+        foil_normal = self.parse_orientation(
+            zone_axis_lattice=foil_normal_lattice,
+            zone_axis_cartesian=foil_normal_cartesian,
+        )
     else:
         foil_normal = zone_axis_rotation_matrix
 
-    foil_normal = foil_normal[:,2]
+    foil_normal = foil_normal[:, 2]
 
     # Note the difference in notation versus kinematic function:
     # k0 is the scalar magnitude of the wavevector, rather than
@@ -359,18 +368,9 @@ def generate_dynamical_diffraction_pattern(
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
     g = (hkl @ self.lat_inv) @ zone_axis_rotation_matrix
-    sg = self.excitation_errors(g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix)
-
-    # import matplotlib.pyplot as plt
-    # sgp = np.sign(sg) >= 0
-    # c = np.zeros_like(g)
-    # c[sgp,:] = np.array([1,0,0])
-    # c[~sgp,:] = np.array([0,0,1])
-    # fig,ax = plt.subplots(dpi=200)
-    # ax.scatter(g[:,0],g[:,1],np.abs(sg)*100,c=c)
-    # ax.axis('equal')
-    # plt.show()
-
+    sg = self.excitation_errors(
+        g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix
+    )
 
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
@@ -386,7 +386,9 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (2.0 * k0 * zone_axis_rotation_matrix[:,2] @ foil_normal)  # divide by 2 k_n
+    gamma = v / (
+        2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
+    )  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -406,22 +408,26 @@ def generate_dynamical_diffraction_pattern(
 
     # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
-    if return_complex: 
-  
-        # calculate the amplitudes 
+    if return_Smatrix:
+        Smatrices = [
+            C @ np.diag(np.exp(2.0j * np.pi * z * gamma)) @ C_inv
+            for z in np.atleast_1d(thickness)
+        ]
+        return Smatrices, psi_0
+    elif return_complex:
+        # calculate the amplitudes
         amplitudes = [
             C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))
             for z in np.atleast_1d(thickness)
         ]
-        
-        # Do this first to avoid handling structured array 
+
+        # Do this first to avoid handling structured array
         intensities = np.abs(amplitudes) ** 2
 
-        # convert amplitudes as a structured array 
-        # do we want complex64 or complex 32. 
-        amplitudes = np.array(amplitudes, dtype=([('amplitude', '<c16')]))
-
-    else: 
+        # convert amplitudes as a structured array
+        # do we want complex64 or complex 32.
+        amplitudes = np.array(amplitudes, dtype=([("amplitude", "<c16")]))
+    else:
         intensities = [
             np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
             for z in np.atleast_1d(thickness)
@@ -431,11 +437,13 @@ def generate_dynamical_diffraction_pattern(
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        if return_complex: 
+        if return_complex:
             # overwrite the kinematical intensities with the dynamical intensities
             newpl.data["intensity"] = intensities[i]
-            # merge amplitudes into the list 
-            newpl.data = rfn.merge_arrays((newpl.data, amplitudes[i]), asrecarray=False, flatten=True)
+            # merge amplitudes into the list
+            newpl.data = rfn.merge_arrays(
+                (newpl.data, amplitudes[i]), asrecarray=False, flatten=True
+            )
         else:
             newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
@@ -515,12 +523,14 @@ def generate_CBED(
 
     # If there are only two beams, augment the list with a third perpendicular spot
     if qxy.shape[0] == 2:
-        assert two_beam_zone_axis_lattice is not None, "When only two beams are present, two_beam_zone_axis_lattice must be specified."
-        hkl_reflection = hkl[1] if np.all(qxy[0]==0.) else hkl[0]
-        qxy_reflection = qxy[1] if np.all(qxy[0]==0.) else qxy[0]
-        orthogonal_spot = np.cross(two_beam_zone_axis_lattice,hkl_reflection)
-        hkl_augmented = np.vstack((hkl,orthogonal_spot))
-        qxy_augmented = np.vstack((qxy,np.flipud(qxy_reflection)))
+        assert (
+            two_beam_zone_axis_lattice is not None
+        ), "When only two beams are present, two_beam_zone_axis_lattice must be specified."
+        hkl_reflection = hkl[1] if np.all(qxy[0] == 0.0) else hkl[0]
+        qxy_reflection = qxy[1] if np.all(qxy[0] == 0.0) else qxy[0]
+        orthogonal_spot = np.cross(two_beam_zone_axis_lattice, hkl_reflection)
+        hkl_augmented = np.vstack((hkl, orthogonal_spot))
+        qxy_augmented = np.vstack((qxy, np.flipud(qxy_reflection)))
         proj = np.linalg.lstsq(qxy_augmented, hkl_augmented, rcond=-1)[0]
         hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
     # Otherwise calculate them based on the pattern
@@ -529,12 +539,20 @@ def generate_CBED(
         hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
-    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
-                                       zone_axis_cartesian=zone_axis_cartesian,
-                                       proj_x_lattice=hkl_proj_x)
-    ZA = np.array(zone_axis_rotation_matrix[:,2]) / np.linalg.norm(np.array(zone_axis_rotation_matrix[:,2]))
-    proj_x = zone_axis_rotation_matrix[:,0] / np.linalg.norm(zone_axis_rotation_matrix[:,0])
-    proj_y = zone_axis_rotation_matrix[:,1] / np.linalg.norm(zone_axis_rotation_matrix[:,1])
+    zone_axis_rotation_matrix = self.parse_orientation(
+        zone_axis_lattice=zone_axis_lattice,
+        zone_axis_cartesian=zone_axis_cartesian,
+        proj_x_lattice=hkl_proj_x,
+    )
+    ZA = np.array(zone_axis_rotation_matrix[:, 2]) / np.linalg.norm(
+        np.array(zone_axis_rotation_matrix[:, 2])
+    )
+    proj_x = zone_axis_rotation_matrix[:, 0] / np.linalg.norm(
+        zone_axis_rotation_matrix[:, 0]
+    )
+    proj_y = zone_axis_rotation_matrix[:, 1] / np.linalg.norm(
+        zone_axis_rotation_matrix[:, 1]
+    )
 
     # the foil normal should be the zone axis if unspecified
     if foil_normal_lattice is None:
@@ -606,7 +624,7 @@ def generate_CBED(
     else:
         # In CBED mode, the DP datastructure is a list of arrays
         DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
-    
+
     if return_probe:
         probe = np.zeros(DP_size, dtype=dtype)
 
@@ -626,7 +644,6 @@ def generate_CBED(
         )
         if return_probe:
             probe[tx_pixels[i] + qx0, ty_pixels[i] + qy0] = 1
-
 
         if LACBED:
             # loop over each thickness
@@ -661,9 +678,8 @@ def generate_CBED(
             return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
         else:
             return DP[0] if len(thickness) == 1 else DP
-    else: 
+    else:
         if return_mask:
             return (DP[0], probe, mask) if len(thickness) == 1 else (DP, probe, mask)
         else:
             return (DP[0], probe) if len(thickness) == 1 else (DP, probe)
-
