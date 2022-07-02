@@ -1428,7 +1428,13 @@ def match_single_pattern(
         return orientation
 
 
-def orientation_map_to_orix_CrystalMap(self, orientation_map, ind_orientation=0, pixel_size=1.0, pixel_units='px', return_color_key=False):
+def orientation_map_to_orix_CrystalMap(self, 
+                                       orientation_map, 
+                                       ind_orientation=0, 
+                                       pixel_size=1.0, 
+                                       pixel_units='px', 
+                                       return_color_key=False
+                                       ):
     from orix.quaternion import Rotation, Orientation
     from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
     from orix.plot import IPFColorKeyTSL
@@ -1458,9 +1464,15 @@ def orientation_map_to_orix_CrystalMap(self, orientation_map, ind_orientation=0,
     pg_structure = pgStructure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
     pointgroup = SpacegroupAnalyzer(pg_structure).get_point_group_symbol()
     
+    # If the structure has only one element, name the phase based on the element
+    if np.unique(self.numbers).size == 1:
+        name = element_symbols[self.numbers[0]-1]
+    else:
+        name = pg_structure.formula    
+    
     # Generate an orix Phase to store symmetry
     phase = Phase(
-        name=pg_structure.formula,
+        name=name,
         point_group=pointgroup,
         structure=structure,
     )
@@ -1470,7 +1482,8 @@ def orientation_map_to_orix_CrystalMap(self, orientation_map, ind_orientation=0,
         x=coords['x'],
         y=coords['y'],
         phase_list=PhaseList(phase),
-        prop={'iq':orientation_map.corr[:,:,ind_orientation].ravel()},
+        prop={'iq':orientation_map.corr[:,:,ind_orientation].ravel(),
+              'ci':orientation_map.corr[:,:,ind_orientation].ravel()},
         scan_unit=pixel_units
     )
     
@@ -1481,26 +1494,39 @@ def orientation_map_to_orix_CrystalMap(self, orientation_map, ind_orientation=0,
 def save_ang_file(
     self,
     file_name,
-    orientation_map,
-    ind_orientation = 0,
-    pixel_size: float = None,
+    orientation_map, 
+    ind_orientation=0, 
+    pixel_size=1.0, 
+    pixel_units='px', 
     ):
     '''
     This function outputs an ascii text file in the .ang format, containing 
     the Euler angles of an orientation map. 
 
     Args:
+        file_name (str):                    Path to save .ang file.
         orientation_map (OrientationMap):   Class containing orientation matrices,
                                             correlation values, etc.
         ind_orientation (int):              Which orientation match to plot if num_matches > 1
         pixel_size (float):                 Pixel size, if known.
+        pixel_units (str):                  Units of the pixel size
 
     Returns:
         nothing
 
     '''
 
-    import orix 
+    from orix.io.plugins.ang import file_writer
+
+    xmap = self.orientation_map_to_orix_CrystalMap(
+                                                   orientation_map,
+                                                   ind_orientation=ind_orientation,
+                                                   pixel_size=pixel_size,
+                                                   pixel_units=pixel_units,
+                                                   return_color_key=False,
+                                                   )
+
+    file_writer(file_name, xmap)
 
 
 
