@@ -1479,29 +1479,32 @@ def orientation_map_to_orix_CrystalMap(self,
 
     xmap = CrystalMap(
         rotations=rotations,
-        x=coords['x'],
-        y=coords['y'],
+        x=coords["x"],
+        y=coords["y"],
         phase_list=PhaseList(phase),
-        prop={'iq':orientation_map.corr[:,:,ind_orientation].ravel(),
-              'ci':orientation_map.corr[:,:,ind_orientation].ravel()},
-        scan_unit=pixel_units
+        prop={
+            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
+            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
+        },
+        scan_unit=pixel_units,
     )
-    
+
     ckey = IPFColorKeyTSL(phase.point_group)
-    
+
     return (xmap, ckey) if return_color_key else xmap
+
 
 def save_ang_file(
     self,
     file_name,
-    orientation_map, 
-    ind_orientation=0, 
-    pixel_size=1.0, 
-    pixel_units='px', 
-    ):
-    '''
-    This function outputs an ascii text file in the .ang format, containing 
-    the Euler angles of an orientation map. 
+    orientation_map,
+    ind_orientation=0,
+    pixel_size=1.0,
+    pixel_units="px",
+):
+    """
+    This function outputs an ascii text file in the .ang format, containing
+    the Euler angles of an orientation map.
 
     Args:
         file_name (str):                    Path to save .ang file.
@@ -1514,20 +1517,19 @@ def save_ang_file(
     Returns:
         nothing
 
-    '''
+    """
 
     from orix.io.plugins.ang import file_writer
 
     xmap = self.orientation_map_to_orix_CrystalMap(
-                                                   orientation_map,
-                                                   ind_orientation=ind_orientation,
-                                                   pixel_size=pixel_size,
-                                                   pixel_units=pixel_units,
-                                                   return_color_key=False,
-                                                   )
+        orientation_map,
+        ind_orientation=ind_orientation,
+        pixel_size=pixel_size,
+        pixel_units=pixel_units,
+        return_color_key=False,
+    )
 
     file_writer(file_name, xmap)
-
 
 
 def symmetry_reduce_directions(
