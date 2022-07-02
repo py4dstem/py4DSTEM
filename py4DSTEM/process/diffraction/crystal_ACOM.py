@@ -36,7 +36,7 @@ def orientation_plan(
     fiber_axis=None,
     fiber_angles=None,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
-    CUDA: bool = True,
+    CUDA: bool = False,
     progress_bar: bool = True,
     ):
 
