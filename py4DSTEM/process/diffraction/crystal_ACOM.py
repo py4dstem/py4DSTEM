@@ -764,6 +764,7 @@ def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
+    min_number_peaks = 3,
     inversion_symmetry = True,
     multiple_corr_reset = False,
     progress_bar: bool = True,
@@ -787,6 +788,7 @@ def match_orientations(
         orientation = self.match_single_pattern(
             bragg_peaks_array.get_pointlist(rx, ry),
             num_matches_return=num_matches_return,
+            min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
             multiple_corr_reset=multiple_corr_reset,
             plot_corr=False,
