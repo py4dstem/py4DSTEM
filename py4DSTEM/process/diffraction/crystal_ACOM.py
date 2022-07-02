@@ -33,8 +33,8 @@ def orientation_plan(
     intensity_power: float = 0.25,  # New default intensity power scaling
     tol_peak_delete=None,
     tol_distance: float = 0.01,
-    fiber_axis=None,
-    fiber_angles=None,
+    fiber_axis = None,
+    fiber_angles = None,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
     CUDA: bool = False,
     progress_bar: bool = True,
@@ -804,8 +804,8 @@ def match_single_pattern(
     bragg_peaks: PointList,
     num_matches_return: int = 1,
     min_number_peaks = 3,
-    inversion_symmetry=True,
-    multiple_corr_reset=False,
+    inversion_symmetry = True,
+    multiple_corr_reset = False,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,
@@ -1867,9 +1867,9 @@ def symmetry_reduce_directions(
     orientation,
     match_ind = 0,
     plot_output = False,
-    figsize=(15,6),
-    el_shift=0.0,
-    az_shift=-30.0,
+    figsize = (15,6),
+    el_shift = 0.0,
+    az_shift = -30.0,
     ):
     '''
     This function calculates the symmetry-reduced cartesian directions from
