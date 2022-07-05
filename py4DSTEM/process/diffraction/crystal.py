@@ -27,6 +27,7 @@ class Crystal:
         orientation_plan, 
         match_orientations, 
         match_single_pattern,
+        calculate_strain,
         save_ang_file,
         symmetry_reduce_directions,
     )
@@ -488,6 +489,7 @@ class Crystal:
             sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+            k_max (float):                   Maximum scattering vector
             keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
             return_orientation_matrix (bool): Return the orientation matrix
 
@@ -663,9 +665,12 @@ class Crystal:
         if np.sum(sub) > 0:
             for ind in np.argwhere(sub):
                 frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
-                vec *= frac.denominator
-            vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
-        return vec.astype('int')
+                vec *= np.round(frac.denominator)
+            vec = np.round(vec \
+                / np.gcd.reduce(np.round(np.abs(vec[sub])).astype('int'))
+                ).astype('int')
+
+        return vec
 
     def parse_orientation(
         self,
