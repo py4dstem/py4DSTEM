@@ -253,4 +253,122 @@ def DiffractionImage_from_Array(array):
 
 
 
+# VirtualImage
+
+# read
+
+def VirtualImage_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a VirtualImage. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A VirtualImage instance
+    """
+    image = Array_from_h5(group)
+    image = VirtualImage_from_Array(image)
+    return image
+
+
+def VirtualImage_from_Array(array):
+    """
+    Converts an Array to a VirtualImage.
+
+    Accepts:
+        array (Array)
+
+    Returns:
+        (VirtualImage)
+    """
+    from .virtualimage import VirtualImage
+    assert(array.rank == 2), "Array must have 2 dimensions"
+
+    # get diffraction image metadata
+    try:
+        md = array.metadata['virtualimage']
+        mode = md['mode']
+        geo = md['geometry']
+        shift_corr = md['shift_corr']
+        eager_compute = md['eager_compute']
+    except KeyError:
+        er = "VirtualImage metadata could not be found"
+        raise Exception(er)
+
+
+    # instantiate as a DiffractionImage
+    array.__class__ = VirtualImage
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        mode = mode,
+        geometry = geo,
+        shift_corr = shift_corr,
+        eager_compute = eager_compute
+    )
+    return array
+
+
+
+# Probe
+
+# read
+
+def Probe_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a Probe. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A Probe instance
+    """
+    probe = Array_from_h5(group)
+    probe = Probe_from_Array(probe)
+    return probe
+
+
+def Probe_from_Array(array):
+    """
+    Converts an Array to a Probe.
+
+    Accepts:
+        array (Array)
+
+    Returns:
+        (Probe)
+    """
+    from .probe import Probe
+    assert(array.rank == 2), "Array must have 2 dimensions"
+
+    # get diffraction image metadata
+    try:
+        md = array.metadata['probe']
+        kwargs = {}
+        for k in md.keys:
+            v = md[k]
+            kwargs[k] = v
+    except KeyError:
+        er = "Probe metadata could not be found"
+        raise Exception(er)
+
+
+    # instantiate as a DiffractionImage
+    array.__class__ = Probe
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        **kwargs
+    )
+    return array
+
+
+
+
 

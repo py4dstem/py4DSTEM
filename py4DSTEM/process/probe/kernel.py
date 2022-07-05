@@ -7,6 +7,84 @@ from ..utils import get_shifted_ar
 from ..calibration import get_probe_size
 
 
+def get_kernel(
+    probe,
+    mode = 'flat',
+    **kwargs
+    ):
+    """
+    Creates a kernel from the probe for cross-correlative template matching.
+
+    Precise behavior and valid keyword arguments depend on the `mode`
+    selected.  In each case, the center of the probe is shifted to the
+    origin and the kernel normalized such that it sums to 1. In 'flat'
+    mode, this is the only processing performed. In the remaining modes,
+    some additional processing is performed which adds a ring of
+    negative intensity around the central probe, which results in
+    edge-filetering-like behavior during cross correlation. Valid modes
+    are:
+
+        - 'flat': creates a flat probe kernel. For bullseye or other
+            structured probes, this mode is recommended.
+        - 'gaussian': subtracts a gaussian with a width of standard
+            deviation 'sigma'
+        - 'sigmoid': subtracts an annulus with inner and outer radii
+            of (ri,ro) and a sine-squared sigmoid radial profile from
+            the probe template.
+        - 'sigmoid_log': subtracts an annulus with inner and outer radii
+            of (ri,ro) and a logistic sigmoid radial profile from
+            the probe template.
+
+    Each mode accepts 'center' (2-tuple) as a kwarg to manually specify
+    the center of the probe, which is otherwise autodetected. Modes which
+    accept additional kwargs and those arguments are:
+
+        - 'gaussian':
+            sigma (number)
+        - 'sigmoid':
+            radii (2-tuple)
+        - 'sigmoid_log':
+            radii (2-tuple)
+
+    Accepts:
+        probe (2D array):
+        mode (str): must be in 'flat','gaussian','sigmoid','sigmoid_log'
+        **kwargs: depend on `mode`, see above
+
+    Returns:
+        (2D array)
+    """
+
+    modes = [
+        'flat',
+        'gaussian',
+        'sigmoid',
+        'sigmoid_log'
+    ]
+
+    # parse args
+    assert mode in modes, f"mode must be in {modes}. Received {mode}"
+
+    # get function
+    fn_dict = _make_function_dict()
+    fn = fn_dict[mode]
+
+    # compute and return
+    kernel = fn(probe, **kwargs)
+    return kernel
+
+
+
+def _make_function_dict():
+    d = {
+        'flat' : get_probe_kernel,
+        'gaussian' : get_probe_kernel_edge_gaussian,
+        'sigmoid' : _get_probe_kernel_edge_sigmoid_sine_squared,
+        'sigmoid_log' : _get_probe_kernel_edge_sigmoid_sine_squared
+    }
+    return d
+
+
 
 
 
@@ -97,8 +175,7 @@ def get_probe_kernel_edge_gaussian(
 
 def get_probe_kernel_edge_sigmoid(
     probe,
-    ri,
-    ro,
+    radii,
     origin=None,
     type='sine_squared'
     ):
@@ -110,8 +187,7 @@ def get_probe_kernel_edge_sigmoid(
     Args:
         probe (ndarray): the diffraction pattern corresponding to the probe over
             vacuum
-        ri (float): the sigmoid inner radius, from the probe center
-        ro (float): the sigmoid outer radius
+        radii (2-tuple): the sigmoid inner and outer radii, from the probe center
         origin (2-tuple or None): if None (default), finds the origin using
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying
             the origin position
@@ -123,6 +199,7 @@ def get_probe_kernel_edge_sigmoid(
     valid_types = ('logistic','sine_squared')
     assert(type in valid_types), "type must be in {}".format(valid_types)
     Q_Nx, Q_Ny = probe.shape
+    ri,ro = radii
 
     # Get CoM
     if origin is None:
@@ -158,7 +235,29 @@ def get_probe_kernel_edge_sigmoid(
 
 
 
+def _get_probe_kernel_edge_sigmoid_sine_squared(
+    probe,
+    radii,
+    origin=None,
+    ):
+    return get_probe_kernel_edge_sigmoid(
+        probe,
+        radii,
+        origin = origin,
+        type='sine_squared'
+    )
 
+def _get_probe_kernel_edge_sigmoid_logistic(
+    probe,
+    radii,
+    origin=None,
+    ):
+    return get_probe_kernel_edge_sigmoid(
+        probe,
+        radii,
+        origin = origin,
+        type='logistic'
+    )
 
 
 

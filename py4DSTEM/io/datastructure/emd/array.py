@@ -445,9 +445,9 @@ class Array:
 
     # HDF5 read/write
 
-    def to_h5(self,group,include_data=True):
+    def to_h5(self,group):
         from .io import Array_to_h5
-        Array_to_h5(self,group,include_data)
+        Array_to_h5(self,group)
 
     def from_h5(group):
         from .io import Array_from_h5
