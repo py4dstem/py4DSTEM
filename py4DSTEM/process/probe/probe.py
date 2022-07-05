@@ -1,7 +1,5 @@
 # Functions for getting images of the vacuum probe
 
-
-
 import numpy as np
 from scipy.ndimage.morphology import (
     binary_opening, binary_dilation, distance_transform_edt)
@@ -82,20 +80,6 @@ def get_vacuum_probe(
         }
     fn = functions[mode]
     probe = fn(data,**kwargs)
-
-
-
-    # make a Probe instance
-    probe = Probe(
-        data = probe,
-        name = name
-    )
-
-    # add to tree, if possible
-    if hasattr(data, 'tree'):
-        data.tree[name] = probe
-
-    # return
     return probe
 
 

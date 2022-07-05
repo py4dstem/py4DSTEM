@@ -24,6 +24,7 @@ datacube.tree.print()
 
 
 
+
 # Virtual diffraction
 
 dp_max = datacube.get_dp_max()
@@ -50,78 +51,88 @@ geometry_ADF = (
     (432,432),
     (80,300)
 )
-#im_BF = py4DSTEM.process.virtualimage.get_virtual_image(
-#    datacube,
-#    geometry_BF,
-#    name = 'vBF'
-#)
-#im_ADF = py4DSTEM.process.virtualimage.get_virtualimage(
-#    datacube,
-#    geometry_ADF,
-#    name = 'vADF'
-#)
+im_BF = datacube.get_virtual_image(
+    mode = 'circle',
+    geometry = geometry_BF,
+    name = 'vBF'
+)
+im_ADF = datacube.get_virtual_image(
+    mode = 'annulus',
+    geometry = geometry_ADF,
+    name = 'vADF'
+)
 #show(datacube.tree['vBF'])
 #show(datacube.tree['vADF'])
 
-#print("After virtual imaging")
-#datacube.tree.print()
+print("After virtual imaging")
+datacube.tree.print()
+
 
 
 
 
 # Probe
 
-## make a probe
-## put the probe in datacube's tree
+datacube_vacuum = py4DSTEM.io.read(
+    filepath_vacuum,
+    name = 'datacube_vacuum'
+)
+print('Loaded a vacuum datacube:')
+print(datacube_vacuum)
 
-#datacube_vacuum = py4DSTEM.io.read(
-#    filepath_vacuum,
-#    name = 'datacube_vacuum'
-#)
-#print('Loaded a vacuum datacube:')
-#print(datacube_vacuum)
+probe = datacube_vacuum.get_vacuum_probe(
+    ROI = (7,10,7,10)
+)
 
-
-#probe = py4DSTEM.process.probe.get_vacuum_probe(
-#    datacube_vacuum,
-#    ROI = (7,10,7,10))
-
-#print(probe.calibration)
-
-#datacube_vacuum.get_probe_kernel(params)
 #show(datacube_vacuum.tree['probe'].probe)
 #show(datacube_vacuum.tree['probe'].kernel)
-#py4DSTEM.visualize.show_probe_kernel(datacube_vacuum.tree['probe'].kernel)
-#
-#datacube.add_probe(datacube_vacuum.tree['probe'])
-#show(datacube.tree['probe'].probe)
-#show(datacube.tree['probe'].kernel)
-#py4DSTEM.visualize.show_probe_kernel(datacube.tree['probe'].kernel)
-#
-#
-#print("After probe")
-#datacube.tree.print()
 
-## ...
-## ...
-## ...
-#
-#
-#print(datacube)
-#print(datacube.tree)   # show the tree
-#
-#
-#
-#
-## Save the datacube with its tree
-## Load datacube+tree from the .h5
-#
-#
-#filepath_h5 = "~/Desktop/test.h5"
-##py4DSTEM.io.save(
+probe.get_kernel(
+    mode = 'sigmoid',
+    radii = (0,50)
+)
+
+datacube.add(probe)
+
+print("After probe")
+datacube.tree.print()
+
+
+
+
+
+
+
+# disk detection
+
+
+
+
+
+
+
+
+
+
+# io
+
+#py4DSTEM.io.save(
+#    filepath_h5,
 #    datacube,
-#    filepath
+#    tree = True,
+#    mode = 'o'
 #)
-#datacube2 = py4DSTEM.io.read(filepath_h5)
+#py4DSTEM.io.print_h5_tree(filepath_h5)
+#
+#d = py4DSTEM.io.read(
+#    filepath_h5,
+#    root = '4DSTEM_experiment/datacube/probe',
+#    tree = False
+#)
+#
+#
+#print(d)
+#print(d.metadata)
+
 
 

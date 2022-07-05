@@ -1,3 +1,3 @@
 from .probe import *
-from .probekernel import *
+from .kernel import *
 

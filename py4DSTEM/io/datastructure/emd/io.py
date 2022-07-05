@@ -185,6 +185,16 @@ def Metadata_to_h5(metadata,group):
                 dset = grp.create_dataset(k, data=v)
                 dset.attrs['type'] = np.string_('tuple')
 
+            # of tuples
+            elif any([isinstance(v[i], tuple) for i in range(len(v))]):
+                dset_grp = grp.create_group(k)
+                dset_grp.attrs['type'] = np.string_('tuple_of_tuples')
+                dset_grp.attrs['length'] = len(v)
+                for i,x in enumerate(v):
+                    dset_grp.create_dataset(
+                        str(i),
+                        data=x)
+
             # of arrays
             elif isinstance(v[0], np.ndarray):
                 dset_grp = grp.create_group(k)
@@ -195,6 +205,16 @@ def Metadata_to_h5(metadata,group):
                         str(i),
                         data=ar,
                         dtype=ar.dtype)
+
+            # of strings
+            elif isinstance(v[0], str):
+                dset_grp = grp.create_group(k)
+                dset_grp.attrs['type'] = np.string_('tuple_of_strings')
+                dset_grp.attrs['length'] = len(v)
+                for i,s in enumerate(v):
+                    dset_grp.create_dataset(
+                        str(i),
+                        data=np.string_(s))
 
             else:
                 er = f"Metadata only supports writing tuples with numeric and array-like arguments; found type {type(v[0])}"
@@ -218,6 +238,16 @@ def Metadata_to_h5(metadata,group):
                         str(i),
                         data=ar,
                         dtype=ar.dtype)
+
+            # of strings
+            elif isinstance(v[0], str):
+                dset_grp = grp.create_group(k)
+                dset_grp.attrs['type'] = np.string_('list_of_strings')
+                dset_grp.attrs['length'] = len(v)
+                for i,s in enumerate(v):
+                    dset_grp.create_dataset(
+                        str(i),
+                        data=np.string_(s))
 
             else:
                 er = f"Metadata only supports writing lists with numeric and array-like arguments; found type {type(v[0])}"
@@ -293,6 +323,28 @@ def Metadata_from_h5(group:h5py.Group):
                 tup.append(np.array(v[str(l)]))
             v = tuple(tup)
 
+        # tuples of tuples
+        elif t == 'tuple_of_tuples':
+            L = group[k].attrs['length']
+            tup = []
+            for l in range(L):
+                x = v[str(l)][...]
+                if x.ndim == 0:
+                    x = x.item()
+                else:
+                    x = tuple(x)
+                tup.append(x)
+            v = tuple(tup)
+
+        # tuples of strings
+        elif t == 'tuple_of_strings':
+            L = group[k].attrs['length']
+            tup = []
+            for l in range(L):
+                s = v[str(l)][...].item().decode('utf-8')
+                tup.append(s)
+            v = tuple(tup)
+
         # lists of numbers
         elif t == 'list':
             v = list(v[...])
@@ -303,6 +355,15 @@ def Metadata_from_h5(group:h5py.Group):
             _list = []
             for l in range(L):
                 _list.append(np.array(v[str(l)]))
+            v = _list
+
+        # list of strings
+        elif t == 'list_of_strings':
+            L = group[k].attrs['length']
+            _list = []
+            for l in range(L):
+                s = v[str(l)][...].item().decode('utf-8')
+                _list.append(s)
             v = _list
 
         else:
@@ -328,8 +389,7 @@ def Metadata_from_h5(group:h5py.Group):
 
 def Array_to_h5(
     array,
-    group,
-    include_data = True,
+    group
     ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
@@ -347,25 +407,13 @@ def Array_to_h5(
     grp.attrs.create("emd_group_type",1) # this tag indicates an Array
     grp.attrs.create("py4dstem_class",array.__class__.__name__)
 
-    # for saving "empty" data blocks, with metadata but no data
-    d = array.data if include_data is True else []
-
     # add the data
-    if include_data:
-        data = grp.create_dataset(
-            "data",
-            shape = array.data.shape,
-            data = array.data
-            #dtype = type(array.data)
-        )
-    # or add empty dataset
-    else:
-        data = grp.create_dataset(
-            "data",
-            shape = 0,
-            data = []
-            #dtype = type(array.data)
-        )
+    data = grp.create_dataset(
+        "data",
+        shape = array.data.shape,
+        data = array.data
+        #dtype = type(array.data)
+    )
     data.attrs.create('units',array.units) # save 'units' but not 'name' - 'name' is the group name
 
     # Add the normal dim vectors
@@ -486,8 +534,7 @@ def Array_from_h5(group:h5py.Group):
 # write
 def PointList_to_h5(
     pointlist,
-    group,
-    include_data = True
+    group
     ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
@@ -510,7 +557,7 @@ def PointList_to_h5(
         group_current_field.attrs.create("dtype", np.string_(t))
         group_current_field.create_dataset(
             "data",
-            data = pointlist.data[f] if include_data is True else []
+            data = pointlist.data[f]
         )
 
     # Add metadata
@@ -574,8 +621,7 @@ def PointList_from_h5(group:h5py.Group):
 # write
 def PointListArray_to_h5(
     pointlistarray,
-    group,
-    include_data = True
+    group
     ):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
@@ -599,12 +645,8 @@ def PointListArray_to_h5(
         pointlistarray.shape,
         dtype
     )
-    if include_data is True:
-        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-            dset[i,j] = pointlistarray.get_pointlist(i,j).data
-    else:
-        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-            dset[i,j] = []
+    for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+        dset[i,j] = pointlistarray.get_pointlist(i,j).data
 
     # Add metadata
     _write_metadata(pointlistarray, grp)

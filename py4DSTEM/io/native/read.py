@@ -18,7 +18,9 @@ from ..datastructure import (
     DataCube,
     DiffractionSlice,
     DiffractionImage,
-    RealSlice
+    RealSlice,
+    VirtualImage,
+    Probe
 )
 
 #from .read_utils import get_py4DSTEM_topgroups
@@ -213,7 +215,9 @@ def _get_class(grp):
         'DataCube' : DataCube,
         'DiffractionSlice' : DiffractionSlice,
         'DiffractionImage' : DiffractionImage,
-        'RealSlice' : RealSlice
+        'RealSlice' : RealSlice,
+        'VirtualImage' : VirtualImage,
+        'Probe' : Probe
     }
     try:
         classname = grp.attrs['py4dstem_class']

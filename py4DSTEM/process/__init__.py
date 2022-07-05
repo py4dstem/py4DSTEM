@@ -1,4 +1,8 @@
+from . import virtualdiffraction
 from . import virtualimage
+
+
+
 from . import probe
 
 #from . import diskdetection

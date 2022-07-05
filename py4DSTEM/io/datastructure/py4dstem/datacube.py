@@ -14,10 +14,13 @@ class DataCube(Array):
     """
 
     from .datacube_fns import (
+        add,
         get_diffraction_image,
         get_dp_max,
         get_dp_mean,
-        get_dp_median
+        get_dp_median,
+        get_virtual_image,
+        get_vacuum_probe
     )
 
 

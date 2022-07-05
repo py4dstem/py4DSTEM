@@ -83,6 +83,41 @@ are:
 
 
 
+### Adding a new class
+
+To add a new py4dstem class:
+
+- create a file py4DSTEM/io/datastructure/py4dstem/yourclass.py. Add your
+    class there.
+- if the class needs read/write functionality not already inherited from a
+    parent class, add YouClass_to_h5 and/or YourClass_from_h5 functions to
+    py4DSTEM/io/datastructure/py4dstem/io.py, then add .to_h5 and/or .from_h5
+    methods to your class definition, importing and running the functions you
+    just added to datastructure/py4dstem/io.py.
+- modify py4DSTEM/io/native/read.py, adding YourClass to the class imports
+    at the top of the file, then adding it to the dictionary in _get_class
+    at the end of the file
+- add your class to the py4DSTEM/io/datastructure/py4dstem/__init__.py file
+
+Your class should now be read/writable with py4DSTEM.  To add your class
+automoatically to a running filetree under a DataCube object using built-in
+DataCube methods:
+
+- go to py4DSTEM/io/datastructure/py4dstem/datacube.py, and find the list of
+    function imports from datacube_fns at the beginning of the class definition.
+    Add the name of your new datacube method here.
+- open py4DSTEM/io/datastructure/py4dstem/datacube_fns.py, and add your function.
+    Please note that this function should be a wrapper around functional code
+    from the py4DSTEM.process module - no new computational code should go here.
+    New datacube_fns.py functions should import a function from process inside
+    of the new function definition rather than at the top of the file to avoid
+    circular import errors, run the function, wrap the output into an instance
+    of the new class, add the instance to the datacube's tree, and optionally
+    return the answer if `returncalc` is True.
+    
+    
+
+
 
 
 

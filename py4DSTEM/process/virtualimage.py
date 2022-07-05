@@ -1,13 +1,11 @@
 # Functions for generating virtual images
 
-# Functions for generating virtual images
-
 import numpy as np
 import dask.array as da
 import h5py
 import warnings
 
-from ...tqdmnd import tqdmnd
+from ..tqdmnd import tqdmnd
 
 
 
@@ -21,9 +19,7 @@ def get_virtual_image(
     ):
     """
     Computes and returns a virtual image from `datacube`. The
-    kind of virtual image (max, mean, median) is specified by the
-    `mode` argument, and the detector geometry is specified
-    by the `geometry` argument.
+    kind of virtual image is specified by the `mode` argument.
 
     Args:
         datacube (Datacube)
@@ -98,7 +94,7 @@ def get_virtual_image(
     # select a function
     dtype = _infer_dtype(datacube)
     fn_dict = _make_function_dict()
-    fn = function_dict[mode][shift_corr][dtype]
+    fn = fn_dict[mode][shift_corr][dtype]
 
 
     # run and return
@@ -144,7 +140,7 @@ def _make_function_dict():
                 'dask' : _get_virtual_image_fn
             },
             False : {
-                'numpy' : _get_virtualimage_circ_ann,
+                'numpy' : _get_virtualimage_ann_old,
                 'dask' : _get_virtual_image_fn
             },
         },
@@ -282,17 +278,20 @@ def _infer_dtype(datacube):
     # mem mapped np.array /
     # h5py dataset 
     if (type(datacube.data) == np.ndarray or
-          type(datacube.data) == np.memmap or
-          type(datacube.data) == h5py.Dataset):
+        isinstance(datacube.data, np.memmap) or
+        isinstance(datacube.data), h5py.Dataset):
         data_type = 'numpy'
 
     # dask array
-    if type(datacube.data) == da.Array:
+    elif type(datacube.data) == da.Array:
         data_type = 'dask'
 
     else:
         er = f"Unexpected datacube array data type, {type(datacube.data)}"
         raise Exception(er)
+
+    return data_type
+
 
 
 def _get_virtual_image_fn(datacube):
@@ -925,21 +924,21 @@ def _get_virtualimage_rect_tensordot(datacube, geometry, spicy=False, *args, **k
 
 #TODO Work out how to handle name space to access underlying __functions__, use __all__ or something like that 
 
-__all__ = [
-    'make_circ_mask',
-    'make_annular_mask',
-    'make_rect_mask',
-    'combine_masks',
-    'plot_mask_overlay',
-    'get_virtualimage',
-    '_get_virtualimage_rect_old',
-    '_get_virtualimage_circ_old',
-    '_get_virtualimage_ann_old',
-    '_infer_detector_geometry',
-    '_get_virtualimage_from_mask_dask',
-    '_get_virtualimage_from_mask_einsum',
-    '_get_virtualimage_from_mask_tensordot'
-    ]
+#__all__ = [
+#    'make_circ_mask',
+#    'make_annular_mask',
+#    'make_rect_mask',
+#    'combine_masks',
+#    'plot_mask_overlay',
+#    'get_virtualimage',
+#    '_get_virtualimage_rect_old',
+#    '_get_virtualimage_circ_old',
+#    '_get_virtualimage_ann_old',
+#    '_infer_detector_geometry',
+#    '_get_virtualimage_from_mask_dask',
+#    '_get_virtualimage_from_mask_einsum',
+#    '_get_virtualimage_from_mask_tensordot'
+#    ]
 
 
 

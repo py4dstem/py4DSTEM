@@ -1,23 +1,41 @@
 # Functions to become DataCube methods
 
 import numpy as np
-from .diffractionimage import DiffractionImage
 
 
 
 
+# Add to tree
+
+from ..emd import Array
+def add(
+    self,
+    data,
+    name = ''
+    ):
+    """
+    Adds a block of data to the DataCube's tree. If `data` is an instance of
+    an EMD/py4DSTEM class, add it to the tree.  If it's a numpy array,
+    turn it into an Array instance, then save to the tree.
+    """
+    if isinstance(data, np.ndarray):
+        data = Array(
+            data = data,
+            name = name
+        )
+    self.tree[data.name] = data
 
 
 
 # Diffraction imaging
 
-
+from .diffractionimage import DiffractionImage
 def get_diffraction_image(
     self,
-    name = 'diffraction_image',
     mode = 'max',
     geometry = None,
     shift_corr = False,
+    name = 'diffraction_image',
     returncalc = True,
     ):
     """
@@ -44,7 +62,7 @@ def get_diffraction_image(
     """
 
     # perform computation
-    from ....process.virtualimage import get_diffraction_image
+    from ....process.virtualdiffraction import get_diffraction_image
     dp = get_diffraction_image(
         self,
         mode = mode,
@@ -71,9 +89,9 @@ def get_diffraction_image(
 
 def get_dp_max(
     self,
-    name = 'dp_max',
     geometry = None,
     shift_corr = False,
+    name = 'dp_max',
     returncalc = True,
     ):
     """
@@ -109,9 +127,9 @@ def get_dp_max(
 
 def get_dp_mean(
     self,
-    name = 'dp_mean',
     geometry = None,
     shift_corr = False,
+    name = 'dp_mean',
     returncalc = True,
     ):
     """
@@ -148,9 +166,9 @@ def get_dp_mean(
 
 def get_dp_median(
     self,
-    name = 'dp_median',
     geometry = None,
     shift_corr = False,
+    name = 'dp_median',
     returncalc = True,
     ):
     """
@@ -182,6 +200,138 @@ def get_dp_median(
     )
     if returncalc:
         return dp
+
+
+
+
+
+# Virtual imaging
+
+from .virtualimage import VirtualImage
+def get_virtual_image(
+    self,
+    mode,
+    geometry,
+    shift_corr = False,
+    eager_compute = True,
+    name = 'virtual_image',
+    returncalc = True,
+    ):
+    """
+    Get a virtual image and store it in `datacube`s tree under `name`.
+    The kind of virtual image is specified by the `mode` argument.
+
+    Args:
+        mode (str): must be in
+            ('point','circle','annulus','rectangle',
+            'cpoint','ccircle','cannulus','csquare',
+            'qpoint','qcircle','qannulus','qsquare',
+            'mask').  The first four modes represent point, circular,
+            annular, and rectangular detectors with geomtries specified
+            in pixels, relative to the uncalibrated origin, i.e. the upper
+            left corner of the diffraction plane. The next four modes
+            represent point, circular, annular, and square detectors with
+            geometries specified in pixels, relative to the calibrated origin,
+            taken to be the mean posiion of the origin over all scans.
+            'ccircle','cannulus', and 'csquare' are automatically centered
+            about the origin. The next four modes are identical to these,
+            except that the geometry is specified in q-space units, rather
+            than pixels. In the last mode the geometry is specified with a
+            user provided mask, which can be either boolean or floating point.
+            Floating point masks are normalized by setting their maximum value
+            to 1.
+        geometry (variable): valid entries are determined by the `mode`
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy)
+                - 'circle': nested 2-tuple, ((qx,qy),r)
+                - 'annulus': nested 2-tuple, ((qx,qy),(ri,ro))
+                - 'rectangle': 4-tuple, (xmin,xmax,ymin,ymax)
+                - 'cpoint': 2-tuple, (qx,qy)
+                - 'ccircle': number, r
+                - 'cannulus': 2-tuple, (ri,ro)
+                - 'csquare': number, s
+                - 'qpoint': 2-tuple, (qx,qy)
+                - 'qcircle': number, r
+                - 'qannulus': 2-tuple, (ri,ro)
+                - 'qsquare': number, s
+                - `mask`: 2D array
+        shift_corr (bool): if True, correct for beam shift. Works only with
+            'c' and 'q' modes - uses the calibrated origin for each pixel,
+            instead of the mean origin position.
+        name (str): the output object's name
+        returncalc (bool): if True, returns the output
+
+    Returns:
+        (Optional): if returncalc is True, returns the VirtualImage
+    """
+
+    # perform computation
+    from ....process.virtualimage import get_virtual_image
+    im = get_virtual_image(
+        self,
+        mode = mode,
+        geometry = geometry,
+        shift_corr = shift_corr,
+        eager_compute = eager_compute
+    )
+
+    # wrap with a py4dstem class
+    im = VirtualImage(
+        data = im,
+        name = name,
+        mode = mode,
+        geometry = geometry,
+        shift_corr = shift_corr
+    )
+
+    # add to the tree
+    self.tree[name] = im
+
+    # return
+    if returncalc:
+        return im
+
+
+
+
+
+# Probe
+
+from .probe import Probe
+def get_vacuum_probe(
+    self,
+    name = 'probe',
+    returncalc = True,
+    **kwargs
+    ):
+    """
+
+    """
+
+    # perform computation
+    from ....process.probe import get_vacuum_probe
+    x = get_vacuum_probe(
+        self,
+        **kwargs
+    )
+
+    # wrap with a py4dstem class
+    x = Probe(
+        data = x,
+        **kwargs
+    )
+
+    # add to the tree
+    self.tree[name] = x
+
+    # return
+    if returncalc:
+        return x
+
+
+
+
+
 
 
 
