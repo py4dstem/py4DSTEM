@@ -17,7 +17,7 @@ filepath_h5 = "/home/ben/Desktop/test.h5"
 # Load a datacube from a dm file
 datacube = py4DSTEM.io.read(filepath_calibration_dm)
 datacube = py4DSTEM.io.datastructure.DataCube(
-    data=datacube.data[0:15,0:20,:,:])
+    data=datacube.data[0:10,0:10,:,:])
 
 print(f"Loaded a {datacube.data.shape} shaped datacube with tree:")
 datacube.tree.print()
@@ -104,8 +104,8 @@ datacube.tree.print()
 
 
 # disk detection
-rxs = 0,3,5,10,5,8
-rys = 8,5,13,12,14,3
+rxs = 0,3,5,0,5,8
+rys = 8,5,3,2,4,3
 
 
 # Tune disk detection parameters on selected DPs
@@ -119,13 +119,75 @@ detect_params = {
     'corrPower':1,
 }
 
-selected_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks_selected(
-    datacube=datacube,
-    probe=probe_kernel,
-    Rx=rxs,
-    Ry=rys,
+# Single DP
+
+#peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
+#    data = datacube.data[4,4,:,:],
+#    template = probe.kernel,
+#    **detect_params
+#)
+#print(peaks)
+
+
+
+# 3D stack of DPs
+
+#mask = np.zeros(datacube.Rshape, dtype=bool)
+#mask[[2,3,4],[0,3,2]] = True
+#peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
+#    data = datacube.data[mask,:,:],
+#    template = probe.kernel,
+#    **detect_params
+#)
+#print(peaks)
+
+
+
+# a set of points rx,ry in a datacube
+
+#rx = np.array([2,3,4])
+#ry = np.array([0,3,2])
+#peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
+#    data = (datacube, rx, ry),
+#    template = probe.kernel,
+#    **detect_params
+#)
+#print(peaks)
+
+
+
+# a whole datacube
+
+peaks = py4DSTEM.process.diskdetection.find_Bragg_disks(
+    data = datacube,
+    template = probe.kernel,
     **detect_params
 )
+print(peaks)
+
+
+
+py4DSTEM.io.save(
+    filepath_h5,
+    data = peaks,
+    mode = 'o'
+)
+py4DSTEM.io.print_h5_tree(filepath_h5)
+d = py4DSTEM.io.read(
+    filepath_h5,
+    root = '4DSTEM_experiment/braggvectors',
+    tree = False
+)
+print(d)
+
+
+
+
+
+
+
+
+
 
 #py4DSTEM.visualize.show_image_grid(
 #    get_ar=lambda i:datacube.data[rxs[i],rys[i],:,:],
@@ -158,7 +220,18 @@ selected_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks_selected(
 
 
 
-
+#py4DSTEM.io.save(
+#    filepath_h5,
+#    data = peaks,
+#    mode = 'o'
+#)
+#py4DSTEM.io.print_h5_tree(filepath_h5)
+#d = py4DSTEM.io.read(
+#    filepath_h5,
+#    root = '4DSTEM_experiment/qpoints',
+#    tree = False
+#)
+#print(d)
 
 
 

@@ -2,10 +2,12 @@
 
 import numpy as np
 import h5py
+from os.path import basename
 
 from ..emd.io import Array_from_h5, Metadata_from_h5
-
-
+from ..emd.io import PointList_from_h5
+from ..emd.io import PointListArray_from_h5, PointListArray_to_h5
+from ..emd.io import _write_metadata, _read_metadata
 
 
 
@@ -150,47 +152,6 @@ def DiffractionSlice_from_Array(array):
 
 
 
-
-# RealSlice
-
-# Reading
-
-def RealSlice_from_h5(group:h5py.Group):
-    """
-    Takes a valid HDF5 group for an HDF5 file object which is open in
-    read mode. Determines if it's a valid Array, and if so loads and
-    returns it as a RealSlice. Otherwise, raises an exception.
-
-    Accepts:
-        group (HDF5 group)
-
-    Returns:
-        A RealSlice instance
-    """
-    realslice = Array_from_h5(group)
-    realslice = RealSlice_from_Array(realslice)
-    return realslice
-
-
-def RealSlice_from_Array(array):
-    """
-    Converts an Array to a RealSlice.
-
-    Accepts:
-        array (Array)
-
-    Returns:
-        (RealSlice)
-    """
-    from .realslice import RealSlice
-    assert(array.rank == 2), "Array must have 2 dimensions"
-    array.__class__ = RealSlice
-    array.__init__(
-        data = array.data,
-        name = array.name,
-        slicelabels = array.slicelabels
-    )
-    return array
 
 
 
@@ -367,6 +328,142 @@ def Probe_from_Array(array):
         **kwargs
     )
     return array
+
+
+
+# QPoints
+
+# Reading
+
+def QPoints_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid QPoints instance, and if so
+    loads and returns it. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A QPoints instance
+    """
+    qpoints = PointList_from_h5(group)
+    qpoints = QPoints_from_PointList(qpoints)
+    return qpoints
+
+
+def QPoints_from_PointList(pointlist):
+    """
+    Converts an PointList to QPoints.
+
+    Accepts:
+        pointlist (PointList)
+
+    Returns:
+        (QPoints)
+    """
+    from .qpoints import QPoints
+    pointlist.__class__ = QPoints
+    pointlist.__init__(
+        data = pointlist.data,
+        name = pointlist.name,
+    )
+    return pointlist
+
+
+
+
+
+# BraggVectors
+
+
+# write
+def BraggVectors_to_h5(
+    braggvectors,
+    group
+    ):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    write or append mode. Writes a new group with a name given by this
+    BraggVectors .name field nested inside the passed group, and saves
+    the data there.
+
+    Accepts:
+        group (HDF5 group)
+    """
+
+    ## Write
+    grp = group.create_group(braggvectors.name)
+    grp.attrs.create("emd_group_type", 4) # this tag indicates a Custom type
+    grp.attrs.create("py4dstem_class", braggvectors.__class__.__name__)
+
+    # Add vectors, cal and uncal
+    PointListArray_to_h5(
+        braggvectors.v,
+        grp
+    )
+    PointListArray_to_h5(
+        braggvectors.v_uncal,
+        grp
+    )
+
+    # Add metadata
+    _write_metadata(braggvectors, grp)
+
+
+# read
+def BraggVectors_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in read mode,
+    and a name.  Determines if a valid BraggVectors object of this name exists inside
+    this group, and if it does, loads and returns it. If it doesn't, raises
+    an exception.
+
+    Accepts:
+        group (HDF5 group)
+        name (string)
+
+    Returns:
+        A BraggVectors instance
+    """
+    from .braggvectors import BraggVectors
+
+    er = f"Group {group} is not a valid BraggVectors group"
+    assert("emd_group_type" in group.attrs.keys()), er
+    assert(group.attrs["emd_group_type"] == 4), er
+
+
+    # Get PointListArrays
+    v_cal = PointListArray_from_h5(group['v_cal'])
+    #v_uncal = PointListArray_from_h5(group['v_uncal'])
+
+    # Set up BraggVectors
+    braggvectors = BraggVectors(
+        v_cal.shape,
+        name = basename(group.name)
+    )
+    braggvectors._v_cal = v_cal
+    braggvectors._v_uncal = v_uncal
+
+
+
+
+
+
+    # Add metadata
+    _read_metadata(braggvectors, group)
+
+    return braggvectors
+
+
+
+
+
+
+
+
+
+
 
 
 

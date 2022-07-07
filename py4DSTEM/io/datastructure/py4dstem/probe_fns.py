@@ -59,14 +59,14 @@ def get_kernel(
 
     # perform computation
     from ....process.probe import get_kernel
-    k = get_kernel(
+    kern = get_kernel(
         self.probe,
         mode = mode,
         **kwargs
     )
 
     # add to the Probe
-    self.kernel = k
+    self.kernel = kern
 
     # Set metadata
     md = Metadata(name='kernel')
@@ -77,7 +77,7 @@ def get_kernel(
 
     # return
     if returncalc:
-        return k
+        return kern
 
 
 

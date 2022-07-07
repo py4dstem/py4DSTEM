@@ -20,7 +20,9 @@ from ..datastructure import (
     DiffractionImage,
     RealSlice,
     VirtualImage,
-    Probe
+    Probe,
+    QPoints,
+    BraggVectors
 )
 
 #from .read_utils import get_py4DSTEM_topgroups
@@ -217,7 +219,9 @@ def _get_class(grp):
         'DiffractionImage' : DiffractionImage,
         'RealSlice' : RealSlice,
         'VirtualImage' : VirtualImage,
-        'Probe' : Probe
+        'Probe' : Probe,
+        'QPoints' : QPoints,
+        'BraggVectors' : BraggVectors
     }
     try:
         classname = grp.attrs['py4dstem_class']
