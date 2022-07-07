@@ -16,7 +16,6 @@ class PointListArray:
         dtype,
         shape,
         name: Optional[str] = 'pointlistarray',
-        calibration: Optional = None,
         ):
         """
 		Creates an empty PointListArray.
@@ -26,7 +25,6 @@ class PointListArray:
                 the data of each PointList
             shape (2-tuple of ints): the shape of the array of PointLists
             name (str): a name for the PointListArray
-            calibration (Calibration): a Calibration instance
 
         Returns:
             a PointListArray instance
@@ -35,7 +33,6 @@ class PointListArray:
 
         self.name = name
         self.shape = shape
-        self.calibration = calibration
 
         self.dtype = np.dtype(dtype)
         self.fields = self.dtype.names
@@ -50,7 +47,7 @@ class PointListArray:
                              for j in range(self.shape[1])] for i in range(self.shape[0])]
 
 
-    ## Retrieve pointlists
+    ## get/set pointlists
 
     def get_pointlist(self, i, j, name=None):
         """
@@ -65,6 +62,13 @@ class PointListArray:
         l = len(tup) if isinstance(tup,tuple) else 1
         assert(l==2), f"Expected 2 slice values, recieved {l}"
         return self.get_pointlist(tup[0],tup[1])
+
+    def __setitem__(self, tup, pointlist):
+        l = len(tup) if isinstance(tup,tuple) else 1
+        assert(l==2), f"Expected 2 slice values, recieved {l}"
+        assert(pointlist.fields == self.fields), "fields must match"
+        self._pointlists[tup[0]][tup[1]] = pointlist
+
 
 
     ## Make copies

@@ -16,7 +16,8 @@ EMD_group_types = {
     'Metadata' : 0,
     'Array' : 1,
     'PointList' : 2,
-    'PointListArray': 3
+    'PointListArray': 3,
+    'Custom': 4
 }
 
 
@@ -638,6 +639,9 @@ def PointListArray_to_h5(
     grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
     grp.attrs.create("py4dstem_class",pointlistarray.__class__.__name__)
 
+    # Add metadata
+    # TODO
+
     # Add data
     dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
     dset = grp.create_dataset(
@@ -646,9 +650,9 @@ def PointListArray_to_h5(
         dtype
     )
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        dset[i,j] = pointlistarray.get_pointlist(i,j).data
+        dset[i,j] = pointlistarray[i,j].data
 
-    # Add metadata
+    # Add additional metadata
     _write_metadata(pointlistarray, grp)
 
 
@@ -675,8 +679,17 @@ def PointListArray_from_h5(group:h5py.Group):
     assert(group.attrs["emd_group_type"] == EMD_group_types['PointListArray']), er
 
 
-    # Get data
+     # Get metadata
+    # TODO
+
+   # Get data
     dset = group['data']
+
+    print(dset)
+    print(dset[0,0])
+    #print(dset[0,0].dtype)
+
+
     shape = group['data'].shape
     dtype = group['data'][0,0].dtype
     pla = PointListArray(
@@ -686,7 +699,7 @@ def PointListArray_from_h5(group:h5py.Group):
     )
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         try:
-            pla.get_pointlist(i,j).append(dset[i,j])
+            pla[i,j].add(dset[i,j])
         except ValueError:
             pass
 

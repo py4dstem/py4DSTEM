@@ -31,23 +31,18 @@ def get_vacuum_probe(
         (Probe) a Probe instance
     """
 
-    # set flags for function selection
+    # select mode of operation
+
     if isinstance(data,DataCube):
         mode = '4D'
     elif isinstance(data,np.ndarray):
-        if data.ndims == 4:
-            mode = '4D'
-        elif data.ndims == 3:
-            mode = '3D'
-        elif data.ndims == 2:
-            mode = '2D'
-        else:
-            er = f"{data.ndims} is an invalid number of dimensions. must be in (2,3,4)"
-            raise Exception(er)
+        mode = str(data.ndims)+'D'
     elif data is None:
         mode = 'synth'
     else:
-        er = f"invalid type {type(data)} for `data`. must be in (DataCube,np.ndarray,None)"
+        er = f"invalid type {type(data)} for `data`."
+        er += f"must be in (DataCube,np.ndarray,None)"
+        raise Exception(er)
 
     if mode == '4D':
         if 'ROI' in kwargs.keys():
@@ -59,14 +54,6 @@ def get_vacuum_probe(
         else:
             mode = '4D_full'
 
-
-    # if a name was passed
-    # pull it from kwargs
-    try:
-        name = kwargs['name']
-        del(kwargs['name'])
-    except KeyError:
-        name = 'probe'
 
 
     # choose and run a function

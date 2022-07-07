@@ -5,6 +5,8 @@ from .diffractionslice import *
 from .diffractionimage import *
 from .realslice import *
 from .virtualimage import *
+from .qpoints import *
+from .braggvectors import *
 
 from .io import *
 

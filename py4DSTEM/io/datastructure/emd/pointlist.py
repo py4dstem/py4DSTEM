@@ -21,7 +21,6 @@ class PointList:
         self,
         data: np.ndarray,
         name: Optional[str] = 'pointlist',
-        calibration: Optional = None,
         ):
         """
 		Instantiate a PointList.
@@ -30,7 +29,6 @@ class PointList:
             data (structured numpy ndarray): the data; the dtype of this array will
                 specify the fields of the PointList.
             name (str): name for the PointList
-            calibration (Calibration): a Calibration instance
 
         Returns:
             a PointList instance
@@ -39,17 +37,40 @@ class PointList:
         self.name = name
         self.length = len(self.data)
 
-        self.dtype = data.dtype
-        self.fields = self.dtype.names
-        self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
+        self._dtype = self.data.dtype
+        self._fields = self.data.dtype.names
+        self._types = tuple([self.data.dtype.fields[f][0] for f in self.fields])
 
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
 
+
+    # properties
+    @property
+    def dtype(self):
+        return self._dtype
+    @dtype.setter
+    def dtype(self, x):
+        self._dtype = data.dtype
+
+    @property
+    def fields(self):
+        return self._fields
+    @fields.setter
+    def fields(self, x):
+        self.data.dtype.names = x
+        self._fields = x
+
+    @property
+    def types(self):
+        return self._types
+
+
+
     ## Add, remove, sort data
 
-    def append(self, data):
+    def add(self, data):
         """
         Appends a numpy structured array. Its dtypes must agree with the existing data.
         """
