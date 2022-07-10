@@ -2,7 +2,59 @@
 
 import numpy as np
 from ..utils import add_to_2D_array_from_floats
+from ...io.datastructure.emd import PointListArray
 from ...tqdmnd import tqdmnd
+
+
+
+def get_bvm(
+    braggpeaks,
+    Qshape,
+    mode = 'centered'
+    ):
+    """
+    Gets a Bragg vector map, a 2D histogram of Bragg scattering vectors.
+
+    Args:
+        braggpeaks (PointListArray): the Bragg vectors and intensities.
+        Qshape (2 tuple): diffraction space shape
+        mode (str): must be 'raw' or 'centered'. TODO, sampling selection
+
+    Args:
+        braggpeaks (PointListArray):
+    """
+    # parse args
+    assert isinstance(braggpeaks, PointListArray)
+    modes = ('raw','centered')
+    assert mode in modes, f"{mode} must be in {modes}"
+
+
+    # select a function
+    fn_dict = {
+        'raw' : get_bragg_vector_map_raw,
+        'centered' : get_bragg_vector_map,
+    }
+    fn = fn_dict[mode]
+
+
+    # run
+    bvm = fn(
+        braggpeaks,
+        Q_Nx = Qshape[0],
+        Q_Ny = Qshape[1]
+    )
+
+    return bvm
+
+
+
+
+
+
+
+
+
+
 
 def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     """
@@ -22,7 +74,8 @@ def get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     # Concatenate all PointList data together for speed
-    bigpl = np.concatenate([pl.data for subpl in braggpeaks.pointlists for pl in subpl])
+    b = braggpeaks
+    bigpl = np.concatenate([b[i,j].data for i in range(b.shape[0]) for j in range(b.shape[1])])
     qx = bigpl['qx']/Q_pixel_size + (Q_Nx/2.)
     qy = bigpl['qy']/Q_pixel_size + (Q_Ny/2.)
     I = bigpl['intensity']
@@ -143,7 +196,8 @@ def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
     assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
 
     # Concatenate all PointList data together for speeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed
-    bigpl = np.concatenate([pl.data for subpl in braggpeaks.pointlists for pl in subpl])
+    b = braggpeaks
+    bigpl = np.concatenate([b[i,j].data for i in range(b.shape[0]) for j in range(b.shape[1])])
     qx = bigpl['qx']/Q_pixel_size
     qy = bigpl['qy']/Q_pixel_size
     I = bigpl['intensity']
@@ -242,7 +296,6 @@ def get_weighted_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, weights):
 
 
 # Aliases
-get_bvm = get_bragg_vector_map
 get_bvm_maxima = get_bragg_vector_maxima_map
 get_bvm_weighted = get_weighted_bragg_vector_map
 

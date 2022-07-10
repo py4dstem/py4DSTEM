@@ -333,6 +333,201 @@ def get_vacuum_probe(
 
 
 
+# Bragg disks
+
+
+
+def find_Bragg_disks(
+    self,
+
+    template,
+    data = None,
+
+    filter_function = None,
+
+    corrPower = 1,
+    sigma = 2,
+    subpixel = 'multicorr',
+    upsample_factor = 16,
+
+    minAbsoluteIntensity = 0,
+    minRelativeIntensity = 0.005,
+    relativeToPeak = 0,
+    minPeakSpacing = 60,
+    edgeBoundary = 20,
+    maxNumPeaks = 70,
+
+    CUDA = False,
+    CUDA_batched = True,
+    distributed = None,
+
+    _qt_progress_bar = None,
+
+    name = 'braggvectors',
+    returncalc = True,
+    ):
+    """
+    Finds the Bragg disks by cross correlation with `template`.
+
+    For each diffraction image, the algorithm works in 4 steps:
+
+    (1) optional pre-processing by passing the image through some
+        `filter_funtion`, which should accept and return 2D arrays
+    (2) the image is cross correlated with the template.
+        Phase/hybrid correlations can be used instead by setting the
+        `corrPower` argument. Cross correlation can be skipped entirely,
+        and steps 3 and 4 performed directly on the diffraction
+        image itself rathar than a cross correlation, by passing None
+        to `template`.
+    (3) the maxima of the cross correlation are located and their
+        positions and intensities stored. The cross correlation may be
+        passed through a gaussian filter first by passing the `sigma`
+        argument. The method for maximum detection can be set with
+        the `subpixel` parameter. Options, from something like fastest/least
+        precise to slowest/most precise are 'pixel', 'poly', and 'multicorr'.
+    (4) filtering is applied to remove untrusted or undesired positive counts,
+        based on their intensity (`minRelativeIntensity`,`relativeToPeak`,
+        `minAbsoluteIntensity`) their proximity to one another or the
+        image edge (`minPeakSpacing`, `edgeBoundary`), and the total
+        number of peaks per pattern (`maxNumPeaks`).
+
+
+    Running on a subset of the data may be desireable, and is controlled
+    by the `data` parameter. If None (default), runs on the whole DataCube,
+    and stores the output in its tree. Otherwise, nothing is stored in tree,
+    but some value is returned. Valid entries are:
+
+        - a 2-tuple of numbers (rx,ry): run on this diffraction image,
+            and return a QPoints instance
+        - a 2-tuple of arrays (rx,ry): run on these diffraction images,
+            and return a list of QPoints instances
+        - an Rspace shapped 2D boolean array: run on the diffraction images
+            specified by the True counts and return a list of QPoints instances
+
+
+    Args:
+        template (2D array): the vacuum probe template, in real space. For
+            Probe instances, this is `probe.kernel`.  If None, does not perform
+            a cross correlation.
+        data (variable): see above.
+        filter_function (callable): filtering function to apply to each
+            diffraction pattern before peakfinding. Must be a function of only
+            one argument (the diffraction pattern) and return the filtered
+            diffraction pattern. The shape of the returned DP must match the
+            shape of the probe kernel (but does not need to match the shape of
+            the input diffraction pattern, e.g. the filter can be used to bin the
+            diffraction pattern). If using distributed disk detection, the
+            function must be able to be pickled with by dill.
+        corrPower (float between 0 and 1, inclusive): the cross correlation
+            power. A value of 1 corresponds to a cross correaltion, 0
+            corresponds to a phase correlation, and intermediate values giving
+            hybrid correlations.
+        sigma (float): if >0, a gaussian smoothing filter with this standard
+            deviation is applied to the cross correlation before maxima are
+            detected
+        subpixel (str): Whether to use subpixel fitting, and which algorithm to
+            use. Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor (int): upsampling factor for subpixel fitting (only used
+            when subpixel='multicorr')
+        minAbsoluteIntensity (float): the minimum acceptable correlation peak
+            intensity, on an absolute scale
+        minRelativeIntensity (float): the minimum acceptable correlation peak
+            intensity, relative to the intensity of the brightest peak
+        relativeToPeak (int): specifies the peak against which the minimum
+            relative intensity is measured -- 0=brightest maximum. 1=next
+            brightest, etc.
+        minPeakSpacing (float): the minimum acceptable spacing between detected
+            peaks
+        edgeBoundary (int): minimum acceptable distance for detected peaks from
+            the diffraction image edge, in pixels.
+        maxNumPeaks (int): the maximum number of peaks to return
+        CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk
+            detection
+        CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT
+            steps of disk detection are performed in batches to better utilize
+            GPU resources.
+        distributed (dict): contains information for parallel processing using an
+            IPyParallel or Dask distributed cluster.  Valid keys are:
+                * ipyparallel (dict):
+                * client_file (str): path to client json for connecting to your
+                    existing IPyParallel cluster
+                * dask (dict): client (object): a dask client that connects to
+                    your existing Dask cluster
+                * data_file (str): the absolute path to your original data
+                    file containing the datacube
+                * cluster_path (str): defaults to the working directory during
+                    processing
+            if distributed is None, which is the default, processing will be in
+            serial
+        _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
+            execution
+        name (str): name for the output BraggVectors
+        returncalc (bool): if True, returns the answer
+
+    Returns:
+        (BraggVectors or QPoints or list of QPoints)
+    """
+    from ....process.diskdetection import find_Bragg_disks
+
+    # parse args
+    if data is None:
+        x = self
+    elif isinstance(data, tuple):
+        x = self, data[0], data[1]
+    elif isinstance(data, np.ndarray):
+        assert data.dtype == bool, 'array must be boolean'
+        assert data.shape == self.Rshape, 'array must be Rspace shaped'
+        x = self.data[data,:,:]
+    else:
+        raise Exception(f'unexpected type for `data` {type(data)}')
+
+
+    # compute
+    peaks = find_Bragg_disks(
+        data = x,
+        template = template,
+
+        filter_function = filter_function,
+
+        corrPower = corrPower,
+        sigma = sigma,
+        subpixel = subpixel,
+        upsample_factor = upsample_factor,
+
+        minAbsoluteIntensity = minAbsoluteIntensity,
+        minRelativeIntensity = minRelativeIntensity,
+        relativeToPeak = relativeToPeak,
+        minPeakSpacing = minPeakSpacing,
+        edgeBoundary = edgeBoundary,
+        maxNumPeaks = maxNumPeaks,
+
+        CUDA = CUDA,
+        CUDA_batched = CUDA_batched,
+        distributed = distributed,
+
+        _qt_progress_bar = _qt_progress_bar,
+    )
+
+
+    # name
+    try:
+        peaks.name = name
+    except AttributeError:
+        pass
+
+    # add to tree
+    if data is None:
+        self.tree[name] = peaks
+
+    # return
+    if returncalc:
+        return peaks
+
+
+
 
 
 

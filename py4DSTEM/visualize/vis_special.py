@@ -36,10 +36,19 @@ def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
     Ri,Ro = fitradii
     qx0,qy0,a,b,theta = p_ellipse
     fig,ax = show(ar,
-                  annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
-                           'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
-                  ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
-                           'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
+                  annulus={'center':(qx0,qy0),
+                           'radii':(Ri,Ro),
+                           'fill':fill,
+                           'color':color_ann,
+                           'alpha':alpha_ann,
+                           'linewidth':linewidth_ann},
+                  ellipse={'center':(qx0,qy0),
+                           'a':a,
+                           'b':b,
+                           'theta':theta,
+                           'color':color_ell,
+                           'alpha':alpha_ell,
+                           'linewidth':linewidth_ell},
                   returnfig=True,**kwargs)
 
     if not returnfig:

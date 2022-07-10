@@ -435,7 +435,7 @@ def BraggVectors_from_h5(group:h5py.Group):
 
     # Get PointListArrays
     v_cal = PointListArray_from_h5(group['v_cal'])
-    #v_uncal = PointListArray_from_h5(group['v_uncal'])
+    v_uncal = PointListArray_from_h5(group['v_uncal'])
 
     # Set up BraggVectors
     braggvectors = BraggVectors(
@@ -444,11 +444,6 @@ def BraggVectors_from_h5(group:h5py.Group):
     )
     braggvectors._v_cal = v_cal
     braggvectors._v_uncal = v_uncal
-
-
-
-
-
 
     # Add metadata
     _read_metadata(braggvectors, group)
