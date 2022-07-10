@@ -6,43 +6,6 @@ from ...io.datastructure import Calibration, PointListArray
 from ...tqdmnd import tqdmnd
 
 
-def calibrate_bragg_peaks_rotation(
-    braggpeaks: PointListArray,
-    theta: float,
-    flip: bool,
-) -> PointListArray:
-    """
-    Calibrate rotation of Bragg peak positions, using either the R/Q rotation `theta`
-    or the `QR_rotation` value inside a Calibration object.
-
-    Accepts:
-        braggpeaks  (PointListArray) the CENTERED Bragg peaks
-        theta       (float) the rotation between real and reciprocal space in radians
-        flip        (bool) whether there is a flip between real and reciprocal space
-
-    Returns:
-        braggpeaks_rotated  (PointListArray) the rotated Bragg peaks
-    """
-
-    assert isinstance(braggpeaks, PointListArray)
-
-    R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-
-    for Rx, Ry in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
-        pointlist = braggpeaks.get_pointlist(Rx, Ry)
-
-        if flip:
-            positions = R @ np.vstack((pointlist.data["qy"], pointlist.data["qx"]))
-        else:
-            positions = R @ np.vstack((pointlist.data["qx"], pointlist.data["qy"]))
-
-        rotated_pointlist = braggpeaks.get_pointlist(Rx, Ry)
-        rotated_pointlist.data["qx"] = positions[0, :]
-        rotated_pointlist.data["qy"] = positions[1, :]
-
-    return braggpeaks
-
-
 def get_Qvector_from_Rvector(vx, vy, QR_rotation):
     """
     For some vector (vx,vy) in real space, and some rotation QR between real and

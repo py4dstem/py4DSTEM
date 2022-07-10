@@ -232,52 +232,6 @@ def double_sided_gaussian(p, x, y):
         + c_bkgd
     )
 
-
-### Correct Bragg peak positions, making a circular coordinate system
-
-def correct_braggpeak_elliptical_distortions(braggpeaks,p_ellipse,centered=True):
-    """
-    Correct the elliptical distortions in a BraggPeaks instance.
-
-    Accepts:
-        braggpeaks (PointListArray): the detected, unshifted bragg peaks
-        p_ellipse (5-tuple): the ellipse parameters (x0,y0,a,b,theta)
-        centered (bool): if True, assumes that the braggpeaks PointListArray has been
-            centered, and uses (x0,y0)=(0,0). Otherwise, uses the (x0,y0) from
-            `p_ellipse`
-
-    Returns:
-        (PointListArray): the corrected Bragg peaks
-    """
-    assert(isinstance(braggpeaks,PointListArray))
-
-    # Unpack parameters
-    x0,y0,a,b,theta = p_ellipse
-    if centered:
-        x0,y0 = 0,0
-
-    # Get the transformation matrix
-    e = b/a
-    sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
-    T = np.array(
-            [
-                [e*sint**2 + cost**2, sint*cost*(1-e)],
-                [sint*cost*(1-e), sint**2 + e*cost**2]
-            ]
-        )
-
-    # Correct distortions
-    for Rx in range(braggpeaks.shape[0]):
-        for Ry in range(braggpeaks.shape[1]):
-            pointlist = braggpeaks.get_pointlist(Rx, Ry)
-            x, y = pointlist.data["qx"] - x0, pointlist.data["qy"] - y0
-            xyar_i = np.vstack([x, y])
-            xyar_f = np.matmul(T, xyar_i)
-            pointlist.data["qx"] = xyar_f[0, :] + x0
-            pointlist.data["qy"] = xyar_f[1, :] + y0
-    return braggpeaks
-
-
 ### Fit an ellipse to crystalline scattering with a known angle between peaks
 
 def constrain_degenerate_ellipse(data, p_ellipse, r_inner, r_outer, phi_known, fitrad=6):

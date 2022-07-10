@@ -18,14 +18,15 @@ class Calibration(Metadata):
         >>> c.set_p(p)
         >>> p = c.get_p()
 
-    If the parameter has not been set, the getter methods return None
-    The value of a parameter may be a number, representing the entire dataset,
-    or a 2D typically (R_Nx,R_Ny)-shaped array, representing values at each
-    detector pixel. For parameters with 2D array values,
+    If the parameter has not been set, the getter methods return None. For
+    parameters with multiple values, they're returned as a tuple. If any of
+    the multiple values can't be found, a single None is returned instead.
+    Some parameters may have distinct values for each scan position; these
+    are stored as 2D arrays, and
 
         >>> c.get_p()
 
-    will return the entire 2D array, and
+    will return the entire 2D array, while
 
         >>> c.get_p(rx,ry)
 
@@ -86,7 +87,10 @@ class Calibration(Metadata):
         R_Ny = self.get_R_Ny()
         Q_Nx = self.get_Q_Nx()
         Q_Ny = self.get_Q_Ny()
-        return (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        shape = (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        if any([x is None for x in shape]):
+            shape = None
+        return shape
     def set_Qshape(self,x):
         """
         Args:
@@ -95,6 +99,13 @@ class Calibration(Metadata):
         Q_Nx,Q_Ny = x
         self._params['Q_Nx'] = Q_Nx
         self._params['Q_Ny'] = Q_Ny
+    def get_Qshape(self,x):
+        Q_Nx = self._params['Q_Nx']
+        Q_Ny = self._params['Q_Ny']
+        shape = (Q_Nx,Q_Ny)
+        if any([x is None for x in shape]):
+            shape = None
+        return shape
     def set_Rshape(self,x):
         """
         Args:
@@ -103,6 +114,13 @@ class Calibration(Metadata):
         R_Nx,R_Ny = x
         self._params['R_Nx'] = R_Nx
         self._params['R_Ny'] = R_Ny
+    def get_Rshape(self,x):
+        R_Nx = self._params['R_Nx']
+        R_Ny = self._params['R_Ny']
+        shape = (R_Nx,R_Ny)
+        if any([x is None for x in shape]):
+            shape = None
+        return shape
 
     # pixel sizes
     def set_Q_pixel_size(self,x):
@@ -114,6 +132,8 @@ class Calibration(Metadata):
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
     def set_Q_pixel_units(self,x):
+        pix = ('pixels','A^-1')
+        assert(x in pix), f"{x} must be in {pix}"
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
@@ -122,32 +142,53 @@ class Calibration(Metadata):
     def get_R_pixel_units(self):
         return self._get_value('R_pixel_units')
 
-
     # origin
+    def set_qx0(self,x):
+        self._params['qx0'] = x
+    def get_qx0(self,rx=None,ry=None):
+        return self._get_value('qx0',rx,ry)
+    def set_qy0(self,x):
+        self._params['qy0'] = x
+    def get_qy0(self,rx=None,ry=None):
+        return self._get_value('qy0',rx,ry)
+    def set_qx0_meas(self,x):
+        self._params['qx0_meas'] = x
+    def get_qx0_meas(self,rx=None,ry=None):
+        return self._get_value('qx0_meas',rx,ry)
+    def set_qy0_meas(self,x):
+        self._params['qy0_meas'] = x
+    def get_qy0_meas(self,rx=None,ry=None):
+        return self._get_value('qy0_meas',rx,ry)
     def set_origin(self,x):
         """
         Args:
-            x (3D array of shape (R_Nx,R_Ny,2): the origin
+            x (2-tuple of numbers or of 2D, R-shaped arrays): the origin
         """
-        self._params['origin'] = x
+        qx0,qy0 = x
+        self.set_qx0(qx0)
+        self.set_qy0(qy0)
     def get_origin(self,rx=None,ry=None):
-        return self._get_value('origin',rx,ry)
+        qx0 = self._get_value('qx0',rx,ry)
+        qy0 = self._get_value('qy0',rx,ry)
+        ans = (qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
     def set_origin_meas(self,x):
         """
         Args:
-            x (3D array of shape (R_Nx,R_Ny,2): the measured origin
+            x (2-tuple of 2D R-shaped arrays: the origin
         """
-        self._params['origin_meas'] = x
+        qx0,qy0 = x
+        self.set_qx0_meas(qx0)
+        self.set_qy0_meas(qy0)
     def get_origin_meas(self,rx=None,ry=None):
-        return self._get_value('origin_meas',rx,ry)
-    def set_origin_residuals(self,x):
-        """
-        Args:
-            x (3D array of shape (R_Nx,R_Ny,2): the residuals of fitting the origin
-        """
-        self._params['origin_residuals'] = x
-    def get_origin_residuals(self,rx=None,ry=None):
-        return self._get_value('origin_residuals',rx,ry)
+        qx0 = self._get_value('qx0_meas',rx,ry)
+        qy0 = self._get_value('qy0_meas',rx,ry)
+        ans = (qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
 
     # ellipse
     def set_a(self,x):
@@ -181,18 +222,16 @@ class Calibration(Metadata):
         self._params['b'] = b
         self._params['theta'] = theta
     def get_ellipse(self,rx=None,ry=None):
-        a = self._get_value('a',rx,ry)
-        b = self._get_value('b',rx,ry)
-        theta = self._get_value('theta',rx,ry)
-        return (a,b,theta)
+        a = self.get_a(rx,ry)
+        b = self.get_b(rx,ry)
+        theta = self.get_theta(rx,ry)
+        ans = (a,b,theta)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
     def get_p_ellipse(self,rx=None,ry=None):
-        origin = self._get_origin('origin',rx,ry)
-        qx0,qy0 = origin[...,0],origin[...,1]
-        if qx0.ndim == 0: qx0 = qx0.item()
-        if qy0.ndim == 0: qy0 = qy0.item()
-        a = self._get_value('a',rx,ry)
-        b = self._get_value('b',rx,ry)
-        theta = self._get_value('theta',rx,ry)
+        qx0,qy0 = self.get_origin(rx,ry)
+        a,b,theta = self.get_ellipse(rx,ry)
         return (qx0,qy0,a,b,theta)
 
     # Q/R-space rotation and flip
@@ -204,6 +243,22 @@ class Calibration(Metadata):
         self._params['QR_flip'] = x
     def get_QR_flip(self):
         return self._get_value('QR_flip')
+    def set_QR_rotflip(self,x):
+        """
+        Args:
+            rot (number): rotation in degrees
+            flip (bool): True indicates a Q/R axes flip
+        """
+        rot,flip = x
+        self.set_QR_rotation_degrees(rot)
+        self.set_QR_flip(flip)
+    def get_QR_rotflip(self):
+        rot = self.get_QR_rotation_degrees()
+        flip = self.get_QR_flip()
+        if rot is None or flip is None:
+            return None
+        return (rot,flip)
+
 
     # probe
     def set_convergence_semiangle_pixels(self,x):

@@ -119,52 +119,107 @@ detect_params = {
     'corrPower':1,
 }
 
-selected_peaks = py4DSTEM.process.diskdetection.find_Bragg_disks_selected(
-    datacube=datacube,
-    probe=probe_kernel,
-    Rx=rxs,
-    Ry=rys,
+selected_peaks = datacube.find_Bragg_disks(
+    data = (rxs,rys),
+    template = probe.kernel,
     **detect_params
 )
 
-#py4DSTEM.visualize.show_image_grid(
-#    get_ar=lambda i:datacube.data[rxs[i],rys[i],:,:],
-#    H=3,W=2,
-#    get_bordercolor=lambda i:colors[i],
-#    get_x=lambda i:selected_peaks[i].data['qx'],
-#    get_y=lambda i:selected_peaks[i].data['qy'],
-#    get_pointcolors=lambda i:colors[i],
-#    scaling='power',power=0.125,
-#    open_circles=True,
-#    scale=200)
-
 
 # Get all disks
-#braggpeaks_raw = py4DSTEM.process.diskdetection.find_Bragg_disks(
-#    datacube=datacube,
-#    probe=probe_kernel,
-#    name='braggpeaks_raw',
-#    **detect_params
-#)
-
-
-
+braggvectors = datacube.find_Bragg_disks(
+    template=probe.kernel,
+    **detect_params
+)
 
 
 # BVM
 
-#bvm = py4DSTEM.process.diskdetection.get_bragg_vector_map_raw(braggpeaks_raw,datacube.Q_Nx,datacube.Q_Ny)
+bvm = braggvectors.get_bvm(
+    Qshape = datacube.Qshape,
+    mode = 'raw'
+)
+
+# set viz params
+bvm_vis_params = {
+    'cmap':'inferno',
+    'scaling':'power',
+    'power':0.125,
+    'clipvals':'manual',
+    'min':0,
+    'max':20
+}
+show(bvm,**bvm_vis_params,figsize=(10,10))
 
 
 
 
 
+########## Calibration ###########
 
 
+# Origin
+
+# Because this data had a beamstop blocking the unscattered beam,
+# we'll use conjugate bragg pairs to find the origin
+
+# Specify an annular region of Q-space 
+center_guess = 380,415
+radii = 240,265
+
+#show(
+#    bvm,
+#    points = {'x':center_guess[0],'y':center_guess[1]},
+#    annulus = {'center':center_guess,'radii':radii,'fill':True,'alpha':0.5,'color':'g'},
+#    **bvm_vis_params,
+#    figsize=(10,10)
+#)
+
+# Compute the origin position pattern-by-pattern
+
+origin_meas = braggvectors.measure_origin(
+    mode = 5,
+    center_guess = center_guess,
+    radii = radii,
+    Q_Nx = datacube.Q_Nx,
+    Q_Ny = datacube.Q_Ny,
+    max_dist = 16,
+    max_iter = 2
+)
+
+# Show the measured origin shifts
+
+qx0_meas,qy0_meas = origin_meas[0],origin_meas[1]
+mask = ~qx0_meas.mask[:,:,0]
+#show(qx0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qx0_meas),max=8)
+#show(qy0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qy0_meas),max=8)
 
 
+# Some local variation in the position of the origin due to electron-sample interaction is
+# expected, and constitutes meaningful signal that we would not want to subtract away.
+# In fitting a plane or parabolic surface to the measured origin shifts, we aim to
+# capture the systematic shift of the beam due to the changing scan coils,
+# while removing as little physically meaningful signal we can.
+
+x = py4DSTEM.process.calibration.fit_origin(
+    (qx0_meas,qy0_meas),
+    mask=~mask,
+    fitfunction='plane')
+qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = x
+py4DSTEM.visualize.show_image_grid(
+    lambda i:[qx0_meas,qx0_fit,qx0_residuals,
+              qy0_meas,qy0_fit,qy0_residuals][i],
+    H=2,W=3,cmap='RdBu',clipvals='centered')
 
 
+# Calibrate the origin
+
+datacube.calibration.set_origin((qx0_fit,qy0_fit))
+
+
+# Center the disk positions about the origin
+
+#braggvectors.calibrate()
 
 
 

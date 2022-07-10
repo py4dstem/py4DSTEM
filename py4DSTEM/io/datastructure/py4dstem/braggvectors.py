@@ -31,6 +31,13 @@ class BraggVectors:
 
     retrieve the positiona and intensity of the scattering.
     """
+
+    from .braggvectors_fns import (
+        get_bvm,
+        measure_origin,
+        calibrate
+    )
+
     def __init__(
         self,
         Rshape,

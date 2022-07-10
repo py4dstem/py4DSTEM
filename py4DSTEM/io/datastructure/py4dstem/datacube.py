@@ -20,7 +20,8 @@ class DataCube(Array):
         get_dp_mean,
         get_dp_median,
         get_virtual_image,
-        get_vacuum_probe
+        get_vacuum_probe,
+        find_Bragg_disks
     )
 
 
@@ -46,7 +47,7 @@ class DataCube(Array):
             Q_pixel_size (float or length 2 list of str): the diffraction space
                 pixel size
             Q_pixel_units (str or length 2 list of str): the diffraction space
-                pixel units
+                pixel units. Must be 'pixels' or 'A^-1'.
             slicelabels (None or list): names for slices if this is a
                 stack of datacubes
             calibration (Calibration):
@@ -55,16 +56,6 @@ class DataCube(Array):
             A new DataCube instance
         """
 
-        # expand r/q inputs to include 2 dimensions
-        if type(R_pixel_size) is not list: R_pixel_size = [
-            R_pixel_size,R_pixel_size]
-        if type(R_pixel_units) is not list: R_pixel_units = [
-            R_pixel_units,R_pixel_units]
-        if type(Q_pixel_size) is not list: Q_pixel_size = [
-            Q_pixel_size,Q_pixel_size]
-        if type(Q_pixel_units) is not list: Q_pixel_units = [
-            Q_pixel_units,Q_pixel_units]
-
         # initialize as an Array
         Array.__init__(
             self,
@@ -72,16 +63,16 @@ class DataCube(Array):
             name = name,
             units = 'pixel intensity',
             dims = [
-                R_pixel_size[0],
-                R_pixel_size[1],
-                Q_pixel_size[0],
-                Q_pixel_size[1]
+                R_pixel_size,
+                R_pixel_size,
+                Q_pixel_size,
+                Q_pixel_size
             ],
             dim_units = [
-                R_pixel_units[0],
-                R_pixel_units[1],
-                Q_pixel_units[0],
-                Q_pixel_units[1]
+                R_pixel_units,
+                R_pixel_units,
+                Q_pixel_units,
+                Q_pixel_units
             ],
             dim_names = [
                 'Rx',

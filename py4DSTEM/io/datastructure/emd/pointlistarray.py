@@ -85,7 +85,7 @@ class PointListArray:
         for i in range(new_pla.shape[0]):
             for j in range(new_pla.shape[1]):
                 pl = new_pla.get_pointlist(i,j)
-                pl.append(np.copy(self.get_pointlist(i,j).data))
+                pl.add(np.copy(self.get_pointlist(i,j).data))
 
         for k,v in self.metadata.items():
             new_pla.metadata = v.copy(name=k)
@@ -122,7 +122,7 @@ class PointListArray:
 
                 # Write into new pointlist
                 pl_new = new_pla.get_pointlist(i,j)
-                pl_new.append(data)
+                pl_new.add(data)
 
         return new_pla
 
