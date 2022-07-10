@@ -190,7 +190,7 @@ origin_meas = braggvectors.measure_origin(
 # Show the measured origin shifts
 
 qx0_meas,qy0_meas = origin_meas[0],origin_meas[1]
-mask = ~qx0_meas.mask[:,:,0]
+mask = ~qx0_meas.mask
 #show(qx0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qx0_meas),max=8)
 #show(qy0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qy0_meas),max=8)
 
