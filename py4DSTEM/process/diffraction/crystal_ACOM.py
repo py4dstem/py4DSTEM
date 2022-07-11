@@ -1623,7 +1623,7 @@ def calculate_strain(
             5)),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
-    strain_map.slices['mask'] = 1
+    strain_map.slices['mask'][:] = 1.0
 
     # init values
     if corr_kernel_size is None:
@@ -1699,8 +1699,8 @@ def calculate_strain(
                     + orientation_map.angles[rx,ry,0,2])
 
         else:
-            strain_map.slices['mask'][rx,ry] = 0
-
+            strain_map.slices['mask'][rx,ry] = 0.0
+        
     if rotation_range is not None:
         strain_map.slices['theta'] \
             = np.mod(strain_map.slices['theta'],rotation_range)
