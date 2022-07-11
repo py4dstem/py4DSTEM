@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io import RealSlice
+from ...io.datastructure import RealSlice
 
 def get_reference_g1g2(g1g2_map, mask):
     """
