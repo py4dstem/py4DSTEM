@@ -5,9 +5,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 from . import show
 from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
+from .overlay import add_points
 from .vis_grid import show_image_grid
 from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from ..io import PointList
+from ..io.datastructure import DataCube,Calibration,PointList
 from ..process.utils import get_voronoi_vertices,convert_ellipse_params
 from ..process.calibration import double_sided_gaussian
 from ..process.latticevectors import get_selected_lattice_vectors
@@ -35,10 +36,19 @@ def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
     Ri,Ro = fitradii
     qx0,qy0,a,b,theta = p_ellipse
     fig,ax = show(ar,
-                  annulus={'center':(qx0,qy0),'Ri':Ri,'Ro':Ro,'fill':fill,
-                           'color':color_ann,'alpha':alpha_ann,'linewidth':linewidth_ann},
-                  ellipse={'center':(qx0,qy0),'a':a,'b':b,'theta':theta,
-                           'color':color_ell,'alpha':alpha_ell,'linewidth':linewidth_ell},
+                  annulus={'center':(qx0,qy0),
+                           'radii':(Ri,Ro),
+                           'fill':fill,
+                           'color':color_ann,
+                           'alpha':alpha_ann,
+                           'linewidth':linewidth_ann},
+                  ellipse={'center':(qx0,qy0),
+                           'a':a,
+                           'b':b,
+                           'theta':theta,
+                           'color':color_ell,
+                           'alpha':alpha_ell,
+                           'linewidth':linewidth_ell},
                   returnfig=True,**kwargs)
 
     if not returnfig:
@@ -588,3 +598,114 @@ def show_max_peak_spacing(ar,spacing,braggdirections,color='g',lw=2,returnfig=Fa
     else:
         plt.show()
         return
+
+def show_origin_meas(data):
+    """
+    Show the measured positions of the origin.
+
+    Args:
+        data (DataCube or Calibration or 2-tuple of arrays (qx0,qy0))
+    """
+    if isinstance(data,tuple):
+        assert len(data)==2
+        qx,qy = data
+    elif isinstance(data,DataCube):
+        qx,qy = data.calibration.get_origin_meas()
+    elif isinstance(data,Calibration):
+        qx,qy = data.get_origin_meas()
+    else:
+        raise Exception("data must be of type Datacube or Calibration or tuple")
+
+    show_image_grid(get_ar = lambda i:[qx,qy][i],H=1,W=2,cmap='RdBu')
+
+def show_origin_fit(data):
+    """
+    Show the measured, fit, and residuals of the origin positions.
+
+    Args:
+        data (DataCube or Calibration or (3,2)-tuple of arrays
+            ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
+    """
+    if isinstance(data,tuple):
+        assert len(data)==3
+        qx0_meas,qy_meas = data[0]
+        qx0_fit,qy0_fit = data[1]
+        qx0_residuals,qy0_residuals = data[2]
+    elif isinstance(data,DataCube):
+        qx0_meas,qy0_meas = data.calibration.get_origin_meas()
+        qx0_fit,qy0_fit = data.calibration.get_origin()
+        qx0_residuals,qy0_residuals = data.calibration.get_origin_residuals()
+    elif isinstance(data,Calibration):
+        qx0_meas,qy0_meas = data.get_origin_meas()
+        qx0_fit,qy0_fit = data.get_origin()
+        qx0_residuals,qy0_residuals = data.get_origin_residuals()
+    else:
+        raise Exception("data must be of type Datacube or Calibration or tuple")
+
+    show_image_grid(get_ar = lambda i:[qx0_meas,qx0_fit,qx0_residuals,
+                                       qy0_meas,qy0_fit,qy0_residuals][i],
+                    H=2,W=3,cmap='RdBu')
+
+def show_selected_dps(datacube,positions,im,bragg_pos=None,
+                      colors=None,HW=None,figsize_im=(6,6),figsize_dp=(4,4),
+                      **kwargs):
+    """
+    Shows two plots: first, a real space image overlaid with colored dots
+    at the specified positions; second, a grid of diffraction patterns
+    corresponding to these scan positions.
+
+    Args:
+        datacube (DataCube):
+        positions (len N list or tuple of 2-tuples): the scan positions
+        im (2d array): a real space image
+        bragg_pos (len N list of pointlistarrays): bragg disk positions
+            for each position. if passed, overlays the disk positions,
+            and supresses plot of the real space image
+        colors (len N list of colors or None):
+        HW (2-tuple of ints): diffraction pattern grid shape
+        figsize_im (2-tuple): size of the image figure
+        figsize_dp (2-tuple): size of each diffraction pattern panel
+        **kwargs (dict): arguments passed to visualize.show for the
+            *diffraction patterns*. Default is `scaling='log'`
+    """
+    assert isinstance(datacube,DataCube)
+    N = len(positions)
+    assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
+    if bragg_pos is not None:
+        show_disk_pos = True
+        assert(len(bragg_pos)==N)
+    else:
+        show_disk_pos = False
+    if colors is None:
+        from matplotlib.cm import gist_ncar
+        linsp = np.linspace(0,1,N,endpoint=False)
+        colors = [gist_ncar(i) for i in linsp]
+    assert(len(colors)==N), "Number of positions and colors don't match"
+    from matplotlib.colors import is_color_like
+    assert([is_color_like(i) for i in colors])
+    if HW is None:
+        W = int(np.ceil(np.sqrt(N)))
+        if W<3: W=3
+        H = int(np.ceil(N/W))
+    else:
+        H,W = HW
+    assert(all([isinstance(x,(int,np.integer)) for x in (H,W)]))
+
+    x = [i[0] for i in positions]
+    y = [i[1] for i in positions]
+    if 'scaling' not in kwargs.keys():
+        kwargs['scaling'] = 'log'
+    if not show_disk_pos:
+        fig,ax = show(im,figsize=figsize_im,returnfig=True)
+        add_points(ax,d = {'x':x,'y':y,'pointcolor':colors})
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                        get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                        **kwargs)
+    else:
+        show_image_grid(get_ar=lambda i:datacube.data[x[i],y[i],:,:],H=H,W=W,
+                    get_bordercolor=lambda i:colors[i],axsize=figsize_dp,
+                    get_x=lambda i:bragg_pos[i].data['qx'],
+                    get_y=lambda i:bragg_pos[i].data['qy'],
+                    get_pointcolors=lambda i:colors[i],
+                    **kwargs)
+

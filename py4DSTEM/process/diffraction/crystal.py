@@ -6,7 +6,8 @@ from fractions import Fraction
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
+from ..utils import single_atom_scatter, electron_wavelength_angstrom
+from ...tqdmnd import tqdmnd
 
 from .crystal_viz import plot_diffraction_pattern
 from .utils import Orientation
@@ -24,8 +25,8 @@ class Crystal:
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
     from .crystal_ACOM import (
-        orientation_plan, 
-        match_orientations, 
+        orientation_plan,
+        match_orientations,
         match_single_pattern,
         calculate_strain,
         save_ang_file,

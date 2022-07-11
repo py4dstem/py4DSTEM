@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ...io import RealSlice
-from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
+from ..utils import electron_wavelength_angstrom
+from ...tqdmnd import tqdmnd
+from ...io.datastructure import PointList, PointListArray, RealSlice
 
 from numpy.linalg import lstsq
 try:
@@ -653,7 +653,7 @@ def orientation_plan(
                 keep[sub] = False
         self.symmetry_operators = self.symmetry_operators[keep]
         self.symmetry_reduction = self.symmetry_reduction[keep]
-    
+
         if self.orientation_fiber_angles is not None \
             and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
             zone_axis_range_flip = self.orientation_zone_axis_range.copy()
@@ -776,7 +776,7 @@ def match_orientations(
     orientation_map = OrientationMap(
         num_x=bragg_peaks_array.shape[0],
         num_y=bragg_peaks_array.shape[1],
-        num_matches=num_matches_return) 
+        num_matches=num_matches_return)
 
     for rx, ry in tqdmnd(
         *bragg_peaks_array.shape,
@@ -847,7 +847,7 @@ def match_single_pattern(
     intensity = bragg_peaks.data["intensity"]
 
     # other init
-    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]    
+    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
     corr_value = np.zeros(self.orientation_num_zones)
     corr_in_plane_angle = np.zeros(self.orientation_num_zones)
     if inversion_symmetry:
@@ -902,7 +902,7 @@ def match_single_pattern(
                     ),
                     axis=0,
                 )
-        
+
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches 
         # don't have higher correlating scores than previous matches.
@@ -922,12 +922,12 @@ def match_single_pattern(
                     if self.CUDA:
                         im_polar_refine = cp.asarray(im_polar.copy())
                     else:
-                        im_polar_refine = im_polar.copy()                     
+                        im_polar_refine = im_polar.copy()
             else:
                 if self.CUDA:
                     im_polar_refine = cp.asarray(im_polar.copy())
                 else:
-                    im_polar_refine = im_polar.copy()                
+                    im_polar_refine = im_polar.copy()
 
         # Plot polar space image if needed
         if plot_polar is True: # and match_ind==0:
@@ -937,12 +937,12 @@ def match_single_pattern(
 
         # FFT along theta
         if self.CUDA:
-            im_polar_fft = cp.fft.fft(cp.asarray(im_polar))        
+            im_polar_fft = cp.fft.fft(cp.asarray(im_polar))
         else:
             im_polar_fft = np.fft.fft(im_polar)
         if self.orientation_refine:
             if self.CUDA:
-                im_polar_refine_fft = cp.fft.fft(cp.asarray(im_polar_refine))        
+                im_polar_refine_fft = cp.fft.fft(cp.asarray(im_polar_refine))
             else:
                 im_polar_refine_fft = np.fft.fft(im_polar_refine)
 
@@ -1243,7 +1243,7 @@ def match_single_pattern(
                 if multiple_corr_reset and match_ind > 0:
                     orientation.corr[match_ind] = corr_value_keep[ind_best_fit]
                 else:
-                    orientation.corr[match_ind] = corr_value[ind_best_fit]            
+                    orientation.corr[match_ind] = corr_value[ind_best_fit]
 
             if inversion_symmetry and corr_inv[ind_best_fit]:
                 ind_phi = ind_phi_inv[ind_best_fit]
@@ -1257,7 +1257,7 @@ def match_single_pattern(
 
             orientation.angles[match_ind,:] = self.orientation_rotation_angles[ind_best_fit,:]
             orientation.angles[match_ind,2] += phi
-            
+
             # If point group is known, use pymatgen to caculate the symmetry-
             # reduced orientation matrix, producing the crystal direction family.
             if self.pymatgen_available:
@@ -1265,7 +1265,7 @@ def match_single_pattern(
                     orientation,
                     match_ind=match_ind,
                     )
-                
+
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
             orientation.matrix[match_ind] = np.squeeze(self.orientation_rotation_matrices[0, :, :])
@@ -1591,14 +1591,14 @@ def calculate_strain(
     progress_bar = True,
     ):
     '''
-    This function takes in both a PointListArray containing Bragg peaks, and a 
-    corresponding OrientationMap, and uses least squares to compute the 
+    This function takes in both a PointListArray containing Bragg peaks, and a
+    corresponding OrientationMap, and uses least squares to compute the
     deformation tensor which transforms the simulated diffraction pattern
     into the experimental pattern, for all probe positons.
 
     TODO: add robust fitting?
 
-    Args: 
+    Args:
         bragg_peaks_array (PointListArray):   All Bragg peaks
         orientation_map (OrientationMap):     Orientation map generated from ACOM
         corr_kernel_size (float):           Correlation kernel size - if user does
@@ -1608,7 +1608,7 @@ def calculate_strain(
         tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
         k_max (float):                   Maximum scattering vector
         min_num_peaks (int):             Minimum number of peaks required.
-        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).      
+        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
 
     Returns:
         strain_map (RealSlice):  strain tensor
@@ -1700,7 +1700,7 @@ def calculate_strain(
 
         else:
             strain_map.slices['mask'][rx,ry] = 0.0
-        
+
     if rotation_range is not None:
         strain_map.slices['theta'] \
             = np.mod(strain_map.slices['theta'],rotation_range)
@@ -1716,8 +1716,8 @@ def save_ang_file(
     pixel_size: float = None,
     ):
     '''
-    This function outputs an ascii text file in the .ang format, containing 
-    the Euler angles of an orientation map. 
+    This function outputs an ascii text file in the .ang format, containing
+    the Euler angles of an orientation map.
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices,
@@ -1895,20 +1895,20 @@ def symmetry_reduce_directions(
         t = np.linspace(0,1,num=num_points+1,endpoint=True)
         d = np.array([[0,1],[0,2],[1,2]])
         orientation_zone_axis_range_flip = self.orientation_zone_axis_range.copy()
-        orientation_zone_axis_range_flip[0,:] = -1*orientation_zone_axis_range_flip[0,:]        
+        orientation_zone_axis_range_flip[0,:] = -1*orientation_zone_axis_range_flip[0,:]
 
 
     # loop over orientation matrix directions
     for a0 in range(3):
         in_range = np.all(np.sum(self.symmetry_reduction * \
-            orientation.matrix[match_ind,:,a0][None,:,None], 
+            orientation.matrix[match_ind,:,a0][None,:,None],
             axis=1) >= 0,
             axis=1)
 
         orientation.family[match_ind,:,a0] = \
             self.symmetry_operators[np.argmax(in_range)] @ \
             orientation.matrix[match_ind,:,a0]
-        
+
 
         # in_range = np.all(np.sum(self.symmetry_reduction * \
         #     orientation.matrix[match_ind,:,a0][None,:,None], 
@@ -1930,9 +1930,9 @@ def symmetry_reduce_directions(
 
 
         if plot_output:
-            ax = fig.add_subplot(1, 3, a0+1, 
+            ax = fig.add_subplot(1, 3, a0+1,
                 projection='3d',
-                elev=el, 
+                elev=el,
                 azim=az)
 
             # draw orienation triangle
@@ -1953,7 +1953,7 @@ def symmetry_reduce_directions(
                     v[:,2],
                     c='k',
                     )
-                
+
 
             # if needed, draw orientation diamond
             if self.orientation_fiber_angles is not None \
