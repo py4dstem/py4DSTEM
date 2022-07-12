@@ -279,7 +279,7 @@ def _infer_dtype(datacube):
     # h5py dataset 
     if (type(datacube.data) == np.ndarray or
         isinstance(datacube.data, np.memmap) or
-        isinstance(datacube.data), h5py.Dataset):
+        isinstance(datacube.data, h5py.Dataset)):
         data_type = 'numpy'
 
     # dask array
