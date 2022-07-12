@@ -428,7 +428,7 @@ def _find_Bragg_disks_CPU(
 
 
     # Make the BraggVectors instance
-    braggvectors = BraggVectors( datacube.Rshape )
+    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
 
 
     # Get the template's Fourier Transform
@@ -521,7 +521,7 @@ def _find_Bragg_disks_CUDA_unbatched(
         batching=False)
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape )
+    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
     braggvectors._v_uncal[rx,ry] = peaks
     return braggvectors
 
@@ -568,7 +568,7 @@ def _find_Bragg_disks_CUDA_batched(
         batching=True)
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape )
+    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
     braggvectors._v_uncal[rx,ry] = peaks
     return braggvectors
 
@@ -621,7 +621,7 @@ def _find_Bragg_disks_ipp(
         )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape )
+    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
     braggvectors._v_uncal[rx,ry] = peaks
     return braggvectors
 
@@ -673,7 +673,7 @@ def _find_Bragg_disks_dask(
         )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape )
+    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
     braggvectors._v_uncal[rx,ry] = peaks
     return braggvectors
 

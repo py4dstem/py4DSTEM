@@ -12,7 +12,6 @@ from ..emd import Metadata
 
 def get_bvm(
     self,
-    Qshape,
     mode = 'centered',
     ):
     """
@@ -28,13 +27,13 @@ def get_bvm(
     assert mode in ('raw','centered')
 
     # select peaks
-    peaks = self.v if mode=='centered' else self.v_uncal
+    peaks = self.vectors if mode=='centered' else self.vectors_uncal
 
     # perform computation
     from ....process.diskdetection import get_bvm
     bvm = get_bvm(
         peaks,
-        Qshape = Qshape,
+        Qshape = self.Qshape,
         mode = mode,
     )
 
@@ -75,7 +74,7 @@ def measure_origin(
     # perform computation
     from ....process.calibration import measure_origin
     origin = measure_origin(
-        self.v_uncal,
+        self.vectors_uncal,
         mode = mode,
         **kwargs
     )
@@ -114,7 +113,7 @@ def calibrate(
 
     from ....process.calibration.braggvectors import calibrate
 
-    v = self.v_uncal.copy( name='v_cal' )
+    v = self.vectors_uncal.copy( name='v_cal' )
     v = calibrate(
         v,
         cal
