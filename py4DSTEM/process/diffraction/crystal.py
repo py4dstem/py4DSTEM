@@ -570,8 +570,7 @@ class Crystal:
         # Output as PointList
         if keep_qz:
             gz_proj = g_diff[2,keep_int]
-            bragg_peaks = PointList(
-                [
+            pl_dtype = np.dtype([
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("qz", "float64"),
@@ -579,40 +578,36 @@ class Crystal:
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ]
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
             )
             if np.any(keep_int):
-                bragg_peaks.add_pointarray(
-                    np.vstack((
-                        gx_proj,
-                        gy_proj,
-                        gz_proj,
-                        g_int[keep_int],
-                        h,
-                        k,
-                        l)).T
-                )
+                bragg_peaks.add_data_by_field(
+                                              [
+                                              gx_proj,
+                                              gy_proj,
+                                              gz_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
         else:
-            bragg_peaks = PointList(
-                [
+            pl_dtype = np.dtype([
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("intensity", "float64"),
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ]
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
             )
             if np.any(keep_int):
-                bragg_peaks.add_pointarray(
-                    np.vstack((
-                        gx_proj,
-                        gy_proj,
-                        g_int[keep_int],
-                        h,
-                        k,
-                        l)).T
-                )
+                bragg_peaks.add_data_by_field([
+                                              gx_proj,
+                                              gy_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
 
         if return_orientation_matrix:
             return bragg_peaks, orientation_matrix

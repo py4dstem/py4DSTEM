@@ -12,4 +12,4 @@ from . import diskdetection
 #from . import dpc
 #from . import rdf
 #from . import virtualimage
-#from . import diffraction
+from . import diffraction
