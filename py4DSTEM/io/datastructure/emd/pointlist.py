@@ -35,7 +35,6 @@ class PointList:
         """
         self.data = data
         self.name = name
-        self.length = len(self.data)
 
         self._dtype = self.data.dtype
         self._fields = self.data.dtype.names
@@ -51,8 +50,8 @@ class PointList:
     def dtype(self):
         return self._dtype
     @dtype.setter
-    def dtype(self, x):
-        self._dtype = data.dtype
+    def dtype(self, dtype):
+        self._dtype = dtype
 
     @property
     def fields(self):
@@ -66,6 +65,10 @@ class PointList:
     def types(self):
         return self._types
 
+    @property
+    def length(self):
+        return np.atleast_1d(self.data).shape[0]
+
 
 
     ## Add, remove, sort data
@@ -74,9 +77,8 @@ class PointList:
         """
         Appends a numpy structured array. Its dtypes must agree with the existing data.
         """
-        assert self.dtype==data.dtype, "Error: dtypes must agree"
+        assert self.dtype == data.dtype, "Error: dtypes must agree"
         self.data = np.append(self.data, data)
-        self.length += np.atleast_1d(data).shape[0]
 
     def remove(self, mask):
         """ Removes points wherever mask==True
@@ -84,7 +86,6 @@ class PointList:
         assert np.atleast_1d(mask).shape[0] == self.length, "deletemask must be same length as the data"
         inds = mask.nonzero()[0]
         self.data = np.delete(self.data, inds)
-        self.length -= len(inds)
 
     def sort(self, field, order='descending'):
         """
@@ -135,6 +136,25 @@ class PointList:
             data[f] = np.copy(self.data[f])
 
         return PointList(data=data, name=name)
+
+    def add_data_by_field(self, data, fields=None):
+        """
+        Add a list of data arrays to the PointList, in the fields
+        given by `fields`. If `fields` is not specified, assumes the data
+        arrays are in the same order as self.fields
+
+        Args:
+            data (list): arrays of data to add to each field
+        """
+
+        newdata = np.zeros(data[0].shape[0],dtype=self.dtype)
+
+        _fields = self.fields if fields is None else fields
+
+        for d,f in zip(data, _fields):
+            newdata[f] = d
+
+        self.data = np.append(self.data,newdata)
 
 
     # set up metadata property
