@@ -12,15 +12,50 @@ from numbers import Number
 from math import log
 from copy import copy
 
-def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
-         vmin=None,vmax=None,min=None,max=None,power=1,bordercolor=None,borderwidth=5,
-         returnclipvals=False,returncax=False,returnfig=False,figax=None,
-         hist=False,n_bins=256,mask=None,mask_color='k',mask_alpha=0.,
-         rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
-         cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
-         calibration=None,rx=None,ry=None,space='Q',
-         pixelsize=None,pixelunits=None,x0=None,y0=None,a=None,theta=None,
-         title=None,**kwargs):
+def show(
+    ar,
+    figsize=(8,8),
+    cmap='gray',
+    scaling='none',
+    clipvals='minmax',
+    vmin=None,
+    vmax=None,
+    min=None,
+    max=None,
+    power=1,
+    bordercolor=None,
+    borderwidth=5,
+    returnclipvals=False,
+    returncax=False,
+    returnfig=False,
+    figax=None,
+    hist=False,
+    n_bins=256,
+    mask=None,
+    mask_color='k',
+    mask_alpha=0.,
+    rectangle=None,
+    circle=None,
+    annulus=None,
+    ellipse=None,
+    points=None,
+    grid_overlay=None,
+    cartesian_grid=None,
+    polarelliptical_grid=None,
+    rtheta_grid=None,
+    scalebar=None,
+    calibration=None,
+    rx=None,
+    ry=None,
+    space='Q',
+    pixelsize=None,
+    pixelunits=None,
+    x0=None,
+    y0=None,
+    a=None,
+    theta=None,
+    title=None,
+    **kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -241,6 +276,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
+
+    # TODO - set all internal references of min and max to vmin and vmax.
+    # Also throw a warning for using vmin / vmax that they are deprecated.
     if vmin is not None: min=vmin
     if vmax is not None: max=vmax
 
@@ -261,6 +299,12 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         else:
             _show_grid(**args,**kwargs)
             return
+    elif not isinstance(ar,np.ndarray):
+        if hasattr(ar, 'data'):
+            ar = ar.data
+        else:
+            raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
+   
     # otherwise plot one image
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','centered')
