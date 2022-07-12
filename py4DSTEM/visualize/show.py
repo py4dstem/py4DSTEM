@@ -301,7 +301,8 @@ def show(
             return
     elif not isinstance(ar,np.ndarray):
         if hasattr(ar, 'data'):
-            ar = ar.data
+            if ar.data.ndim == 2:
+                ar = ar.data
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
    
