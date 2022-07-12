@@ -399,11 +399,11 @@ def BraggVectors_to_h5(
 
     # Add vectors, cal and uncal
     PointListArray_to_h5(
-        braggvectors.v,
+        braggvectors.vectors,
         grp
     )
     PointListArray_to_h5(
-        braggvectors.v_uncal,
+        braggvectors.vectors_uncal,
         grp
     )
 
@@ -437,15 +437,23 @@ def BraggVectors_from_h5(group:h5py.Group):
     v_cal = PointListArray_from_h5(group['v_cal'])
     v_uncal = PointListArray_from_h5(group['v_uncal'])
 
+    # Get Qshape metadata
+    try:
+        grp_metadata = group['_metadata']
+        Qshape = Metadata_from_h5(grp_metadata['braggvectors'])['Qshape']
+    except KeyError:
+        raise Exception("could not read Qshape")
+
     # Set up BraggVectors
     braggvectors = BraggVectors(
         v_cal.shape,
+        Qshape = Qshape,
         name = basename(group.name)
     )
     braggvectors._v_cal = v_cal
     braggvectors._v_uncal = v_uncal
 
-    # Add metadata
+    # Add remaining metadata
     _read_metadata(braggvectors, group)
 
     return braggvectors
