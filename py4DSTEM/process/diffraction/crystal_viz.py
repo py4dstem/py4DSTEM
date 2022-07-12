@@ -1272,7 +1272,7 @@ def plot_orientation_maps(
         3,2))
     if self.pymatgen_available:
         images_orientation[:,:,:,0] = rgb_x
-    images_orientation[:,:,:,0] = rgb_z
+    images_orientation[:,:,:,1] = rgb_z
 
     if returnfig:
         ax = [ax_x,ax_z,ax_l]
