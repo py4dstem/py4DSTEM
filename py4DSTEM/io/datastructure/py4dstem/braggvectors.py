@@ -15,7 +15,7 @@ class BraggVectors:
     """
     Stores bragg scattering information for a 4D datacube.
 
-        >>> braggvectors = BraggVectors( datacube.Rshape )
+        >>> braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
 
     initializes an instance of the appropriate shape for a DataCube `datacube`.
 
@@ -41,15 +41,20 @@ class BraggVectors:
     def __init__(
         self,
         Rshape,
+        Qshape,
         name = 'braggvectors'
         ):
 
         self.name = name
         self.shape = Rshape
+        self.Qshape = Qshape
 
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
+        if 'braggvectors' not in self._metadata.keys():
+            self.metadata = Metadata( name='braggvectors' )
+        self.metadata['braggvectors']['Qshape'] = self.Qshape
 
         self._v_uncal = PointListArray(
             dtype = [
@@ -74,11 +79,11 @@ class BraggVectors:
 
 
     @property
-    def v(self):
+    def vectors(self):
         return self._v_cal
 
     @property
-    def v_uncal(self):
+    def vectors_uncal(self):
         return self._v_uncal
 
 
