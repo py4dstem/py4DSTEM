@@ -6,7 +6,7 @@ from .native.write import save
 
 #from . import native
 #from . import nonnative
-#from .datastructure import *
+from .datastructure import *
 #from .native import *
 #from .nonnative import *
 #from .read import read
