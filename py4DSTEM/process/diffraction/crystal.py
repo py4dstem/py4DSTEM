@@ -513,9 +513,12 @@ class Crystal:
             orientation_matrix (array):      3x3 orientation matrix (optional)
         """
 
-        assert hasattr(self, "wavelength") and hasattr(
+        if not (hasattr(self, "wavelength") and hasattr(
             self, "accel_voltage"
-        ), "Accelerating voltage not set. Please run setup_diffraction."
+        )):
+            print("Accelerating voltage not set. Assuming 300 keV!")
+            self.setup_diffraction(300e3)
+
 
         # Tolerance for angular tests
         tol = 1e-6
