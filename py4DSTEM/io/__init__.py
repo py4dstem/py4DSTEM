@@ -2,11 +2,11 @@ from . import datastructure
 from .read import *
 from .native.read import print_h5_tree
 from .native.write import save
+from .datastructure import *
 
 
 #from . import native
 #from . import nonnative
-#from .datastructure import *
 #from .native import *
 #from .nonnative import *
 #from .read import read
