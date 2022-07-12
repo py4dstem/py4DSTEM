@@ -12,4 +12,4 @@ from . import dpc
 #from . import classification
 #from . import rdf
 #from . import virtualimage
-#from . import diffraction
+from . import diffraction

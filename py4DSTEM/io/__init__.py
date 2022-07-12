@@ -1,4 +1,5 @@
 from . import datastructure
+from .datastructure import *
 from .read import *
 from .native.read import print_h5_tree
 from .native.write import save
