@@ -3,7 +3,6 @@ import numpy as np
 from typing import Optional, Union
 from numbers import Number
 
-from ...io.datastructure import BraggVectors
 from ...io.datastructure.emd import PointListArray
 from ...io.datastructure.py4dstem import Calibration
 
@@ -101,10 +100,6 @@ def center_braggpeaks(
     Returns:
         (PointListArray): the centered Bragg peaks
     """
-
-    if isinstance(braggpeaks, BraggVectors):
-        braggpeaks = braggpeaks.vectors_uncal
-
     assert isinstance(braggpeaks, PointListArray)
     assert(len(origin)==2)
     qx0,qy0 = origin
