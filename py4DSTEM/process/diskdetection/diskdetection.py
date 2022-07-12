@@ -170,7 +170,15 @@ def find_Bragg_disks(
     else:
         try:
             dc,rx,ry = data[0],data[1],data[2]
-            data = dc.data[rx,ry,:,:]
+
+            # h5py datasets have different rules for slicing than
+            # numpy arrays, so we have to do this manually
+            if "h5py" in str(type(dc.data)):
+                data = np.zeros((len(rx),dc.Q_Nx,dc.Q_Ny))
+                for i,(x,y) in enumerate(zip(rx,ry)):
+                    data[i] = dc.data[x,y]
+            else:
+                data = dc.data[np.array(rx),np.array(ry),:,:]
             if data.ndim == 2:
                 mode = 'dp'
             elif data.ndim == 3:
