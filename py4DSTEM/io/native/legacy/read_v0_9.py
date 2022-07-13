@@ -273,6 +273,7 @@ def get_counted_datacube_from_grp(g):
     """ Accepts an h5py Group corresponding to a counted datacube in an open, correctly formatted H5 file,
         and returns a CountedDataCube.
     """
+    raise NotImplementedError("CountedDataCubes are not available in py4DSTEM v0.13")
     return #TODO
 
 def get_diffractionslice_from_grp(g):
