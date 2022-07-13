@@ -53,7 +53,8 @@ def get_py4DSTEM_dataobject_info(filepath, topgroup='4DSTEM_experiment'):
             i += 1
         for name in sorted(grp_pla.keys()):
             ar_shape = grp_pla[name+'/data'].shape
-            N_coords = len(grp_pla[name+'/data'][0,0].dtype)
+            pla_dtype = h5py.check_vlen_dtype(grp_pla[name+'/data'].dtype)
+            N_coords = len(pla_dtype)
             shape = (ar_shape[0],ar_shape[1],N_coords,-1)
             dtype = 'PointListArray'
             info[i] = i,dtype,shape,name

@@ -349,12 +349,12 @@ def get_pointlistarray_from_grp(g):
     """
     name = g.name.split('/')[-1]
     dset = g['data']
-    shape = g['data'].shape
-    coordinates = g['data'][0,0].dtype
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    shape = dset.shape
+    coordinates = h5py.check_vlen_dtype(dset.dtype)
+    pla = PointListArray(dtype=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
         try:
-            pla.get_pointlist(i,j).add_dataarray(dset[i,j])
+            pla.get_pointlist(i,j).data = dset[i,j]
         except ValueError:
             pass
     return pla
