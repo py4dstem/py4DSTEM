@@ -235,7 +235,8 @@ def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     if dtype == 'datacubes':
         return get_datacube_from_grp(g,mem,binfactor,bindtype)
     elif dtype == 'counted_datacubes':
-        return get_counted_datacube_from_grp(g)
+        raise NotImplementedError("CountedDataCube objects are not available in py4DSTEM v0.13")
+        # return get_counted_datacube_from_grp(g)
     elif dtype == 'diffractionslices':
         return get_diffractionslice_from_grp(g)
     elif dtype == 'realslices':
@@ -245,7 +246,8 @@ def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     elif dtype == 'pointlistarrays':
         return get_pointlistarray_from_grp(g)
     elif dtype == 'coordinates':
-        return get_coordinates_from_grp(g)
+        raise NotImplementedError("Conversion from legacy Coordinates object to v0.13 Calibration is not available...")
+        # return get_coordinates_from_grp(g)
     else:
         raise Exception('Unrecognized data object type {}'.format(dtype))
 
@@ -341,7 +343,7 @@ def get_pointlist_from_grp(g):
     data = np.zeros(length,dtype=coordinates)
     for coord in coord_names:
         data[coord] = np.array(g[coord+'/data'])
-    return PointList(data=data,coordinates=coordinates,name=name)
+    return PointList(data=data,name=name)
 
 def get_pointlistarray_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
