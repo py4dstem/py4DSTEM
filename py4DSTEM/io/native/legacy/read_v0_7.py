@@ -315,7 +315,7 @@ def get_pointlist_from_grp(g):
     data = np.zeros(length,dtype=coordinates)
     for coord in coord_names:
         data[coord] = np.array(g[coord+'/data'])
-    return PointList(data=data,coordinates=coordinates,name=name)
+    return PointList(data=data,name=name)
 
 def get_pointlistarray_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
@@ -330,9 +330,9 @@ def get_pointlistarray_from_grp(g):
     N = len(coord_names)
     coord_types = [ar[0,0].dtype.fields[i][0] for i in coord_names]
     coordinates = [(coord_names[i],coord_types[i]) for i in range(N)]
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    pla = PointListArray(dtype=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(range(shape[0]),range(shape[1]),desc="Reading PointListArray",unit="PointList"):
-        pla.get_pointlist(i,j).add_dataarray(ar[i,j])
+        pla.get_pointlist(i,j).data = ar[i,j]
     return pla
 
 
