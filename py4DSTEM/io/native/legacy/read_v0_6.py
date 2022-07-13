@@ -5,9 +5,9 @@ import numpy as np
 from os.path import splitext
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
 from .read_utils_v0_6 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, CountedDataCube, DiffractionSlice, RealSlice
+from ...datastructure import DataCube, DiffractionSlice, RealSlice
 from ...datastructure import PointList, PointListArray
-from ....tqdmnd import tqdmnd
+from ....process.utils import tqdmnd
 
 def read_v0_6(fp, **kwargs):
     """
@@ -315,7 +315,7 @@ def get_pointlist_from_grp(g):
     data = np.zeros(length,dtype=coordinates)
     for coord in coord_names:
         data[coord] = np.array(g[coord+'/data'])
-    return PointList(data=data,coordinates=coordinates,name=name)
+    return PointList(data=data,name=name)
 
 def get_pointlistarray_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
@@ -329,7 +329,7 @@ def get_pointlistarray_from_grp(g):
     N = len(coord_names)
     coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/data'])[0]) for i in range(N)]
     coordinates = [(coord_names[i],coord_types[i]) for i in range(N)]
-    pla = PointListArray(coordinates=coordinates,shape=shape,name=name)
+    pla = PointListArray(dtype=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(range(shape[0]),range(shape[1]),desc="Reading PointListArray",unit="PointList"):
         g_pl = g[str(i)+'_'+str(j)]
         L = len(np.array(g_pl[coordinates[0][0]+'/data']))
@@ -337,7 +337,7 @@ def get_pointlistarray_from_grp(g):
         for i in range(N):
             coord = coordinates[i][0]
             data[coord] = np.array(g_pl[coord+'/data'])
-        pla.get_pointlist(i,j).add_dataarray(data)
+        pla.get_pointlist(i,j).data = data
     return pla
 
 
