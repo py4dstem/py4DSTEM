@@ -1,6 +1,6 @@
 from . import io
 from .version import __version__
-from .tqdmnd import *
+from .tqdmnd import tqdmnd
 
 from . import process
 from . import visualize
