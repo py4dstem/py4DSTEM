@@ -25,18 +25,13 @@ from ..datastructure import (
     BraggVectors
 )
 
-#from .read_utils import get_py4DSTEM_topgroups
-#from .read_utils import get_py4DSTEM_version, version_is_geq
-#from .read_v0_12 import read_v0_12
-#from .read_v0_9 import read_v0_9
-#from .read_v0_7 import read_v0_7
-#from .read_v0_6 import read_v0_6
-#from .read_v0_5 import read_v0_5
+from .read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
     root: Optional[str] = None,
-    tree: Optional[Union[bool,str]] = True
+    tree: Optional[Union[bool,str]] = True,
+    **legacy_options,
     ):
     """
     File reader files written by py4DSTEM.
@@ -47,6 +42,12 @@ def read_py4DSTEM(
         root (str): the name of the root block of data to return.
             If `None` is passed (default), ... TODO
         tree (bool or str): must be `True` or `False` or `noroot`
+
+    For files created with py4DSTEM versions before v0.13.0:
+        To print the contents of the file, specify only `filepath`
+        To read a dataset from the file, specify `data_id`, either as
+            the numeric index of the dataset or dataset name. 
+        Other legacy options are explained in legacy_reader_EMD.py
 
 
         - return a single object
@@ -63,6 +64,15 @@ def read_py4DSTEM(
     # Check that filepath is valid
     assert(exists(filepath)), "Error: specified filepath does not exist"
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
+
+    # Check the EMD version
+    v = get_py4DSTEM_version(filepath)
+    # print(f"Reading EMD version {v[0]}.{v[1]}.{v[2]}")
+
+    # Use legacy readers for older EMD files
+    if v[1] <= 12:
+        from .legacy import read_py4DSTEM_legacy
+        return read_py4DSTEM_legacy(filepath,**legacy_options)
 
     # Open h5 file
     with h5py.File(filepath,'r') as f:
