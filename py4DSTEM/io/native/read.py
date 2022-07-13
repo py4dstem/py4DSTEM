@@ -43,6 +43,12 @@ def read_py4DSTEM(
             If `None` is passed (default), ... TODO
         tree (bool or str): must be `True` or `False` or `noroot`
 
+    For files created with py4DSTEM versions before v0.13.0:
+        To print the contents of the file, specify only `filepath`
+        To read a dataset from the file, specify `data_id`, either as
+            the numeric index of the dataset or dataset name. 
+        Other legacy options are explained in legacy_reader_EMD.py
+
 
         - return a single object
         - return a tree, starting from a given root
