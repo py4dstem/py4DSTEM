@@ -304,18 +304,18 @@ def _find_Bragg_disks_single(
 
 
         # Compute cross correlation
-        _returnval = 'fourier' if subpixel == 'multicorr' else 'real'
+        # _returnval = 'fourier' if subpixel == 'multicorr' else 'real'
         cc = get_cross_correlation_FT(
             DP,
             template_FT,
             corrPower,
-            _returnval
+            'fourier',
         )
 
 
     # Get maxima
     maxima = get_maxima_2D(
-        cc,
+        np.maximum(np.real(np.fft.ifft2(cc)),0),
         subpixel = subpixel,
         upsample_factor = upsample_factor,
         minAbsoluteIntensity = minAbsoluteIntensity,
@@ -324,6 +324,7 @@ def _find_Bragg_disks_single(
         minSpacing = minPeakSpacing,
         edgeBoundary = edgeBoundary,
         maxNumPeaks = maxNumPeaks,
+        _ar_FT = cc
     )
 
     # Wrap as QPoints instance
