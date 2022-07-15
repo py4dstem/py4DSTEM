@@ -327,7 +327,13 @@ braggvectors.calibrate()
 
 
 
+braggvectors2 = py4DSTEM.process.diskdetection.find_Bragg_disks(
+    datacube,
+    template=probe.kernel,
+    **detect_params
+)
 
+#braggvectors2.calibration = datacube.calibration
 
 
 
@@ -335,28 +341,79 @@ braggvectors.calibrate()
 
 py4DSTEM.io.save(
     filepath_h5,
-    datacube,
-    tree = 'noroot',
+    braggvectors2,
+    #tree = False,
     mode = 'o'
 )
 py4DSTEM.io.print_h5_tree(filepath_h5)
 
 d = py4DSTEM.io.read(
     filepath_h5,
-    root = '4DSTEM_experiment/datacube/',
-    tree = True
+    root = '4DSTEM_experiment/braggvectors',
+    #tree = True
 )
 
+print(d)
+print(d.tree)
+print(d.calibration)
+
+
+
+
+
+## USE CASES
+
+# Save just BraggVectors.  Make sure Calibration is attached.
+# Load and make sure BraggVectors and Calibration both loaded.
+
+#py4DSTEM.io.save(
+#    filepath_h5,
+#    braggvectors,
+#    mode = 'o'
+#)
+#py4DSTEM.io.print_h5_tree(filepath_h5)
+
+#d = py4DSTEM.io.read(
+#    filepath_h5,
+#    root = '4DSTEM_experiment/braggvectors/',
+#)
 
 #print(d)
-#print(d.calibration)
+#print(d.tree)
 
 
 
-#d.calibration = datacube.calibration
-#print(d.calibration)
 
-#d.tree['braggvectors'].calibrate()
+
+# Save a tree under a DataCube.  Load only the BraggVectors.
+# Make sure Calibration is attached.
+
+
+
+
+
+# Attach some Calibration instance to an free BraggVectors instance.
+# Make sure it writes/reads correctly.
+
+
+
+
+
+# Make sure that if we attach a Calibration instance to BraggVectors
+# instance that's already in a tree, or that is subsequently attached
+# to a Tree, and then save the whole tree or BV instance,
+# nothing unexpected happens
+
+
+
+
+
+
+
+
+
+
+
 
 
 
