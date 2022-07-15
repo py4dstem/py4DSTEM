@@ -4,12 +4,13 @@ import h5py
 import numpy as np
 from os.path import splitext, exists
 from typing import Optional, Union
-from os.path import basename
+from os.path import basename,dirname
 
 from .read_utils import is_py4DSTEM_file
 from ..datastructure import (
     Root,
     Tree,
+    ParentTree,
     Metadata,
     Array,
     PointList,
@@ -46,7 +47,7 @@ def read_py4DSTEM(
     For files created with py4DSTEM versions before v0.13.0:
         To print the contents of the file, specify only `filepath`
         To read a dataset from the file, specify `data_id`, either as
-            the numeric index of the dataset or dataset name. 
+            the numeric index of the dataset or dataset name.
         Other legacy options are explained in legacy_reader_EMD.py
 
 
@@ -104,19 +105,26 @@ def _read_without_tree(grp):
         data = Root(
             name = basename(grp.name),
         )
-        _add_calibration(
+        cal = _add_calibration(
             data.tree,
             grp
         )
+        if cal is not None:
+            data.tree = ParentTree(data, cal)
+            data.calibration = cal
         return data
 
     # read all other data
     __class__ = _get_class(grp)
     data = __class__.from_h5(grp)
-    _add_calibration(
-        data.tree,
-        grp
-    )
+    if not isinstance(data, Calibration):
+        cal = _add_calibration(
+            data.tree,
+            grp
+        )
+        if cal is not None:
+            data.tree = ParentTree(data, cal)
+            data.calibration = cal
     return data
 
 
@@ -131,10 +139,13 @@ def _read_with_tree(grp):
 
 def _read_without_root(grp):
     root = Root()
-    _add_calibration(
+    cal = _add_calibration(
         root,
         grp
     )
+    if cal is not None:
+        root.tree = ParentTree(root,cal)
+        data.calibration = cal
     _populate_tree(
         root.tree,
         grp
@@ -142,12 +153,21 @@ def _read_without_root(grp):
     return root
 
 
+# TODO: case of multiple Calibration instances
 def _add_calibration(tree,grp):
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
     keys = [k for k in keys if (_get_class(grp[k]) == Calibration)]
-    for k in keys:
+    if len(keys)>0:
+        k = keys[0]
         tree[k] = _read_without_tree(grp[k])
-    pass
+        return tree[k]
+    else:
+        name = dirname(grp.name)
+        if name != '/':
+            grp_upstream = grp.file[dirname(grp.name)]
+            return _add_calibration(tree, grp_upstream)
+        else:
+            return None
 
 
 def _populate_tree(tree,grp):
