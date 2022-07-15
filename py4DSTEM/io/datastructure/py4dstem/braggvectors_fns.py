@@ -51,7 +51,7 @@ def measure_origin(
     """
     Modes of operation are 2 or 5.  Use-cases and input arguments:
 
-    2 - A set of bragg peaks for data with no beamstop, and in which
+    "bragg_no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
         the center beam is brightest throughout.
 
         Args:
@@ -59,17 +59,15 @@ def measure_origin(
             Q_Nx (int)
             Q_Ny (int)
 
-    5 - A set of bragg peaks for data with a beamstop
+    "bragg_beam_stop" - A set of bragg peaks for data with a beamstop
 
         Args:
             data (PointListArray)
             center_guess (2-tuple)
             radii   (2-tuple)
-            Q_Nx (int)
-            Q_Ny (int)
 
     """
-    assert mode in (2,5)
+    assert mode in ("bragg_no_beamstop","bragg_beamstop")
 
     # perform computation
     from ....process.calibration import measure_origin

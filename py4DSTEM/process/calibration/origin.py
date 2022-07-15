@@ -21,13 +21,13 @@ def measure_origin(
     """
     Modes of operation are 1-5.  Use-cases and input arguments:
 
-    1 - A datacube with no beamstop, and in which the center beam
+    "dc_no_beamstop" - A datacube with no beamstop, and in which the center beam
         is brightest throughout.
 
         Args:
             data (DataCube)
 
-    2 - A set of bragg peaks for data with no beamstop, and in which
+    "bragg_no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
         the center beam is brightest throughout.
 
         Args:
@@ -35,20 +35,20 @@ def measure_origin(
             Q_Nx (int)
             Q_Ny (int)
 
-    3 - A datacube with no beamstop, and in which the center beam
+    "dc_brightest_disk" - A datacube with no beamstop, and in which the center beam
         is brightest throughout.
 
         Args:
             data (DataCube)
             probe_kernel (2d array)
 
-    4 - A datacube with a beamstop
+    "dc_beamstop" - A datacube with a beamstop
 
         Args:
             data (DataCube)
             mask (2d array)
 
-    5 - A set of bragg peaks for data with a beamstop
+    "bragg_beamstop" - A set of bragg peaks for data with a beamstop
 
         Args:
             data (PointListArray)
@@ -59,16 +59,22 @@ def measure_origin(
 
     """
     # parse args
-    modes = (1,2,3,4,5)
+    modes = (
+        "dc_no_beamstop",
+        "bragg_no_beamstop",
+        "dc_brightest_disk",
+        "dc_beamstop",
+        "bragg_beamstop"
+    )
     assert mode in modes, f"{mode} must be in {modes}"
 
     # select a fn
     fn_dict = {
-        1 : get_origin,
-        2 : get_origin_from_braggpeaks,
-        3 : get_origin_brightest_disk,
-        4 : get_origin_beamstop,
-        5 : get_origin_beamstop_braggpeaks
+        "dc_no_beamstop" : get_origin,
+        "bragg_no_beamstop" : get_origin_from_braggpeaks,
+        "dc_brightest_disk" : get_origin_brightest_disk,
+        "dc_beamstop" : get_origin_beamstop,
+        "bragg_beamstop" : get_origin_beamstop_braggpeaks
     }
     fn = fn_dict[mode]
 
@@ -432,7 +438,7 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
     return qx0, qy0
 
-def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
+def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
                                    max_dist=2,max_iter=1):
     """
     Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
@@ -442,7 +448,6 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
         braggpeaks (PointListArray):
         center_guess (2-tuple): qx0,qy0
         radii (2-tuple): the inner and outer radii of the specified annular region
-        Q_Nx,Q_Ny: the shape of diffraction space
         max_dist (number): the maximum allowed distance between the reflection of two
             peaks to consider them conjugate pairs
         max_iter (integer): for values >1, repeats the algorithm after updating center_guess
