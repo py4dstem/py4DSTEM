@@ -7,7 +7,8 @@
 import numpy as np
 from scipy import optimize
 
-from ..utils import get_maximal_points, print_progress_bar, bin2D
+# get_maximal_points has gone missing / renamed will break
+from ..process.utils import get_maximal_points, print_progress_bar, bin2D
 from ...io import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,

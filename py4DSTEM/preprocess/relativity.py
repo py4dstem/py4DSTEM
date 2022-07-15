@@ -16,8 +16,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ipywidgets import FloatProgress
 from time import time
-from ..utils import get_shift
-from ...io import DataCube
+from ..process.utils import get_shift
+from ..io.datastructure.py4dstem import DataCube
 
 def slice_subframes(frame, x_cent, y_cent, wx=500, wy=500):
 	"""
