@@ -1,22 +1,17 @@
-# Reader for py4DSTEM v0.12 files
+# Reader for py4DSTEM v0.9 - v0.11 files
 
 import h5py
 import numpy as np
 from os.path import splitext, exists
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from .read_utils_v0_12 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, get_datacube_from_grp
-from ...datastructure import CountedDataCube, get_counted_datacube_from_grp
-from ...datastructure import DiffractionSlice, get_diffractionslice_from_grp
-from ...datastructure import RealSlice, get_realslice_from_grp
-from ...datastructure import PointList, get_pointlist_from_grp
-from ...datastructure import PointListArray, get_pointlistarray_from_grp
-from ...datastructure import Coordinates, get_coordinates_from_grp
-from ..metadata import metadata_from_h5
+from .read_utils_v0_9 import get_py4DSTEM_dataobject_info
+from ...datastructure import DataCube, DiffractionSlice, RealSlice
+from ...datastructure import PointList, PointListArray
+from ....process.utils import tqdmnd
 
-def read_v0_12(fp, **kwargs):
+def read_v0_9(fp, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.12.  Precise behavior is detemined by which
+    File reader for files written by py4DSTEM v0.9-0.11.  Precise behavior is detemined by which
     arguments are passed -- see below.
 
     Accepts:
@@ -38,7 +33,7 @@ def read_v0_12(fp, **kwargs):
                                     called splitext(fp)[0]+'.log'.
         mem         str             Only used if a single DataCube is loaded. In this case, mem
                                     specifies how the data should be stored; must be "RAM"
-                                    or "MEMMAP" or "DASK". See docstring for py4DSTEM.file.io.read. Default
+                                    or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
                                     is "RAM".
         binfactor   int             Only used if a single DataCube is loaded. In this case,
                                     a binfactor of > 1 causes the data to be binned by this amount
@@ -75,7 +70,8 @@ def read_v0_12(fp, **kwargs):
             return None,None
 
     version = get_py4DSTEM_version(fp, tg)
-    assert(version_is_geq(version,(0,12,0))), "File must be v0.12+"
+    assert(version_is_geq(version,(0,9,0)) and not version_is_geq(version,(0,12,0))), (
+                                                               "File must be v0.9-0.11")
     _data_id = 'data_id' in kwargs.keys()  # Flag indicating if data was requested
 
     # If metadata is requested
@@ -93,7 +89,7 @@ def read_v0_12(fp, **kwargs):
         # Parse optional arguments
         if 'mem' in kwargs.keys():
             mem = kwargs['mem']
-            assert(mem in ('RAM','MEMMAP', 'DASK'))
+            assert(mem in ('RAM','MEMMAP'))
         else:
             mem='RAM'
         if 'binfactor' in kwargs.keys():
@@ -115,7 +111,28 @@ def read_v0_12(fp, **kwargs):
         return
 
 
-###### Get data ######
+
+
+
+
+
+
+
+############ Helper functions ############
+
+def print_py4DSTEM_file(filepath,tg):
+    """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
+    """
+    info = get_py4DSTEM_dataobject_info(filepath,tg)
+
+    version = get_py4DSTEM_version(filepath, tg)
+    print(f"py4DSTEM file version {version[0]}.{version[1]}.{version[2]}")
+
+    print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
+    print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
+    for el in info:
+        print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
+    return
 
 def get_data(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
     """ Accepts a filepath to a valid py4DSTEM file and an int/str/list specifying data, and returns the data.
@@ -138,8 +155,7 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlistarrays/']
-        grp_coords = f[tg+'/data/coordinates/']
-        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla,grp_coords]
+        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
 
         Ns = np.cumsum([len(grp.keys()) for grp in grps])
         i = np.nonzero(data_id<Ns)[0][0]
@@ -157,12 +173,6 @@ def get_data_from_int(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
-    # ADDING STUFF IN HERE,
-    # I need to change datacube and counted datacube 
-    elif mem == "DASK":
-        f = h5py.File(filepath, 'r')
-        grp_data = f[group_name]
-        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
     return data
 
@@ -177,8 +187,7 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         grp_rs = f[tg+'/data/realslices/']
         grp_pl = f[tg+'/data/pointlists/']
         grp_pla = f[tg+'/data/pointlistarrays/']
-        grp_coords = f[tg+'/data/coordinates/']
-        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla,grp_coords]
+        grps = [grp_dc,grp_cdc,grp_ds,grp_rs,grp_pl,grp_pla]
 
         l_dc = list(grp_dc.keys())
         l_cdc = list(grp_cdc.keys())
@@ -186,8 +195,7 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
         l_rs = list(grp_rs.keys())
         l_pl = list(grp_pl.keys())
         l_pla = list(grp_pla.keys())
-        l_coords = list(grp_coords.keys())
-        names = l_dc+l_cdc+l_ds+l_rs+l_pl+l_pla+l_coords
+        names = l_dc+l_cdc+l_ds+l_rs+l_pl+l_pla
 
         inds = [i for i,name in enumerate(names) if name==data_id]
         assert(len(inds)!=0), "Error: no data named {} found.".format(data_id)
@@ -203,11 +211,9 @@ def get_data_from_str(filepath,tg,data_id,mem='RAM',binfactor=1,bindtype=None):
             grp_data = f[group_name]
             data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
 
+    # if using MEMMAP, file cannot be accessed from the context manager
+    # or else it will be closed before the data is accessed
     if mem == "MEMMAP":
-        f = h5py.File(filepath,'r')
-        grp_data = f[group_name]
-        data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
-    elif mem == 'DASK':
         f = h5py.File(filepath,'r')
         grp_data = f[group_name]
         data = get_data_from_grp(grp_data,mem=mem,binfactor=binfactor,bindtype=bindtype)
@@ -246,28 +252,96 @@ def get_data_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
         return get_pointlist_from_grp(g)
     elif dtype == 'pointlistarrays':
         return get_pointlistarray_from_grp(g)
-    elif dtype == 'coordinates':
-        return get_coordinates_from_grp(g)
     else:
         raise Exception('Unrecognized data object type {}'.format(dtype))
 
-
-# Print to screen
-
-def print_py4DSTEM_file(filepath,tg):
-    """ Accepts a filepath to a valid py4DSTEM file and prints to screen the file contents.
+def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
+    """ Accepts an h5py Group corresponding to a single datacube in an open, correctly formatted H5 file,
+        and returns a DataCube.
     """
-    info = get_py4DSTEM_dataobject_info(filepath,tg)
+    assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
 
-    version = get_py4DSTEM_version(filepath, tg)
-    print(f"py4DSTEM file version {version[0]}.{version[1]}.{version[2]}")
+    if (mem, binfactor) == ("RAM", 1):
+        data = np.array(g['data'])
+    elif (mem, binfactor) == ("MEMMAP", 1):
+        data = g['data']
 
-    print("{:10}{:18}{:24}{:54}".format('Index', 'Type', 'Shape', 'Name'))
-    print("{:10}{:18}{:24}{:54}".format('-----', '----', '-----', '----'))
-    for el in info:
-        print("  {:8}{:18}{:24}{:54}".format(str(el['index']),str(el['type']),str(el['shape']),str(el['name'])))
-    return
+    name = g.name.split('/')[-1]
+    return DataCube(data=data,name=name)
 
+def get_counted_datacube_from_grp(g):
+    """ Accepts an h5py Group corresponding to a counted datacube in an open, correctly formatted H5 file,
+        and returns a CountedDataCube.
+    """
+    raise NotImplementedError("CountedDataCubes are not available in py4DSTEM v0.13")
+    return #TODO
+
+def get_diffractionslice_from_grp(g):
+    """ Accepts an h5py Group corresponding to a diffractionslice in an open, correctly formatted H5 file,
+        and returns a DiffractionSlice.
+    """
+    data = np.array(g['data'])
+    name = g.name.split('/')[-1]
+    Q_Nx,Q_Ny = data.shape[:2]
+    if len(data.shape)==2:
+        return DiffractionSlice(data=data,name=name)
+    else:
+        lbls = g['dim3']
+        if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
+            with lbls.astype('S64'):
+                lbls = lbls[:]
+            lbls = [lbl.decode('UTF-8') for lbl in lbls]
+        return DiffractionSlice(data=data,name=name,slicelabels=lbls)
+
+def get_realslice_from_grp(g):
+    """ Accepts an h5py Group corresponding to a realslice in an open, correctly formatted H5 file,
+        and returns a RealSlice.
+    """
+    data = np.array(g['data'])
+    name = g.name.split('/')[-1]
+    R_Nx,R_Ny = data.shape[:2]
+    if len(data.shape)==2:
+        return RealSlice(data=data,name=name)
+    else:
+        lbls = g['dim3']
+        if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
+            with lbls.astype('S64'):
+                lbls = lbls[:]
+            lbls = [lbl.decode('UTF-8') for lbl in lbls]
+        return RealSlice(data=data,name=name,slicelabels=lbls)
+
+def get_pointlist_from_grp(g):
+    """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
+        and returns a PointList.
+    """
+    name = g.name.split('/')[-1]
+    coordinates = []
+    coord_names = list(g.keys())
+    length = len(g[coord_names[0]+'/data'])
+    if length==0:
+        for coord in coord_names:
+            coordinates.append((coord,None))
+    else:
+        for coord in coord_names:
+            dtype = type(g[coord+'/data'][0])
+            coordinates.append((coord, dtype))
+    data = np.zeros(length,dtype=coordinates)
+    for coord in coord_names:
+        data[coord] = np.array(g[coord+'/data'])
+    return PointList(data=data,name=name)
+
+def get_pointlistarray_from_grp(g):
+    """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,
+        and returns a PointListArray.
+    """
+    name = g.name.split('/')[-1]
+    dset = g['data']
+    shape = g['data'].shape
+    coordinates = g['data'][0,0].dtype
+    pla = PointListArray(dtype=coordinates,shape=shape,name=name)
+    for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
+        pla.get_pointlist(i,j).data = dset[i,j]
+    return pla
 
 
 

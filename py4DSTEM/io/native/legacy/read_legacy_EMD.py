@@ -11,7 +11,7 @@ from .read_v0_7 import read_v0_7
 from .read_v0_6 import read_v0_6
 from .read_v0_5 import read_v0_5
 
-def read_py4DSTEM(filepath, metadata=False, **kwargs):
+def read_py4DSTEM_legacy(filepath, metadata=False, **kwargs):
     """
     File reader for py4DSTEM formated .h5 files.  Precise behavior is
     detemined by which arguments are passed -- see below.
@@ -23,13 +23,12 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
         data_id (int/str/list, optional): Specifies which data to load. Use integers to
             specify the data index, or strings to specify data names. A list or tuple
             returns a list of DataObjects. Returns the specified data.
-        topgroup (str, optional:) Stricty, a py4DSTEM file is considered to be everything
+        topgroup (str, optional): Stricty, a py4DSTEM file is considered to be everything
             inside a toplevel subdirectory within the HDF5 file, so that if desired one
             can place many py4DSTEM files inside a single H5.  In this case, when loading
             data, the topgroup argument is passed to indicate which py4DSTEM file to
             load. If an H5 containing multiple py4DSTEM files is passed without a
             topgroup specified, the topgroup names are printed to screen.
-        metadata (bool, optional) If True, returns the metadata as a Metadata instance.
         mem (str, optional): Only used if a single DataCube is loaded. In this case,
             mem specifies how the data should be stored; must be "RAM" or "MEMMAP". See
             docstring for py4DSTEM.file.io.read. Default is "RAM".
@@ -45,7 +44,6 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
 
             * If no input arguments with return values (i.e. data_id or metadata) are
               passed, nothing is returned.
-            * If metadata==True, returns a Metadata instance with the file metadata.
             * Otherwise, a single DataObject or list of DataObjects are returned, based
               on the value of the argument data_id.
     """
@@ -76,7 +74,7 @@ def read_py4DSTEM(filepath, metadata=False, **kwargs):
     elif version_is_geq(version,(0,6,0)): return read_v0_6(filepath, **kwargs)
     elif version_is_geq(version,(0,5,0)): return read_v0_5(filepath, **kwargs)
     else:
-        raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
+        raise Exception('Support for legacy v{}.{}.{} files is no longer available.'.format(version[0],version[1],version[2]))
 
 
 
