@@ -35,6 +35,7 @@ class BraggVectors:
     from .braggvectors_fns import (
         get_bvm,
         measure_origin,
+        fit_origin,
         calibrate
     )
 
