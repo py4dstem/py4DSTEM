@@ -79,7 +79,7 @@ def measure_origin(
 
     # try to add to calibration
     try:
-        self.calibration.set_origin_meas(origin)
+        self.calibration.set_origin(origin)
     except AttributeError:
         # should a warning be raised?
         pass
