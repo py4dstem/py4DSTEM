@@ -4,7 +4,7 @@ from .tqdmnd import tqdmnd
 
 from . import process
 from . import visualize
-
+from . import preprocess
 # Import Individual Functions into Top Level Namespace 
 from .visualize import show 
 from .io import read, save

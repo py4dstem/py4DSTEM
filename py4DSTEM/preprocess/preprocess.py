@@ -8,8 +8,8 @@
 #       datacube.preprocess_function(*args)
 
 import numpy as np
-from ..utils import bin2D, get_shifted_ar
-from ...tqdmnd import tqdmnd
+from ..process.utils import bin2D, get_shifted_ar
+from ..tqdmnd import tqdmnd
 from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
