@@ -80,7 +80,7 @@ def measure_origin(
 
     # try to add to calibration
     try:
-        self.calibration.set_origin(origin)
+        self.calibration.set_origin_meas(origin)
     except AttributeError:
         # should a warning be raised?
         pass
@@ -89,13 +89,56 @@ def measure_origin(
         return origin
 
 
+def fit_origin(
+    self,
+    mask=None,
+    fitfunction="plane",
+    robust=False,
+    robust_steps=3,
+    robust_thresh=2,
+    plot = True,
+    returncalc = True,
+    ):
+    """
 
+    
+    """
+    q_meas = self.calibration.get_origin_meas()
+    from ....process.calibration import fit_origin
+    qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(tuple(q_meas))
+
+    # try to add to calibration
+    try:
+        self.calibration.set_origin([qx0_fit,qy0_fit])
+    except AttributeError:
+        # should a warning be raised?
+        pass
+    if plot: 
+        from ....visualize import show_image_grid
+        qx0_meas,qy0_meas = q_meas
+        qx0_mean = np.mean(qx0_fit)
+        qy0_mean = np.mean(qy0_fit)
+
+        show_image_grid(
+            lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_residuals,
+                      qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_residuals][i],
+            H = 2,
+            W = 3,
+            cmap = 'RdBu',
+            clipvals = 'manual',
+            vmin = -1,
+            vmax = 1,
+            axsize = (6,2),
+        )
+
+    if returncalc:
+        return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals 
 
 # Calibrate
-
 def calibrate(
     self,
-    returncalc = False
+    use_fitted_origin = True,
+    returncalc = False,
     ):
     """
     Determines which calibrations are present in set.calibrations (of origin,
@@ -113,9 +156,10 @@ def calibrate(
     from ....process.calibration.braggvectors import calibrate
 
     v = self.vectors_uncal.copy( name='v_cal' )
-    v = calibrate(
+    v = calibrate( 
         v,
-        cal
+        cal,
+        use_fitted_origin,
     )
     self._v_cal = v
 
