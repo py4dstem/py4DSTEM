@@ -327,7 +327,13 @@ braggvectors.calibrate()
 
 
 
+braggvectors2 = py4DSTEM.process.diskdetection.find_Bragg_disks(
+    datacube,
+    template=probe.kernel,
+    **detect_params
+)
 
+#braggvectors2.calibration = datacube.calibration
 
 
 
@@ -335,8 +341,8 @@ braggvectors.calibrate()
 
 py4DSTEM.io.save(
     filepath_h5,
-    braggvectors,
-    tree = False,
+    braggvectors2,
+    #tree = False,
     mode = 'o'
 )
 py4DSTEM.io.print_h5_tree(filepath_h5)
@@ -344,7 +350,7 @@ py4DSTEM.io.print_h5_tree(filepath_h5)
 d = py4DSTEM.io.read(
     filepath_h5,
     root = '4DSTEM_experiment/braggvectors',
-    tree = True
+    #tree = True
 )
 
 print(d)

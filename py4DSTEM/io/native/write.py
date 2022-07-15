@@ -343,7 +343,7 @@ def _add_calibration(
             subgroup,
             cal
         )
-    except KeyError:
+    except AttributeError:
         return
 
 
