@@ -5,7 +5,7 @@
 import h5py
 import numpy as np
 from collections import OrderedDict
-from os.path import exists
+from os.path import exists, dirname
 from os import remove
 from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from ..datastructure import (
@@ -167,12 +167,15 @@ def _write_new_file(
         # Save
         if tree is True:
             _save_w_tree(grp_top,data)
+            _add_calibration(grp_top,data)
 
         elif tree is False:
             _save_wout_tree(grp_top,data)
+            _add_calibration(grp_top,data)
 
         elif tree == "noroot":
             _save_wout_root(grp_top,data)
+            _add_calibration(grp_top,data)
 
         else:
             raise Exception(f"invalid argument {tree} passed for `tree`; must be True or False or 'noroot'")
@@ -219,15 +222,24 @@ def _append_to_file(
         # Save
         if tree is True:
             _save_w_tree(grp_top,data)
+            _add_calibration(grp_top,data)
 
         elif tree is False:
             _save_wout_tree(grp_top,data)
+            _add_calibration(grp_top,data)
 
         elif tree == "noroot":
             _save_wout_root(grp_top,data)
+            _add_calibration(grp_top,data)
 
         else:
             raise Exception(f"invalid argument {tree} passed for `tree`; must be True or False or 'noroot'")
+
+
+
+
+
+
 
 
 
@@ -307,6 +319,32 @@ def _save_wout_root(
             grp_root,
             d
         )
+
+
+
+def _add_calibration(
+    group,
+    data
+    ):
+    """
+    Checks if a Calibration instance exists at the top level;
+    if not, looks for a .calibration parameter, and adds this.
+    """
+    # checks if there is already a Calibration instance at top level
+    for key in data.tree.keys():
+        d = data.tree[key]
+        if isinstance(d,Calibration):
+            return
+    try:
+        # If .calibration attr exists, save to tree
+        cal = data.calibration
+        subgroup = group[data.name]
+        _save_wout_tree(
+            subgroup,
+            cal
+        )
+    except AttributeError:
+        return
 
 
 
