@@ -335,15 +335,15 @@ braggvectors.calibrate()
 
 py4DSTEM.io.save(
     filepath_h5,
-    datacube,
-    tree = 'noroot',
+    braggvectors,
+    tree = False,
     mode = 'o'
 )
 py4DSTEM.io.print_h5_tree(filepath_h5)
 
 d = py4DSTEM.io.read(
     filepath_h5,
-    root = '4DSTEM_experiment/datacube/braggvectors',
+    root = '4DSTEM_experiment/braggvectors',
     tree = True
 )
 
