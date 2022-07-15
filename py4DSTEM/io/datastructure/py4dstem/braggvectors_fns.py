@@ -56,8 +56,6 @@ def measure_origin(
 
         Args:
             data (PointListArray)
-            Q_Nx (int)
-            Q_Ny (int)
 
     "bragg_beam_stop" - A set of bragg peaks for data with a beamstop
 
@@ -71,6 +69,9 @@ def measure_origin(
 
     # perform computation
     from ....process.calibration import measure_origin
+    
+    kwargs["Q_shape"] = self.Qshape
+    
     origin = measure_origin(
         self.vectors_uncal,
         mode = mode,
