@@ -155,25 +155,18 @@ def _read_without_root(grp):
 
 # TODO: case of multiple Calibration instances
 def _add_calibration(tree,grp):
-    print(1)
-    print(grp.name)
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
     keys = [k for k in keys if (_get_class(grp[k]) == Calibration)]
     if len(keys)>0:
-        print(3)
         k = keys[0]
         tree[k] = _read_without_tree(grp[k])
         return tree[k]
     else:
         name = dirname(grp.name)
-        print(2)
-        print(name)
         if name != '/':
             grp_upstream = grp.file[dirname(grp.name)]
-            print(grp_upstream.name)
             return _add_calibration(tree, grp_upstream)
         else:
-            print(4)
             return None
 
 
