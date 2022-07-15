@@ -300,5 +300,135 @@ def constrain_degenerate_ellipse(data, p_ellipse, r_inner, r_outer, phi_known, f
     return a_constrained, b_constrained
 
 
+def two_dimensional_gaussian(p,x,y):
+    '''
+    Return the value of the two-dimensional gaussian function at point (x,y) given parameters p. 
+
+    **** p ****
+    I0, sigma_x, sigma_y,c_bkgd, x0, y0, theta = p
+    In the fitting process parameters are transfered into A, B, C 
+    A*(x - x0)**2 + 2*B*(x - x0)*(y - y0) + C*(y - y0)**2, which will result into a more accurate and better 
+    fitting outcome
+
+
+    **** return value ****
+    return value is I0 * np.exp(-r2) + c_bkgd ,here r2 stands for 
+     r2 = A*(x - x0)**2 + 2*B*(x - x0)*(y - y0) + C*(y - y0)**2
+
+
+    '''
+    #Unpack parameters
+
+    I0, sigma_x, sigma_y,c_bkgd, x0, y0, theta = p
+    A = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
+    B = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
+    C = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
+    r2 = A*(x - x0)**2 + 2*B*(x - x0)*(y - y0) + C*(y - y0)**2
+
+    return(
+      I0 * np.exp(-r2) + c_bkgd   
+    )
+
+def two_dimensional_gaussian_fiterr(p, x, y, val):
+    """
+    Returns the fit error associated with a point (x,y) with value val, given parameters p.
+    """
+    return two_dimensional_gaussian(p, x, y) - val
+
+
+def fit_two_dimensional_gaussian(data,center,fitradii,p0=None,mask=None):
+    """
+    For a 2d array , fits a 2d gaussian curve to the data inside an annulus or circle (as a rough estimate to start), centered
+    at `center` with inner and outer radii at `fitradii`.  The data to fit can optionally
+    be additionally masked with the boolean array mask.These two methods of determining the fitted area
+    complement each other and allow for greater flexibility.See module docstring for more info.
+    The parameters of the fit function are
+
+            * **I0**: Intensity
+            * **sigma0**: the semimajor axis length
+            * **sigma1**: the semiminor axis length
+            * **c_bkgd**: background
+            * **x0**: x center
+            * **y0**: y center
+            * **theta**: tilt of a-axis w.r.t x-axis, in radians
+
+    Args:
+        data (2d array): the data
+        center (2-tuple of numbers): the center (x0,y0)
+        fitradii (2-tuple of numbers): the inner and outer radii of the fitting annulus, if set inner radius to zero, became a circle (rough estimate)
+        p0 (7-tuple): initial guess parameters. If p0 is None, the function will compute
+            a guess at all parameters. If p0 is a 7-tuple it must be populated by some
+            mix of numbers and None; any parameters which are set to None will be guessed
+            by the function.  The parameters are the 7 parameters of the fit function
+            described above, p0 = (I0,sigma0,sigma1,c_bkgd,x0,y0, theta).
+            Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
+            to the main function, but if they are passed as elements of p0 these will
+            take precendence.
+        mask (2d array of bools): only fit to datapoints where mask is True
+
+    Returns:
+        (I0,sigma_x,sigma_y,c_bkgd,_x0,_y0,_theta),p
+        (2-tuple comprised of two 7-tuples): Returns a 2-tuple.
+
+        The first element is the ellipse parameters need to elliptically parametrize
+        diffraction space, and is itself a 7-tuple:
+
+
+
+            * **I0**: Intensity
+            * **sigma_x**: the semimajor axis length
+            * **sigma_y**: the semiminor axis length
+            * **c_bkgd**: the background
+            * **_x0**: x center
+            * **_y0**: y center,
+            * **_theta**: tilt of a-axis w.r.t x-axis, in radians
+
+        The second element is the full set of fit parameters to the 2 dimensional gaussian
+        function, described above, and is an 7-tuple
+    """
+    if mask is None:
+        mask = np.ones_like(data).astype(bool)
+    assert data.shape == mask.shape, "data and mask must have same shapes."
+    x0,y0 = center
+    ri,ro = fitradii
+
+    # Get data mask
+    Nx,Ny = data.shape
+    yy,xx = np.meshgrid(np.arange(Ny),np.arange(Nx))
+    rr = np.hypot(xx-x0,yy-y0)
+    _mask = ((rr>ri)*(rr<ro)).astype(bool)
+    _mask *= mask
+
+    # Make coordinates, get data values
+    x_inds, y_inds = np.nonzero(_mask)
+    vals = data[_mask]
+
+    # Get initial parameter guesses
+    I0 = np.max(data)
+    sigma_x = ri/2.
+    sigma_y = ri/2.
+    c_bkgd = np.min(data)
+    #  set the theta to zero
+    theta = 0
+
+    # Populate initial parameters
+    p0_guess = tuple([I0,sigma_x,sigma_y,c_bkgd,x0,y0,theta])
+    if p0 is None:
+        _p0 = p0_guess
+    else:
+        assert len(p0)==7
+        _p0 = tuple([p0_guess[i] if p0[i] is None else p0[i] for i in range(len(p0))])
+
+    # Perform fit
+    p = leastsq(two_dimensional_gaussian_fiterr, _p0, args=(x_inds, y_inds, vals))[0]
+
+    # Return
+    _x0,_y0 = p[4],p[5]
+    _theta = p[6]
+    I0 = p[0]
+    sigma_x = p[1]
+    sigma_y = p[2]
+    c_bkgd = p[3]
+    return (I0,sigma_x,sigma_y,c_bkgd,_x0,_y0,_theta),p
 
 
