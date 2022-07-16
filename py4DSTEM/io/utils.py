@@ -4,6 +4,7 @@ def parse_filetype(fp):
     """ Accepts a path to a 4D-STEM dataset, and returns the file type.
     """
     _, fext = splitext(fp)
+    fext = fext.lower()
     if fext in [
         ".h5",
         ".H5",
