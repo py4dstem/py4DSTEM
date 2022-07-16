@@ -24,6 +24,7 @@ def calibrate(
     Args:
         braggpeaks (PointListArray)
         calibration (Calibration)
+        use_fitted_origin (bool): determine if using fitted origin or measured origin
 
     Returns:
         (PointListArray)

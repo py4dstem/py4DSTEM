@@ -126,7 +126,8 @@ def get_maxima_2D(
         subShift = upsampled_correlation(_ar_FT,upsample_factor,xyShift)
         maxima['x'][ipeak]=subShift[0]
         maxima['y'][ipeak]=subShift[1]
-
+        
+    maxima = np.sort(maxima, order='intensity')[::-1]
     return maxima
 
 
