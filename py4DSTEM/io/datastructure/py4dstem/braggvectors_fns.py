@@ -101,6 +101,7 @@ def fit_origin(
     robust_steps=3,
     robust_thresh=2,
     plot = True,
+    fit_vis_params = None,
     returncalc = True,
     **kwargs
     ):
@@ -142,17 +143,22 @@ def fit_origin(
         qx0_meas,qy0_meas = q_meas
         qx0_mean = np.mean(qx0_fit)
         qy0_mean = np.mean(qy0_fit)
+        
+        if fit_vis_params is None: 
+            fit_vis_params = {
+                'H':2,
+                'W':3,
+                'cmap':'RdBu',
+                'clipvals':'manual',
+                'vmin':-1,
+                'vmax':1,
+                'axsize':(6,2),
+                }
 
         show_image_grid(
             lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_residuals,
                       qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_residuals][i],
-            H = 2,
-            W = 3,
-            cmap = 'RdBu',
-            clipvals = 'manual',
-            vmin = -1,
-            vmax = 1,
-            axsize = (6,2),
+            **fit_vis_params
         )
 
     if returncalc:
@@ -208,6 +214,7 @@ def choose_lattice_vectors(
     minSpacing=0,
     edgeBoundary=1,
     maxNumPeaks=10,
+    bvm_vis_params = {},
     returncalc = False,
     ):
     """
@@ -255,14 +262,12 @@ def choose_lattice_vectors(
     from ....visualize import select_lattice_vectors
     g1,g2 = select_lattice_vectors(
         bvm,    
-        figsize = (16,8),
-        scaling = 'power',
-        power = 0.5,
         gx = g['x'], 
         gy = g['y'],
         i0 = index_g0,
         i1 = index_g1,
-        i2 = index_g2
+        i2 = index_g2,
+        **bvm_vis_params,
     )
 
     self.g1 = g1
@@ -276,6 +281,7 @@ def index_bragg_directions(
     x0 = None, 
     y0 = None,
     plot = True,
+    bvm_vis_params = {},
     returncalc = False,
     ):
     """
@@ -310,8 +316,7 @@ def index_bragg_directions(
         from ....visualize import show_bragg_indexing
         show_bragg_indexing(
             self.bvm_centered,
-            scaling = 'power',
-            power = 0.5,
+            **bvm_vis_params,
             braggdirections = braggdirections,
             points = True
         )
