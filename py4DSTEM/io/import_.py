@@ -11,11 +11,25 @@ def import_(
     mem: Optional[str] = "RAM",
     binfactor: Optional[int] = 1,
     filetype: Optional[str] = None,
-    # metadata=False,
     **kwargs,
 ):
     """
     Reader for non-native file formats.
+    Supports Gatan DM3/4, some EMPAD file versions, and Gatan K2 bin/gtg
+
+    Args:
+        filepath:   Path to the file. For K2 raw datasets, pass the path to the gtg file
+        mem:        "RAM" to load the dataset into ram, "MEMMAP" to produce a memory map
+                        (For K2 raw data, only MEMMAP is supported)
+        binfactor   Diffraction space binning factor for bin-on-load.
+        filetype    Used to override automatic filetype detection.
+
+    For documentation of kwargs, refer to the individual readers (currently
+        only the K2 reader uses kwargs.)
+    
+    Returns:
+        data    DataCube if 4D data is found, else an Array containing 2D or 3D data
+
     """
 
     assert isinstance(
