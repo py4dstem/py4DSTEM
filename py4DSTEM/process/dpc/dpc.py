@@ -1,7 +1,7 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
-from ..utils import make_Fourier_coords2D, print_progress_bar
+from ..utils import make_Fourier_coords2D
 from ...io import DataCube
 
 
@@ -209,7 +209,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
                                           n_iter=n_iter)
         stds[i] = np.std(phase)
         if verbose:
-            print_progress_bar(i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
+            pass # Old progress bar was here
 
     # Flipped
     for i,theta in enumerate(thetas):
@@ -219,7 +219,7 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
                                           n_iter=n_iter)
         stds_f[i] = np.std(phase)
         if verbose:
-            print_progress_bar(N_thetas+i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
+            pass # Old progress bar was here
 
     flip = np.max(stds_f)>np.max(stds)
     if flip:

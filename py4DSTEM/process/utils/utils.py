@@ -260,31 +260,6 @@ def add_to_2D_array_from_floats(ar, x, y, I):
     ar[x1[mask], y1[mask]] += (    dx[mask]) * (    dy[mask]) * I[mask]
     return ar
 
-
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1,
-                       length=100, fill='*'):
-    """
-    Call in a loop to create terminal progress bar
-
-    Args:
-        iteration (int): current iteration
-        total (int): total iterations
-        prefix (str, optional): prefix string
-        suffix  (str, optional): suffix string
-        decimals (int, optional): positive number of decimals in percent complete
-        length (int, optional): character length of bar
-        fill (str, optional): bar fill character
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    clear_output(wait=True)
-    print('\r{} |{}| {}% {}\r'.format(prefix, bar, percent, suffix))
-    # Print New Line on Complete
-    if iteration == total:
-        print()
-
-
 def bin2D(array, factor, dtype=np.float64):
     """
     Bin a 2D ndarray by binfactor.
