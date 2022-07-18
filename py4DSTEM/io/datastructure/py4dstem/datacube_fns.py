@@ -332,7 +332,7 @@ def get_vacuum_probe(
 from .calibration import Calibration
 def get_probe_size(
     self,
-    name = 'probe_size',
+    mode = None,
     returncal = True, 
     ** kwargs,
     ):
@@ -342,10 +342,19 @@ def get_probe_size(
     #perform computation 
     from ....process.calibration import get_probe_size
     
-    assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
+    if mode is None: 
+        assert 'no mode speficied, using mean diffraciton pattern'
+        assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
+        DP = self.tree['dp_mean'].data
+    elif type(mode) == str:
+        assert mode in self.tree.keys(), "mode not found"
+        DP = self.tree[mode].data
+    elif type(mode) == np.ndarray:
+        assert len(mode.shape) == 2, "must be a 2D array"
+        DP = mode
 
-    x = get_probe_size(
-        self.tree['dp_mean'].data,
+    x = get_probe_size(DP
+        ,
         **kwargs
     )
 
