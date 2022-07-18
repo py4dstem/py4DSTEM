@@ -3,8 +3,8 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io import PointList, PointListArray
-from ..utils import tqdmnd
+from ...io.datastructure import PointList, PointListArray
+from ...tqdmnd import tqdmnd
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     """
@@ -78,8 +78,9 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
 
     # Store in a PointList
     coords = [('qx',float),('qy',float),('h',int),('k',int)]
-    bragg_directions = PointList(coordinates=coords)
-    bragg_directions.add_tuple_of_nparrays((gx,gy,h,k))
+    temp_array = np.zeros([], dtype = coords)
+    bragg_directions = PointList(data = temp_array)
+    bragg_directions.add_data_by_field((gx,gy,h,k))
 
     return h,k, bragg_directions
 
@@ -137,8 +138,7 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
     ideal_data['h'] = M_ideal[:,0]
     ideal_data['k'] = M_ideal[:,1]
 
-    ideal_lattice = PointList(coordinates=coords)
-    ideal_lattice.add_dataarray(ideal_data)
+    ideal_lattice = PointList(data=ideal_data)
 
     #shift to the DP center
     ideal_lattice.data['qx'] += x0
@@ -197,9 +197,9 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
 
     # add the coordinates if they don't exist
     if not ('h' in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('h',int)])
+        indexed_braggpeaks = indexed_braggpeaks.add_fields([('h',int)])
     if not ('k' in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_coordinates([('k',int)])
+        indexed_braggpeaks = indexed_braggpeaks.add_fields([('k',int)])
 
     # loop over all the scan positions
     for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
@@ -216,7 +216,7 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
                     pl.data['k'][i] = lattice.data['k'][ind]
                 else:
                     rm_peak_mask[i] = True
-            pl.remove_points(rm_peak_mask)
+            pl.remove(rm_peak_mask)
 
     indexed_braggpeaks.name = braggpeaks.name + "_indexed"
     return indexed_braggpeaks

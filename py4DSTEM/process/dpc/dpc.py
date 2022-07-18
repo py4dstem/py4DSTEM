@@ -4,6 +4,7 @@ import numpy as np
 from ..utils import make_Fourier_coords2D, print_progress_bar
 from ...io import DataCube
 
+
 ############################# DPC Functions ################################
 
 def get_CoM_images(datacube, mask=None, normalize=True):
@@ -145,7 +146,7 @@ def get_rotation_and_flip_zerocurl(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=
 
 def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
                                       regLowPass=0.5, regHighPass=100, stepsize=1,
-                                      n_iter=1, return_stds=False, verbose=True):
+                                      n_iter=1, return_stds=False, verbose=False):
     """
     Find the rotation offset between real space and diffraction space, and whether there
     exists a relative axis flip their coordinate systems, starting from the premise that
