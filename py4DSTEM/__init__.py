@@ -5,7 +5,11 @@ from .tqdmnd import tqdmnd
 from . import process
 #from . import preprocess
 from . import visualize
+
+
+# Import Individual Functions into Top Level Namespace 
 from .visualize import show
+from .io import read, save
 
 
 #from .file.log import Logger
