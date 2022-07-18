@@ -49,17 +49,15 @@ def get_maxima_2D(
     er = f"Unrecognized subpixel option {subpixel}. Must be in {subpixel_modes}"
     assert subpixel in subpixel_modes, er
 
-    ar_real = np.maximum(np.real(np.fft.ifft2(ar)),0) if subpixel == 'multicorr' else ar
-
     # gaussian filtering
-    ar_real = ar_real if sigma<=0 else gaussian_filter(ar_real, sigma)
+    ar = ar if sigma<=0 else gaussian_filter(ar, sigma)
 
     # local pixelwise maxima
     maxima_bool = \
-        (ar_real >= np.roll(ar_real, (-1, 0), axis=(0, 1))) & (ar_real > np.roll(ar_real, (1, 0), axis=(0, 1))) & \
-        (ar_real >= np.roll(ar_real, (0, -1), axis=(0, 1))) & (ar_real > np.roll(ar_real, (0, 1), axis=(0, 1))) & \
-        (ar_real >= np.roll(ar_real, (-1, -1), axis=(0, 1))) & (ar_real > np.roll(ar_real, (-1, 1), axis=(0, 1))) & \
-        (ar_real >= np.roll(ar_real, (1, -1), axis=(0, 1))) & (ar_real > np.roll(ar_real, (1, 1), axis=(0, 1)))
+        (ar >= np.roll(ar, (-1, 0), axis=(0, 1))) & (ar > np.roll(ar, (1, 0), axis=(0, 1))) & \
+        (ar >= np.roll(ar, (0, -1), axis=(0, 1))) & (ar > np.roll(ar, (0, 1), axis=(0, 1))) & \
+        (ar >= np.roll(ar, (-1, -1), axis=(0, 1))) & (ar > np.roll(ar, (-1, 1), axis=(0, 1))) & \
+        (ar >= np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
 
     # remove edges
     assert isinstance(edgeBoundary, (int, np.integer))
@@ -76,7 +74,7 @@ def get_maxima_2D(
     maxima = np.zeros(len(maxima_x), dtype=dtype)
     maxima['x'] = maxima_x
     maxima['y'] = maxima_y
-    maxima['intensity'] = ar_real[maxima_x, maxima_y]
+    maxima['intensity'] = ar[maxima_x, maxima_y]
     maxima = np.sort(maxima, order='intensity')[::-1]
 
     if len(maxima) == 0:
@@ -100,17 +98,17 @@ def get_maxima_2D(
 
     # Parabolic subpixel refinement
     for i in range(len(maxima)):
-        Ix1_ = ar_real[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float)
-        Ix0 = ar_real[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
-        Ix1 = ar_real[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float)
-        Iy1_ = ar_real[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float)
-        Iy0 = ar_real[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
-        Iy1 = ar_real[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float)
+        Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float)
+        Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
+        Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float)
+        Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float)
+        Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
+        Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float)
         deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
         deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
         maxima['x'][i] += deltax
         maxima['y'][i] += deltay
-        maxima['intensity'][i] = linear_interpolation_2D(ar_real, maxima['x'][i], maxima['y'][i])
+        maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
 
     if subpixel == 'poly':
         return maxima
