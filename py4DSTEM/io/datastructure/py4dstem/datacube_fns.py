@@ -329,13 +329,39 @@ def get_vacuum_probe(
         return x
 
 
+from .calibration import Calibration
+def get_probe_size(
+    self,
+    name = 'probe_size',
+    returncal = True, 
+    ** kwargs,
+    ):
+    """
 
+    """
+    #perform computation 
+    from ....process.calibration import get_probe_size
+    
+    assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
 
+    x = get_probe_size(
+        self.tree['dp_mean'].data,
+        **kwargs
+    )
+
+    # try to add to calibration
+    try:
+        self.calibration.set_probe_param(x)
+    except AttributeError:
+        # should a warning be raised?
+        pass
+
+    # return
+    if returncal:
+        return x
 
 
 # Bragg disks
-
-
 
 def find_Bragg_disks(
     self,

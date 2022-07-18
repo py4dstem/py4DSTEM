@@ -21,7 +21,8 @@ class DataCube(Array):
         get_dp_median,
         get_virtual_image,
         get_vacuum_probe,
-        find_Bragg_disks
+        find_Bragg_disks,
+        get_probe_size,
     )
 
 

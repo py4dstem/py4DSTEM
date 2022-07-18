@@ -36,7 +36,7 @@ def get_vacuum_probe(
     if isinstance(data,DataCube):
         mode = '4D'
     elif isinstance(data,np.ndarray):
-        mode = str(data.ndims)+'D'
+        mode = str(data.ndim)+'D'
     elif data is None:
         mode = 'synth'
     else:

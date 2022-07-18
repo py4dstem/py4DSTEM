@@ -158,6 +158,7 @@ class K2DataArray(Sequence):
         )
 
         # needed for Dask support:
+        self.ndim = 4
         self.ndims = 4
         self.dtype = np.int16
 

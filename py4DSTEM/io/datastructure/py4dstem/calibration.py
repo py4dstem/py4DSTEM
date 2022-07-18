@@ -189,6 +189,28 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
+    def set_probe_semiangle(self,x):
+        self._params['probe_semiangle'] = x
+    def get_probe_semiangle(self):
+        return self._get_value('probe_semiangle')
+    def set_probe_param(self, x):
+        """
+        Args:
+            x (3-tuple): (probe size, x0, y0)
+        """
+        probe_semiangle, qx0, qy0 = x
+        self.set_probe_semiangle(probe_semiangle)
+        self.set_qx0(qx0)
+        self.set_qy0(qy0)
+    def get_probe_param(self):
+        probe_semiangle = self._get_value('probe_semiangle')
+        qx0 = self._get_value('qx0')
+        qy0 = self._get_value('qy0')
+        ans = (probe_semiangle,qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
+        
 
     # ellipse
     def set_a(self,x):
@@ -243,13 +265,14 @@ class Calibration(Metadata):
         self._params['QR_flip'] = x
     def get_QR_flip(self):
         return self._get_value('QR_flip')
-    def set_QR_rotflip(self,x):
+    def set_QR_rotflip(self, rot_flip):
         """
         Args:
-            rot (number): rotation in degrees
-            flip (bool): True indicates a Q/R axes flip
+            rot_flip (tuple), (rot, flip) where:
+                rot (number): rotation in degrees
+                flip (bool): True indicates a Q/R axes flip
         """
-        rot,flip = x
+        rot,flip = rot_flip
         self.set_QR_rotation_degrees(rot)
         self.set_QR_flip(flip)
     def get_QR_rotflip(self):

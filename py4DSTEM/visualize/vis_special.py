@@ -349,10 +349,10 @@ def show_strain(strainmap,
     vmin_theta,vmax_theta = vrange_theta[0]/(180.0/np.pi),vrange_theta[1]/(180.0/np.pi)
 
     # Get images
-    e_xx = np.ma.array(strainmap.slices['e_xx'],mask=strainmap.slices['mask']==False)
-    e_yy = np.ma.array(strainmap.slices['e_yy'],mask=strainmap.slices['mask']==False)
-    e_xy = np.ma.array(strainmap.slices['e_xy'],mask=strainmap.slices['mask']==False)
-    theta = np.ma.array(strainmap.slices['theta'],mask=strainmap.slices['mask']==False)
+    e_xx = np.ma.array(strainmap.get_slice('e_xx').data,mask=strainmap.get_slice('mask').data==False)
+    e_yy = np.ma.array(strainmap.get_slice('e_yy').data,mask=strainmap.get_slice('mask').data==False)
+    e_xy = np.ma.array(strainmap.get_slice('e_xy').data,mask=strainmap.get_slice('mask').data==False)
+    theta = np.ma.array(strainmap.get_slice('theta').data,mask=strainmap.get_slice('mask').data==False)
 
     # Plot
     if layout==0:
