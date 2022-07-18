@@ -31,6 +31,8 @@ class Crystal:
         calculate_strain,
         save_ang_file,
         symmetry_reduce_directions,
+        orientation_map_to_orix_CrystalMap,
+        save_ang_file,
     )
 
     from .crystal_viz import (
