@@ -218,7 +218,8 @@ def choose_lattice_vectors(
     returncalc = False,
     ):
     """
-    choose which lattice vectors to use for strain mapping 
+    Choose which lattice vectors to use for strain mapping.
+    
     Args: 
         index_g0 (int): origin
         index_g1 (int): second point of vector 1
