@@ -7,8 +7,8 @@
 import numpy as np
 from scipy import optimize
 
-from ..process.utils import get_maxima_2D, bin2D
 from ..io import PointListArray
+from ..process.utils import get_maxima_2D, bin2D
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
