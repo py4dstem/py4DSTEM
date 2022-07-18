@@ -10,6 +10,7 @@ from ...io.datastructure.py4dstem import Calibration
 def calibrate(
         braggpeaks,
         calibration,
+        use_fitted_origin = True,
         **params
     ):
     """
@@ -23,6 +24,7 @@ def calibrate(
     Args:
         braggpeaks (PointListArray)
         calibration (Calibration)
+        use_fitted_origin (bool): determine if using fitted origin or measured origin
 
     Returns:
         (PointListArray)
@@ -32,7 +34,7 @@ def calibrate(
 
     # find calibrations
     c = calibration
-    origin = c.get_origin()
+    origin = c.get_origin() if use_fitted_origin else c.get_origin_meas()
     ellipse = c.get_ellipse()
     pixel_size = c.get_Q_pixel_size()
     pixel_units = c.get_Q_pixel_units()

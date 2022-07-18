@@ -53,7 +53,7 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     thresh = np.mean(thresh_vals[mask])
     mask = DP > DPmax * thresh
     x0, y0 = get_CoM(DP * mask)
-
+    
     return r, x0, y0
 
 
