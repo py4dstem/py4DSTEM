@@ -3,7 +3,7 @@
 
 ## Papers which have used py4DSTEM
 
-Please email clophus@lbl.gov if you used py4DSTEM for analysis and your paper is not listed below!
+Please email clophus@lbl.gov if you have used py4DSTEM for analysis and your paper is not listed below!
 
 ### 2022 (9)
 
