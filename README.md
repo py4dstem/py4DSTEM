@@ -189,12 +189,9 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 [![TRI logo](/images/toyota_research_institute.png)](https://www.tri.global/)
 
 
-![](/images/toyota_research_institute.png)
-
 The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
 
-
-![DOE logo](/images/DOE_logo.png)
+[![DOE logo](/images/DOE_logo.png)](https://www.energy.gov/science/bes/basic-energy-sciences/)
 
 Additional funding has been provided by the US Department of Energy, OFfice of Science, Basic Energy Sciences.
 
