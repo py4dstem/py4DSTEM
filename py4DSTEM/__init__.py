@@ -14,7 +14,7 @@ from . import visualize
 # functions
 
 from .visualize import show
-from .io import read, save
+from .io import read, save, import_file
 
 
 
