@@ -11,44 +11,41 @@ from ...tqdmnd import tqdmnd
 from ...io.datastructure import PointListArray, DataCube
 
 
-
-
 def measure_origin(
         data,
         mode,
         **kwargs
     ):
     """
-    Modes of operation are 1-5.  Use-cases and input arguments:
+    Options for the `mode` argument, their uses-cases, and their expected additional input arguments are:
 
-    1 - A datacube with no beamstop, and in which the center beam
+    "dc_no_beamstop" - A datacube with no beamstop, and in which the center beam
         is brightest throughout.
 
         Args:
             data (DataCube)
 
-    2 - A set of bragg peaks for data with no beamstop, and in which
+    "bragg_no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
         the center beam is brightest throughout.
 
         Args:
             data (PointListArray)
-            Q_Nx (int)
-            Q_Ny (int)
+            Q_shape (Qx, Qy) from braggvector
 
-    3 - A datacube with no beamstop, and in which the center beam
+    "dc_brightest_disk" - A datacube with no beamstop, and in which the center beam
         is brightest throughout.
 
         Args:
             data (DataCube)
             probe_kernel (2d array)
 
-    4 - A datacube with a beamstop
+    "dc_beamstop" - A datacube with a beamstop
 
         Args:
             data (DataCube)
             mask (2d array)
 
-    5 - A set of bragg peaks for data with a beamstop
+    "bragg_beamstop" - A set of bragg peaks for data with a beamstop
 
         Args:
             data (PointListArray)
@@ -59,16 +56,22 @@ def measure_origin(
 
     """
     # parse args
-    modes = (1,2,3,4,5)
+    modes = (
+        "dc_no_beamstop",
+        "bragg_no_beamstop",
+        "dc_beamstop",
+        "bragg_beamstop",
+        "dc_brightest_disk"
+    )
     assert mode in modes, f"{mode} must be in {modes}"
 
     # select a fn
     fn_dict = {
-        1 : get_origin,
-        2 : get_origin_from_braggpeaks,
-        3 : get_origin_brightest_disk,
-        4 : get_origin_beamstop,
-        5 : get_origin_beamstop_braggpeaks
+        "dc_no_beamstop" : get_origin,
+        "bragg_no_beamstop" : get_origin_from_braggpeaks,
+        "dc_beamstop" : get_origin_beamstop,
+        "bragg_beamstop" : get_origin_beamstop_braggpeaks,
+        "dc_brightest_disk" : get_origin_brightest_disk,
     }
     fn = fn_dict[mode]
 
@@ -195,7 +198,15 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
     return qx0, qy0
 
 
-def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=None):
+def get_origin_from_braggpeaks(
+    braggpeaks, 
+    Q_shape, 
+    center_guess = None, 
+    score_method = 'distance', 
+    findcenter="CoM", 
+    bvm=None,
+    **kwargs
+):
     """
     Gets the diffraction shifts using detected Bragg disk positions.
 
@@ -225,158 +236,68 @@ def get_origin_from_braggpeaks(braggpeaks, Q_Nx, Q_Ny, findcenter="CoM", bvm=Non
               purposes.
     """
     assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
-    assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
+    # assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
     assert isinstance(findcenter, str), "center must be a str"
     assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
-    R_Nx, R_Ny = braggpeaks.shape
+    assert score_method in ["distance", "intensity weighted distance"], "center must be either 'distance' or 'intensity weighted distance'"
 
-    # Get guess at position of unscattered beam
-    if bvm is None:
-        from ..diskdetection.braggvectormap import get_bragg_vector_map
-        braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
-    else:
-        braggvectormap_all = bvm
-    if findcenter == "max":
-        x0, y0 = np.unravel_index(
-            np.argmax(gaussian_filter(braggvectormap_all, 10)), (Q_Nx, Q_Ny)
-        )
-    else:
-        x0, y0 = get_CoM(braggvectormap_all)
-        braggvectormap = np.zeros_like(braggvectormap_all)
-        for Rx in range(R_Nx):
-            for Ry in range(R_Ny):
-                pointlist = braggpeaks.get_pointlist(Rx, Ry)
-                if pointlist.length > 0:
-                    r2 = (pointlist.data["qx"] - x0) ** 2 + (
-                        pointlist.data["qy"] - y0
-                    ) ** 2
-                    index = np.argmin(r2)
-                    braggvectormap = add_to_2D_array_from_floats(
-                        braggvectormap,
-                        pointlist.data["qx"][index],
-                        pointlist.data["qy"][index],
-                        pointlist.data["intensity"][index],
-                    )
-        x0, y0 = get_CoM(braggvectormap)
+    R_Nx, R_Ny = braggpeaks.shape
+    Q_Nx, Q_Ny = Q_shape
+
+    # Get guess at position of unscattered beam (x0,y0)
+    if center_guess is None: 
+        if bvm is None:
+            from ..diskdetection.braggvectormap import get_bragg_vector_map
+            braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
+        else:
+            braggvectormap_all = bvm
+        if findcenter == "max":
+            x0, y0 = np.unravel_index(
+                np.argmax(gaussian_filter(braggvectormap_all, 10)), (Q_Nx, Q_Ny)
+            )
+        else:
+            x0, y0 = get_CoM(braggvectormap_all)
+            braggvectormap = np.zeros_like(braggvectormap_all)
+            for Rx in range(R_Nx):
+                for Ry in range(R_Ny):
+                    pointlist = braggpeaks.get_pointlist(Rx, Ry)
+                    if pointlist.length > 0:
+                        r2 = (pointlist.data["qx"] - x0) ** 2 + (
+                            pointlist.data["qy"] - y0
+                        ) ** 2
+                        index = np.argmin(r2)
+                        braggvectormap = add_to_2D_array_from_floats(
+                            braggvectormap,
+                            pointlist.data["qx"][index],
+                            pointlist.data["qy"][index],
+                            pointlist.data["intensity"][index],
+                        )
+            x0, y0 = get_CoM(braggvectormap)
+    else: 
+        x0, y0 = center_guess
 
     # Get Bragg peak closest to unscattered beam at each scan position
-    braggvectormap = np.zeros_like(braggvectormap_all)
     qx0 = np.zeros((R_Nx, R_Ny))
     qy0 = np.zeros((R_Nx, R_Ny))
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
             pointlist = braggpeaks.get_pointlist(Rx, Ry)
             if pointlist.length > 0:
-                r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
-                index = np.argmin(r2)
-                braggvectormap = add_to_2D_array_from_floats(
-                    braggvectormap,
-                    pointlist.data["qx"][index],
-                    pointlist.data["qy"][index],
-                    pointlist.data["intensity"][index],
-                )
+                if score_method == "distance":
+                    r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
+                    index = np.argmin(r2)
+                elif score_method == "intensity weighted distance":
+                    r2 = pointlist.data["intensity"]/(1+((pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2))
+                    index = np.argmax(r2)
                 qx0[Rx, Ry] = pointlist.data["qx"][index]
                 qy0[Rx, Ry] = pointlist.data["qy"][index]
+            else: 
+                qx0[Rx, Ry] = x0
+                qy0[Rx, Ry] = y0
 
-    return qx0, qy0, braggvectormap
+    return qx0, qy0
 
-def get_origin_brightest_disk(
-    datacube,
-    probe_kernel,
-    qxyInit = None,
-    probe_mask_size=None,
-    subpixel=None,
-    upsample_factor=16,
-    mask=None):
-    """
-    Find the origin for all diffraction patterns in a datacube, by finding the
-    brightest peak and then masking around that peak.
-
-    Args:
-        datacube (DataCube): the data
-        probe_kernel (array): probe kernel for disk detection
-        qxyInit (array or None): (qx0,qy0) origin for choosing the peak, or `None`.
-            If `None`, the origin is the mean diffraction pattern is computed,
-            which may be slow for large datasets, and is used to compute
-            `(qx0,qy0)`.
-        probe_mask_size (float): mask size in pixels. If set to None, we set it
-            to 2*probe radius estimate.
-        sub_pixel (str): 'None' or 'poly' or 'multicorr'
-        upsample_factor (int): upsample factor
-        mask (ndarray or None): if not None, should be an (Q_Nx,Q_Ny) shaped
-            boolean array. Mask will be applied to diffraction patterns before
-            finding the center.
-        probe_mask_std_scale (float): size of Gaussian mask sigma. If set to
-            None, function will estimate probe size.
-
-    Returns:
-        2 (R_Nx,R_Ny)-shaped ndarrays: the origin, (x,y) at each scan position
-    """
-    from ..diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
-
-    if probe_mask_size is None:
-        probe_mask_size, px, py = get_probe_size(np.fft.fftshift(probe_kernel))
-        probe_mask_size *= 2
-
-    # take fft of probe kernel
-    probe_kernel_FT = np.conj(np.fft.fft2(probe_kernel))
-
-    if qxyInit is None:
-        # find initial guess for probe center using mean diffraction pattern
-        diff_mean = np.mean(datacube.data,axis=(0,1))
-        peaks = _find_Bragg_disks_single_DP_FK(
-            diff_mean,
-            probe_kernel_FT,
-            corrPower = 1,
-            sigma = 0,
-            edgeBoundary = 0,
-            minRelativeIntensity = 0,
-            minAbsoluteIntensity = 0,
-            relativeToPeak = 0,
-            maxNumPeaks = 1,
-            subpixel = subpixel,
-            upsample_factor = upsample_factor)
-        qxyInit = np.array([peaks.data['qx'],peaks.data['qy']])
-
-    # Create mask
-    qx = np.arange(datacube.Q_Nx) - qxyInit[0]
-    qy = np.arange(datacube.Q_Ny) - qxyInit[1]
-    qya,qxa = np.meshgrid(qy,qx)
-    if mask is None:
-        mask = np.exp((qxa**2 + qya**2)/(-2*probe_mask_size**2))
-    else:
-        mask *= np.exp((qxa**2 + qya**2)/(-2*probe_mask_size**2))
-
-    # init output arrays
-    qx0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
-    qy0_ar = np.zeros((datacube.R_Nx,datacube.R_Ny))
-
-    for (rx,ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding origins',unit='DP',unit_scale=True):
-    # for (rx,ry) in tqdmnd(2,2,desc='Finding origins',unit='DP',unit_scale=True):
-        if subpixel is None:
-            dp_corr = np.real(np.fft.ifft2(np.fft.fft2(datacube.data[rx,ry,:,:] * mask) * probe_kernel_FT))
-            ind2D = np.unravel_index(np.argmax(dp_corr), dp_corr.shape)
-            qx0_ar[rx,ry] = ind2D[0]
-            qy0_ar[rx,ry] = ind2D[1]
-        else:
-            peaks = _find_Bragg_disks_single_DP_FK(
-                datacube.data[rx,ry,:,:] * mask,
-                probe_kernel_FT,
-                corrPower = 1,
-                sigma = 0,
-                edgeBoundary = 0,
-                minRelativeIntensity = 0,
-                minAbsoluteIntensity = 0,
-                relativeToPeak = 0,
-                maxNumPeaks = 1,
-                subpixel = subpixel,
-                upsample_factor = upsample_factor)
-            qx0_ar[rx,ry] = peaks.data['qx']
-            qy0_ar[rx,ry] = peaks.data['qy']
-
-    return qx0_ar, qy0_ar
-
-def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray):
+def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
@@ -406,7 +327,7 @@ def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray):
     return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
 
 
-def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
+def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
     """
     Find the origin for each diffraction pattern, assuming there is a beam stop.
 
@@ -432,8 +353,8 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray):
 
     return qx0, qy0
 
-def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
-                                   max_dist=2,max_iter=1):
+def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
+                                   max_dist=2,max_iter=1, **kwargs):
     """
     Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
     pairs of conjugate peaks inside an annular region and finding their centers of mass.
@@ -442,7 +363,6 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
         braggpeaks (PointListArray):
         center_guess (2-tuple): qx0,qy0
         radii (2-tuple): the inner and outer radii of the specified annular region
-        Q_Nx,Q_Ny: the shape of diffraction space
         max_dist (number): the maximum allowed distance between the reflection of two
             peaks to consider them conjugate pairs
         max_iter (integer): for values >1, repeats the algorithm after updating center_guess
@@ -513,6 +433,12 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,Q_Nx,Q_Ny,
     qx0,qy0 = origins[:,:,0],origins[:,:,1]
     return qx0,qy0
 
+
+def get_origin_brightest_disk(
+        datacube,
+        **kwargs
+        ):
+        raise Exception("This function needs to be added. Try another origin detection mode.")
 
 
 

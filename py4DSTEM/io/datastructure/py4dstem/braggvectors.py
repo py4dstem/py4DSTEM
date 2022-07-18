@@ -35,7 +35,15 @@ class BraggVectors:
     from .braggvectors_fns import (
         get_bvm,
         measure_origin,
-        calibrate
+        fit_origin,
+        calibrate,
+        choose_lattice_vectors,
+        index_bragg_directions,
+        add_indices_to_braggpeaks,
+        fit_lattice_vectors_all_DPs,
+        get_strain_from_reference_region,
+        get_rotated_strain_map,
+        get_strain_from_reference_g1g2,
     )
 
     def __init__(
@@ -76,8 +84,6 @@ class BraggVectors:
             name = 'v_cal'
         )
 
-
-
     @property
     def vectors(self):
         return self._v_cal
@@ -85,7 +91,6 @@ class BraggVectors:
     @property
     def vectors_uncal(self):
         return self._v_uncal
-
 
     @property
     def metadata(self):
