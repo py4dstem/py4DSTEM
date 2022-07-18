@@ -7,8 +7,8 @@
 import numpy as np
 from scipy import optimize
 
-from ..utils import get_maximal_points, print_progress_bar, bin2D
-from ...io import PointListArray
+from ..process.utils import get_maxima_2D, bin2D
+from ..io import PointListArray
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
@@ -74,15 +74,13 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
-                                                                                 length = 50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference              # Subtract dark ref from frame
                 events = workingarray>thresh_bkgrnd             # Threshold electron events
                 events *= thresh_xray>workingarray
 
                 ## Keep events which are greater than all NN pixels ##
-                events = get_maximal_points(workingarray*events)
+                events = get_maxima_2D(workingarray*events)
 
                 if(binfactor>1):
                     # Perform binning
@@ -98,15 +96,13 @@ def electron_count(datacube, darkreference, Nsamples=40,
         # Loop through frames
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:',
-                                    suffix='Complete', length=50)
                 frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
                 workingarray = frame-darkreference        # Subtract dark ref from frame
                 events = workingarray>thresh_bkgrnd       # Threshold electron events
                 events *= thresh_xray>workingarray
 
                 ## Keep events which are greater than all NN pixels ##
-                events = get_maximal_points(workingarray*events)
+                events = get_maxima_2D(workingarray*events)
 
                 # Perform binning
                 if(binfactor>1):
@@ -157,8 +153,6 @@ def electron_count_GPU(datacube, darkreference, Nsamples=40,
     # Loop through frames
     for Rx in range(R_Nx):
         for Ry in range(R_Ny):
-            print_progress_bar(Rx*R_Ny+Ry+1, R_Ny*R_Nx, prefix=' Counting:', suffix='Complete',
-                                                                             length = 50)
             frame = datacube[Rx,Ry,:,:].astype(np.int16)    # Get frame from file
             gframe = torch.from_numpy(frame).to(device)     # Move frame to GPU
             workingarray = gframe-darkref                   # Subtract dark ref from frame
