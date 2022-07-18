@@ -17,7 +17,7 @@ def measure_origin(
         **kwargs
     ):
     """
-    Modes of operation are 1-5.  Use-cases and input arguments:
+    Options for the `mode` argument, their uses-cases, and their expected additional input arguments are:
 
     "dc_no_beamstop" - A datacube with no beamstop, and in which the center beam
         is brightest throughout.
@@ -60,7 +60,8 @@ def measure_origin(
         "dc_no_beamstop",
         "bragg_no_beamstop",
         "dc_beamstop",
-        "bragg_beamstop"
+        "bragg_beamstop",
+        "dc_brightest_disk"
     )
     assert mode in modes, f"{mode} must be in {modes}"
 
@@ -69,7 +70,8 @@ def measure_origin(
         "dc_no_beamstop" : get_origin,
         "bragg_no_beamstop" : get_origin_from_braggpeaks,
         "dc_beamstop" : get_origin_beamstop,
-        "bragg_beamstop" : get_origin_beamstop_braggpeaks
+        "bragg_beamstop" : get_origin_beamstop_braggpeaks,
+        "dc_brightest_disk" : get_origin_brightest_disk,
     }
     fn = fn_dict[mode]
 
@@ -431,6 +433,12 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
     qx0,qy0 = origins[:,:,0],origins[:,:,1]
     return qx0,qy0
 
+
+def get_origin_brightest_disk(
+        datacube,
+        **kwargs
+        ):
+        raise Exception("This function needs to be added. Try another origin detection mode.")
 
 
 
