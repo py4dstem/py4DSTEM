@@ -3,9 +3,16 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd, electron_wavelength_angstrom
 from .utils import Orientation, OrientationMap, axisEqual3D
+from ..utils import electron_wavelength_angstrom
+from ...tqdmnd import tqdmnd
+from ...io.datastructure import PointList, PointListArray, RealSlice
+
+from numpy.linalg import lstsq
+try:
+    import cupy as cp
+except:
+    cp = None
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -17,6 +24,8 @@ def orientation_plan(
     self,
     zone_axis_range: np.ndarray = np.array([[0, 1, 1], [1, 1, 1]]),
     angle_step_zone_axis: float = 2.0,
+    angle_coarse_zone_axis: float = None,
+    angle_refine_range: float = None,
     angle_step_in_plane: float = 2.0,
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
@@ -24,9 +33,10 @@ def orientation_plan(
     intensity_power: float = 0.25,  # New default intensity power scaling
     tol_peak_delete=None,
     tol_distance: float = 0.01,
-    fiber_axis=None,
-    fiber_angles=None,
+    fiber_axis = None,
+    fiber_angles = None,
     figsize: Union[list, tuple, np.ndarray] = (6, 6),
+    CUDA: bool = False,
     progress_bar: bool = True,
     ):
 
@@ -43,7 +53,12 @@ def orientation_plan(
                                  Setting to 'fiber' as a string will make a spherical cap around a given vector.
                                  Setting to 'auto' will use pymatgen to determine the point group symmetry
                                     of the structure and choose an appropriate zone_axis_range
-        angle_step_zone_axis (float): Approximate angular step size for zone axis [degrees]
+        angle_step_zone_axis (float): Approximate angular step size for zone axis search [degrees]
+        angle_coarse_zone_axis (float): Coarse step size for zone axis search [degrees]. Setting to 
+                                        None uses the same value as angle_step_zone_axis.
+        angle_refine_range (float):   Range of angles to use for zone axis refinement. Setting to
+                                      None uses same value as angle_coarse_zone_axis.
+
         angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
         accel_voltage (float):        Accelerating voltage for electrons [Volts]
         corr_kernel_size (float):        Correlation kernel size length in Angstroms
@@ -57,6 +72,7 @@ def orientation_plan(
         cartesian_directions (bool): When set to true, all zone axes and projection directions
                                      are specified in Cartesian directions.
         figsize (float):            (2,) vector giving the figure size
+        CUDA (bool):             Use CUDA for the Fourier operations.
         progress_bar (bool):    If false no progress bar is displayed
     """
 
@@ -75,8 +91,7 @@ def orientation_plan(
         self.orientation_fiber_angles = None
     else:
         self.orientation_fiber_angles = np.asarray(fiber_angles)
-
-    
+    self.CUDA = CUDA
 
     # Calculate wavelenth
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
@@ -84,6 +99,20 @@ def orientation_plan(
     # store the radial and intensity scaling to use later for generating test patterns
     self.orientation_radial_power = radial_power
     self.orientation_intensity_power = intensity_power
+
+    # Calculate the ratio between coarse and fine refinement
+    if angle_coarse_zone_axis is not None:
+        self.orientation_refine = True
+        self.orientation_refine_ratio = np.round(
+            angle_coarse_zone_axis/angle_step_zone_axis).astype('int')
+        self.orientation_angle_coarse = angle_coarse_zone_axis
+        if angle_refine_range is None:
+            self.orientation_refine_range = angle_coarse_zone_axis
+        else:
+            self.orientation_refine_range = angle_refine_range
+    else:
+        self.orientation_refine_ratio = 1.0
+        self.orientation_refine = False
 
     # Handle the "auto" case first, since it works by overriding zone_axis_range,
     #   fiber_axis, and fiber_angles then using the regular parser:
@@ -142,43 +171,6 @@ def orientation_plan(
             v2 = np.cross(v3, self.orientation_fiber_axis,)
             v2 = v2 / np.linalg.norm(v2)
             v3 = v3 / np.linalg.norm(v3)
-
-            # v2 = self.lat_real[0,:]
-            # v3 = np.cross(self.orientation_fiber_axis, v2)
-
-
-            # # else:
-            # #     self.orientation_fiber_axis = self.crystal_to_cartesian(
-            # #         self.orientation_fiber_axis
-            # #     )
-
-            # # Generate 2 perpendicular vectors to self.orientation_fiber_axis
-            # # TESTING - different defaults for the zone axis ranges
-            # # if np.sum(np.abs(
-            # #     self.orientation_fiber_axis - np.array([0.0, 1.0, 0.0])
-            # #     )) < 1e-6:
-            # #     v0 = np.array([1.0, 0.0, 0.0])
-            # # else:
-            # #     v0 = np.array([0.0, -1.0, 0.0])
-            # if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
-            #     - np.array([1.0, 0.0, 0.0])) < 1e-6:
-            #     v0 = np.array([0.0, -1.0, 0.0])
-            # else:
-            #     v0 = np.array([1.0, 0.0, 0.0])
-            # if np.linalg.norm(np.abs(self.orientation_fiber_axis) \
-            #     - np.array([0.0, 1.0, 0.0])) < 1e-6:
-            #     v0 = np.array([1.0, 0.0, 0.0])
-            # else:
-            #     v0 = np.array([0.0, 1.0, 0.0])
-
-            # # v2 = np.cross(self.orientation_fiber_axis, v0)
-            # # v3 = np.cross(v2, self.orientation_fiber_axis)
-            # # v2 = v2 / np.linalg.norm(v2)
-            # # v3 = v3 / np.linalg.norm(v3)
-            # v2 = np.cross(v0, self.orientation_fiber_axis,)
-            # v3 = np.cross(self.orientation_fiber_axis, v2)
-            # v2 = v2 / np.linalg.norm(v2)
-            # v3 = v3 / np.linalg.norm(v3)
 
             if self.orientation_fiber_angles[0] == 0:
                 self.orientation_zone_axis_range = np.vstack(
@@ -250,11 +242,6 @@ def orientation_plan(
 
     else:
         self.orientation_zone_axis_range = np.array(zone_axis_range, dtype="float")
-        # if not self.cartesian_directions:
-        #     for a0 in range(zone_axis_range.shape[0]):
-        #         self.orientation_zone_axis_range[a0, :] = self.crystal_to_cartesian(
-        #             self.orientation_zone_axis_range[a0, :]
-        #         )
 
         # Define 3 vectors which span zone axis orientation range, normalize
         if zone_axis_range.shape[0] == 3:
@@ -301,12 +288,13 @@ def orientation_plan(
             * self.orientation_zone_axis_range[2, :]
         )
     )
-    self.orientation_zone_axis_steps = np.round(
-        np.maximum(
-            (180 / np.pi) * angle_u_v / angle_step_zone_axis,
-            (180 / np.pi) * angle_u_w / angle_step_zone_axis,
-        )
-    ).astype(np.int)
+    step = np.maximum(
+        (180 / np.pi) * angle_u_v / angle_step_zone_axis,
+        (180 / np.pi) * angle_u_w / angle_step_zone_axis,
+    )
+    self.orientation_zone_axis_steps = (np.round(
+        step / self.orientation_refine_ratio
+        ) * self.orientation_refine_ratio).astype(np.int)
 
     if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
         self.orientation_num_zones = int(1)
@@ -567,6 +555,14 @@ def orientation_plan(
         ).astype("int")
         self.orientation_inds[:, 2] = orientation_sector
 
+    # If needed, create coarse orientation sieve
+    if self.orientation_refine:
+        self.orientation_sieve = np.logical_and(
+            np.mod(self.orientation_inds[:, 0], self.orientation_refine_ratio) == 0,
+            np.mod(self.orientation_inds[:, 1], self.orientation_refine_ratio) == 0)
+        if self.CUDA:
+            self.orientation_sieve_CUDA = cp.asarray(self.orientation_sieve)
+
     # Convert to spherical coordinates
     elev = np.arctan2(
         np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
@@ -617,7 +613,13 @@ def orientation_plan(
         ),
         dtype="float",
     )
-
+    # self.orientation_ref_1D = np.zeros(
+    #     (
+    #         self.orientation_num_zones,
+    #         np.size(self.orientation_shell_radii),
+    #     ),
+    #     dtype="float",
+    # )
 
     # If possible,  Get symmetry operations for this spacegroup, store in matrix form
     if self.pymatgen_available:
@@ -651,7 +653,7 @@ def orientation_plan(
                 keep[sub] = False
         self.symmetry_operators = self.symmetry_operators[keep]
         self.symmetry_reduction = self.symmetry_reduction[keep]
-    
+
         if self.orientation_fiber_angles is not None \
             and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3:
             zone_axis_range_flip = self.orientation_zone_axis_range.copy()
@@ -667,7 +669,6 @@ def orientation_plan(
                     (zone_axis_range_inv.T @ self.symmetry_operators[a0+num_sym]).T
 
     # Calculate rotation matrices for zone axes
-    # for a0 in tqdmnd(np.arange(self.orientation_num_zones),desc='Computing orientation basis',unit=' terms',unit_scale=True):
     for a0 in np.arange(self.orientation_num_zones):
         m1z = np.array(
             [
@@ -718,6 +719,7 @@ def orientation_plan(
             ind_radial = self.orientation_shell_index[a1]
 
             if keep[a1] and ind_radial >= 0:
+                # 2D orientation plan
                 self.orientation_ref[a0, ind_radial, :] += (
                     np.power(self.orientation_shell_radii[ind_radial], radial_power)
                     * np.power(self.struct_factors_int[a1], intensity_power)
@@ -742,24 +744,29 @@ def orientation_plan(
                     )
                 )
 
-        # Normalization
-        self.orientation_ref[a0, :, :] /= np.sqrt(
-            np.sum(self.orientation_ref[a0, :, :] ** 2)
-        )
+        orientation_ref_norm = np.sqrt(np.sum(
+            self.orientation_ref[a0, :, :] ** 2))
+        if orientation_ref_norm > 0:
+            self.orientation_ref[a0, :, :] /= orientation_ref_norm
 
     # Maximum value
     self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
     # Fourier domain along angular axis
-    self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+    if self.CUDA:
+        self.orientation_ref = cp.asarray(self.orientation_ref)
+        self.orientation_ref = cp.conj(cp.fft.fft(self.orientation_ref))
+    else:
+        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
 def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
-    inversion_symmetry=True,
-    multiple_corr_reset=True,
+    min_number_peaks = 3,
+    inversion_symmetry = True,
+    multiple_corr_reset = False,
     progress_bar: bool = True,
 ):
     '''
@@ -769,7 +776,7 @@ def match_orientations(
     orientation_map = OrientationMap(
         num_x=bragg_peaks_array.shape[0],
         num_y=bragg_peaks_array.shape[1],
-        num_matches=num_matches_return) 
+        num_matches=num_matches_return)
 
     for rx, ry in tqdmnd(
         *bragg_peaks_array.shape,
@@ -781,6 +788,7 @@ def match_orientations(
         orientation = self.match_single_pattern(
             bragg_peaks_array.get_pointlist(rx, ry),
             num_matches_return=num_matches_return,
+            min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
             multiple_corr_reset=multiple_corr_reset,
             plot_corr=False,
@@ -795,16 +803,15 @@ def match_single_pattern(
     self,
     bragg_peaks: PointList,
     num_matches_return: int = 1,
-    multiple_corr_reset=True,
-    inversion_symmetry=True,
+    min_number_peaks = 3,
+    inversion_symmetry = True,
+    multiple_corr_reset = False,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,
     figsize: Union[list, tuple, np.ndarray] = (12, 4),
     verbose: bool = False,
-    # subpixel_tilt: bool = False,
     # plot_corr_3D: bool = False,
-    # return_corr: bool = False,
     ):
     """
     Solve for the best fit orientation of a single diffraction pattern.
@@ -812,37 +819,39 @@ def match_single_pattern(
     Args:
         bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
         num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
-        multiple_corr_reset (bool):   keep original correlation score for multiple matches
+        min_number_peaks (int):       Minimum number of peaks required to perform ACOM matching
         inversion_symmetry (bool):    check for inversion symmetry in the matches
+        multiple_corr_reset (bool):   keep original correlation score for multiple matches
         subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
         plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
         plot_corr (bool):             set to true to plot the resulting correlogram
+        returnfig (bool):             Return figure handles
+        figsize (list):               size of figure
+        verbose (bool):               Print the fitted zone axes, correlation scores
+        CUDA (bool):                  Enable CUDA for the FFT steps
 
     Returns:
         orientation (Orientation):    Orientation class containing all outputs
         fig, ax (handles):            Figure handles for the plotting output
     """
 
+
+    # init orientation output
+    orientation = Orientation(num_matches=num_matches_return)
+    if bragg_peaks.data.shape[0] < min_number_peaks:
+        return orientation
+
     # get bragg peak data
     qx = bragg_peaks.data["qx"]
     qy = bragg_peaks.data["qy"]
     intensity = bragg_peaks.data["intensity"]
 
-    # init orientation output
-    orientation = Orientation(num_matches=num_matches_return)
-
     # other init
-    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]    
+    dphi = self.orientation_gamma[1] - self.orientation_gamma[0]
     corr_value = np.zeros(self.orientation_num_zones)
     corr_in_plane_angle = np.zeros(self.orientation_num_zones)
     if inversion_symmetry:
         corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
-
-    # if num_matches_return == 1:
-    #     orientation_output = np.zeros((3, 3))
-    # else:
-    #     orientation_output = np.zeros((3, 3, num_matches_return))
-    #     corr_output = np.zeros((num_matches_return))
 
     # loop over the number of matches to return
     for match_ind in range(num_matches_return):
@@ -894,149 +903,306 @@ def match_single_pattern(
                     axis=0,
                 )
 
+        # Determine the RMS signal from im_polar for the first match.
+        # Note that we use scaling slightly below RMS so that following matches 
+        # don't have higher correlating scores than previous matches.
+        if multiple_corr_reset is False and num_matches_return > 1:
+            if match_ind == 0:
+                im_polar_scale_0 = np.mean(im_polar**2)**0.4
+            else:
+                im_polar_scale = np.mean(im_polar**2)**0.4
+                im_polar *= im_polar_scale_0 / im_polar_scale
+                # im_polar /= np.sqrt(np.mean(im_polar**2))
+                # im_polar *= im_polar_0_rms
+
+        # If later refinement is performed, we need to keep the original image's polar tranform if corr reset is enabled
+        if self.orientation_refine:
+            if multiple_corr_reset:
+                if match_ind == 0:
+                    if self.CUDA:
+                        im_polar_refine = cp.asarray(im_polar.copy())
+                    else:
+                        im_polar_refine = im_polar.copy()
+            else:
+                if self.CUDA:
+                    im_polar_refine = cp.asarray(im_polar.copy())
+                else:
+                    im_polar_refine = im_polar.copy()
+
         # Plot polar space image if needed
-        if plot_polar is True and match_ind==0:
-            # print(match_ind)
+        if plot_polar is True: # and match_ind==0:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             ax.imshow(im_polar)
+            plt.show()
 
         # FFT along theta
-        im_polar_fft = np.fft.fft(im_polar)
+        if self.CUDA:
+            im_polar_fft = cp.fft.fft(cp.asarray(im_polar))
+        else:
+            im_polar_fft = np.fft.fft(im_polar)
+        if self.orientation_refine:
+            if self.CUDA:
+                im_polar_refine_fft = cp.fft.fft(cp.asarray(im_polar_refine))
+            else:
+                im_polar_refine_fft = np.fft.fft(im_polar_refine)
 
-        # Calculate orientation correlogram
-        corr_full = np.maximum(
-            np.sum(
-                np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
-                axis=1,
-            ),
-            0,
-        )
+
+        # Calculate full orientation correlogram
+        if self.orientation_refine:
+            corr_full = np.zeros((
+                self.orientation_num_zones,
+                self.orientation_in_plane_steps,
+                ))
+            if self.CUDA:
+                corr_full[self.orientation_sieve,:] = cp.maximum(
+                    cp.sum(
+                        cp.real(cp.fft.ifft(
+                            self.orientation_ref[self.orientation_sieve_CUDA,:,:] \
+                            * im_polar_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                ).get()
+            else:
+                corr_full[self.orientation_sieve,:] = np.maximum(
+                    np.sum(
+                        np.real(np.fft.ifft(
+                            self.orientation_ref[self.orientation_sieve,:,:] \
+                            * im_polar_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                )
+
+        else:
+            if self.CUDA:
+                corr_full = np.maximum(
+                    np.sum(
+                        np.real(cp.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                ).get()
+            else:
+                corr_full = np.maximum(
+                    np.sum(
+                        np.real(np.fft.ifft(self.orientation_ref * im_polar_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                )
+
+        # Get maximum (non inverted) correlation value
         ind_phi = np.argmax(corr_full, axis=1)
 
-        # Calculate orientation correlogram for inverse pattern
+        # Calculate orientation correlogram for inverse pattern (in-plane mirror)
         if inversion_symmetry:
-            corr_full_inv = np.maximum(
-                np.sum(
-                    np.real(
-                        np.fft.ifft(
-                            self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
-                        )
-                    ),
-                    axis=1,
-                ),
-                0,
-            )
+            if self.orientation_refine:
+                corr_full_inv = np.zeros((
+                    self.orientation_num_zones,
+                    self.orientation_in_plane_steps,
+                    ))
+                if self.CUDA:
+                    corr_full_inv[self.orientation_sieve,:] = cp.maximum(
+                        cp.sum(
+                            cp.real(
+                                cp.fft.ifft(
+                                    self.orientation_ref[self.orientation_sieve_CUDA,:,:] \
+                                    * cp.conj(im_polar_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    ).get()
+                else:
+                    corr_full_inv[self.orientation_sieve,:] = np.maximum(
+                        np.sum(
+                            np.real(
+                                np.fft.ifft(
+                                    self.orientation_ref[self.orientation_sieve,:,:] \
+                                    * np.conj(im_polar_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    )
+            else:
+                if self.CUDA:
+                    corr_full_inv = np.maximum(
+                        np.sum(
+                            np.real(
+                                cp.fft.ifft(
+                                    self.orientation_ref * cp.conj(im_polar_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    ).get()
+                else:
+                    corr_full_inv = np.maximum(
+                        np.sum(
+                            np.real(
+                                np.fft.ifft(
+                                    self.orientation_ref * np.conj(im_polar_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    )
             ind_phi_inv = np.argmax(corr_full_inv, axis=1)
             corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
 
-        
-        # Testing of direct index correlogram computation
-        # # init
-        # corr_full = np.zeros((
-        #     self.orientation_num_zones,
-        #     self.orientation_in_plane_steps)) 
-        # if inversion_symmetry:
-        #     corr_full_inv = np.zeros((
-        #         self.orientation_num_zones,
-        #         self.orientation_in_plane_steps))
-
-
-        # for ind_peak, radius in enumerate(qr):
-        #     ip = qphi[ind_peak] / dphi
-        #     fp = np.floor(ip).astype('int')
-        #     dp = ip - fp
-
-        #     dqr_all = np.abs(self.orientation_shell_radii - radius)
-        #     sub = dqr_all < self.orientation_kernel_size
-
-        #     # for ind_radial, dqr in enumerate(dqr_all):
-        #         # if dqr < self.orientation_kernel_size:
-        #     weight = (1 - dqr_all[sub] / self.orientation_kernel_size) \
-        #         *  np.power(np.maximum(intensity[ind_peak], 0),self.orientation_intensity_power) \
-        #         *  np.power(qr[ind_peak],self.orientation_radial_power)
-
-        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
-        #     corr_full += np.sum(np.roll(self.orientation_ref[:,sub,:],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)
-
-        #     if inversion_symmetry:
-        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp  ,axis=2) * (weight*(1-dp))[None,:,None],axis=1)
-        #         corr_full += np.sum(np.roll(self.orientation_ref[:,sub,::-1],-fp-1,axis=2) * (weight*(  dp))[None,:,None],axis=1)          
-
-
-
-        #     # inds = np.argwhere(dqr < self.orientation_kernel_size)
-
-        #     # ip = qphi[ind_peak] / dphi
-        #     # fp = np.floor(ip)
-        #     # dp = ip - fp
-
-        #     # for ind_radial in inds:
-
-        #     #     weight = (1 - dqr[ind_radial] / self.orientation_kernel_size) \
-        #     #         *  np.power(np.max(intensity[ind_peak], 0),self.orientation_intensity_power)
-
-        #     #     print(ind_radial)
-        #     #     # print(corr_full.shape)
-        #     #     # print(type(self.orientation_ref))
-        #     #     corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,ind_radial),:],-fp  ,axis=1)
-        #     #     corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],-fp-1,axis=1)
-
-        #     #     if inversion_symmetry:
-        #     #         corr_full += (weight*(1-dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp  ,axis=1)
-        #     #         corr_full += (weight*(  dp))*np.roll(self.orientation_ref[:,int(ind_radial),:],fp+1,axis=1)                    
-
-        # # Get best fit in-plane rotations
-        # ind_phi = np.argmax(corr_full, axis=1)
-        # if inversion_symmetry:
-        #     ind_phi_inv = np.argmax(corr_full_inv, axis=1)
-
-
-
         # Find best match for each zone axis
+        corr_value[:] = 0
         for a0 in range(self.orientation_num_zones):
-            # Correlation score
-            if inversion_symmetry:
-                if corr_full_inv[a0, ind_phi_inv[a0]] > corr_full[a0, ind_phi[a0]]:
-                    corr_value[a0] = corr_full_inv[a0, ind_phi_inv[a0]]
-                    corr_inv[a0] = True
+            if (self.orientation_refine is False) or self.orientation_sieve[a0]:
+
+                # Correlation score
+                if inversion_symmetry:
+                    if corr_full_inv[a0, ind_phi_inv[a0]] > corr_full[a0, ind_phi[a0]]:
+                        corr_value[a0] = corr_full_inv[a0, ind_phi_inv[a0]]
+                        corr_inv[a0] = True
+                    else:
+                        corr_value[a0] = corr_full[a0, ind_phi[a0]]
                 else:
                     corr_value[a0] = corr_full[a0, ind_phi[a0]]
-            else:
-                corr_value[a0] = corr_full[a0, ind_phi[a0]]
 
-            # Subpixel angular fit
-            if inversion_symmetry and corr_inv[a0]:
-                inds = np.mod(
-                    ind_phi_inv[a0] + np.arange(-1, 2), self.orientation_gamma.size
-                ).astype("int")
-                c = corr_full_inv[a0, inds]
-                if np.max(c) > 0:
-                    dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
-                    corr_in_plane_angle[a0] = (
-                        self.orientation_gamma[ind_phi_inv[a0]] + dc * dphi
-                    ) + np.pi
-            else:
-                inds = np.mod(
-                    ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
-                ).astype("int")
-                c = corr_full[a0, inds]
-                if np.max(c) > 0:
-                    dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
-                    corr_in_plane_angle[a0] = (
-                        self.orientation_gamma[ind_phi[a0]] + dc * dphi
-                    )
+                # In-plane sub-pixel angular fit
+                if inversion_symmetry and corr_inv[a0]:
+                    inds = np.mod(
+                        ind_phi_inv[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full_inv[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi_inv[a0]] + dc * dphi
+                        ) + np.pi
+                else:
+                    inds = np.mod(
+                        ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi[a0]] + dc * dphi
+                        )
 
-        # keep plotting image if needed 
-        if plot_corr and match_ind == 0:
-            corr_plot = corr_value
-
-        # If needed, keep correlation values for additional matches
-        if multiple_corr_reset and num_matches_return > 1 and match_ind == 0:
+        # If needed, keep original polar image to recompute the correlations
+        if multiple_corr_reset and num_matches_return > 1 and match_ind == 0 and not self.orientation_refine:
             corr_value_keep = corr_value.copy()
             corr_in_plane_angle_keep = corr_in_plane_angle.copy()
 
         # Determine the best fit orientation
         ind_best_fit = np.unravel_index(np.argmax(corr_value), corr_value.shape)[0]
+
+
+        ############################################################
+        # If needed, perform fine step refinement of the zone axis #
+        ############################################################
+        if self.orientation_refine:
+            mask_refine = np.arccos(np.clip(np.sum(self.orientation_vecs \
+                * self.orientation_vecs[ind_best_fit,:],axis=1),-1,1)) \
+                < np.deg2rad(self.orientation_refine_range)
+            if self.CUDA:
+                mask_refine_CUDA = cp.asarray(mask_refine)
+
+            if self.CUDA:
+                corr_full[mask_refine,:] = cp.maximum(
+                    cp.sum(
+                        cp.real(cp.fft.ifft(
+                            self.orientation_ref[mask_refine_CUDA,:,:] \
+                            * im_polar_refine_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                ).get()
+            else:
+                corr_full[mask_refine,:] = np.maximum(
+                    np.sum(
+                        np.real(np.fft.ifft(
+                            self.orientation_ref[mask_refine,:,:] \
+                            * im_polar_refine_fft[None, :, :])),
+                        axis=1,
+                    ),
+                    0,
+                )
+
+            # Get maximum (non inverted) correlation value
+            ind_phi = np.argmax(corr_full, axis=1)
+
+            # Inversion symmetry
+            if inversion_symmetry:
+                if self.CUDA:
+                    corr_full_inv[mask_refine,:] = cp.maximum(
+                        cp.sum(
+                            cp.real(
+                                cp.fft.ifft(
+                                    self.orientation_ref[mask_refine_CUDA,:,:] \
+                                    * cp.conj(im_polar_refine_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    ).get()
+                else:
+                    corr_full_inv[mask_refine,:] = np.maximum(
+                        np.sum(
+                            np.real(
+                                np.fft.ifft(
+                                    self.orientation_ref[mask_refine,:,:] \
+                                    * np.conj(im_polar_refine_fft)[None, :, :]
+                                )
+                            ),
+                            axis=1,
+                        ),
+                        0,
+                    )
+                ind_phi_inv = np.argmax(corr_full_inv, axis=1)
+
+
+            # Determine best in-plane correlation
+            for a0 in np.argwhere(mask_refine):
+                # Correlation score
+                if inversion_symmetry:
+                    if corr_full_inv[a0, ind_phi_inv[a0]] > corr_full[a0, ind_phi[a0]]:
+                        corr_value[a0] = corr_full_inv[a0, ind_phi_inv[a0]]
+                        corr_inv[a0] = True
+                    else:
+                        corr_value[a0] = corr_full[a0, ind_phi[a0]]
+                else:
+                    corr_value[a0] = corr_full[a0, ind_phi[a0]]
+
+                # Subpixel angular fit
+                if inversion_symmetry and corr_inv[a0]:
+                    inds = np.mod(
+                        ind_phi_inv[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full_inv[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi_inv[a0]] + dc * dphi
+                        ) + np.pi
+                else:
+                    inds = np.mod(
+                        ind_phi[a0] + np.arange(-1, 2), self.orientation_gamma.size
+                    ).astype("int")
+                    c = corr_full[a0, inds]
+                    if np.max(c) > 0:
+                        dc = (c[2] - c[0]) / (4*c[1] - 2*c[0] - 2*c[2])
+                        corr_in_plane_angle[a0] = (
+                            self.orientation_gamma[ind_phi[a0]] + dc * dphi
+                        )
+
+            # Determine the new best fit orientation
+            ind_best_fit = np.unravel_index(np.argmax(corr_value * mask_refine[None,:]), corr_value.shape)[0]
 
         # Verify current match has a correlation > 0
         if corr_value[ind_best_fit] > 0:
@@ -1046,7 +1212,7 @@ def match_single_pattern(
             )
 
             # apply in-plane rotation, and inversion if needed
-            if multiple_corr_reset and match_ind > 0:
+            if multiple_corr_reset and match_ind > 0 and self.orientation_refine is False:
                 phi = corr_in_plane_angle_keep[ind_best_fit]
             else:
                 phi = corr_in_plane_angle[ind_best_fit]
@@ -1070,11 +1236,14 @@ def match_single_pattern(
 
             # Output best fit values into Orientation class
             orientation.matrix[match_ind] = orientation_matrix
-            
-            if multiple_corr_reset and match_ind > 0:
-                orientation.corr[match_ind] = corr_value_keep[ind_best_fit]
-            else:
+
+            if self.orientation_refine:
                 orientation.corr[match_ind] = corr_value[ind_best_fit]
+            else:
+                if multiple_corr_reset and match_ind > 0:
+                    orientation.corr[match_ind] = corr_value_keep[ind_best_fit]
+                else:
+                    orientation.corr[match_ind] = corr_value[ind_best_fit]
 
             if inversion_symmetry and corr_inv[ind_best_fit]:
                 ind_phi = ind_phi_inv[ind_best_fit]
@@ -1088,7 +1257,7 @@ def match_single_pattern(
 
             orientation.angles[match_ind,:] = self.orientation_rotation_angles[ind_best_fit,:]
             orientation.angles[match_ind,2] += phi
-            
+
             # If point group is known, use pymatgen to caculate the symmetry-
             # reduced orientation matrix, producing the crystal direction family.
             if self.pymatgen_available:
@@ -1096,11 +1265,10 @@ def match_single_pattern(
                     orientation,
                     match_ind=match_ind,
                     )
-                
+
         else:
             # No more matches are detected, so output default orientation matrix and leave corr = 0
             orientation.matrix[match_ind] = np.squeeze(self.orientation_rotation_matrices[0, :, :])
-
 
         if verbose:
             if self.pymatgen_available:
@@ -1169,258 +1337,236 @@ def match_single_pattern(
             intensity = intensity[~remove]
 
 
-    # plotting correlation image
-    if plot_corr is True:
+        # plotting correlation image
+        if plot_corr is True:
+            corr_plot = corr_value.copy()
+            sig_in_plane = np.squeeze(corr_full[ind_best_fit, :]).copy()
 
-        if self.orientation_full:
-            fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 2]))
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
+            if self.orientation_full:
+                fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 2]))
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
 
-            im_corr_zone_axis = np.zeros(
-                (
-                    2 * self.orientation_zone_axis_steps + 1,
-                    2 * self.orientation_zone_axis_steps + 1,
+                im_corr_zone_axis = np.zeros(
+                    (
+                        2 * self.orientation_zone_axis_steps + 1,
+                        2 * self.orientation_zone_axis_steps + 1,
+                    )
                 )
-            )
 
-            sub = self.orientation_inds[:, 2] == 0
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 1
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 2
-            x_inds = (
-                self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 3
-            x_inds = (
-                self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
-            ).astype("int") + self.orientation_zone_axis_steps
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-
-        elif self.orientation_half:
-            fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 1]))
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
-
-            im_corr_zone_axis = np.zeros(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps * 2 + 1,
+                sub = self.orientation_inds[:, 2] == 0
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
                 )
-            )
-
-            sub = self.orientation_inds[:, 2] == 0
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int")
-            y_inds = (
-                self.orientation_inds[sub, 1].astype("int")
-                + self.orientation_zone_axis_steps
-            )
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            sub = self.orientation_inds[:, 2] == 1
-            x_inds = (
-                self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
-            ).astype("int")
-            y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
-                sub, 1
-            ].astype("int")
-            inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-            im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-
-            im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-
-        else:
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            cmin = np.min(corr_plot)
-            cmax = np.max(corr_plot)
-
-            im_corr_zone_axis = np.zeros(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps + 1,
-                )
-            )
-            im_mask = np.ones(
-                (
-                    self.orientation_zone_axis_steps + 1,
-                    self.orientation_zone_axis_steps + 1,
-                ),
-                dtype="bool",
-            )
-
-            # Image indices
-            x_inds = (self.orientation_inds[:, 0] - self.orientation_inds[:, 1]).astype(
-                "int"
-            )
-            y_inds = self.orientation_inds[:, 1].astype("int")
-
-            # Check vertical range of the orientation triangle.
-            if self.orientation_fiber_angles is not None \
-                and np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
-                # Orientation covers only top of orientation sphere
-
                 inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
-                im_corr_zone_axis.ravel()[inds_1D] = corr_plot
-                im_mask.ravel()[inds_1D] = False
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 1
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 2
+                x_inds = (
+                    self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
+                )
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 3
+                x_inds = (
+                    self.orientation_inds[sub, 1] - self.orientation_inds[sub, 0]
+                ).astype("int") + self.orientation_zone_axis_steps
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+
+            elif self.orientation_half:
+                fig, ax = plt.subplots(1, 2, figsize=figsize * np.array([2, 1]))
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
+
+                im_corr_zone_axis = np.zeros(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps * 2 + 1,
+                    )
+                )
+
+                sub = self.orientation_inds[:, 2] == 0
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int")
+                y_inds = (
+                    self.orientation_inds[sub, 1].astype("int")
+                    + self.orientation_zone_axis_steps
+                )
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                sub = self.orientation_inds[:, 2] == 1
+                x_inds = (
+                    self.orientation_inds[sub, 0] - self.orientation_inds[sub, 1]
+                ).astype("int")
+                y_inds = self.orientation_zone_axis_steps - self.orientation_inds[
+                    sub, 1
+                ].astype("int")
+                inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+
+                im_plot = (im_corr_zone_axis - cmin) / (cmax - cmin)
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
 
             else:
-                # Orientation covers full vertical range of orientation sphere.
-                # top half
-                sub = self.orientation_inds[:,2] == 0
-                inds_1D = np.ravel_multi_index([x_inds[sub], y_inds[sub]], im_corr_zone_axis.shape)
-                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-                im_mask.ravel()[inds_1D] = False
-                # bottom half
-                sub = self.orientation_inds[:,2] == 1
-                inds_1D = np.ravel_multi_index([
-                    self.orientation_zone_axis_steps - y_inds[sub], 
-                    self.orientation_zone_axis_steps - x_inds[sub]
-                    ],im_corr_zone_axis.shape)
-                im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
-                im_mask.ravel()[inds_1D] = False
+                fig, ax = plt.subplots(1, 2, figsize=figsize)
+                cmin = np.min(corr_plot)
+                cmax = np.max(corr_plot)
+
+                im_corr_zone_axis = np.zeros(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps + 1,
+                    )
+                )
+                im_mask = np.ones(
+                    (
+                        self.orientation_zone_axis_steps + 1,
+                        self.orientation_zone_axis_steps + 1,
+                    ),
+                    dtype="bool",
+                )
+
+                # Image indices
+                x_inds = (self.orientation_inds[:, 0] - self.orientation_inds[:, 1]).astype(
+                    "int"
+                )
+                y_inds = self.orientation_inds[:, 1].astype("int")
+
+                # Check vertical range of the orientation triangle.
+                if self.orientation_fiber_angles is not None \
+                    and np.abs(self.orientation_fiber_angles[0] - 180.0) > 1e-3:
+                    # Orientation covers only top of orientation sphere
+
+                    inds_1D = np.ravel_multi_index([x_inds, y_inds], im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot
+                    im_mask.ravel()[inds_1D] = False
+
+                else:
+                    # Orientation covers full vertical range of orientation sphere.
+                    # top half
+                    sub = self.orientation_inds[:,2] == 0
+                    inds_1D = np.ravel_multi_index([x_inds[sub], y_inds[sub]], im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                    im_mask.ravel()[inds_1D] = False
+                    # bottom half
+                    sub = self.orientation_inds[:,2] == 1
+                    inds_1D = np.ravel_multi_index([
+                        self.orientation_zone_axis_steps - y_inds[sub], 
+                        self.orientation_zone_axis_steps - x_inds[sub]
+                        ],im_corr_zone_axis.shape)
+                    im_corr_zone_axis.ravel()[inds_1D] = corr_plot[sub]
+                    im_mask.ravel()[inds_1D] = False
+
+                if cmax > cmin:
+                    im_plot = np.ma.masked_array(
+                        (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
+                    )
+                else:
+                    im_plot = im_corr_zone_axis
 
 
+                ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
+                ax[0].spines["left"].set_color("none")
+                ax[0].spines["right"].set_color("none")
+                ax[0].spines["top"].set_color("none")
+                ax[0].spines["bottom"].set_color("none")
 
-            # print(self.orientation_inds)
-            # print(np.vstack((x_inds,y_inds)))
+                inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
+                ax[0].scatter(
+                    inds_plot[1],
+                    inds_plot[0],
+                    s=120,
+                    linewidth=2,
+                    facecolors="none",
+                    edgecolors="r",
+                )
 
+                if np.abs(self.cell[5]-120.0) < 1e-6:
+                    label_0 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[0, :])))
+                    label_1 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[1, :])))
+                    label_2 = self.rational_ind(
+                        self.lattice_to_hexagonal(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[2, :])))
+                else:
+                    label_0 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[0, :]))
+                    label_1 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[1, :]))
+                    label_2 = self.rational_ind(
+                        self.cartesian_to_lattice(
+                        self.orientation_zone_axis_range[2, :]))
 
+                ax[0].set_xticks([0, self.orientation_zone_axis_steps])
+                ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
+                ax[0].xaxis.tick_top()
 
-            im_plot = np.ma.masked_array(
-                (im_corr_zone_axis - cmin) / (cmax - cmin), mask=im_mask
+                ax[0].set_yticks([self.orientation_zone_axis_steps])
+                ax[0].set_yticklabels([str(label_1)], size=14)
+
+            # In-plane rotation
+            # sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
+            sig_in_plane_max = np.max(sig_in_plane)
+            if sig_in_plane_max > 0:
+                sig_in_plane /= sig_in_plane_max
+            ax[1].plot(
+                self.orientation_gamma * 180 / np.pi,
+                sig_in_plane,
             )
 
-            ax[0].imshow(im_plot, cmap="viridis", vmin=0.0, vmax=1.0)
-            ax[0].spines["left"].set_color("none")
-            ax[0].spines["right"].set_color("none")
-            ax[0].spines["top"].set_color("none")
-            ax[0].spines["bottom"].set_color("none")
+            # Add markers for the best fit 
+            tol = 0.01
+            sub = sig_in_plane > 1 - tol
+            ax[1].scatter(
+                    self.orientation_gamma[sub] * 180 / np.pi,
+                    sig_in_plane[sub],
+                    s=120,
+                    linewidth=2,
+                    facecolors="none",
+                    edgecolors="r",
+                )
 
-            inds_plot = np.unravel_index(np.argmax(im_plot, axis=None), im_plot.shape)
-            ax[0].scatter(
-                inds_plot[1],
-                inds_plot[0],
-                s=120,
-                linewidth=2,
-                facecolors="none",
-                edgecolors="r",
-            )
+            ax[1].set_xlabel("In-plane rotation angle [deg]", size=16)
+            ax[1].set_ylabel("Corr. of Best Fit Zone Axis", size=16)
+            ax[1].set_ylim([0, 1.03])
 
-            # label_0 = self.orientation_zone_axis_range[0, :]
-            # label_1 = self.orientation_zone_axis_range[1, :]
-            # label_2 = self.orientation_zone_axis_range[2, :]
-
-            # label_0 = np.round(label_0, decimals=3)
-            # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-            # label_0 = np.round(label_0, decimals=3)
-
-            # label_1 = np.round(label_1, decimals=3)
-            # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-            # label_1 = np.round(label_1, decimals=3)
-
-            # label_2 = np.round(label_2, decimals=3)
-            # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-            # label_2 = np.round(label_2, decimals=3)
-
-
-            if np.abs(self.cell[5]-120.0) < 1e-6:
-                label_0 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[0, :])))
-                label_1 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[1, :])))
-                label_2 = self.rational_ind(
-                    self.lattice_to_hexagonal(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[2, :])))
-            else:
-                label_0 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[0, :]))
-                label_1 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[1, :]))
-                label_2 = self.rational_ind(
-                    self.cartesian_to_lattice(
-                    self.orientation_zone_axis_range[2, :]))
-            # label_0 = np.round(label_0, decimals=2)
-            # label_1 = np.round(label_1, decimals=2)
-            # label_2 = np.round(label_2, decimals=2)
-
-
-            ax[0].set_xticks([0, self.orientation_zone_axis_steps])
-            ax[0].set_xticklabels([str(label_0), str(label_2)], size=14)
-            ax[0].xaxis.tick_top()
-
-            ax[0].set_yticks([self.orientation_zone_axis_steps])
-            ax[0].set_yticklabels([str(label_1)], size=14)
-
-
-        # In-plane rotation
-        sig_in_plane = np.squeeze(corr_full[ind_best_fit, :])
-        sig_in_plane = sig_in_plane / np.max(sig_in_plane)
-        ax[1].plot(
-            self.orientation_gamma * 180 / np.pi,
-            sig_in_plane,
-        )
-
-        # Add markers for the best fit 
-        tol = 0.01
-        sub = sig_in_plane > 1 - tol
-        ax[1].scatter(
-                self.orientation_gamma[sub] * 180 / np.pi,
-                sig_in_plane[sub],
-                s=120,
-                linewidth=2,
-                facecolors="none",
-                edgecolors="r",
-            )
-
-        ax[1].set_xlabel("In-plane rotation angle [deg]", size=16)
-        ax[1].set_ylabel("Corr. of Best Fit Zone Axis", size=16)
-        ax[1].set_ylim([0, 1.03])
-
-        plt.show()
-
+            plt.show()
 
     if returnfig:
         return orientation, fig, ax
@@ -1494,6 +1640,138 @@ def orientation_map_to_orix_CrystalMap(self,
     return (xmap, ckey) if return_color_key else xmap
 
 
+
+def calculate_strain(
+    self,
+    bragg_peaks_array: PointListArray,
+    orientation_map: OrientationMap,
+    corr_kernel_size = None,
+    sigma_excitation_error = 0.02,
+    tol_excitation_error_mult: float = 3,
+    tol_intensity: float = 1e-4,
+    k_max: Optional[float] = None,
+    min_num_peaks = 5,
+    rotation_range = None,
+    progress_bar = True,
+    ):
+    '''
+    This function takes in both a PointListArray containing Bragg peaks, and a
+    corresponding OrientationMap, and uses least squares to compute the
+    deformation tensor which transforms the simulated diffraction pattern
+    into the experimental pattern, for all probe positons.
+
+    TODO: add robust fitting?
+
+    Args:
+        bragg_peaks_array (PointListArray):   All Bragg peaks
+        orientation_map (OrientationMap):     Orientation map generated from ACOM
+        corr_kernel_size (float):           Correlation kernel size - if user does
+                                            not specify, uses self.corr_kernel_size.
+        sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+        tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
+        tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+        k_max (float):                   Maximum scattering vector
+        min_num_peaks (int):             Minimum number of peaks required.
+        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
+
+    Returns:
+        strain_map (RealSlice):  strain tensor
+
+    '''
+
+    # Initialize empty strain maps
+    strain_map = RealSlice(
+        data=np.zeros((
+            bragg_peaks_array.shape[0],
+            bragg_peaks_array.shape[1],
+            5)),
+        slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
+        name='strain_map')
+    strain_map.slices['mask'][:] = 1.0
+
+    # init values
+    if corr_kernel_size is None:
+        corr_kernel_size = self.orientation_kernel_size
+    radius_max_2 = corr_kernel_size**2
+
+    # Loop over all probe positions
+    for rx, ry in tqdmnd(
+        *bragg_peaks_array.shape,
+        desc="Calculating strains",
+        unit=" PointList",
+        disable=not progress_bar,
+        ):
+        # Get bragg peaks from experiment and reference
+        p = bragg_peaks_array.get_pointlist(rx,ry)
+
+        if p.data.shape[0] >= min_num_peaks:
+            p_ref = self.generate_diffraction_pattern(
+                orientation_map.get_orientation(rx,ry),
+                sigma_excitation_error = sigma_excitation_error,
+                tol_excitation_error_mult = tol_excitation_error_mult,
+                tol_intensity = tol_intensity,
+                k_max = k_max,
+            )
+
+            # init
+            keep = np.zeros(p.data.shape[0],dtype='bool')
+            inds_match = np.zeros(p.data.shape[0],dtype='int')
+
+            # Pair off experimental Bragg peaks with reference peaks
+            for a0 in range(p.data.shape[0]):
+                dist_2 = (p.data['qx'][a0] - p_ref.data['qx'])**2 \
+                    +   (p.data['qy'][a0] - p_ref.data['qy'])**2
+                ind_min = np.argmin(dist_2)
+
+                if dist_2[ind_min] <= radius_max_2:
+                    inds_match[a0] = ind_min
+                    keep[a0] = True
+
+            # Get all paired peaks
+            qxy = np.vstack((
+                p.data['qx'][keep],
+                p.data['qy'][keep])).T
+            qxy_ref = np.vstack((
+                p_ref.data['qx'][inds_match[keep]],
+                p_ref.data['qy'][inds_match[keep]])).T
+
+            # Apply intensity weighting from experimental measurements
+            qxy *= p.data['intensity'][keep,None]
+            qxy_ref *= p.data['intensity'][keep,None]
+
+            # Fit transformation matrix
+            # Note - not sure about transpose here 
+            # (though it might not matter if rotation isn't included)
+            m = lstsq(qxy_ref, qxy, rcond=None)[0].T
+
+            # Get the infinitesimal strain matrix
+            strain_map.slices['e_xx'][rx,ry] = 1 - m[0,0]
+            strain_map.slices['e_yy'][rx,ry] = 1 - m[1,1]
+            strain_map.slices['e_xy'][rx,ry] = -(m[0,1]+m[1,0])/2.0
+            strain_map.slices['theta'][rx,ry] =  (m[0,1]-m[1,0])/2.0
+
+            # Add finite rotation from ACOM orientation map.
+            # I am not sure about the relative signs here.
+            # Also, I need to add in the mirror operator.
+            if orientation_map.mirror[rx,ry,0]:
+                strain_map.slices['theta'][rx,ry] \
+                    += (orientation_map.angles[rx,ry,0,0] \
+                    + orientation_map.angles[rx,ry,0,2])
+            else:
+                strain_map.slices['theta'][rx,ry] \
+                    -= (orientation_map.angles[rx,ry,0,0] \
+                    + orientation_map.angles[rx,ry,0,2])
+
+        else:
+            strain_map.slices['mask'][rx,ry] = 0.0
+
+    if rotation_range is not None:
+        strain_map.slices['theta'] \
+            = np.mod(strain_map.slices['theta'],rotation_range)
+
+    return strain_map
+
+
 def save_ang_file(
     self,
     file_name,
@@ -1537,9 +1815,9 @@ def symmetry_reduce_directions(
     orientation,
     match_ind = 0,
     plot_output = False,
-    figsize=(15,6),
-    el_shift=0.0,
-    az_shift=-30.0,
+    figsize = (15,6),
+    el_shift = 0.0,
+    az_shift = -30.0,
     ):
     '''
     This function calculates the symmetry-reduced cartesian directions from
@@ -1565,20 +1843,20 @@ def symmetry_reduce_directions(
         t = np.linspace(0,1,num=num_points+1,endpoint=True)
         d = np.array([[0,1],[0,2],[1,2]])
         orientation_zone_axis_range_flip = self.orientation_zone_axis_range.copy()
-        orientation_zone_axis_range_flip[0,:] = -1*orientation_zone_axis_range_flip[0,:]        
+        orientation_zone_axis_range_flip[0,:] = -1*orientation_zone_axis_range_flip[0,:]
 
 
     # loop over orientation matrix directions
     for a0 in range(3):
         in_range = np.all(np.sum(self.symmetry_reduction * \
-            orientation.matrix[match_ind,:,a0][None,:,None], 
+            orientation.matrix[match_ind,:,a0][None,:,None],
             axis=1) >= 0,
             axis=1)
 
         orientation.family[match_ind,:,a0] = \
             self.symmetry_operators[np.argmax(in_range)] @ \
             orientation.matrix[match_ind,:,a0]
-        
+
 
         # in_range = np.all(np.sum(self.symmetry_reduction * \
         #     orientation.matrix[match_ind,:,a0][None,:,None], 
@@ -1600,9 +1878,9 @@ def symmetry_reduce_directions(
 
 
         if plot_output:
-            ax = fig.add_subplot(1, 3, a0+1, 
+            ax = fig.add_subplot(1, 3, a0+1,
                 projection='3d',
-                elev=el, 
+                elev=el,
                 azim=az)
 
             # draw orienation triangle
@@ -1623,7 +1901,7 @@ def symmetry_reduce_directions(
                     v[:,2],
                     c='k',
                     )
-                
+
 
             # if needed, draw orientation diamond
             if self.orientation_fiber_angles is not None \
