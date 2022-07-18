@@ -189,6 +189,28 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
+    def set_probe_semiangle(self,x):
+        self._params['probe_semiangle'] = x
+    def get_probe_semiangle(self):
+        return self._get_value('probe_semiangle')
+    def set_probe_param(self, x):
+        """
+        Args:
+            x (3-tuple): (probe size, x0, y0)
+        """
+        probe_semiangle, qx0, qy0 = x
+        self.set_probe_semiangle(probe_semiangle)
+        self.set_qx0(qx0)
+        self.set_qy0(qy0)
+    def get_probe_param(self):
+        probe_semiangle = self._get_value('probe_semiangle')
+        qx0 = self._get_value('qx0')
+        qy0 = self._get_value('qy0')
+        ans = (probe_semiangle,qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
+        
 
     # ellipse
     def set_a(self,x):
