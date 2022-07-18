@@ -11,7 +11,6 @@ from .utils import parse_filetype
 
 def read(
     filepath: Union[str,pathlib.Path],
-    filetype = None,
     **kwargs
     ):
     """
@@ -40,8 +39,8 @@ def read(
     assert(isinstance(filepath, (str,pathlib.Path) )), er1
     assert(exists(filepath)), er2
 
-    filetype = parse_filetype(filepath) if filetype is None else filetype
-    assert filetype == "py4DSTEM", "Incompatible file type for py4DSTEM.io.read. To import data from a non-py4DSTEM EMD file, use py4DSTEM.io.import_file"
+    filetype = parse_filetype(filepath)
+    assert filetype == "py4DSTEM", "Incompatible file type for py4DSTEM.io.read. To import data from a non-py4DSTEM EMD file, use py4DSTEM.io.import_"
 
     data = read_py4DSTEM(
         filepath,
