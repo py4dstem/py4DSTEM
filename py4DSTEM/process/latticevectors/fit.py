@@ -39,7 +39,7 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     # Remove unindexed peaks
     if 'index_mask' in braggpeaks.dtype.names:
         deletemask = braggpeaks.data['index_mask'] == False
-        braggpeaks.remove_points(deletemask)
+        braggpeaks.remove(deletemask)
 
     # Check to ensure enough peaks are present
     if braggpeaks.length < minNumPeaks:
@@ -89,14 +89,14 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     Returns:
         (RealSlice): A RealSlice ``g1g2map`` containing the following 8 arrays:
 
-            * ``g1g2_map.slices['x0']``     x-coord of the origin of the best fit lattice
-            * ``g1g2_map.slices['y0']``     y-coord of the origin
-            * ``g1g2_map.slices['g1x']``    x-coord of the first lattice vector
-            * ``g1g2_map.slices['g1y']``    y-coord of the first lattice vector
-            * ``g1g2_map.slices['g2x']``    x-coord of the second lattice vector
-            * ``g1g2_map.slices['g2y']``    y-coord of the second lattice vector
-            * ``g1g2_map.slices['error']``  the fit error
-            * ``g1g2_map.slices['mask']``   1 for successful fits, 0 for unsuccessful
+            * ``g1g2_map.get_slice('x0')``     x-coord of the origin of the best fit lattice
+            * ``g1g2_map.get_slice('y0')``     y-coord of the origin
+            * ``g1g2_map.get_slice('g1x')``    x-coord of the first lattice vector
+            * ``g1g2_map.get_slice('g1y')``    y-coord of the first lattice vector
+            * ``g1g2_map.get_slice('g2x')``    x-coord of the second lattice vector
+            * ``g1g2_map.get_slice('g2y')``    y-coord of the second lattice vector
+            * ``g1g2_map.get_slice('error')``  the fit error
+            * ``g1g2_map.get_slice('mask')``   1 for successful fits, 0 for unsuccessful
               fits
     """
     assert isinstance(braggpeaks, PointListArray)
@@ -113,14 +113,14 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
         qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(braggpeaks_curr, x0, y0, minNumPeaks)
         # Store data
         if g1x is not None:
-            g1g2_map.slices['x0'][Rx,Ry] = qx0
-            g1g2_map.slices['y0'][Rx,Ry] = qy0
-            g1g2_map.slices['g1x'][Rx,Ry] = g1x
-            g1g2_map.slices['g1y'][Rx,Ry] = g1y
-            g1g2_map.slices['g2x'][Rx,Ry] = g2x
-            g1g2_map.slices['g2y'][Rx,Ry] = g2y
-            g1g2_map.slices['error'][Rx,Ry] = error
-            g1g2_map.slices['mask'][Rx,Ry] = 1
+            g1g2_map.get_slice('x0').data[Rx,Ry] = qx0
+            g1g2_map.get_slice('y0').data[Rx,Ry] = qx0
+            g1g2_map.get_slice('g1x').data[Rx,Ry] = g1x
+            g1g2_map.get_slice('g1y').data[Rx,Ry] = g1y
+            g1g2_map.get_slice('g2x').data[Rx,Ry] = g2x
+            g1g2_map.get_slice('g2y').data[Rx,Ry] = g2y
+            g1g2_map.get_slice('error').data[Rx,Ry] = error
+            g1g2_map.get_slice('mask').data[Rx,Ry] = 1
 
     return g1g2_map
 
@@ -145,14 +145,14 @@ def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
     Returns:
         (RealSlice): A RealSlice ``g1g2map`` containing the following 8 arrays:
 
-            * ``g1g2_map.slices['x0']``     x-coord of the origin of the best fit lattice
-            * ``g1g2_map.slices['y0']``     y-coord of the origin
-            * ``g1g2_map.slices['g1x']``    x-coord of the first lattice vector
-            * ``g1g2_map.slices['g1y']``    y-coord of the first lattice vector
-            * ``g1g2_map.slices['g2x']``    x-coord of the second lattice vector
-            * ``g1g2_map.slices['g2y']``    y-coord of the second lattice vector
-            * ``g1g2_map.slices['error']``  the fit error
-            * ``g1g2_map.slices['mask']``   1 for successful fits, 0 for unsuccessful
+            * ``g1g2_map.get_slice('x0')``     x-coord of the origin of the best fit lattice
+            * ``g1g2_map.get_slice('y0')``     y-coord of the origin
+            * ``g1g2_map.get_slice('g1x')``    x-coord of the first lattice vector
+            * ``g1g2_map.get_slice('g1y')``    y-coord of the first lattice vector
+            * ``g1g2_map.get_slice('g2x')``    x-coord of the second lattice vector
+            * ``g1g2_map.get_slice('g2y')``    y-coord of the second lattice vector
+            * ``g1g2_map.get_slice('error')``  the fit error
+            * ``g1g2_map.get_slice('mask')``   1 for successful fits, 0 for unsuccessful
               fits
     """
     assert isinstance(braggpeaks, PointListArray)
@@ -170,14 +170,13 @@ def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
             qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(braggpeaks_curr, x0, y0, minNumPeaks)
             # Store data
             if g1x is not None:
-                g1g2_map.slices['x0'][Rx,Ry] = qx0
-                g1g2_map.slices['y0'][Rx,Ry] = qy0
-                g1g2_map.slices['g1x'][Rx,Ry] = g1x
-                g1g2_map.slices['g1y'][Rx,Ry] = g1y
-                g1g2_map.slices['g2x'][Rx,Ry] = g2x
-                g1g2_map.slices['g2y'][Rx,Ry] = g2y
-                g1g2_map.slices['error'][Rx,Ry] = error
-                g1g2_map.slices['mask'][Rx,Ry] = 1
-
+                g1g2_map.get_slice('x0').data[Rx,Ry] = qx0
+                g1g2_map.get_slice('y0').data[Rx,Ry] = qx0
+                g1g2_map.get_slice('g1x').data[Rx,Ry] = g1x
+                g1g2_map.get_slice('g1y').data[Rx,Ry] = g1y
+                g1g2_map.get_slice('g2x').data[Rx,Ry] = g2x
+                g1g2_map.get_slice('g2y').data[Rx,Ry] = g2y
+                g1g2_map.get_slice('error').data[Rx,Ry] = error
+                g1g2_map.get_slice('mask').data[Rx,Ry] = 1
     return g1g2_map
 
