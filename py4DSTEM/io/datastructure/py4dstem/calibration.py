@@ -265,13 +265,14 @@ class Calibration(Metadata):
         self._params['QR_flip'] = x
     def get_QR_flip(self):
         return self._get_value('QR_flip')
-    def set_QR_rotflip(self,x):
+    def set_QR_rotflip(self, rot_flip):
         """
         Args:
-            rot (number): rotation in degrees
-            flip (bool): True indicates a Q/R axes flip
+            rot_flip (tuple), (rot, flip) where:
+                rot (number): rotation in degrees
+                flip (bool): True indicates a Q/R axes flip
         """
-        rot,flip = x
+        rot,flip = rot_flip
         self.set_QR_rotation_degrees(rot)
         self.set_QR_flip(flip)
     def get_QR_rotflip(self):

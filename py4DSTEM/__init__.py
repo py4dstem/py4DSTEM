@@ -1,17 +1,20 @@
-from . import io
 from .version import __version__
 from .tqdmnd import tqdmnd
 
+
+# submodules
+
+from . import io
+from . import preprocess
 from . import process
-#from . import preprocess
 from . import visualize
 
 
-# Import Individual Functions into Top Level Namespace 
+
+# functions
+
 from .visualize import show
 from .io import read, save
 
 
-#from .file.log import Logger
-#logger = Logger()
 
