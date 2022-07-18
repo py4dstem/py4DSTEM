@@ -185,7 +185,8 @@ It is free to use, alter, or build on, provided that any work derived from py4DS
 
 # Acknowledgements
 
-(![TRI logo][/images/toyota_research_institute.png])[https://www.tri.global/]
+
+[![TRI logo](/images/toyota_research_institute.png)](https://www.tri.global/)
 
 
 ![](/images/toyota_research_institute.png)
