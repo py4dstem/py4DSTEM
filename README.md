@@ -1,16 +1,24 @@
+
+> :warning: **py4DSTEM version 0.13 update**: Warning, this is a major update and we expect some workflows to break.  To install the previous version of py4DSTEM, please use the command line:
+```
+pip install py4dstem==0.12.23
+```
+
+
+
 ![py4DSTEM logo](/images/py4DSTEM_logo.png)
 
-**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data.
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data. Additional information:
 
-For additional information beyond what's decribed below, please see:
+- [Our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications.
+- [The py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html)
+- [Our open access 4D-STEM review in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927619000497) describing this project and demonstrating a variety of applications.
 
-- [the py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html)
-- [our open access publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications
 
 
 # What is 4D-STEM?
 
-In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM a pixelated detector is used instead, where a 2D image of the diffracted STEM probe is recorded at every raster position of the beam. A 4D-STEM scan thus results in a 4D data array.
 
 
 4D-STEM data is information rich.
@@ -21,16 +29,16 @@ Structure in the diffracted halos of amorphous systems can be used to describe t
 
 py4DSTEM supports many different modes of 4DSTEM analysis.
 The tutorials, sample code, module, and function documentation all provide more detailed discussion on some of the analytical methods possible with this code.
-More information can also be found at [https://arxiv.org/abs/2003.09523](https://arxiv.org/abs/2003.09523).
 
 
 
 
-# Installation
+# py4DSTEM Installation
 
 The recommended installation for py4DSTEM uses the Anaconda python distribution.
-First, download and install Anaconda. Instructions can be found at www.anaconda.com/download.
-Then open a terminal and run one of the following sets of commands:
+First, download and install Anaconda: www.anaconda.com/download. 
+If you prefer a more lightweight conda client, we recomment Miniconda: https://docs.conda.io/en/latest/miniconda.html.
+Then open a conda terminal and run one of the following sets of commands:
 
 **For x86 CPUS e.g. INTEL, AMD processors**
 ```
@@ -140,6 +148,9 @@ Sample datasets are provided [here](https://drive.google.com/drive/folders/1GmxF
 Links to individual datasets are provided in the sample code files which make use of them.
 Once you've selected a file of sample code to run, find the link in that file to the dataset it uses, download and place it somewhere in your filesystem, then edit the filepath in the code to indicate where you've put that data.
 
+The largest collection of py4DSTEM workflows can be found on the tutorial repo here: https://github.com/py4dstem/py4DSTEM_tutorials
+
+
 
 # More information
 
@@ -147,7 +158,13 @@ Once you've selected a file of sample code to run, find the link in that file to
 
 Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff4500535dba).
 
-### Dependencies
+
+## Scientific papers which use py4DSTEM
+
+See a list [here](docs/papers.md).
+
+
+## Dependencies
 
 * numpy
 * scipy
@@ -164,22 +181,21 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 * gdown
 
 
-### Optional dependencies
+## Optional dependencies
 
 * ipyparallel
 * dask
+* cupy
+* pymatgen
 
 
 
-
-### License
+## License
 
 GNU GPLv3
 
 **py4DSTEM** is open source software distributed under a GPLv3 license.
 It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
-
-
 
 
 
