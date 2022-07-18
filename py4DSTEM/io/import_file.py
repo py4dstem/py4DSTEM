@@ -6,7 +6,7 @@ from .utils import parse_filetype
 from .nonnative import read_empad, read_dm, read_gatan_K2_bin
 
 
-def import_(
+def import_file(
     filepath: Union[str, pathlib.Path],
     mem: Optional[str] = "RAM",
     binfactor: Optional[int] = 1,
@@ -26,7 +26,7 @@ def import_(
 
     For documentation of kwargs, refer to the individual readers (currently
         only the K2 reader uses kwargs.)
-    
+
     Returns:
         data    DataCube if 4D data is found, else an Array containing 2D or 3D data
 
@@ -69,3 +69,5 @@ def import_(
         raise Exception("Bad filetype!")
 
     return data
+
+
