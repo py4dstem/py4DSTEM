@@ -106,7 +106,8 @@ def fit_origin(
     **kwargs
     ):
     """
-    fit origin of bragg vectors 
+    Fit origin of bragg vectors.
+    
     Args:
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
@@ -174,6 +175,7 @@ def calibrate(
     Determines which calibrations are present in set.calibrations (of origin,
     elliptical, pixel, rotational), and applies any it finds to self.v_uncal,
     storing the output in self.v.
+    
     Args: 
         use_fitted_origin (bool): determine if using fitted origin or measured origin
     Returns:
@@ -433,6 +435,7 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
     and Qy directions, respectively, get a strain map defined with respect to some other
     right-handed coordinate system, in which the x-axis is oriented along (xaxis_x,
     xaxis_y).
+    
     Args:
         g_referencce (tupe): reference coordinate system for xaxis_x and xaxis_y
     """
