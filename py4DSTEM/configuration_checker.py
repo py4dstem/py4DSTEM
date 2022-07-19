@@ -3,10 +3,12 @@
 import importlib
 from operator import mod
 
+# list of modules we expect/may expect to be installed
+#  as part of a standard py4DSTEM installation 
 modules = ["cupy",
            "numpy",
-           "jax",
-           "tensorflow",
+           "jax", # added as example of something that will not be imported
+           "tensorflow", 
            "dask",
            "pymatgen"
           ]
@@ -14,9 +16,6 @@ modules = ["cupy",
 
 
 #### Class and Functions to Create Coloured Strings ####
-
-
-
 class colours:
     CEND = '\x1b[0m'
     WARNING = '\x1b[7;93m'
@@ -25,56 +24,122 @@ class colours:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def create_warning(s:str):
+def create_warning(s:str)->str:
+    """
+    Creates a yellow shaded with white font version of string s 
+
+    Args:
+        s (str): string to be turned into a warning style string
+
+    Returns:
+        str: stylized version of string s
+    """
     s = colours.WARNING + s + colours.CEND
     return s
-def create_success(s:str):
+def create_success(s:str)-> str:
+    """
+    Creates a yellow shaded with white font version of string s 
+
+    Args:
+        s (str): string to be turned into a warning style string
+
+    Returns:
+        str: stylized version of string s
+    """
     s = colours.SUCCESS + s + colours.CEND
     return s
-def create_failure(s:str):
+def create_failure(s:str)->str:
+    """
+    Creates a yellow shaded with white font version of string s 
+
+    Args:
+        s (str): string to be turned into a warning style string
+
+    Returns:
+        str: stylized version of string s
+    """
     s = colours.FAIL + s + colours.CEND
     return s
-def create_bold(s:str):
+def create_bold(s:str)->str:
+    """
+    Creates a yellow shaded with white font version of string s 
+
+    Args:
+        s (str): string to be turned into a warning style string
+
+    Returns:
+        str: stylized version of string s
+    """
     s = colours.BOLD + s + colours.CEND
     return s
-def create_underline(s:str):
+def create_underline(s:str)->str:
+    """
+    Creates an underlined version of string s 
+
+    Args:
+        s (str): string to be turned into an underlined style string
+
+    Returns:
+        str: stylized version of string s
+    """
     s = colours.UNDERLINE + s + colours.CEND
     return s
 
 
 
-def import_tester(m:str):
-    
+def import_tester(m:str)->bool:
+    """
+    This function will try and import the module, m,
+    it returns the success as boolean and prints a message. 
+    Args:
+        m (str): string name of a module
+
+    Returns:
+        bool: boolean if the module was able to be imported
+    """
+    # set a boolean switch
     state = True
+
+    # try and import the module
     try:
         importlib.import_module(m) 
     except:
         state = False
-    
-    
+    # if able to import
     if state:
         s = f" Module {m.capitalize()} Imported Successfully "
         s = create_success(s)
         s = f"{s: <80}"
         print(s)
-    
+    #if unable to import 
     else: 
         s = f" Module {m.capitalize()} Import Failed "
         s = create_failure(s)
         s = f"{s: <80}"
         print(s)
-
+    # return whether it was able to be imported
     return state
+
+#### ADDTIONAL CHECKS ####
 
 def check_cupy_gpu(
     verbose:bool = False,
     gratuitously_verbose:bool = False,
     **kwargs
     ):
-    
+    """
+    This function performs some additional tests which may be useful in 
+    diagnosing Cupy GPU performance
+
+    Args:
+        verbose (bool, optional): Will print additional information e.g. CUDA path, Cupy version. Defaults to False
+        gratuitously_verbose (bool, optional): Will print out atributes of all  Defaults to False.
+    """
+    # import some libaries
     from pprint import pprint
     import cupy as cp
     
+    # check that CUDA is detected correctly
     cuda_availability = cp.cuda.is_available()
     if cuda_availability:
         s = f" CUDA is Available "
@@ -86,7 +151,9 @@ def check_cupy_gpu(
         s = create_failure(s)
         s = f"{s: <80}"
         print(s)
-        
+    
+    # Count how many GPUs Cupy can detect
+    # probably should change this to a while loop ... 
     for i in range(24):
         try:
             d = cp.cuda.Device(i)
@@ -94,6 +161,8 @@ def check_cupy_gpu(
         except:
             num_gpus_detected = i
             break
+
+    # print how many GPUs were detected, filter for a couple of special conditons
     if num_gpus_detected == 0:
         s = " Detected no GPUs "
         s = create_failure(s)
@@ -109,11 +178,14 @@ def check_cupy_gpu(
         s = create_success(s)
         s = f"{s: <80}"
         print(s)
+
+    # if verbose print extra information 
     if verbose:
         cuda_path = cp.cuda.get_cuda_path()
         print(f"Detected CUDA Path:\t{cuda_path}")
         cupy_version = cp.__version__
         print(f"Cupy Version:\t\t{cupy_version}")
+    # print the atributes of the GPUs detected. 
     if gratuitously_verbose:
         for i in range(num_gpus_detected):
             d = cp.cuda.Device(i)
@@ -121,8 +193,20 @@ def check_cupy_gpu(
             s = create_warning(s)
             print(f" {s} ")
             pprint(d.attributes)
+    return None
+
 
 def print_no_extra_checks(m:str):
+    """
+    This function prints a warning style message that the module m
+    currently has no extra checks. 
+
+    Args:
+        m (str): This is the name of the module
+
+    Returns:
+        None
+    """
     s = f" There are no Extra Checks for {m} "
     s = create_warning(s)
     s = f" {s} "
@@ -130,6 +214,7 @@ def print_no_extra_checks(m:str):
     
     return None
 
+#### main function used to check the configuration of the installation
 def check_config(
     modules:list = modules,
     verbose:bool = False,
