@@ -37,10 +37,10 @@ def get_bvm(
         mode = mode,
     )
     if mode == 'centered':
-        self.bvm_centered = bvm  
-    else: 
+        self.bvm_centered = bvm
+    else:
         self.bvm_raw = bvm
-    
+
     return bvm
 
 
@@ -53,29 +53,32 @@ def measure_origin(
     **kwargs,
     ):
     """
-    Modes of operation are 2 or 5.  Use-cases and input arguments:
+    Valid `mode` arguments are "beamstop" and "no_beamstop".
+    Use-cases and input arguments:
 
-    "bragg_no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
-        the center beam is brightest throughout.
+    "no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
+        the center beam is brightest throughout. No required kwargs, optional
+        kwargs are any accepted by process.calibration.origin.
+        get_origin_from_braggpeaks.
+
+    "beamstop" - A set of bragg peaks for data with a beamstop. Req'd kwargs
+        are `center_guess` (2-tuple) and `radii` (2-tuple) specifying an annular
+        region in which to search for conjugate pairs of Bragg peaks to use
+        for calibrating. Optional kwargs are those accepted by
+        process.calibration.origin.get_origin_beamstop_braggpeaks.
 
         Args:
-            data (PointListArray)
-
-    "bragg_beam_stop" - A set of bragg peaks for data with a beamstop
-
-        Args:
-            data (PointListArray)
             center_guess (2-tuple)
             radii   (2-tuple)
 
     """
-    assert mode in ("bragg_no_beamstop","bragg_beamstop")
+    from ....process.calibration import measure_origin
+    assert mode in ("beamstop", "no_beamstop")
+
+    mode = "bragg_" + mode
+    kwargs["Q_shape"] = self.Qshape
 
     # perform computation
-    from ....process.calibration import measure_origin
-    
-    kwargs["Q_shape"] = self.Qshape
-    
     origin = measure_origin(
         self.vectors_uncal,
         mode = mode,
