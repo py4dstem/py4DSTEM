@@ -30,7 +30,7 @@ from .read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
-    root: Optional[str] = None,
+    root: Optional[str] = "4DSTEM_experiment",
     tree: Optional[Union[bool,str]] = True,
     **legacy_options,
     ):
