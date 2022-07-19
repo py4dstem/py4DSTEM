@@ -32,13 +32,6 @@ def measure_origin(
             data (PointListArray)
             Q_shape (Qx, Qy) from braggvector
 
-    "dc_brightest_disk" - A datacube with no beamstop, and in which the center beam
-        is brightest throughout.
-
-        Args:
-            data (DataCube)
-            probe_kernel (2d array)
-
     "dc_beamstop" - A datacube with a beamstop
 
         Args:
@@ -54,6 +47,9 @@ def measure_origin(
             Q_Nx (int)
             Q_Ny (int)
 
+
+    Returns:
+        (3 real space shaped arrays) qx0, qy0, mask
     """
     # parse args
     modes = (
@@ -61,17 +57,15 @@ def measure_origin(
         "bragg_no_beamstop",
         "dc_beamstop",
         "bragg_beamstop",
-        "dc_brightest_disk"
     )
     assert mode in modes, f"{mode} must be in {modes}"
 
     # select a fn
     fn_dict = {
         "dc_no_beamstop" : get_origin,
-        "bragg_no_beamstop" : get_origin_from_braggpeaks,
         "dc_beamstop" : get_origin_beamstop,
+        "bragg_no_beamstop" : get_origin_from_braggpeaks,
         "bragg_beamstop" : get_origin_beamstop_braggpeaks,
-        "dc_brightest_disk" : get_origin_brightest_disk,
     }
     fn = fn_dict[mode]
 
@@ -114,7 +108,13 @@ def get_origin_single_dp(dp, r, rscale=1.2):
     return qx0, qy0
 
 
-def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
+def get_origin(
+    datacube,
+    r=None,
+    rscale=1.2,
+    dp_max=None,
+    mask=None
+    ):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity. Stores the origin
@@ -195,15 +195,17 @@ def get_origin(datacube, r=None, rscale=1.2, dp_max=None, mask=None):
             else:
                 qx0.mask, qy0.mask = True, True
 
-    return qx0, qy0
+    # return
+    mask = np.ones(datacube.Rshape, dtype=bool)
+    return qx0, qy0, mask
 
 
 def get_origin_from_braggpeaks(
-    braggpeaks, 
-    Q_shape, 
-    center_guess = None, 
-    score_method = 'distance', 
-    findcenter="CoM", 
+    braggpeaks,
+    Q_shape,
+    center_guess = None,
+    score_method = 'distance',
+    findcenter="CoM",
     bvm=None,
     **kwargs
 ):
@@ -245,7 +247,7 @@ def get_origin_from_braggpeaks(
     Q_Nx, Q_Ny = Q_shape
 
     # Get guess at position of unscattered beam (x0,y0)
-    if center_guess is None: 
+    if center_guess is None:
         if bvm is None:
             from ..diskdetection.braggvectormap import get_bragg_vector_map
             braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
@@ -273,7 +275,7 @@ def get_origin_from_braggpeaks(
                             pointlist.data["intensity"][index],
                         )
             x0, y0 = get_CoM(braggvectormap)
-    else: 
+    else:
         x0, y0 = center_guess
 
     # Get Bragg peak closest to unscattered beam at each scan position
@@ -291,11 +293,13 @@ def get_origin_from_braggpeaks(
                     index = np.argmax(r2)
                 qx0[Rx, Ry] = pointlist.data["qx"][index]
                 qy0[Rx, Ry] = pointlist.data["qy"][index]
-            else: 
+            else:
                 qx0[Rx, Ry] = x0
                 qy0[Rx, Ry] = y0
 
-    return qx0, qy0
+    # return
+    mask = np.ones(datacube.Rshape, dtype=bool)
+    return qx0, qy0, mask
 
 def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
     """
@@ -353,8 +357,14 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
 
     return qx0, qy0
 
-def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
-                                   max_dist=2,max_iter=1, **kwargs):
+def get_origin_beamstop_braggpeaks(
+    braggpeaks,
+    center_guess,
+    radii,
+    max_dist=2,
+    max_iter=1,
+    **kwargs
+    ):
     """
     Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
     pairs of conjugate peaks inside an annular region and finding their centers of mass.
@@ -428,17 +438,10 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
         center_curr = x0_curr,y0_curr
 
     # return
-    found_center = np.logical_not(np.dstack([found_center,found_center]))
-    origins = np.ma.array(data=centers, mask=found_center)
-    qx0,qy0 = origins[:,:,0],origins[:,:,1]
-    return qx0,qy0
+    mask = found_center
+    qx0,qy0 = centers[:,:,0],centers[:,:,1]
+    return qx0,qy0,mask
 
-
-def get_origin_brightest_disk(
-        datacube,
-        **kwargs
-        ):
-        raise Exception("This function needs to be added. Try another origin detection mode.")
 
 
 
