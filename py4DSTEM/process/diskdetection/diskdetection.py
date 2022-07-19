@@ -7,7 +7,7 @@ from scipy.ndimage.filters import gaussian_filter
 from ...io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from ..utils.get_maxima_2D import get_maxima_2D
 from ..utils.cross_correlate import get_cross_correlation_FT
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 

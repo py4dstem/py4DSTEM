@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 from numbers import Number
 
-from ....tqdmnd import tqdmnd
+from ....utils.tqdmnd import tqdmnd
 
 
 

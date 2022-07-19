@@ -12,7 +12,7 @@ import numba
 
 from .kernels import kernels
 from ...io import PointList, PointListArray
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 def find_Bragg_disks_CUDA(

@@ -3,7 +3,7 @@
 import numpy as np
 from ..utils import add_to_2D_array_from_floats
 from ...io.datastructure.emd import PointListArray
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 
