@@ -35,6 +35,35 @@ modules = [
         'tqdm'
 ]   
 
+# currently this was copy and pasted from setup.py, 
+# hopefully there's a programatic way to do this. 
+module_depenencies = {
+    'base' : [
+        'numpy',
+        'scipy',
+        'h5py',
+        'ncempy',
+        'matplotlib',
+        'skimage',
+        'sklearn',
+        'PyQt5',
+        'pyqtgraph',
+        'qtconsole',
+        'ipywidgets',
+        'tqdm',
+        'dill',
+        'gdown',
+        'dask',
+        'distributed'
+        ],
+    'ipyparallel': ['ipyparallel', 'dill'],
+    'cuda': ['cupy'],
+    'acom': ['pymatgen', 'mp_api', 'orix'],
+    'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
+    'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
+    'numba': ['numba']
+    }
+
 
 #### Class and Functions to Create Coloured Strings ####
 class colours:
@@ -242,34 +271,6 @@ def check_module_functionality(state_dict:dict)->None:
 
     """
 
-    # currently this was copy and pasted from setup.py, 
-    # hopefully there's a programatic way to do this. 
-    module_depenencies = {
-        'base' : [
-            'numpy',
-            'scipy',
-            'h5py',
-            'ncempy',
-            'matplotlib',
-            'skimage',
-            'sklearn',
-            'PyQt5',
-            'pyqtgraph',
-            'qtconsole',
-            'ipywidgets',
-            'tqdm',
-            'dill',
-            'gdown',
-            'dask',
-            'distributed'
-            ],
-        'ipyparallel': ['ipyparallel', 'dill'],
-        'cuda': ['cupy'],
-        'acom': ['pymatgen', 'mp_api', 'orix'],
-        'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
-        'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
-        'numba': ['numba']
-        }
 
     # create an empty dict to put module states into:
     module_states = {}
