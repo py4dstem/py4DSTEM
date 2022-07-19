@@ -15,6 +15,6 @@ from . import visualize
 
 from .visualize import show
 from .io import read, save, import_file
-
+from .configuration_checker import check_config
 
 
