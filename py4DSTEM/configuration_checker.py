@@ -209,7 +209,7 @@ def print_no_extra_checks(m:str):
     """
     s = f" There are no Extra Checks for {m} "
     s = create_warning(s)
-    s = f" {s} "
+    s = f"{s}"
     print(s)
     
     return None
