@@ -137,10 +137,20 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
         return fig,ax
 
 
-def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
-                  color='k',xlabel='q (pixels)',ylabel='Intensity (A.U.)',
-                  labelsize=16,ticklabelsize=14,grid='on',label=None,
-                  **kwargs):
+def show_qprofile(
+    q,
+    intensity,
+    ymax=None,
+    figsize=(12,4),
+    returnfig=False,
+    color='k',
+    xlabel='q (pixels)',
+    ylabel='Intensity (A.U.)',  
+    labelsize=16,
+    ticklabelsize=14,
+    grid='on',
+    label=None,
+    **kwargs):
     """
     Plots a diffraction space radial profile.
     Params:
@@ -155,6 +165,10 @@ def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
         grid            'off' or 'on'
         label           a legend label for the plotted curve
     """
+    if ymax is None:
+        ymax = np.max(intensity)*1.05
+
+
     fig,ax = plt.subplots(figsize=figsize)
     ax.plot(q,intensity,color=color,label=label)
     ax.grid(grid)

@@ -428,9 +428,10 @@ def get_origin_beamstop_braggpeaks(braggpeaks,center_guess,radii,
         center_curr = x0_curr,y0_curr
 
     # return
-    found_center = np.logical_not(np.dstack([found_center,found_center]))
-    origins = np.ma.array(data=centers, mask=found_center)
-    qx0,qy0 = origins[:,:,0],origins[:,:,1]
+    found_center = np.logical_not(found_center)
+    qx0 = np.ma.array(data=centers[:,:,0], mask=found_center)
+    qy0 = np.ma.array(data=centers[:,:,1], mask=found_center)
+
     return qx0,qy0
 
 
@@ -504,6 +505,10 @@ def fit_origin(
         f = bezier_two
     else:
         raise Exception("Invalid fitfunction '{}'".format(fitfunction))
+
+    # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
+    if isinstance(qx0_meas, np.ma.MaskedArray):
+        mask = np.ma.getmask(qx0_meas)
 
     # Fit data
     if mask is None:
