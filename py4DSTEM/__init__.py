@@ -1,5 +1,5 @@
 from .version import __version__
-from .tqdmnd import tqdmnd
+from .utils.tqdmnd import tqdmnd
 
 
 # submodules
@@ -15,6 +15,6 @@ from . import visualize
 
 from .visualize import show
 from .io import read, save, import_file
-from .configuration_checker import check_config
+from .utils.configuration_checker import check_config
 
 

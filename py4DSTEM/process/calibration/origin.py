@@ -7,7 +7,7 @@ from scipy.optimize import leastsq
 from .probe import get_probe_size
 from ..fit import plane,parabola,bezier_two,fit_2D
 from ..utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ...io.datastructure import PointListArray, DataCube
 
 

@@ -5,14 +5,35 @@ from operator import mod
 
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation 
-modules = ["cupy",
-           "numpy",
-           "jax", # added as example of something that will not be imported
-           "tensorflow", 
-           "dask",
-           "pymatgen"
-          ]
-
+# this needs to be the import name e.g. import mp_api not mp-api
+modules = [
+        'PyQt5',
+        'crystal4D',
+        'cupy',
+        'dask',
+        'dill',
+        'distributed',
+        'gdown',
+        'h5py',
+        'ipyparallel',
+        'ipywidgets',
+        'jax',
+        'matplotlib',
+        'mp_api',
+        'ncempy',
+        'numba',
+        'numpy',
+        'orix',
+        'pymatgen',
+        'pyqtgraph',
+        'qtconsole',
+        'skimage',
+        'sklearn',
+        'scipy',
+        'tensorflow',
+        'tensorflow-addons',
+        'tqdm'
+]   
 
 
 #### Class and Functions to Create Coloured Strings ####
@@ -214,6 +235,79 @@ def print_no_extra_checks(m:str):
     
     return None
 
+
+def check_module_functionality(state_dict:dict)->None:
+    """
+
+
+    """
+
+    # currently this was copy and pasted from setup.py, 
+    # hopefully there's a programatic way to do this. 
+    module_depenencies = {
+        'base' : [
+            'numpy',
+            'scipy',
+            'h5py',
+            'ncempy',
+            'matplotlib',
+            'skimage',
+            'sklearn',
+            'PyQt5',
+            'pyqtgraph',
+            'qtconsole',
+            'ipywidgets',
+            'tqdm',
+            'dill',
+            'gdown',
+            'dask',
+            'distributed'
+            ],
+        'ipyparallel': ['ipyparallel', 'dill'],
+        'cuda': ['cupy'],
+        'acom': ['pymatgen', 'mp_api', 'orix'],
+        'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
+        'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
+        'numba': ['numba']
+        }
+
+    # create an empty dict to put module states into:
+    module_states = {}
+
+    # key is the name of the module e.g. ACOM
+    # val is a list of its dependencies 
+    for key, val in module_depenencies.items():
+        
+        # create a list to store the status of the depencies
+        temp_lst = []
+
+        # loop over all the dependencies required for the module to work
+        # append the bool if they could be imported
+        for depend in val:
+            temp_lst.append(state_dict[depend])
+        
+        # check that all the depencies could be imported i.e. state == True
+        # and set the state of the module to that 
+        module_states[key] = all(temp_lst) == True
+
+    # Print out the state of all the modules in colour code
+    for key, val in module_states.items():
+        # if the state is True
+        if val:
+            s = f" All Dependencies for {key.capitalize()} are Installed "
+            s = create_success(s)
+            print(s)
+        # if something is missing
+        else: 
+            s = f" Not All Dependencies for {key.capitalize()} are Installed"
+            s = create_failure(s)
+            print(s)
+
+    return None # module_states
+
+    
+
+
 #### main function used to check the configuration of the installation
 def check_config(
     modules:list = modules,
@@ -242,6 +336,7 @@ def check_config(
         x = import_tester(m)
         states_dict[m] = x
     
+
     extra_checks_message = "Running Extra Checks"
     extra_checks_message = create_bold(extra_checks_message)
     print(f"{extra_checks_message}")
@@ -255,4 +350,10 @@ def check_config(
                 func(verbose, gratuitously_verbose)
             else:
                 print_no_extra_checks(key)
+
+    modules_checks_message = "Checking Module Dependencies"
+    modules_checks_message = create_bold(modules_checks_message)
+    print(modules_checks_message)
+
+    check_module_functionality(state_dict=states_dict)
     return None
