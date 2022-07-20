@@ -172,7 +172,7 @@ def _add_calibration(tree,grp):
 
 def _populate_tree(tree,grp):
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
-    keys = [k for k in keys if (k != '_metadata' and not _get_class(
+    keys = [k for k in keys if (k[0] != '_' and not _get_class(
                 grp[k]) == Calibration)]
     for key in keys:
         tree[key] = _read_without_tree(
