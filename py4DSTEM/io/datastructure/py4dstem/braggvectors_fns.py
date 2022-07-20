@@ -4,10 +4,6 @@ import numpy as np
 from ..emd import Metadata
 
 
-
-
-
-
 # Bragg vector maps
 
 def get_bvm(
@@ -462,3 +458,49 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
 
     if returncalc:
         return strainmap
+
+
+
+def get_masked_peaks(
+    self, 
+    mask,
+    update_inplace = False,
+    returncalc = True):
+    """
+    This function applys a mask to bragg peaks .
+
+    
+    Args:
+        mask (bool):    binary image where peaks will be deleted
+        
+
+    Returns:
+
+    """
+
+    # Copy peaks
+    v = self._v_uncal.copy( name='_v_uncal' )
+
+    # Loop over all peaks
+    for rx in range(v.shape[0]):
+        for ry in range(v.shape[1]):
+            p = v.get_pointlist(rx,ry)
+            sub = mask.ravel()[np.ravel_multi_index((
+                np.round(p.data["qx"]).astype('int'), 
+                np.round(p.data["qy"]).astype('int')),
+                self.Qshape)]
+            p.remove(sub)
+
+    if update_inplace:
+        self._v_uncal = v
+
+        if returncalc: 
+            return self
+
+    if returncalc: 
+        bragg_vector_update = self.copy()
+        bragg_vector_update._v_uncal = v
+
+        return bragg_vector_update
+
+
