@@ -114,6 +114,19 @@ class BraggVectors:
         return string
 
 
+    # copy
+    def copy(self, name=None):
+        name = name if name is not None else self.name+"_copy"
+        braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
+        braggvector_copy._v_uncal = self._v_uncal
+        braggvector_copy._v_cal = self._v_cal
+        for k in self.metadata.keys():
+            braggvector_copy.metadata = self.metadata[k].copy()
+        if hasattr(self,'calibration'):
+            braggvector_copy.calibration = self.calibration
+
+        return braggvector_copy
+
 
     # HDF5 read/write
 
@@ -129,16 +142,7 @@ class BraggVectors:
         return BraggVectors_from_h5(group)
 
 
-    def copy(self):
-        braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name = self.name + '_copy')
-        braggvector_copy._v_uncal = self._v_uncal
-        braggvector_copy._v_cal = self._v_cal
-        for k in self.metadata.keys():
-            braggvector_copy.metadata = self.metadata[k].copy()
-        if hasattr(self,'calibration'):
-            braggvector_copy.calibration = self.calibration
 
-        return braggvector_copy
 
 ############ END OF CLASS ###########
 
