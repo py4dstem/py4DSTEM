@@ -258,7 +258,16 @@ def print_module_states(module_states:dict)->None:
     return None
 
 def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:bool, **kwargs)->None:
-    
+    """_summary_
+
+    Args:
+        import_states (dict): _description_
+        verbose (bool): _description_
+        gratuitously_verbose (bool): _description_
+
+    Returns:
+        _type_: _description_
+    """
 
     # print a output module 
     extra_checks_message = "Running Extra Checks"
@@ -500,74 +509,8 @@ def check_config(
 
         print_import_states(states_dict)
 
-        # Run the extra checks
-        # extra_checks_message = "Running Extra Checks"
-        # extra_checks_message = create_bold(extra_checks_message)
-        # print(f"{extra_checks_message}")
-        # # For modules that import run any extra checks
-        # for key, val in states_dict.items():
-        #     if val:
-        #         s = create_underline(key.capitalize())
-        #         print(s)
-        #         func = funcs_dict.get(key)
-        #         if func is not None:
-        #             func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
-        #         else:
-        #             print_no_extra_checks(key)
-
         perfrom_extra_checks(import_states=states_dict, verbose=verbose, gratuitously_verbose=gratuitously_verbose)
 
    
 
     return None
-
-
-
-# def check_config(
-#     modules:list = modules,
-#     verbose:bool = False,
-#     gratuitously_verbose:bool = False
-#     ):
-    
-    
-#     # create an empty dict to check the import states
-#     states_dict = {}
-    
-#     # dict of extra check functions
-#     funcs_dict = {
-#         "cupy"  : check_cupy_gpu
-#     }
-    
-    
-#     # Print that Import Checks are happening
-#     imports_check_message = "Running Import Checks"
-#     imports_check_message = create_bold(imports_check_message)
-#     print(f"{imports_check_message}")
-    
-#     # check if the modules import 
-#     # and update the states dict to reflect this 
-#     for m in modules:
-#         x = import_tester(m)
-#         states_dict[m] = x
-    
-
-#     extra_checks_message = "Running Extra Checks"
-#     extra_checks_message = create_bold(extra_checks_message)
-#     print(f"{extra_checks_message}")
-#     # For modules that import run any extra checks
-#     for key, val in states_dict.items():
-#         if val:
-#             s = create_underline(key.capitalize())
-#             print(s)
-#             func = funcs_dict.get(key)
-#             if func is not None:
-#                 func(verbose, gratuitously_verbose)
-#             else:
-#                 print_no_extra_checks(key)
-
-#     modules_checks_message = "Checking Module Dependencies"
-#     modules_checks_message = create_bold(modules_checks_message)
-#     print(modules_checks_message)
-
-#     check_module_functionality(state_dict=states_dict)
-#     return None
