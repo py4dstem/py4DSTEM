@@ -314,19 +314,7 @@ def import_tester(m:str)->bool:
         importlib.import_module(m) 
     except:
         state = False
-    # # if able to import
-    # if state:
-    #     s = f" Module {m.capitalize()} Imported Successfully "
-    #     s = create_success(s)
-    #     s = f"{s: <80}"
-    #     print(s)
-    # #if unable to import 
-    # else: 
-    #     s = f" Module {m.capitalize()} Import Failed "
-    #     s = create_failure(s)
-    #     s = f"{s: <80}"
-    #     print(s)
-    # # return whether it was able to be imported
+
     return state
 
 
@@ -480,12 +468,23 @@ funcs_dict = {
 
 #### main function used to check the configuration of the installation
 def check_config(
-    modules:list = modules,
+    #modules:list = modules, # removed to not be user editable as this will often break. Could make it append to modules... but for now just removing
     verbose:bool = False,
     gratuitously_verbose:bool = False,
     # egregiously_verbose:bool = False
-    ):
-    
+    )->None:
+    """
+    This function checks the state of required imports to run py4DSTEM. 
+
+    Default behaviour will provide a summary of install dependencies for each module e.g. Base, ACOM etc. 
+  
+    Args:
+        verbose (bool, optional): Will provide the status of all possible requriements for py4DSTEM, and perform any additonal checks. Defaults to False.
+        gratuitously_verbose (bool, optional): Provides more indepth analysis. Defaults to False.
+
+    Returns:
+        None
+    """
     
     # get the states of all imports 
     states_dict = get_import_states(modules)
