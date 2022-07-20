@@ -44,6 +44,7 @@ class BraggVectors:
         get_strain_from_reference_region,
         get_rotated_strain_map,
         get_strain_from_reference_g1g2,
+        get_masked_peaks,
     )
 
     def __init__(
@@ -54,7 +55,8 @@ class BraggVectors:
         ):
 
         self.name = name
-        self.shape = Rshape
+        self.Rshape = Rshape
+        self.shape = self.Rshape
         self.Qshape = Qshape
 
         self.tree = Tree()
@@ -113,9 +115,6 @@ class BraggVectors:
 
 
 
-
-
-
     # HDF5 read/write
 
     # write
@@ -130,9 +129,13 @@ class BraggVectors:
         return BraggVectors_from_h5(group)
 
 
-
-
-
+    def copy(self):
+        braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name = self.name + '_copy')
+        braggvector_copy._v_uncal = self._v_uncal
+        braggvector_copy._v_cal = self._v_cal
+        for k in self.metadata.keys():
+            braggvector_copy.metadata = self.metadata[k].copy()
+        return braggvector_copy
 
 ############ END OF CLASS ###########
 

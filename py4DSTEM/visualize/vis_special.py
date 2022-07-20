@@ -168,7 +168,6 @@ def show_qprofile(
     if ymax is None:
         ymax = np.max(intensity)*1.05
 
-
     fig,ax = plt.subplots(figsize=figsize)
     ax.plot(q,intensity,color=color,label=label)
     ax.grid(grid)
