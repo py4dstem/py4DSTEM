@@ -298,7 +298,7 @@ def get_origin_from_braggpeaks(
                 qy0[Rx, Ry] = y0
 
     # return
-    mask = np.ones(datacube.Rshape, dtype=bool)
+    mask = np.ones(braggpeaks.shape, dtype=bool)
     return qx0, qy0, mask
 
 def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
