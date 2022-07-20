@@ -3,9 +3,13 @@
 import importlib
 from operator import mod
 
+
+# TODO check the correct nameing convetions e.g. is h5py a libray or a module
+
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
+# maybe this should be called libraries?
 modules = [
         'PyQt5',
         'crystal4D',
@@ -63,6 +67,9 @@ module_depenencies = {
     'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
     'numba': ['numba']
     }
+
+
+
 
 
 #### Class and Functions to Create Coloured Strings ####
@@ -136,7 +143,119 @@ def create_underline(s:str)->str:
     return s
 
 
+#### Functions to check imports etc. 
+### here I use the term state to define a boolean condition as to whether a libary/module was sucessfully imported/can be used
 
+def get_import_states(modules:list = modules)->dict:
+
+    # Create the import states dict
+    import_states_dict = {}
+    
+    # check if the modules import 
+    # and update the states dict to reflect this 
+    for m in modules:
+        state = import_tester(m)
+        import_states_dict[m] = state
+
+    return import_states_dict
+
+
+def get_module_states(state_dict:dict)->dict:
+
+
+    # create an empty dict to put module states into:
+    module_states = {}
+
+    # key is the name of the module e.g. ACOM
+    # val is a list of its dependencies 
+    # module_dependencies comes from the namespace
+    for key, val in module_depenencies.items():
+        
+        # create a list to store the status of the depencies
+        temp_lst = []
+
+        # loop over all the dependencies required for the module to work
+        # append the bool if they could be imported
+        for depend in val:
+            temp_lst.append(state_dict[depend])
+        
+        # check that all the depencies could be imported i.e. state == True
+        # and set the state of the module to that 
+        module_states[key] = all(temp_lst) == True
+
+    return module_states
+
+
+def print_import_states(import_states:dict)->None:
+    
+    # m is the name of the import module
+    # state is whether it was importable
+    for m, state in import_states.items():
+        # if it was importable i.e. state == True
+        if state:
+            s = f" Module {m.capitalize()} Imported Successfully "
+            s = create_success(s)
+            s = f"{s: <80}"
+            print(s)
+        #if unable to import i.e. state == False
+        else: 
+            s = f" Module {m.capitalize()} Import Failed "
+            s = create_failure(s)
+            s = f"{s: <80}"
+            print(s)
+    return None
+
+    
+
+
+def print_module_states(module_states:dict)->None:
+    
+    # Print out the state of all the modules in colour code
+    # key is the name of a py4DSTEM Module
+    # Val is the state i.e. True/False
+    for key, val in module_states.items():
+        # if the state is True i.e. all dependencies are installed
+        if val:
+            s = f" All Dependencies for {key.capitalize()} are Installed "
+            s = create_success(s)
+            print(s)
+        # if something is missing
+        else: 
+            s = f" Not All Dependencies for {key.capitalize()} are Installed"
+            s = create_failure(s)
+            print(s)
+    return None
+
+def perfrom_extra_checks(import_states:dict, **kwargs)->None:
+    
+
+    # print a output module 
+    extra_checks_message = "Running Extra Checks"
+    extra_checks_message = create_bold(extra_checks_message)
+    print(f"{extra_checks_message}")
+    # For modules that import run any extra checks
+    for key, val in import_states.items():
+        if val:
+            s = create_underline(key.capitalize())
+            print(s)
+            func = funcs_dict.get(key)
+            if func is not None:
+                s = create_underline(key.capitalize())
+                print(s)
+                func(verbose, gratuitously_verbose, egregiously_verbose)
+            else:
+                # if egregiously_verbose print out all modules without checks
+                if egregiously_verbose:
+                    s = create_underline(key.capitalize())
+                    print(s)
+                    print_no_extra_checks(key)
+                else:
+                    pass
+
+
+    return None
+
+    
 def import_tester(m:str)->bool:
     """
     This function will try and import the module, m,
@@ -155,26 +274,75 @@ def import_tester(m:str)->bool:
         importlib.import_module(m) 
     except:
         state = False
-    # if able to import
-    if state:
-        s = f" Module {m.capitalize()} Imported Successfully "
-        s = create_success(s)
-        s = f"{s: <80}"
-        print(s)
-    #if unable to import 
-    else: 
-        s = f" Module {m.capitalize()} Import Failed "
-        s = create_failure(s)
-        s = f"{s: <80}"
-        print(s)
-    # return whether it was able to be imported
+    # # if able to import
+    # if state:
+    #     s = f" Module {m.capitalize()} Imported Successfully "
+    #     s = create_success(s)
+    #     s = f"{s: <80}"
+    #     print(s)
+    # #if unable to import 
+    # else: 
+    #     s = f" Module {m.capitalize()} Import Failed "
+    #     s = create_failure(s)
+    #     s = f"{s: <80}"
+    #     print(s)
+    # # return whether it was able to be imported
     return state
+
+
+
+
+def check_module_functionality(state_dict:dict)->None:
+    """
+    This function checks all the py4DSTEM modules, e.g. acom, ml-ai, and whether all the required dependencies are importable 
+
+    Args:
+        state_dict (dict): dictionary of the state, i.e. boolean, of all the modules and the ability to import.
+        It will then print in a 'Success' or 'Failure' message. All dependencies must be available to succeed. 
+
+    Returns:
+        None: Prints the state of a py4DSTEM module's libaray depencencies 
+    """
+    
+    # create an empty dict to put module states into:
+    module_states = {}
+
+    # key is the name of the module e.g. ACOM
+    # val is a list of its dependencies 
+    for key, val in module_depenencies.items():
+        
+        # create a list to store the status of the depencies
+        temp_lst = []
+
+        # loop over all the dependencies required for the module to work
+        # append the bool if they could be imported
+        for depend in val:
+            temp_lst.append(state_dict[depend])
+        
+        # check that all the depencies could be imported i.e. state == True
+        # and set the state of the module to that 
+        module_states[key] = all(temp_lst) == True
+
+    # Print out the state of all the modules in colour code
+    for key, val in module_states.items():
+        # if the state is True
+        if val:
+            s = f" All Dependencies for {key.capitalize()} are Installed "
+            s = create_success(s)
+            print(s)
+        # if something is missing
+        else: 
+            s = f" Not All Dependencies for {key.capitalize()} are Installed"
+            s = create_failure(s)
+            print(s)
+
+    return None # module_states
 
 #### ADDTIONAL CHECKS ####
 
 def check_cupy_gpu(
-    verbose:bool = False,
     gratuitously_verbose:bool = False,
+    egregiously_verbose:bool = False,
     **kwargs
     ):
     """
@@ -230,13 +398,13 @@ def check_cupy_gpu(
         print(s)
 
     # if verbose print extra information 
-    if verbose:
+    if gratuitously_verbose:
         cuda_path = cp.cuda.get_cuda_path()
         print(f"Detected CUDA Path:\t{cuda_path}")
         cupy_version = cp.__version__
         print(f"Cupy Version:\t\t{cupy_version}")
     # print the atributes of the GPUs detected. 
-    if gratuitously_verbose:
+    if egregiously_verbose:
         for i in range(num_gpus_detected):
             d = cp.cuda.Device(i)
             s = f"GPU: {i}" 
@@ -264,97 +432,113 @@ def print_no_extra_checks(m:str):
     
     return None
 
-
-def check_module_functionality(state_dict:dict)->None:
-    """
-
-
-    """
+# dict of extra check functions
+funcs_dict = {
+    "cupy"  : check_cupy_gpu
+}
 
 
-    # create an empty dict to put module states into:
-    module_states = {}
-
-    # key is the name of the module e.g. ACOM
-    # val is a list of its dependencies 
-    for key, val in module_depenencies.items():
-        
-        # create a list to store the status of the depencies
-        temp_lst = []
-
-        # loop over all the dependencies required for the module to work
-        # append the bool if they could be imported
-        for depend in val:
-            temp_lst.append(state_dict[depend])
-        
-        # check that all the depencies could be imported i.e. state == True
-        # and set the state of the module to that 
-        module_states[key] = all(temp_lst) == True
-
-    # Print out the state of all the modules in colour code
-    for key, val in module_states.items():
-        # if the state is True
-        if val:
-            s = f" All Dependencies for {key.capitalize()} are Installed "
-            s = create_success(s)
-            print(s)
-        # if something is missing
-        else: 
-            s = f" Not All Dependencies for {key.capitalize()} are Installed"
-            s = create_failure(s)
-            print(s)
-
-    return None # module_states
-
-    
 
 
 #### main function used to check the configuration of the installation
 def check_config(
     modules:list = modules,
     verbose:bool = False,
-    gratuitously_verbose:bool = False
+    gratuitously_verbose:bool = False,
+    egregiously_verbose:bool = False
     ):
     
     
-    # create an empty dict to check the import states
-    states_dict = {}
-    
-    # dict of extra check functions
-    funcs_dict = {
-        "cupy"  : check_cupy_gpu
-    }
-    
-    
-    # Print that Import Checks are happening
-    imports_check_message = "Running Import Checks"
-    imports_check_message = create_bold(imports_check_message)
-    print(f"{imports_check_message}")
-    
-    # check if the modules import 
-    # and update the states dict to reflect this 
-    for m in modules:
-        x = import_tester(m)
-        states_dict[m] = x
-    
+    # get the states of all imports 
+    states_dict = get_import_states(modules)
 
-    extra_checks_message = "Running Extra Checks"
-    extra_checks_message = create_bold(extra_checks_message)
-    print(f"{extra_checks_message}")
-    # For modules that import run any extra checks
-    for key, val in states_dict.items():
-        if val:
-            s = create_underline(key.capitalize())
-            print(s)
-            func = funcs_dict.get(key)
-            if func is not None:
-                func(verbose, gratuitously_verbose)
-            else:
-                print_no_extra_checks(key)
-
+    # get the states of all modules dependencies
+    modules_dict = get_module_states(states_dict)
+    
+    # print the modules compatiabiltiy 
+    # prepare a message 
     modules_checks_message = "Checking Module Dependencies"
     modules_checks_message = create_bold(modules_checks_message)
     print(modules_checks_message)
+    # print the status
+    print_module_states(modules_dict)
 
-    check_module_functionality(state_dict=states_dict)
+    if verbose:
+        # Print that Import Checks are happening
+        imports_check_message = "Running Import Checks"
+        imports_check_message = create_bold(imports_check_message)
+        print(f"{imports_check_message}")
+
+        print_import_states(states_dict)
+
+    if gratuitously_verbose:
+        
+        extra_checks_message = "Running Extra Checks"
+        extra_checks_message = create_bold(extra_checks_message)
+        print(f"{extra_checks_message}")
+        # For modules that import run any extra checks
+        for key, val in states_dict.items():
+            if val:
+                s = create_underline(key.capitalize())
+                print(s)
+                func = funcs_dict.get(key)
+                if func is not None:
+                    func(verbose, gratuitously_verbose)
+                else:
+                    print_no_extra_checks(key)
+
+   
+
+    #check_module_functionality(state_dict=states_dict)
     return None
+
+
+
+# def check_config(
+#     modules:list = modules,
+#     verbose:bool = False,
+#     gratuitously_verbose:bool = False
+#     ):
+    
+    
+#     # create an empty dict to check the import states
+#     states_dict = {}
+    
+#     # dict of extra check functions
+#     funcs_dict = {
+#         "cupy"  : check_cupy_gpu
+#     }
+    
+    
+#     # Print that Import Checks are happening
+#     imports_check_message = "Running Import Checks"
+#     imports_check_message = create_bold(imports_check_message)
+#     print(f"{imports_check_message}")
+    
+#     # check if the modules import 
+#     # and update the states dict to reflect this 
+#     for m in modules:
+#         x = import_tester(m)
+#         states_dict[m] = x
+    
+
+#     extra_checks_message = "Running Extra Checks"
+#     extra_checks_message = create_bold(extra_checks_message)
+#     print(f"{extra_checks_message}")
+#     # For modules that import run any extra checks
+#     for key, val in states_dict.items():
+#         if val:
+#             s = create_underline(key.capitalize())
+#             print(s)
+#             func = funcs_dict.get(key)
+#             if func is not None:
+#                 func(verbose, gratuitously_verbose)
+#             else:
+#                 print_no_extra_checks(key)
+
+#     modules_checks_message = "Checking Module Dependencies"
+#     modules_checks_message = create_bold(modules_checks_message)
+#     print(modules_checks_message)
+
+#     check_module_functionality(state_dict=states_dict)
+#     return None
