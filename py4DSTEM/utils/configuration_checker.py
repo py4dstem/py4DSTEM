@@ -147,7 +147,16 @@ def create_underline(s:str)->str:
 ### here I use the term state to define a boolean condition as to whether a libary/module was sucessfully imported/can be used
 
 def get_import_states(modules:list = modules)->dict:
+    """
+    Check the ability to import modules and store the results as a boolean value. Returns as a dict.
+    e.g. import_states_dict['numpy'] == True/False
 
+    Args:
+        modules (list, optional): List of modules to check the ability to import. Defaults to modules.
+
+    Returns:
+        dict: dictionary where key is the name of the module, and val is the boolean state if it could be imported
+    """
     # Create the import states dict
     import_states_dict = {}
     
@@ -161,6 +170,14 @@ def get_import_states(modules:list = modules)->dict:
 
 
 def get_module_states(state_dict:dict)->dict:
+    """_summary_
+
+    Args:
+        state_dict (dict): _description_
+
+    Returns:
+        dict: _description_
+    """
 
 
     # create an empty dict to put module states into:
@@ -187,7 +204,14 @@ def get_module_states(state_dict:dict)->dict:
 
 
 def print_import_states(import_states:dict)->None:
-    
+    """_summary_
+
+    Args:
+        import_states (dict): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # m is the name of the import module
     # state is whether it was importable
     for m, state in import_states.items():
@@ -209,7 +233,14 @@ def print_import_states(import_states:dict)->None:
 
 
 def print_module_states(module_states:dict)->None:
-    
+    """_summary_
+
+    Args:
+        module_states (dict): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # Print out the state of all the modules in colour code
     # key is the name of a py4DSTEM Module
     # Val is the state i.e. True/False
@@ -226,7 +257,7 @@ def print_module_states(module_states:dict)->None:
             print(s)
     return None
 
-def perfrom_extra_checks(import_states:dict, **kwargs)->None:
+def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:bool, **kwargs)->None:
     
 
     # print a output module 
@@ -236,16 +267,16 @@ def perfrom_extra_checks(import_states:dict, **kwargs)->None:
     # For modules that import run any extra checks
     for key, val in import_states.items():
         if val:
-            s = create_underline(key.capitalize())
-            print(s)
+            # s = create_underline(key.capitalize())
+            # print(s)
             func = funcs_dict.get(key)
             if func is not None:
                 s = create_underline(key.capitalize())
                 print(s)
-                func(verbose, gratuitously_verbose, egregiously_verbose)
+                func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
             else:
-                # if egregiously_verbose print out all modules without checks
-                if egregiously_verbose:
+                # if gratuitously_verbose print out all modules without checks
+                if gratuitously_verbose:
                     s = create_underline(key.capitalize())
                     print(s)
                     print_no_extra_checks(key)
@@ -341,8 +372,7 @@ def check_module_functionality(state_dict:dict)->None:
 #### ADDTIONAL CHECKS ####
 
 def check_cupy_gpu(
-    gratuitously_verbose:bool = False,
-    egregiously_verbose:bool = False,
+    gratuitously_verbose:bool,
     **kwargs
     ):
     """
@@ -397,14 +427,13 @@ def check_cupy_gpu(
         s = f"{s: <80}"
         print(s)
 
+    cuda_path = cp.cuda.get_cuda_path()
+    print(f"Detected CUDA Path:\t{cuda_path}")
+    cupy_version = cp.__version__
+    print(f"Cupy Version:\t\t{cupy_version}")
+    
     # if verbose print extra information 
     if gratuitously_verbose:
-        cuda_path = cp.cuda.get_cuda_path()
-        print(f"Detected CUDA Path:\t{cuda_path}")
-        cupy_version = cp.__version__
-        print(f"Cupy Version:\t\t{cupy_version}")
-    # print the atributes of the GPUs detected. 
-    if egregiously_verbose:
         for i in range(num_gpus_detected):
             d = cp.cuda.Device(i)
             s = f"GPU: {i}" 
@@ -445,7 +474,7 @@ def check_config(
     modules:list = modules,
     verbose:bool = False,
     gratuitously_verbose:bool = False,
-    egregiously_verbose:bool = False
+    # egregiously_verbose:bool = False
     ):
     
     
@@ -471,25 +500,25 @@ def check_config(
 
         print_import_states(states_dict)
 
-    if gratuitously_verbose:
-        
-        extra_checks_message = "Running Extra Checks"
-        extra_checks_message = create_bold(extra_checks_message)
-        print(f"{extra_checks_message}")
-        # For modules that import run any extra checks
-        for key, val in states_dict.items():
-            if val:
-                s = create_underline(key.capitalize())
-                print(s)
-                func = funcs_dict.get(key)
-                if func is not None:
-                    func(verbose, gratuitously_verbose)
-                else:
-                    print_no_extra_checks(key)
+        # Run the extra checks
+        # extra_checks_message = "Running Extra Checks"
+        # extra_checks_message = create_bold(extra_checks_message)
+        # print(f"{extra_checks_message}")
+        # # For modules that import run any extra checks
+        # for key, val in states_dict.items():
+        #     if val:
+        #         s = create_underline(key.capitalize())
+        #         print(s)
+        #         func = funcs_dict.get(key)
+        #         if func is not None:
+        #             func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
+        #         else:
+        #             print_no_extra_checks(key)
+
+        perfrom_extra_checks(import_states=states_dict, verbose=verbose, gratuitously_verbose=gratuitously_verbose)
 
    
 
-    #check_module_functionality(state_dict=states_dict)
     return None
 
 
