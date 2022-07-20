@@ -135,6 +135,9 @@ class BraggVectors:
         braggvector_copy._v_cal = self._v_cal
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
+        if hasattr(self,'calibration'):
+            braggvector_copy.calibration = self.calibration
+
         return braggvector_copy
 
 ############ END OF CLASS ###########

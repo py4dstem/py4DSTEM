@@ -911,7 +911,8 @@ def match_single_pattern(
                 im_polar_scale_0 = np.mean(im_polar**2)**0.4
             else:
                 im_polar_scale = np.mean(im_polar**2)**0.4
-                im_polar *= im_polar_scale_0 / im_polar_scale
+                if im_polar_scale > 0:
+                    im_polar *= im_polar_scale_0 / im_polar_scale
                 # im_polar /= np.sqrt(np.mean(im_polar**2))
                 # im_polar *= im_polar_0_rms
 
@@ -1278,10 +1279,11 @@ def match_single_pattern(
                     zone_axis_lattice = self.lattice_to_hexagonal(self.cartesian_to_lattice(orientation.family[match_ind][:, 2]))
                     zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
                 else:
-                    x_proj_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 0])
-                    x_proj_lattice = np.round(x_proj_lattice,decimals=3)
-                    zone_axis_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 2])
-                    zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
+                    if np.max(np.abs(orientation.family)) > 0.1:
+                        x_proj_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 0])
+                        x_proj_lattice = np.round(x_proj_lattice,decimals=3)
+                        zone_axis_lattice = self.cartesian_to_lattice(orientation.family[match_ind][:, 2])
+                        zone_axis_lattice = np.round(zone_axis_lattice,decimals=3)
 
                 if orientation.corr[match_ind] > 0:
                     print(
@@ -1294,6 +1296,8 @@ def match_single_pattern(
                         + " with corr value = "
                         + str(np.round(orientation.corr[match_ind], decimals=3))
                     )
+                else:
+                    print('No good match found for index ' + str(match_ind))
 
             else:
                 zone_axis_fit = orientation.matrix[match_ind][:, 2]

@@ -278,7 +278,7 @@ def radial_integral(
     ar, 
     x0=None, 
     y0=None, 
-    dr=1, 
+    dr=0.1, 
     rmax=None
     ):
     """
