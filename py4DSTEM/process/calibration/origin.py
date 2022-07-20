@@ -298,7 +298,7 @@ def get_origin_from_braggpeaks(
                 qy0[Rx, Ry] = y0
 
     # return
-    mask = np.ones(datacube.Rshape, dtype=bool)
+    mask = np.ones(braggpeaks.shape, dtype=bool)
     return qx0, qy0, mask
 
 def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
@@ -467,7 +467,7 @@ def fit_origin(
 
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
-        mask (2b boolean array, optional): ignore points where mask=True
+        mask (2b boolean array, optional): ignore points where mask=False
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
         returnfitp (bool, optional): if True, returns the fit parameters
         robust (bool, optional): If set to True, fit will be repeated with outliers
@@ -536,7 +536,7 @@ def fit_origin(
             robust=robust,
             robust_steps=robust_steps,
             robust_thresh=robust_thresh,
-            data_mask=mask == False,
+            data_mask=mask == True,
         )
         popt_y, pcov_y, qy0_fit = fit_2D(
             f,
@@ -544,7 +544,7 @@ def fit_origin(
             robust=robust,
             robust_steps=robust_steps,
             robust_thresh=robust_thresh,
-            data_mask=mask == False,
+            data_mask=mask == True,
         )
 
     # Compute residuals

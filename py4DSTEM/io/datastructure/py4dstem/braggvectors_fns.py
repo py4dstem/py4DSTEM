@@ -99,7 +99,9 @@ def fit_origin(
     robust=False,
     robust_steps=3,
     robust_thresh=2,
+    mask_check_data = True,
     plot = True,
+    plot_range = None,
     fit_vis_params = None,
     returncalc = True,
     **kwargs
@@ -117,7 +119,9 @@ def fit_origin(
         robust_thresh (int, optional): Threshold for including points, in units of
             root-mean-square (standard deviations) error of the predicted values after
             fitting.
+        mask_check_data (bool):     Get mask from origin measurements equal to zero. (TODO - replace)
         plot (bool, optional): plot results
+        plot_range (float):    min and max color range for plot (pixels)
 
     Returns:
         (variable): Return value depends on returnfitp. If ``returnfitp==False``
@@ -129,8 +133,18 @@ def fit_origin(
             * **qy0_residuals**: *(ndarray)* the y-position fit residuals
     """
     q_meas = self.calibration.get_origin_meas()
+
     from ....process.calibration import fit_origin
-    qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(tuple(q_meas))
+    if mask_check_data is True:
+        # TODO - replace this bad hack for the mask for the origin fit
+        mask = np.logical_not(q_meas[0]==0)
+        qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
+            tuple(q_meas),
+            mask = mask,
+            )
+    else:
+        qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
+            tuple(q_meas))
 
     # try to add to calibration
     try:
@@ -140,9 +154,21 @@ def fit_origin(
         pass
     if plot:
         from ....visualize import show_image_grid
-        qx0_meas,qy0_meas = q_meas
+        if mask is None:
+            qx0_meas,qy0_meas = q_meas
+            qx0_res_plot = qx0_residuals
+            qy0_res_plot = qy0_residuals
+        else:
+            qx0_meas = np.ma.masked_array(q_meas[0], mask = np.logical_not(mask))
+            qy0_meas = np.ma.masked_array(q_meas[1], mask = np.logical_not(mask))
+            qx0_res_plot = np.ma.masked_array(qx0_residuals, mask = np.logical_not(mask))
+            qy0_res_plot = np.ma.masked_array(qy0_residuals, mask = np.logical_not(mask))
         qx0_mean = np.mean(qx0_fit)
         qy0_mean = np.mean(qy0_fit)
+
+
+        if plot_range is None:
+            plot_range = 2*np.max(qx0_fit - qx0_mean)
 
         if fit_vis_params is None:
             fit_vis_params = {
@@ -150,14 +176,14 @@ def fit_origin(
                 'W':3,
                 'cmap':'RdBu',
                 'clipvals':'manual',
-                'vmin':-1,
-                'vmax':1,
+                'vmin':-1*plot_range,
+                'vmax':1*plot_range,
                 'axsize':(6,2),
                 }
 
         show_image_grid(
-            lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_residuals,
-                      qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_residuals][i],
+            lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_res_plot,
+                      qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_res_plot][i],
             **fit_vis_params
         )
 
