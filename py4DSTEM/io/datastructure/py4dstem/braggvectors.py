@@ -73,22 +73,17 @@ class BraggVectors:
                 ('intensity',np.float)
             ],
             shape = Rshape,
-            name = 'v_uncal'
+            name = '_v_uncal'
         )
 
-        self._v_cal = PointListArray(
-            dtype = [
-                ('qx',np.float),
-                ('qy',np.float),
-                ('intensity',np.float)
-            ],
-            shape = Rshape,
-            name = 'v_cal'
-        )
 
     @property
     def vectors(self):
-        return self._v_cal
+        try:
+            return self._v_cal
+        except AttributeError:
+            er = "No calibrated bragg vectors found. Try running .calibrate()!"
+            raise Exception(er)
 
     @property
     def vectors_uncal(self):
