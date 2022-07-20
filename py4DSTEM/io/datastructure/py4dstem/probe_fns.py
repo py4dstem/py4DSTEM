@@ -23,35 +23,23 @@ def get_kernel(
     mode, this is the only processing performed. In the remaining modes,
     some additional processing is performed which adds a ring of
     negative intensity around the central probe, which results in
-    edge-filetering-like behavior during cross correlation. Valid modes
-    are:
+    edge-filetering-like behavior during cross correlation. Valid modes,
+    and the required additional kwargs, if any, for each, are:
 
         - 'flat': creates a flat probe kernel. For bullseye or other
-            structured probes, this mode is recommended.
+            structured probes, this mode is recommended. No required
+            arguments, optional arg `origin` (2 tuple)
         - 'gaussian': subtracts a gaussian with a width of standard
-            deviation 'sigma'
+            deviation `sigma`, which is a required argument. Optional
+            arg `origin`.
         - 'sigmoid': subtracts an annulus with inner and outer radii
             of (ri,ro) and a sine-squared sigmoid radial profile from
-            the probe template.
+            the probe template. Required arg: `radii` (2 tuple). Optional
+            args `origin` (2-tuple)
         - 'sigmoid_log': subtracts an annulus with inner and outer radii
             of (ri,ro) and a logistic sigmoid radial profile from
-            the probe template.
-
-    Each mode accepts 'center' (2-tuple) as a kwarg to manually specify
-    the center of the probe, which is otherwise autodetected. Modes which
-    accept additional kwargs and those arguments are:
-
-        - 'gaussian':
-            sigma (number)
-        - 'sigmoid':
-            radii (2-tuple)
-        - 'sigmoid_log':
-            radii (2-tuple)
-
-    Accepts:
-        probe (2D array):
-        mode (str): must be in 'flat','gaussian','sigmoid','sigmoid_log'
-        **kwargs: depend on `mode`, see above
+            the probe template. Required arg: `radii` (2 tuple). Optional
+            args `origin` (2-tuple)
 
     Returns:
         (2D array)
