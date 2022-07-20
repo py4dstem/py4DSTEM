@@ -24,7 +24,11 @@ from ...io.datastructure import PointListArray
 
 ###### Fitting a 1d elliptical curve to a 2d array, e.g. a Bragg vector map ######
 
-def fit_ellipse_1D(ar,center,fitradii,mask=None):
+def fit_ellipse_1D(
+    ar,
+    center=None,
+    fitradii=None,
+    mask=None):
     """
     For a 2d array ar, fits a 1d elliptical curve to the data inside an annulus centered
     at `center` with inner and outer radii at `fitradii`.  The data to fit make optionally
@@ -45,6 +49,14 @@ def fit_ellipse_1D(ar,center,fitradii,mask=None):
             * **theta**: the tilt of the ellipse semimajor axis with respect to the
               x-axis, in radians
     """
+
+    # Default values
+    if center is None:
+        center = (ar.shape[0]/2,ar.shape[1]/2)
+
+    if fitradii is None:
+        fitradii = (0,np.minimum(ar.shape)/2)
+
     # Unpack inputs
     x0,y0 = center
     ri,ro = fitradii
