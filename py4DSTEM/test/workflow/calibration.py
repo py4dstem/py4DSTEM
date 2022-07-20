@@ -15,9 +15,9 @@ filepath_h5 = "/home/ben/Desktop/test.h5"
 
 
 # Load a datacube from a dm file
-datacube = py4DSTEM.io.read(filepath_calibration_dm)
+datacube = py4DSTEM.io.import_file(filepath_calibration_dm)
 datacube = py4DSTEM.io.datastructure.DataCube(
-    data=datacube.data[0:15,0:20,:,:])
+    data=datacube.data[0:10,0:10,:,:])
 
 print(f"Loaded a {datacube.data.shape} shaped datacube with tree:")
 datacube.tree.print()
@@ -69,7 +69,7 @@ im_ADF = datacube.get_virtual_image(
 
 # Probe
 
-datacube_vacuum = py4DSTEM.io.read(
+datacube_vacuum = py4DSTEM.io.import_file(
     filepath_vacuum,
     name = 'datacube_vacuum'
 )
@@ -96,8 +96,8 @@ datacube.add(probe)
 # Disk Detection
 
 # Select scan positions
-rxs = 0,3,5,10,5,8
-rys = 8,5,13,12,14,3
+rxs = 0,3,5,0,5,8
+rys = 8,5,3,2,4,3
 
 # Tune disk detection parameters on selected DPs
 detect_params = {
@@ -165,8 +165,8 @@ radii = 240,265
 #)
 
 # Compute the origin position pattern-by-pattern
-origin_meas = braggvectors.measure_origin(
-    mode = 5,
+qx0_meas,qy0_meas,mask = braggvectors.measure_origin(
+    mode = 'beamstop',
     center_guess = center_guess,
     radii = radii,
     Q_Nx = datacube.Q_Nx,
@@ -176,16 +176,10 @@ origin_meas = braggvectors.measure_origin(
 )
 
 # Show the measured origin shifts
-qx0_meas,qy0_meas = origin_meas[0],origin_meas[1]
-mask = ~qx0_meas.mask
 #show(qx0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qx0_meas),max=8)
 #show(qy0_meas,cmap='RdBu',clipvals='centered',min=np.mean(qy0_meas),max=8)
 
-# Some local variation in the position of the origin due to electron-sample interaction is
-# expected, and constitutes meaningful signal that we would not want to subtract away.
-# In fitting a plane or parabolic surface to the measured origin shifts, we aim to
-# capture the systematic shift of the beam due to the changing scan coils,
-# while removing as little physically meaningful signal we can.
+# Fit origin
 x = py4DSTEM.process.calibration.fit_origin(
     (qx0_meas,qy0_meas),
     mask=~mask,
@@ -343,7 +337,7 @@ py4DSTEM.io.print_h5_tree(filepath_h5)
 
 d = py4DSTEM.io.read(
     filepath_h5,
-    root = '4DSTEM_experiment/datacube/',
+    root = '4DSTEM_experiment/datacube/braggvectors',
     tree = True
 )
 
@@ -357,7 +351,6 @@ d = py4DSTEM.io.read(
 #print(d.calibration)
 
 #d.tree['braggvectors'].calibrate()
-
 
 
 
