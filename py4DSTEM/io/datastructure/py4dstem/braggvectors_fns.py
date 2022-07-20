@@ -476,7 +476,7 @@ def get_masked_peaks(
     """
 
     # Copy peaks
-    v = self._v_uncal.copy()
+    v = self._v_uncal.copy( name='_v_uncal' )
 
     # Loop over all peaks
     for rx in range(v.shape[0]):
@@ -497,7 +497,6 @@ def get_masked_peaks(
     if returncalc: 
         bragg_vector_update = self.copy()
         bragg_vector_update._v_uncal = v
-        bragg_vector_update._v_uncal.name = 'v_uncal'
 
         return bragg_vector_update
 
