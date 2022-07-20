@@ -110,7 +110,7 @@ def fit_origin(
     ):
     """
     Fit origin of bragg vectors.
-    
+
     Args:
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
@@ -122,7 +122,7 @@ def fit_origin(
             root-mean-square (standard deviations) error of the predicted values after
             fitting.
         plot (bool, optional): plot results
-    
+
     Returns:
         (variable): Return value depends on returnfitp. If ``returnfitp==False``
         (default), returns a 4-tuple containing:
@@ -130,7 +130,7 @@ def fit_origin(
             * **qx0_fit**: *(ndarray)* the fit origin x-position
             * **qy0_fit**: *(ndarray)* the fit origin y-position
             * **qx0_residuals**: *(ndarray)* the x-position fit residuals
-            * **qy0_residuals**: *(ndarray)* the y-position fit residuals    
+            * **qy0_residuals**: *(ndarray)* the y-position fit residuals
     """
     q_meas = self.calibration.get_origin_meas()
     from ....process.calibration import fit_origin
@@ -142,13 +142,13 @@ def fit_origin(
     except AttributeError:
         # should a warning be raised?
         pass
-    if plot: 
+    if plot:
         from ....visualize import show_image_grid
         qx0_meas,qy0_meas = q_meas
         qx0_mean = np.mean(qx0_fit)
         qy0_mean = np.mean(qy0_fit)
-        
-        if fit_vis_params is None: 
+
+        if fit_vis_params is None:
             fit_vis_params = {
                 'H':2,
                 'W':3,
@@ -166,7 +166,7 @@ def fit_origin(
         )
 
     if returncalc:
-        return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals 
+        return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
 
 # Calibrate
 def calibrate(
@@ -178,8 +178,8 @@ def calibrate(
     Determines which calibrations are present in set.calibrations (of origin,
     elliptical, pixel, rotational), and applies any it finds to self.v_uncal,
     storing the output in self.v.
-    
-    Args: 
+
+    Args:
         use_fitted_origin (bool): determine if using fitted origin or measured origin
     Returns:
         (PointListArray)
@@ -191,8 +191,8 @@ def calibrate(
 
     from ....process.calibration.braggvectors import calibrate
 
-    v = self.vectors_uncal.copy( name='v_cal' )
-    v = calibrate( 
+    v = self.vectors_uncal.copy( name='_v_cal' )
+    v = calibrate(
         v,
         cal,
         use_fitted_origin,
@@ -205,8 +205,8 @@ def calibrate(
 # Lattice vectors
 def choose_lattice_vectors(
     self,
-    index_g0, 
-    index_g1, 
+    index_g0,
+    index_g1,
     index_g2,
     mode = 'centered',
     plot = True,
@@ -224,8 +224,8 @@ def choose_lattice_vectors(
     ):
     """
     Choose which lattice vectors to use for strain mapping.
-    
-    Args: 
+
+    Args:
         index_g0 (int): origin
         index_g1 (int): second point of vector 1
         index_g2 (int): second point of vector 2
@@ -244,10 +244,10 @@ def choose_lattice_vectors(
             after maximum detection and before subpixel refinement
     """
     from ....process.utils import get_maxima_2D
-    
-    if mode == "centered": 
+
+    if mode == "centered":
         bvm = self.bvm_centered
-    else: 
+    else:
         bvm = self.bvm_raw
 
     g = get_maxima_2D(
@@ -267,8 +267,8 @@ def choose_lattice_vectors(
 
     from ....visualize import select_lattice_vectors
     g1,g2 = select_lattice_vectors(
-        bvm,    
-        gx = g['x'], 
+        bvm,
+        gx = g['x'],
         gy = g['y'],
         i0 = index_g0,
         i1 = index_g1,
@@ -280,11 +280,11 @@ def choose_lattice_vectors(
     self.g2 = g2
 
     if returncalc:
-        return g1, g2 
+        return g1, g2
 
 def index_bragg_directions(
     self,
-    x0 = None, 
+    x0 = None,
     y0 = None,
     plot = True,
     bvm_vis_params = {},
@@ -294,16 +294,16 @@ def index_bragg_directions(
     From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
     lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
     reciprocal lattice directions.
-    
-    Args: 
+
+    Args:
         x0 (float): x-coord of origin
         y0 (float): y-coord of origin
         Plot (bool): plot results
     """
 
-    if x0 is None: 
+    if x0 is None:
         x0 = self.Qshape[0]/2
-    if y0 is None: 
+    if y0 is None:
         y0 = self.Qshape[0]/2
 
     from ....process.latticevectors import index_bragg_directions
@@ -318,7 +318,7 @@ def index_bragg_directions(
 
     self.braggdirections = braggdirections
 
-    if plot: 
+    if plot:
         from ....visualize import show_bragg_indexing
         show_bragg_indexing(
             self.bvm_centered,
@@ -327,14 +327,14 @@ def index_bragg_directions(
             points = True
         )
 
-    if returncalc: 
+    if returncalc:
         return braggdirections
 
 
 
 def add_indices_to_braggpeaks(
     self,
-    maxPeakSpacing, 
+    maxPeakSpacing,
     mask = None,
     returncalc = False,
     ):
@@ -368,7 +368,7 @@ def add_indices_to_braggpeaks(
 
     self.bragg_peaks_indexed = bragg_peaks_indexed
 
-    if returncalc: 
+    if returncalc:
         return bragg_peaks_indexed
 
 
@@ -383,7 +383,7 @@ def fit_lattice_vectors_all_DPs(self, returncalc = False):
     from ....process.latticevectors import fit_lattice_vectors_all_DPs
     g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_peaks_indexed)
     self.g1g2_map = g1g2_map
-    if returncalc: 
+    if returncalc:
         return g1g2_map
 
 def get_strain_from_reference_region(self, mask, returncalc = False):
@@ -391,7 +391,7 @@ def get_strain_from_reference_region(self, mask, returncalc = False):
     Gets a strain map from the reference region of real space specified by mask and the
     lattice vector map g1g2_map.
 
-    Args: 
+    Args:
         mask (ndarray of bools): use lattice vectors from g1g2_map scan positions
             wherever mask==True
 
@@ -405,7 +405,7 @@ def get_strain_from_reference_region(self, mask, returncalc = False):
 
     self.strainmap_median_g1g2 = strainmap_median_g1g2
 
-    if returncalc: 
+    if returncalc:
         return strainmap_median_g1g2
 
 
@@ -415,7 +415,7 @@ def get_strain_from_reference_g1g2(self, mask, returncalc = False):
     g1g2_map.
 
 
-    Args: 
+    Args:
         mask (ndarray of bools): use lattice vectors from g1g2_map scan positions
             wherever mask==True
 
@@ -428,7 +428,7 @@ def get_strain_from_reference_g1g2(self, mask, returncalc = False):
 
     self.strainmap_reference_g1g2 = strainmap_reference_g1g2
 
-    if returncalc: 
+    if returncalc:
         return strainmap_reference_g1g2
 
 def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
@@ -438,21 +438,21 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
     and Qy directions, respectively, get a strain map defined with respect to some other
     right-handed coordinate system, in which the x-axis is oriented along (xaxis_x,
     xaxis_y).
-    
+
     Args:
         g_referencce (tupe): reference coordinate system for xaxis_x and xaxis_y
     """
-    
+
     assert mode in ("median","reference")
-    if g_reference is None: 
+    if g_reference is None:
         g_reference = np.subtract(self.g1, self.g2)
 
     from ....process.latticevectors import get_rotated_strain_map
 
-    if mode == "median": 
-        strainmap_raw = self.strainmap_median_g1g2 
+    if mode == "median":
+        strainmap_raw = self.strainmap_median_g1g2
     elif mode == "reference":
-        strainmap_raw = self.strainmap_reference_g1g2 
+        strainmap_raw = self.strainmap_reference_g1g2
 
     strainmap = get_rotated_strain_map(
         strainmap_raw,
@@ -460,5 +460,5 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
         xaxis_y = g_reference[1],
     )
 
-    if returncalc: 
+    if returncalc:
         return strainmap

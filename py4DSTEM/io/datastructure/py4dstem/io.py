@@ -437,7 +437,7 @@ def BraggVectors_from_h5(group:h5py.Group):
 
 
     # Get uncalibrated peak
-    v_uncal = PointListArray_from_h5(group['v_uncal'])
+    v_uncal = PointListArray_from_h5(group['_v_uncal'])
 
     # Get Qshape metadata
     try:
@@ -456,7 +456,7 @@ def BraggVectors_from_h5(group:h5py.Group):
 
     # Add calibrated peaks, if they're there
     try:
-        v_cal = PointListArray_from_h5(group['v_cal'])
+        v_cal = PointListArray_from_h5(group['_v_cal'])
         braggvectors._v_cal = v_cal
     except KeyError:
         pass

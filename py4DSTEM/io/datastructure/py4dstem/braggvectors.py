@@ -71,7 +71,7 @@ class BraggVectors:
                 ('intensity',np.float)
             ],
             shape = Rshape,
-            name = 'v_uncal'
+            name = '_v_uncal'
         )
 
 
