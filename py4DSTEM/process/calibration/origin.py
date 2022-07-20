@@ -508,6 +508,10 @@ def fit_origin(
     else:
         raise Exception("Invalid fitfunction '{}'".format(fitfunction))
 
+    # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
+    if isinstance(qx0_meas, np.ma.MaskedArray):
+        mask = np.ma.getmask(qx0_meas)
+
     # Fit data
     if mask is None:
         popt_x, pcov_x, qx0_fit = fit_2D(
