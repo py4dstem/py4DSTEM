@@ -23,6 +23,7 @@ class DataCube(Array):
         get_vacuum_probe,
         find_Bragg_disks,
         get_probe_size,
+        get_beamstop_mask,
     )
 
 

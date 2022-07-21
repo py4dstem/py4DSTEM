@@ -1,7 +1,8 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
-from tqdm import tqdm
+# from tqdm import tqdm
+from ...tqdmnd import tqdmnd
 from ..utils import make_Fourier_coords2D
 from ...io import DataCube
 
@@ -203,7 +204,8 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
     stds_f = np.zeros(N_thetas)
 
     # Unflipped
-    for i,theta in tqdm(enumerate(thetas)):
+    for i in tqdmnd(range(thetas.shape[0])):
+        theta = thetas[i]
         phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=False,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
@@ -211,7 +213,8 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
         stds[i] = np.std(phase)
 
     # Flipped
-    for i,theta in tqdm(enumerate(thetas)):
+    for i in tqdmnd(range(thetas.shape[0])):
+        theta = thetas[i]
         phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=True,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
@@ -229,8 +232,19 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
     else:
         return theta, flip
 
-def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
-                        paddingfactor=2, stepsize=1, n_iter=10, phase_init=None):
+def get_phase_from_CoM(
+    CoMx, 
+    CoMy, 
+    theta, 
+    flip, 
+    regLowPass=0.5, 
+    regHighPass=100,
+    paddingfactor=2, 
+    stepsize=1, 
+    n_iter=10, 
+    phase_init=None,
+    progress_bar = False,
+    ):
     """
     Calculate the phase of the sample transmittance from the diffraction centers of mass.
     A bare bones description of the approach taken here is below - for detailed
@@ -271,6 +285,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         stepsize (float): the stepsize in the iteration step which updates the phase
         n_iter (int): the number of iterations
         phase_init (2D array): initial guess for the phase
+        progress_bar (bool):  Enable progressbar
 
     Returns:
         (2-tuple) A 2-tuple containing:
@@ -322,7 +337,12 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         phase[:R_Nx,:R_Ny] = phase_init
 
     # Iterative reconstruction
-    for i in tqdm(range(n_iter)):
+    for i in tqdmnd(
+        range(n_iter),
+        desc="Reconstructing phase",
+        unit=" iterations",
+        disable=not progress_bar,
+        ):
 
         # Update gradient estimates using measured CoM values
         dx[mask] -= CoMx_rot.ravel()
