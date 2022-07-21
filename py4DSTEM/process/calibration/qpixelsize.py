@@ -4,7 +4,7 @@ import numpy as np
 from scipy.optimize import leastsq
 from typing import Union, Optional
 from ..utils import get_CoM
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ...io.datastructure import Calibration, PointListArray
 
 

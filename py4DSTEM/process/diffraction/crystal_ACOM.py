@@ -5,7 +5,7 @@ from typing import Union, Optional
 
 from .utils import Orientation, OrientationMap, axisEqual3D
 from ..utils import electron_wavelength_angstrom
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ...io.datastructure import PointList, PointListArray, RealSlice
 
 from numpy.linalg import lstsq
