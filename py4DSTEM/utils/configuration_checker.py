@@ -4,12 +4,9 @@ import importlib
 from operator import mod
 
 
-# TODO check the correct nameing convetions e.g. is h5py a libray or a module
-
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
-# maybe this should be called libraries?
 modules = [
         'PyQt5',
         'crystal4D',
