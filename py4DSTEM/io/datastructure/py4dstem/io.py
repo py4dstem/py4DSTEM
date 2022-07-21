@@ -398,8 +398,8 @@ def BraggVectors_to_h5(
     grp.attrs.create("py4dstem_class", braggvectors.__class__.__name__)
 
     # Ensure that the PointListArrays have the appropriate names
-    braggvectors.vectors_uncal.name = "v_uncal"
-    braggvectors.vectors.name = "v_cal"
+    braggvectors.vectors_uncal.name = "_v_uncal"
+    braggvectors.vectors.name = "_v_cal"
 
     # Add vectors, cal and uncal
     PointListArray_to_h5(
