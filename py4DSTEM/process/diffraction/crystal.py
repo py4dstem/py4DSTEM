@@ -7,7 +7,7 @@ from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
 from ..utils import single_atom_scatter, electron_wavelength_angstrom
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 from .crystal_viz import plot_diffraction_pattern
 from .utils import Orientation
