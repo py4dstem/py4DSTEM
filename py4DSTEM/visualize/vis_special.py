@@ -137,10 +137,20 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
         return fig,ax
 
 
-def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
-                  color='k',xlabel='q (pixels)',ylabel='Intensity (A.U.)',
-                  labelsize=16,ticklabelsize=14,grid='on',label=None,
-                  **kwargs):
+def show_qprofile(
+    q,
+    intensity,
+    ymax=None,
+    figsize=(12,4),
+    returnfig=False,
+    color='k',
+    xlabel='q (pixels)',
+    ylabel='Intensity (A.U.)',  
+    labelsize=16,
+    ticklabelsize=14,
+    grid='on',
+    label=None,
+    **kwargs):
     """
     Plots a diffraction space radial profile.
     Params:
@@ -155,6 +165,9 @@ def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
         grid            'off' or 'on'
         label           a legend label for the plotted curve
     """
+    if ymax is None:
+        ymax = np.max(intensity)*1.05
+
     fig,ax = plt.subplots(figsize=figsize)
     ax.plot(q,intensity,color=color,label=label)
     ax.grid(grid)
@@ -169,18 +182,60 @@ def show_qprofile(q,intensity,ymax,figsize=(12,4),returnfig=False,
     else:
         return fig,ax
 
-def show_kernel(kernel,R,L,W,figsize=(12,6),returnfig=False,**kwargs):
+def show_kernel(
+    kernel,
+    R,
+    L,
+    W,
+    figsize=(12,6),
+    returnfig=False,
+    **kwargs):
     """
     Plots, side by side, the probe kernel and its line profile.
     R is the kernel plot's window size.
-    L and W are the lenth ad width of the lineprofile.
+    L and W are the length and width of the lineprofile.
     """
-    lineprofile = np.concatenate([np.sum(kernel[-L:,:W],axis=(1)),
-                                  np.sum(kernel[:L,:W],axis=(1))])
+    lineprofile_1 = np.concatenate([
+        np.sum(kernel[-L:,:W],axis=1),
+        np.sum(kernel[:L,:W],axis=1)
+    ])
+    lineprofile_2 = np.concatenate([
+        np.sum(kernel[:W,-L:],axis=0),
+        np.sum(kernel[:W,:L],axis=0)
+    ])
+
+    im_kernel = np.vstack([
+        np.hstack([
+            kernel[-int(R):,-int(R):],
+            kernel[-int(R):,:int(R)]
+        ]),
+        np.hstack([
+            kernel[:int(R),-int(R):],
+            kernel[:int(R),:int(R)]
+        ]),
+    ])
 
     fig,axs = plt.subplots(1,2,figsize=figsize)
-    axs[0].matshow(kernel[:int(R),:int(R)],cmap='gray')
-    axs[1].plot(np.arange(len(lineprofile)),lineprofile)
+    axs[0].matshow(im_kernel,cmap='gray')
+    axs[0].plot(
+        np.ones(2*R)*R,
+        np.arange(2*R),
+        c='r')
+    axs[0].plot(
+        np.arange(2*R),
+        np.ones(2*R)*R,
+        c='c')
+
+
+    axs[1].plot(
+        np.arange(len(lineprofile_1)),
+        lineprofile_1,
+        c='r')
+    axs[1].plot(
+        np.arange(len(lineprofile_2)),
+        lineprofile_2,
+        c='c')
+
     if not returnfig:
         plt.show()
         return

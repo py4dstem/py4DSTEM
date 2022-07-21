@@ -159,6 +159,10 @@ class Calibration(Metadata):
         self._params['qy0_meas'] = x
     def get_qy0_meas(self,rx=None,ry=None):
         return self._get_value('qy0_meas',rx,ry)
+    def set_origin_meas_mask(self,x):
+        self._['origin_meas_mask'] = x
+    def get_origin_meas_mask(self,rx=None,ry=None):
+        return self._get_value('origin_meas_mask',rx,ry)
     def set_origin(self,x):
         """
         Args:
@@ -177,11 +181,16 @@ class Calibration(Metadata):
     def set_origin_meas(self,x):
         """
         Args:
-            x (2-tuple of 2D R-shaped arrays: the origin
+            x (2-tuple or 3 uple of 2D R-shaped arrays): qx0,qy0,[mask]
         """
-        qx0,qy0 = x
+        qx0,qy0 = x[0],x[1]
         self.set_qx0_meas(qx0)
         self.set_qy0_meas(qy0)
+        try:
+            m = x[2]
+            self.set_origin_meas_mask(m)
+        except IndexError:
+            pass
     def get_origin_meas(self,rx=None,ry=None):
         qx0 = self._get_value('qx0_meas',rx,ry)
         qy0 = self._get_value('qy0_meas',rx,ry)

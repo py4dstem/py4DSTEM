@@ -1,8 +1,7 @@
 # Functions to become DataCube methods
 
 import numpy as np
-
-
+from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 
 # Add to tree
@@ -332,7 +331,7 @@ def get_vacuum_probe(
 from .calibration import Calibration
 def get_probe_size(
     self,
-    name = 'probe_size',
+    mode = None,
     returncal = True, 
     ** kwargs,
     ):
@@ -342,10 +341,19 @@ def get_probe_size(
     #perform computation 
     from ....process.calibration import get_probe_size
     
-    assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
+    if mode is None: 
+        assert 'no mode speficied, using mean diffraciton pattern'
+        assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
+        DP = self.tree['dp_mean'].data
+    elif type(mode) == str:
+        assert mode in self.tree.keys(), "mode not found"
+        DP = self.tree[mode].data
+    elif type(mode) == np.ndarray:
+        assert len(mode.shape) == 2, "must be a 2D array"
+        DP = mode
 
-    x = get_probe_size(
-        self.tree['dp_mean'].data,
+    x = get_probe_size(DP
+        ,
         **kwargs
     )
 
@@ -556,4 +564,65 @@ def find_Bragg_disks(
 
 
 
+def get_beamstop_mask(
+    self,
+    threshold = 0.25,
+    distance_edge = 4.0,
+    include_edges = True,
+    name = "mask_beamstop",
+    returncalc = True,
+    ):
+    """
+    This function uses the mean diffraction pattern plus a threshold to create a beamstop mask.
+    
+    Args:
+        threshold: (float)  Value from 0 to 1 defining initial threshold for beamstop mask,
+                            taken from the sorted intensity values - 0 is the dimmest
+                            pixel, while 1 uses the brighted pixels.
+        distance_edge: (float)  How many pixels to expand the mask.
+        include_edges: (bool)   If set to True, edge pixels will be included in the mask.
+        name: (string)          Name of the output array.
+        returncalc: (bool):     Set to true to return the result.
+
+    Returns:
+        (Optional): if returncalc is True, returns the beamstop mask
+
+    """
+
+    # Calculate dp_mean if needed
+    if not "dp_mean" in self.tree.keys():
+        self.get_dp_mean();
+
+    # normalized dp_mean
+    int_sort = np.sort(self.tree["dp_mean"].data.ravel())
+    ind = np.round(np.clip(
+            int_sort.shape[0]*threshold,
+            0,int_sort.shape[0])).astype('int')
+    intensity_threshold = int_sort[ind]
+
+    # Use threshold to calculate initial mask
+    mask_beamstop = self.tree["dp_mean"].data >= intensity_threshold
+
+    # clean up mask
+    mask_beamstop = np.logical_not(binary_fill_holes(np.logical_not(mask_beamstop)))
+    mask_beamstop = binary_fill_holes(mask_beamstop)
+
+    # Edges
+    if include_edges:
+        mask_beamstop[0,:] = False
+        mask_beamstop[:,0] = False
+        mask_beamstop[-1,:] = False
+        mask_beamstop[:,-1] = False
+
+
+    # Expand mask
+    mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge
+
+    # Output mask for beamstop
+    self.name = name
+    self.tree[name] = mask_beamstop
+
+    # return
+    if returncalc:
+        return mask_beamstop
 

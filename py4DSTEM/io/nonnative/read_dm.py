@@ -102,7 +102,6 @@ def read_dm(
 
         if len(_data.shape) == 4:
             data = DataCube(_data, name=name)
-            print(_data.pixelUnit)
         else:
             data = Array(_data, name=name)
 
