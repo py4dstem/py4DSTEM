@@ -230,7 +230,12 @@ def cartesian_to_polarelliptical_transform(
 
 ### Radial integration
 
-def radial_elliptical_integral(ar, dr, p_ellipse):
+def radial_elliptical_integral(
+    ar, 
+    dr, 
+    p_ellipse,
+    rmax = None,
+    ):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of
     dr.
@@ -239,6 +244,7 @@ def radial_elliptical_integral(ar, dr, p_ellipse):
         ar (2d array): the data
         dr (number): the r sampling
         p_ellipse (5-tuple): the parameters (x0,y0,a,b,theta) for the ellipse
+        r_max (float):  maximum radial value
 
     Returns:
         (2-tuple): A 2-tuple containing:
@@ -248,16 +254,18 @@ def radial_elliptical_integral(ar, dr, p_ellipse):
         radial_integral (1d array) the radial integral
     """
     x0, y0 = p_ellipse[0], p_ellipse[1]
-    rmax = int(
-        max(
-            (
-                np.hypot(x0, y0),
-                np.hypot(x0, ar.shape[1] - y0),
-                np.hypot(ar.shape[0] - x0, y0),
-                np.hypot(ar.shape[0] - x0, ar.shape[1] - y0),
+    if rmax is None:
+        rmax = int(
+            max(
+                (
+                    np.hypot(x0, y0),
+                    np.hypot(x0, ar.shape[1] - y0),
+                    np.hypot(ar.shape[0] - x0, y0),
+                    np.hypot(ar.shape[0] - x0, ar.shape[1] - y0),
+                )
             )
         )
-    )
+
     polarAr, rr, pp = cartesian_to_polarelliptical_transform(
         ar, p_ellipse=p_ellipse, dr=dr, dphi=np.radians(2), r_range=rmax
     )
@@ -266,7 +274,13 @@ def radial_elliptical_integral(ar, dr, p_ellipse):
     return rbin_centers,radial_integral
 
 
-def radial_integral(ar, x0, y0, dr):
+def radial_integral(
+    ar, 
+    x0=None, 
+    y0=None, 
+    dr=0.1, 
+    rmax=None
+    ):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
@@ -274,6 +288,7 @@ def radial_integral(ar, x0, y0, dr):
         ar (2d array): the data
         x0,y0 (floats): the origin
         dr (number): radial step size
+        rmax (float): maximum radial dimension
 
     Returns:
         (2-tuple): A 2-tuple containing:
@@ -281,5 +296,15 @@ def radial_integral(ar, x0, y0, dr):
             * **rbin_centers**: *(1d array)* the bins centers of the radial integral
             * **radial_integral**: *(1d array)* the radial integral
     """
-    return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0))
+
+    # Default values
+    if x0 is None:
+        x0 = ar.shape[0]/2
+    if y0 is None:
+        y0 = ar.shape[1]/2
+
+    if rmax is None:
+        return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0))
+    else:
+        return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0), rmax=rmax)
 

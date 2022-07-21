@@ -10,7 +10,7 @@ import numpy as np
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 def plot_structure(

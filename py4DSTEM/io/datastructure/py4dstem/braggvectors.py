@@ -44,6 +44,7 @@ class BraggVectors:
         get_strain_from_reference_region,
         get_rotated_strain_map,
         get_strain_from_reference_g1g2,
+        get_masked_peaks,
     )
 
     def __init__(
@@ -54,7 +55,8 @@ class BraggVectors:
         ):
 
         self.name = name
-        self.shape = Rshape
+        self.Rshape = Rshape
+        self.shape = self.Rshape
         self.Qshape = Qshape
 
         self.tree = Tree()
@@ -71,22 +73,17 @@ class BraggVectors:
                 ('intensity',np.float)
             ],
             shape = Rshape,
-            name = 'v_uncal'
+            name = '_v_uncal'
         )
 
-        self._v_cal = PointListArray(
-            dtype = [
-                ('qx',np.float),
-                ('qy',np.float),
-                ('intensity',np.float)
-            ],
-            shape = Rshape,
-            name = 'v_cal'
-        )
 
     @property
     def vectors(self):
-        return self._v_cal
+        try:
+            return self._v_cal
+        except AttributeError:
+            er = "No calibrated bragg vectors found. Try running .calibrate()!"
+            raise Exception(er)
 
     @property
     def vectors_uncal(self):
@@ -112,8 +109,21 @@ class BraggVectors:
         return string
 
 
+    # copy
+    def copy(self, name=None):
+        name = name if name is not None else self.name+"_copy"
+        braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
+        braggvector_copy._v_uncal = self._v_uncal
+        try:
+            braggvector_copy._v_cal = self._v_cal
+        except AttributeError:
+            pass
+        for k in self.metadata.keys():
+            braggvector_copy.metadata = self.metadata[k].copy()
+        if hasattr(self,'calibration'):
+            braggvector_copy.calibration = self.calibration
 
-
+        return braggvector_copy
 
 
     # HDF5 read/write
@@ -128,8 +138,6 @@ class BraggVectors:
     def from_h5(group):
         from .io import BraggVectors_from_h5
         return BraggVectors_from_h5(group)
-
-
 
 
 

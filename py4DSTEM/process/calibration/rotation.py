@@ -3,7 +3,7 @@
 import numpy as np
 from typing import Optional
 from ...io.datastructure import Calibration, PointListArray
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 def get_Qvector_from_Rvector(vx, vy, QR_rotation):
