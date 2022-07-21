@@ -5,7 +5,7 @@ from scipy.ndimage.morphology import (
     binary_opening, binary_dilation, distance_transform_edt)
 
 from ..utils import get_shifted_ar, get_shift
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ...io.datastructure import DataCube, Probe
 
 

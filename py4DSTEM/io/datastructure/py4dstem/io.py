@@ -401,15 +401,18 @@ def BraggVectors_to_h5(
     braggvectors.vectors_uncal.name = "_v_uncal"
     braggvectors.vectors.name = "_v_cal"
 
-    # Add vectors, cal and uncal
+    # Add vectors
     PointListArray_to_h5(
-        braggvectors.vectors,
+        braggvectors._v_uncal,
         grp
     )
-    PointListArray_to_h5(
-        braggvectors.vectors_uncal,
-        grp
-    )
+    try:
+        PointListArray_to_h5(
+            braggvectors._v_cal,
+            grp
+        )
+    except AttributeError:
+        pass
 
     # Add metadata
     _write_metadata(braggvectors, grp)
@@ -437,9 +440,8 @@ def BraggVectors_from_h5(group:h5py.Group):
     assert(group.attrs["emd_group_type"] == 4), er
 
 
-    # Get PointListArrays
-    v_cal = PointListArray_from_h5(group['v_cal'])
-    v_uncal = PointListArray_from_h5(group['v_uncal'])
+    # Get uncalibrated peak
+    v_uncal = PointListArray_from_h5(group['_v_uncal'])
 
     # Get Qshape metadata
     try:
@@ -450,12 +452,18 @@ def BraggVectors_from_h5(group:h5py.Group):
 
     # Set up BraggVectors
     braggvectors = BraggVectors(
-        v_cal.shape,
+        v_uncal.shape,
         Qshape = Qshape,
         name = basename(group.name)
     )
-    braggvectors._v_cal = v_cal
     braggvectors._v_uncal = v_uncal
+
+    # Add calibrated peaks, if they're there
+    try:
+        v_cal = PointListArray_from_h5(group['_v_cal'])
+        braggvectors._v_cal = v_cal
+    except KeyError:
+        pass
 
     # Add remaining metadata
     _read_metadata(braggvectors, group)

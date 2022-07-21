@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 
