@@ -621,7 +621,72 @@ class Crystal:
         else:
             return bragg_peaks
 
+    def generate_ring_pattern(
+        self, 
+        accelerating_voltage = None,
+        k_max = 2.0,
+        orientation_plan_params = None,
+        sigma_excitation_error = 0.02,
+        tol_intensity = 1e-3,
+       # use_bloch = False,
+    ):
+        """
+        Process to calculate polycrystalline diffraction pattern from structure
+        Args: 
+            accelerating voltage (float):
+            kinematic or dynamic
+            angle_step_zone_axis=5,
+            angle_step_in_plane=5, 
+        """ 
 
+        #check accelerating voltage 
+        if accelerating_voltage is None: 
+            if hasattr(self, "accel_voltage"): 
+                accelerating_voltage = self.accel_voltage
+            else: 
+                self.accel_voltage = 300e3
+                print("Accelerating voltage not set. Assuming 300 keV!")
+        
+        #check structure factor
+        if not hasattr(self, "struct_factors"):
+            self.calculate_structure_factors(
+                k_max = k_max, 
+            ) 
+
+        #check orientation plan
+        if not hasattr(self, "orientation_vecs"):
+            if orientation_plan_params is None: 
+                orientation_plan_params = {
+                    'zone_axis_range': 'auto',
+                    'angle_step_zone_axis': 4, 
+                    'angle_step_in_plane': 4,
+                    'progress_bar' : False,
+                }    
+            self.orientation_plan(
+                **orientation_plan_params,
+            )
+
+        #calculate intensity and radius for rings 
+        radius = []
+        intensity = []
+        for a0 in range(self.orientation_vecs.shape[0]):
+            pattern = self.generate_diffraction_pattern(
+                zone_axis_lattice = self.orientation_vecs[a0],
+                sigma_excitation_error = sigma_excitation_error, 
+                tol_intensity = tol_intensity, 
+                k_max = k_max
+            )
+
+            intensity.append(pattern['intensity'])
+            radius.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
+        
+        intensity = np.concatenate(intensity)
+        radius = np.concatenate(radius)
+
+        radius_unique, index, counts, = np.unique(radius, return_counts = True, return_index = True)
+        intensity_unique = intensity[index] * counts
+
+        return radius_unique, intensity_unique
 
     # Vector conversions and other utilities for Crystal classes
 
@@ -733,6 +798,8 @@ class Crystal:
         else:
             return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
                 / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])
+
+
 
 
 
