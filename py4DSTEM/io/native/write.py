@@ -27,7 +27,7 @@ def save(
     filepath,
     data,
     mode = 'w',
-    root = '4DSTEM_experiment',
+    root = '4DSTEM',
     tree = True,
     ):
     """

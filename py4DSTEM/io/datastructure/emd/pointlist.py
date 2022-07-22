@@ -147,7 +147,11 @@ class PointList:
             data (list): arrays of data to add to each field
         """
 
-        newdata = np.zeros(data[0].shape[0],dtype=self.dtype)
+        if data[0].ndim == 0:
+            L = 1,
+        else:
+            L = data[0].shape[0]
+        newdata = np.zeros(L,dtype=self.dtype)
 
         _fields = self.fields if fields is None else fields
 
