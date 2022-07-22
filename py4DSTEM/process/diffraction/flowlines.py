@@ -752,6 +752,7 @@ def make_flowline_combined_image(
     size_input = orient_flowlines.shape
     size_output = np.array([size_input[0],size_input[1],size_input[2],3])
     im_flowline = np.zeros(size_output)
+    cvals = np.array(cvals)
 
     # Generate all color images
     for a0 in range(size_input[0]):
