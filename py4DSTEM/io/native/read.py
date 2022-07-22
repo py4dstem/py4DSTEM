@@ -69,7 +69,7 @@ def read_py4DSTEM(
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
     # Check the EMD version
-    v = get_py4DSTEM_version(filepath)
+    v = get_py4DSTEM_version(filepath, root.split("/")[0])
     # print(f"Reading EMD version {v[0]}.{v[1]}.{v[2]}")
 
     # Use legacy readers for older EMD files
