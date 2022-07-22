@@ -204,7 +204,7 @@ def get_origin_from_braggpeaks(
     braggpeaks,
     Q_shape,
     center_guess = None,
-    score_method = 'distance',
+    score_method = None,
     findcenter="CoM",
     bvm=None,
     **kwargs
@@ -222,7 +222,9 @@ def get_origin_from_braggpeaks(
 
     Args:
         braggpeaks (PointListArray): the Bragg peak positions
-        Q_Nx, Q_Ny (ints): the shape of diffration space
+        Q_shape (tuple of ints): the shape of diffration space
+        center_guess (tuple of ints):   initial guess for the center
+        score_method (string):     Method used to find center peak
         findcenter (str): specifies the method for determining the unscattered beam
             position options: 'CoM', or 'max'
         bvm (array or None): the braggvector map. If None (default), the bvm is
@@ -241,10 +243,18 @@ def get_origin_from_braggpeaks(
     # assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
     assert isinstance(findcenter, str), "center must be a str"
     assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
-    assert score_method in ["distance", "intensity weighted distance"], "center must be either 'distance' or 'intensity weighted distance'"
+    assert score_method in ["distance", "intensity", "intensity weighted distance", None], "center must be either 'distance' or 'intensity weighted distance'"
 
     R_Nx, R_Ny = braggpeaks.shape
     Q_Nx, Q_Ny = Q_shape
+
+    # Default scoring method
+    if score_method is None:
+        if center_guess is None:
+            score_method = "intensity"
+        else:
+            score_method = "distance"
+
 
     # Get guess at position of unscattered beam (x0,y0)
     if center_guess is None:
@@ -288,6 +298,8 @@ def get_origin_from_braggpeaks(
                 if score_method == "distance":
                     r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
                     index = np.argmin(r2)
+                elif score_method == "intensity":
+                    index = np.argmax(pointlist.data["intensity"])
                 elif score_method == "intensity weighted distance":
                     r2 = pointlist.data["intensity"]/(1+((pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2))
                     index = np.argmax(r2)
