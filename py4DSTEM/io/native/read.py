@@ -30,37 +30,39 @@ from .read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
-    root: Optional[str] = None,
+    root: Optional[str] = '4DSTEM',
     tree: Optional[Union[bool,str]] = True,
     **legacy_options,
     ):
     """
-    File reader files written by py4DSTEM.
-    Behavior is detemined by the arguments passed - see below.
+    File reader for files written by py4DSTEM.
+
+    For files written by py4DSTEM v0.13+, the arguments this function
+    accepts and their behaviors are below. For older verions, see
+    the docstring for `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy`
+    for keyword arguments and their behaviors.
+
 
     Args:
         filepath (str or Path): the file path
-        root (str): the name of the root block of data to return.
-            If `None` is passed (default), ... TODO
-        tree (bool or str): must be `True` or `False` or `noroot`
+        root (str): the path to the root data group in the HDF5 file
+            to read from. To examine an HDF5 file written by py4DSTEM
+            in order to determine this path, call
+            `py4DSTEM.io.print_h5_tree(filepath)`.
+        tree (bool or str): indicates what data should be loaded,
+            relative to the root group specified above.  must be in
+            (`True` or `False` or `noroot`).  If set to `False`, the
+            only the data in the root group is loaded, plus any
+            associated calibrations.  If set to `True`, loads the root
+            group, and all other data groups nested underneath it
+            in the file tree.  If set to `'noroot'`, loads all other
+            data groups nested under the root group in the file tree,
+            but does *not* load the data inside the root group (allowing,
+            e.g., loading all the data nested under a DataCube without
+            loading the whole datacube).
 
-    For files created with py4DSTEM versions before v0.13.0:
-        To print the contents of the file, specify only `filepath`
-        To read a dataset from the file, specify `data_id`, either as
-            the numeric index of the dataset or dataset name.
-        Other legacy options are explained in legacy_reader_EMD.py
-
-
-        - return a single object
-        - return a tree, starting from a given root
-    (?) - return a dictionary/structure of keys, which
-            can be passed back to this function
-        - for datacubes, in terms of their data storage/access:
-            - load a numpy array stored in RAM
-            - load a numpy array pointing to a memory map
-            - load a Dask representation
-
-
+    Returns:
+        (the data)
     """
     # Check that filepath is valid
     assert(exists(filepath)), "Error: specified filepath does not exist"
@@ -145,7 +147,7 @@ def _read_without_root(grp):
     )
     if cal is not None:
         root.tree = ParentTree(root,cal)
-        data.calibration = cal
+        root.calibration = cal
     _populate_tree(
         root.tree,
         grp

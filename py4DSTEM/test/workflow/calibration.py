@@ -337,7 +337,7 @@ py4DSTEM.io.print_h5_tree(filepath_h5)
 
 d = py4DSTEM.io.read(
     filepath_h5,
-    root = '4DSTEM_experiment/datacube/braggvectors',
+    root = '4DSTEM/datacube/braggvectors',
     tree = True
 )
 
