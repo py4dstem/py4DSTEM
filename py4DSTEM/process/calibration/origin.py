@@ -249,8 +249,8 @@ def get_origin_from_braggpeaks(
     # Get guess at position of unscattered beam (x0,y0)
     if center_guess is None:
         if bvm is None:
-            from ..diskdetection.braggvectormap import get_bragg_vector_map
-            braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
+            from ..diskdetection.braggvectormap import get_bragg_vector_map_raw
+            braggvectormap_all = get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny)
         else:
             braggvectormap_all = bvm
         if findcenter == "max":
