@@ -298,7 +298,7 @@ def get_origin_from_braggpeaks(
                 if score_method == "distance":
                     r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
                     index = np.argmin(r2)
-                elif score_method == 'intensity':
+                elif score_method == "intensity":
                     index = np.argmax(pointlist.data["intensity"])
                 elif score_method == "intensity weighted distance":
                     r2 = pointlist.data["intensity"]/(1+((pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2))
