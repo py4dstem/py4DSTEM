@@ -93,14 +93,10 @@ def DataCube_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
-        R_pixel_size = [array.dims[0][1]-array.dims[0][0],
-                        array.dims[1][1]-array.dims[1][0]],
-        R_pixel_units = [array.dim_units[0],
-                         array.dim_units[1]],
-        Q_pixel_size = [array.dims[2][1]-array.dims[2][0],
-                        array.dims[3][1]-array.dims[3][0]],
-        Q_pixel_units = [array.dim_units[2],
-                         array.dim_units[3]],
+        R_pixel_size = array.dims[0][1]-array.dims[0][0],
+        R_pixel_units = array.dim_units[0],
+        Q_pixel_size = array.dims[2][1]-array.dims[2][0],
+        Q_pixel_units = array.dim_units[2],
         slicelabels = array.slicelabels
     )
     return array
