@@ -209,6 +209,6 @@ The developers gratefully acknowledge the financial support of the Toyota Resear
 
 [![DOE logo](/images/DOE_logo.png)](https://www.energy.gov/science/bes/basic-energy-sciences/)
 
-Additional funding has been provided by the US Department of Energy, OFfice of Science, Basic Energy Sciences.
+Additional funding has been provided by the US Department of Energy, Office of Science, Basic Energy Sciences.
 
 
