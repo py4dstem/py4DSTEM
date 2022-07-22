@@ -12,7 +12,7 @@ from matplotlib.colors import rgb_to_hsv
 from matplotlib.colors import ListedColormap
 
 from ...io.datastructure import PointList, PointListArray
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 def make_orientation_histogram(
