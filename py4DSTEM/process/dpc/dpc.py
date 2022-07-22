@@ -1,11 +1,8 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
-# from tqdm import tqdm
-from ...utils.tqdmnd import tqdmnd
-from ..utils import make_Fourier_coords2D
+from ..utils import make_Fourier_coords2D, tqdmnd
 from ...io import DataCube
-
 
 ############################# DPC Functions ################################
 
