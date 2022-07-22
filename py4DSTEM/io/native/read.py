@@ -48,7 +48,7 @@ def read_py4DSTEM(
         root (str): the path to the root data group in the HDF5 file
             to read from. To examine an HDF5 file written by py4DSTEM
             in order to determine this path, call
-            `py4DSTEM.io.print_h5_tree(filepath)`.
+            `py4DSTEM.print_h5_tree(filepath)`.
         tree (bool or str): indicates what data should be loaded,
             relative to the root group specified above.  must be in
             (`True` or `False` or `noroot`).  If set to `False`, the
