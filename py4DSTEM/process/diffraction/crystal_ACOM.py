@@ -1691,7 +1691,7 @@ def calculate_strain(
             5)),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
-    strain_map.slices['mask'][:] = 1.0
+    strain_map.get_slice('mask').data[:] = 1.0
 
     # init values
     if corr_kernel_size is None:
@@ -1749,29 +1749,29 @@ def calculate_strain(
             m = lstsq(qxy_ref, qxy, rcond=None)[0].T
 
             # Get the infinitesimal strain matrix
-            strain_map.slices['e_xx'][rx,ry] = 1 - m[0,0]
-            strain_map.slices['e_yy'][rx,ry] = 1 - m[1,1]
-            strain_map.slices['e_xy'][rx,ry] = -(m[0,1]+m[1,0])/2.0
-            strain_map.slices['theta'][rx,ry] =  (m[0,1]-m[1,0])/2.0
+            strain_map.get_slice('e_xx').data[rx,ry] = 1 - m[0,0]
+            strain_map.get_slice('e_yy').data[rx,ry] = 1 - m[1,1]
+            strain_map.get_slice('e_xy').data[rx,ry] = -(m[0,1]+m[1,0])/2.0
+            strain_map.get_slice('theta').data[rx,ry] =  (m[0,1]-m[1,0])/2.0
 
             # Add finite rotation from ACOM orientation map.
             # I am not sure about the relative signs here.
             # Also, I need to add in the mirror operator.
             if orientation_map.mirror[rx,ry,0]:
-                strain_map.slices['theta'][rx,ry] \
+                strain_map.get_slice('theta').data[rx,ry] \
                     += (orientation_map.angles[rx,ry,0,0] \
                     + orientation_map.angles[rx,ry,0,2])
             else:
-                strain_map.slices['theta'][rx,ry] \
+                strain_map.get_slice('theta').data[rx,ry] \
                     -= (orientation_map.angles[rx,ry,0,0] \
                     + orientation_map.angles[rx,ry,0,2])
 
         else:
-            strain_map.slices['mask'][rx,ry] = 0.0
+            strain_map.get_slice('mask').data[rx,ry] = 0.0
 
     if rotation_range is not None:
-        strain_map.slices['theta'] \
-            = np.mod(strain_map.slices['theta'],rotation_range)
+        strain_map.get_slice('theta').data[:] \
+            = np.mod(strain_map.get_slice('theta').data[:], rotation_range)
 
     return strain_map
 
