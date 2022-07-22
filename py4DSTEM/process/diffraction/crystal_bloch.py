@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 from ...io.datastructure import PointList
 from ..utils import electron_wavelength_angstrom, single_atom_scatter
-from ..dpc import get_interaction_constant
 from .WK_scattering_factors import compute_WK_factor
 
 
@@ -24,7 +23,7 @@ def calculate_dynamical_structure_factors(
     accelerating_voltage: float,
     method: str = "WK-CP",
     k_max: float = 2.0,
-    thermal_sigma: float = None,
+    thermal_sigma: Optional[Union[float, dict]] = None,
     tol_structure_factor: float = 1.0e-4,
     verbose=True,
 ):
@@ -52,10 +51,12 @@ def calculate_dynamical_structure_factors(
         k_max (float):                  max scattering length to compute structure factors to.
                                         Setting this to 2x the k_max used in generating the beamsn
                                         included in a simulation will retain all possible couplings
-        thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
+        thermal_sigma (float or dict{int->float}):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
                                         Units are Å. (This is often written as 〈u〉in papers)
+                                        To specify different 〈u〉 for each element, pass a dictionary
+                                        with Z as the key, mapping to the appropriate float value
         tol_structure_factor (float):   tolerance for removing low-valued structure factors. Reflections
                                         with structure factor below the tolerance will have zero coupling
                                         in the dynamical calculations (i.e. they are the ignored weak beams)
@@ -71,6 +72,11 @@ def calculate_dynamical_structure_factors(
         "WK-P",
         "WK-CP",
     ), "Invalid method specified."
+
+    if "WK" in method:
+        assert (
+            thermal_sigma is not None
+        ), "thermal_sigma must be specifed when using W-K potentials"
 
     # Calculate the reciprocal lattice points to include based on k_max
 
@@ -125,7 +131,7 @@ def calculate_dynamical_structure_factors(
     # get_f_e returns f^e in units of VÅ^3, with relativistic correction
     # but not yet converted to
     @lru_cache(maxsize=2 ** 12)
-    def get_f_e(q, Z, B, method):
+    def get_f_e(q, Z, thermal_sigma, method):
         if method == "Lobato":
             # Real lobato factors
             lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
@@ -193,20 +199,26 @@ def calculate_dynamical_structure_factors(
         desc=f"Computing {display_names[method]} lookup table",
         disable=not verbose,
     ):
-        Freal = 0.0
-        Fimag = 0.0
+        Fscatt = 0.0 + 0.0j
         for i_pos in range(self.positions.shape[0]):
             # Get the appropriate atomic form factor:
-            fe = get_f_e(g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method)
+            sigma = (
+                thermal_sigma[self.numbers[i_pos]]
+                if isinstance(thermal_sigma, dict)
+                else thermal_sigma
+            )
+            fe = get_f_e(
+                q=g_vec_leng[i_hkl],
+                Z=self.numbers[i_pos],
+                thermal_sigma=sigma,
+                method=method,
+            )
 
-            # accumulate the real and imag portions separately (?)
-            Freal += np.real(fe) * np.exp(
+            Fscatt += fe * np.exp(
                 (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
             )
-            Fimag += np.imag(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-        struct_factors[i_hkl] = Freal + 1.0j * Fimag
+
+        struct_factors[i_hkl] = Fscatt
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))

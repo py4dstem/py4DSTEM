@@ -554,12 +554,15 @@ def PointList_to_h5(
 
     # Add data
     for f,t in zip(pointlist.fields,pointlist.types):
-        group_current_field = grp.create_group(f)
-        group_current_field.attrs.create("dtype", np.string_(t))
-        group_current_field.create_dataset(
-            "data",
+        group_current_field = grp.create_dataset(
+            f,
             data = pointlist.data[f]
         )
+        group_current_field.attrs.create("dtype", np.string_(t))
+        #group_current_field.create_dataset(
+        #    "data",
+        #    data = pointlist.data[f]
+        #)
 
     # Add metadata
     _write_metadata(pointlist, grp)
@@ -596,13 +599,13 @@ def PointList_from_h5(group:h5py.Group):
     for field in fields:
         curr_dtype = group[field].attrs["dtype"].decode('utf-8')
         dtype.append((field,curr_dtype))
-    length = len(group[fields[0]+'/data'])
+    length = len(group[fields[0]])
 
     # Get data
     data = np.zeros(length,dtype=dtype)
     if length > 0:
         for field in fields:
-            data[field] = np.array(group[field+'/data'])
+            data[field] = np.array(group[field])
 
     # Make the PointList
     pl = PointList(
