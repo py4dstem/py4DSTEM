@@ -11,12 +11,12 @@ datacube = py4DSTEM.io.datastructure.DataCube(
     R_pixel_size = 5,
     R_pixel_units = 'nm',
     Q_pixel_size = [0.01,0.02],
-    Q_pixel_units = ['A^-1','nm^-1']
+    Q_pixel_units = 'A^-1'
 )
 
 print(datacube)
 
-datacube.Q_pixel_units = 'A^-1'
+#datacube.Q_pixel_units = 'A^-1'
 print(datacube.Q_pixel_units)
 print(datacube.dim_units)
 print(datacube)

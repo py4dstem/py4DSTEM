@@ -2,7 +2,7 @@
 
 import numpy as np
 # from tqdm import tqdm
-from ...tqdmnd import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ..utils import make_Fourier_coords2D
 from ...io import DataCube
 
