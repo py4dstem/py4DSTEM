@@ -625,20 +625,32 @@ class Crystal:
         self, 
         accelerating_voltage = None,
         k_max = 2.0,
+        use_bloch = False,
+        thickness = None,
+        bloch_params = None,
         orientation_plan_params = None,
         sigma_excitation_error = 0.02,
         tol_intensity = 1e-3,
-       # use_bloch = False,
     ):
         """
-        Process to calculate polycrystalline diffraction pattern from structure
+        Calculate polycrystalline diffraction pattern from structure
+        
         Args: 
-            accelerating voltage (float):
-            kinematic or dynamic
-            angle_step_zone_axis=5,
-            angle_step_in_plane=5, 
+            accel_voltage (float): Accelerating voltage for electrons [Volts]
+            k_max (float): Maximum scattering vector
+            use_bloch (bool): if true, use dynamic instead of kinematic approach
+            thickness (float) thickness in Ångström to evaluate diffraction patterns, only needed for dynamical calculations
+            bloch_params (dict): optional, parameters to calculate dynamical structure factor
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan
+            sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+            tol_intensity (np float): tolerance in intensity units for inclusion of diffraction spots
+        
+        Returns: 
+            radii_unique (np array): radii of ring pattern in units of scattering vector k
+            intensity_unique (np array): intensity of rings weighted by frequency of diffraciton spots
         """ 
-
+        if use_bloch: 
+            assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
         #check accelerating voltage 
         if accelerating_voltage is None: 
             if hasattr(self, "accel_voltage"): 
@@ -648,11 +660,25 @@ class Crystal:
                 print("Accelerating voltage not set. Assuming 300 keV!")
         
         #check structure factor
-        if not hasattr(self, "struct_factors"):
-            self.calculate_structure_factors(
-                k_max = k_max, 
-            ) 
-
+        
+        if use_bloch == True: 
+            if not hasattr(self, "Ug_dict"):
+                if bloch_params is None: 
+                    bloch_params = {
+                        'thermal_sigma': '0.05',
+                    }  
+                self.calculate_structure_factors(
+                    k_max = k_max, 
+                )
+                self.calculate_dynamical_structure_factors(
+                    accelerating_voltage = self.accel_voltage,
+                    **bloch_params,
+                )
+        else: 
+            if not hasattr(self, "struct_factors"):
+                self.calculate_structure_factors(
+                    k_max = k_max, 
+                )
         #check orientation plan
         if not hasattr(self, "orientation_vecs"):
             if orientation_plan_params is None: 
@@ -667,26 +693,41 @@ class Crystal:
             )
 
         #calculate intensity and radius for rings 
-        radius = []
+        radii = []
         intensity = []
         for a0 in range(self.orientation_vecs.shape[0]):
-            pattern = self.generate_diffraction_pattern(
-                zone_axis_lattice = self.orientation_vecs[a0],
-                sigma_excitation_error = sigma_excitation_error, 
-                tol_intensity = tol_intensity, 
-                k_max = k_max
-            )
+            if use_bloch == True:
+                beams = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+                pattern = self.generate_dynamical_diffraction_pattern(
+                    beams = beams,
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    thickness = thickness,
+                )
+            else:  
+                pattern = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
 
             intensity.append(pattern['intensity'])
-            radius.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
+            radii.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
         
         intensity = np.concatenate(intensity)
-        radius = np.concatenate(radius)
+        radii = np.concatenate(radii)
 
-        radius_unique, index, counts, = np.unique(radius, return_counts = True, return_index = True)
+        radii_unique, index, counts, = np.unique(radii, return_counts = True, return_index = True)
         intensity_unique = intensity[index] * counts
 
-        return radius_unique, intensity_unique
+        return radii_unique, intensity_unique
+
+
 
     # Vector conversions and other utilities for Crystal classes
 
