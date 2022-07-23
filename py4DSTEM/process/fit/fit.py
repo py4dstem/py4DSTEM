@@ -14,6 +14,7 @@ def fit_1D_gaussian(xdata,ydata,xmin,xmax):
 
         >>> fit_gaussian = py4DSTEM.process.fit.gaussian(xdata,A,mu,sigma)
     """
+
     mask = (xmin<=xdata)*(xmax>xdata)
     inds = np.nonzero(mask)[0]
     _xdata = xdata[inds]
@@ -22,6 +23,8 @@ def fit_1D_gaussian(xdata,ydata,xmin,xmax):
     _ydata = _ydata/scale
 
     p0 = [np.max(_ydata),_xdata[np.argmax(_ydata)],(xmax-xmin)/8.]  # TODO: better guess for std
+
+
     popt,pcov = curve_fit(gaussian,_xdata,_ydata,p0=p0)
     A,mu,sigma = scale*popt[0],popt[1],popt[2]
     return A,mu,sigma

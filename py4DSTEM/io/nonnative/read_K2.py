@@ -8,7 +8,7 @@ try:
     import numba as nb
 except ImportError:
     pass
-from ...process.utils import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from ..datastructure import DataCube
 
 
@@ -158,6 +158,7 @@ class K2DataArray(Sequence):
         )
 
         # needed for Dask support:
+        self.ndim = 4
         self.ndims = 4
         self.dtype = np.int16
 
