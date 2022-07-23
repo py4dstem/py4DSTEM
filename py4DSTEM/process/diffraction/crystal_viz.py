@@ -10,7 +10,7 @@ import numpy as np
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 
 
 def plot_structure(
@@ -721,6 +721,7 @@ def plot_diffraction_pattern(
     shift_labels: float = 0.08,
     shift_marker: float = 0.005,
     min_marker_size: float = 1e-6,
+    max_marker_size: float = 1000,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
@@ -737,6 +738,7 @@ def plot_diffraction_pattern(
         plot_range_kx_ky (float):       2 element numpy vector giving the plot range
         add_labels (bool):              flag to add hkl labels to peaks
         min_marker_size (float):        minimum marker size for the comparison peaks
+        max_marker_size (float):        maximum marker size for the comparison peaks
         figsize (2 element float):      size scaling of figure axes
         returnfig (bool):               set to True to return figure and axes handles
         input_fig_handle (fig,ax)       Tuple containing a figure / axes handle for the plot.
@@ -768,15 +770,17 @@ def plot_diffraction_pattern(
             scale_markers_compare = scale_markers
 
         if power_markers == 2:
-            marker_size_compare = np.maximum(
+            marker_size_compare = np.clip(
                 scale_markers_compare * bragg_peaks_compare.data["intensity"],
                 min_marker_size,
+                max_marker_size,
             )
         else:
-            marker_size_compare = np.maximum(
+            marker_size_compare = np.clip(
                 scale_markers_compare
                 * (bragg_peaks_compare.data["intensity"] ** (power_markers / 2)),
                 min_marker_size,
+                max_marker_size,
             )
 
         ax.scatter(
@@ -1272,7 +1276,7 @@ def plot_orientation_maps(
         3,2))
     if self.pymatgen_available:
         images_orientation[:,:,:,0] = rgb_x
-    images_orientation[:,:,:,0] = rgb_z
+    images_orientation[:,:,:,1] = rgb_z
 
     if returnfig:
         ax = [ax_x,ax_z,ax_l]
