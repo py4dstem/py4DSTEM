@@ -1650,7 +1650,8 @@ jmol_colors = {
 def plot_ring_pattern( 
     radii, 
     intensity,
-    intensity_scale = 1, 
+    intensity_scale = 1,
+    intensity_constant = False, 
     color = 'k',
     figsize = (10,10),
     returnfig = False, 
@@ -1664,6 +1665,7 @@ def plot_ring_pattern(
         radii (PointList):              1D numpy array containing radii for diffraction rings
         intensity (PointList):          1D numpy array containing intensities for diffraciton rings
         intensity_scale (float):        size scaling for ring thickness
+        intensity_constant (bool):      if true, all rings are plotted with same line width
         color (matplotlib color):       color of ring, any format recognized by matplotlib 
         figsize (2 element float):      size scaling of figure axes
         returnfig (bool):               set to True to return figure and axes handles
@@ -1684,10 +1686,20 @@ def plot_ring_pattern(
         ax = ax_parent[0]
 
     for a1 in range(radii.shape[0]): 
-        ax.plot(radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
-            lw = intensity[a1]*intensity_scale, 
-            color = color,
-        )
+        if intensity_constant == True:
+            ax.plot(
+                radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
+                lw = intensity_scale,
+                color = color, 
+                **kwargs,
+            )
+        else: 
+            ax.plot(
+                radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
+                lw = intensity[a1]*intensity_scale,
+                color = color, 
+                **kwargs,
+            )
     
     ax.set_xlabel("$q_y$ [Å$^{-1}$]")
     ax.set_ylabel("$q_x$ [Å$^{-1}$]")
