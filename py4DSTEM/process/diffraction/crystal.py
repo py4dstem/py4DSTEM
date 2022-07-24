@@ -634,6 +634,7 @@ class Crystal:
         tol_intensity = 1e-3,
         plot_rings = True,
         plot_params = {},
+        return_calc = True,
     ):
         """
         Calculate polycrystalline diffraction pattern from structure
@@ -652,6 +653,8 @@ class Crystal:
                                             in units of inverse Angstroms
             tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
             plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
+            return_calc (bool):             return radii and intensities 
+
         Returns: 
             radii_unique (np array):        radii of ring pattern in units of scattering vector k
             intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
@@ -739,7 +742,8 @@ class Crystal:
                 **plot_params
             )
 
-        return radii_unique, intensity_unique
+        if return_calc == True: 
+            return radii_unique, intensity_unique
 
     # Vector conversions and other utilities for Crystal classes
 
