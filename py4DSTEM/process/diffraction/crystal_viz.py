@@ -1650,3 +1650,57 @@ jmol_colors = {
 # def isPointWithinPolygon(point, polygonVertexCoords):
 #      path = matplotlib.path.Path( polygonVertexCoords )
 #      return path.contains_point(point[0], point[1]) 
+
+def plot_ring_pattern( 
+    radii, 
+    intensity,
+    intensity_scale = 1, 
+    color = 'k',
+    figsize = (10,10),
+    returnfig = False, 
+    input_fig_handle = None,
+    **kwargs
+): 
+    """
+    2D plot of diffraction rings
+
+    Args:
+        radii (PointList):              1D numpy array containing radii for diffraction rings
+        intensity (PointList):          1D numpy array containing intensities for diffraciton rings
+        intensity_scale (float):        size scaling for ring thickness
+        color (matplotlib color):       color of ring, any format recognized by matplotlib 
+        figsize (2 element float):      size scaling of figure axes
+        returnfig (bool):               set to True to return figure and axes handles
+        input_fig_handle (fig,ax)       Tuple containing a figure / axes handle for the plot
+    """
+
+    theta = np.linspace(-np.pi, np.pi, 200)
+
+    if input_fig_handle is None:
+        fig, ax = plt.subplots(
+            1, 1, 
+            figsize=figsize, 
+            facecolor=(1, 1, 1)
+        )
+    else:
+        fig = input_fig_handle[0]
+        ax_parent = input_fig_handle[1]
+        ax = ax_parent[0]
+
+    for a1 in range(radii.shape[0]): 
+        ax.plot(radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
+            lw = intensity[a1]*intensity_scale, 
+            color = color,
+        )
+    
+    ax.set_xlabel("$q_y$ [Å$^{-1}$]")
+    ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+
+    ax.set_aspect('equal')
+
+    if input_fig_handle is None:
+        plt.show()
+    
+    if returnfig:
+        return fig,ax
+    
