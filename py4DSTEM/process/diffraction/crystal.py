@@ -624,7 +624,6 @@ class Crystal:
 
     def generate_ring_pattern(
         self, 
-        accelerating_voltage = None,
         k_max = 2.0,
         use_bloch = False,
         thickness = None,
@@ -640,7 +639,6 @@ class Crystal:
         Calculate polycrystalline diffraction pattern from structure
         
         Args: 
-            accel_voltage (float):          Accelerating voltage for electrons [Volts]
             k_max (float):                  Maximum scattering vector
             use_bloch (bool):               if true, use dynamic instead of kinematic approach
             thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
@@ -662,34 +660,20 @@ class Crystal:
        
         if use_bloch: 
             assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
+            assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
+            
+        if not hasattr(self, "struct_factors"):
+            self.calculate_structure_factors(
+                k_max = k_max, 
+            )
+    
         #check accelerating voltage 
-        if accelerating_voltage is None: 
-            if hasattr(self, "accel_voltage"): 
-                accelerating_voltage = self.accel_voltage
-            else: 
-                self.accel_voltage = 300e3
-                print("Accelerating voltage not set. Assuming 300 keV!")
-        
-        #check structure factor
-        
-        if use_bloch == True: 
-            if not hasattr(self, "Ug_dict"):
-                if bloch_params is None: 
-                    bloch_params = {
-                        'thermal_sigma': '0.08',
-                    }  
-                self.calculate_structure_factors(
-                    k_max = k_max, 
-                )
-                self.calculate_dynamical_structure_factors(
-                    accelerating_voltage = self.accel_voltage,
-                    **bloch_params,
-                )
+        if hasattr(self, "accel_voltage"): 
+            accelerating_voltage = self.accel_voltage
         else: 
-            if not hasattr(self, "struct_factors"):
-                self.calculate_structure_factors(
-                    k_max = k_max, 
-                )
+            self.accel_voltage = 300e3
+            print("Accelerating voltage not set. Assuming 300 keV!")
+        
         #check orientation plan
         if not hasattr(self, "orientation_vecs"):
             if orientation_plan_params is None: 
@@ -706,7 +690,7 @@ class Crystal:
         radii = []
         intensity = []
         for a0 in range(self.orientation_vecs.shape[0]):
-            if use_bloch == True:
+            if use_bloch:
                 beams = self.generate_diffraction_pattern(
                     zone_axis_lattice = self.orientation_vecs[a0],
                     sigma_excitation_error = sigma_excitation_error, 
