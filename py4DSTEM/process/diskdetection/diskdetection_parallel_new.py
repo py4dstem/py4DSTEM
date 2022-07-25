@@ -8,6 +8,8 @@ from dask import delayed
 import dask
 #import dask.bag as db
 from py4DSTEM.io.datastructure import PointListArray, PointList
+from ...io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
+
 from .diskdetection import _find_Bragg_disks_single
 from py4DSTEM.io import PointListArray, PointList, datastructure
 import time
@@ -219,8 +221,7 @@ def beta_parallel_disk_detection(dataset,
     dtype = [('qx',float),('qy',float),('intensity',float)]
     peaks = PointListArray(dtype=dtype, shape=dataset.data.shape[:-2])
 
-    #temp_peaks[0][0]
-
+    
     # operating over a list so we need the size (0->count) and re-create the probe positions (0->rx,0->ry),
     # count is the size of the list 
     for (count,(rx, ry)) in zip([i for i in range(dataset.data[...,0,0].size)],np.ndindex(dataset.data.shape[:-2])):
@@ -228,17 +229,24 @@ def beta_parallel_disk_detection(dataset,
         #peaks.get_pointlist(rx, ry).add_pointlist(output[count][0])
         peaks.get_pointlist(rx, ry).add(output[count])
 
-    # Clean up
+
+    # create a BraggVectors obj
+    braggvectors = BraggVectors(dataset.Rshape, dataset.Qshape)
+    # populate the uncalibrated object with the 
+    braggvectors._v_uncal = peaks
+
+
+    # Clean up dask related stuff
     dask_client.cancel(_temp_peaks) # removes from the dask workers
     del _temp_peaks # deletes the object 
     if close_dask_client:
         dask_client.close()
-        return peaks
+        return braggvectors
     elif close_dask_client == False and return_dask_client == True:
-        return peaks, dask_client
+        return braggvectors, dask_client
     elif close_dask_client and return_dask_client == False:
-        return peaks
+        return braggvectors
     else:
         print('Dask Client in unknown state, this may result in unpredicitable behaviour later')
-        return peaks
+        return braggvectors
 
