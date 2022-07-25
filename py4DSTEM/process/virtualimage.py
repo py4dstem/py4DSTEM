@@ -24,19 +24,19 @@ def get_virtual_image(
     Args:
         datacube (Datacube)
         mode (str): must be in
-            ('point','circle','annulus','rectangle',
-            'cpoint','ccircle','cannulus','csquare',
-            'qpoint','qcircle','qannulus','qsquare',
-            'mask').  The first four modes represent point, circular,
+            ('point','circular','annular','rectangular',
+            'point_centered','circular_centered','annular_centered',
+            'square_centered','point_calibrated','circular_calibrated',
+            'annular_calibrated','square_calibrated','mask').
+            The first four modes represent point, circular,
             annular, and rectangular detectors with geomtries specified
             in pixels, relative to the uncalibrated origin, i.e. the upper
             left corner of the diffraction plane. The next four modes
             represent point, circular, annular, and square detectors with
             geometries specified in pixels, relative to the calibrated origin,
             taken to be the mean posiion of the origin over all scans.
-            'ccircle','cannulus', and 'csquare' are automatically centered
-            about the origin. The next four modes are identical to these,
-            except that the geometry is specified in q-space units, rather
+            The next four modes are identical to these, except that the
+            geometry is specified in q-space units, rather
             than pixels. In the last mode the geometry is specified with a
             user provided mask, which can be either boolean or floating point.
             Floating point masks are normalized by setting their maximum value
@@ -44,21 +44,21 @@ def get_virtual_image(
         geometry (variable): valid entries are determined by the `mode`
             argument, as follows:
                 - 'point': 2-tuple, (qx,qy)
-                - 'circle': nested 2-tuple, ((qx,qy),r)
-                - 'annulus': nested 2-tuple, ((qx,qy),(ri,ro))
-                - 'rectangle': 4-tuple, (xmin,xmax,ymin,ymax)
-                - 'cpoint': 2-tuple, (qx,qy)
-                - 'ccircle': number, r
-                - 'cannulus': 2-tuple, (ri,ro)
-                - 'csquare': number, s
-                - 'qpoint': 2-tuple, (qx,qy)
-                - 'qcircle': number, r
-                - 'qannulus': 2-tuple, (ri,ro)
-                - 'qsquare': number, s
+                - 'circular': nested 2-tuple, ((qx,qy),r)
+                - 'annular': nested 2-tuple, ((qx,qy),(ri,ro))
+                - 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - 'point_centered': 2-tuple, (qx,qy)
+                - 'circular_centered': number, r
+                - 'annular_centered': 2-tuple, (ri,ro)
+                - 'square_centered': number, s
+                - 'point_calibrated': 2-tuple, (qx,qy)
+                - 'circular_calibrated': number, r
+                - 'annular_calibrated': 2-tuple, (ri,ro)
+                - 'square_calibrated': number, s
                 - `mask`: 2D array
         shift_corr (bool): if True, correct for beam shift. Works only with
-            'c' and 'q' modes - uses the calibrated origin for each pixel,
-            instead of the mean origin position.
+            'centered' and 'calibrated' modes - uses the calibrated origin for
+            each pixel, instead of the mean origin position.
 
     Returns:
         (2D array): the virtual image
@@ -66,19 +66,28 @@ def get_virtual_image(
     """
     # parse args
     modes = ('point','circle','annulus','rectangle',
+             'circular','annular','rectangular',
              'cpoint','ccircle','cannulus','csquare',
+             'point_centered','circular_centered',
+             'rectangular_centered','annular_centered',
              'qpoint','qcircle','qannulus','qsquare',
+             'point_calibrated','circular_calibrated',
+             'rectangular_calibrated','annular_calibrated',
              'mask')
     assert( mode in modes), f"`mode` was {mode}; must be in {modes}"
     g=geometry
     er = 'mode/geometry are mismatched'
-    if mode in ('ccircle','csquare','qcircle','qsquare'):
+    if mode in ('ccircle','csquare','qcircle','qsquare',
+        'circular_centered','square_centered','circular_calibrated',
+        'square_calibrated'):
         assert(isinstance(g,Number)), er
-    elif mode in ('point','cpoint','cannulus','qpoint','qannulus'):
+    elif mode in ('point','cpoint','cannulus','qpoint','qannulus',
+        'point_centered','annular_centered','point_calibrated',
+        'annular_calibrated'):
         assert(isinstance(g,tuple) and len(g)==2), er
-    elif mode in ('circle'):
+    elif mode in ('circle','circular'):
         assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2), er
-    elif mode in ('annulus'):
+    elif mode in ('annulus','annular'):
         assert(isinstance(g,tuple) and len(g)==2 and
                all([len(g[i])==2 for i in (0,1)])), er
     elif mode in ('mask'):
@@ -89,6 +98,10 @@ def get_virtual_image(
     else:
         raise Exception(f"Unknown mode {mode}")
 
+
+    # parse mode duplicate names
+    mode_dict = _parse_mode_dict()
+    mode = mode_dict[mode]
 
 
     # select a function
@@ -102,6 +115,35 @@ def get_virtual_image(
     return im
 
 
+
+def _parse_mode_dict():
+    return {
+        'point':'point',
+        'circle':'circular',
+        'annulus':'annular',
+        'rectangle':'rectangular',
+        'circular':'circular',
+        'annular':'annular',
+        'rectangular':'rectangular',
+        'cpoint':'point_centered',
+        'ccircle':'circular_centered',
+        'cannulus':'annular_centered',
+        'csquare':'square_centered',
+        'point_centered':'point_centered',
+        'circular_centered':'circular_centered',
+        'rectangular_centered':'rectangular_centered',
+        'annular_centered':'annular_centered',
+        'qpoint':'point_calibrated',
+        'qcircle':'circular_calibrated',
+        'qannulus':'annular_calibrated',
+        'qsquare':'square_calibrated',
+        'point_calibrated':'point_calibrated',
+        'circular_calibrated':'circular_calibrated',
+        'rectangular_calibrated':'rectangular_calibrated',
+        'annular_calibrated':'annular_calibrated',
+        'mask':'mask',
+        'mask_float':'mask_float'
+    }
 
 
 def _make_function_dict():
@@ -123,7 +165,7 @@ def _make_function_dict():
             },
         },
 
-        'circle' : {
+        'circular' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -134,7 +176,7 @@ def _make_function_dict():
             },
         },
 
-        'annulus' : {
+        'annular' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -145,7 +187,7 @@ def _make_function_dict():
             },
         },
 
-        'rectangle' : {
+        'rectangular' : {
             True : {
                 'numpy' : _get_virtualimage_rect_old,
                 'dask' : _get_virtual_image_fn
@@ -157,7 +199,7 @@ def _make_function_dict():
         },
 
         # c modes
-        'cpoint' : {
+        'point_centered' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -168,7 +210,7 @@ def _make_function_dict():
             },
         },
 
-        'ccircle' : {
+        'circular_centered' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -179,7 +221,7 @@ def _make_function_dict():
             },
         },
 
-        'cannulus' : {
+        'annular_centered' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -190,7 +232,7 @@ def _make_function_dict():
             },
         },
 
-        'csquare' : {
+        'square_centered' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -202,7 +244,7 @@ def _make_function_dict():
         },
 
         # q modes
-        'qpoint' : {
+        'point_calibrated' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -213,7 +255,7 @@ def _make_function_dict():
             },
         },
 
-        'qcircle' : {
+        'circle_calibrated' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -224,7 +266,7 @@ def _make_function_dict():
             },
         },
 
-        'qannulus' : {
+        'annulus_calibrated' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
@@ -235,7 +277,7 @@ def _make_function_dict():
             },
         },
 
-        'qsquare' : {
+        'square_calibrated' : {
             True : {
                 'numpy' : _get_virtual_image_fn,
                 'dask' : _get_virtual_image_fn
