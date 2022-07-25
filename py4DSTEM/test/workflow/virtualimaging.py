@@ -13,7 +13,7 @@ filepath_h5 = "/home/ben/Desktop/test.h5"
 
 
 # Load a datacube from a dm file
-datacube = py4DSTEM.io.read(filepath_calibration_dm)
+datacube = py4DSTEM.import_file(filepath_calibration_dm)
 datacube = py4DSTEM.io.datastructure.DataCube(
     data=datacube.data[0:15,0:20,:,:])
 
@@ -46,12 +46,12 @@ geometry_ADF = (
 )
 im_BF = py4DSTEM.process.virtualimage.get_virtual_image(
     datacube,
-    mode = 'circle',
+    mode = 'circular',
     geometry = geometry_BF,
 )
 im_ADF = py4DSTEM.process.virtualimage.get_virtual_image(
     datacube,
-    mode = 'annulus',
+    mode = 'annular',
     geometry = geometry_ADF,
 )
 #show(datacube.tree['vBF'])
