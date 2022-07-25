@@ -29,11 +29,18 @@ def is_py4DSTEM_file(filepath):
     except OSError:
         return False
 
-def get_py4DSTEM_version(filepath, topgroup='4DSTEM_experiment'):
+def get_py4DSTEM_version(filepath, topgroup=None):
     """ Returns the version (major,minor,release) of a py4DSTEM file.
     """
     assert(is_py4DSTEM_file(filepath)), "Error: not recognized as a py4DSTEM file"
     with h5py.File(filepath,'r') as f:
+        if topgroup is None or topgroup not in f.keys(): 
+            if "4DSTEM" in f.keys(): 
+                topgroup = "4DSTEM"
+            elif "4DSTEM_experiment" in f.keys():
+                topgroup = "4DSTEM_experiment"
+            else: 
+                raise ValueError("no root group exists with default names. please specify topgroup.")
         version_major = int(f[topgroup].attrs['version_major'])
         version_minor = int(f[topgroup].attrs['version_minor'])
         if 'version_release' in f[topgroup].attrs.keys():
@@ -42,7 +49,7 @@ def get_py4DSTEM_version(filepath, topgroup='4DSTEM_experiment'):
             version_release = 0
         return version_major, version_minor, version_release
 
-def get_UUID(filepath, topgroup='4DSTEM_experiment'):
+def get_UUID(filepath, topgroup='4DSTEM'):
     """ Returns the UUID of a py4DSTEM file, or if unavailable returns -1.
     """
     assert(is_py4DSTEM_file(filepath)), "Error: not recognized as a py4DSTEM file"
@@ -68,7 +75,7 @@ def version_is_geq(current,minimum):
     else:
         return False
 
-#def get_N_dataobjects(filepath, topgroup='4DSTEM_experiment'):
+#def get_N_dataobjects(filepath, topgroup='4DSTEM'):
 #    """ Returns a 7-tuple of ints with the numbers of: DataCubes, CountedDataCubes,
 #        DiffractionSlices, RealSlices, PointLists, PointListArrays, total DataObjects.
 #    """
