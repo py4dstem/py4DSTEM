@@ -8,7 +8,7 @@ from dask import delayed
 import dask
 #import dask.bag as db
 from py4DSTEM.io.datastructure import PointListArray, PointList
-from .diskdetection import _find_Bragg_disks_single_DP_FK
+from .diskdetection import _find_Bragg_disks_single
 from py4DSTEM.io import PointListArray, PointList, datastructure
 import time
 from dask.diagnostics import ProgressBar
@@ -50,7 +50,6 @@ def register_dill_serializer():
     register_serialization_family('dill', dill_dumps, dill_loads)
     return None
 
-
 #### END OF SERAILISERS ####
 
 
@@ -62,7 +61,7 @@ def register_dill_serializer():
 # TODO add ML-AI version 
 def _find_Bragg_disks_single_DP_FK_dask_wrapper(arr, *args,**kwargs):
     # THis is needed as _find_Bragg_disks_single_DP_FK takes 2D array these arrays have the wrong shape
-    return _find_Bragg_disks_single_DP_FK(arr[0,0], *args, **kwargs)
+    return _find_Bragg_disks_single(arr[0,0], *args, **kwargs)
 
 
 #### END OF DASK WRAPPER FUNCTIONS ####
@@ -75,7 +74,7 @@ def _find_Bragg_disks_single_DP_FK_dask_wrapper(arr, *args,**kwargs):
 
 def beta_parallel_disk_detection(dataset, 
                             probe,
-                            #rxmin=None, # these would allow selecting a sub section 
+                            #rxmin=None, # these would allow selecting a sub section # probably not a useful case 
                             #rxmax=None,
                             #rymin=None,
                             #rymax=None,
@@ -125,13 +124,21 @@ def beta_parallel_disk_detection(dataset,
     #   ... dask stuff. 
     #TODO add assert statements and other checks. Think about reordering opperations
     
+    ## adding assert statement to make sure peaks not passed as a keyword argument
+    assert 'peaks' not in kwargs, "peaks must not be passed as a keyword arguement"
+
+    # Check to see if a dask client has been passed. 
+    # if no client passed
     if dask_client == None: 
+        # check if  parameters are passed create a cluster, and pass them to dask client. 
         if dask_client_params !=None:
 
             dask.config.set({'distributed.worker.memory.spill': False,
                 'distributed.worker.memory.target': False}) 
             cluster = LocalCluster(**dask_client_params)
             dask_client = Client(cluster, **dask_client_params)
+
+        # if no parameters are passed create them with some default values
         else:
             # AUTO MAGICALLY SET?
             # LET DASK SET?
@@ -154,8 +161,10 @@ def beta_parallel_disk_detection(dataset,
             pass
 
 
-    # Probe stuff
+    #### Probe stuff
+    # check that the probe shape is correct. 
     assert (probe.shape == dataset.data.shape[2:]), "Probe and Diffraction Pattern Shapes are Mismatched"
+    
     if probe_type != "FT":
     #TODO clean up and pull out redudant parts
     #if probe.dtype != (np.complex128 or np.complex64 or np.complex256):
@@ -192,7 +201,7 @@ def beta_parallel_disk_detection(dataset,
     # loop over the dataset_delayed and create a delayed function of 
     for x in np.ndindex(dataset_delayed.shape):
         temp = delayed(_find_Bragg_disks_single_DP_FK_dask_wrapper)(dataset_delayed[x],
-                                probe_kernel_FT=dask_probe_delayed[0,0],
+                                template=dask_probe_delayed[0,0],
                                 #probe_kernel_FT=delayed_probe_kernel_FT,
                                 *args, **kwargs) #passing through args from earlier or should I use 
                                 #corrPower=corrPower,
@@ -207,16 +216,17 @@ def beta_parallel_disk_detection(dataset,
 
     output = dask_client.gather(_temp_peaks) # gather the future objects 
 
-    coords = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(coordinates=coords, shape=dataset.data.shape[:-2])
+    dtype = [('qx',float),('qy',float),('intensity',float)]
+    peaks = PointListArray(dtype=dtype, shape=dataset.data.shape[:-2])
 
     #temp_peaks[0][0]
 
     # operating over a list so we need the size (0->count) and re-create the probe positions (0->rx,0->ry),
+    # count is the size of the list 
     for (count,(rx, ry)) in zip([i for i in range(dataset.data[...,0,0].size)],np.ndindex(dataset.data.shape[:-2])):
         #peaks.get_pointlist(rx, ry).add_pointlist(temp_peaks[0][count])
         #peaks.get_pointlist(rx, ry).add_pointlist(output[count][0])
-        peaks.get_pointlist(rx, ry).add_pointlist(output[count])
+        peaks.get_pointlist(rx, ry).add(output[count])
 
     # Clean up
     dask_client.cancel(_temp_peaks) # removes from the dask workers
