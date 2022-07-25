@@ -1669,7 +1669,7 @@ def plot_ring_pattern(
     Args:
         radii (PointList):              1D numpy array containing radii for diffraction rings
         intensity (PointList):          1D numpy array containing intensities for diffraciton rings
-        theta (3-tuple):                first two specify angle range, last specifies number of points used to plot
+        theta (3-tuple):                first two values specify angle range, and the last specifies the number of points used for plotting
         intensity_scale (float):        size scaling for ring thickness
         intensity_constant (bool):      if true, all rings are plotted with same line width
         color (matplotlib color):       color of ring, any format recognized by matplotlib 
