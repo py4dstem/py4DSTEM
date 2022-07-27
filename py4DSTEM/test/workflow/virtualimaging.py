@@ -62,4 +62,14 @@ datacube.tree.print()
 
 
 
+# mask detector
+
+mask = np.zeros(datacube.Qshape, dtype=bool)
+mask[30:35,30:35] = True
+
+im_mask = py4DSTEM.process.virtualimage.get_virtual_image(
+    datacube,
+    mode = 'mask',
+    geometry = mask,
+)
 
