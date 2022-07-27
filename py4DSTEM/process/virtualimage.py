@@ -91,9 +91,9 @@ def get_virtual_image(
         assert(isinstance(g,tuple) and len(g)==2 and
                all([len(g[i])==2 for i in (0,1)])), er
     elif mode in ('mask'):
-        assert type(mask) == np.ndarray, "`mask` type should be `np.ndarray`"
+        assert type(geometry) == np.ndarray, "`geometry` type should be `np.ndarray`"
         er = "mask and diffraction pattern shapes do not match"
-        assert mask.shape == datacube.Qshape, er
+        assert geometry.shape == datacube.Qshape, er
         mode = 'mask' if g.dtype==bool else 'mask_float'
     else:
         raise Exception(f"Unknown mode {mode}")
@@ -294,7 +294,7 @@ def _make_function_dict():
                 'dask' : _get_virtual_image_fn
             },
             False : {
-                'numpy' : _get_virtual_image_fn,
+                'numpy' : _get_virtualimage_mask,
                 'dask' : _get_virtual_image_fn
             },
         },
@@ -305,7 +305,7 @@ def _make_function_dict():
                 'dask' : _get_virtual_image_fn
             },
             False : {
-                'numpy' : _get_virtual_image_fn,
+                'numpy' : _get_virtualimage_mask,
                 'dask' : _get_virtual_image_fn
             },
         }
@@ -645,6 +645,17 @@ def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs)
     for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
     return virtual_image
+
+def _get_virtualimage_mask(datacube, geometry, verbose=True, *args, **kwargs):
+    """
+    Returns:
+        (2D array): the virtual image
+    """
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
+        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,:,:]*geometry)
+    return virtual_image
+
 #### End of py4DSTEM funcs V0.13.0 ####
 
 #### Dask Function #### 
