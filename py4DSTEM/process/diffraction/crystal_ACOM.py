@@ -1578,21 +1578,26 @@ def match_single_pattern(
         return orientation
 
 
-def orientation_map_to_orix_CrystalMap(self, 
-                                       orientation_map, 
-                                       ind_orientation=0, 
-                                       pixel_size=1.0, 
-                                       pixel_units='px', 
-                                       return_color_key=False
-                                       ):
-    from orix.quaternion import Rotation, Orientation
-    from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
-    from orix.plot import IPFColorKeyTSL
+def orientation_map_to_orix_CrystalMap(
+    self,
+    orientation_map,
+    ind_orientation=0,
+    pixel_size=1.0,
+    pixel_units='px',
+    return_color_key=False
+    ):
+    try:
+        from orix.quaternion import Rotation, Orientation
+        from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
+        from orix.plot import IPFColorKeyTSL
+    except ImportError:
+        raise Exception("orix failed to import; try pip installing separately")
+
     from diffpy.structure import Atom, Lattice, Structure
-    
+
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure as pgStructure
-    
+
     from py4DSTEM.process.diffraction.utils import element_symbols
 
     # generate a list of Rotation objects from the Euler angles
