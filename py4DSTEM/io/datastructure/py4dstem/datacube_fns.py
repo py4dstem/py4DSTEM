@@ -222,19 +222,19 @@ def get_virtual_image(
 
     Args:
         mode (str): must be in
-            ('point','circle','annulus','rectangle',
-            'cpoint','ccircle','cannulus','csquare',
-            'qpoint','qcircle','qannulus','qsquare',
-            'mask').  The first four modes represent point, circular,
+            ('point','circular','annular','rectangular',
+            'point_centered','circular_centered','annular_centered',
+            'square_centered','point_calibrated','circular_calibrated',
+            'annular_calibrated','square_calibrated','mask').
+            The first four modes represent point, circular,
             annular, and rectangular detectors with geomtries specified
             in pixels, relative to the uncalibrated origin, i.e. the upper
             left corner of the diffraction plane. The next four modes
             represent point, circular, annular, and square detectors with
             geometries specified in pixels, relative to the calibrated origin,
             taken to be the mean posiion of the origin over all scans.
-            'ccircle','cannulus', and 'csquare' are automatically centered
-            about the origin. The next four modes are identical to these,
-            except that the geometry is specified in q-space units, rather
+            The next four modes are identical to these, except that the
+            geometry is specified in q-space units, rather
             than pixels. In the last mode the geometry is specified with a
             user provided mask, which can be either boolean or floating point.
             Floating point masks are normalized by setting their maximum value
@@ -242,17 +242,17 @@ def get_virtual_image(
         geometry (variable): valid entries are determined by the `mode`
             argument, as follows:
                 - 'point': 2-tuple, (qx,qy)
-                - 'circle': nested 2-tuple, ((qx,qy),r)
-                - 'annulus': nested 2-tuple, ((qx,qy),(ri,ro))
-                - 'rectangle': 4-tuple, (xmin,xmax,ymin,ymax)
-                - 'cpoint': 2-tuple, (qx,qy)
-                - 'ccircle': number, r
-                - 'cannulus': 2-tuple, (ri,ro)
-                - 'csquare': number, s
-                - 'qpoint': 2-tuple, (qx,qy)
-                - 'qcircle': number, r
-                - 'qannulus': 2-tuple, (ri,ro)
-                - 'qsquare': number, s
+                - 'circular': nested 2-tuple, ((qx,qy),r)
+                - 'annular': nested 2-tuple, ((qx,qy),(ri,ro))
+                - 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - 'point_centered': 2-tuple, (qx,qy)
+                - 'circular_centered': number, r
+                - 'annular_centered': 2-tuple, (ri,ro)
+                - 'square_centered': number, s
+                - 'point_calibrated': 2-tuple, (qx,qy)
+                - 'circular_calibrated': number, r
+                - 'annular_calibrated': 2-tuple, (ri,ro)
+                - 'square_calibrated': number, s
                 - `mask`: 2D array
         shift_corr (bool): if True, correct for beam shift. Works only with
             'c' and 'q' modes - uses the calibrated origin for each pixel,
