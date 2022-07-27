@@ -24,7 +24,6 @@ modules = [
         'ncempy',
         'numba',
         'numpy',
-        'orix',
         'pymatgen',
         'pyqtgraph',
         'qtconsole',
@@ -59,7 +58,7 @@ module_depenencies = {
         ],
     'ipyparallel': ['ipyparallel', 'dill'],
     'cuda': ['cupy'],
-    'acom': ['pymatgen', 'mp_api', 'orix'],
+    'acom': ['pymatgen', 'mp_api'],
     'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
     'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
     'numba': ['numba']
