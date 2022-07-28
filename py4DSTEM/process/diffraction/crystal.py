@@ -180,9 +180,9 @@ class Crystal:
 
         """
         import pymatgen as mg
-        from mp_api import MPRester
         if structure is not None:
             if isinstance(structure, str):
+                from mp_api import MPRester
                 with  MPRester(MP_key) as mpr:
                     structure = mpr.get_structure_by_material_id(structure)
 
@@ -198,6 +198,7 @@ class Crystal:
                 else structure
             )
         else:
+            from mp_api import MPRester
             with MPRester(MP_key) as mpr: 
                 if formula is None:
                     raise Exception(
