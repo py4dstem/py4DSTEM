@@ -29,7 +29,6 @@ sample_code/data/*dm3
 *.avi
 *.mp4
 *.emd
-*.pdf
 *.bin
 *.mat
 *.doc
