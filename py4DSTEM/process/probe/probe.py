@@ -18,14 +18,24 @@ def get_vacuum_probe(
     ):
     """
     Takes some data and computes a vacuum probe, using a method
-    selected based on the shape of `data`, and on other arguments
-    passed.
+    selected based on the type and shape of `data`, and on other
+    arguments passed.
 
-    Valid modes are:
-        - ...
+    If `data` is a DataCube and nothing else is passed, computes a
+    probe using the whole datacube by aligning then averaging all
+    the diffraction images. If `data` is a DataCube and the `ROI`
+    keyword is passed, aligns and averages a subset of the datacube
+    based on the ROI argument's value, which may be a R-space shaped
+    boolean mask, or a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax).
+    Aligned data is also masked outside the central disk.
+
+    If `data` is a 3D array, averages the stack with no alignment, but
+    including masking outside of the central disk.
+
+    If `data` is a 2D array, masks outside the central disk.
 
     Args:
-        data:
+        data (variable): see above
 
     Returns:
         (Probe) a Probe instance
