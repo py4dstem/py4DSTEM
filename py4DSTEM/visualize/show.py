@@ -1,6 +1,6 @@
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
 from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from ..io.datastructure import Calibration
+from ..io.datastructure import Calibration, DiffractionSlice, RealSlice
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -299,13 +299,42 @@ def show(
         else:
             _show_grid(**args,**kwargs)
             return
+    # support for native data types
     elif not isinstance(ar,np.ndarray):
+        # support for calibration/auto-scalebars
+        if hasattr(ar, 'calibration'):
+            cal = ar.calibration
+            er = ".calibration attribute must be a Calibration instance"
+            assert isinstance(cal, Calibration), er
+            if isinstance(ar, DiffractionSlice):
+                scalebar = {
+                    'Nx':ar.data.shape[0],
+                    'Ny':ar.data.shape,
+                    'pixelsize':cal.get_Q_pixel_size(),
+                    'pixelunits':cal.get_Q_pixel_units(),
+                    'space':'Q',
+                    'position':'br'
+                }
+                pixelsize = cal.get_Q_pixel_size()
+                pixelunits = cal.get_Q_pixel_units()
+            elif isinstance(ar, RealSlice):
+                scalebar = {
+                    'Nx':ar.data.shape[0],
+                    'Ny':ar.data.shape,
+                    'pixelsize':cal.get_R_pixel_size(),
+                    'pixelunits':cal.get_R_pixel_units(),
+                    'space':'Q',
+                    'position':'br'
+                }
+                pixelsize = cal.get_R_pixel_size()
+                pixelunits = cal.get_R_pixel_units()
+        # get the data
         if hasattr(ar, 'data'):
             if ar.data.ndim == 2:
                 ar = ar.data
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
-   
+
     # otherwise plot one image
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','centered')
