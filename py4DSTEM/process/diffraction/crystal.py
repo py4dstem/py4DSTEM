@@ -43,6 +43,7 @@ class Crystal:
         plot_orientation_plan,
         plot_orientation_maps,
         plot_fiber_orientation_maps,
+        plot_ring_pattern,
     )
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
