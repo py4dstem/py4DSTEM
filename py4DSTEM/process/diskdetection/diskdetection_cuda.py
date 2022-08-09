@@ -1,4 +1,4 @@
-""" 
+"""
 Functions for finding Braggdisks using cupy
 
 """
@@ -10,9 +10,9 @@ import cupyx.scipy.fft as cufft
 from time import time
 import numba
 
-from ...io import PointList, PointListArray
-from ..utils import tqdmnd
 from .kernels import kernels
+from ...io import PointList, PointListArray
+from ...utils.tqdmnd import tqdmnd
 
 
 def find_Bragg_disks_CUDA(
@@ -91,7 +91,7 @@ def find_Bragg_disks_CUDA(
 
     # Make the peaks PointListArray
     coords = [("qx", float), ("qy", float), ("intensity", float)]
-    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+    peaks = PointListArray(dtype=coords, shape=(datacube.R_Nx, datacube.R_Ny))
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function:
@@ -368,7 +368,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
     if peaks is None:
         coords = [("qx", float), ("qy", float), ("intensity", float)]
         peaks = PointList(coordinates=coords)
-    peaks.add_tuple_of_nparrays((maxima_x, maxima_y, maxima_int))
+    peaks.add_data_by_field((maxima_x, maxima_y, maxima_int))
 
     if return_cc:
         return peaks, gaussian_filter(cc, sigma)

@@ -6,7 +6,8 @@ from fractions import Fraction
 from typing import Union, Optional
 
 from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd, single_atom_scatter, electron_wavelength_angstrom
+from ..utils import single_atom_scatter, electron_wavelength_angstrom
+from ...utils.tqdmnd import tqdmnd
 
 from .crystal_viz import plot_diffraction_pattern
 from .utils import Orientation
@@ -24,11 +25,14 @@ class Crystal:
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
     from .crystal_ACOM import (
-        orientation_plan, 
-        match_orientations, 
+        orientation_plan,
+        match_orientations,
         match_single_pattern,
+        calculate_strain,
         save_ang_file,
         symmetry_reduce_directions,
+        orientation_map_to_orix_CrystalMap,
+        save_ang_file,
     )
 
     from .crystal_viz import (
@@ -176,9 +180,9 @@ class Crystal:
 
         """
         import pymatgen as mg
-        from mp_api import MPRester
         if structure is not None:
             if isinstance(structure, str):
+                from mp_api import MPRester
                 with  MPRester(MP_key) as mpr:
                     structure = mpr.get_structure_by_material_id(structure)
 
@@ -194,6 +198,7 @@ class Crystal:
                 else structure
             )
         else:
+            from mp_api import MPRester
             with MPRester(MP_key) as mpr: 
                 if formula is None:
                     raise Exception(
@@ -488,6 +493,7 @@ class Crystal:
             sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
             tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+            k_max (float):                   Maximum scattering vector
             keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
             return_orientation_matrix (bool): Return the orientation matrix
 
@@ -496,7 +502,12 @@ class Crystal:
             orientation_matrix (array):      3x3 orientation matrix (optional)
         """
 
-        assert hasattr(self,'wavelength') and hasattr(self,'accel_voltage'), "Accelerating voltage not set. Please run setup_diffraction."
+        if not (hasattr(self, "wavelength") and hasattr(
+            self, "accel_voltage"
+        )):
+            print("Accelerating voltage not set. Assuming 300 keV!")
+            self.setup_diffraction(300e3)
+
 
         # Tolerance for angular tests
         tol = 1e-6
@@ -567,8 +578,7 @@ class Crystal:
         # Output as PointList
         if keep_qz:
             gz_proj = g_diff[2,keep_int]
-            bragg_peaks = PointList(
-                [
+            pl_dtype = np.dtype([
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("qz", "float64"),
@@ -576,40 +586,36 @@ class Crystal:
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ]
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
             )
             if np.any(keep_int):
-                bragg_peaks.add_pointarray(
-                    np.vstack((
-                        gx_proj,
-                        gy_proj,
-                        gz_proj,
-                        g_int[keep_int],
-                        h,
-                        k,
-                        l)).T
-                )
+                bragg_peaks.add_data_by_field(
+                                              [
+                                              gx_proj,
+                                              gy_proj,
+                                              gz_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
         else:
-            bragg_peaks = PointList(
-                [
+            pl_dtype = np.dtype([
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("intensity", "float64"),
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ]
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
             )
             if np.any(keep_int):
-                bragg_peaks.add_pointarray(
-                    np.vstack((
-                        gx_proj,
-                        gy_proj,
-                        g_int[keep_int],
-                        h,
-                        k,
-                        l)).T
-                )
+                bragg_peaks.add_data_by_field([
+                                              gx_proj,
+                                              gy_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
 
         if return_orientation_matrix:
             return bragg_peaks, orientation_matrix
@@ -663,9 +669,12 @@ class Crystal:
         if np.sum(sub) > 0:
             for ind in np.argwhere(sub):
                 frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
-                vec *= frac.denominator
-            vec /= np.gcd.reduce(np.abs(vec[sub]).astype('int'))
-        return vec.astype('int')
+                vec *= np.round(frac.denominator)
+            vec = np.round(vec \
+                / np.gcd.reduce(np.round(np.abs(vec[sub])).astype('int'))
+                ).astype('int')
+
+        return vec
 
     def parse_orientation(
         self,

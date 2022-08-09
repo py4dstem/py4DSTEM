@@ -8,7 +8,8 @@
 import numpy as np
 from pathlib import Path
 from ..datastructure import DataCube
-from ...process.utils import bin2D, tqdmnd
+from ...utils.tqdmnd import tqdmnd
+from ...process.utils import bin2D
 
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
