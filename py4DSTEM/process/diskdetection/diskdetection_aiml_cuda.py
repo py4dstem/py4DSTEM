@@ -24,7 +24,7 @@ from cupyx.scipy.ndimage import gaussian_filter
 from .diskdetection_aiml import _get_latest_model
 
 from ...io import PointList, PointListArray
-from ..utils import tqdmnd
+from ...utils.tqdmnd import tqdmnd
 from .kernels import kernels
 from .diskdetection import universal_threshold
 

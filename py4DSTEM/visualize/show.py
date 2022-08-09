@@ -1,6 +1,6 @@
 from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
 from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from ..io.datastructure import Coordinates
+from ..io.datastructure import Calibration, DiffractionSlice, RealSlice
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,15 +12,50 @@ from numbers import Number
 from math import log
 from copy import copy
 
-def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
-         vmin=None,vmax=None,min=None,max=None,power=1,bordercolor=None,borderwidth=5,
-         returnclipvals=False,returncax=False,returnfig=False,figax=None,
-         hist=False,n_bins=256,mask=None,mask_color='k',mask_alpha=0.,
-         rectangle=None,circle=None,annulus=None,ellipse=None,points=None,grid_overlay=None,
-         cartesian_grid=None,polarelliptical_grid=None,rtheta_grid=None,scalebar=None,
-         coordinates=None,rx=None,ry=None,space='Q',
-         pixelsize=None,pixelunits=None,x0=None,y0=None,e=None,theta=None,
-         **kwargs):
+def show(
+    ar,
+    figsize=(8,8),
+    cmap='gray',
+    scaling='none',
+    clipvals='minmax',
+    vmin=None,
+    vmax=None,
+    min=None,
+    max=None,
+    power=1,
+    bordercolor=None,
+    borderwidth=5,
+    returnclipvals=False,
+    returncax=False,
+    returnfig=False,
+    figax=None,
+    hist=False,
+    n_bins=256,
+    mask=None,
+    mask_color='k',
+    mask_alpha=0.,
+    rectangle=None,
+    circle=None,
+    annulus=None,
+    ellipse=None,
+    points=None,
+    grid_overlay=None,
+    cartesian_grid=None,
+    polarelliptical_grid=None,
+    rtheta_grid=None,
+    scalebar=None,
+    calibration=None,
+    rx=None,
+    ry=None,
+    space='Q',
+    pixelsize=None,
+    pixelunits=None,
+    x0=None,
+    y0=None,
+    a=None,
+    theta=None,
+    title=None,
+    **kwargs):
     """
     General visualization function for 2D arrays.
 
@@ -96,8 +131,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
         will overlay a single red square, and
 
-            >>> show(ar, annulus={'center':[(28,68),(92,160)],'fill':True,
-                                  'alpha':[0.9,0.3],'Ri':[16,12],'Ro':[24,36],
+            >>> show(ar, annulus={'center':[(28,68),(92,160)],
+                                  'radii':[(16,24),(12,36)],
+                                  'fill':True,
+                                  'alpha':[0.9,0.3],
                                   'color':['r',(0,1,1,1)]})
 
         will overlay two annuli with two different centers, radii, colors, and
@@ -115,20 +152,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         overlays (coordinate systems and scalebars) require information about the
         plot - e.g. the position of the origin, the pixel sizes, the pixel units,
         any elliptical distortions, etc.  The easiest way to pass this information
-        is by pass a Coordinates object containing this info to ``show`` as the
-        keyword ``coordinates``. Second, once the coordinate information has been
+        is by pass a Calibration object containing this info to ``show`` as the
+        keyword ``calibration``. Second, once the coordinate information has been
         passed, informational overlays can autoselect their own parameters, thus simply
         passing an empty dict to one of these parameters will add that overlay.
 
         For example:
 
-            >>> show(dp, scalebar={}, coordinates=coords)
+            >>> show(dp, scalebar={}, calibration=calibration)
 
         will display the diffraction pattern ``dp`` with a scalebar overlaid in the
-        bottom left corner given the pixel size and units described in ``coords``,
+        bottom left corner given the pixel size and units described in ``calibration``,
         and
 
-            >>> show(dp, coordinates=coords, scalebar={'length':0.5,'width':2,
+            >>> show(dp, calibration=calibration, scalebar={'length':0.5,'width':2,
                                                        'position':'ul','label':True'})
 
         will display a more customized scalebar.
@@ -136,20 +173,20 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         When overlaying coordinate grids, it is important to note that some relevant
         parameters, e.g. the position of the origin, may change by scan position.
         In these cases, the parameters ``rx``,``ry`` must also be passed to ``show``,
-        to tell the ``Coordinates`` object where to look for the relevant parameters.
+        to tell the ``Calibration`` object where to look for the relevant parameters.
         For example:
 
-            >>> show(dp, cartesian_grid={}, coordinates=coords, rx=2,ry=5)
+            >>> show(dp, cartesian_grid={}, calibration=calibration, rx=2,ry=5)
 
         will overlay a cartesian coordinate grid on the diffraction pattern at scan
         position (2,5). Adding
 
-            >>> show(dp, coordinates=coords, rx=2, ry=5, cartesian_grid={'label':True,
+            >>> show(dp, calibration=calibration, rx=2, ry=5, cartesian_grid={'label':True,
                         'alpha':0.7,'color':'r'})
 
         will customize the appearance of the grid further. And
 
-            >>> show(im, coordinates=coords, cartesian_grid={}, space='R')
+            >>> show(im, calibration=calibration, cartesian_grid={}, space='R')
 
         displays a cartesian grid over a real space image.  For more details, see the
         documentation for the visualize functions add_*, where * = ('scalebar',
@@ -185,7 +222,9 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
 
     Args:
-        ar (2D array): the array to plot
+        ar (2D array or a list of 2D arrays): the data to plot. Normally this
+            is a 2D array of the data.  If a list of 2D arrays is passed, plots
+            a corresponding grid of images.
         figsize (2-tuple): size of the plot
         cmap (colormap): any matplotlib cmap; default is gray
         scaling (str): selects a scaling scheme for the intensity values. Default is
@@ -237,8 +276,66 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
+
+    # TODO - set all internal references of min and max to vmin and vmax.
+    # Also throw a warning for using vmin / vmax that they are deprecated.
     if vmin is not None: min=vmin
     if vmax is not None: max=vmax
+
+    # plot a grid if `ar` is a list
+    if isinstance(ar,list):
+        args = locals()
+        if 'kwargs' in args.keys():
+            del args['kwargs']
+        rm = []
+        for k in args.keys():
+            if args[k] is None:
+                rm.append(k)
+        for k in rm:
+            del args[k]
+        from .show_extention import _show_grid
+        if returnfig:
+            return _show_grid(**args,**kwargs)
+        else:
+            _show_grid(**args,**kwargs)
+            return
+    # support for native data types
+    elif not isinstance(ar,np.ndarray):
+        # support for calibration/auto-scalebars
+        if hasattr(ar, 'calibration'):
+            cal = ar.calibration
+            er = ".calibration attribute must be a Calibration instance"
+            assert isinstance(cal, Calibration), er
+            if isinstance(ar, DiffractionSlice):
+                scalebar = {
+                    'Nx':ar.data.shape[0],
+                    'Ny':ar.data.shape,
+                    'pixelsize':cal.get_Q_pixel_size(),
+                    'pixelunits':cal.get_Q_pixel_units(),
+                    'space':'Q',
+                    'position':'br'
+                }
+                pixelsize = cal.get_Q_pixel_size()
+                pixelunits = cal.get_Q_pixel_units()
+            elif isinstance(ar, RealSlice):
+                scalebar = {
+                    'Nx':ar.data.shape[0],
+                    'Ny':ar.data.shape,
+                    'pixelsize':cal.get_R_pixel_size(),
+                    'pixelunits':cal.get_R_pixel_units(),
+                    'space':'Q',
+                    'position':'br'
+                }
+                pixelsize = cal.get_R_pixel_size()
+                pixelunits = cal.get_R_pixel_units()
+        # get the data
+        if hasattr(ar, 'data'):
+            if ar.data.ndim == 2:
+                ar = ar.data
+        else:
+            raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
+
+    # otherwise plot one image
     assert scaling in ('none','log','power','hist')
     assert clipvals in ('minmax','manual','std','centered')
     if mask is not None:
@@ -334,6 +431,10 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         ax.bar(x,hist,width=w)
         ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
 
+    # add a title
+    if title is not None:
+        ax.set_title(title)
+
     # Add a border
     if bordercolor is not None:
         for s in ['bottom','top','left','right']:
@@ -358,46 +459,46 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
 
 
     # Parse arguments for scale/coordinate overlays
-    if coordinates is not None:
-        assert isinstance(coordinates,Coordinates)
+    if calibration is not None:
+        assert isinstance(calibration,Calibration)
     assert space in ('Q','R')
     # pixel size/units
-    if pixelsize is None and coordinates is None:
+    if pixelsize is None and calibration is None:
         pixelsize = 1
     if pixelsize is not None:
         pass
     else:
         if space == 'Q':
-            pixelsize = coordinates.get_Q_pixel_size()
+            pixelsize = calibration.get_Q_pixel_size()
         else:
-            pixelsize = coordinates.get_R_pixel_size()
-    if pixelunits is None and coordinates is None:
+            pixelsize = calibration.get_R_pixel_size()
+    if pixelunits is None and calibration is None:
         pixelunits = 'pixels'
     if pixelunits is not None:
         pass
     else:
         if space == 'Q':
-            pixelunits = coordinates.get_Q_pixel_units()
+            pixelunits = calibration.get_Q_pixel_units()
         else:
-            pixelunits = coordinates.get_R_pixel_units()
+            pixelunits = calibration.get_R_pixel_units()
     # origin
     if space == 'Q':
         if x0 is not None:
             pass
-        elif coordinates is not None:
+        elif calibration is not None:
             try:
-                x0 = coordinates.get_qx0(rx,ry)
+                x0 = calibration.get_origin(rx,ry)[0]
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for qx0')
+                raise Exception('The Calibration instance passed does not contain a value for qx0')
         else:
             x0 = 0
         if y0 is not None:
             pass
-        elif coordinates is not None:
+        elif calibration is not None:
             try:
-                y0 = coordinates.get_qy0(rx,ry)
+                y0 = calibration.get_origin(rx,ry)[1]
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for qy0')
+                raise Exception('The Calibration instance passed does not contain a value for qy0')
         else:
             y0 = 0
     else:
@@ -405,26 +506,26 @@ def show(ar,figsize=(8,8),cmap='gray',scaling='none',clipvals='minmax',
         y0 = y0 if y0 is not None else 0
     # ellipticity
     if space == 'Q':
-        if e is not None:
+        if a is not None:
             pass
-        elif coordinates is not None:
+        elif calibration is not None:
             try:
-                e = coordinates.get_e(rx,ry)
+                a = calibration.get_a(rx,ry)
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for e')
+                raise Exception('The Calibration instance passed does not contain a value for a')
         else:
-            e = 1
+            a = 1
         if theta is not None:
             pass
-        elif coordinates is not None:
+        elif calibration is not None:
             try:
-                theta = coordinates.get_theta(rx,ry)
+                theta = calibration.get_theta(rx,ry)
             except AttributeError:
-                raise Exception('The Coordinates instance passed does not contain a value for theta')
+                raise Exception('The Calibration instance passed does not contain a value for theta')
         else:
             theta = 0
     else:
-        e = e if e is not None else 1
+        a = a if a is not None else 1
         theta = theta if theta is not None else 0
 
 
@@ -537,7 +638,7 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
 
 def show_Q(ar,scalebar=True,grid=False,polargrid=False,
            Q_pixel_size=None,Q_pixel_units=None,
-           coordinates=None,rx=None,ry=None,
+           calibration=None,rx=None,ry=None,
            qx0=None,qy0=None,
            e=None,theta=None,
            scalebarloc=0,scalebarsize=None,scalebarwidth=None,
@@ -553,44 +654,44 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
     including a scalebar, a cartesian grid, or a polar / polar-elliptical grid.
 
     Regardless of which overlay is requested, the function must recieve either values
-    for Q_pixel_size and Q_pixel_units, or a Coordinates instance containing these values.
+    for Q_pixel_size and Q_pixel_units, or a Calibration instance containing these values.
     If both are passed, the manually passed values take precedence.
     If a cartesian grid is requested, (qx0,qy0) are required, either passed manually or
-    passed as a Coordinates instance with the appropriate (rx,ry) value.
+    passed as a Calibration instance with the appropriate (rx,ry) value.
     If a polar grid is requested, (qx0,qy0,e,theta) are required, again either manually
-    or via a Coordinates instance.
+    or via a Calibration instance.
 
     Any arguments accepted by the show() function (e.g. image scaling, clipvalues, etc)
     may be passed to this function as kwargs.
     """
     # Check inputs
     assert(isinstance(ar,np.ndarray) and len(ar.shape)==2)
-    if coordinates is not None:
-        assert isinstance(coordinates,Coordinates)
+    if calibration is not None:
+        assert isinstance(calibration,Calibration)
     try:
         Q_pixel_size = Q_pixel_size if Q_pixel_size is not None else \
-                       coordinates.get_Q_pixel_size()
+                       calibration.get_Q_pixel_size()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
     try:
         Q_pixel_units = Q_pixel_units if Q_pixel_units is not None else \
-                       coordinates.get_Q_pixel_units()
+                       calibration.get_Q_pixel_units()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in coordinates or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
     if grid or polargrid:
         try:
-            qx0 = qx0 if qx0 is not None else coordinates.get_qx0(rx,ry)
+            qx0 = qx0 if qx0 is not None else calibration.get_qx0(rx,ry)
         except AttributeError:
-            raise Exception("qx0 must be specified, either in coordinates or manually")
+            raise Exception("qx0 must be specified, either in calibration or manually")
         try:
-            qy0 = qy0 if qy0 is not None else coordinates.get_qy0(rx,ry)
+            qy0 = qy0 if qy0 is not None else calibration.get_qy0(rx,ry)
         except AttributeError:
-            raise Exception("qy0 must be specified, either in coordinates or manually")
+            raise Exception("qy0 must be specified, either in calibration or manually")
         assert isinstance(qx0,Number), "Error: qx0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(qy0,Number), "Error: qy0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
     if polargrid:
-        e = e if e is not None else coordinates.get_e(rx,ry)
-        theta = theta if theta is not None else coordinates.get_theta(rx,ry)
+        e = e if e is not None else calibration.get_e(rx,ry)
+        theta = theta if theta is not None else calibration.get_theta(rx,ry)
         assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
 
@@ -847,7 +948,7 @@ def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
     else:
         return fig,ax
 
-def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
+def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,
                 **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed annuli.
@@ -860,7 +961,7 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
 
     Accepts:
         center      (2-tuple, or list of N 2-tuples) the center of the annulus (x0,y0)
-        Ri,Ro       (number of list of N numbers) the inner and outer radii
+        radii       (2-tuple, or list of N 2-tuples) the inner and outer radii
         color       (string of list of N strings)
         fill        (bool or list of N bools) filled in or empty rectangles
         alpha       (number, 0 to 1) transparency
@@ -872,7 +973,7 @@ def show_annuli(ar,center,Ri,Ro,color='r',fill=True,alpha=0.3,linewidth=2,return
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'Ri':Ri,'Ro':Ro,'color':color,'fill':fill,'alpha':alpha,
+    d = {'center':center,'radii':radii,'color':color,'fill':fill,'alpha':alpha,
          'linewidth':linewidth}
     add_annuli(ax,d)
 

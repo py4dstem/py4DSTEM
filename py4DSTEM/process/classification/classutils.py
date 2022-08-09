@@ -1,7 +1,8 @@
 # Utility functions for classification routines
 
 import numpy as np
-from ..utils import get_shifted_ar, tqdmnd
+from ..utils import get_shifted_ar
+from ...utils.tqdmnd import tqdmnd
 from ...io import DataCube, PointListArray
 
 def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,
