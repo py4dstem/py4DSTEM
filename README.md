@@ -54,7 +54,7 @@ Or if you would prefer to install only the base modules of **py4DSTEM**, you can
 conda update conda
 conda create -n py4dstem
 conda activate py4dstem
-conda install py4dstem
+conda install -c conda-forge py4dstem
 ```
 
 In Windows you should then also run:
