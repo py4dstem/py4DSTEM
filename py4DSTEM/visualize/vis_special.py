@@ -770,6 +770,7 @@ def show_complex(
     vmax = None,
     cbar = True,
     returnfig = False,
+    **kwargs
     ):
     '''
     Function to plot complex arrays
@@ -816,7 +817,8 @@ def show_complex(
     #plot
     fig, ax = show(
         hsv,
-        returnfig = True
+        returnfig = True,
+        **kwargs
     )
 
     #add color bar
@@ -846,10 +848,13 @@ def show_complex(
         ax0.axhline(AA/2, 0, AA, color = 'k')
         ax0.axvline(AA/2, 0, AA, color = 'k')
         ax0.axis('off')
-        ax0.text(AA, AA/2,1, fontsize = 16)
-        ax0.text(AA/2, 0, 'i', fontsize = 16)
-        ax0.text(AA/2, AA, '-i', fontsize = 16)
-        ax0.text(0, AA/2,-1, fontsize = 16)
+
+        label_size = 16
+
+        ax0.text(AA, AA/2, 1, fontsize = label_size)
+        ax0.text(AA/2, 0, 'i', fontsize = label_size)
+        ax0.text(AA/2, AA, '-i', fontsize = label_size)
+        ax0.text(0, AA/2, -1, fontsize = label_size)
 
     if returnfig == True: 
         return fig, ax
