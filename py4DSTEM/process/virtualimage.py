@@ -58,38 +58,47 @@ def get_virtual_image(
 
     #point mode 
     if mode == 'point':
-        assert(qx,qy), "specify qx and qy"
+        assert(qx,qy) is not None, "specify qx and qy"
         mask = np.zeros((datacube.Q_Nx, datacube.Q_Ny))
+        
+        if qx%1 > 1e-6: 
+            print("warning: rounding qx to integer")
+
+        if qy%1 > 1e-6: 
+            print("warning: rounding qy to integer")
+            
+        qx = int(qx)
+        qy = int(qy)
+        
         mask[qx,qy] = 1
 
     #circular mask
     if mode in('circle', 'circular') :
-        assert(qx qy,radius_i), "specify qx, qy, radius_i"
+        assert (qx, qy,radius_i) is not None, "specify qx, qy, radius_i"
 
         qxa, qya = np.indices((datacube.Q_Nx, datacube.Q_Ny))
-        mask = (qxa - qx) ** 2 + (y-jc) ** 2 < radius_i ** 2
+        mask = (qxa - qx) ** 2 + (qya - qy) ** 2 < radius_i ** 2
 
     #annular mask 
     if mode in('annulus', 'annular') :
-        assert(qx qy,radius_i, radius_o), "specify qx, qy, radius_i, radius_o"
+        assert (qx, qy,radius_i, radius_o) is not None, "specify qx, qy, radius_i, radius_o"
         qxa, qya = np.indices((datacube.Q_Nx, datacube.Q_Ny))
-        mask1 = (qxa - qx) ** 2 + (y-jc) ** 2 > radius_i ** 2
-        mask2 = (qxa - qx) ** 2 + (y-jc) ** 2 < radius_i ** 2
-        mask = np.logical(mask1, mask2)
+        mask1 = (qxa - qx) ** 2 + (qya - qy) ** 2 > radius_i ** 2
+        mask2 = (qxa - qx) ** 2 + (qya - qy) ** 2 < radius_o ** 2
+        mask = np.logical_and(mask1, mask2)
 
     #rectangle mask 
-    if mode in('rectangle', 'square', 'rectangular')
-        assert(x_min, x_max, y_min, y_max), "x_min, x_max, y_min, y_max"
+    if mode in('rectangle', 'square', 'rectangular') :
+        assert (x_min, x_max, y_min, y_max) is not None, "specify x_min, x_max, y_min, y_max"
         mask = np.zeros((datacube.Q_Nx, datacube.Q_Ny))
         mask[x_min:x_max, y_min:y_max] = 1
 
     #flexible mask
-    if mode == 'mask'
-        assert (virtual_mask.shape == (datacube.Q_Nx, datacube.Q_Ny)), 
-            "check mask dimensions"
+    if mode == 'mask' :
+        assert (virtual_mask.shape == (datacube.Q_Nx, datacube.Q_Ny)), "check mask dimensions"
         mask = virtual_mask
 
-   virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny)) 
+    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny)) 
     for rx,ry in tqdmnd(
         datacube.R_Nx, 
         datacube.R_Ny,
