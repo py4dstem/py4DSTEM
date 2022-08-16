@@ -10,6 +10,7 @@ from ..utils import single_atom_scatter, electron_wavelength_angstrom
 from ...utils.tqdmnd import tqdmnd
 
 from .crystal_viz import plot_diffraction_pattern
+from .crystal_viz import plot_ring_pattern
 from .utils import Orientation
 
 
@@ -621,7 +622,112 @@ class Crystal:
         else:
             return bragg_peaks
 
+    def generate_ring_pattern(
+        self, 
+        k_max = 2.0,
+        use_bloch = False,
+        thickness = None,
+        bloch_params = None,
+        orientation_plan_params = None,
+        sigma_excitation_error = 0.02,
+        tol_intensity = 1e-3,
+        plot_rings = True,
+        plot_params = {},
+        return_calc = True,
+    ):
+        """
+        Calculate polycrystalline diffraction pattern from structure
+        
+        Args: 
+            k_max (float):                  Maximum scattering vector
+            use_bloch (bool):               if true, use dynamic instead of kinematic approach
+            thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
+                                            only needed for dynamical calculations
+            bloch_params (dict):            optional, parameters to calculate dynamical structure factor, 
+                                            see calculate_dynamical_structure_factors doc strings
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan, 
+                                            see orientation_plan doc strings
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) 
+                                            in units of inverse Angstroms
+            tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
+            plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
+            return_calc (bool):             return radii and intensities 
 
+        Returns: 
+            radii_unique (np array):        radii of ring pattern in units of scattering vector k
+            intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
+        """ 
+       
+        if use_bloch: 
+            assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
+            assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
+            
+        if not hasattr(self, "struct_factors"):
+            self.calculate_structure_factors(
+                k_max = k_max, 
+            )
+    
+        #check accelerating voltage 
+        if hasattr(self, "accel_voltage"): 
+            accelerating_voltage = self.accel_voltage
+        else: 
+            self.accel_voltage = 300e3
+            print("Accelerating voltage not set. Assuming 300 keV!")
+        
+        #check orientation plan
+        if not hasattr(self, "orientation_vecs"):
+            if orientation_plan_params is None: 
+                orientation_plan_params = {
+                    'zone_axis_range': 'auto',
+                    'angle_step_zone_axis': 4, 
+                    'angle_step_in_plane': 4,
+                }    
+            self.orientation_plan(
+                **orientation_plan_params,
+            )
+
+        #calculate intensity and radius for rings 
+        radii = []
+        intensity = []
+        for a0 in range(self.orientation_vecs.shape[0]):
+            if use_bloch:
+                beams = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+                pattern = self.generate_dynamical_diffraction_pattern(
+                    beams = beams,
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    thickness = thickness,
+                )
+            else:  
+                pattern = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+
+            intensity.append(pattern['intensity'])
+            radii.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
+        
+        intensity = np.concatenate(intensity)
+        radii = np.concatenate(radii)
+
+        radii_unique,idx,inv,cts = np.unique(radii, return_counts=True, return_index=True,return_inverse=True)
+        intensity_unique = np.bincount(inv,weights=intensity)
+
+        if plot_rings == True:
+            from .crystal_viz import plot_ring_pattern 
+            plot_ring_pattern(radii_unique, 
+                intensity_unique, 
+                **plot_params
+            )
+
+        if return_calc == True: 
+            return radii_unique, intensity_unique
 
     # Vector conversions and other utilities for Crystal classes
 
@@ -733,6 +839,8 @@ class Crystal:
         else:
             return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
                 / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])
+
+
 
 
 
