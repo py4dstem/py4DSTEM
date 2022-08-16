@@ -111,7 +111,6 @@ def bin_data_diffraction(datacube, bin_factor):
         else:
             datacube.data = datacube.data[:,:,:-(Q_Nx%bin_factor),:-(Q_Ny%bin_factor)]
         datacube.data = datacube.data.reshape(R_Nx,R_Ny,int(Q_Nx/bin_factor),bin_factor,int(Q_Ny/bin_factor),bin_factor).sum(axis=(3,5))
-        datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
 def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
@@ -127,7 +126,6 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
         data[Rx,Ry,:,:] = bin2D(datacube.data[Rx,Ry,:,:],bin_factor,dtype=dtype)
 
     datacube.data = data
-    datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
     return datacube
 
 def bin_data_real(datacube, bin_factor):
@@ -149,7 +147,6 @@ def bin_data_real(datacube, bin_factor):
         else:
             datacube.data = datacube.data[:-(R_Nx%bin_factor),:-(R_Ny%bin_factor),:,:]
         datacube.data = datacube.data.reshape(int(R_Nx/bin_factor),bin_factor,int(R_Ny/bin_factor),bin_factor,Q_Nx,Q_Ny).sum(axis=(1,3))
-        datacube.R_Nx,datacube.R_Ny,datacube.Q_Nx,datacube.Q_Ny = datacube.data.shape
         return datacube
 
 def filter_hot_pixels(
