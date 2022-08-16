@@ -716,8 +716,8 @@ class Crystal:
         intensity = np.concatenate(intensity)
         radii = np.concatenate(radii)
 
-        radii_unique, index, counts, = np.unique(radii, return_counts = True, return_index = True)
-        intensity_unique = intensity[index] * counts
+        radii_unique,idx,inv,cts = np.unique(radii, return_counts=True, return_index=True,return_inverse=True)
+        intensity_unique = np.bincount(inv,weights=intensity)
 
         if plot_rings == True:
             from .crystal_viz import plot_ring_pattern 
