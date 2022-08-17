@@ -1,7 +1,7 @@
 # Functions for generating virtual images
 
 import numpy as np
-#import dask.array as da
+import dask.array as da
 #import h5py
 #import warnings
 
@@ -13,6 +13,7 @@ def get_virtual_image(
     geometry,
     shift_center = False,
     verbose = True,
+    dask = False,
 ):
     '''
     Function to calculate virtual image
@@ -40,6 +41,8 @@ def get_virtual_image(
 
         virtual image (2D-array)
     '''
+    
+
     g = geometry
 
     #point mode 
@@ -88,12 +91,19 @@ def get_virtual_image(
         assert (g.shape == datacube.Qshape), 'mask and diffraction pattern shapes do not match'
         mask = g
 
-    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny)) 
-    for rx,ry in tqdmnd(
-        datacube.R_Nx, 
-        datacube.R_Ny,
-        disable = not verbose,
-    ):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+    def _apply_mask_dask(datacube,mask):
+        virtual_image = np.sum(np.multiply(array,mask), dtype=np.float64)
+
+    if dask == True:
+        apply_mask = da.as_gufunc(_apply_mask_dask,signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
+        virtual_image = apply_mask_dask(datacube, mask)
+    else: 
+        virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny)) 
+        for rx,ry in tqdmnd(
+            datacube.R_Nx, 
+            datacube.R_Ny,
+            disable = not verbose,
+        ):
+            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
 
     return virtual_image
