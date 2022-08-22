@@ -3,7 +3,7 @@ from numbers import Number
 from typing import Optional
 import h5py
 
-from .tree import Tree
+from py4DSTEM.io.datastructure.emd.tree import Tree
 
 
 class Root:
@@ -51,11 +51,11 @@ class Root:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .io import Root_to_h5
+        from py4DSTEM.io.datastructure.emd.io import Root_to_h5
         Root_to_h5(self,group)
 
     def from_h5(group):
-        from .io import Root_from_h5
+        from py4DSTEM.io.datastructure.emd.io import Root_from_h5
         return Root_from_h5(group)
 
 

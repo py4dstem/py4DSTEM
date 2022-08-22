@@ -5,8 +5,8 @@ from os.path import exists, splitext
 from typing import Union, Optional
 import h5py
 
-from .native.read import read_py4DSTEM
-from .utils import parse_filetype
+from py4DSTEM.io.native.read import read_py4DSTEM
+from py4DSTEM.io.utils import parse_filetype
 
 
 def read(

@@ -3,8 +3,8 @@
 
 import numpy as np
 
-from ..utils import get_shifted_ar
-from ..calibration import get_probe_size
+from py4DSTEM.process.utils import get_shifted_ar
+from py4DSTEM.process.calibration import get_probe_size
 
 
 def get_kernel(

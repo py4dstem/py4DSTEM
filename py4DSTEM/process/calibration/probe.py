@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..utils import get_CoM
+from py4DSTEM.process.utils import get_CoM
 
 
 
