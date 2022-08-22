@@ -7,8 +7,8 @@ import h5py
 from copy import copy
 from typing import Optional
 
-from .tree import Tree
-from .metadata import Metadata
+from py4DSTEM.io.datastructure.emd.tree import Tree
+from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
 
 class PointList:
@@ -197,11 +197,11 @@ class PointList:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .io import PointList_to_h5
+        from py4DSTEM.io.datastructure.emd.io import PointList_to_h5
         PointList_to_h5(self,group)
 
     def from_h5(group):
-        from .io import PointList_from_h5
+        from py4DSTEM.io.datastructure.emd.io import PointList_from_h5
         return PointList_from_h5(group)
 
 

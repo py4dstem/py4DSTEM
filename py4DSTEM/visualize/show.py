@@ -1,6 +1,6 @@
-from .overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
-from .overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from ..io.datastructure import Calibration, DiffractionSlice, RealSlice
+from py4DSTEM.visualize.overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
+from py4DSTEM.visualize.overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
+from py4DSTEM.io.datastructure import Calibration, DiffractionSlice, RealSlice
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -293,7 +293,7 @@ def show(
                 rm.append(k)
         for k in rm:
             del args[k]
-        from .show_extention import _show_grid
+        from py4DSTEM.visualize.show_extention import _show_grid
         if returnfig:
             return _show_grid(**args,**kwargs)
         else:

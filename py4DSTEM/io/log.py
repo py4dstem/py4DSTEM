@@ -13,7 +13,7 @@ from functools import wraps
 import inspect
 
 # Get the current version in __version__
-from ..version import __version__
+from py4DSTEM.version import __version__
 
 class Logger(object):
     """

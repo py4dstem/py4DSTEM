@@ -1,7 +1,7 @@
 # Functions to become Probe methods
 
 import numpy as np
-from ..emd import Metadata
+from py4DSTEM.io.datastructure.emd import Metadata
 
 
 
@@ -46,7 +46,7 @@ def get_kernel(
     """
 
     # perform computation
-    from ....process.probe import get_kernel
+    from py4DSTEM.process.probe import get_kernel
     kern = get_kernel(
         self.probe,
         mode = mode,

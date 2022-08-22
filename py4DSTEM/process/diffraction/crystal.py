@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ..utils import single_atom_scatter, electron_wavelength_angstrom
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
-from .crystal_viz import plot_diffraction_pattern
-from .crystal_viz import plot_ring_pattern
-from .utils import Orientation
+from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
+from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
+from py4DSTEM.process.diffraction.utils import Orientation
 
 
 class Crystal:
@@ -25,7 +25,7 @@ class Crystal:
     # (see https://stackoverflow.com/a/47562412)
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
-    from .crystal_ACOM import (
+    from py4DSTEM.process.diffraction.crystal_ACOM import (
         orientation_plan,
         match_orientations,
         match_single_pattern,
@@ -36,7 +36,7 @@ class Crystal:
         save_ang_file,
     )
 
-    from .crystal_viz import (
+    from py4DSTEM.process.diffraction.crystal_viz import (
         plot_structure,
         plot_structure_factors,
         plot_orientation_zones,
@@ -46,7 +46,7 @@ class Crystal:
     )
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
-    from .crystal_bloch import (
+    from py4DSTEM.process.diffraction.crystal_bloch import (
         generate_dynamical_diffraction_pattern,
         generate_CBED,
         calculate_dynamical_structure_factors,
@@ -720,7 +720,7 @@ class Crystal:
         intensity_unique = np.bincount(inv,weights=intensity)
 
         if plot_rings == True:
-            from .crystal_viz import plot_ring_pattern 
+            from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern 
             plot_ring_pattern(radii_unique, 
                 intensity_unique, 
                 **plot_params
