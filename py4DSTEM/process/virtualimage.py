@@ -164,7 +164,7 @@ def get_virtual_image(
 
                         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
 
-         #annular mask
+        #annular mask
         if mode in('annulus', 'annular'):
                 assert(isinstance(g,tuple) and len(g)==2 and len(g[1])==2),'specify qx, qy, radius_i, radius_0 as ((qx, qy), radius_i, radius_o)'
                 
