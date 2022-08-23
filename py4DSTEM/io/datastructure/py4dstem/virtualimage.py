@@ -1,8 +1,8 @@
 # Defines the VirtualImage class, which stores 2D, real-shaped data
 # with metadata about how it was created
 
-from .realslice import RealSlice
-from ..emd.metadata import Metadata
+from py4DSTEM.io.datastructure.py4dstem.realslice import RealSlice
+from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
 from typing import Optional,Union
 import numpy as np
@@ -63,7 +63,7 @@ class VirtualImage(RealSlice):
 
     # read
     def from_h5(group):
-        from .io import VirtualImage_from_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import VirtualImage_from_h5
         return VirtualImage_from_h5(group)
 
 

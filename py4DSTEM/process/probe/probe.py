@@ -4,9 +4,9 @@ import numpy as np
 from scipy.ndimage.morphology import (
     binary_opening, binary_dilation, distance_transform_edt)
 
-from ..utils import get_shifted_ar, get_shift
-from ...utils.tqdmnd import tqdmnd
-from ...io.datastructure import DataCube, Probe
+from py4DSTEM.process.utils import get_shifted_ar, get_shift
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import DataCube, Probe
 
 
 

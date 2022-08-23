@@ -1,7 +1,8 @@
 # Functions for generating virtual images
 import numpy as np
 import dask.array as da
-from ..utils.tqdmnd import tqdmnd
+
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 def get_virtual_image(
     datacube, 
