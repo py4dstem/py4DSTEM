@@ -5,7 +5,7 @@ import dask.array as da
 import h5py
 import warnings
 
-from ..utils.tqdmnd import tqdmnd
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 

@@ -9,8 +9,8 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def plot_structure(

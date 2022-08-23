@@ -2,8 +2,8 @@ import pathlib
 from os.path import exists, splitext
 from typing import Union, Optional
 
-from .utils import parse_filetype
-from .nonnative import read_empad, read_dm, read_gatan_K2_bin
+from py4DSTEM.io.utils import parse_filetype
+from py4DSTEM.io.nonnative import read_empad, read_dm, read_gatan_K2_bin
 
 
 def import_file(

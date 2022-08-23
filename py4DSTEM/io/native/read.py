@@ -6,8 +6,8 @@ from os.path import splitext, exists
 from typing import Optional, Union
 from os.path import basename,dirname
 
-from .read_utils import is_py4DSTEM_file
-from ..datastructure import (
+from py4DSTEM.io.native.read_utils import is_py4DSTEM_file
+from py4DSTEM.io.datastructure import (
     Root,
     Tree,
     ParentTree,
@@ -26,7 +26,7 @@ from ..datastructure import (
     BraggVectors
 )
 
-from .read_utils import get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.native.read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
@@ -74,7 +74,7 @@ def read_py4DSTEM(
 
     # Use legacy readers for older EMD files
     if v[1] <= 12:
-        from .legacy import read_py4DSTEM_legacy
+        from py4DSTEM.io.native.legacy import read_py4DSTEM_legacy
         return read_py4DSTEM_legacy(filepath,**legacy_options)
 
     # Open h5 file
