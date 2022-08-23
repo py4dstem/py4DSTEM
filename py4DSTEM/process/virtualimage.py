@@ -26,22 +26,28 @@ def get_virtual_image(
                                     - 'mask' flexible detector, any 2D array
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
                                 argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy)
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                                    - 'point': 2-tuple, (qx,qy), 
+                                       qx and qy are each single float or int to define center
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                       qx, qy and radius, are each single float or int 
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                                       qx, qy, radius_i, and radius_o are each single float or integer 
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
                                 supported for 'point', 'circle', and 'annular' geometry 
-                                for the shifting center mode, the geometry should be modified so that qx and qy are the same size as real space
-                                    - 'point': 2-tuple, (qx,qy) where qx.shape and qx.shape == datacube.Rshape
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) where qx.shape and qx.shape == datacube.Rshape
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)) where qx.shape and qx.shape == datacube.Rshape
+                                for the shifting center mode, the geometry should be modified 
+                                so that qx and qy are the same size as real space
+                                    - 'point': 2-tuple, (qx,qy) 
+                                       where qx.shape and qx.shape == datacube.Rshape
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
+                                       where qx.shape and qx.shape == datacube.Rshape
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                                       where qx.shape and qx.shape == datacube.Rshape
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
 
     Returns:
-
         virtual image (2D-array)
     '''
     
@@ -67,7 +73,7 @@ def get_virtual_image(
 
         #circular mask
         if mode in('circle', 'circular'):
-            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],float or int)), \
+            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
             'specify qx, qy, radius_i as ((qx, qy), radius)'
 
             qxa, qya = np.indices(datacube.Qshape)
@@ -87,7 +93,7 @@ def get_virtual_image(
             assert(isinstance(g,tuple) and len(g)==4), \
            'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
             mask = np.zeros(datacube.Qshape)
-            mask[g[0]:g[1], g[2]:g[3]] = 1
+            mask[g[0] : g[1], g[2] : g[3]] = 1
 
         #flexible mask
         if mode == 'mask' :
@@ -144,7 +150,7 @@ def get_virtual_image(
                         virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
         #circular mask 
         if mode in('circle', 'circular') :
-                assert(isinstance(g,tuple) and len(g)==2 and isinstance(g[1],float or int)), 'specify qx, qy, radius_i as ((qx, qy), radius)'
+                assert(isinstance(g,tuple) and len(g)==2 and isinstance(g[1],(float,int))), 'specify qx, qy, radius_i as ((qx, qy), radius)'
                 
                 qx_scan = np.asarray(g[0][0])
                 qy_scan = np.asarray(g[0][1])

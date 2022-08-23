@@ -19,23 +19,26 @@ class VirtualImage(RealSlice):
         name: Optional[str] = 'virtualimage',
         mode: Optional[str] = None,
         geometry: Optional[Union[tuple,np.ndarray]] = None,
-        shift_corr: bool = False,
-        eager_compute: bool = True
+        shift_center: Optional[bool] = False,
         ):
         """
         Args:
-            data (np.ndarray): the 2D data
-            name (str): the name
-            mode (str): must be in
-                ('point','circle','annulus','rectangle',
-                 'cpoint','ccircle','cannulus','csquare',
-                 'qpoint','qcircle','qannulus','qsquare',
-                 'mask')
-            geometry (variable): valid entries are determined by the `mode`
-                argument
-            shift_corr (bool):
-            eager_compute (bool)
-
+            data (np.ndarray)       : the 2D data
+            name (str)              : the name
+            mode (str)              : defines geometry mode for calculating virtual image
+                                    options:
+                                        - 'point' uses singular point as detector
+                                        - 'circle' or 'circular' uses round detector,like bright field
+                                        - 'annular' or 'annulus' uses annular detector, like dark field
+                                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                                        - 'mask' flexible detector, any 2D array
+            geometry (variable)     : valid entries are determined by the `mode`, values in pixels
+                                        argument, as follows:
+                                        - 'point': 2-tuple, (qx,qy), 
+                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                        - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                                        - `mask`: flexible detector, any 2D array, same size as datacube.QShape        
         Returns:
             A new VirtualImage instance
         """
@@ -46,15 +49,12 @@ class VirtualImage(RealSlice):
             name = name,
         )
 
-
         # Set metadata
         md = Metadata(name='virtualimage')
         md['mode'] = mode
         md['geometry'] = geometry
-        md['shift_corr'] = shift_corr
-        md['eager_compute'] = eager_compute
+        md['shift_center'] = shift_center
         self.metadata = md
-
 
 
     # HDF5 read/write

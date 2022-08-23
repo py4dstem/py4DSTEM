@@ -211,8 +211,8 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    shift_corr = False,
-    eager_compute = True,
+    shift_center = False,
+    verbose = True,
     name = 'virtual_image',
     returncalc = True,
     ):
@@ -220,45 +220,37 @@ def get_virtual_image(
     Get a virtual image and store it in `datacube`s tree under `name`.
     The kind of virtual image is specified by the `mode` argument.
 
-    Args:
-        mode (str): must be in
-            ('point','circular','annular','rectangular',
-            'point_centered','circular_centered','annular_centered',
-            'square_centered','point_calibrated','circular_calibrated',
-            'annular_calibrated','square_calibrated','mask').
-            The first four modes represent point, circular,
-            annular, and rectangular detectors with geomtries specified
-            in pixels, relative to the uncalibrated origin, i.e. the upper
-            left corner of the diffraction plane. The next four modes
-            represent point, circular, annular, and square detectors with
-            geometries specified in pixels, relative to the calibrated origin,
-            taken to be the mean posiion of the origin over all scans.
-            The next four modes are identical to these, except that the
-            geometry is specified in q-space units, rather
-            than pixels. In the last mode the geometry is specified with a
-            user provided mask, which can be either boolean or floating point.
-            Floating point masks are normalized by setting their maximum value
-            to 1.
-        geometry (variable): valid entries are determined by the `mode`
-            argument, as follows:
-                - 'point': 2-tuple, (qx,qy)
-                - 'circular': nested 2-tuple, ((qx,qy),r)
-                - 'annular': nested 2-tuple, ((qx,qy),(ri,ro))
-                - 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - 'point_centered': 2-tuple, (qx,qy)
-                - 'circular_centered': number, r
-                - 'annular_centered': 2-tuple, (ri,ro)
-                - 'square_centered': number, s
-                - 'point_calibrated': 2-tuple, (qx,qy)
-                - 'circular_calibrated': number, r
-                - 'annular_calibrated': 2-tuple, (ri,ro)
-                - 'square_calibrated': number, s
-                - `mask`: 2D array
-        shift_corr (bool): if True, correct for beam shift. Works only with
-            'c' and 'q' modes - uses the calibrated origin for each pixel,
-            instead of the mean origin position.
-        name (str): the output object's name
-        returncalc (bool): if True, returns the output
+    Args: 
+        mode (str)          : defines geometry mode for calculating virtual image
+                                options:
+                                    - 'point' uses singular point as detector
+                                    - 'circle' or 'circular' uses round detector,like bright field
+                                    - 'annular' or 'annulus' uses annular detector, like dark field
+                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                                    - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                                argument, as follows:
+                                    - 'point': 2-tuple, (qx,qy), 
+                                       qx and qy are each single float or int to define center
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                       qx, qy and radius, are each single float or int 
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                                       qx, qy, radius_i, and radius_o are each single float or integer 
+                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
+        shift_center (bool) : if True, qx and qx are shifted for each position in real space
+                                supported for 'point', 'circle', and 'annular' geometry 
+                                for the shifting center mode, the geometry should be modified 
+                                so that qx and qy are the same size as real space
+                                    - 'point': 2-tuple, (qx,qy) 
+                                       where qx.shape and qx.shape == datacube.Rshape
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
+                                       where qx.shape and qx.shape == datacube.Rshape
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                                       where qx.shape and qx.shape == datacube.Rshape
+        verbose (bool)      : if True, show progress bar
+        name (str)          : the output object's name
+        returncalc (bool)   : if True, returns the output
 
     Returns:
         (Optional): if returncalc is True, returns the VirtualImage
@@ -270,8 +262,8 @@ def get_virtual_image(
         self,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
-        eager_compute = eager_compute
+        shift_center = shift_center,
+        verbose = verbose,
     )
 
     # wrap with a py4dstem class
@@ -280,7 +272,7 @@ def get_virtual_image(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr
+        shift_center = shift_center, 
     )
 
     # add to the tree
@@ -290,8 +282,41 @@ def get_virtual_image(
     if returncalc:
         return im
 
+def get_bright_field(
+    self,
+    geometry = None, 
+    expand_BF = 4,
+    verbose = True,
+    name = 'bright_field',
+    returncalc = True,
+):
+    '''
+    Args: 
+        geometry 
 
+    Returns:
+        (Optional): if returncalc is True, returns the bright field VirtualImage
+    '''
 
+    if geometry is None: 
+        assert(self.calibration.get_probe_semiangle() and self.calibration.get_qx0 and self.calibration.get_qy0()), \
+        'get_probe_size() first'
+
+        probe_semiangle = self.calibration.get_probe_semiangle()
+        qx0 = self.calibration.get_qx0()
+        qy0 = self.calibration.get_qy0()
+        geometry = ((qx0,qy0),probe_semiangle + expand_BF)
+
+    BF = self.get_virtual_image(
+        mode = 'circle', 
+        geometry = geometry, 
+        verbose = verbose,
+        returncalc = returncalc,
+        name = name
+    )
+
+    if returncalc == True: 
+        return BF 
 
 
 # Probe
