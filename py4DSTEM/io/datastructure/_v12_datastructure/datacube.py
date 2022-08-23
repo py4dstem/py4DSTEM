@@ -7,14 +7,14 @@
 import numpy as np
 import h5py
 
-from .dataobject import DataObject
-from .diffraction import DiffractionSlice
-from .real import RealSlice
-from .calibrations import Calibrations
-from .braggpeaks import BraggPeaks
-from ...process import preprocess
-from ...process import virtualimage,virtualimage_viewer
-from ...process.utils import tqdmnd, bin2D
+from py4DSTEM.io.datastructure._v12_datastructure.dataobject import DataObject
+from py4DSTEM.io.datastructure._v12_datastructure.diffraction import DiffractionSlice
+from py4DSTEM.io.datastructure._v12_datastructure.real import RealSlice
+from py4DSTEM.io.datastructure._v12_datastructure.calibrations import Calibrations
+from py4DSTEM.io.datastructure._v12_datastructure.braggpeaks import BraggPeaks
+from py4DSTEM.io.process import preprocess
+from py4DSTEM.io.process import virtualimage,virtualimage_viewer
+from py4DSTEM.io.process.utils import tqdmnd, bin2D
 
 class DataCube(DataObject):
     """
@@ -153,7 +153,7 @@ class DataCube(DataObject):
                 - (string) the attached realslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show_rectangles
+        from py4DSTEM.io.visualize import show_rectangles
         im,title = self._get_best_im(im)
         if 'title' not in kwargs:
             kwargs['title'] = title + ", position realspace lims"
@@ -173,7 +173,7 @@ class DataCube(DataObject):
                 - (string) the attached realslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         im,title = self._get_best_im(im)
         if 'title' not in kwargs:
             kwargs['title'] = title + ", position realspace mask"
@@ -305,7 +305,7 @@ class DataCube(DataObject):
                 - (string) the attached diffractionslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show_circles
+        from py4DSTEM.io.visualize import show_circles
         center,radius = geometry
         dp,title = self._get_best_dp(dp)
         if 'title' not in kwargs:
@@ -327,7 +327,7 @@ class DataCube(DataObject):
                 - (string) the attached diffractionslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show_rectangles
+        from py4DSTEM.io.visualize import show_rectangles
         dp,title = self._get_best_dp(dp)
         if 'title' not in kwargs:
             kwargs['title'] = title + ", position rectangular detector"
@@ -349,7 +349,7 @@ class DataCube(DataObject):
                 - (string) the attached diffractionslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         center,radii = geometry
         dp,title = self._get_best_dp(dp)
         if 'title' not in kwargs:
@@ -373,7 +373,7 @@ class DataCube(DataObject):
                 - (string) the attached diffractionslice of this name, if it exists
             alpha (number): the transparency of the overlay
         """
-        from ...visualize import show_rectangles
+        from py4DSTEM.io.visualize import show_rectangles
         lims = (geometry[0],geometry[0]+1,geometry[1],geometry[1]+1)
         dp,title = self._get_best_dp(dp)
         if 'title' not in kwargs:
@@ -403,7 +403,7 @@ class DataCube(DataObject):
         Measures the convergence angle from a probe image in pixels.
         See process.calibration.origin.get_probe_size for more info.
         """
-        from ...process.calibration.origin import get_probe_size
+        from py4DSTEM.io.process.calibration.origin import get_probe_size
         assert('probe_image' in self.diffractionslices.keys()), "First add a probe image!"
         qr,qx0,qy0 = get_probe_size(self.diffractionslices['probe_image'].data,**kwargs)
         self.calibrations.set_convergence_semiangle_pixels(qr)
@@ -414,7 +414,7 @@ class DataCube(DataObject):
         """
         Show the measure size of the vacuum probe
         """
-        from ...visualize import show_circles
+        from py4DSTEM.io.visualize import show_circles
         assert('probe_image' in self.diffractionslices.keys())
         center = self.calibrations.get_probe_center()
         alpha = self.calibrations.get_convergence_semiangle_pixels()
@@ -445,7 +445,7 @@ class DataCube(DataObject):
             center = self.calibrations.probe_center
             alpha = self.calibrations.alpha_pix
         except AttributeError:
-            from ...process.calibration.origin import get_probe_size
+            from py4DSTEM.io.process.calibration.origin import get_probe_size
             alpha,qx0,qy0 = get_probe_size(probe)
         if 'origin' not in kwargs.keys():
             try:
@@ -455,17 +455,17 @@ class DataCube(DataObject):
 
         # make the probe kernel
         if method == 'none':
-            from ...process.diskdetection.probe import get_probe_kernel
+            from py4DSTEM.io.process.diskdetection.probe import get_probe_kernel
             probe_kernel = get_probe_kernel(probe,**kwargs)
 
         if method == 'gaussian':
-            from ...process.diskdetection.probe import get_probe_kernel_edge_gaussian
+            from py4DSTEM.io.process.diskdetection.probe import get_probe_kernel_edge_gaussian
             if 'sigma' not in kwargs.keys():
                 kwargs['sigma'] = alpha * 3.2                           # discuss
             probe_kernel = get_probe_kernel_edge_gaussian(probe,**kwargs)
 
         if method == 'sigmoid':
-            from ...process.diskdetection.probe import get_probe_kernel_edge_sigmoid
+            from py4DSTEM.io.process.diskdetection.probe import get_probe_kernel_edge_sigmoid
             if 'ri' not in kwargs.keys() or 'ro' not in kwargs.keys():
                 kwargs['ri'] = alpha
                 kwargs['ro'] = alpha * 2                                # discuss
@@ -485,7 +485,7 @@ class DataCube(DataObject):
             L (int): the line profile length
             W (int): the line profile integration window width
         """
-        from ...visualize import show_kernel
+        from py4DSTEM.io.visualize import show_kernel
         assert('probe_kernel' in self.diffractionslices.keys())
         if R is None:
             alpha = self.calibrations.get_convergence_semiangle_pixels()
@@ -524,7 +524,7 @@ class DataCube(DataObject):
             **kwargs (dict): arguments passed to visualize.show for the
                 *diffraction patterns*. Default is `scaling='log'`
         """
-        from ...visualize.vis_special import show_selected_dps
+        from py4DSTEM.io.visualize.vis_special import show_selected_dps
         im,_ = self._get_best_im(im)
         show_selected_dps(self,positions,im=im,colors=colors,
                 HW=HW,figsize_im=figsize_im,figsize_dp=figsize_dp,**kwargs)
@@ -538,7 +538,7 @@ class DataCube(DataObject):
             positions ((Nx2) shaped)
             name: identifier for a set of scan positions and their associated disks
         """
-        from ...process.diskdetection import find_Bragg_disks_selected
+        from py4DSTEM.io.process.diskdetection import find_Bragg_disks_selected
         assert('probe_kernel' in self.diffractionslices.keys())
         N = len(positions)
         x = [i[0] for i in positions]
@@ -564,7 +564,7 @@ class DataCube(DataObject):
             **kwargs (dict): arguments passed to visualize.show for the
                 *diffraction patterns*. Default is `scaling='log'`
         """
-        from ...visualize.vis_special import show_selected_dps
+        from py4DSTEM.io.visualize.vis_special import show_selected_dps
         assert(name in self._some_braggpeaks.keys()), "First run find_some_bragg_disks!"
         braggpeaks = self._some_braggpeaks[name]['peaks']
         positions = self._some_braggpeaks[name]['positions']
@@ -576,7 +576,7 @@ class DataCube(DataObject):
         """
 
         """
-        from ...process.diskdetection import find_Bragg_disks
+        from py4DSTEM.io.process.diskdetection import find_Bragg_disks
         assert('probe_kernel' in self.diffractionslices.keys())
         peaks = find_Bragg_disks(self,self.diffractionslices['probe_kernel'].data,
                                  **disk_detec_params)
@@ -619,7 +619,7 @@ class DataCube(DataObject):
         function computes it. See process.calibration.origin.get_origin
         for more info.
         """
-        from ...process.calibration.origin import get_origin
+        from py4DSTEM.io.process.calibration.origin import get_origin
         if 'max_dp' not in self.diffractionslices.keys():
             self.get_max_dp()
         kwargs['dp_max'] = self.diffractionslices['max_dp'].data
@@ -631,7 +631,7 @@ class DataCube(DataObject):
         Performs a fit to the measured origin positions. See
         process.calibration.origin.fit_origin for more info.
         """
-        from ...process.calibration.origin import fit_origin
+        from py4DSTEM.io.process.calibration.origin import fit_origin
         try:
             origin_meas = self.calibrations.get_origin_meas()
         except AttributeError or KeyError:
@@ -644,14 +644,14 @@ class DataCube(DataObject):
         """
         Show the measured origin positions
         """
-        from ...visualize import show_origin_meas
+        from py4DSTEM.io.visualize import show_origin_meas
         show_origin_meas(self)
 
     def show_origin_fit(self):
         """
         Show the fit origin positions
         """
-        from ...visualize import show_origin_fit
+        from py4DSTEM.io.visualize import show_origin_fit
         show_origin_fit(self)
 
 
@@ -748,7 +748,7 @@ class DataCube(DataObject):
                   all 2-tuples. The function then shows multiple images corresponding
                   to these selections.
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         if 'scaling' not in kwargs:
             kwargs['scaling'] = 'log'
 
@@ -812,7 +812,7 @@ class DataCube(DataObject):
                 - (2-tuple) the virtual image from a point detector at (qx,qy)
                 - (string) the attached RealSlice of this name, if it exists
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
 
         # plot one image
         if not isinstance(im,list):
