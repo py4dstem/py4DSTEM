@@ -6,7 +6,7 @@ from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 # Add to tree
 
-from py4DSTEM.io.datastructure.emd import Array
+from ..emd import Array
 def add(
     self,
     data,
@@ -28,7 +28,7 @@ def add(
 
 # Diffraction imaging
 
-from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
+from .diffractionimage import DiffractionImage
 def get_diffraction_image(
     self,
     mode = 'max',
@@ -61,7 +61,7 @@ def get_diffraction_image(
     """
 
     # perform computation
-    from py4DSTEM.process.virtualdiffraction import get_diffraction_image
+    from ....process.virtualdiffraction import get_diffraction_image
     dp = get_diffraction_image(
         self,
         mode = mode,
@@ -206,7 +206,7 @@ def get_dp_median(
 
 # Virtual imaging
 
-from py4DSTEM.io.datastructure.py4dstem.virtualimage import VirtualImage
+from .virtualimage import VirtualImage
 def get_virtual_image(
     self,
     mode,
@@ -224,7 +224,7 @@ def get_virtual_image(
         mode (str)          : defines geometry mode for calculating virtual image
                                 options:
                                     - 'point' uses singular point as detector
-                                    - 'circle' or 'circular' uses round detector,like bright field
+                                    - 'circle' or 'circular' uses round detector, like bright field
                                     - 'annular' or 'annulus' uses annular detector, like dark field
                                     - 'rectangle', 'square', 'rectangular', uses rectangular detector
                                     - 'mask' flexible detector, any 2D array
@@ -239,9 +239,9 @@ def get_virtual_image(
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                supported for 'point', 'circle', and 'annular' geometry 
-                                for the shifting center mode, the geometry should be modified 
-                                so that qx and qy are the same size as real space
+                                supported for 'point', 'circle', and 'annular' geometry. 
+                                For the shifting center mode, the geometry argument shape
+                                should be modified so that qx and qy are the same size as Rshape
                                     - 'point': 2-tuple, (qx,qy) 
                                        where qx.shape and qx.shape == datacube.Rshape
                                     - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
@@ -257,7 +257,7 @@ def get_virtual_image(
     """
 
     # perform computation
-    from py4DSTEM.process.virtualimage import get_virtual_image
+    from ....process.virtualimage import get_virtual_image
     im = get_virtual_image(
         self,
         mode = mode,
@@ -282,46 +282,9 @@ def get_virtual_image(
     if returncalc:
         return im
 
-def get_bright_field(
-    self,
-    geometry = None, 
-    expand_BF = 4,
-    verbose = True,
-    name = 'bright_field',
-    returncalc = True,
-):
-    '''
-    Args: 
-        geometry 
-
-    Returns:
-        (Optional): if returncalc is True, returns the bright field VirtualImage
-    '''
-
-    if geometry is None: 
-        assert(self.calibration.get_probe_semiangle() and self.calibration.get_qx0 and self.calibration.get_qy0()), \
-        'get_probe_size() first'
-
-        probe_semiangle = self.calibration.get_probe_semiangle()
-        qx0 = self.calibration.get_qx0()
-        qy0 = self.calibration.get_qy0()
-        geometry = ((qx0,qy0),probe_semiangle + expand_BF)
-
-    BF = self.get_virtual_image(
-        mode = 'circle', 
-        geometry = geometry, 
-        verbose = verbose,
-        returncalc = returncalc,
-        name = name
-    )
-
-    if returncalc == True: 
-        return BF 
-
-
 # Probe
 
-from py4DSTEM.io.datastructure.py4dstem.probe import Probe
+from .probe import Probe
 def get_vacuum_probe(
     self,
     name = 'probe',
@@ -333,7 +296,7 @@ def get_vacuum_probe(
     """
 
     # perform computation
-    from py4DSTEM.process.probe import get_vacuum_probe
+    from ....process.probe import get_vacuum_probe
     x = get_vacuum_probe(
         self,
         **kwargs
@@ -353,7 +316,7 @@ def get_vacuum_probe(
         return x
 
 
-from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
+from .calibration import Calibration
 def get_probe_size(
     self,
     mode = None,
@@ -364,7 +327,7 @@ def get_probe_size(
 
     """
     #perform computation 
-    from py4DSTEM.process.calibration import get_probe_size
+    from ....process.calibration import get_probe_size
     
     if mode is None: 
         assert 'no mode speficied, using mean diffraciton pattern'
@@ -529,7 +492,7 @@ def find_Bragg_disks(
     Returns:
         (BraggVectors or QPoints or list of QPoints)
     """
-    from py4DSTEM.process.diskdetection import find_Bragg_disks
+    from ....process.diskdetection import find_Bragg_disks
 
     # parse args
     if data is None:
