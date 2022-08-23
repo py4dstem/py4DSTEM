@@ -1,4 +1,4 @@
-from .vis_grid import show_image_grid
+from py4DSTEM.visualize.vis_grid import show_image_grid
 
 def _show_grid(**kwargs):
     """

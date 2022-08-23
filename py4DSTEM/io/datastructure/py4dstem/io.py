@@ -4,10 +4,10 @@ import numpy as np
 import h5py
 from os.path import basename
 
-from ..emd.io import Array_from_h5, Metadata_from_h5
-from ..emd.io import PointList_from_h5
-from ..emd.io import PointListArray_from_h5, PointListArray_to_h5
-from ..emd.io import _write_metadata, _read_metadata
+from py4DSTEM.io.datastructure.emd.io import Array_from_h5, Metadata_from_h5
+from py4DSTEM.io.datastructure.emd.io import PointList_from_h5
+from py4DSTEM.io.datastructure.emd.io import PointListArray_from_h5, PointListArray_to_h5
+from py4DSTEM.io.datastructure.emd.io import _write_metadata, _read_metadata
 
 
 
@@ -41,7 +41,7 @@ def Calibration_from_Metadata(metadata):
     Returns:
         (Calibration)
     """
-    from .calibration import Calibration
+    from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
     p = metadata._params
     metadata.__class__ = Calibration
     metadata.__init__(
@@ -87,7 +87,7 @@ def DataCube_from_Array(array):
     Returns:
         datacube (DataCube)
     """
-    from .datacube import DataCube
+    from py4DSTEM.io.datastructure.py4dstem.datacube import DataCube
     assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
     array.__init__(
@@ -136,7 +136,7 @@ def DiffractionSlice_from_Array(array):
     Returns:
         (DiffractionSlice)
     """
-    from .diffractionslice import DiffractionSlice
+    from py4DSTEM.io.datastructure.py4dstem.diffractionslice import DiffractionSlice
     assert(array.rank == 2), "Array must have 2 dimensions"
     array.__class__ = DiffractionSlice
     array.__init__(
@@ -182,7 +182,7 @@ def DiffractionImage_from_Array(array):
     Returns:
         (DiffractionImage)
     """
-    from .diffractionimage import DiffractionImage
+    from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
@@ -241,7 +241,7 @@ def VirtualImage_from_Array(array):
     Returns:
         (VirtualImage)
     """
-    from .virtualimage import VirtualImage
+    from py4DSTEM.io.datastructure.py4dstem.virtualimage import VirtualImage
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
@@ -301,7 +301,7 @@ def Probe_from_Array(array):
     Returns:
         (Probe)
     """
-    from .probe import Probe
+    from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
@@ -358,7 +358,7 @@ def QPoints_from_PointList(pointlist):
     Returns:
         (QPoints)
     """
-    from .qpoints import QPoints
+    from py4DSTEM.io.datastructure.py4dstem.qpoints import QPoints
     pointlist.__class__ = QPoints
     pointlist.__init__(
         data = pointlist.data,
@@ -429,7 +429,7 @@ def BraggVectors_from_h5(group:h5py.Group):
     Returns:
         A BraggVectors instance
     """
-    from .braggvectors import BraggVectors
+    from py4DSTEM.io.datastructure.py4dstem.braggvectors import BraggVectors
 
     er = f"Group {group} is not a valid BraggVectors group"
     assert("emd_group_type" in group.attrs.keys()), er
