@@ -9,5 +9,4 @@ from py4DSTEM.process import classification
 from py4DSTEM.process import latticevectors
 from py4DSTEM.process import diffraction
 
-#from . import fit
 #from . import rdf
