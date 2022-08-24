@@ -4,6 +4,7 @@ from typing import Union, Optional
 
 from .utils import parse_filetype
 from .nonnative import read_empad, read_dm, read_gatan_K2_bin
+from .nonnative.read_mib import load_mib
 
 
 def import_file(
@@ -15,7 +16,7 @@ def import_file(
 ):
     """
     Reader for non-native file formats.
-    Supports Gatan DM3/4, some EMPAD file versions, and Gatan K2 bin/gtg
+    Supports Gatan DM3/4, some EMPAD file versions, Gatan K2 bin/gtg, and mib
 
     Args:
         filepath:   Path to the file. For K2 raw datasets, pass the path to the gtg file
@@ -54,6 +55,7 @@ def import_file(
         "dm",
         "empad",
         "gatan_K2_bin",
+        "mib"
         # "kitware_counted",
     ], "Error: filetype not recognized"
 
@@ -65,6 +67,8 @@ def import_file(
         data = read_gatan_K2_bin(filepath, mem=mem, binfactor=binfactor, **kwargs)
     # elif filetype == "kitware_counted":
     #    data = read_kitware_counted(filepath, mem, binfactor, metadata=metadata, **kwargs)
+    elif filetype == "mib":
+       data = load_mib(filepath, mem=mem, binfactor=binfactor, scan=(256,256),**kwargs)
     else:
         raise Exception("Bad filetype!")
 
