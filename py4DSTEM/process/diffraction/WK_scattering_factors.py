@@ -6,7 +6,7 @@ from scipy.special import expi
 from py4DSTEM.process.utils import electron_wavelength_angstrom
 
 """
-Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMsoftLib/others.f90 
+Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMsoftLib/others.f90
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
