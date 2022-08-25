@@ -812,11 +812,11 @@ def show_complex(
         return hsv_to_rgb(np.dstack((h,s,v)))
 
     #convert to complex colors
-    hsv = Complex2HSV(ar_complex, vmin, vmax)
+    rgb = Complex2HSV(ar_complex, vmin, vmax)
     
     #plot
     fig, ax = show(
-        hsv,
+        rgb,
         returnfig = True,
         **kwargs
     )
@@ -835,13 +835,13 @@ def show_complex(
         ktheta = kra*np.exp(1j*ktheta)
         
         #convert to hsv
-        hsv = Complex2HSV(ktheta, 0, 0.4)
+        rgb = Complex2HSV(ktheta, 0, 0.4)
         ind = kra > 0.4
-        hsv[ind] = [1,1,1]
+        rgb[ind] = [1,1,1]
         
         #plot
         ax0.imshow(
-            hsv
+            rgb
         )
 
         #add axes
