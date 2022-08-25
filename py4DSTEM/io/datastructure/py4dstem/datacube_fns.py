@@ -284,7 +284,7 @@ def get_virtual_image(
 
 # Probe
 
-from py4DSTEM.process.probe import get_vacuum_probe
+from py4DSTEM.io.datastructure.py4dstem.probe import Probe
 def get_vacuum_probe(
     self,
     name = 'probe',
@@ -296,7 +296,7 @@ def get_vacuum_probe(
     """
 
     # perform computation
-    from py4DSTEM.io.datastructure.py4dstem.probe import Probe
+    from py4DSTEM.process.probe import get_vacuum_probe
     x = get_vacuum_probe(
         self,
         **kwargs
