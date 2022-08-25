@@ -20,7 +20,6 @@ def set_scan_shape(datacube,R_Nx,R_Ny):
     """
     try:
         datacube.data = datacube.data.reshape(datacube.R_N,datacube.Q_Nx,datacube.Q_Ny).reshape(R_Nx,R_Ny,datacube.Q_Nx,datacube.Q_Ny)
-        datacube.R_Nx,datacube.R_Ny = R_Nx,R_Ny
         return datacube
     except ValueError:
         print("Can't reshape {} scan positions into a {}x{} array.".format(datacube.R_N, R_Nx, R_Ny))
@@ -42,7 +41,6 @@ def swap_RQ(datacube):
         (Qx,Qy,Rx,Ry)
     """
     datacube.data = np.transpose(datacube.data, axes=(2, 3, 0, 1))
-    datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Nx, datacube.Q_Ny, datacube.R_Nx, datacube.R_Ny
     return datacube
 
 def swap_Rxy(datacube):
@@ -58,7 +56,6 @@ def swap_Rxy(datacube):
         (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 1, 0)
-    datacube.R_Nx, datacube.R_Ny = datacube.R_Ny, datacube.R_Nx
     return datacube
 
 def swap_Qxy(datacube):
@@ -74,7 +71,6 @@ def swap_Qxy(datacube):
         (Rx,Ry,Qx,Qy)
     """
     datacube.data = np.moveaxis(datacube.data, 3, 2)
-    datacube.Q_Nx, datacube.Q_Ny = datacube.Q_Ny, datacube.Q_Nx
     return datacube
 
 
@@ -82,13 +78,10 @@ def swap_Qxy(datacube):
 
 def crop_data_diffraction(datacube,crop_Qx_min,crop_Qx_max,crop_Qy_min,crop_Qy_max):
     datacube.data = datacube.data[:,:,crop_Qx_min:crop_Qx_max,crop_Qy_min:crop_Qy_max]
-    datacube.Q_Nx, datacube.Q_Ny = crop_Qx_max-crop_Qx_min, crop_Qy_max-crop_Qy_min
     return datacube
 
 def crop_data_real(datacube,crop_Rx_min,crop_Rx_max,crop_Ry_min,crop_Ry_max):
     datacube.data = datacube.data[crop_Rx_min:crop_Rx_max,crop_Ry_min:crop_Ry_max,:,:]
-    datacube.R_Nx, datacube.R_Ny = crop_Rx_max-crop_Rx_min, crop_Ry_max-crop_Ry_min
-    datacube.R_N = datacube.R_Nx*datacube.R_Ny
     return datacube
 
 def bin_data_diffraction(datacube, bin_factor):
@@ -156,7 +149,7 @@ def filter_hot_pixels(
     ):
     """
     This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
-    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity 
+    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity
     values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
     Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
     Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
@@ -167,7 +160,7 @@ def filter_hot_pixels(
             ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
 
         Returns:
-            datacube                     datacube              
+            datacube                     datacube
             mask (bool):                 (optional) the bad pixel mask
     """
 
