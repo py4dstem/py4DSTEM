@@ -6,7 +6,7 @@ from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 # Add to tree
 
-from ..emd import Array
+from py4DSTEM.io.datastructure.emd import Array
 def add(
     self,
     data,
@@ -28,7 +28,7 @@ def add(
 
 # Diffraction imaging
 
-from .diffractionimage import DiffractionImage
+from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
 def get_diffraction_image(
     self,
     mode = 'max',
@@ -61,7 +61,7 @@ def get_diffraction_image(
     """
 
     # perform computation
-    from ....process.virtualdiffraction import get_diffraction_image
+    from py4DSTEM.process.virtualdiffraction import get_diffraction_image
     dp = get_diffraction_image(
         self,
         mode = mode,
@@ -257,7 +257,7 @@ def get_virtual_image(
     """
 
     # perform computation
-    from ....process.virtualimage import get_virtual_image
+    from py4DSTEM.io.datastructure.py4dstem.virtualimage import get_virtual_image
     im = get_virtual_image(
         self,
         mode = mode,
@@ -284,7 +284,7 @@ def get_virtual_image(
 
 # Probe
 
-from .probe import Probe
+from py4DSTEM.io.datastructure.py4dstem.probe import Probe
 def get_vacuum_probe(
     self,
     name = 'probe',
@@ -296,7 +296,7 @@ def get_vacuum_probe(
     """
 
     # perform computation
-    from ....process.probe import get_vacuum_probe
+    from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     x = get_vacuum_probe(
         self,
         **kwargs
@@ -316,7 +316,7 @@ def get_vacuum_probe(
         return x
 
 
-from .calibration import Calibration
+from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
 def get_probe_size(
     self,
     mode = None,
@@ -327,7 +327,7 @@ def get_probe_size(
 
     """
     #perform computation 
-    from ....process.calibration import get_probe_size
+    from py4DSTEM.process.calibration import get_probe_size
     
     if mode is None: 
         assert 'no mode speficied, using mean diffraciton pattern'
@@ -492,8 +492,8 @@ def find_Bragg_disks(
     Returns:
         (BraggVectors or QPoints or list of QPoints)
     """
-    from ....process.diskdetection import find_Bragg_disks
-
+    from py4DSTEM.process.diskdetection import find_Bragg_disks
+    
     # parse args
     if data is None:
         x = self
