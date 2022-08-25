@@ -16,7 +16,8 @@ def read(
     **kwargs,
     ):
     """
-    File reader for files written by py4DSTEM.
+    File reader for files written by py4DSTEM. To load non-native
+    file types, use py4DSTEM.import_file.
 
     For files written by py4DSTEM v0.13+, the arguments this function
     accepts and their behaviors are below. For older verions, see
