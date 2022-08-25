@@ -206,7 +206,7 @@ def get_dp_median(
 
 # Virtual imaging
 
-from .virtualimage import VirtualImage
+from py4DSTEM.io.datastructure.py4dstem.virtualimage import VirtualImage
 def get_virtual_image(
     self,
     mode,
@@ -257,7 +257,7 @@ def get_virtual_image(
     """
 
     # perform computation
-    from py4DSTEM.io.datastructure.py4dstem.virtualimage import get_virtual_image
+    from py4DSTEM.process.virtualimage import get_virtual_image
     im = get_virtual_image(
         self,
         mode = mode,
@@ -284,7 +284,7 @@ def get_virtual_image(
 
 # Probe
 
-from py4DSTEM.io.datastructure.py4dstem.probe import Probe
+from py4DSTEM.process.probe import get_vacuum_probe
 def get_vacuum_probe(
     self,
     name = 'probe',
@@ -493,7 +493,7 @@ def find_Bragg_disks(
         (BraggVectors or QPoints or list of QPoints)
     """
     from py4DSTEM.process.diskdetection import find_Bragg_disks
-    
+
     # parse args
     if data is None:
         x = self
