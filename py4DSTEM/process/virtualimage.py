@@ -124,11 +124,11 @@ def get_virtual_image(
 
         #dask 
         def _apply_mask_dask(datacube,mask):
-            virtual_image = np.sum(np.multiply(array,mask), dtype=np.float64)
+            virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
         
         #calculate images
         if dask == True:
-            apply_mask = da.as_gufunc(_apply_mask_dask,signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
+            apply_mask_dask = da.as_gufunc(_apply_mask_dask,signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
             virtual_image = apply_mask_dask(datacube, mask)
         else: 
             virtual_image = np.zeros(datacube.Rshape) 
