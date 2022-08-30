@@ -10,6 +10,7 @@ def get_virtual_image(
     geometry,
     shift_center = False,
     verbose = True,
+    calibrated = False, 
     dask = False,
 ):
     '''
@@ -52,76 +53,14 @@ def get_virtual_image(
         virtual image (2D-array)
     '''
     
-    g = geometry
-
     assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
     'check doc strings for supported modes'
 
-    if shift_center == False:
-        #point mask 
-        if mode == 'point':
-            assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
-            mask = np.zeros(datacube.Qshape)
-            
-            if g[0]%1 > 1e-6: 
-                print('warning: rounding qx to integer')
-
-            if g[1]%1 > 1e-6: 
-                print('warning: rounding qy to integer')
-                
-            qx = int(g[0])
-            qy = int(g[1])
-            
-            mask[qx,qy] = 1
-
-        #circular mask
-        if mode in('circle', 'circular'):
-            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
-            'specify qx, qy, radius_i as ((qx, qy), radius)'
-
-            qxa, qya = np.indices(datacube.Qshape)
-            mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
-
-        #annular mask 
-        if mode in('annulus', 'annular'):
-            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2), \
-            'specify qx, qy, radius_i, radius_0 as ((qx, qy), radius_i, radius_o)'
-            qxa, qya = np.indices(datacube.Qshape)
-            mask1 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 > g[1][0] ** 2
-            mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
-            mask = np.logical_and(mask1, mask2)
-
-        #rectangle mask 
-        if mode in('rectangle', 'square', 'rectangular') :
-            assert(isinstance(g,tuple) and len(g)==4), \
-           'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
-            mask = np.zeros(datacube.Qshape)
-
-            if g[0]%1 > 1e-6: 
-                print('warning: rounding xmin to integer')
-
-            if g[1]%1 > 1e-6: 
-                print('warning: rounding xmax to integer')
-
-            if g[2]%1 > 1e-6: 
-                print('warning: rounding ymin to integer')
-
-            if g[3]%1 > 1e-6: 
-                print('warning: rounding ymax to integer')
-                
-            xmin = int(g[0])
-            xmax = int(g[1])
-            ymin = int(g[2])
-            ymax = int(g[3])
-            
-            mask[xmin:xmax, ymin:ymax] = 1
-
-        #flexible mask
-        if mode == 'mask':
-            assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
-            assert (g.shape == datacube.Qshape), 'mask and diffraction pattern shapes do not match'
-            mask = g
-
+    g = geometry
+    
+    if shift_center == False: 
+        mask = make_detector(datacube.Qshape, mode, geometry)
+        
         #dask 
         def _apply_mask_dask(datacube,mask):
             virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
@@ -129,7 +68,7 @@ def get_virtual_image(
         #calculate images
         if dask == True:
             apply_mask_dask = da.as_gufunc(_apply_mask_dask,signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
-            virtual_image = apply_mask_dask(datacube, mask)
+            virtual_image = apply_mask_dask(datacube.data, mask)
         else: 
             virtual_image = np.zeros(datacube.Rshape) 
             for rx,ry in tqdmnd(
@@ -144,72 +83,137 @@ def get_virtual_image(
         
         #point mask
         if mode == 'point':
-                assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
-                qx_scan = np.asarray(g[0])
-                qy_scan = np.asarray(g[1])
-                assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
+            qx_scan = np.asarray(g[0])
+            qy_scan = np.asarray(g[1])
+            assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
 
-                virtual_image = np.zeros(datacube.Rshape) 
+            virtual_image = np.zeros(datacube.Rshape) 
 
-                for rx,ry in tqdmnd(
-                    datacube.R_Nx, 
-                    datacube.R_Ny,
-                    disable = not verbose,
-                ):
-                        mask = np.zeros(datacube.Qshape)
-                        
-                        qx = int(qx_scan[rx,ry])
-                        qy = int(qy_scan[rx,ry])
+            for rx,ry in tqdmnd(
+                datacube.R_Nx, 
+                datacube.R_Ny,
+                disable = not verbose,
+            ):
+                geometry_shift = (qx_scan[rx,ry], qy_scan[rx,ry])
+                mask = make_detector(datacube.Qshape, mode, geometry_shift)
+                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
 
-                        mask[qx,qy] = 1
 
-                        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
-        #circular mask 
-        if mode in('circle', 'circular') :
-                assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
-                'specify qx, qy, radius_i as ((qx, qy), radius)'
-                
-                qx_scan = np.asarray(g[0][0])
-                qy_scan = np.asarray(g[0][1])
-                
-                assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
+        #circular or annular mask 
+        if mode in('circle', 'circular', 'annulus', 'annular') :
+            qx_scan = np.asarray(g[0][0])
+            qy_scan = np.asarray(g[0][1])
+            
+            assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
 
-                qxa, qya = np.indices(datacube.Qshape)
-                
-                virtual_image = np.zeros(datacube.Rshape) 
+            #make mask using small subset of diffraction space
+            if mode in('circle', 'circular'): 
+                R = g[1]
+            if mode in('annulus', 'annular'): 
+                R = g[1][1]
 
-                for rx,ry in tqdmnd(
-                    datacube.R_Nx, 
-                    datacube.R_Ny,
-                    disable = not verbose,
-                ):
-                        mask = (qxa - qx_scan[rx,ry]) ** 2 + (qya - qx_scan[rx,ry]) ** 2 < g[1] ** 2
+            xmin,xmax = max(0,int(np.floor(np.min(qx_scan)-R))),min(datacube.Q_Nx,int(np.ceil(np.max(qx_scan)+R)))
+            ymin,ymax = max(0,int(np.round(np.min(qy_scan)-R))),min(datacube.Q_Ny,int(np.ceil(np.max(qy_scan)+R)))
+            xsize,ysize = xmax-xmin,ymax-ymin
+            qx_scan_crop,qy_scan_crop = qx_scan-xmin,qy_scan-ymin
 
-                        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+            virtual_image = np.zeros(datacube.Rshape) 
 
-        #annular mask
-        if mode in('annulus', 'annular'):
-                assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2),\
-                'specify qx, qy, radius_i, radius_0 as ((qx, qy), radius_i, radius_o)'
-                
-                qx_scan = np.asarray(g[0][0])
-                qy_scan = np.asarray(g[0][1])
-                assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape),\
-                'qx and qy should match real space size'
-                
-                qxa, qya = np.indices(datacube.Qshape)
+            for rx,ry in tqdmnd(
+                datacube.R_Nx, 
+                datacube.R_Ny,
+                disable = not verbose,
+            ):
+                geometry_shift = ((qx_scan_crop[rx, ry], qy_scan_crop[rx, ry]), g[1])
+                mask = make_detector((xsize,ysize), mode, geometry_shift)
 
-                virtual_image = np.zeros(datacube.Rshape) 
-
-                for rx,ry in tqdmnd(
-                    datacube.R_Nx, 
-                    datacube.R_Ny,
-                    disable = not verbose,
-                ):
-                        mask1 = (qxa - qx_scan[rx,ry]) ** 2 + (qya - qx_scan[rx,ry]) ** 2 > g[1][0] ** 2
-                        mask2 = (qxa - qx_scan[rx,ry]) ** 2 + (qya - qx_scan[rx,ry]) ** 2 < g[1][1] ** 2
-                        mask = np.logical_and(mask1, mask2)
-
-                        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+                full_mask = np.zeros(shape=datacube.Qshape, dtype=np.bool_)
+                full_mask[xmin:xmax,ymin:ymax] = mask
+            
+                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*full_mask)
 
     return virtual_image
+
+def make_detector(
+    Qshape,
+    mode, 
+    geometry,
+):
+    '''
+    Function to return 2D mask
+    
+    Args: 
+        Qshape (tuple)     : defines shape of mask (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are mask sizes
+        mode (str)          : defines geometry mode for calculating virtual image
+                                options:
+                                    - 'point' uses singular point as detector
+                                    - 'circle' or 'circular' uses round detector, like bright field
+                                    - 'annular' or 'annulus' uses annular detector, like dark field
+                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                                    - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                                argument, as follows:
+                                    - 'point': 2-tuple, (qx,qy), 
+                                       qx and qy are each single float or int to define center
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                       qx, qy and radius, are each single float or int 
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                                       qx, qy, radius_i, and radius_o are each single float or integer 
+                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
+
+    Returns:
+        virtual detector in the form of a 2D mask (array)
+    '''
+    g = geometry
+
+    #point mask 
+    if mode == 'point':
+        assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
+        mask = np.zeros(Qshape)
+            
+        qx = int(g[0])
+        qy = int(g[1])
+        
+        mask[qx,qy] = 1
+
+    #circular mask
+    if mode in('circle', 'circular'):
+        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
+        'specify qx, qy, radius_i as ((qx, qy), radius)'
+
+        qxa, qya = np.indices(Qshape)
+        mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
+
+    #annular mask 
+    if mode in('annulus', 'annular'):
+        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2), \
+        'specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))'
+
+        assert g[1][1] > g[1][0], "Inner radius must be smaller than outer radius"
+
+        qxa, qya = np.indices(Qshape)
+        mask1 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 > g[1][0] ** 2
+        mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
+        mask = np.logical_and(mask1, mask2)
+
+    #rectangle mask 
+    if mode in('rectangle', 'square', 'rectangular') :
+        assert(isinstance(g,tuple) and len(g)==4), \
+       'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
+        mask = np.zeros(Qshape)
+            
+        xmin = int(g[0])
+        xmax = int(g[1])
+        ymin = int(g[2])
+        ymax = int(g[3])
+        
+        mask[xmin:xmax, ymin:ymax] = 1
+
+    #flexible mask
+    if mode == 'mask':
+        assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
+        assert (g.shape == Qshape), 'mask and diffraction pattern shapes do not match'
+        mask = g
+
+    return mask
