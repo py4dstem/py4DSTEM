@@ -211,8 +211,11 @@ def get_virtual_image(
     self,
     mode,
     geometry,
+    centered = False, 
+    calibrated = False,
     shift_center = False,
     verbose = True,
+    dask = False,
     name = 'virtual_image',
     returncalc = True,
     ):
@@ -238,6 +241,11 @@ def get_virtual_image(
                                        qx, qy, radius_i, and radius_o are each single float or integer 
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
+        centered (bool)     : by default, the origin is in the upper left corner. However, 
+                              if True, the measured origin is set as center. In this case, for example, 
+                              a centered bright field image could be defined by geometry = ((0,0), R).
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels. 
+                              The datacube must have updated calibration metadata.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
                                 supported for 'point', 'circle', and 'annular' geometry. 
                                 For the shifting center mode, the geometry argument shape
@@ -249,6 +257,7 @@ def get_virtual_image(
                                     - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
                                        where qx.shape and qx.shape == datacube.Rshape
         verbose (bool)      : if True, show progress bar
+        dask (bool)         : if True, use dask arrays
         name (str)          : the output object's name
         returncalc (bool)   : if True, returns the output
 
@@ -262,8 +271,11 @@ def get_virtual_image(
         self,
         mode = mode,
         geometry = geometry,
+        centered = centered, 
+        calibrated = calibrated,
         shift_center = shift_center,
         verbose = verbose,
+        dask = dask, 
     )
 
     # wrap with a py4dstem class

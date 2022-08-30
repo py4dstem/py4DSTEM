@@ -19,26 +19,44 @@ class VirtualImage(RealSlice):
         name: Optional[str] = 'virtualimage',
         mode: Optional[str] = None,
         geometry: Optional[Union[tuple,np.ndarray]] = None,
+        centered: Optional[bool] = False,
+        calibrated: Optional[bool] = False,
         shift_center: Optional[bool] = False,
         ):
         """
         Args:
-            data (np.ndarray)       : the 2D data
-            name (str)              : the name
-            mode (str)              : defines geometry mode for calculating virtual image
+            data (np.ndarray)   : the 2D data
+            name (str)          : the name
+            mode (str)          : defines geometry mode for calculating virtual image
                                     options:
-                                        - 'point' uses singular point as detector
-                                        - 'circle' or 'circular' uses round detector,like bright field
-                                        - 'annular' or 'annulus' uses annular detector, like dark field
-                                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                                        - 'mask' flexible detector, any 2D array
-            geometry (variable)     : valid entries are determined by the `mode`, values in pixels
+                                    - 'point' uses singular point as detector
+                                    - 'circle' or 'circular' uses round detector,like bright field
+                                    - 'annular' or 'annulus' uses annular detector, like dark field
+                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                                    - 'mask' flexible detector, any 2D array
+            geometry (variable) : valid entries are determined by the `mode`, values in pixels
                                         argument, as follows:
-                                        - 'point': 2-tuple, (qx,qy), 
-                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
-                                        - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                        - `mask`: flexible detector, any 2D array, same size as datacube.QShape        
+                                    - 'point': 2-tuple, (qx,qy), 
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+            centered (bool)     : by default, the origin is in the upper left corner. However, 
+                                  if True, the measured origin is set as center. In this case, for example, 
+                                  a centered bright field image could be defined by geometry = ((0,0), R).
+            calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels. 
+                                  The datacube must have updated calibration metadata.
+            shift_center (bool) : if True, qx and qx are shifted for each position in real space
+                                    supported for 'point', 'circle', and 'annular' geometry. 
+                                    For the shifting center mode, the geometry argument shape
+                                    should be modified so that qx and qy are the same size as Rshape
+                                        - 'point': 2-tuple, (qx,qy) 
+                                           where qx.shape and qx.shape == datacube.Rshape
+                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
+                                           where qx.shape and qx.shape == datacube.Rshape
+                                        - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                                           where qx.shape and qx.shape == datacube.Rshape
+            dask (bool)         : if True, use dask arrays        
         Returns:
             A new VirtualImage instance
         """
@@ -53,6 +71,8 @@ class VirtualImage(RealSlice):
         md = Metadata(name='virtualimage')
         md['mode'] = mode
         md['geometry'] = geometry
+        md['centered'] = centered
+        md['calibrated'] = calibrated
         md['shift_center'] = shift_center
         self.metadata = md
 

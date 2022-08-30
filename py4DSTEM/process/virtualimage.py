@@ -8,9 +8,10 @@ def get_virtual_image(
     datacube, 
     mode, 
     geometry,
+    centered = False, 
+    calibrated = False,
     shift_center = False,
-    verbose = True,
-    calibrated = False, 
+    verbose = True, 
     dask = False,
 ):
     '''
@@ -36,6 +37,11 @@ def get_virtual_image(
                                        qx, qy, radius_i, and radius_o are each single float or integer 
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
+        centered (bool)     : by default, the origin is in the upper left corner. However, 
+                              if True, the measured origin is set as center. In this case, for example, 
+                              a centered bright field image could be defined by geometry = ((0,0), R).
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels. 
+                              The datacube must have updated calibration metadata.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
                                 supported for 'point', 'circle', and 'annular' geometry. 
                                 For the shifting center mode, the geometry argument shape
@@ -55,11 +61,39 @@ def get_virtual_image(
     
     assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
     'check doc strings for supported modes'
-
     g = geometry
-    
+
+    if centered == True: 
+        assert datacube.calibration.get_origin_meas(), "origin need to be calibrated"
+        x0, y0 = datacube.calibration.get_origin_meas()
+        x0_mean = np.mean(x0)
+        y0_mean = np.mean(y0)
+        if mode == 'point':
+            g = (g[0] + x0_mean, g[1] + y0_mean)
+        if mode in('circle', 'circular', 'annulus', 'annular'):
+            g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
+        if mode in('rectangle', 'square', 'rectangular') :
+             g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
+
+    if calibrated == True:
+        assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
+        'check datacube.calibration. datacube must be calibrated in A^-1'
+
+        unit_conversion = datacube.calibration['Q_pixel_size']
+        if mode == 'point':
+            g = (g[0]/unit_conversion, g[1]/unit_conversion)
+        if mode in('circle', 'circular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion), 
+                (g[1]/unit_conversion))
+        if mode in('annulus', 'annular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion), 
+                (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
+        if mode in('rectangle', 'square', 'rectangular') :
+            g = (g[0]/unit_conversion, g[1]/unit_conversion, 
+                 g[2]/unit_conversion, g[3]/unit_conversion)
+
     if shift_center == False: 
-        mask = make_detector(datacube.Qshape, mode, geometry)
+        mask = make_detector(datacube.Qshape, mode, g)
         
         #dask 
         def _apply_mask_dask(datacube,mask):
@@ -116,7 +150,6 @@ def get_virtual_image(
             ymin,ymax = max(0,int(np.round(np.min(qy_scan)-R))),min(datacube.Q_Ny,int(np.ceil(np.max(qy_scan)+R)))
             xsize,ysize = xmax-xmin,ymax-ymin
             qx_scan_crop,qy_scan_crop = qx_scan-xmin,qy_scan-ymin
-
             virtual_image = np.zeros(datacube.Rshape) 
 
             for rx,ry in tqdmnd(
