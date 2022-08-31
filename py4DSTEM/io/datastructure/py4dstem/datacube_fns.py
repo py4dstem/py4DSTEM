@@ -241,11 +241,11 @@ def get_virtual_image(
                                        qx, qy, radius_i, and radius_o are each single float or integer 
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
-        centered (bool)     : if false (default), the origin is in the upper left corner.
+        centered (bool)     : if False (default), the origin is in the upper left corner.
                               If True, the mean measured origin in the datacube calibrations 
                               is set as center. In this case, for example, a centered bright field image 
                               could be defined by geometry = ((0,0), R).
-        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels. 
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels. 
                               The datacube must have updated calibration metadata.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
                                 supported for 'point', 'circle', and 'annular' geometry. 
