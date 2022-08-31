@@ -45,12 +45,12 @@ datacube = py4DSTEM.io.datastructure.DataCube(
 # Virtual imaging
 
 geometry_BF = (
-    (127,127),
-    25
+    (63,63),
+    12
 )
 geometry_ADF = (
-    (127,127),
-    (80,300)
+    (63,63),
+    (40,150)
 )
 im_BF = datacube.get_virtual_image(
     mode = 'circular',
@@ -76,4 +76,24 @@ im_mask = py4DSTEM.process.virtualimage.get_virtual_image(
     mode = 'mask',
     geometry = mask,
 )
+
+
+
+x0 = np.ones(datacube.Rshape)*63
+y0 = np.ones(datacube.Rshape)*63
+sy,sx = np.meshgrid(np.linspace(-5,5,datacube.Rshape[1]),np.linspace(-5,5,datacube.Rshape[0]))
+x0 += sx
+y0 += sy
+datacube.calibration.set_origin((x0,y0))
+
+# vis testing
+m = datacube.get_virtual_image(
+    mode = 'annular',
+    #geometry = geometry_BF,
+    geometry = ((0,0),(25,50)),
+    centered = True,
+    shift_center = True,
+    return_mask = (0,19)
+)
+show(m)
 

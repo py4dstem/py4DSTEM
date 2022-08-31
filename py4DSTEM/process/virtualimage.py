@@ -71,8 +71,8 @@ def get_virtual_image(
 
     # Get calibration metadata
     if centered or calibrated or shift_center:
-        assert datacube.calibration.get_origin_meas(), "origin need to be calibrated"
-        x0, y0 = datacube.calibration.get_origin_meas()
+        assert datacube.calibration.get_origin(), "origin need to be calibrated"
+        x0, y0 = datacube.calibration.get_origin()
         x0_mean = np.mean(x0)
         y0_mean = np.mean(y0)
     if calibrated:
@@ -149,12 +149,15 @@ def get_virtual_image(
     else:
 
         # get shifts
-        qx_shift = -(x0-x0_mean).round().astype(int)
-        qy_shift = -(y0-y0_mean).round().astype(int)
+        qx_shift = (x0-x0_mean).round().astype(int)
+        qy_shift = (y0-y0_mean).round().astype(int)
 
         # if return_mask is True, skip computation
         if return_mask is not False:
-            rx,ry = return_mask
+            try:
+                rx,ry = return_mask
+            except TypeError:
+                raise Exception("when `shift_center` is True, return_mask must be a 2-tuple of ints or False")
             # get shifted mask
             _mask = np.roll(
                 mask,
