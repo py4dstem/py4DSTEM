@@ -28,37 +28,41 @@ class VirtualImage(RealSlice):
         Args:
             data (np.ndarray)   : the 2D data
             name (str)          : the name
-            mode (str)          : defines geometry mode for calculating virtual image
-                                    options:
-                                    - 'point' uses singular point as detector
-                                    - 'circle' or 'circular' uses round detector,like bright field
-                                    - 'annular' or 'annulus' uses annular detector, like dark field
-                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                                    - 'mask' flexible detector, any 2D array
+            mode (str)          : defines geometry mode for calculating virtual image.
+                Options:
+                    - 'point' uses singular point as detector
+                    - 'circle' or 'circular' uses round detector, like bright field
+                    - 'annular' or 'annulus' uses annular detector, like dark field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'mask' flexible detector, any 2D array
             geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                                        argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy),
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+                argument, as follows:
+                    - 'point': 2-tuple, (qx,qy),
+                       qx and qy are each single float or int to define center
+                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                       qx, qy and radius, are each single float or int
+                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                       qx, qy, radius_i, and radius_o are each single float or integer
+                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                    - `mask`: flexible detector, any boolean or floating point 2D array with
+                        the same shape as datacube.Qshape
             centered (bool)     : if False (default), the origin is in the upper left corner.
-                                  If True, the mean measured origin in the datacube calibrations
-                                  is set as center. In this case, for example, a centered bright field image
-                                  could be defined by geometry = ((0,0), R).
+                 If True, the mean measured origin in the datacube calibrations
+                 is set as center. The measured origin is set with datacube.calibration.set_origin()
+                 In this case, for example, a centered bright field image could be defined 
+                 by geometry = ((0,0), R). For `mode="mask"`, has no effect.
             calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-                                  The datacube must have updated calibration metadata.
-            shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                    supported for 'point', 'circle', and 'annular' geometry.
-                                    For the shifting center mode, the geometry argument shape
-                                    should be modified so that qx and qy are the same size as Rshape
-                                        - 'point': 2-tuple, (qx,qy)
-                                           where qx.shape and qy.shape == datacube.Rshape
-                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                                           where qx.shape and qx.shape == datacube.Rshape
-                                        - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
-                                           where qx.shape and qx.shape == datacube.Rshape
+                The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
+                Setting `calibrated=True` automatically performs centering, regardless of the
+                value of the `centered` argument. For `mode="mask"`, has no effect.
+            shift_center (bool) : if True, the mask is shifted at each real space position to
+                account for any shifting of the origin of the diffraction images. The datacube's
+                calibration['origin'] parameter must be set. The shift applied to each pattern is
+                the difference between the local origin position and the mean origin position
+                over all patterns, rounded to the nearest integer for speed.
+            verbose (bool)      : if True, show progress bar
             dask (bool)         : if True, use dask arrays
+        
         Returns:
             A new VirtualImage instance
         """
