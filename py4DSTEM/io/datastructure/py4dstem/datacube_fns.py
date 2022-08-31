@@ -216,6 +216,7 @@ def get_virtual_image(
     shift_center = False,
     verbose = True,
     dask = False,
+    return_mask = False,
     name = 'virtual_image',
     returncalc = True,
     ):
@@ -240,25 +241,30 @@ def get_virtual_image(
                 - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                    qx, qy, radius_i, and radius_o are each single float or integer
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+                - `mask`: flexible detector, any boolean or floating point 2D array with the
+                    same size as datacube.Qshape
         centered (bool)     : if False (default), the origin is in the upper left corner.
-            If True, the mean measured origin in the datacube calibrations
-            is set as center. In this case, for example, a centered bright field image
-            could be defined by geometry = ((0,0), R).
+             If True, the mean measured origin in the datacube calibrations
+             is set as center. In this case, for example, a centered bright field image
+             could be defined by geometry = ((0,0), R). For `mode="mask"`, has no effect.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-            The datacube must have updated calibration metadata.
-        shift_center (bool) : if True, qx and qx are shifted for each position in real space
-            supported for 'point', 'circle', and 'annular' geometry.
-            For the shifting center mode, the geometry argument shape
-            should be modified so that qx and qy are the same size as Rshape
-                - 'point': 2-tuple, (qx,qy)
-                   where qx.shape and qy.shape == datacube.Rshape
-                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                   where qx.shape and qx.shape == datacube.Rshape
-                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
-                   where qx.shape and qx.shape == datacube.Rshape
+            The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
+            Setting `calibrated=True` automatically performs centering, regardless of the
+            value of the `centered` argument. For `mode="mask"`, has no effect.
+        shift_center (bool) : if True, the mask is shifted at each real space position to
+            account for any shifting of the origin of the diffraction images. The datacube's
+            calibration['origin'] parameter must be set. The shift applied to each pattern is
+            the difference between the local origin position and the mean origin position
+            over all patterns, rounded to the nearest integer for speed.
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
+        return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
+            *not* generate or return a virtual image, instead returning the mask that would be
+            used in virtual image computation for any call to this function where
+            `shift_center = False`.  Otherwise, must be a 2-tuple of integers corresponding
+            to a scan position (rx,ry); in this case, returns the mask that would be used for
+            virtual image computation at this scan position with `shift_center` set to `True`.
+            Setting return_mask to True does not add anything to the datacube's tree.
         name (str)          : the output object's name
         returncalc (bool)   : if True, returns the output
 
@@ -277,7 +283,12 @@ def get_virtual_image(
         shift_center = shift_center,
         verbose = verbose,
         dask = dask,
+        return_mask = return_mask
     )
+
+    # if a mask is requested, skip the remaining i/o functionality
+    if return_mask is not False:
+        return im
 
     # wrap with a py4dstem class
     im = VirtualImage(

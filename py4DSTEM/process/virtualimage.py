@@ -12,6 +12,7 @@ def get_virtual_image(
     shift_center = False,
     verbose = True,
     dask = False,
+    return_mask = False
 ):
     '''
     Function to calculate virtual image
@@ -35,26 +36,29 @@ def get_virtual_image(
                 - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                    qx, qy, radius_i, and radius_o are each single float or integer
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Qshape
         centered (bool)     : if False (default), the origin is in the upper left corner.
              If True, the mean measured origin in the datacube calibrations
              is set as center. In this case, for example, a centered bright field image
-             could be defined by geometry = ((0,0), R).
+             could be defined by geometry = ((0,0), R). For `mode="mask"`, has no effect.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-            Setting `calibrated=True` automatically sets `centered=True` as well,
-            overwriting the previous value of `centered`.
-        shift_center (bool) : if True, qx and qx are shifted for each position in real space
-            supported for 'point', 'circle', and 'annular' geometry.
-            For the shifting center mode, the geometry argument shape
-            should be modified so that qx and qy are the same size as Rshape
-                - 'point': 2-tuple, (qx,qy)
-                   where qx.shape and qy.shape == datacube.Rshape
-                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                   where qx.shape and qx.shape == datacube.Rshape
-                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
-                   where qx.shape and qx.shape == datacube.Rshape
+            The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
+            Setting `calibrated=True` automatically performs centering, regardless of the
+            value of the `centered` argument. For `mode="mask"`, has no effect.
+        shift_center (bool) : if True, the mask is shifted at each real space position to
+            account for any shifting of the origin of the diffraction images. The datacube's
+            calibration['origin'] parameter must be set. The shift applied to each pattern is
+            the difference between the local origin position and the mean origin position
+            over all patterns, rounded to the nearest integer for speed.
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
+        return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
+            *not* generate or return a virtual image, instead returning the mask that would be
+            used in virtual image computation for any call to this function where
+            `shift_center = False`.  Otherwise, must be a 2-tuple of integers corresponding
+            to a scan position (rx,ry); in this case, returns the mask that would be used for
+            virtual image computation at this scan position with `shift_center` set to `True`.
 
     Returns:
         virtual image (2D-array)
@@ -64,11 +68,20 @@ def get_virtual_image(
     'check doc strings for supported modes'
     g = geometry
 
-    if centered == True:
+
+    # Get calibration metadata
+    if centered or calibrated or shift_center:
         assert datacube.calibration.get_origin_meas(), "origin need to be calibrated"
         x0, y0 = datacube.calibration.get_origin_meas()
         x0_mean = np.mean(x0)
         y0_mean = np.mean(y0)
+    if calibrated:
+        assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
+        'check datacube.calibration. datacube must be calibrated in A^-1 to use `calibrated=True`'
+
+
+    # Convert units into detector pixels, if `centered` or `calibrated` are True
+    if centered == True or calibrated == True:
         if mode == 'point':
             g = (g[0] + x0_mean, g[1] + y0_mean)
         if mode in('circle', 'circular', 'annulus', 'annular'):
@@ -77,8 +90,6 @@ def get_virtual_image(
              g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
     if calibrated == True:
-        assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
-        'check datacube.calibration. datacube must be calibrated in A^-1'
 
         unit_conversion = datacube.calibration['Q_pixel_size']
         if mode == 'point':
@@ -93,18 +104,39 @@ def get_virtual_image(
             g = (g[0]/unit_conversion, g[1]/unit_conversion,
                  g[2]/unit_conversion, g[3]/unit_conversion)
 
+
+    # Get mask
+    mask = make_detector(datacube.Qshape, mode, g)
+    # if return_mask is True, skip computation
+    if return_mask == True and shift_center == False:
+        return mask
+
+
+    # Calculate images
+
+    # no center shifting
     if shift_center == False:
-        mask = make_detector(datacube.Qshape, mode, g)
 
-        #dask 
-        def _apply_mask_dask(datacube,mask):
-            virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
-
-        #calculate images
+        # dask 
         if dask == True:
-            apply_mask_dask = da.as_gufunc(_apply_mask_dask,signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
+
+            # set up a generalized universal function for dask distribution
+            def _apply_mask_dask(datacube,mask):
+                virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
+            apply_mask_dask = da.as_gufunc(
+                _apply_mask_dask,signature='(i,j),(i,j)->()',
+                output_dtypes=np.float64,
+                axes=[(2,3),(0,1),()],
+                vectorize=True
+            )
+
+            # compute
             virtual_image = apply_mask_dask(datacube.data, mask)
+
+        # non-dask
         else:
+
+            # compute
             virtual_image = np.zeros(datacube.Rshape)
             for rx,ry in tqdmnd(
                 datacube.R_Nx,
@@ -112,59 +144,38 @@ def get_virtual_image(
                 disable = not verbose,
             ):
                 virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+
+    # with center shifting
     else:
-        assert mode in ('point', 'circle', 'circular','annulus', 'annular'), \
-        'only point, circular, and annular detectors supported for shift_center'
 
-        #point mask
-        if mode == 'point':
-            qx_scan = np.asarray(g[0])
-            qy_scan = np.asarray(g[1])
-            assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
+        # get shifts
+        qx_shift = -(x0-x0_mean).round().astype(int)
+        qy_shift = -(y0-y0_mean).round().astype(int)
 
-            virtual_image = np.zeros(datacube.Rshape)
+        # if return_mask is True, skip computation
+        if return_mask is not False:
+            rx,ry = return_mask
+            # get shifted mask
+            _mask = np.roll(
+                mask,
+                (qx_shift[rx,ry], qy_shift[rx,ry]),
+                axis=(0,1)
+            )
+            return _mask
 
-            for rx,ry in tqdmnd(
-                datacube.R_Nx,
-                datacube.R_Ny,
-                disable = not verbose,
-            ):
-                geometry_shift = (qx_scan[rx,ry], qy_scan[rx,ry])
-                mask = make_detector(datacube.Qshape, mode, geometry_shift)
-                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
-
-
-        #circular or annular mask 
-        if mode in('circle', 'circular', 'annulus', 'annular') :
-            qx_scan = np.asarray(g[0][0])
-            qy_scan = np.asarray(g[0][1])
-
-            assert(qx_scan.shape == datacube.Rshape and qy_scan.shape == datacube.Rshape), 'qx and qy should match real space size'
-
-            #make mask using small subset of diffraction space
-            if mode in('circle', 'circular'):
-                R = g[1]
-            if mode in('annulus', 'annular'):
-                R = g[1][1]
-
-            xmin,xmax = max(0,int(np.floor(np.min(qx_scan)-R))),min(datacube.Q_Nx,int(np.ceil(np.max(qx_scan)+R)))
-            ymin,ymax = max(0,int(np.round(np.min(qy_scan)-R))),min(datacube.Q_Ny,int(np.ceil(np.max(qy_scan)+R)))
-            xsize,ysize = xmax-xmin,ymax-ymin
-            qx_scan_crop,qy_scan_crop = qx_scan-xmin,qy_scan-ymin
-            virtual_image = np.zeros(datacube.Rshape)
-
-            for rx,ry in tqdmnd(
-                datacube.R_Nx,
-                datacube.R_Ny,
-                disable = not verbose,
-            ):
-                geometry_shift = ((qx_scan_crop[rx, ry], qy_scan_crop[rx, ry]), g[1])
-                mask = make_detector((xsize,ysize), mode, geometry_shift)
-
-                full_mask = np.zeros(shape=datacube.Qshape, dtype=np.bool_)
-                full_mask[xmin:xmax,ymin:ymax] = mask
-
-                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*full_mask)
+        # compute
+        for rx,ry in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            disable = not verbose,
+        ):
+            # get shifted mask
+            _mask = np.roll(
+                mask,
+                (qx_shift[rx,ry], qy_shift[rx,ry]),
+                axis=(0,1)
+            )
+            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
     return virtual_image
 
@@ -184,7 +195,8 @@ def make_detector(
                 - 'circle' or 'circular' uses round detector, like bright field
                 - 'annular' or 'annulus' uses annular detector, like dark field
                 - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                - 'mask' flexible detector, any 2D array
+                - 'mask' flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Qshape
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
             argument, as follows:
                 - 'point': 2-tuple, (qx,qy),
@@ -194,7 +206,8 @@ def make_detector(
                 - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                    qx, qy, radius_i, and radius_o are each single float or integer
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+                - `mask`: flexible detector, any boolean or floating point 2D array with the
+                    same shape as datacube.Qshape
 
     Returns:
         virtual detector in the form of a 2D mask (array)
@@ -237,10 +250,10 @@ def make_detector(
        'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
         mask = np.zeros(Qshape)
 
-        xmin = int(g[0])
-        xmax = int(g[1])
-        ymin = int(g[2])
-        ymax = int(g[3])
+        xmin = int(np.round(g[0]))
+        xmax = int(np.round(g[1]))
+        ymin = int(np.round(g[2]))
+        ymax = int(np.round(g[3]))
 
         mask[xmin:xmax, ymin:ymax] = 1
 
@@ -251,3 +264,4 @@ def make_detector(
         mask = g
 
     return mask
+
