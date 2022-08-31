@@ -40,8 +40,9 @@ def get_virtual_image(
                     the same shape as datacube.Qshape
         centered (bool)     : if False (default), the origin is in the upper left corner.
              If True, the mean measured origin in the datacube calibrations
-             is set as center. In this case, for example, a centered bright field image
-             could be defined by geometry = ((0,0), R). For `mode="mask"`, has no effect.
+             is set as center. The measured origin is set with datacube.calibration.set_origin()
+             In this case, for example, a centered bright field image could be defined 
+             by geometry = ((0,0), R). For `mode="mask"`, has no effect.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
             The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
             Setting `calibrated=True` automatically performs centering, regardless of the
@@ -167,6 +168,7 @@ def get_virtual_image(
             return _mask
 
         # compute
+        virtual_image = np.zeros(datacube.Rshape)
         for rx,ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
