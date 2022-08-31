@@ -8,15 +8,23 @@ import numpy as np
 # Set filepaths
 #  - experimental aluminum dataset
 #  - a path to write to
-filepath_calibration_dm = "/media/AuxDriveB/Data/HadasSternlicht/conductive_polymers/500C/dataset_123_aluminumStandard/dataset_123.dm4"
-filepath_h5 = "/home/ben/Desktop/test.h5"
+
+#filepath_calibration_dm = "/media/AuxDriveB/Data/HadasSternlicht/conductive_polymers/500C/dataset_123_aluminumStandard/dataset_123.dm4"
+#filepath_h5 = "/home/ben/Desktop/test.h5"
+filepath_calibration_dm = "/Users/Ben/ben/data/py4DSTEM_sampleData/calibration_simulatedAuNanoplatelet/calibrationData_simulatedAuNanoplatelet_binned.h5"
+filepath_h5 = "/Users/Ben/Desktop/test.h5"
 
 
 # Load a datacube from a dm file
-datacube = py4DSTEM.import_file(filepath_calibration_dm)
+#datacube = py4DSTEM.import_file(filepath_calibration_dm)
+#datacube = py4DSTEM.io.datastructure.DataCube(
+#    data=datacube.data[0:15,0:20,:,:])
+datacube = py4DSTEM.read(
+    filepath_calibration_dm,
+    data_id = "polyAu_4DSTEM"
+    )
 datacube = py4DSTEM.io.datastructure.DataCube(
     data=datacube.data[0:15,0:20,:,:])
-
 
 
 
@@ -37,25 +45,21 @@ datacube = py4DSTEM.io.datastructure.DataCube(
 # Virtual imaging
 
 geometry_BF = (
-    (432,432),
-    30
+    (127,127),
+    25
 )
 geometry_ADF = (
-    (432,432),
+    (127,127),
     (80,300)
 )
-im_BF = py4DSTEM.process.virtualimage.get_virtual_image(
-    datacube,
+im_BF = datacube.get_virtual_image(
     mode = 'circular',
     geometry = geometry_BF,
 )
-im_ADF = py4DSTEM.process.virtualimage.get_virtual_image(
-    datacube,
+im_ADF = datacube.get_virtual_image(
     mode = 'annular',
     geometry = geometry_ADF,
 )
-#show(datacube.tree['vBF'])
-#show(datacube.tree['vADF'])
 
 print("After virtual imaging")
 datacube.tree.print()
