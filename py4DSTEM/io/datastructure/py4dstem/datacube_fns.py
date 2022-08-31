@@ -211,7 +211,7 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    centered = False, 
+    centered = False,
     calibrated = False,
     shift_center = False,
     verbose = True,
@@ -223,7 +223,7 @@ def get_virtual_image(
     Get a virtual image and store it in `datacube`s tree under `name`.
     The kind of virtual image is specified by the `mode` argument.
 
-    Args: 
+    Args:
         mode (str)          : defines geometry mode for calculating virtual image
                                 options:
                                     - 'point' uses singular point as detector
@@ -233,27 +233,27 @@ def get_virtual_image(
                                     - 'mask' flexible detector, any 2D array
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
                                 argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy), 
+                                    - 'point': 2-tuple, (qx,qy),
                                        qx and qy are each single float or int to define center
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
-                                       qx, qy and radius, are each single float or int 
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                                       qx, qy and radius, are each single float or int
                                     - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                       qx, qy, radius_i, and radius_o are each single float or integer 
+                                       qx, qy, radius_i, and radius_o are each single float or integer
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape         
+                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
         centered (bool)     : if False (default), the origin is in the upper left corner.
-                              If True, the mean measured origin in the datacube calibrations 
-                              is set as center. In this case, for example, a centered bright field image 
+                              If True, the mean measured origin in the datacube calibrations
+                              is set as center. In this case, for example, a centered bright field image
                               could be defined by geometry = ((0,0), R).
-        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels. 
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
                               The datacube must have updated calibration metadata.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                supported for 'point', 'circle', and 'annular' geometry. 
+                                supported for 'point', 'circle', and 'annular' geometry.
                                 For the shifting center mode, the geometry argument shape
                                 should be modified so that qx and qy are the same size as Rshape
-                                    - 'point': 2-tuple, (qx,qy) 
+                                    - 'point': 2-tuple, (qx,qy)
                                        where qx.shape and qy.shape == datacube.Rshape
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
                                        where qx.shape and qx.shape == datacube.Rshape
                                     - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
                                        where qx.shape and qx.shape == datacube.Rshape
@@ -272,11 +272,11 @@ def get_virtual_image(
         self,
         mode = mode,
         geometry = geometry,
-        centered = centered, 
+        centered = centered,
         calibrated = calibrated,
         shift_center = shift_center,
         verbose = verbose,
-        dask = dask, 
+        dask = dask,
     )
 
     # wrap with a py4dstem class
@@ -285,7 +285,7 @@ def get_virtual_image(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_center = shift_center, 
+        shift_center = shift_center,
     )
 
     # add to the tree
@@ -333,7 +333,7 @@ from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
 def get_probe_size(
     self,
     mode = None,
-    returncal = True, 
+    returncal = True,
     ** kwargs,
     ):
     """
@@ -575,7 +575,7 @@ def get_beamstop_mask(
     ):
     """
     This function uses the mean diffraction pattern plus a threshold to create a beamstop mask.
-    
+
     Args:
         threshold: (float)  Value from 0 to 1 defining initial threshold for beamstop mask,
                             taken from the sorted intensity values - 0 is the dimmest
