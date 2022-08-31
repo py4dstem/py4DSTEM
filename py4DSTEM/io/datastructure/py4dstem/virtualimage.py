@@ -22,6 +22,7 @@ class VirtualImage(RealSlice):
         centered: Optional[bool] = False,
         calibrated: Optional[bool] = False,
         shift_center: Optional[bool] = False,
+        dask: Optional[bool] = False
         ):
         """
         Args:
@@ -36,28 +37,28 @@ class VirtualImage(RealSlice):
                                     - 'mask' flexible detector, any 2D array
             geometry (variable) : valid entries are determined by the `mode`, values in pixels
                                         argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy), 
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius), 
+                                    - 'point': 2-tuple, (qx,qy),
+                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
                                     - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                                     - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                                     - `mask`: flexible detector, any 2D array, same size as datacube.QShape
-            centered (bool)     : if false (default), the origin is in the upper left corner.
-                                  If True, the mean measured origin in the datacube calibrations 
-                                  is set as center. In this case, for example, a centered bright field image 
+            centered (bool)     : if False (default), the origin is in the upper left corner.
+                                  If True, the mean measured origin in the datacube calibrations
+                                  is set as center. In this case, for example, a centered bright field image
                                   could be defined by geometry = ((0,0), R).
-            calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels. 
+            calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
                                   The datacube must have updated calibration metadata.
             shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                    supported for 'point', 'circle', and 'annular' geometry. 
+                                    supported for 'point', 'circle', and 'annular' geometry.
                                     For the shifting center mode, the geometry argument shape
                                     should be modified so that qx and qy are the same size as Rshape
-                                        - 'point': 2-tuple, (qx,qy) 
+                                        - 'point': 2-tuple, (qx,qy)
                                            where qx.shape and qy.shape == datacube.Rshape
-                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius) 
+                                        - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
                                            where qx.shape and qx.shape == datacube.Rshape
                                         - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
                                            where qx.shape and qx.shape == datacube.Rshape
-            dask (bool)         : if True, use dask arrays        
+            dask (bool)         : if True, use dask arrays
         Returns:
             A new VirtualImage instance
         """
@@ -75,6 +76,7 @@ class VirtualImage(RealSlice):
         md['centered'] = centered
         md['calibrated'] = calibrated
         md['shift_center'] = shift_center
+        md['dask'] = dask
         self.metadata = md
 
 
