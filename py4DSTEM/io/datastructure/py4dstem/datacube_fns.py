@@ -225,38 +225,38 @@ def get_virtual_image(
 
     Args:
         mode (str)          : defines geometry mode for calculating virtual image
-                                options:
-                                    - 'point' uses singular point as detector
-                                    - 'circle' or 'circular' uses round detector, like bright field
-                                    - 'annular' or 'annulus' uses annular detector, like dark field
-                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                                    - 'mask' flexible detector, any 2D array
+            options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                                argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy),
-                                       qx and qy are each single float or int to define center
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
-                                       qx, qy and radius, are each single float or int
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                       qx, qy, radius_i, and radius_o are each single float or integer
-                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
         centered (bool)     : if False (default), the origin is in the upper left corner.
-                              If True, the mean measured origin in the datacube calibrations
-                              is set as center. In this case, for example, a centered bright field image
-                              could be defined by geometry = ((0,0), R).
+            If True, the mean measured origin in the datacube calibrations
+            is set as center. In this case, for example, a centered bright field image
+            could be defined by geometry = ((0,0), R).
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-                              The datacube must have updated calibration metadata.
+            The datacube must have updated calibration metadata.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                supported for 'point', 'circle', and 'annular' geometry.
-                                For the shifting center mode, the geometry argument shape
-                                should be modified so that qx and qy are the same size as Rshape
-                                    - 'point': 2-tuple, (qx,qy)
-                                       where qx.shape and qy.shape == datacube.Rshape
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                                       where qx.shape and qx.shape == datacube.Rshape
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
-                                       where qx.shape and qx.shape == datacube.Rshape
+            supported for 'point', 'circle', and 'annular' geometry.
+            For the shifting center mode, the geometry argument shape
+            should be modified so that qx and qy are the same size as Rshape
+                - 'point': 2-tuple, (qx,qy)
+                   where qx.shape and qy.shape == datacube.Rshape
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
+                   where qx.shape and qx.shape == datacube.Rshape
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                   where qx.shape and qx.shape == datacube.Rshape
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
         name (str)          : the output object's name
@@ -341,8 +341,8 @@ def get_probe_size(
     """
     #perform computation 
     from py4DSTEM.process.calibration import get_probe_size
-    
-    if mode is None: 
+
+    if mode is None:
         assert 'no mode speficied, using mean diffraciton pattern'
         assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
         DP = self.tree['dp_mean'].data
@@ -578,8 +578,8 @@ def get_beamstop_mask(
 
     Args:
         threshold: (float)  Value from 0 to 1 defining initial threshold for beamstop mask,
-                            taken from the sorted intensity values - 0 is the dimmest
-                            pixel, while 1 uses the brighted pixels.
+            taken from the sorted intensity values - 0 is the dimmest
+            pixel, while 1 uses the brighted pixels.
         distance_edge: (float)  How many pixels to expand the mask.
         include_edges: (bool)   If set to True, edge pixels will be included in the mask.
         name: (string)          Name of the output array.

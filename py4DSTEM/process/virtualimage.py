@@ -18,40 +18,41 @@ def get_virtual_image(
 
     Args:
         datacube (Datacube) : datacube class object which stores 4D-dataset
-                              needed for calculation
-        mode (str)          : defines geometry mode for calculating virtual image
-                                options:
-                                    - 'point' uses singular point as detector
-                                    - 'circle' or 'circular' uses round detector, like bright field
-                                    - 'annular' or 'annulus' uses annular detector, like dark field
-                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                                    - 'mask' flexible detector, any 2D array
+            needed for calculation
+        mode (str)          : defines geometry mode for calculating virtual image.
+            Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                                argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy),
-                                       qx and qy are each single float or int to define center
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
-                                       qx, qy and radius, are each single float or int
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                       qx, qy, radius_i, and radius_o are each single float or integer
-                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
-        centered (bool)     : if false (default), the origin is in the upper left corner.
-                              If True, the mean measured origin in the datacube calibrations
-                              is set as center. In this case, for example, a centered bright field image
-                              could be defined by geometry = ((0,0), R).
-        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' isntead of pixels.
-                              The datacube must have updated calibration metadata.
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+        centered (bool)     : if False (default), the origin is in the upper left corner.
+             If True, the mean measured origin in the datacube calibrations
+             is set as center. In this case, for example, a centered bright field image
+             could be defined by geometry = ((0,0), R).
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
+            Setting `calibrated=True` automatically sets `centered=True` as well,
+            overwriting the previous value of `centered`.
         shift_center (bool) : if True, qx and qx are shifted for each position in real space
-                                supported for 'point', 'circle', and 'annular' geometry.
-                                For the shifting center mode, the geometry argument shape
-                                should be modified so that qx and qy are the same size as Rshape
-                                    - 'point': 2-tuple, (qx,qy)
-                                       where qx.shape and qy.shape == datacube.Rshape
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
-                                       where qx.shape and qx.shape == datacube.Rshape
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
-                                       where qx.shape and qx.shape == datacube.Rshape
+            supported for 'point', 'circle', and 'annular' geometry.
+            For the shifting center mode, the geometry argument shape
+            should be modified so that qx and qy are the same size as Rshape
+                - 'point': 2-tuple, (qx,qy)
+                   where qx.shape and qy.shape == datacube.Rshape
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius)
+                   where qx.shape and qx.shape == datacube.Rshape
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o))
+                   where qx.shape and qx.shape == datacube.Rshape
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
 
@@ -178,22 +179,22 @@ def make_detector(
     Args:
         Qshape (tuple)     : defines shape of mask (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are mask sizes
         mode (str)         : defines geometry mode for calculating virtual image
-                                options:
-                                    - 'point' uses singular point as detector
-                                    - 'circle' or 'circular' uses round detector, like bright field
-                                    - 'annular' or 'annulus' uses annular detector, like dark field
-                                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                                    - 'mask' flexible detector, any 2D array
+            options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                                argument, as follows:
-                                    - 'point': 2-tuple, (qx,qy),
-                                       qx and qy are each single float or int to define center
-                                    - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
-                                       qx, qy and radius, are each single float or int
-                                    - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                                       qx, qy, radius_i, and radius_o are each single float or integer
-                                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                                    - `mask`: flexible detector, any 2D array, same size as datacube.QShape
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any 2D array, same size as datacube.QShape
 
     Returns:
         virtual detector in the form of a 2D mask (array)
