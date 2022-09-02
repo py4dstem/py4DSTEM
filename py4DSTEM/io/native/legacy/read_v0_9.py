@@ -3,11 +3,11 @@
 import h5py
 import numpy as np
 from os.path import splitext, exists
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from .read_utils_v0_9 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, DiffractionSlice, RealSlice
-from ...datastructure import PointList, PointListArray
-from ....process.utils import tqdmnd
+from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.native.legacy.read_utils_v0_9 import get_py4DSTEM_dataobject_info
+from py4DSTEM.io.datastructure import DataCube, DiffractionSlice, RealSlice
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.process.utils import tqdmnd
 
 def read_v0_9(fp, **kwargs):
     """
