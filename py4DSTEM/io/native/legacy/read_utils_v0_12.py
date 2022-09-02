@@ -2,7 +2,7 @@
 
 import h5py
 import numpy as np
-from .read_utils import is_py4DSTEM_file
+from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file
 
 def get_py4DSTEM_dataobject_info(filepath, topgroup='4DSTEM_experiment'):
     """ Returns a numpy structured array with basic metadata for all contained dataobjects.

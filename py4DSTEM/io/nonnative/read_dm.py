@@ -3,8 +3,8 @@
 import numpy as np
 from pathlib import Path
 from ncempy.io import dm
-from ..datastructure import DataCube, Array, Metadata
-from ...process.utils import bin2D
+from py4DSTEM.io.datastructure import DataCube, Array, Metadata
+from py4DSTEM.process.utils import bin2D
 
 
 def read_dm(

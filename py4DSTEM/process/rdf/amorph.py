@@ -4,7 +4,7 @@ from py4DSTEM.process.utils.elliptical_coords import * ## What else is used here
                                                       ## moved around some. In general, specifying
                                                       ## the fns is better practice. TODO: change
                                                       ## this import
-from ..calibration import fit_ellipse_amorphous_ring
+from py4DSTEM.process.calibration import fit_ellipse_amorphous_ring
 import matplotlib
 from tqdm import tqdm
 
