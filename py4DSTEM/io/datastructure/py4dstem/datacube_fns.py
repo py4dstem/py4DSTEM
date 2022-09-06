@@ -211,9 +211,9 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    centered = False,
-    calibrated = False,
-    shift_center = False,
+    centered = None,
+    calibrated = None,
+    shift_center = None,
     verbose = True,
     dask = False,
     return_mask = False,
@@ -247,16 +247,19 @@ def get_virtual_image(
              If True, the mean measured origin in the datacube calibrations
              is set as center. The measured origin is set with datacube.calibration.set_origin()
              In this case, for example, a centered bright field image could be defined 
-             by geometry = ((0,0), R). For `mode="mask"`, has no effect.
+             by geometry = ((0,0), R). For `mode="mask"`, has no effect. Default is None and will 
+             set to True if the origin has been set.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
             The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
             Setting `calibrated=True` automatically performs centering, regardless of the
-            value of the `centered` argument. For `mode="mask"`, has no effect.
+            value of the `centered` argument. For `mode="mask"`, has no effect. Default is None
+            and will set to True if the calibration has been set.
         shift_center (bool) : if True, the mask is shifted at each real space position to
             account for any shifting of the origin of the diffraction images. The datacube's
-            calibration['origin'] parameter must be set. The shift applied to each pattern is
-            the difference between the local origin position and the mean origin position
-            over all patterns, rounded to the nearest integer for speed.
+            calibration['origin'] parameter must be set (centered = True). The shift applied to each 
+            pattern is the difference between the local origin position and the mean origin position
+            over all patterns, rounded to the nearest integer for speed. Default is None and will set 
+            to True if calibrated == True and centered == True. 
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
         return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
@@ -272,6 +275,27 @@ def get_virtual_image(
     Returns:
         (Optional): if returncalc is True, returns the VirtualImage
     """
+    #check for calibration
+    if calibrated is None:
+        if self.calibration['Q_pixel_units'] == 'A^-1': 
+            calibrated = True
+        else: 
+            calibrated = False
+
+    #check for centered 
+    if centered is None:
+        if self.calibration.get_origin(): 
+            centered = True
+        else: 
+            centered = False
+
+    # logic to determine shift_center
+    if shift_center is None: 
+        if centered and calibrated: 
+            shift_center = True
+            print ('warning: setting `shift_center` to True')
+        else: 
+            shift_center = False 
 
     # perform computation
     from py4DSTEM.process.virtualimage import get_virtual_image
