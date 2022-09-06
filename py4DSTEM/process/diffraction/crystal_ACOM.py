@@ -855,6 +855,16 @@ def match_single_pattern(
 
     # loop over the number of matches to return
     for match_ind in range(num_matches_return):
+        # fig, ax = plt.subplots(1,1)
+        # ax.scatter(
+        #     qx,
+        #     qy,
+        #     s=intensity*1000)
+        # ax.set_aspect(1.0)
+        # ax.set_xlim((-2,2))
+        # ax.set_ylim((-2,2))
+        # plt.show()
+
         # Convert Bragg peaks to polar coordinates
         qr = np.sqrt(qx ** 2 + qy ** 2)
         qphi = np.arctan2(qy, qx)
@@ -1320,7 +1330,7 @@ def match_single_pattern(
             )
 
             remove = np.zeros_like(qx, dtype="bool")
-            scale_int = np.zeros_like(qx)
+            scale_int = np.ones_like(qx)
             for a0 in np.arange(qx.size):
                 d_2 = (bragg_peaks_fit.data["qx"] - qx[a0]) ** 2 + (
                     bragg_peaks_fit.data["qy"] - qy[a0]
