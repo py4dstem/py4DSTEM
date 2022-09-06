@@ -49,8 +49,8 @@ def get_virtual_image(
             value of the `centered` argument. For `mode="mask"`, has no effect.
         shift_center (bool) : if True, the mask is shifted at each real space position to
             account for any shifting of the origin of the diffraction images. The datacube's
-            calibration['origin'] parameter must be set. The shift applied to each pattern is
-            the difference between the local origin position and the mean origin position
+            calibration['origin'] parameter must be set (centered = True). The shift applied to each 
+            pattern is the difference between the local origin position and the mean origin position
             over all patterns, rounded to the nearest integer for speed.
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
@@ -69,9 +69,8 @@ def get_virtual_image(
     'check doc strings for supported modes'
     g = geometry
 
-
     # Get calibration metadata
-    if centered or calibrated or shift_center:
+    if centered:
         assert datacube.calibration.get_origin(), "origin need to be calibrated"
         x0, y0 = datacube.calibration.get_origin()
         x0_mean = np.mean(x0)
@@ -80,9 +79,8 @@ def get_virtual_image(
         assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
         'check datacube.calibration. datacube must be calibrated in A^-1 to use `calibrated=True`'
 
-
     # Convert units into detector pixels, if `centered` or `calibrated` are True
-    if centered == True or calibrated == True:
+    if centered == True:
         if mode == 'point':
             g = (g[0] + x0_mean, g[1] + y0_mean)
         if mode in('circle', 'circular', 'annulus', 'annular'):
@@ -91,7 +89,6 @@ def get_virtual_image(
              g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
     if calibrated == True:
-
         unit_conversion = datacube.calibration['Q_pixel_size']
         if mode == 'point':
             g = (g[0]/unit_conversion, g[1]/unit_conversion)
@@ -105,13 +102,14 @@ def get_virtual_image(
             g = (g[0]/unit_conversion, g[1]/unit_conversion,
                  g[2]/unit_conversion, g[3]/unit_conversion)
 
+    if shift_center == True: 
+        assert centered, "centered must be True" 
 
     # Get mask
     mask = make_detector(datacube.Qshape, mode, g)
     # if return_mask is True, skip computation
     if return_mask == True and shift_center == False:
         return mask
-
 
     # Calculate images
 
