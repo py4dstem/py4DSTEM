@@ -39,6 +39,7 @@ class Crystal:
     from py4DSTEM.process.diffraction.crystal_viz import (
         plot_structure,
         plot_structure_factors,
+        plot_scattering_intensity,
         plot_orientation_zones,
         plot_orientation_plan,
         plot_orientation_maps,
