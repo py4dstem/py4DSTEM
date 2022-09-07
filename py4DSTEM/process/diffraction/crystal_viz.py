@@ -4,6 +4,7 @@ from matplotlib.axes import Axes
 import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from scipy.signal import medfilt
+from scipy.ndimage import gaussian_filter
 
 import warnings
 import numpy as np
@@ -294,6 +295,134 @@ def plot_structure_factors(
 
     if returnfig:
         return fig, ax
+
+
+def plot_scattering_intensity(
+    self,
+    k_min = 0.0,
+    k_max = None,
+    k_step = 0.001,
+    k_broadening = 0.001,
+    remove_origin = True,
+    bragg_peaks = None,
+    radial_power = 1.0,
+    intensity_power = 1.0,
+    k_broadening_bragg = 0.005,
+    figsize: Union[list, tuple, np.ndarray] = (12, 6),
+    returnfig: bool = False,
+):
+    """
+    1D plot of the structure factors 
+
+    Args:
+        radial_power (float):       Power law scaling for radial coordinate q.  
+        intensity_power (float):    Power law scaling for intensities.  
+                                    Plotted intensity will be
+                                      intensity_meas**intensity_power * q**radial_power
+        figsize (2 element float):   size scaling of figure axes
+        returnfig (bool):            set to True to return figure and axes handles
+
+    Returns:
+        fig, ax                     (optional) figure and axes handles
+    """
+
+    # k coordinates    
+    if k_max is None:
+        k_max = self.k_max
+    k = np.arange(k_min,k_max+k_step,k_step)
+    k_num = k.shape[0]
+
+    # get discrete plot from structure factor amplitudes
+    int_sf = np.zeros_like(k)
+    k_px = (self.g_vec_leng - k_min) / k_step;
+    kf = np.floor(k_px).astype('int')
+    dk = k_px - kf;
+
+    sub = np.logical_and(kf >= 0, kf < k_num)
+    int_sf = np.bincount(
+        np.floor(k_px[sub]).astype('int'), 
+        weights = (1-dk[sub])*self.struct_factors_int[sub], 
+        minlength = k_num)
+    sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+    int_sf += np.bincount(
+        np.floor(k_px[sub] + 1).astype('int'), 
+        weights = dk[sub]*self.struct_factors_int[sub], 
+        minlength = k_num)
+
+    if remove_origin is True:
+        int_sf[0:2] = 0
+
+    # Apply broadening if needed
+    if k_broadening > 0.0:
+        int_sf = gaussian_filter(int_sf, k_broadening/k_step, mode='constant')
+
+    # Scale SFs to amplitude for plotting
+    int_sf_plot = np.sqrt(int_sf)
+    int_sf_plot /= np.max(int_sf_plot)
+    # int_sf_plot = (int_sf**intensity_power) * (k**radial_power)
+
+    # If Bragg peaks are passed in, compute 1D integral
+    if bragg_peaks is not None:
+        bigpl = np.concatenate([
+            bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
+        qr = np.sqrt(bigpl['qx']**2 + bigpl['qy']**2)
+        int_meas = bigpl['intensity']
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step;
+        kf = np.floor(k_px).astype('int')
+        dk = k_px - kf;
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype('int'), 
+            weights = (1-dk[sub])*int_meas[sub], 
+            minlength = k_num)
+        sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype('int'), 
+            weights = dk[sub]*int_meas[sub], 
+            minlength = k_num)
+        
+        if k_broadening_bragg > 0.0:
+            int_exp = gaussian_filter(int_exp, k_broadening_bragg/k_step, mode='constant')
+
+        int_exp_plot = (int_exp**intensity_power) * (k**radial_power)
+        int_exp_plot /= np.max(int_exp_plot)
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    if bragg_peaks is not None:
+        ax.fill_between(
+            k,
+            int_exp_plot,
+            facecolor=(1.0, 0.8, 0.8, 1.0))
+        ax.plot(
+            k, 
+            int_exp_plot,
+            c=(1.0,0.4,0.4,1.0),
+            linewidth=2)
+    ax.fill_between(
+        k,
+        int_sf_plot,
+        facecolor=(0.0, 0.0, 0.0, 0.2))
+    ax.plot(
+        k, 
+        int_sf_plot,
+        c=(0.0, 0.0, 0.0, 0.5),
+        linewidth=2)
+
+    # Appearance
+    ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
+    ax.set_yticks([])
+    ax.set_ylabel("Magnitude", fontsize=14)
+    # ax.set_ .rc('axes', labelsize=14)
+
+    # ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+
+    if returnfig:
+        return fig,ax
 
 
 def plot_orientation_zones(
