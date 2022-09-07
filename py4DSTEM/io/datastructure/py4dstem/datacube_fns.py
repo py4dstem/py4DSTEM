@@ -243,7 +243,7 @@ def get_virtual_image(
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                 - `mask`: flexible detector, any boolean or floating point 2D array with the
                     same size as datacube.Qshape
-        centered (bool)     : if False (default), the origin is in the upper left corner.
+        centered (bool)     : if False, the origin is in the upper left corner.
              If True, the mean measured origin in the datacube calibrations
              is set as center. The measured origin is set with datacube.calibration.set_origin()
              In this case, for example, a centered bright field image could be defined 
