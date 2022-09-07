@@ -259,7 +259,7 @@ def get_virtual_image(
             calibration['origin'] parameter must be set (centered = True). The shift applied to each 
             pattern is the difference between the local origin position and the mean origin position
             over all patterns, rounded to the nearest integer for speed. Default is None and will set 
-            to True if calibrated == True and centered == True. 
+            to True if centered == True. 
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
         return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
@@ -291,9 +291,9 @@ def get_virtual_image(
 
     # logic to determine shift_center
     if shift_center is None: 
-        if centered and calibrated: 
+        if centered: 
             shift_center = True
-            print ('warning: setting `shift_center` to True')
+            print ('note: setting `shift_center` to True')
         else: 
             shift_center = False 
 
