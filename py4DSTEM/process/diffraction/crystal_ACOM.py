@@ -766,7 +766,7 @@ def match_orientations(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     progress_bar: bool = True,
 ):
     '''
@@ -805,7 +805,7 @@ def match_single_pattern(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,

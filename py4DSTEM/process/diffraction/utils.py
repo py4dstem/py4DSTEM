@@ -2,6 +2,8 @@
 
 import numpy as np
 from dataclasses import dataclass
+import copy
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 @dataclass
@@ -33,9 +35,6 @@ class OrientationMap:
     num_x: int
     num_y: int
     num_matches: int
-    # basis_zone_axis = None
-    # basis_in_plane = None
-    # map_fiber = None
 
     def __post_init__(self):
         # initialize empty arrays
@@ -65,6 +64,62 @@ class OrientationMap:
         orientation.mirror = self.mirror[ind_x, ind_y]
         orientation.angles = self.angles[ind_x, ind_y]
         return orientation
+
+    # def __copy__(self):
+    #     return OrientationMap(self.name)
+    # def __deepcopy__(self, memo):
+    #     return OrientationMap(copy.deepcopy(self.name, memo))
+
+
+def sort_orientation_maps(
+    orientation_map,
+    sort = "intensity",
+    cluster_thresh = 0.1,
+    ):
+    """
+    Sort the orientation maps along the ind_match direction, either by intensity
+    or by clustering similar angles (greedily, in order of intensity).
+
+    Args:
+        orientation_map             Initial OrientationMap
+        sort (string):              "intensity" or "cluster" for sorting method.
+        cluster_thresh (float):     similarity threshold for clustering method
+
+    Returns:
+        orientation_sort            Sorted OrientationMap
+    """
+
+    # make a deep copy
+    orientation_sort = copy.deepcopy(orientation_map)
+
+    if sort == "intensity":
+        for rx, ry in tqdmnd(
+            orientation_sort.num_x,
+            orientation_sort.num_y,
+            desc="Sorting orientations",
+            unit=" probe positions",
+            # disable=not progress_bar,
+            ):
+            inds = np.argsort(orientation_map.corr[rx,ry])[::-1]
+
+            orientation_sort.matrix[rx,ry,:,:,:] = orientation_sort.matrix[rx,ry,inds,:,:]        
+            orientation_sort.family[rx,ry,:,:,:] = orientation_sort.family[rx,ry,inds,:,:]        
+            orientation_sort.corr[rx,ry,:] = orientation_sort.corr[rx,ry,inds]        
+            orientation_sort.inds[rx,ry,:,:] = orientation_sort.inds[rx,ry,inds,:]        
+            orientation_sort.mirror[rx,ry,:] = orientation_sort.mirror[rx,ry,inds]        
+            orientation_sort.angles[rx,ry,:,:] = orientation_sort.angles[rx,ry,inds,:]        
+
+        # elif sort == "cluster":
+        #     mask = np.zeros_like(orientation_map.corr, dtype='bool')
+        # TODO - implement clustering method for sorting
+
+    else:
+        err_msg = "Invalid sorting method: " + sort
+        raise Exception(err_msg) 
+
+
+    return orientation_sort
+
 
 
 def axisEqual3D(ax):

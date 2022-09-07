@@ -854,7 +854,7 @@ def plot_diffraction_pattern(
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
-):
+    ):
     """
     2D scatter plot of the Bragg peaks
 
@@ -1000,7 +1000,7 @@ def plot_orientation_maps(
     progress_bar = False,
     ):
     """
-    Generate and plot the orientation maps
+    Plot the orientation maps.
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
