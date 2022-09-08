@@ -4,6 +4,7 @@ import numpy as np
 from dataclasses import dataclass
 import copy
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from scipy.ndimage import gaussian_filter
 
 
 @dataclass
@@ -120,6 +121,69 @@ def sort_orientation_maps(
 
     return orientation_sort
 
+
+
+
+def calc_1D_profile(
+    k,
+    g_coords,
+    g_int,
+    remove_origin = True,
+    k_broadening = 0.0,
+    int_scale = None,
+    normalize_intensity = True,
+    ):
+
+    # init
+    int_scale = np.atleast_1d(int_scale)
+    k_num = k.shape[0]
+    k_min = k[0]
+    k_step = k[1] - k[0]
+    k_max = k[-1]
+
+    # get discrete plot from structure factor amplitudes
+    int_profile = np.zeros_like(k)
+    k_px = (g_coords - k_min) / k_step;
+    kf = np.floor(k_px).astype('int')
+    dk = k_px - kf;
+
+    sub = np.logical_and(kf >= 0, kf < k_num)
+    if int_scale.shape[0] > 1:
+        int_profile = np.bincount(
+            np.floor(k_px[sub]).astype('int'), 
+            weights = (1-dk[sub])*g_int[sub]*int_scale[sub], 
+            minlength = k_num)
+    else:
+        int_profile = np.bincount(
+            np.floor(k_px[sub]).astype('int'), 
+            weights = (1-dk[sub])*g_int[sub], 
+            minlength = k_num)
+    sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+    if int_scale.shape[0] > 1:
+        int_profile += np.bincount(
+            np.floor(k_px[sub] + 1).astype('int'), 
+            weights = dk[sub]*g_int[sub]*int_scale[sub], 
+            minlength = k_num)
+    else:
+        int_profile += np.bincount(
+            np.floor(k_px[sub] + 1).astype('int'), 
+            weights = dk[sub]*g_int[sub], 
+            minlength = k_num)
+
+    if remove_origin is True:
+        int_profile[0:2] = 0
+
+    # Apply broadening if needed
+    if k_broadening > 0.0:
+        int_profile = gaussian_filter(int_profile, k_broadening/k_step, mode='constant')
+
+    if normalize_intensity:
+        int_profile /= np.max(int_profile)
+    if int_scale is not None:
+        if int_scale.shape[0] == 1:
+            int_profile *= int_scale
+
+    return int_profile
 
 
 def axisEqual3D(ax):

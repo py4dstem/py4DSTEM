@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
+from py4DSTEM.process.diffraction.utils import calc_1D_profile
 from py4DSTEM.io.datastructure import PointList, PointListArray
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
@@ -303,11 +304,12 @@ def plot_scattering_intensity(
     k_max = None,
     k_step = 0.001,
     k_broadening = 0.001,
+    int_scale = 1.0,
     remove_origin = True,
     bragg_peaks = None,
-    radial_power = 1.0,
-    intensity_power = 1.0,
-    k_broadening_bragg = 0.005,
+    bragg_k_power = 0.0,
+    bragg_intensity_power = 1.0,
+    bragg_k_broadening = 0.005,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
 ):
@@ -333,38 +335,26 @@ def plot_scattering_intensity(
     k_num = k.shape[0]
 
     # get discrete plot from structure factor amplitudes
-    int_sf = np.zeros_like(k)
-    k_px = (self.g_vec_leng - k_min) / k_step;
-    kf = np.floor(k_px).astype('int')
-    dk = k_px - kf;
+    int_sf_plot = calc_1D_profile(
+        k,
+        self.g_vec_leng,
+        self.struct_factors_int,
+        remove_origin = True,
+        k_broadening = k_broadening,
+        int_scale = int_scale,
+    )
 
-    sub = np.logical_and(kf >= 0, kf < k_num)
-    int_sf = np.bincount(
-        np.floor(k_px[sub]).astype('int'), 
-        weights = (1-dk[sub])*self.struct_factors_int[sub], 
-        minlength = k_num)
-    sub = np.logical_and(k_px >= -1, k_px < k_num-1)
-    int_sf += np.bincount(
-        np.floor(k_px[sub] + 1).astype('int'), 
-        weights = dk[sub]*self.struct_factors_int[sub], 
-        minlength = k_num)
-
-    if remove_origin is True:
-        int_sf[0:2] = 0
-
-    # Apply broadening if needed
-    if k_broadening > 0.0:
-        int_sf = gaussian_filter(int_sf, k_broadening/k_step, mode='constant')
-
-    # Scale SFs to amplitude for plotting
-    int_sf_plot = np.sqrt(int_sf)
-    int_sf_plot /= np.max(int_sf_plot)
-    # int_sf_plot = (int_sf**intensity_power) * (k**radial_power)
+    # # Scale SFs to amplitude for plotting
+    # int_sf_plot = np.sqrt(int_sf)
+    # int_sf_plot /= np.max(int_sf_plot)
+    # int_sf_plot *= int_scale
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
+        # bigpl = np.concatenate([
+        #     bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
         bigpl = np.concatenate([
-            bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
+            bragg_peaks.vectors[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
         qr = np.sqrt(bigpl['qx']**2 + bigpl['qy']**2)
         int_meas = bigpl['intensity']
 
@@ -385,10 +375,10 @@ def plot_scattering_intensity(
             weights = dk[sub]*int_meas[sub], 
             minlength = k_num)
         
-        if k_broadening_bragg > 0.0:
-            int_exp = gaussian_filter(int_exp, k_broadening_bragg/k_step, mode='constant')
+        if bragg_k_broadening > 0.0:
+            int_exp = gaussian_filter(int_exp, bragg_k_broadening/k_step, mode='constant')
 
-        int_exp_plot = (int_exp**intensity_power) * (k**radial_power)
+        int_exp_plot = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
         int_exp_plot /= np.max(int_exp_plot)
 
     # Plotting
@@ -397,11 +387,11 @@ def plot_scattering_intensity(
         ax.fill_between(
             k,
             int_exp_plot,
-            facecolor=(1.0, 0.8, 0.8, 1.0))
+            facecolor=(1.0, 0.0, 0.0, 0.2))
         ax.plot(
             k, 
             int_exp_plot,
-            c=(1.0,0.4,0.4,1.0),
+            c=(1.0,0.0,0.0,0.8),
             linewidth=2)
     ax.fill_between(
         k,
@@ -410,7 +400,7 @@ def plot_scattering_intensity(
     ax.plot(
         k, 
         int_sf_plot,
-        c=(0.0, 0.0, 0.0, 0.5),
+        c=(0.0, 0.0, 0.0, 0.8),
         linewidth=2)
 
     # Appearance
