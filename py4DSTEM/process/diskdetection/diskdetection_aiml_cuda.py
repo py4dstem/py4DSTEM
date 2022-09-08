@@ -220,7 +220,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                   get_maximal_points = None,
                                   blocks = None,
                                   threads = None,
-                                  model_path="path/to/model"):
+                                  model_path=None):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
