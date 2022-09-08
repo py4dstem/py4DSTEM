@@ -303,7 +303,9 @@ def plot_scattering_intensity(
     k_min = 0.0,
     k_max = None,
     k_step = 0.001,
-    k_broadening = 0.001,
+    k_broadening = 0.0,
+    k_power_scale = 0.0,
+    int_power_scale = 0.5,
     int_scale = 1.0,
     remove_origin = True,
     bragg_peaks = None,
@@ -317,12 +319,20 @@ def plot_scattering_intensity(
     1D plot of the structure factors 
 
     Args:
-        radial_power (float):       Power law scaling for radial coordinate q.  
-        intensity_power (float):    Power law scaling for intensities.  
-                                    Plotted intensity will be
-                                      intensity_meas**intensity_power * q**radial_power
-        figsize (2 element float):   size scaling of figure axes
-        returnfig (bool):            set to True to return figure and axes handles
+        k_min (float):                      min k value for profile range.
+        k_max (float):                      max k value for profile range.
+        k_step (float):                     step size of k in profile range.
+        k_broadening (float):               Broadening of simulated pattern.
+        k_power_scale (float):              Scale SF intensities by k**k_power_scale.
+        int_power_scale (float):            Scale SF intensities**int_power_scale.
+        int_scale (float):                  Scale output profile by this value.
+        remove_origin (bool):               Remove origin from plot.
+        bragg_peaks (BraggVectors):         Passed in bragg_peaks for comparison with simulated pattern.
+        bragg_k_power (float):              bragg_peaks scaled by k**bragg_k_power.
+        bragg_intensity_power (float):      bragg_peaks scaled by intensities**bragg_intensity_power.
+        bragg_k_broadening float):          Broadening applied to bragg_peaks.
+        figsize (list, tuple, np.ndarray):  Figure size for plot.
+        returnfig (bool):                   Return figure and axes handles if this is True.
 
     Returns:
         fig, ax                     (optional) figure and axes handles
@@ -338,16 +348,12 @@ def plot_scattering_intensity(
     int_sf_plot = calc_1D_profile(
         k,
         self.g_vec_leng,
-        self.struct_factors_int,
+        (self.struct_factors_int**int_power_scale) * (self.g_vec_leng**k_power_scale),
         remove_origin = True,
         k_broadening = k_broadening,
         int_scale = int_scale,
     )
 
-    # # Scale SFs to amplitude for plotting
-    # int_sf_plot = np.sqrt(int_sf)
-    # int_sf_plot /= np.max(int_sf_plot)
-    # int_sf_plot *= int_scale
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:

@@ -743,7 +743,7 @@ class Crystal:
             k_min = 0.0,
             k_max = None,
             k_step = 0.005,
-            k_broadening = 0.01,
+            k_broadening = 0.02,
             fit_all_intensities = True,
             plot_result = False,
             figsize: Union[list, tuple, np.ndarray] = (12, 6),
