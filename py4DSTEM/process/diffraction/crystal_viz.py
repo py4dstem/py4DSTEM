@@ -1418,7 +1418,7 @@ def plot_fiber_orientation_maps(
     corr_normalize: bool = True,
     show_axes: bool = True,
     medfilt_size: int = None,
-    cmap_out_of_plane: 'string' = 'plasma',
+    cmap_out_of_plane: str = 'plasma',
     leg_size: int = 200,
     figsize: Union[list, tuple, np.ndarray] = (12, 8),
     figbound: Union[list, tuple, np.ndarray] = (0.005, 0.04),
