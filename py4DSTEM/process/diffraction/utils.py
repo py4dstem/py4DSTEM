@@ -133,6 +133,23 @@ def calc_1D_profile(
     int_scale = None,
     normalize_intensity = True,
     ):
+    """
+    Utility function to calculate a 1D histogram from the diffraction vector lengths
+    stored in a Crystal class. 
+
+    Args:
+            k (np.array):                       k coordinates.
+            g_coords (np.array):                Scattering vector lengths g.
+            bragg_intensity_power (np.array):   Scattering vector intensities.
+            remove_origin (bool):               Remove the origin peak from the profile.
+            k_broadening (float):               Broadening applied to full profile.
+            int_scale (np.array):               Either a scalar value mulitiplied into all peak intensities,
+                                                or a vector with 1 value per peak to scale peaks individually.
+            normalize_intensity (bool):         Normalize maximum output value to 1.
+
+        Returns:
+        int_profile (np.array):                 Computed intensity profile
+    """
 
     # init
     int_scale = np.atleast_1d(int_scale)
