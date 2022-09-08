@@ -53,6 +53,7 @@ def show(
     x0=None,
     y0=None,
     a=None,
+    e=None,
     theta=None,
     title=None,
     **kwargs):

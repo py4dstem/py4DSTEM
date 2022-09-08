@@ -96,7 +96,7 @@ def Root_to_h5(root,group):
     ## Write
     grp = group.create_group(root.name)
     grp.attrs.create("emd_group_type",EMD_group_types['Root'])
-    grp.attrs.create("py4dstem_class",metadata.__class__.__name__)
+    grp.attrs.create("py4dstem_class",root.metadata.__class__.__name__)
 
 
 
