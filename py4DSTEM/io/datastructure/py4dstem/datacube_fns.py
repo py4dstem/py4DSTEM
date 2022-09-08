@@ -277,7 +277,7 @@ def get_virtual_image(
     """
     #check for calibration
     if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1': 
+        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys: 
             calibrated = True
         else: 
             calibrated = False
