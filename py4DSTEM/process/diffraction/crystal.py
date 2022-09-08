@@ -745,6 +745,7 @@ class Crystal:
             k_step = 0.005,
             k_broadening = 0.02,
             fit_all_intensities = True,
+            verbose = True,
             plot_result = False,
             figsize: Union[list, tuple, np.ndarray] = (12, 6),
             returnfig = False,
@@ -764,6 +765,7 @@ class Crystal:
             k_broadening (float):               Initial guess for broadening of simulated pattern.
             fit_all_intensities (bool):         Set to true to allow all peak intensities to change.
                                                 False forces single intensity scaling.
+            verbose (bool):                     Output the calibrated pixel size.
             plot_result (bool):                 Plot the resulting fit.
             figsize (list, tuple, np.ndarray)   Figure size of the plot.
             returnfig (bool):                   Return handles figure and axis
@@ -844,6 +846,12 @@ class Crystal:
         bragg_peaks_cali.calibration.set_Q_pixel_size(inv_Ang_per_pixel / scale_pixel_size)
         bragg_peaks_cali.calibration.set_Q_pixel_units('A^-1')
         bragg_peaks_cali.calibrate()
+
+        # Output
+        if verbose:
+            p = bragg_peaks_cali.calibration.get_Q_pixel_size()
+            u = bragg_peaks_cali.calibration.get_Q_pixel_units()
+            print('Calibrated pixel size = ' + str(np.round(p,decimals=8)) + ' ' + u)
 
         # Plotting
         if plot_result:
