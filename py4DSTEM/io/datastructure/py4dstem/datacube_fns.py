@@ -211,8 +211,12 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    shift_corr = False,
-    eager_compute = True,
+    centered = None,
+    calibrated = None,
+    shift_center = None,
+    verbose = True,
+    dask = False,
+    return_mask = False,
     name = 'virtual_image',
     returncalc = True,
     ):
@@ -221,48 +225,77 @@ def get_virtual_image(
     The kind of virtual image is specified by the `mode` argument.
 
     Args:
-        mode (str): must be in
-            ('point','circular','annular','rectangular',
-            'point_centered','circular_centered','annular_centered',
-            'square_centered','point_calibrated','circular_calibrated',
-            'annular_calibrated','square_calibrated','mask').
-            The first four modes represent point, circular,
-            annular, and rectangular detectors with geomtries specified
-            in pixels, relative to the uncalibrated origin, i.e. the upper
-            left corner of the diffraction plane. The next four modes
-            represent point, circular, annular, and square detectors with
-            geometries specified in pixels, relative to the calibrated origin,
-            taken to be the mean posiion of the origin over all scans.
-            The next four modes are identical to these, except that the
-            geometry is specified in q-space units, rather
-            than pixels. In the last mode the geometry is specified with a
-            user provided mask, which can be either boolean or floating point.
-            Floating point masks are normalized by setting their maximum value
-            to 1.
-        geometry (variable): valid entries are determined by the `mode`
+        mode (str)          : defines geometry mode for calculating virtual image
+            options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
             argument, as follows:
-                - 'point': 2-tuple, (qx,qy)
-                - 'circular': nested 2-tuple, ((qx,qy),r)
-                - 'annular': nested 2-tuple, ((qx,qy),(ri,ro))
-                - 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - 'point_centered': 2-tuple, (qx,qy)
-                - 'circular_centered': number, r
-                - 'annular_centered': 2-tuple, (ri,ro)
-                - 'square_centered': number, s
-                - 'point_calibrated': 2-tuple, (qx,qy)
-                - 'circular_calibrated': number, r
-                - 'annular_calibrated': 2-tuple, (ri,ro)
-                - 'square_calibrated': number, s
-                - `mask`: 2D array
-        shift_corr (bool): if True, correct for beam shift. Works only with
-            'c' and 'q' modes - uses the calibrated origin for each pixel,
-            instead of the mean origin position.
-        name (str): the output object's name
-        returncalc (bool): if True, returns the output
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with the
+                    same size as datacube.Qshape
+        centered (bool)     : if False, the origin is in the upper left corner.
+             If True, the mean measured origin in the datacube calibrations
+             is set as center. The measured origin is set with datacube.calibration.set_origin()
+             In this case, for example, a centered bright field image could be defined 
+             by geometry = ((0,0), R). For `mode="mask"`, has no effect. Default is None and will 
+             set to True if the origin has been set.
+        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
+            The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
+            Setting `calibrated=True` automatically performs centering, regardless of the
+            value of the `centered` argument. For `mode="mask"`, has no effect. Default is None
+            and will set to True if the calibration has been set.
+        shift_center (bool) : if True, the mask is shifted at each real space position to
+            account for any shifting of the origin of the diffraction images. The datacube's
+            calibration['origin'] parameter must be set (centered = True). The shift applied to each 
+            pattern is the difference between the local origin position and the mean origin position
+            over all patterns, rounded to the nearest integer for speed. Default is None and will set 
+            to True if centered == True. 
+        verbose (bool)      : if True, show progress bar
+        dask (bool)         : if True, use dask arrays
+        return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
+            *not* generate or return a virtual image, instead returning the mask that would be
+            used in virtual image computation for any call to this function where
+            `shift_center = False`.  Otherwise, must be a 2-tuple of integers corresponding
+            to a scan position (rx,ry); in this case, returns the mask that would be used for
+            virtual image computation at this scan position with `shift_center` set to `True`.
+            Setting return_mask to True does not add anything to the datacube's tree.
+        name (str)          : the output object's name
+        returncalc (bool)   : if True, returns the output
 
     Returns:
         (Optional): if returncalc is True, returns the VirtualImage
     """
+    #check for calibration
+    if calibrated is None:
+        if self.calibration['Q_pixel_units'] == 'A^-1': 
+            calibrated = True
+        else: 
+            calibrated = False
+
+    #check for centered 
+    if centered is None:
+        if self.calibration.get_origin(): 
+            centered = True
+        else: 
+            centered = False
+
+    # logic to determine shift_center
+    if shift_center is None: 
+        if centered: 
+            shift_center = True
+            print ('note: setting `shift_center` to True')
+        else: 
+            shift_center = False 
 
     # perform computation
     from py4DSTEM.process.virtualimage import get_virtual_image
@@ -270,9 +303,17 @@ def get_virtual_image(
         self,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
-        eager_compute = eager_compute
+        centered = centered,
+        calibrated = calibrated,
+        shift_center = shift_center,
+        verbose = verbose,
+        dask = dask,
+        return_mask = return_mask
     )
+
+    # if a mask is requested, skip the remaining i/o functionality
+    if return_mask is not False:
+        return im
 
     # wrap with a py4dstem class
     im = VirtualImage(
@@ -280,7 +321,7 @@ def get_virtual_image(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr
+        shift_center = shift_center,
     )
 
     # add to the tree
@@ -289,10 +330,6 @@ def get_virtual_image(
     # return
     if returncalc:
         return im
-
-
-
-
 
 # Probe
 
@@ -332,7 +369,7 @@ from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
 def get_probe_size(
     self,
     mode = None,
-    returncal = True, 
+    returncal = True,
     ** kwargs,
     ):
     """
@@ -340,8 +377,8 @@ def get_probe_size(
     """
     #perform computation 
     from py4DSTEM.process.calibration import get_probe_size
-    
-    if mode is None: 
+
+    if mode is None:
         assert 'no mode speficied, using mean diffraciton pattern'
         assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
         DP = self.tree['dp_mean'].data
@@ -574,11 +611,11 @@ def get_beamstop_mask(
     ):
     """
     This function uses the mean diffraction pattern plus a threshold to create a beamstop mask.
-    
+
     Args:
         threshold: (float)  Value from 0 to 1 defining initial threshold for beamstop mask,
-                            taken from the sorted intensity values - 0 is the dimmest
-                            pixel, while 1 uses the brighted pixels.
+            taken from the sorted intensity values - 0 is the dimmest
+            pixel, while 1 uses the brighted pixels.
         distance_edge: (float)  How many pixels to expand the mask.
         include_edges: (bool)   If set to True, edge pixels will be included in the mask.
         name: (string)          Name of the output array.

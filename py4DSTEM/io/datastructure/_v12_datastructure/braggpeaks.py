@@ -393,19 +393,19 @@ def save_braggpeaks_group(group, braggpeaks):
     Expects an open .h5 group and a BraggPeaks instance; saves to the group
     """
     try:
-        n_coords = len(pointlistarray.dtype.names)
+        n_coords = len(braggpeaks.dtype.names)
     except:
         n_coords = 1
-    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("calibrations", np.string_(str(pointlistarray.dtype)))
+    #coords = np.string_(str([coord for coord in braggpeaks.dtype.names]))
+    group.attrs.create("calibrations", np.string_(str(braggpeaks.dtype)))
     group.attrs.create("dimensions", n_coords)
 
-    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
+    pointlist_dtype = h5py.special_dtype(vlen=braggpeaks.dtype)
     name = "data"
-    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
+    dset = group.create_dataset(name,braggpeaks.shape,pointlist_dtype)
 
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        dset[i,j] = pointlistarray.get_pointlist(i,j).data
+        dset[i,j] = braggpeaks.get_pointlist(i,j).data
 
 def get_pointlistarray_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,

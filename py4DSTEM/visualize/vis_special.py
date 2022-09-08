@@ -765,3 +765,97 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
+def show_complex(
+    ar_complex,
+    vmin = None,
+    vmax = None,
+    cbar = True,
+    returnfig = False,
+    **kwargs
+    ):
+    '''
+    Function to plot complex arrays
+    
+    Args: 
+        ar_complex (2d array)   : complex array to be plotted
+        vmin (float, optional)  : minimum absolute value 
+        vmax (float, optional)  : maximum absolute value 
+        cbar (bool)             : if True, include color wheel
+        returnfig (bool)        : if True, the function returns the tuple (figure,axis)
+
+    Returns:
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, return the figure and the axis.
+    '''
+
+    #define min and max
+    amp = np.abs(ar_complex)
+    if vmin is None: 
+        vmin = np.min(amp)
+    if vmax is None: 
+        vmax = np.max(amp)
+    
+    from matplotlib.colors import hsv_to_rgb
+
+    #function for converting to complex colors
+    def Complex2HSV(z, vmin, vmax, hue_start=90):
+        #based on stack overflow 17044052
+        amp = np.abs(z)
+        amp = np.where(amp < vmin, vmin, amp)
+        amp = np.where(amp > vmax, vmax, amp)
+        
+        ph = np.angle(z, deg=1) + hue_start
+        
+        h = (ph % 360) / 360
+        s = 0.85 * np.ones_like(h)
+        v = (amp -vmin) / (vmax - vmin)
+        
+        return hsv_to_rgb(np.dstack((h,s,v)))
+
+    #convert to complex colors
+    rgb = Complex2HSV(ar_complex, vmin, vmax)
+    
+    #plot
+    fig, ax = show(
+        rgb,
+        returnfig = True,
+        **kwargs
+    )
+
+    #add color bar
+    if cbar == True:
+        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+        
+        #create wheel
+        AA = 1000
+        kx = np.fft.fftshift(np.fft.fftfreq(AA))
+        ky = np.fft.fftshift(np.fft.fftfreq(AA))
+        kya,kxa = np.meshgrid(ky,kx)
+        kra = (kya**2+kxa**2)**0.5
+        ktheta = np.arctan2(-kxa,kya)
+        ktheta = kra*np.exp(1j*ktheta)
+        
+        #convert to hsv
+        rgb = Complex2HSV(ktheta, 0, 0.4)
+        ind = kra > 0.4
+        rgb[ind] = [1,1,1]
+        
+        #plot
+        ax0.imshow(
+            rgb
+        )
+
+        #add axes
+        ax0.axhline(AA/2, 0, AA, color = 'k')
+        ax0.axvline(AA/2, 0, AA, color = 'k')
+        ax0.axis('off')
+
+        label_size = 16
+
+        ax0.text(AA, AA/2, 1, fontsize = label_size)
+        ax0.text(AA/2, 0, 'i', fontsize = label_size)
+        ax0.text(AA/2, AA, '-i', fontsize = label_size)
+        ax0.text(0, AA/2, -1, fontsize = label_size)
+
+    if returnfig == True: 
+        return fig, ax

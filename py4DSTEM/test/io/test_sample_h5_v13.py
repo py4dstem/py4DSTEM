@@ -52,7 +52,7 @@ datacube.get_probe_size()
 datacube.get_probe_kernel(
     edge = 'sigmoid',
     ri = 0,
-    ro = 4*datacube.calibrations.get_alpha())
+    ro = 4*datacube.calibrations.get_alpha(),
 )
 
 # Find bragg scattering
@@ -85,7 +85,7 @@ if vis:
 
     # Selected scan positions
     datacube.show(
-        'BF'
+        'BF',
         points=np.array(positions)
     )
 
