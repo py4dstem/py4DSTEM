@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
+from copy import deepcopy
+from scipy.optimize import curve_fit
 
 from py4DSTEM.io.datastructure import PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
@@ -11,12 +13,12 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
-from py4DSTEM.process.diffraction.utils import Orientation
+from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
 
 
 class Crystal:
     """
-    A class storing a single crystal structure, and associated diffraction data.
+    A class storing a singl ecrystal structure, and associated diffraction data.
 
     """
 
@@ -731,8 +733,215 @@ class Crystal:
         if return_calc == True: 
             return radii_unique, intensity_unique
 
-    # Vector conversions and other utilities for Crystal classes
 
+    def calibrate_pixel_size(
+            self,
+            bragg_peaks,
+            scale_pixel_size = 1.0,
+            bragg_k_power = 1.0,
+            bragg_intensity_power = 1.0,
+            k_min = 0.0,
+            k_max = None,
+            k_step = 0.005,
+            k_power = 0.0,
+            k_broadening = 0.01,
+            fit_all_intensities = True,
+            plot_result = False,
+            figsize: Union[list, tuple, np.ndarray] = (12, 6),
+    ):
+        """
+        Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
+        and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
+
+        Args:
+
+
+        Returns:
+
+        """
+
+        # k coordinates    
+        if k_max is None:
+            k_max = self.k_max
+        k = np.arange(k_min,k_max+k_step,k_step)
+        k_num = k.shape[0]
+
+        # experimental data histogram
+        bigpl = np.concatenate([
+            bragg_peaks.vectors[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
+        qr = np.sqrt(bigpl['qx']**2 + bigpl['qy']**2)
+        int_meas = bigpl['intensity']
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step;
+        kf = np.floor(k_px).astype('int')
+        dk = k_px - kf;
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype('int'), 
+            weights = (1-dk[sub])*int_meas[sub], 
+            minlength = k_num)
+        sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype('int'), 
+            weights = dk[sub]*int_meas[sub], 
+            minlength = k_num)
+        int_exp = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
+        int_exp /= np.max(int_exp)
+
+        # Perform fitting
+        def fit_profile(
+            k,
+            *coefs,
+            ):
+            scale_pixel_size = coefs[0]
+            k_broadening = coefs[1]
+            int_scale = coefs[2:]
+
+            int_sf = calc_1D_profile(
+                k,
+                self.g_vec_leng * scale_pixel_size,
+                self.struct_factors_int,
+                k_broadening = k_broadening,
+                int_scale = int_scale,
+                normalize_intensity = False,
+            ) 
+            return int_sf
+
+        if fit_all_intensities:
+            coefs = (
+                scale_pixel_size, 
+                k_broadening, 
+                *tuple(np.ones(self.g_vec_leng.shape[0])))
+            popt, pcov = curve_fit(fit_profile, k, int_exp , p0=coefs)
+        else:
+            coefs = (scale_pixel_size, k_broadening, 1.0)
+            popt, pcov = curve_fit(fit_profile, k, int_exp , p0=coefs)
+
+        scale_pixel_size = popt[0]
+        k_broadening = popt[1]
+        int_scale = np.array(popt[2:])
+
+
+        # print(popt)
+
+
+        # # # test = np.ones(self.g_vec_leng.shape[0])
+        # # # print(test.shape)
+        # def fit_profile(
+        #     k, 
+        #     scale_pixel_size = scale_pixel_size, 
+        #     k_broadening = 0.0, 
+
+        #     int_scale = np.ones(self.g_vec_leng.shape[0]),
+        #     ):
+        #     int_sf = calc_1D_profile(
+        #         k,
+        #         self.g_vec_leng * scale_pixel_size,
+        #         self.struct_factors_int,
+        #         k_broadening = k_broadening,
+        #         int_scale = int_scale,
+        #         normalize_intensity = False,
+        #     ) 
+        #     return int_sf
+        # # guesses = (scale_pixel_size,0.0,np.ones(self.g_vec_leng.shape[0],dtype='float'))
+        # popt, pcov = curve_fit(fit_profile, k, int_exp, guesses)
+
+        # print(popt)
+        # scale_pixel_size = popt[0]
+        # k_broadening = popt[1]
+        # int_scale_all = popt[2]
+
+        # Make a copy of bragg_peaks
+        bragg_peaks_cali = deepcopy(bragg_peaks)
+        # Apply correction
+        inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
+        bragg_peaks_cali.calibration.set_Q_pixel_size(inv_Ang_per_pixel / scale_pixel_size)
+        bragg_peaks_cali.calibration.set_Q_pixel_units('A^-1')
+        bragg_peaks_cali.calibrate()
+
+        # Plotting
+        if plot_result:
+            self.plot_scattering_intensity(
+                bragg_peaks = bragg_peaks_cali,
+                figsize = figsize,
+                k_broadening = k_broadening,
+                int_scale = int_scale,
+                bragg_k_power = bragg_k_power,
+                bragg_intensity_power = bragg_intensity_power,
+            )
+
+        return bragg_peaks_cali
+
+
+
+        # # init
+        # scale = 1.0
+
+        # # Use a Fourier log transform to guess the initial scale
+        # if guess_initial_scale:
+        #     # Generate SF profile
+        #     int_sf = calc_1D_profile(
+        #         k,
+        #         self.g_vec_leng,
+        #         self.struct_factors_int,
+        #         remove_origin = True,
+        #     )
+
+        #     # Resample intensities onto log scale
+        #     # ind_start = np.round(k.shape[0]*0.1).astype('int')
+        #     ind_start = 1
+        #     k_log = np.logspace(np.log10(k[ind_start]),np.log10(k[-1]),k.shape[0]-ind_start)
+
+        #     int_exp_log = np.interp( k[ind_start:], k_log, int_exp[ind_start:]);
+        #     int_sf_log = np.interp(k[ind_start:], k_log, int_sf[ind_start:]);
+
+        #     # Calculate log-resampled FFTs
+        #     sig_log_fft = np.real(
+        #         np.fft.ifft(np.fft.fft(int_exp_log) * \
+        #             np.conj(np.fft.fft(int_exp_log))))
+
+
+
+        # #     # print(k[ind_start],k_log[0])
+        # #     # print(k[-1],k_log[-1])
+        # #     print(k[ind_start:].shape,k_log.shape)
+
+        # fig, ax = plt.subplots(1, 1, figsize=(6,6))
+        # ax.plot(
+        #     np.arange(sig_log_fft.shape[0]),
+        #     sig_log_fft,
+        #     )
+        # # ax.fill_between(
+        # #     k[ind_start:],
+        # #     int_exp_log,
+        # #     facecolor=(1.0, 0.0, 0.0, 0.5))
+        # # # ax.plot(
+        # # #     k, 
+        # # #     int_exp_plot,
+        # # #     c=(1.0,0.4,0.4,1.0),
+        # # #     linewidth=2)
+        # # ax.plot(
+        # #     k[ind_start:],
+        # #     int_sf_log,
+        # #     linewidth=2,
+        # #     c=(0.0, 0.7, 1.0, 0.5))
+        # # # ax.plot(
+        # # #     k, 
+        # # #     int_sf_plot,
+        # # #     c=(0.0, 0.0, 0.0, 0.5),
+        # # #     linewidth=2)
+
+        # # # Appearance
+        # # ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
+        # # ax.set_yticks([])
+        # # ax.set_ylabel("Magnitude", fontsize=14)
+
+
+
+    # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
         vec_lattice = self.lat_inv @ vec_cartesian
         return vec_lattice / np.linalg.norm(vec_lattice)
