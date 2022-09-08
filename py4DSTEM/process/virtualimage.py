@@ -4,8 +4,10 @@ import numpy as np
 import dask.array as da
 import h5py
 import warnings
+from numbers import Number
 
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import DataCube
 
 
 
@@ -106,7 +108,7 @@ def get_virtual_image(
 
     # select a function
     dtype = _infer_dtype(datacube)
-    fn_dict = _make_function_dict()
+    fn_dict = _make_function_dict(g)
     fn = fn_dict[mode][shift_corr][dtype]
 
 
@@ -146,7 +148,7 @@ def _parse_mode_dict():
     }
 
 
-def _make_function_dict():
+def _make_function_dict(g):
     """
     Creates a dictionary for selecting an imaging function
     """
@@ -559,6 +561,7 @@ def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0
     # explicitly check the diffraction pattern is 2D should be caught above but just incase,  catch before plotting 
     assert dp.ndim == 2, "Diffraction pattern (dp) must be a 2D slice"
 
+    import matplotlib.pyplot as plt
     #plot the diffraction pattern
     plt.imshow(dp, cmap='Greys', *args,**kwargs)
     #plot the mask overlay
