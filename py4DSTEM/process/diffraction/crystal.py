@@ -18,7 +18,7 @@ from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
 
 class Crystal:
     """
-    A class storing a singl ecrystal structure, and associated diffraction data.
+    A class storing a single crystal structure, and associated diffraction data.
 
     """
 
@@ -756,15 +756,20 @@ class Crystal:
 
         Args:
             bragg_peaks (BraggVectors):         Input Bragg vectors.
-            scale_pixel_size (float):           Initial guess for pixel size scaling.
-            bragg_k_power (float):              Input Bragg vectors multiplied k**bragg_k_power  
-            bragg_intensity_power (float):      Input Bragg vectors are raised power **bragg_intensity_power.
-            k_min (float):                      min k value for fitting range.
-            k_max (float):                      max k value for fitting range.
-            k_step (float):                     step size of k in fitting range.
-            k_broadening (float):               Initial guess for broadening of simulated pattern.
-            fit_all_intensities (bool):         Set to true to allow all peak intensities to change.
-                                                False forces single intensity scaling.
+            scale_pixel_size (float):           Initial guess for scaling of the existing pixel size
+                                                If the pixel size is currently uncalibrated, this is a
+                                                guess of the pixel size in Å^-1. If the pixel size is already
+                                                (approximately) calibrated, this is the scaling factor to
+                                                correct that existing calibration.
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power 
+                                                to change the weighting of longer scattering vectors 
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
+            k_broadening (float):               Initial guess for Gaussian broadening of simulated pattern (Å^-1)
+            fit_all_intensities (bool):         Set to true to allow all peak intensities to change independently
+                                                False forces a single intensity scaling.
             verbose (bool):                     Output the calibrated pixel size.
             plot_result (bool):                 Plot the resulting fit.
             figsize (list, tuple, np.ndarray)   Figure size of the plot.
@@ -776,10 +781,12 @@ class Crystal:
 
         """
 
+        assert hasattr(self, "struct_factors"), "Compute structure factors first..."
+
         # k coordinates    
         if k_max is None:
             k_max = self.k_max
-        k = np.arange(k_min,k_max+k_step,k_step)
+        k = np.arange(k_min, k_max + k_step, k_step)
         k_num = k.shape[0]
 
         # experimental data histogram
@@ -808,10 +815,7 @@ class Crystal:
         int_exp /= np.max(int_exp)
 
         # Perform fitting
-        def fit_profile(
-            k,
-            *coefs,
-            ):
+        def fit_profile(k, *coefs):
             scale_pixel_size = coefs[0]
             k_broadening = coefs[1]
             int_scale = coefs[2:]
