@@ -57,20 +57,20 @@ def plot_structure(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_lattice,
-            proj_x_lattice,
-            zone_axis_cartesian,
-            proj_x_cartesian)
+            zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+        )
 
     # matplotlib camera orientation
-    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
-        el = 90.0 * np.sign(orientation_matrix[2,2])
+    if np.abs(abs(orientation_matrix[2, 2]) - 1) < 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2, 2])
     else:
-        el = (np.rad2deg(np.arctan(orientation_matrix[2,2] \
-            / np.sqrt(orientation_matrix[0,2] ** 2 
-            + orientation_matrix[1,2] ** 2)))
+        el = np.rad2deg(
+            np.arctan(
+                orientation_matrix[2, 2]
+                / np.sqrt(orientation_matrix[0, 2] ** 2 + orientation_matrix[1, 2] ** 2)
+            )
         )
-    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
+    az = np.rad2deg(np.arctan2(orientation_matrix[0, 2], orientation_matrix[1, 2]))
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
     # init_y = np.cross(proj_z,np.array([0,1e-6,0]))
@@ -109,16 +109,9 @@ def plot_structure(
     # 3D plotting
     fig = plt.figure(figsize=figsize)
     if perspective_axes:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az)
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az)
     else:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az,
-            proj_type='ortho')
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az, proj_type="ortho")
 
     # unit cell
     p = np.vstack([[0, 0, 0], u, u + v, v, w, u + w, u + v + w, v + w])
@@ -229,21 +222,20 @@ def plot_structure_factors(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_lattice,
-            proj_x_lattice,
-            zone_axis_cartesian,
-            proj_x_cartesian)
+            zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+        )
 
     # matplotlib camera orientation
-    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
-        el = 90.0 * np.sign(orientation_matrix[2,2])
+    if np.abs(abs(orientation_matrix[2, 2]) - 1) < 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2, 2])
     else:
-        el = (np.rad2deg(np.arctan(
-            orientation_matrix[2,2] / np.sqrt(
-            orientation_matrix[0,2] ** 2 +
-            orientation_matrix[1,2] ** 2)))
+        el = np.rad2deg(
+            np.arctan(
+                orientation_matrix[2, 2]
+                / np.sqrt(orientation_matrix[0, 2] ** 2 + orientation_matrix[1, 2] ** 2)
+            )
         )
-    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
+    az = np.rad2deg(np.arctan2(orientation_matrix[0, 2], orientation_matrix[1, 2]))
 
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
@@ -257,16 +249,9 @@ def plot_structure_factors(
     # 3D plotting
     fig = plt.figure(figsize=figsize)
     if perspective_axes:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az)
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az)
     else:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az,
-            proj_type='ortho')
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az, proj_type="ortho")
 
     # plot all structure factor points
     ax.scatter(
@@ -300,23 +285,23 @@ def plot_structure_factors(
 
 def plot_scattering_intensity(
     self,
-    k_min = 0.0,
-    k_max = None,
-    k_step = 0.001,
-    k_broadening = 0.0,
-    k_power_scale = 0.0,
-    int_power_scale = 0.5,
-    int_scale = 1.0,
-    remove_origin = True,
-    bragg_peaks = None,
-    bragg_k_power = 0.0,
-    bragg_intensity_power = 1.0,
-    bragg_k_broadening = 0.005,
+    k_min=0.0,
+    k_max=None,
+    k_step=0.001,
+    k_broadening=0.0,
+    k_power_scale=0.0,
+    int_power_scale=0.5,
+    int_scale=1.0,
+    remove_origin=True,
+    bragg_peaks=None,
+    bragg_k_power=0.0,
+    bragg_intensity_power=1.0,
+    bragg_k_broadening=0.005,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
 ):
     """
-    1D plot of the structure factors 
+    1D plot of the structure factors
 
     Args:
         k_min (float):                      min k value for profile range.
@@ -338,83 +323,78 @@ def plot_scattering_intensity(
         fig, ax                     (optional) figure and axes handles
     """
 
-    # k coordinates    
+    # k coordinates
     if k_max is None:
         k_max = self.k_max
-    k = np.arange(k_min,k_max+k_step,k_step)
+    k = np.arange(k_min, k_max + k_step, k_step)
     k_num = k.shape[0]
 
     # get discrete plot from structure factor amplitudes
     int_sf_plot = calc_1D_profile(
         k,
         self.g_vec_leng,
-        (self.struct_factors_int**int_power_scale) * (self.g_vec_leng**k_power_scale),
-        remove_origin = True,
-        k_broadening = k_broadening,
-        int_scale = int_scale,
+        (self.struct_factors_int ** int_power_scale)
+        * (self.g_vec_leng ** k_power_scale),
+        remove_origin=True,
+        k_broadening=k_broadening,
+        int_scale=int_scale,
     )
-
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
         # bigpl = np.concatenate([
         #     bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
-        bigpl = np.concatenate([
-            bragg_peaks.vectors[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
-        qr = np.sqrt(bigpl['qx']**2 + bigpl['qy']**2)
-        int_meas = bigpl['intensity']
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.vectors[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
+            ]
+        )
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
 
         # get discrete plot from structure factor amplitudes
         int_exp = np.zeros_like(k)
-        k_px = (qr - k_min) / k_step;
-        kf = np.floor(k_px).astype('int')
-        dk = k_px - kf;
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
 
         sub = np.logical_and(kf >= 0, kf < k_num)
         int_exp = np.bincount(
-            np.floor(k_px[sub]).astype('int'), 
-            weights = (1-dk[sub])*int_meas[sub], 
-            minlength = k_num)
-        sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
         int_exp += np.bincount(
-            np.floor(k_px[sub] + 1).astype('int'), 
-            weights = dk[sub]*int_meas[sub], 
-            minlength = k_num)
-        
-        if bragg_k_broadening > 0.0:
-            int_exp = gaussian_filter(int_exp, bragg_k_broadening/k_step, mode='constant')
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
 
-        int_exp_plot = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
+        if bragg_k_broadening > 0.0:
+            int_exp = gaussian_filter(
+                int_exp, bragg_k_broadening / k_step, mode="constant"
+            )
+
+        int_exp_plot = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
         int_exp_plot /= np.max(int_exp_plot)
 
     # Plotting
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     if bragg_peaks is not None:
-        ax.fill_between(
-            k,
-            int_exp_plot,
-            facecolor=(1.0, 0.0, 0.0, 0.2))
-        ax.plot(
-            k, 
-            int_exp_plot,
-            c=(1.0,0.0,0.0,0.8),
-            linewidth=2)
-    ax.fill_between(
-        k,
-        int_sf_plot,
-        facecolor=(0.0, 0.0, 0.0, 0.2))
-    ax.plot(
-        k, 
-        int_sf_plot,
-        c=(0.0, 0.0, 0.0, 0.8),
-        linewidth=2)
+        ax.fill_between(k, int_exp_plot, facecolor=(1.0, 0.0, 0.0, 0.2))
+        ax.plot(k, int_exp_plot, c=(1.0, 0.0, 0.0, 0.8), linewidth=2)
+    ax.fill_between(k, int_sf_plot, facecolor=(0.0, 0.0, 0.0, 0.2))
+    ax.plot(k, int_sf_plot, c=(0.0, 0.0, 0.0, 0.8), linewidth=2)
     # Appearance
     ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
     ax.set_yticks([])
     ax.set_ylabel("Magnitude", fontsize=14)
 
     if returnfig:
-        return fig,ax
+        return fig, ax
 
 
 def plot_orientation_zones(
@@ -422,7 +402,7 @@ def plot_orientation_zones(
     azim_elev: Optional[Union[list, tuple, np.ndarray]] = None,
     proj_dir_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
     proj_dir_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
-    tol_den = 10,
+    tol_den=10,
     marker_size: float = 20,
     plot_limit: Union[list, tuple, np.ndarray] = np.array([-1.1, 1.1]),
     figsize: Union[list, tuple, np.ndarray] = (8, 8),
@@ -448,13 +428,13 @@ def plot_orientation_zones(
     """
 
     if azim_elev is not None:
-        proj_dir =  azim_elev
+        proj_dir = azim_elev
     elif proj_dir_lattice is not None:
-        proj_dir =  self.lattice_to_cartesian(proj_dir_lattice)
+        proj_dir = self.lattice_to_cartesian(proj_dir_lattice)
     elif proj_dir_cartesian is not None:
         proj_dir = proj_dir_cartesian
     else:
-        proj_dir = np.mean(self.orientation_zone_axis_range,axis=0)
+        proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
 
     if np.size(proj_dir) == 2:
         el = proj_dir[0]
@@ -525,36 +505,38 @@ def plot_orientation_zones(
     )
 
     # zone axis range labels
-    if np.abs(self.cell[5]-120.0) < 1e-6:
+    if np.abs(self.cell[5] - 120.0) < 1e-6:
         label_0 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+            ),
+            tol_den=tol_den,
+        )
         label_1 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+            ),
+            tol_den=tol_den,
+        )
         label_2 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+            ),
+            tol_den=tol_den,
+        )
     else:
         label_0 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :]),
-            tol_den=tol_den)
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :]),
+            tol_den=tol_den,
+        )
         label_1 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :]),
-            tol_den=tol_den)
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :]),
+            tol_den=tol_den,
+        )
         label_2 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :]),
-            tol_den=tol_den)
-
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :]),
+            tol_den=tol_den,
+        )
 
     # # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
     # # if self.cartesian_directions:
@@ -565,10 +547,7 @@ def plot_orientation_zones(
     # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     # label_0 = np.round(label_0, decimals=3)
 
-    if (
-        self.orientation_full is False and
-        self.orientation_half is False
-        ):
+    if self.orientation_full is False and self.orientation_half is False:
         # # label_1 = self.cartesian_to_crystal(
         # #     self.orientation_zone_axis_range[1, :]
         # #     )
@@ -634,10 +613,7 @@ def plot_orientation_zones(
         ha="center",
         **text_params,
     )
-    if (
-        self.orientation_full is False and
-        self.orientation_half is False
-    ):
+    if self.orientation_full is False and self.orientation_half is False:
         ax.text(
             self.orientation_vecs[inds[1], 1] * text_scale_pos,
             self.orientation_vecs[inds[1], 0] * text_scale_pos,
@@ -689,7 +665,7 @@ def plot_orientation_plan(
     zone_axis_cartesian: Optional[np.ndarray] = None,
     figsize: Union[list, tuple, np.ndarray] = (14, 6),
     returnfig: bool = False,
-    ):
+):
     """
     3D scatter plot of the structure factors using magnitude^2,
     i.e. intensity.
@@ -710,11 +686,11 @@ def plot_orientation_plan(
             zone_axis_lattice=zone_axis_lattice,
             proj_x_lattice=None,
             zone_axis_cartesian=zone_axis_cartesian,
-            proj_x_cartesian=None)
-        index_plot = np.argmin(np.sum(np.abs(
-            self.orientation_vecs - orientation_matrix[:,2]), axis=1)) 
-
-
+            proj_x_cartesian=None,
+        )
+        index_plot = np.argmin(
+            np.sum(np.abs(self.orientation_vecs - orientation_matrix[:, 2]), axis=1)
+        )
 
     # if zone_axis_plot is not None:
     #     zone_axis_plot = np.array(zone_axis_plot, dtype="float")
@@ -765,9 +741,9 @@ def plot_orientation_plan(
     # im_plot = self.orientation_ref[index_plot, :, :] / self.orientation_ref_max
     if self.CUDA:
         im_plot = (
-            np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :].get(), axis=1)).astype(
-                "float"
-            )
+            np.real(
+                np.fft.ifft(self.orientation_ref[index_plot, :, :].get(), axis=1)
+            ).astype("float")
             / self.orientation_ref_max
         )
     else:
@@ -846,7 +822,7 @@ def plot_diffraction_pattern(
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
-    ):
+):
     """
     2D scatter plot of the Bragg peaks
 
@@ -926,9 +902,9 @@ def plot_diffraction_pattern(
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
     else:
-        k_range = 1.05*np.sqrt(np.max(
-            bragg_peaks.data["qx"]**2 + 
-            bragg_peaks.data["qy"]**2))
+        k_range = 1.05 * np.sqrt(
+            np.max(bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2)
+        )
         ax.set_xlim((-k_range, k_range))
         ax.set_ylim((-k_range, k_range))
 
@@ -985,12 +961,12 @@ def plot_orientation_maps(
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
     show_axes: bool = True,
-    camera_dist = None,
-    plot_limit = None,
-    swap_axes_xy_limits = False,
+    camera_dist=None,
+    plot_limit=None,
+    swap_axes_xy_limits=False,
     returnfig: bool = False,
-    progress_bar = False,
-    ):
+    progress_bar=False,
+):
     """
     Plot the orientation maps.
 
@@ -1034,7 +1010,7 @@ def plot_orientation_maps(
     )
 
     # Generate reflection operators for symmetry reduction
-    A_ref = np.zeros((3,3,3))
+    A_ref = np.zeros((3, 3, 3))
     # A_ref[0] = np.array([
     #     [-1, 0, 0],
     #     [ 0,-1. 0],
@@ -1042,39 +1018,44 @@ def plot_orientation_maps(
     for a0 in range(3):
         if a0 == 0:
             v = np.cross(
-                self.orientation_zone_axis_range[1,:],
-                self.orientation_zone_axis_range[0,:])
+                self.orientation_zone_axis_range[1, :],
+                self.orientation_zone_axis_range[0, :],
+            )
         elif a0 == 1:
             v = np.cross(
-                self.orientation_zone_axis_range[2,:],
-                self.orientation_zone_axis_range[1,:])
+                self.orientation_zone_axis_range[2, :],
+                self.orientation_zone_axis_range[1, :],
+            )
         elif a0 == 2:
             v = np.cross(
-                self.orientation_zone_axis_range[0,:],
-                self.orientation_zone_axis_range[2,:])
+                self.orientation_zone_axis_range[0, :],
+                self.orientation_zone_axis_range[2, :],
+            )
         v = v / np.linalg.norm(v)
 
-        A_ref[a0] = np.array([
-            [ 1-2*v[0]**2, -2*v[0]*v[1], -2*v[0]*v[2]],
-            [-2*v[0]*v[1],  1-2*v[1]**2, -2*v[1]*v[2]],
-            [-2*v[0]*v[2], -2*v[1]*v[2],  1-2*v[2]**2],
-            ])
+        A_ref[a0] = np.array(
+            [
+                [1 - 2 * v[0] ** 2, -2 * v[0] * v[1], -2 * v[0] * v[2]],
+                [-2 * v[0] * v[1], 1 - 2 * v[1] ** 2, -2 * v[1] * v[2]],
+                [-2 * v[0] * v[2], -2 * v[1] * v[2], 1 - 2 * v[2] ** 2],
+            ]
+        )
 
     # init
     dir_in_plane = np.deg2rad(dir_in_plane_degrees)
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
-    basis_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    basis_y = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    basis_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    rgb_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    rgb_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    rgb_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
 
-    # Basis for fitting orientation projections 
+    # Basis for fitting orientation projections
     A = np.linalg.inv(self.orientation_zone_axis_range).T
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,orientation_ind]
+    corr = orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
@@ -1285,7 +1266,7 @@ def plot_orientation_maps(
     else:
         ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
         ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
-        ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])        
+        ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
     axisEqual3D(ax_l)
     if camera_dist is not None:
         ax_l.dist = camera_dist
@@ -1418,12 +1399,12 @@ def plot_fiber_orientation_maps(
     corr_normalize: bool = True,
     show_axes: bool = True,
     medfilt_size: int = None,
-    cmap_out_of_plane: str = 'plasma',
+    cmap_out_of_plane: str = "plasma",
     leg_size: int = 200,
     figsize: Union[list, tuple, np.ndarray] = (12, 8),
     figbound: Union[list, tuple, np.ndarray] = (0.005, 0.04),
     returnfig: bool = False,
-    ):
+):
     """
     Generate and plot the orientation maps from fiber texture plots.
 
@@ -1449,24 +1430,25 @@ def plot_fiber_orientation_maps(
     """
 
     # angular colormap
-    basis = np.array([
-        [1.0, 0.2, 0.2],
-        [1.0, 0.7, 0.0],
-        [0.0, 0.8, 0.0],
-        [0.0, 0.8, 1.0],
-        [0.2, 0.4, 1.0],
-        [0.9, 0.2, 1.0],
-    ])
+    basis = np.array(
+        [
+            [1.0, 0.2, 0.2],
+            [1.0, 0.7, 0.0],
+            [0.0, 0.8, 0.0],
+            [0.0, 0.8, 1.0],
+            [0.2, 0.4, 1.0],
+            [0.9, 0.2, 1.0],
+        ]
+    )
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,orientation_ind]
+    corr = orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     if medfilt_size is not None:
-        corr = medfilt(corr,medfilt_size)
+        corr = medfilt(corr, medfilt_size)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
     mask = np.clip(mask, 0, 1)
-
 
     # Get symmetry
     if symmetry_order is None:
@@ -1475,63 +1457,71 @@ def plot_fiber_orientation_maps(
         symmetry_order = 2 * symmetry_order
 
     # Generate out-of-plane orientation signal
-    ang_op = orientation_map.angles[:,:,orientation_ind,1]
+    ang_op = orientation_map.angles[:, :, orientation_ind, 1]
     if self.orientation_fiber_angles[0] > 0:
         sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
     else:
         sig_op = ang_op
     if medfilt_size is not None:
-        sig_op = medfilt(sig_op,medfilt_size)
+        sig_op = medfilt(sig_op, medfilt_size)
 
     # Generate in-plane orientation signal
-    ang_ip = orientation_map.angles[:,:,orientation_ind,0] \
-        + orientation_map.angles[:,:,orientation_ind,2]
-    sig_ip = np.mod((symmetry_order/(2*np.pi))*ang_ip,1.0)
+    ang_ip = (
+        orientation_map.angles[:, :, orientation_ind, 0]
+        + orientation_map.angles[:, :, orientation_ind, 2]
+    )
+    sig_ip = np.mod((symmetry_order / (2 * np.pi)) * ang_ip, 1.0)
     if symmetry_mirror:
-        sub = np.sin((symmetry_order/2)*ang_ip) < 0
-        sig_ip[sub] = np.mod(-sig_ip[sub],1)
-    sig_ip = np.mod(sig_ip - (dir_in_plane_degrees/360.*symmetry_order),1.)
+        sub = np.sin((symmetry_order / 2) * ang_ip) < 0
+        sig_ip[sub] = np.mod(-sig_ip[sub], 1)
+    sig_ip = np.mod(sig_ip - (dir_in_plane_degrees / 360.0 * symmetry_order), 1.0)
     if medfilt_size is not None:
-        sig_ip = medfilt(sig_ip,medfilt_size)
+        sig_ip = medfilt(sig_ip, medfilt_size)
 
     # out-of-plane RGB images
     # im_op = plt.cm.blues(sig_op)
     cmap = plt.get_cmap(cmap_out_of_plane)
     im_op = cmap(sig_op)
     im_op = np.delete(im_op, 3, axis=2)
-    im_op = im_op * mask[:,:,None]
+    im_op = im_op * mask[:, :, None]
 
     # in-plane image
-    im_ip = np.zeros((
-        sig_ip.shape[0],
-        sig_ip.shape[1],
-        3))
+    im_ip = np.zeros((sig_ip.shape[0], sig_ip.shape[1], 3))
     for a0 in range(basis.shape[0]):
-        weight = np.maximum(1-np.abs(np.mod(
-            sig_ip - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
-        im_ip += basis[a0,:][None,None,:] * weight[:,:,None]
+        weight = np.maximum(
+            1
+            - np.abs(np.mod(sig_ip - a0 / basis.shape[0] + 0.5, 1.0) - 0.5)
+            * basis.shape[0],
+            0,
+        )
+        im_ip += basis[a0, :][None, None, :] * weight[:, :, None]
     im_ip = np.clip(im_ip, 0, 1)
-    im_ip = im_ip * mask[:,:,None]
+    im_ip = im_ip * mask[:, :, None]
 
     # draw in-plane legends
-    r = np.arange(leg_size) - leg_size/2 + 0.5
-    ya,xa = np.meshgrid(r,r)
-    ra = np.sqrt(xa**2 + ya**2)
-    ta = np.arctan2(ya,xa)
-    sig_leg = np.mod((symmetry_order/(2*np.pi))*ta,1.0)
+    r = np.arange(leg_size) - leg_size / 2 + 0.5
+    ya, xa = np.meshgrid(r, r)
+    ra = np.sqrt(xa ** 2 + ya ** 2)
+    ta = np.arctan2(ya, xa)
+    sig_leg = np.mod((symmetry_order / (2 * np.pi)) * ta, 1.0)
     if symmetry_mirror:
-        sub = np.sin((symmetry_order/2)*ta) < 0
-        sig_leg[sub] = np.mod(-sig_leg[sub],1)
-    # leg_ip = 
-    im_ip_leg = np.zeros((leg_size,leg_size,3))
+        sub = np.sin((symmetry_order / 2) * ta) < 0
+        sig_leg[sub] = np.mod(-sig_leg[sub], 1)
+    # leg_ip =
+    im_ip_leg = np.zeros((leg_size, leg_size, 3))
     for a0 in range(basis.shape[0]):
-        weight = np.maximum(1-np.abs(np.mod(
-            sig_leg - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
-        im_ip_leg += basis[a0,:][None,None,:] * weight[:,:,None]
+        weight = np.maximum(
+            1
+            - np.abs(np.mod(sig_leg - a0 / basis.shape[0] + 0.5, 1.0) - 0.5)
+            * basis.shape[0],
+            0,
+        )
+        im_ip_leg += basis[a0, :][None, None, :] * weight[:, :, None]
     im_ip_leg = np.clip(im_ip_leg, 0, 1)
-    mask = np.clip(leg_size/2 - ra + 0.5, 0, 1) \
-        * np.clip(ra - leg_size/4 + 0.5, 0, 1)
-    im_ip_leg = im_ip_leg*mask[:,:,None] + (1-mask)[:,:,None]
+    mask = np.clip(leg_size / 2 - ra + 0.5, 0, 1) * np.clip(
+        ra - leg_size / 4 + 0.5, 0, 1
+    )
+    im_ip_leg = im_ip_leg * mask[:, :, None] + (1 - mask)[:, :, None]
 
     # t = np.linspace(0,2*np.pi,1001)
     # y = np.mod((symmetry_order/(2*np.pi))*t,1.0)
@@ -1562,7 +1552,7 @@ def plot_fiber_orientation_maps(
         ax_op.imshow(im_op)
         ax_op.set_title("Out-of-Plane Tilt", size=16)
     else:
-        ax_op.axis('off')
+        ax_op.axis("off")
 
     if show_axes is False:
         ax_ip.axis("off")
@@ -1574,44 +1564,43 @@ def plot_fiber_orientation_maps(
 
     # out of plane legend
     if self.orientation_fiber_angles[0] > 0:
-        t = np.tile(np.linspace(0,1,leg_size,endpoint=True),(np.round(leg_size/10).astype('int'),1))
+        t = np.tile(
+            np.linspace(0, 1, leg_size, endpoint=True),
+            (np.round(leg_size / 10).astype("int"), 1),
+        )
         im_op_leg = cmap(t)
         im_op_leg = np.delete(im_op_leg, 3, axis=2)
         ax_op_l.imshow(im_op_leg)
         ax_op_l.set_yticks([])
 
         ticks = [
-            np.round(leg_size*0.0), 
-            np.round(leg_size*0.25), 
-            np.round(leg_size*0.5), 
-            np.round(leg_size*0.75), 
-            np.round(leg_size*1.0), 
-            ]
+            np.round(leg_size * 0.0),
+            np.round(leg_size * 0.25),
+            np.round(leg_size * 0.5),
+            np.round(leg_size * 0.75),
+            np.round(leg_size * 1.0),
+        ]
         labels = [
-            str(np.round(self.orientation_fiber_angles[0]*0.00)) + '$\degree$', 
-            str(np.round(self.orientation_fiber_angles[0]*0.25)) + '$\degree$', 
-            str(np.round(self.orientation_fiber_angles[0]*0.50)) + '$\degree$', 
-            str(np.round(self.orientation_fiber_angles[0]*0.75)) + '$\degree$', 
-            str(np.round(self.orientation_fiber_angles[0]*1.00)) + '$\degree$', 
-            ]
+            str(np.round(self.orientation_fiber_angles[0] * 0.00)) + "$\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.25)) + "$\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.50)) + "$\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.75)) + "$\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 1.00)) + "$\degree$",
+        ]
         ax_op_l.set_xticks(ticks)
         ax_op_l.set_xticklabels(labels)
     else:
-        ax_op_l.axis('off')
+        ax_op_l.axis("off")
 
-    images_orientation = np.zeros((
-        orientation_map.num_x,
-        orientation_map.num_y,
-        3,2))
-    images_orientation[:,:,:,0] = im_ip
-    images_orientation[:,:,:,1] = im_op
+    images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
+    images_orientation[:, :, :, 0] = im_ip
+    images_orientation[:, :, :, 1] = im_op
 
     if returnfig:
         ax = [ax_ip, ax_op, ax_ip_l, ax_op_l]
         return images_orientation, fig, ax
     else:
         return images_orientation
-
 
 
 def axisEqual3D(ax):
@@ -1623,7 +1612,6 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
     ax.set_box_aspect((1, 1, 1))
-
 
 
 def atomic_colors(Z, scheme="jmol"):
@@ -1770,20 +1758,21 @@ jmol_colors = {
 
 # def isPointWithinPolygon(point, polygonVertexCoords):
 #      path = matplotlib.path.Path( polygonVertexCoords )
-#      return path.contains_point(point[0], point[1]) 
+#      return path.contains_point(point[0], point[1])
 
-def plot_ring_pattern( 
-    radii, 
+
+def plot_ring_pattern(
+    radii,
     intensity,
-    theta = [-np.pi, np.pi, 200],
-    intensity_scale = 1,
-    intensity_constant = False, 
-    color = 'k',
-    figsize = (10,10),
-    returnfig = False, 
-    input_fig_handle = None,
+    theta=[-np.pi, np.pi, 200],
+    intensity_scale=1,
+    intensity_constant=False,
+    color="k",
+    figsize=(10, 10),
+    returnfig=False,
+    input_fig_handle=None,
     **kwargs
-): 
+):
     """
     2D plot of diffraction rings
 
@@ -1793,7 +1782,7 @@ def plot_ring_pattern(
         theta (3-tuple):                first two values specify angle range, and the last specifies the number of points used for plotting
         intensity_scale (float):        size scaling for ring thickness
         intensity_constant (bool):      if true, all rings are plotted with same line width
-        color (matplotlib color):       color of ring, any format recognized by matplotlib 
+        color (matplotlib color):       color of ring, any format recognized by matplotlib
         figsize (2 element float):      size scaling of figure axes
         returnfig (bool):               set to True to return figure and axes handles
         input_fig_handle (fig,ax)       tuple containing a figure / axes handle for the plot
@@ -1802,44 +1791,41 @@ def plot_ring_pattern(
     theta = np.linspace(*theta)
 
     if input_fig_handle is None:
-        fig, ax = plt.subplots(
-            1, 1, 
-            figsize=figsize, 
-            facecolor=(1, 1, 1)
-        )
+        fig, ax = plt.subplots(1, 1, figsize=figsize, facecolor=(1, 1, 1))
     else:
         fig = input_fig_handle[0]
         ax_parent = input_fig_handle[1]
         ax = ax_parent[0]
 
-    for a1 in range(radii.shape[0]): 
+    for a1 in range(radii.shape[0]):
         if intensity_constant == True:
             ax.plot(
-                radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
-                lw = intensity_scale,
-                color = color, 
+                radii[a1] * np.sin(theta),
+                radii[a1] * np.cos(theta),
+                lw=intensity_scale,
+                color=color,
                 **kwargs,
             )
-        else: 
+        else:
             ax.plot(
-                radii[a1]*np.sin(theta), radii[a1]*np.cos(theta), 
-                lw = intensity[a1]*intensity_scale,
-                color = color, 
+                radii[a1] * np.sin(theta),
+                radii[a1] * np.cos(theta),
+                lw=intensity[a1] * intensity_scale,
+                color=color,
                 **kwargs,
             )
-    
+
     ax.set_xlabel("$q_y$ [Å$^{-1}$]")
     ax.set_ylabel("$q_x$ [Å$^{-1}$]")
 
-    max_value = np.max(radii)*1.1
+    max_value = np.max(radii) * 1.1
     ax.set_xlim([-max_value, max_value])
     ax.set_ylim([-max_value, max_value])
 
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
 
     if input_fig_handle is None:
         plt.show()
-    
+
     if returnfig:
-        return fig,ax
-    
+        return fig, ax
