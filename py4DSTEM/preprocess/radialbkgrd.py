@@ -74,6 +74,7 @@ def get_1D_polar_background(data,
 
     # Iteratively mask off high intensity peaks
     maskPolar = np.copy(polarData.mask)
+    background1D = np.ma.median(polarData, axis = 0)
     for ii in range(maskUpdateIter+1):
         if ii > 0:
             maskUpdate = np.logical_or(maskPolar,
@@ -83,7 +84,6 @@ def get_1D_polar_background(data,
             maskUpdate[:,colMaskMin] = polarData.mask[:,colMaskMin] # reset empty columns to values of previous iterations
             polarData.mask  = maskUpdate  # Update Mask
 
-        background1D = np.ma.median(polarData, axis = 0)
 
     background1D = np.maximum(background1D, min_background_value)
 

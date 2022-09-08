@@ -16,6 +16,7 @@ from time import time
 from numbers import Number
 
 from py4DSTEM.process.utils import get_cross_correlation_fk, get_maxima_2D
+from py4DSTEM.process.diskdetection import universal_threshold
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.io import PointList, PointListArray
 
