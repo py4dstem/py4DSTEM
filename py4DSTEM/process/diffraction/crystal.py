@@ -743,20 +743,34 @@ class Crystal:
             k_min = 0.0,
             k_max = None,
             k_step = 0.005,
-            k_power = 0.0,
             k_broadening = 0.01,
             fit_all_intensities = True,
             plot_result = False,
             figsize: Union[list, tuple, np.ndarray] = (12, 6),
+            returnfig = False,
     ):
         """
         Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
         and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
 
         Args:
-
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            scale_pixel_size (float):           Initial guess for pixel size scaling.
+            bragg_k_power (float):              Input Bragg vectors multiplied k**bragg_k_power  
+            bragg_intensity_power (float):      Input Bragg vectors are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range.
+            k_max (float):                      max k value for fitting range.
+            k_step (float):                     step size of k in fitting range.
+            k_broadening (float):               Initial guess for broadening of simulated pattern.
+            fit_all_intensities (bool):         Set to true to allow all peak intensities to change.
+                                                False forces single intensity scaling.
+            plot_result (bool):                 Plot the resulting fit.
+            figsize (list, tuple, np.ndarray)   Figure size of the plot.
+            returnfig (bool):                   Return handles figure and axis
 
         Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
 
         """
 
@@ -824,39 +838,8 @@ class Crystal:
         k_broadening = popt[1]
         int_scale = np.array(popt[2:])
 
-
-        # print(popt)
-
-
-        # # # test = np.ones(self.g_vec_leng.shape[0])
-        # # # print(test.shape)
-        # def fit_profile(
-        #     k, 
-        #     scale_pixel_size = scale_pixel_size, 
-        #     k_broadening = 0.0, 
-
-        #     int_scale = np.ones(self.g_vec_leng.shape[0]),
-        #     ):
-        #     int_sf = calc_1D_profile(
-        #         k,
-        #         self.g_vec_leng * scale_pixel_size,
-        #         self.struct_factors_int,
-        #         k_broadening = k_broadening,
-        #         int_scale = int_scale,
-        #         normalize_intensity = False,
-        #     ) 
-        #     return int_sf
-        # # guesses = (scale_pixel_size,0.0,np.ones(self.g_vec_leng.shape[0],dtype='float'))
-        # popt, pcov = curve_fit(fit_profile, k, int_exp, guesses)
-
-        # print(popt)
-        # scale_pixel_size = popt[0]
-        # k_broadening = popt[1]
-        # int_scale_all = popt[2]
-
-        # Make a copy of bragg_peaks
+        # Make a copy of bragg_peaks, apply correction
         bragg_peaks_cali = deepcopy(bragg_peaks)
-        # Apply correction
         inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
         bragg_peaks_cali.calibration.set_Q_pixel_size(inv_Ang_per_pixel / scale_pixel_size)
         bragg_peaks_cali.calibration.set_Q_pixel_units('A^-1')
@@ -864,16 +847,30 @@ class Crystal:
 
         # Plotting
         if plot_result:
-            self.plot_scattering_intensity(
-                bragg_peaks = bragg_peaks_cali,
-                figsize = figsize,
-                k_broadening = k_broadening,
-                int_scale = int_scale,
-                bragg_k_power = bragg_k_power,
-                bragg_intensity_power = bragg_intensity_power,
-            )
+            if returnfig:
+                fig, ax = self.plot_scattering_intensity(
+                    bragg_peaks = bragg_peaks_cali,
+                    figsize = figsize,
+                    k_broadening = k_broadening,
+                    int_scale = int_scale,
+                    bragg_k_power = bragg_k_power,
+                    bragg_intensity_power = bragg_intensity_power,
+                    returnfig = True,
+                )
+            else:
+                self.plot_scattering_intensity(
+                    bragg_peaks = bragg_peaks_cali,
+                    figsize = figsize,
+                    k_broadening = k_broadening,
+                    int_scale = int_scale,
+                    bragg_k_power = bragg_k_power,
+                    bragg_intensity_power = bragg_intensity_power,
+                )
 
-        return bragg_peaks_cali
+        if returnfig and plot_result:
+            return bragg_peaks_cali, fig, ax
+        else:
+            return bragg_peaks_cali
 
 
 
