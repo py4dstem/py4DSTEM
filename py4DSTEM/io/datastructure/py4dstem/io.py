@@ -249,8 +249,10 @@ def VirtualImage_from_Array(array):
         md = array.metadata['virtualimage']
         mode = md['mode']
         geo = md['geometry']
-        shift_corr = md['shift_corr']
-        eager_compute = md['eager_compute']
+        centered = md._params.get('centered',None)
+        calibrated = md._params.get('calibrated',None)
+        shift_center = md._params.get('shift_center',None)
+        dask = md._params.get('dask',None)
     except KeyError:
         er = "VirtualImage metadata could not be found"
         raise Exception(er)
@@ -263,8 +265,10 @@ def VirtualImage_from_Array(array):
         name = array.name,
         mode = mode,
         geometry = geo,
-        shift_corr = shift_corr,
-        eager_compute = eager_compute
+        centered = centered,
+        calibrated = calibrated,
+        shift_center = shift_center,
+        dask = dask
     )
     return array
 
