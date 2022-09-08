@@ -208,7 +208,7 @@ def make_orientation_histogram(
             orient_hist = orient_hist / np.max(orient_hist)
     elif normalize_intensity_image is True:
         for a0 in range(num_radii):
-            orient_hist[:,:,a0,:] = orient_hist[:,:,a0,:] / np.max(orient_hist[:,:,a0,:])
+            orient_hist[a0,:,:,:] = orient_hist[a0,:,:,:] / np.max(orient_hist[a0,:,:,:])
 
     return orient_hist
 

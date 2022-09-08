@@ -766,7 +766,7 @@ def match_orientations(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     progress_bar: bool = True,
 ):
     '''
@@ -805,7 +805,7 @@ def match_single_pattern(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,
@@ -1320,7 +1320,7 @@ def match_single_pattern(
             )
 
             remove = np.zeros_like(qx, dtype="bool")
-            scale_int = np.zeros_like(qx)
+            scale_int = np.ones_like(qx)
             for a0 in np.arange(qx.size):
                 d_2 = (bragg_peaks_fit.data["qx"] - qx[a0]) ** 2 + (
                     bragg_peaks_fit.data["qy"] - qy[a0]

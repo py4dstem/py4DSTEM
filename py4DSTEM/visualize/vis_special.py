@@ -341,7 +341,7 @@ def show_strain(strainmap,
                 returnfig=False):
     """
     Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
-    masking each image with strainmap.slices['mask'].
+    masking each image with strainmap.get_slice('mask') 
 
     Args:
         strainmap (RealSlice):
@@ -431,8 +431,9 @@ def show_strain(strainmap,
 
     # Add black background
     if bkgrd:
-        mask = np.ma.masked_where(strainmap.slices['mask'].astype(bool),
-                                  np.zeros_like(strainmap.slices['mask']))
+        mask = np.ma.masked_where(
+            strainmap.get_slice('mask').astype(bool),
+            np.zeros_like(strainmap.get_slice('mask')))
         ax11.matshow(mask,cmap='gray')
         ax12.matshow(mask,cmap='gray')
         ax21.matshow(mask,cmap='gray')
