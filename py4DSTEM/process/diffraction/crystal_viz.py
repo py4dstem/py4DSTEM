@@ -408,14 +408,10 @@ def plot_scattering_intensity(
         int_sf_plot,
         c=(0.0, 0.0, 0.0, 0.8),
         linewidth=2)
-
     # Appearance
     ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
     ax.set_yticks([])
     ax.set_ylabel("Magnitude", fontsize=14)
-    # ax.set_ .rc('axes', labelsize=14)
-
-    # ax.set_ylabel("$q_x$ [Å$^{-1}$]")
 
     if returnfig:
         return fig,ax
