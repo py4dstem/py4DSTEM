@@ -54,6 +54,15 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
         R_pixel_size = pixelsize[2]
         R_pixel_units = "px" if pixelunits[2] == "" else pixelunits[2]
 
+        # Convert mrad to Å^-1 if possible
+        if Q_pixel_units == "mrad":
+            voltage = [v for t,v in dmFile.allTags.items() if "Microscope Info.Voltage" in t]
+            if len(voltage) == 1:
+                from py4DSTEM.process.utils import electron_wavelength_angstrom
+                lamda = electron_wavelength_angstrom(voltage[0])
+                Q_pixel_units = "A^-1"
+                Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
+
         # Handle 3D NCEM TitanX data
         titan_shape = _process_NCEM_TitanX_Tags(dmFile)
 
