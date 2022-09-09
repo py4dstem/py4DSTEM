@@ -79,7 +79,8 @@ def read_v0_12(fp, **kwargs):
     # If metadata is requested
     if 'metadata' in kwargs.keys():
         if kwargs['metadata']:
-            return metadata_from_h5(fp, tg)
+            raise NotImplementedError("Legacy metadata reader missing...")
+            # return metadata_from_h5(fp, tg)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():
