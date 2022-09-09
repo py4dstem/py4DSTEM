@@ -109,10 +109,13 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
 
         if len(_data.shape) == 4:
             data = DataCube(_data, name=name)
-            data.calibration.set_Q_pixel_size(Q_pixel_size * binfactor)
-            data.calibration.set_Q_pixel_units(Q_pixel_units)
-            data.calibration.set_R_pixel_size(R_pixel_size)
-            data.calibration.set_R_pixel_units(R_pixel_units)
+            try:
+                data.calibration.set_Q_pixel_size(Q_pixel_size * binfactor)
+                data.calibration.set_Q_pixel_units(Q_pixel_units)
+                data.calibration.set_R_pixel_size(R_pixel_size)
+                data.calibration.set_R_pixel_units(R_pixel_units)
+            except Exception as err:
+                print(f"Setting pixel sizes of the datacube failed with error {err}")
         else:
             data = Array(_data, name=name)
 
