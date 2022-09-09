@@ -23,7 +23,12 @@ def get_bvm(
     assert mode in ('raw','centered')
 
     # select peaks
-    peaks = self.vectors if mode=='centered' else self.vectors_uncal
+    if mode=='centered':
+        peaks = self.vectors
+        Q_pixel_size = self.calibration.get_Q_pixel_size()
+    else:
+        peaks = self.vectors_uncal
+        Q_pixel_size = 1.0
 
     # perform computation
     from py4DSTEM.process.diskdetection import get_bvm
@@ -31,6 +36,7 @@ def get_bvm(
         peaks,
         Qshape = self.Qshape,
         mode = mode,
+        Q_pixel_size = Q_pixel_size,
     )
     if mode == 'centered':
         self.bvm_centered = bvm
