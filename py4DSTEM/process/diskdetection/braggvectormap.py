@@ -10,7 +10,8 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 def get_bvm(
     braggpeaks,
     Qshape,
-    mode = 'centered'
+    mode = 'centered',
+    Q_pixel_size = 1.0,
     ):
     """
     Gets a Bragg vector map, a 2D histogram of Bragg scattering vectors.
@@ -41,7 +42,8 @@ def get_bvm(
     bvm = fn(
         braggpeaks,
         Q_Nx = Qshape[0],
-        Q_Ny = Qshape[1]
+        Q_Ny = Qshape[1],
+        Q_pixel_size=Q_pixel_size,
     )
 
     return bvm
