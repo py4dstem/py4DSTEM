@@ -46,13 +46,21 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
         scale_offset = sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
         pixelsize = dmFile.scale[scale_offset:]
         pixelunits = dmFile.scaleUnit[scale_offset:]
-        print(scale_offset,pixelsize,pixelunits)
 
         # Get the calibration pixel sizes
         Q_pixel_size = pixelsize[0]
-        Q_pixel_units = "px" if pixelunits[0] == "" else pixelunits[0]
+        Q_pixel_units = "pixels" if pixelunits[0] == "" else pixelunits[0]
         R_pixel_size = pixelsize[2]
-        R_pixel_units = "px" if pixelunits[2] == "" else pixelunits[2]
+        R_pixel_units = "pixels" if pixelunits[2] == "" else pixelunits[2]
+
+        # Check that the units are sensible
+        # On microscopes that do not have live communication with the detector
+        # the calibrations can be invalid
+        if Q_pixel_units in ("nm", "µm"):
+            Q_pixel_units = "pixels"
+            Q_pixel_size = 1
+            R_pixel_units = "pixels"
+            R_pixel_size = 1
 
         # Convert mrad to Å^-1 if possible
         if Q_pixel_units == "mrad":
