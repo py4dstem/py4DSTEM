@@ -371,8 +371,8 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
 
 def get_origin_beamstop_braggpeaks(
     braggpeaks,
-    center_guess = None,
-    radii = None,
+    center_guess,
+    radii,
     max_dist=2,
     max_iter=1,
     **kwargs
@@ -396,170 +396,69 @@ def get_origin_beamstop_braggpeaks(
     assert(isinstance(braggpeaks,PointListArray))
     R_Nx,R_Ny = braggpeaks.shape
 
-    if center_guess is not None:
-        # User has provided radial range and center guess
 
-        # remove peaks outside the annulus
-        braggpeaks_masked = braggpeaks.copy()
+    # remove peaks outside the annulus
+    braggpeaks_masked = braggpeaks.copy()
+    for rx in range(R_Nx):
+        for ry in range(R_Ny):
+            pl = braggpeaks_masked.get_pointlist(rx,ry)
+            qr = np.hypot(pl.data['qx']-center_guess[0],
+                          pl.data['qy']-center_guess[1])
+            rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
+            pl.remove(rm)
+
+    # Find all matching conjugate pairs of peaks
+    center_curr = center_guess
+    for ii in range(max_iter):
+        centers = np.zeros((R_Nx,R_Ny,2))
+        found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
         for rx in range(R_Nx):
             for ry in range(R_Ny):
+
+                # Get data
                 pl = braggpeaks_masked.get_pointlist(rx,ry)
-                qr = np.hypot(pl.data['qx']-center_guess[0],
-                              pl.data['qy']-center_guess[1])
-                rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
-                pl.remove(rm)
+                is_paired = np.zeros(len(pl.data),dtype=bool)
+                matches = []
 
-        # Find all matching conjugate pairs of peaks
-        center_curr = center_guess
-        for ii in range(max_iter):
-            centers = np.zeros((R_Nx,R_Ny,2))
-            found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
-            for rx in range(R_Nx):
-                for ry in range(R_Ny):
+                # Find matching pairs
+                for i in range(len(pl.data)):
+                    if not is_paired[i]:
+                        x,y = pl.data['qx'][i],pl.data['qy'][i]
+                        x_r = -x+2*center_curr[0]
+                        y_r = -y+2*center_curr[1]
+                        dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
+                        dists[is_paired] = 2*max_dist
+                        matched = dists<=max_dist
+                        if(any(matched)):
+                            match = np.argmin(dists)
+                            matches.append((i,match))
+                            is_paired[i],is_paired[match] = True,True
 
-                    # Get data
-                    pl = braggpeaks_masked.get_pointlist(rx,ry)
-                    is_paired = np.zeros(len(pl.data),dtype=bool)
-                    matches = []
+                # Find the center
+                if len(matches)>0:
+                    x0,y0 = [],[]
+                    for i in range(len(matches)):
+                        x0.append(np.mean(pl.data['qx'][list(matches[i])]))
+                        y0.append(np.mean(pl.data['qy'][list(matches[i])]))
+                    x0,y0 = np.mean(x0),np.mean(y0)
+                    centers[rx,ry,:] = x0,y0
+                    found_center[rx,ry] = True
+                else:
+                    found_center[rx,ry] = False
 
-                    # Find matching pairs
-                    for i in range(len(pl.data)):
-                        if not is_paired[i]:
-                            x,y = pl.data['qx'][i],pl.data['qy'][i]
-                            x_r = -x+2*center_curr[0]
-                            y_r = -y+2*center_curr[1]
-                            dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
-                            dists[is_paired] = 2*max_dist
-                            matched = dists<=max_dist
-                            if(any(matched)):
-                                match = np.argmin(dists)
-                                matches.append((i,match))
-                                is_paired[i],is_paired[match] = True,True
+        # Update current center guess
+        x0_curr = np.mean(centers[found_center,0])
+        y0_curr = np.mean(centers[found_center,1])
+        center_curr = x0_curr,y0_curr
 
-                    # Find the center
-                    if len(matches)>0:
-                        x0,y0 = [],[]
-                        for i in range(len(matches)):
-                            x0.append(np.mean(pl.data['qx'][list(matches[i])]))
-                            y0.append(np.mean(pl.data['qy'][list(matches[i])]))
-                        x0,y0 = np.mean(x0),np.mean(y0)
-                        centers[rx,ry,:] = x0,y0
-                        found_center[rx,ry] = True
-                    else:
-                        found_center[rx,ry] = False
-
-            # Update current center guess
-            x0_curr = np.mean(centers[found_center,0])
-            y0_curr = np.mean(centers[found_center,1])
-            center_curr = x0_curr,y0_curr
-
-        # return
-        mask = found_center
-        qx0,qy0 = centers[:,:,0],centers[:,:,1]
-
-    else:
-        # Determine most common peak pair
-        r_step = 1.0
-        r_max = np.max(braggpeaks.shape)
-        r_thresh = 2  # threshold for pair inclusion
-
-        r = np.arange(0,r_max,r_step)
-        dist = np.zeros_like(r)
-
-        # for rx,ry in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
-        for rx,ry in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
-            p = braggpeaks.get_pointlist(rx,ry)
-            if p.data.shape[0] > 2:
-                p_dists = np.sqrt(
-                    (p.data['qx'][:,None] - p.data['qx'][None,:])**2 + \
-                    (p.data['qy'][:,None] - p.data['qy'][None,:])**2).ravel()
-                p_ints = (p.data['intensity'][:,None] + p.data['intensity'][None,:]).ravel()
-                # p_ints = np.maximum(p.data['intensity'][:,None], p.data['intensity'][None,:]).ravel()
-
-                p_bin = p_dists/r_step
-                p_ind = np.floor(p_bin).astype('int')
-                dp = p_bin - p_ind
-
-                sub = np.logical_and(
-                    p_ind > 0,
-                    p_ind < r.shape[0]-1)
-                dist += np.bincount(
-                    p_ind[sub], 
-                    weights=p_ints[sub] * (1 - dp[sub]), 
-                    minlength=r.shape[0])
-                dist += np.bincount(
-                    p_ind[sub]+1, 
-                    weights=p_ints[sub] * dp[sub], 
-                    minlength=r.shape[0])
-
-        sig = dist
-        ind = np.argmax(sig)
-        sig_crop = sig[ind-1:ind+2]
-        r_shift = (sig_crop[2] - sig_crop[0]) / (4*sig_crop[1] - 2*sig_crop[0] - 2*sig_crop[2])
-        r_pair = r[ind] + r_shift*r_step
-        r_pair = 40
-
-        # init
-        qx0 = np.zeros(braggpeaks.shape)
-        qy0 = np.zeros(braggpeaks.shape)
-        mask = np.zeros(braggpeaks.shape,dtype='bool')
-
-        import matplotlib.pyplot as plt
-
-
-
-        fig,ax  = plt.subplots(1,1,figsize=(6,6))
-        ax.plot(r,sig)
-        plt.show()
-
-
-        # Find all pairs of peaks, center coordinates        
-        # for rx,ry in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
-        for rx,ry in tqdmnd(braggpeaks.shape[0],2):
-            p = braggpeaks.get_pointlist(rx,ry)
-            if p.data.shape[0] > 20:
-                p_dists = np.sqrt(
-                    (p.data['qx'][:,None] - p.data['qx'][None,:])**2 + \
-                    (p.data['qy'][:,None] - p.data['qy'][None,:])**2)
-                keep1 = np.abs(p_dists - r_pair) < r_thresh
-                mn = np.argwhere(keep1)
-                mn = mn[mn[:,0] < mn[:,1],:]
-                print(mn)
-
-                qx_mean = (p.data['qx'][mn[:,0]] + p.data['qx'][mn[:,1]])/2
-                qy_mean = (p.data['qy'][mn[:,0]] + p.data['qy'][mn[:,1]])/2
-                int_mean = p.data['intensity'][mn[:,0]] + p.data['intensity'][mn[:,1]]
-
-                t = np.vstack((qx_mean, qy_mean, int_mean))
-
-                # print(t.T)
-
-                fig,ax  = plt.subplots(1,1,figsize=(6,6))
-                ax.scatter(
-                    p.data['qy'],
-                    p.data['qx'],
-                    s=p.data['intensity'])
-                
-                ax.scatter(
-                    qy_mean,
-                    qx_mean,
-                    s=int_mean)
-                ax.set_xlim([0, 172])
-                ax.set_ylim([0, 172])
-
-                plt.show()
-
-
-
-
+    # return
+    mask = found_center
+    qx0,qy0 = centers[:,:,0],centers[:,:,1]
 
     return qx0,qy0,mask
 
 
-
-
 ### Functions for fitting the origin
-
 
 def fit_origin(
     data,
