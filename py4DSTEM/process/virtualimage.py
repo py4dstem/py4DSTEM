@@ -280,13 +280,20 @@ def get_virtual_image_pointlistarray(
 
     Args:
         peaks (PointListArray): List of all peaks and intensities.
-        mode (str):             'annular' = 
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-                            and radii is either max angle, or a 2-tuple (ri,ro)
-                            describing the inner and outer radial ranges.
-                            center can be skipped for calibrated (centered) pointlists.
+        mode (str)          : defines geometry mode for calculating virtual image.
+            Options:
+                - 'circular' or 'circle' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                              argument, as follows:
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - Note that (qx,qy) can be skipped, which assumes peaks centered at (0,0)
+
     Returns:
-        im_virtual (2D numpy array): the output virtual image
+        im_virtual (2D numpy array): the calculated virtual image
     """
 
     # Set geometry
@@ -305,6 +312,20 @@ def get_virtual_image_pointlistarray(
                 radial_range = None
             else:
                 radial_range = np.array(geometry[1])
+    elif mode == 'circular' or mode == 'circle':
+        radial_range = np.array((0,geometry[1]))
+        if len(geometry[0]) == 0:
+                center = None
+        else:
+            center = np.array(geometry[0])
+    elif mode == 'annular' or mode == 'annulus':
+        radial_range = np.array(geometry[1])
+        if len(geometry[0]) == 0:
+                center = None
+        else:
+            center = np.array(geometry[0])
+
+
 
     # init
     im_virtual = np.zeros(peaks.shape)
@@ -331,8 +352,8 @@ def get_virtual_image_pointlistarray(
 
 def get_virtual_image_braggvectors(
     bragg_peaks,
-    mode,
-    geometry,
+    mode = None,
+    geometry = None,
     ):
     '''
     Function to calculate virtual images from braggvectors / pointlist arrays.
@@ -350,11 +371,16 @@ def get_virtual_image_braggvectors(
                    qx, qy and radius, are each single float or int
                 - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                    qx, qy, radius_i, and radius_o are each single float or integer
-                - Note that (qx,qy) can be skipped for 
+                - Note that (qx,qy) can be skipped, which assumes peaks centered at (0,0)
                 
     Returns:
-        virtual image (2D-array)
+        im_virtual (2D numpy array): the calculated virtual image
     '''
-    virtual_image = 0
+
+    virtual_image = get_virtual_image_pointlistarray(
+        bragg_peaks.vectors,    
+        mode = mode,
+        geometry = geometry,
+        )
 
     return virtual_image
