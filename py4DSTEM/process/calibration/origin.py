@@ -392,8 +392,10 @@ def get_origin_beamstop_braggpeaks(
     Returns:
         (2d masked array): the origins
     """
+
     assert(isinstance(braggpeaks,PointListArray))
     R_Nx,R_Ny = braggpeaks.shape
+
 
     # remove peaks outside the annulus
     braggpeaks_masked = braggpeaks.copy()
@@ -452,13 +454,11 @@ def get_origin_beamstop_braggpeaks(
     # return
     mask = found_center
     qx0,qy0 = centers[:,:,0],centers[:,:,1]
+
     return qx0,qy0,mask
 
 
-
-
 ### Functions for fitting the origin
-
 
 def fit_origin(
     data,

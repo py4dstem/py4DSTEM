@@ -454,7 +454,7 @@ def _find_Bragg_disks_CPU(
         unit_scale=True
         ):
         if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
+            _qt_progress_bar.setValue(rx*datacube.R_Ny+ry+1)
             QApplication.processEvents()
 
         # Get a diffraction pattern
@@ -631,7 +631,7 @@ def _find_Bragg_disks_ipp(
 
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal[rx,ry] = peaks
+    braggvectors._v_uncal = peaks
     return braggvectors
 
 
@@ -683,7 +683,7 @@ def _find_Bragg_disks_dask(
 
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal[rx,ry] = peaks
+    braggvectors._v_uncal = peaks
     return braggvectors
 
 
