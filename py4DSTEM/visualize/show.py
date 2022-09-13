@@ -239,13 +239,15 @@ def show(
                 * 'log': values where ar<=0 are set to 0
         clipvals (str): method for setting clipvalues (min and max intensities).  
                         Default is 'auto'. Accepted values:
-                * 'auto': automatically scale intensities from histogram
-                * 'minmax': The min/max values are np.min(ar)/np.max(r)
-                * 'manual': The min/max values are set to the values of
-                  the min,max arguments received by this function
-                * 'std': The min/max values are ``np.median(ar) -/+ N*np.std(ar)``, and
+                * 'auto': vmin/vmax are set to the percentile of the
+                  distribution of pixel values in the array, e.g. vmin=0.02
+                  will set the minumum display value to saturate the lower 2% of pixels
+                * 'minmax': The vmin/vmax values are np.min(ar)/np.max(r)
+                * 'manual': The vmin/vmax values are set to the values of
+                  the vmin,vmax arguments received by this function
+                * 'std': The vmin/vmax values are ``np.median(ar) -/+ N*np.std(ar)``, and
                    N is this functions min,max vals.
-                * 'centered': The min/max values are set to ``c -/+ m``, where by default
+                * 'centered': The vmin/vmax values are set to ``c -/+ m``, where by default
                   'c' is zero and m is the max(abs(ar-c), or the two params can be user
                   specified using the kwargs vmin/vmax -> c/m.
         vmin (number): min intensity, behavior depends on clipvals
