@@ -19,8 +19,8 @@ sample_collection_ids = {
         ('file2', '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU')
     ),
     'moretestdata' : (
-        ('file1','id'),
-        ('file2','id')
+        ('file3','id'),
+        ('file4','id')
     )
 }
 
@@ -113,7 +113,7 @@ def download_file_from_google_drive(id_, destination, overwrite=False):
 
 
 def get_sample_data_ids():
-    return {'files' : sample_data_ids.keys(),
+    return {'files' : sample_file_ids.keys(),
             'collections' : sample_collection_ids.keys()}
 
 
