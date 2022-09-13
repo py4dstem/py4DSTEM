@@ -132,7 +132,7 @@ class Calibration(Metadata):
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
     def set_Q_pixel_units(self,x):
-        pix = ('pixels','A^-1')
+        pix = ('pixels','A^-1','mrad')
         assert(x in pix), f"{x} must be in {pix}"
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
