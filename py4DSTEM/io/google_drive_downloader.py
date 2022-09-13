@@ -19,8 +19,8 @@ sample_collection_ids = {
         ('file2', '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU')
     ),
     'moretestdata' : (
-        ('file1','id'),
-        ('file2','id')
+        ('file3','id'),
+        ('file4','id')
     )
 }
 
