@@ -4,6 +4,7 @@ from py4DSTEM.io.datastructure import Calibration, DiffractionSlice, RealSlice
 
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
@@ -17,12 +18,14 @@ def show(
     figsize=(8,8),
     cmap='gray',
     scaling='none',
-    clipvals='minmax',
+    clipvals='auto',
     vmin=None,
     vmax=None,
     min=None,
     max=None,
-    power=1,
+    power=None,
+    power_offset=True,
+    ticks=True,
     bordercolor=None,
     borderwidth=5,
     returnclipvals=False,
@@ -81,7 +84,7 @@ def show(
 
     Scaling:
         Setting the parameter ``scaling`` will scale the display image. Options are
-        'none', 'power', or 'log'.  If 'power' is specified, the parameter ``power`` must
+        'none', 'auto', power', or 'log'.  If 'power' is specified, the parameter ``power`` must
         also be passed. The underlying data is not altered. Values less than or equal to
         zero are set to zero. If the image histogram is displayed using ``hist=True``,
         the scaled image histogram is shown.
@@ -89,7 +92,7 @@ def show(
         Examples::
 
             >>> show(ar,scaling='log')
-            >>> show(ar,scaling='power',power=0.5)
+            >>> show(ar,power=0.5)
             >>> show(ar,scaling='power',power=0.5,hist=True)
 
     Histogram:
@@ -230,12 +233,13 @@ def show(
         cmap (colormap): any matplotlib cmap; default is gray
         scaling (str): selects a scaling scheme for the intensity values. Default is
             none. Accepted values:
-                * 'none'
+                * 'none': do not scale intensity values
+                * 'full': fill entire color range with sorted intensity values
+                * 'power': power law scaling
                 * 'log': values where ar<=0 are set to 0
-                * 'power': requires the 'power' argument be set.
-                  values where ar<=0 are set to 0
-        clipvals (str): method for setting clipvalues.  Default is the array min and max
-            values. Accepted values:
+        clipvals (str): method for setting clipvalues (min and max intensities).  
+                        Default is 'auto'. Accepted values:
+                * 'auto': automatically scale intensities from histogram
                 * 'minmax': The min/max values are np.min(ar)/np.max(r)
                 * 'manual': The min/max values are set to the values of
                   the min,max arguments received by this function
@@ -243,11 +247,13 @@ def show(
                    N is this functions min,max vals.
                 * 'centered': The min/max values are set to ``c -/+ m``, where by default
                   'c' is zero and m is the max(abs(ar-c), or the two params can be user
-                  specified using the kwargs min/max -> c/m.
-        min (number): behavior depends on clipvals
-        max (number): behavior depends on clipvals
-        vmin,vmax: alias' for min,max
-        power (number): when ``scaling='power'``, specifies the scaling power
+                  specified using the kwargs vmin/vmax -> c/m.
+        vmin (number): min intensity, behavior depends on clipvals
+        vmax (number): max intensity, behavior depends on clipvals
+        min,max: alias' for vmin,vmax, throws deprecation warning
+        power (number): specifies the scaling power
+        power_offset (bool): If true, image has min value subtracted before power scaling
+        ticks (bool):  Turn outer tick marks on or off
         bordercolor (color or None): if not None, add a border of this color.
             The color can be anything matplotlib recognizes as a color.
         borderwidth (number):
@@ -278,10 +284,11 @@ def show(
         if returnfig==True, return the figure and the axis.
     """
 
-    # TODO - set all internal references of min and max to vmin and vmax.
-    # Also throw a warning for using vmin / vmax that they are deprecated.
-    if vmin is not None: min=vmin
-    if vmax is not None: max=vmax
+    # Alias dep
+    if min is not None: vmin=min
+    if max is not None: vmax=max
+    if min is not None or max is not None:
+        warnings.warn("Warning, min/max commands are deprecated. Use vmin/vmax instead.")
 
     # plot a grid if `ar` is a list
     if isinstance(ar,list):
@@ -336,67 +343,144 @@ def show(
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
 
-    # otherwise plot one image
-    assert scaling in ('none','log','power','hist')
-    assert clipvals in ('minmax','manual','std','centered')
+    # Otherwise, plot one image
+    
+    # get image from a masked array
     if mask is not None:
         assert mask.shape == ar.shape
         assert is_color_like(mask_color) or mask_color=='empty'
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=~mask)
+            ar = np.ma.array(data=ar,mask=~mask)    
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
         mask = np.ones_like(ar,dtype=bool)
         ar = np.ma.array(data=ar,mask=mask==False)
 
-    # Perform any scaling
+    # New intensity scaling logic
+    assert scaling in ('none','full','log','power','hist')
+    assert clipvals in ('auto','manual','minmax','std','centered')  
+    if power is not None:
+        scaling = 'power'            
     if scaling == 'none':
         _ar = ar.copy()
         _mask = np.ones_like(_ar.data,dtype=bool)
+    elif scaling == 'full':
+        _ar = np.reshape(ar.ravel().argsort().argsort(),ar.shape) / (ar.size-1)
+        _mask = np.ones_like(_ar.data,dtype=bool)
     elif scaling == 'log':
-        _mask = ar.data>0
+        _mask = ar.data>0.0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
         if clipvals == 'manual':
-            if min != None:
-                if min > 0: min = np.log(min)
-                else: min = np.min(_ar[_mask])
-            if max != None: max = np.log(max)
+            if mvin != None:
+                if vmin > 0.0: vmin = np.log(vmin)
+                else: vmin = np.min(_ar[_mask])
+            if vmax != None: vmax = np.log(vmax)
     elif scaling == 'power':
-        _mask = ar.data>0
-        _ar = np.zeros_like(ar.data,dtype=float)
-        _ar[_mask] = np.power(ar.data[_mask],power)
-        _ar[~_mask] = np.nan
-        if clipvals == 'manual':
-            if min != None: min = np.power(min,power)
-            if max != None: max = np.power(max,power)
+        if power_offset is False:
+            _mask = ar.data>0.0
+            _ar = np.zeros_like(ar.data,dtype=float)
+            _ar[_mask] = np.power(ar.data[_mask],power)
+            _ar[~_mask] = np.nan
+        else:
+            ar_min = np.min(ar)
+            if ar_min < 0:
+                _ar = np.power(ar.copy() - np.min(ar), power)
+            else:
+                _ar = np.power(ar.copy(), power)            
+            _mask = np.ones_like(_ar.data,dtype=bool)
+            if clipvals == 'manual':
+                if vmin != None: vmin = np.power(vmin,power)
+                if vmax != None: vmax = np.power(vmax,power)
     else:
         raise Exception
 
+    # init array
     _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
-    if clipvals == 'minmax':
+    if clipvals == 'auto':
+        if vmin is None: vmin = 0.02
+        if vmax is None: vmax = 0.98
+        vals = np.sort(_ar[~np.isnan(_ar)])
+        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+    elif clipvals == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
     elif clipvals == 'manual':
-        assert min is not None and max is not None
-        vmin,vmax = min,max
+        assert vmin is not None and vmax is not None
+        # vmin,vmax = vmin,vmax
     elif clipvals == 'std':
-        assert min is not None and max is not None
+        assert vmin is not None and vmax is not None
         m,s = np.nanmedian(_ar),np.nanstd(_ar)
-        vmin = m + min*s
-        vmax = m + max*s
+        vmin = m + vmin*s
+        vmax = m + vmax*s
     elif clipvals == 'centered':
-        c = np.nanmean(_ar) if min is None else min
-        m = np.nanmax(np.ma.abs(c-_ar)) if max is None else max
+        c = np.nanmean(_ar) if vmin is None else vmin
+        m = np.nanmax(np.ma.abs(c-_ar)) if vmax is None else vmax
         vmin = c-m
         vmax = c+m
     else:
         raise Exception
+
+
+    # elif isinstance(ar,np.ma.masked_array):
+    #     pass
+    # else:
+    #     mask = np.ones_like(ar,dtype=bool)
+    #     ar = np.ma.array(data=ar,mask=mask==False)
+
+    # # Perform any scaling
+    # if scaling == 'none':
+    #     _ar = ar.copy()
+    #     _mask = np.ones_like(_ar.data,dtype=bool)
+    # elif scaling == 'log':
+    #     _mask = ar.data>0
+    #     _ar = np.zeros_like(ar.data,dtype=float)
+    #     _ar[_mask] = np.log(ar.data[_mask])
+    #     _ar[~_mask] = np.nan
+    #     if clipvals == 'manual':
+    #         if mvin != None:
+    #             if vmin > 0: vmin = np.log(vmin)
+    #             else: vmin = np.min(_ar[_mask])
+    #         if vmax != None: vmax = np.log(vmax)
+    # elif scaling == 'power':
+    #     _mask = ar.data>0
+    #     _ar = np.zeros_like(ar.data,dtype=float)
+    #     _ar[_mask] = np.power(ar.data[_mask],power)
+    #     _ar[~_mask] = np.nan
+    #     if clipvals == 'manual':
+    #         if vmin != None: vmin = np.power(vmin,power)
+    #         if vmax != None: vmax = np.power(vmax,power)
+    # else:
+    #     raise Exception
+
+    # _ar = np.ma.array(data=_ar.data,mask=~_mask)
+
+    # # Set the clipvalues
+    # if clipvals == 'minmax':
+    #     vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
+    # elif clipvals == 'manual':
+    #     assert vmin is not None and vmax is not None
+    #     vmin,vmax = min,max
+    # elif clipvals == 'std':
+    #     assert vmin is not None and vmax is not None
+    #     m,s = np.nanmedian(_ar),np.nanstd(_ar)
+    #     vmin = m + vmin*s
+    #     vmax = m + vmax*s
+    # elif clipvals == 'centered':
+    #     c = np.nanmean(_ar) if vmin is None else vmin
+    #     m = np.nanmax(np.ma.abs(c-_ar)) if vmax is None else vmax
+    #     vmin = c-m
+    #     vmax = c+m
+    # else:
+    #     raise Exception
 
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
@@ -573,6 +657,11 @@ def show(
     if rtheta_grid is not None:
         add_rtheta_grid(ax,rtheta_grid)
 
+    # tick marks
+    if ticks is False:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     # Show or return
     returnval = []
     if returnfig: returnval.append((fig,ax))
@@ -624,7 +713,6 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
     plt.xlabel('Intensity')
     if vlines is not None:
         ax.vlines(vlines,0,np.max(counts),color=vlinecolor,ls=vlinestyle)
-
     if not returnhist and not returnfig:
         plt.show()
         return
