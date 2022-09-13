@@ -2,9 +2,9 @@
 
 import h5py
 import numpy as np
-from os.path import splitext, exists
+import warnings
+from os.path import splitext, exists,basename,dirname,join
 from typing import Optional, Union
-from os.path import basename,dirname
 
 from py4DSTEM.io.native.read_utils import is_py4DSTEM_file
 from py4DSTEM.io.datastructure import (
@@ -30,7 +30,7 @@ from py4DSTEM.io.native.read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
-    root: Optional[str] = '4DSTEM',
+    root: Optional[str] = None,
     tree: Optional[Union[bool,str]] = True,
     **legacy_options,
     ):
@@ -48,7 +48,11 @@ def read_py4DSTEM(
         root (str): the path to the root data group in the HDF5 file
             to read from. To examine an HDF5 file written by py4DSTEM
             in order to determine this path, call
-            `py4DSTEM.print_h5_tree(filepath)`.
+            `py4DSTEM.print_h5_tree(filepath)`. If left unspecified,
+            looks in the file and if it finds a single top-level
+            object, loads it. If it finds multiple top-level objects,
+            prints a warning and returns a list of root paths to the
+            top-level object found
         tree (bool or str): indicates what data should be loaded,
             relative to the root group specified above.  must be in
             (`True` or `False` or `noroot`).  If set to `False`, the
@@ -67,6 +71,26 @@ def read_py4DSTEM(
     # Check that filepath is valid
     assert(exists(filepath)), "Error: specified filepath does not exist"
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
+
+    # if root is None, determine if there is a single object in the file
+    # if so, set root to that file; otherwise raise an Exception or Warning
+    if root is None:
+        with h5py.File(filepath,'r') as f:
+            l1keys = list(f.keys())
+            if len(l1keys)==0:
+                raise Exception('No top level groups found in this HDF5 file!')
+            elif len(l1keys)>1:
+                warnings.warn('Multiple top level groups found; please specify. Returning group names.')
+                return l1keys
+            else:
+                l2keys = list(f[l1keys[0]].keys())
+                if len(l2keys)==0:
+                    raise Exception('No top level data blocks found in this HDF5 file!')
+                elif len(l2keys)>1:
+                    warnings.warn('Multiple top level data blocks found; please specify. Returning h5 paths to top level data blocks.')
+                    return [join(l1keys[0],k) for k in l2keys]
+                else:
+                    root = join(l1keys[0],l2keys[0])
 
     # Check the EMD version
     v = get_py4DSTEM_version(filepath, root.split("/")[0])
@@ -88,7 +112,6 @@ def read_py4DSTEM(
             if tree is True:
                 return _read_with_tree(group_data)
 
-            elif tree is False:
                 return _read_without_tree(group_data)
 
             elif tree == 'noroot':
