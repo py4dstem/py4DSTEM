@@ -376,7 +376,7 @@ def show(
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
         if clipvals == 'manual':
-            if mvin != None:
+            if vmin != None:
                 if vmin > 0.0: vmin = np.log(vmin)
                 else: vmin = np.min(_ar[_mask])
             if vmax != None: vmax = np.log(vmax)
@@ -446,7 +446,7 @@ def show(
     #     _ar[_mask] = np.log(ar.data[_mask])
     #     _ar[~_mask] = np.nan
     #     if clipvals == 'manual':
-    #         if mvin != None:
+    #         if vmin != None:
     #             if vmin > 0: vmin = np.log(vmin)
     #             else: vmin = np.min(_ar[_mask])
     #         if vmax != None: vmax = np.log(vmax)
