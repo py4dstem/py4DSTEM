@@ -54,7 +54,7 @@ def read(
     assert(exists(filepath)), er2
 
     filetype = parse_filetype(filepath)
-    assert filetype == "py4DSTEM", "Incompatible file type for py4DSTEM.io.read. To import data from a non-py4DSTEM EMD file, use py4DSTEM.io.import_file"
+    assert filetype == "py4DSTEM", "Incompatible file type for py4DSTEM.io.read. To non-native files must be read with py4DSTEM.io.import_file"
 
     # prepare kwargs
     kwargs['root'] = root
