@@ -113,7 +113,7 @@ def download_file_from_google_drive(id_, destination, overwrite=False):
 
 
 def get_sample_data_ids():
-    return {'files' : sample_data_ids.keys(),
+    return {'files' : sample_file_ids.keys(),
             'collections' : sample_collection_ids.keys()}
 
 
