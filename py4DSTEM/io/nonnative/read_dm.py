@@ -42,6 +42,7 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
                 break
 
         # We will only try to read pixel sizes for 4D data for now
+        pixel_size_found = False
         if dmFile.dataShape[dataset_index] > 2:
             # The pixel sizes of all datasets are chained together, so
             # we have to figure out the right offset
@@ -75,7 +76,7 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
                         Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
                 pixel_size_found = True
             except Exception as err:
-                pixel_size_found = False
+                pass
 
         # Handle 3D NCEM TitanX data
         titan_shape = _process_NCEM_TitanX_Tags(dmFile)
