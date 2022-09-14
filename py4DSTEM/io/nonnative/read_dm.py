@@ -41,35 +41,42 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
                 dataset_index = i
                 break
 
-        # The pixel sizes of all datasets are chained together, so
-        # we have to figure out the right offset
-        scale_offset = sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
-        pixelsize = dmFile.scale[scale_offset:]
-        pixelunits = dmFile.scaleUnit[scale_offset:]
+        # We will only try to read pixel sizes for 4D data for now
+        pixel_size_found = False
+        if dmFile.dataShape[dataset_index] > 2:
+            # The pixel sizes of all datasets are chained together, so
+            # we have to figure out the right offset
+            try:
+                scale_offset = sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
+                pixelsize = dmFile.scale[scale_offset:]
+                pixelunits = dmFile.scaleUnit[scale_offset:]
 
-        # Get the calibration pixel sizes
-        Q_pixel_size = pixelsize[0]
-        Q_pixel_units = "pixels" if pixelunits[0] == "" else pixelunits[0]
-        R_pixel_size = pixelsize[2]
-        R_pixel_units = "pixels" if pixelunits[2] == "" else pixelunits[2]
+                # Get the calibration pixel sizes
+                Q_pixel_size = pixelsize[0]
+                Q_pixel_units = "pixels" if pixelunits[0] == "" else pixelunits[0]
+                R_pixel_size = pixelsize[2]
+                R_pixel_units = "pixels" if pixelunits[2] == "" else pixelunits[2]
 
-        # Check that the units are sensible
-        # On microscopes that do not have live communication with the detector
-        # the calibrations can be invalid
-        if Q_pixel_units in ("nm", "µm"):
-            Q_pixel_units = "pixels"
-            Q_pixel_size = 1
-            R_pixel_units = "pixels"
-            R_pixel_size = 1
+                # Check that the units are sensible
+                # On microscopes that do not have live communication with the detector
+                # the calibrations can be invalid
+                if Q_pixel_units in ("nm", "µm"):
+                    Q_pixel_units = "pixels"
+                    Q_pixel_size = 1
+                    R_pixel_units = "pixels"
+                    R_pixel_size = 1
 
-        # Convert mrad to Å^-1 if possible
-        if Q_pixel_units == "mrad":
-            voltage = [v for t,v in dmFile.allTags.items() if "Microscope Info.Voltage" in t]
-            if len(voltage) == 1:
-                from py4DSTEM.process.utils import electron_wavelength_angstrom
-                lamda = electron_wavelength_angstrom(voltage[0])
-                Q_pixel_units = "A^-1"
-                Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
+                # Convert mrad to Å^-1 if possible
+                if Q_pixel_units == "mrad":
+                    voltage = [v for t,v in dmFile.allTags.items() if "Microscope Info.Voltage" in t]
+                    if len(voltage) == 1:
+                        from py4DSTEM.process.utils import electron_wavelength_angstrom
+                        lamda = electron_wavelength_angstrom(voltage[0])
+                        Q_pixel_units = "A^-1"
+                        Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
+                pixel_size_found = True
+            except Exception as err:
+                pass
 
         # Handle 3D NCEM TitanX data
         titan_shape = _process_NCEM_TitanX_Tags(dmFile)
@@ -109,13 +116,14 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
 
         if len(_data.shape) == 4:
             data = DataCube(_data, name=name)
-            try:
-                data.calibration.set_Q_pixel_size(Q_pixel_size * binfactor)
-                data.calibration.set_Q_pixel_units(Q_pixel_units)
-                data.calibration.set_R_pixel_size(R_pixel_size)
-                data.calibration.set_R_pixel_units(R_pixel_units)
-            except Exception as err:
-                print(f"Setting pixel sizes of the datacube failed with error {err}")
+            if pixel_size_found:
+                try:
+                    data.calibration.set_Q_pixel_size(Q_pixel_size * binfactor)
+                    data.calibration.set_Q_pixel_units(Q_pixel_units)
+                    data.calibration.set_R_pixel_size(R_pixel_size)
+                    data.calibration.set_R_pixel_units(R_pixel_units)
+                except Exception as err:
+                    print(f"Setting pixel sizes of the datacube failed with error {err}")
         else:
             data = Array(_data, name=name)
 
