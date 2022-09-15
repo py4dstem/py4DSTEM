@@ -271,6 +271,11 @@ def show(
             multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
+        scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
+            with calibrations is passed, adds a scalebar.  If None and anything else is
+            passed or if False, does not add a scalebar.  If a dict is passed, it is
+            propagated to the add_scalebar function which will attempt to use it to
+            overlay a scalebar.
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -303,7 +308,7 @@ def show(
     # support for native data types
     elif not isinstance(ar,np.ndarray):
         # support for calibration/auto-scalebars
-        if hasattr(ar, 'calibration'):
+        if hasattr(ar, 'calibration') and scalebar != False:
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
@@ -531,7 +536,7 @@ def show(
 
 
     # Add a scalebar
-    if scalebar is not None:
+    if scalebar is not None and scalebar is not False:
         # Add the grid
         scalebar['Nx'],scalebar['Ny']=ar.shape
         scalebar['pixelsize'] = pixelsize
