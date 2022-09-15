@@ -90,7 +90,8 @@ def _make_function_dict():
 
 def get_probe_kernel(
     probe,
-    origin=None
+    origin=None,
+    bilinear=True
     ):
     """
     Creates a convolution kernel from an average probe, by normalizing, then
@@ -119,7 +120,7 @@ def get_probe_kernel(
     probe = probe/np.sum(probe)
 
     # Shift center to corners of array
-    probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM)
+    probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM, bilinear=bilinear)
 
     return probe_kernel
 
@@ -128,7 +129,7 @@ def get_probe_kernel_edge_gaussian(
         probe,
         sigma,
         origin=None,
-        bilinear=False,
+        bilinear=True,
         ):
     """
     Creates a convolution kernel from an average probe, subtracting a gaussian
@@ -143,7 +144,7 @@ def get_probe_kernel_edge_gaussian(
         origin (2-tuple or None): if None (default), finds the origin using
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying
             the origin position
-        bilinear (bool): By default probe is shifted via a Fourier transform. 
+        bilinear (bool): By default probe is shifted via a Fourier transform.
                          Setting this to true overrides it and uses bilinear shifting.
                          Not recommended!
 
@@ -182,7 +183,7 @@ def get_probe_kernel_edge_sigmoid(
     radii,
     origin=None,
     type='sine_squared',
-    bilinear=False,
+    bilinear=True,
     ):
     """
     Creates a convolution kernel from an average probe, subtracting an annular
@@ -247,24 +248,28 @@ def _get_probe_kernel_edge_sigmoid_sine_squared(
     probe,
     radii,
     origin=None,
+    **kwargs,
     ):
     return get_probe_kernel_edge_sigmoid(
         probe,
         radii,
         origin = origin,
-        type='sine_squared'
+        type='sine_squared',
+        **kwargs,
     )
 
 def _get_probe_kernel_edge_sigmoid_logistic(
     probe,
     radii,
     origin=None,
+    **kwargs,
     ):
     return get_probe_kernel_edge_sigmoid(
         probe,
         radii,
         origin = origin,
-        type='logistic'
+        type='logistic',
+        **kwargs
     )
 
 
