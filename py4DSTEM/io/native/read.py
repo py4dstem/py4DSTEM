@@ -72,6 +72,26 @@ def read_py4DSTEM(
     assert(exists(filepath)), "Error: specified filepath does not exist"
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
+    # Check the EMD version
+    if root is not None:
+        v = get_py4DSTEM_version(filepath, root.split("/")[0])
+    else:
+        try:
+            with h5py.File(filepath,'r') as f:
+                k = list(f.keys())[0]
+                v = get_py4DSTEM_version(filepath, k)
+        except:
+            raise Exception('error parsing file version...')
+
+
+    # Use legacy readers for EMD files with v<13
+    if v[1] <= 12:
+        from py4DSTEM.io.native.legacy import read_py4DSTEM_legacy
+        return read_py4DSTEM_legacy(filepath,**legacy_options)
+
+
+    # Read EMD files with v>=13
+
     # if root is None, determine if there is a single object in the file
     # if so, set root to that file; otherwise raise an Exception or Warning
     if root is None:
@@ -91,15 +111,6 @@ def read_py4DSTEM(
                     return [join(l1keys[0],k) for k in l2keys]
                 else:
                     root = join(l1keys[0],l2keys[0])
-
-    # Check the EMD version
-    v = get_py4DSTEM_version(filepath, root.split("/")[0])
-    # print(f"Reading EMD version {v[0]}.{v[1]}.{v[2]}")
-
-    # Use legacy readers for older EMD files
-    if v[1] <= 12:
-        from py4DSTEM.io.native.legacy import read_py4DSTEM_legacy
-        return read_py4DSTEM_legacy(filepath,**legacy_options)
 
     # Open h5 file
     with h5py.File(filepath,'r') as f:
