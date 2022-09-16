@@ -103,6 +103,9 @@ def get_probe_kernel(
         origin (2-tuple or None): if None (default), finds the origin using
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying
             the origin position
+        bilinear (bool): By default probe is shifted via a Fourier transform. 
+                 Setting this to True overrides it and uses bilinear shifting.
+                 Not recommended!
 
     Returns:
         (ndarray): the convolution kernel corresponding to the probe, in real
@@ -145,7 +148,7 @@ def get_probe_kernel_edge_gaussian(
             get_probe_radius. Otherwise, should be a 2-tuple (x0,y0) specifying
             the origin position
         bilinear (bool): By default probe is shifted via a Fourier transform.
-                         Setting this to true overrides it and uses bilinear shifting.
+                         Setting this to True overrides it and uses bilinear shifting.
                          Not recommended!
 
     Returns:
@@ -199,7 +202,7 @@ def get_probe_kernel_edge_sigmoid(
             the origin position
         type (string): must be 'logistic' or 'sine_squared'
         bilinear (bool): By default probe is shifted via a Fourier transform. 
-                 Setting this to true overrides it and uses bilinear shifting.
+                 Setting this to True overrides it and uses bilinear shifting.
                  Not recommended!
 
     Returns:
