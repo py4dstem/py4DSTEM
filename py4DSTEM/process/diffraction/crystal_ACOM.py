@@ -1615,7 +1615,7 @@ def orientation_map_to_orix_CrystalMap(
 
     angles = np.vstack(
         [
-        R.from_matrix(matrix.T @ (swapop if mirror else eye).as_euler('zxz'))
+        R.from_matrix(matrix.T @ (swapop if mirror else eye)).as_euler('zxz')
         for matrix,mirror in zip(
             orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3),
             orientation_map.mirror[:,:,ind_orientation].flat,
