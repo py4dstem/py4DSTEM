@@ -15,7 +15,7 @@ def get_CoM_images(datacube, mask=None, normalize=True):
 
     Args:
         datacube (DataCube): the 4D-STEM data
-        mask (2D array): optionally, calculate the CoM only in the areas where mask==True
+        mask (2D array): optionally, calculate the CoM only in the areas where mask==True. The function will cast the input array to a bool dtype
         normalize (bool): if true, subtract off the mean of the CoM images
 
     Returns:
@@ -26,9 +26,14 @@ def get_CoM_images(datacube, mask=None, normalize=True):
 
     # Coordinates
     qy,qx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
-    if mask is not None:
-        qx *= mask
-        qy *= mask
+    if mask is None:
+        mask = np.ones_like(qx).astype(bool)
+    else:
+        assert qy.shape == mask.shape, f"The mask shape {mask.shape} must equal the diffraction pattern shape {qy.shape}."
+        mask = mask.astype(bool)
+
+    qx *= mask
+    qy *= mask
 
     # Get CoM
     CoMx = np.zeros((datacube.R_Nx,datacube.R_Ny))
