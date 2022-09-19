@@ -4,6 +4,7 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
+import warnings
 
 from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
@@ -24,9 +25,11 @@ class propagating_calibration(object):
         self.func(*args,**kwargs)
 
         calibration = args[0]
-        for target in calibration.targets:
+        for target in calibration._targets:
             if hasattr(target,'calibrate') and callable(target.calibrate):
                 target.calibrate()
+            else:
+                warnings.warn(f"{target} is registered as a target for calibration propagation but does not appear to have a calibrate() method")
 
     def __get__(self, instance, owner):
         """
