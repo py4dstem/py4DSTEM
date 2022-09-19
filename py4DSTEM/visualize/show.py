@@ -349,8 +349,8 @@ def show(
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
-        mask = np.ones_like(ar,dtype=bool)
-        ar = np.ma.array(data=ar,mask=mask==False)
+        mask = np.zeros_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask)
 
     # Perform any scaling
     if scaling == 'none':
@@ -401,6 +401,8 @@ def show(
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
         fig,ax = plt.subplots(1,1,figsize=figsize)
+    elif isinstance(figax, int):
+        fig,ax = plt.subplots(1,1,figsize=figsize, num=figax)
     else:
         fig,ax = figax
         assert(isinstance(fig,Figure))

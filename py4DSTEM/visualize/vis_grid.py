@@ -90,8 +90,8 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         return fig,ax
 
 def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
-                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None,
-                    get_s=None,open_circles=False,**kwargs):
+                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None, title=None,
+                    get_s=None,open_circles=False, num=1,**kwargs):
     """
     Displays a set of images in a grid.
 
@@ -114,8 +114,11 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     the integers 0 through HW-1
         H,W         integers, the dimensions of the grid
         axsize      the size of each image
+        title       a list of titles, accessed by i
         titlesize   if >0, prints the index i passed to get_ar over
                     each image
+        num         int - set a figure number, so you can replot the on the 
+                    same figure
         get_bordercolor
                     if not None, should be a function defined over
                     the same i as get_ar, and which returns a
@@ -134,68 +137,84 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         as a function of index i
 
     Returns:
-        if returnfig==false (default), the figure is plotted and nothing is returned.
-        if returnfig==false, the figure and its one axis are returned, and can be
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, the figure and its axes are returned, and can be
         further edited.
     """
     _get_bordercolor = get_bordercolor is not None
     _get_points = (get_x is not None) and (get_y is not None)
     _get_colors = get_pointcolors is not None
     _get_s = get_s is not None
-    fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
-    if H==1:
-        axs = axs[np.newaxis,:]
-    elif W==1:
-        axs = axs[:,np.newaxis]
-    for i in range(H):
-        for j in range(W):
-            ax = axs[i,j]
-            N = i*W+j
-            try:
-                ar = get_ar(N)
-                if _get_bordercolor and _get_points:
-                    bc = get_bordercolor(N)
-                    x,y = get_x(N),get_y(N)
-                    if _get_colors:
-                        pointcolors = get_pointcolors(N)
-                    else:
-                        pointcolors='r'
-                    if _get_s:
-                        s = get_s(N)
-                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
-                                          bordercolor=bc,x=x,y=y,s=s,
-                                          pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
-                    else:
-                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
-                                          bordercolor=bc,x=x,y=y,
-                                          pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
-                elif _get_bordercolor:
-                    bc = get_bordercolor(N)
-                    _,_ = show(ar,figax=(fig,ax),returnfig=True,
-                               bordercolor=bc,**kwargs)
-                elif _get_points:
-                    x,y = get_x(N),get_y(N)
-                    if _get_colors:
-                        pointcolors = get_pointcolors(N)
-                    else:
-                        pointcolors='r'
-                    _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
-                                      pointcolor=pointcolors,
-                                      open_circles=open_circles,**kwargs)
+    fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]), num=num, clear=True)
+    for N in range(H*W):
+        ax = axs.ravel()[N]
+        try:
+            ar = get_ar(N)
+            if _get_bordercolor and _get_points:
+                bc = get_bordercolor(N)
+                x,y = get_x(N),get_y(N)
+                if _get_colors:
+                    pointcolors = get_pointcolors(N)
                 else:
-                    _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
-                if titlesize>0:
-                    ax.set_title(N,fontsize=titlesize)
-            except IndexError:
-                ax.axis('off')
-    plt.tight_layout()
+                    pointcolors='r'
+                if _get_s:
+                    s = get_s(N)
+                    _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
+                                        bordercolor=bc,x=x,y=y,s=s,
+                                        pointcolor=pointcolors,**kwargs)
+                else:
+                    _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
+                                        bordercolor=bc,x=x,y=y,
+                                        pointcolor=pointcolors,**kwargs)
+            elif _get_bordercolor:
+                bc = get_bordercolor(N)
+                _,_ = show(ar,figax=(fig,ax),returnfig=True,
+                            bordercolor=bc,**kwargs)
+            elif _get_points:
+                x,y = get_x(N),get_y(N)
+                if _get_colors:
+                    pointcolors = get_pointcolors(N)
+                else:
+                    pointcolors='r'
+                _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
+                                    pointcolor=pointcolors,**kwargs)
+            else:
+                _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
+            if title is not None:
+                ax.set_title(title[N],fontsize=titlesize)
+        except IndexError:
+            ax.axis('off')
 
     if not returnfig:
         plt.show()
+        plt.tight_layout() # this should only be used if not further editing the plot
         return
     else:
         return fig,axs
 
 
+def show_nn(datacube, i, j, mask=None, returnfig=False, **kwargs):
+    """
+    this will just plot a 3x3 grid of patterns
+    datacube is a numpy 4D array (x,y,qx,qy)
+    i is row (int)
+    j is column (int)
+    mask is a numpy array (2D), which is placed on every diffraction pattern
+    kwargs is passed to plt.imshow
+    """
+    if mask is None:
+        mask = np.ones(datacube.shape[2:4]).astype(bool)
+        
+    fig,ax = plt.subplots(1,1, num=f"Nearest Neighbors of {i}, {j}")
+
+    tiled_image = np.concatenate(
+        np.concatenate(datacube[i - 1 : i + 2, j - 1 : j + 2, :, :] * mask, axis=-2),
+        axis=-1,
+    )
+    ax.imshow(tiled_image, **kwargs)
+
+    if not returnfig:
+        plt.show()
+        return
+    else:
+        return fig,ax

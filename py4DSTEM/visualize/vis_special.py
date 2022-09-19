@@ -61,7 +61,8 @@ def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
 def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
                             fitborder=True,fitbordercolor='k',fitborderlw=0.5,
                             scaling='log',ellipse=False,ellipse_color='r',
-                            ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,**kwargs):
+                            ellipse_alpha=0.7,ellipse_lw=2,returnfig=False,
+                            maskcenter=False, mask=None,**kwargs):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
     the data and the fit in a pinwheel pattern.
@@ -91,6 +92,9 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
     Q_Nx,Q_Ny = dp.shape
     qmin,qmax = fitradii
 
+    if  qmax is None:
+        qmax = np.sqrt(Q_Nx**2 + Q_Ny**2)
+
     # Make coords
     qx0,qy0 = p_dsg[6],p_dsg[7]
     qyy,qxx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
@@ -98,12 +102,23 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
     q = np.hypot(qx,qy)
     theta = np.arctan2(qy,qx)
 
-    # Make mask
+    # mask off center peak if maskcenter is true
+    if maskcenter is True:
+        dp[q<qmin] = np.mean(dp[q>qmin])
+
+    # mask off diffraction spots if mask is passed in
+    if mask is not None:
+        assert mask.shape == dp.shape
+        dp[~mask] = np.min(dp[~mask])
+
+
+    # Make pinwheel mask
     thetas = np.linspace(-np.pi,np.pi,2*N+1)
     pinwheel = np.zeros((Q_Nx,Q_Ny),dtype=bool)
     for i in range(N):
         pinwheel += (theta>thetas[2*i]) * (theta<=thetas[2*i+1])
     mask = pinwheel * (q>qmin) * (q<=qmax)
+
 
     # Get fit data
     fit = double_sided_gaussian(p_dsg, qxx, qyy)

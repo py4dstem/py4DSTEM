@@ -140,19 +140,20 @@ def fit_ellipse_amorphous_ring(data,center,fitradii,p0=None,mask=None):
         * x0,y0: the origin
         * A,B,C: The ellipse parameters, in the form Ax^2 + Bxy + Cy^2 = 1
 
-    Args:
-        data (2d array): the data
-        center (2-tuple of numbers): the center (x0,y0)
-        fitradii (2-tuple of numbers): the inner and outer radii of the fitting annulus
-        p0 (11-tuple): initial guess parameters. If p0 is None, the function will compute
-            a guess at all parameters. If p0 is a 11-tuple it must be populated by some
-            mix of numbers and None; any parameters which are set to None will be guessed
-            by the function.  The parameters are the 11 parameters of the fit function
-            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C).
-            Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
-            to the main function, but if they are passed as elements of p0 these will
-            take precendence.
-        mask (2d array of bools): only fit to datapoints where mask is True
+    Accepts:
+        data        (2d array)
+        x0,y0       (numbers) the center
+        ri,ro       (numbers) the inner and outer radii of the fitting annulus
+        p0          (11-tuple) initial guess parameters. If p0 is None, the
+                    function will compute a guess at all parameters. If p0 is
+                    a 11-tuple it must be populated by some mix of numbers
+                    and None; any parameters which are set to None will be guessed
+                    by the function.  The parameters are:
+                        p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,R,x0,y0,B,C)
+                    Note that x0,y0 are redundant; their guess values are the x0,y0
+                    values passed to the main function, but if they are passed as
+                    elements of p0 these will take precendence.
+        mask        only fit to datapoints where mask is True
 
     Returns:
         (2-tuple comprised of a 5-tuple and an 11-tuple): Returns a 2-tuple.
@@ -310,7 +311,3 @@ def constrain_degenerate_ellipse(data, p_ellipse, r_inner, r_outer, phi_known, f
     b_constrained = np.sqrt(y_fixed**2/(1-(x_fixed/(a_constrained))**2))
 
     return a_constrained, b_constrained
-
-
-
-
