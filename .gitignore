@@ -14,7 +14,7 @@ dist/
 py4DSTEM/test/testdata/
 sample_code/data/*h5
 sample_code/data/*dm3
-test/unit_test_data/
+py4DSTEM/test/unit_test_data/
 .vscode
 # Data Specific #
 #################
