@@ -1597,22 +1597,11 @@ def orientation_map_to_orix_CrystalMap(
     from py4DSTEM.process.diffraction.utils import element_symbols
 
     # Convert the orientation matrices into Euler angles
-    swapop = np.array(
-        [
-            [0,1,0],
-            [1,0,0],
-            [0,0,1],
-        ],
-        dtype=np.float64
-    )
-    eye = np.eye(3,dtype=np.float64)
-
     angles = np.vstack(
         [
-        R.from_matrix(matrix.T @ (swapop if mirror else eye)).as_euler('zxz')
-        for matrix,mirror in zip(
-            orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3),
-            orientation_map.mirror[:,:,ind_orientation].flat,
+        R.from_matrix(matrix.T).as_euler('zxz')
+        for matrix in zip(
+            orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
             )
         ]
     )
