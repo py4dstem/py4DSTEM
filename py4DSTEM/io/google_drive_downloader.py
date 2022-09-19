@@ -15,15 +15,13 @@ sample_file_ids = {
 # collections of files
 sample_collection_ids = {
     'unit_test_data' : (
-        ('file1', '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi'),
-        ('file2', '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU')
+        ('dm_test_file.dm3', '1RxI1QY6vYMDqqMVPt5GBN6Q_iCwHFU4B'),
     ),
     'moretestdata' : (
         ('file3','id'),
         ('file4','id')
     )
 }
-
 
 
 def download_file_from_google_drive(id_, destination, overwrite=False):
