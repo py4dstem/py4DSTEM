@@ -1,11 +1,10 @@
 # This file downloads test files to enable running py4DSTEM unit
 # tests with the pytest framework.
 
-# Please set the filepath below to point to the `py4DSTEM/test/`
-# directory on your local installation. Then run this file to
-# download test data.
 
-filepath = '/home/ben/projects/self/py4DSTEM/py4DSTEM/py4DSTEM/test/'
+from py4DSTEM import _TESTPATH
+from os.path import join
+filepath = join(_TESTPATH,'..')
 
 
 if __name__ == '__main__':
