@@ -183,7 +183,7 @@ def get_virtual_image(
     return virtual_image
 
 def make_detector(
-    Qshape,
+    Shape,
     mode,
     geometry,
 ):
@@ -191,7 +191,7 @@ def make_detector(
     Function to return 2D mask
 
     Args:
-        Qshape (tuple)     : defines shape of mask (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are mask sizes
+        Shape (tuple)     : defines shape of mask (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are mask sizes
         mode (str)         : defines geometry mode for calculating virtual image
             options:
                 - 'point' uses singular point as detector
@@ -199,7 +199,8 @@ def make_detector(
                 - 'annular' or 'annulus' uses annular detector, like dark field
                 - 'rectangle', 'square', 'rectangular', uses rectangular detector
                 - 'mask' flexible detector, any boolean or floating point 2D array with
-                    the same shape as datacube.Qshape
+                    the same shape as datacube.Qshape or datacube.Rshape for virtual image
+                    or diffraction image respectively
         geometry (variable) : valid entries are determined by the `mode`, values in pixels
             argument, as follows:
                 - 'point': 2-tuple, (qx,qy),
@@ -210,7 +211,8 @@ def make_detector(
                    qx, qy, radius_i, and radius_o are each single float or integer
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                 - `mask`: flexible detector, any boolean or floating point 2D array with the
-                    same shape as datacube.Qshape
+                    same shape as datacube.Qshape or datacube.Rshapefor virtual image
+                    or diffraction image respectively
 
     Returns:
         virtual detector in the form of a 2D mask (array)
@@ -220,7 +222,7 @@ def make_detector(
     #point mask 
     if mode == 'point':
         assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
-        mask = np.zeros(Qshape)
+        mask = np.zeros(Shape)
 
         qx = int(g[0])
         qy = int(g[1])
@@ -232,7 +234,7 @@ def make_detector(
         assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
         'specify qx, qy, radius_i as ((qx, qy), radius)'
 
-        qxa, qya = np.indices(Qshape)
+        qxa, qya = np.indices(Shape)
         mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
 
     #annular mask 
@@ -242,7 +244,7 @@ def make_detector(
 
         assert g[1][1] > g[1][0], "Inner radius must be smaller than outer radius"
 
-        qxa, qya = np.indices(Qshape)
+        qxa, qya = np.indices(Shape)
         mask1 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 > g[1][0] ** 2
         mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
         mask = np.logical_and(mask1, mask2)
@@ -251,7 +253,7 @@ def make_detector(
     if mode in('rectangle', 'square', 'rectangular') :
         assert(isinstance(g,tuple) and len(g)==4), \
        'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
-        mask = np.zeros(Qshape)
+        mask = np.zeros(Shape)
 
         xmin = int(np.round(g[0]))
         xmax = int(np.round(g[1]))
@@ -263,7 +265,7 @@ def make_detector(
     #flexible mask
     if mode == 'mask':
         assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
-        assert (g.shape == Qshape), 'mask and diffraction pattern shapes do not match'
+        assert (g.shape == Shape), 'mask and diffraction pattern shapes do not match'
         mask = g
 
     return mask
