@@ -14,7 +14,7 @@ sample_file_ids = {
 
 # collections of files
 sample_collection_ids = {
-    'testdata' : (
+    'unit_test_data' : (
         ('file1', '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi'),
         ('file2', '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU')
     ),
@@ -28,7 +28,8 @@ sample_collection_ids = {
 
 def download_file_from_google_drive(id_, destination, overwrite=False):
     """
-    Downloads a file from google drive to the destination file path.
+    Downloads a file or collection of files from google drive to the
+    destination file path.
 
     Args:
         id_ (str): File ID for the desired file.  May be:
@@ -36,18 +37,27 @@ def download_file_from_google_drive(id_, destination, overwrite=False):
               https://drive.google.com/file/d/1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM/
               id='1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM'
             - the complete URL,
-            - a special string denoting a sample dataset or collection of datasets.
-              For a list of sample datasets and their keys, run get_sample_data_ids().
-        destination (Union[pathlib.PurePosixPath, pathlib.PureWindowsPath,str]): path
-            file will be downloaded to
-        overwrite (bool): switch to add or remove overwrite protection
+            - a special string denoting a sample dataset or collection of
+              datasets. For a list of sample datasets and their keys, run
+              get_sample_data_ids().
+        destination (str or Path): path file will be downloaded to. For
+            collections of files, this should point to an existing directory;
+            a subdirectory will be created inside this directory whose name
+            will be given by `id_`, and the colletion of files will be placed
+            inside that subdirectory. If a subdirectory of this name already
+            exists, aborts or deletes and overwrite the entire subdirectory,
+            depending on the value of `overwrite`.
+        overwrite (bool): turn overwrite protection on/off
     """
     # handle paths
 
     # for collections of files
     if id_ in sample_collection_ids.keys():
 
-        #update the path with a directory name
+        # check if directory exists
+        assert os.path.exists(destination), "specified directory does not exist; check filepath"
+
+        # update the path with a new sub-directory name
         destination = os.path.join(destination, id_)
 
         # check if it already exists
