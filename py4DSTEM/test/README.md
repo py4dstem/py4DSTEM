@@ -20,8 +20,9 @@ To run all tests, you can then do
 
 from the command line in this directory - pytest will collect
 and run all the test in this directory and its subdirectories.
-You can also run a single test file or all files in a single
-test subdirectory with
+Please note that you must be run the command from this directory
+for the filepath to be imported correctly.  You can also run a
+single test file or all files in a single test subdirectory with
 
 `pytest test_file.py`
 `pytest test_dir`
