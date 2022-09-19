@@ -1,7 +1,7 @@
 # Find the origin of diffraction space
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
 from py4DSTEM.process.calibration.probe import get_probe_size

@@ -1,7 +1,7 @@
 # Functions for getting images of the vacuum probe
 
 import numpy as np
-from scipy.ndimage.morphology import (
+from scipy.ndimage import (
     binary_opening, binary_dilation, distance_transform_edt)
 
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
