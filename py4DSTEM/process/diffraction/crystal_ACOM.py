@@ -1217,16 +1217,7 @@ def match_single_pattern(
                 phi = corr_in_plane_angle_keep[ind_best_fit]
             else:
                 phi = corr_in_plane_angle[ind_best_fit]
-            if inversion_symmetry and corr_inv[ind_best_fit]:
-                m3z = np.array(
-                    [
-                        [-np.cos(phi), np.sin(phi), 0],
-                        [np.sin(phi), np.cos(phi), 0],
-                        [0, 0, 1],
-                    ]
-                )
-            else:
-                m3z = np.array(
+            m3z = np.array(
                     [
                         [np.cos(phi), np.sin(phi), 0],
                         [-np.sin(phi), np.cos(phi), 0],
@@ -1234,7 +1225,10 @@ def match_single_pattern(
                     ]
                 )
             orientation_matrix = orientation_matrix @ m3z
-
+            if inversion_symmetry and corr_inv[ind_best_fit]:
+                # Rotate 180 degrees around x axis for projected x-mirroring operation
+                orientation_matrix[:,1:] = -orientation_matrix[:,1:] 
+            
             # Output best fit values into Orientation class
             orientation.matrix[match_ind] = orientation_matrix
 
