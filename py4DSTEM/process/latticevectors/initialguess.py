@@ -1,7 +1,7 @@
 # Obtain an initial guess at the lattice vectors
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from skimage.transform import radon
 
 from py4DSTEM.process.utils import get_maxima_1D
