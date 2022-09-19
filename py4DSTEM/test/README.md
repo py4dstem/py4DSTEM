@@ -31,11 +31,8 @@ single test file or all files in a single test subdirectory with
 
 Some tests need data files to run.  In order to avoid distibuting large
 datasets with the package these files do not come pre-installed with the
-package - you'll need to download them.  To do so, open the file
-`download_test_data.py` and update the variable `filepath` to point to this
-directory (`py4DSTEM/test/`) on your local installation. Then run
-`download_test_data.py` in an environment that has py4DSTEM installed,
-e.g. with
+package - you'll need to download them.  To do so, run the
+`download_test_data.py` file in this directory, e.g. with
 
 `python download_test_data.py`
 
@@ -52,14 +49,9 @@ name your new file `test_*.py` for some short, descriptive `*`
 specifying that nature of your tests.
 
 Inside the file, any function called `test_*` will be found and run
-by pytest.
+by pytest.  In classes named `Test*`, any methods called `test_*` will
+also be found and run.
 
-If multiple tests need the same boilerplate code to be run to set up the
-test, these functions can be placed inside a class named `Test*`, the
-boilerplate code can be placed in the `__init__` function, and the
-tests can be written as individual methods named `test_*`. pytest will
-find and run each of these.  Note that a new instance of the class will
-be created for each test.
 
 
 
