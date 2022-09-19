@@ -1600,9 +1600,7 @@ def orientation_map_to_orix_CrystalMap(
     angles = np.vstack(
         [
         R.from_matrix(matrix.T).as_euler('zxz')
-        for matrix in zip(
-            orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
-            )
+        for matrix in  orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
         ]
     )
 
