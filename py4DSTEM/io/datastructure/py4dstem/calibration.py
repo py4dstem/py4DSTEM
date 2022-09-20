@@ -10,18 +10,22 @@ from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
 class propagating_calibration(object):
     """
-    A decorator which can be attached to a method of Calibration
-    which causes `calibrate` to be called on any objects in the 
-    Calibration object's `_targets` list following execution of
-    the decorated function
+    A decorator which, when attached to a method of Calibration,
+    causes `calibrate` to be called on any objects in the 
+    Calibration object's `_targets` list, following execution of
+    the decorated function.
+    This allows objects associated with the Calibration to 
+    automatically respond to changes in the calibration state.
     """
     def __init__(self, func):
         self.func = func
 
     def __call__(self, *args, **kwargs):
-        # Update the parameters the caller wanted,
-        # then loop through the list of targets
-        # and call their `calibrate` methods
+        """
+        Update the parameters the caller wanted by calling the wrapped 
+        method, then loop through the list of targetsand call their 
+        `calibrate` methods.
+        """
         self.func(*args,**kwargs)
 
         calibration = args[0]
@@ -35,7 +39,11 @@ class propagating_calibration(object):
         """
         This is some magic to make sure that the Calibration instance
         on which the decorator was called gets passed through and
-        everything dispatches correctly
+        everything dispatches correctly (by making sure `instance`, 
+        the Calibration instance to which the call was directed, gets
+        placed in the `self` slot of the wrapped method (which is *not*
+        actually bound to the instance due to this decoration.) using
+        partial application of the method.)
         """
         from functools import partial
         return partial(self.__call__, instance)
@@ -76,6 +84,8 @@ class Calibration(Metadata):
             self,
             name=name)
 
+        # List to hold objects that will re-`calibrate` when
+        # certain properties are changed
         self._targets = []
 
         # set initial pixel values
@@ -86,9 +96,17 @@ class Calibration(Metadata):
 
 
     def register_target(self,new_target):
+        """
+        Register an object to recieve calls to it `calibrate`
+        method when certain calibrations get updated 
+        """
         self._targets.append(new_target)
 
     def unregister_target(self,target):
+        """
+        Unlink an object from recieving calls to `calibrate` when
+        certain calibration values are changed
+        """
         if target in self._targets:
             self._targets.remove(target)
 
