@@ -2,6 +2,7 @@ import numpy as np
 from numpy.lib.arraysetops import isin
 from tqdm import tqdm
 from py4DSTEM.process.calibration import ellipse
+from py4DSTEM.process.utils import tqdmnd
 
 # this fixes figure si
 # bring strain mapping, fit stack code here, rely on visualization package for plotting. also bring in make_mask_array
@@ -59,23 +60,20 @@ def fit_stack(datacube, init_coefs, ri, ro, mask=None):
         coef_cube  - an array of coefficients of the fit
     """
     coefs_array = np.zeros([i for i in datacube.data.shape[0:2]] + [len(init_coefs)])
-    for i in tqdm(range(datacube.R_Nx)):
-        for j in tqdm(range(datacube.R_Ny)):
-            if len(mask.shape) == 2:
-                mask_current = mask
-            elif len(mask.shape) == 4:
-                mask_current = mask[i, j, :, :]
+    for i,j in tqdmnd(datacube.data.shape[0], datacube.data.shape[1]):
+        if len(mask.shape) == 2:
+            mask_current = mask
+        elif len(mask.shape) == 4:
+            mask_current = mask[i, j, :, :]
 
-            coefs = ellipse.fit_ellipse_amorphous_ring(
-                datacube.data[i, j, :, :],
-                init_coefs[7],
-                init_coefs[8],
-                ri,
-                ro,
-                p0=init_coefs,
-                mask=mask_current,
-            )[1]
-            coefs_array[i, j] = coefs
+        coefs = ellipse.fit_ellipse_amorphous_ring(
+            datacube.data[i, j, :, :],
+            (init_coefs[7], init_coefs[8]),
+            (ri,ro),
+            p0=init_coefs,
+            mask=mask_current,
+        )[1]
+        coefs_array[i, j] = coefs
 
     return coefs_array
 
