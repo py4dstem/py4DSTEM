@@ -688,7 +688,7 @@ def add_scalebar(ax,d):
 
     # Add label
     if label:
-        labeltext = str(length_units)+' '+pixelunits
+        labeltext = f'{np.round(length_units,3)}'+' '+pixelunits
         if xshiftdir>0: va='top'
         else: va='bottom'
         ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
