@@ -354,8 +354,8 @@ def show(
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
-        mask = np.ones_like(ar,dtype=bool)
-        ar = np.ma.array(data=ar,mask=mask==False)
+        mask = np.zeros_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask)
 
     # Perform any scaling
     if scaling == 'none':
@@ -382,7 +382,9 @@ def show(
     else:
         raise Exception
 
-    _ar = np.ma.array(data=_ar.data,mask=~_mask)
+    # Create the masked array applying the user mask (this is done before the 
+    # vmin and vmax are determined so the mask affects those)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
     # Set the clipvalues
     if clipvals == 'minmax':
@@ -411,9 +413,6 @@ def show(
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
-    # Create the masked array applying the user mask (this is done after the 
-    # vmin and vmax are determined so the mask doesn't affect those)
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Create colormap with mask_color for bad values
     cm = copy(plt.cm.get_cmap(cmap))
