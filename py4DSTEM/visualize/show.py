@@ -914,7 +914,7 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     else:
         return fig,ax
 
-def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+def show_ellipses(ar,center,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
                                                         returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
@@ -943,7 +943,7 @@ def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'a':a,'e':e,'theta':theta,'color':color,'fill':fill,
+    d = {'center':center,'a':a,'b':b,'theta':theta,'color':color,'fill':fill,
          'alpha':alpha,'linewidth':linewidth}
     add_ellipses(ax,d)
 
