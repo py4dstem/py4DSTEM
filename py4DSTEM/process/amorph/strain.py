@@ -60,7 +60,7 @@ def fit_stack(datacube, init_coefs, ri, ro, mask=None):
         coef_cube  - an array of coefficients of the fit
     """
     coefs_array = np.zeros([i for i in datacube.data.shape[0:2]] + [len(init_coefs)])
-    for i,j in tqdmnd(datacube.data.shape[0], datacube.data.shape[1]):
+    for i,j in tqdmnd(datacube.data.shape[0], datacube.data.shape[1], miniters=1, mininterval=0.5):
         if len(mask.shape) == 2:
             mask_current = mask
         elif len(mask.shape) == 4:
@@ -68,7 +68,7 @@ def fit_stack(datacube, init_coefs, ri, ro, mask=None):
 
         coefs = ellipse.fit_ellipse_amorphous_ring(
             datacube.data[i, j, :, :],
-            (init_coefs[7], init_coefs[8]),
+            (init_coefs[6:8]),
             (ri,ro),
             p0=init_coefs,
             mask=mask_current,

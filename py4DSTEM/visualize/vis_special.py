@@ -447,8 +447,8 @@ def show_strain(strainmap,
     # Add black background
     if bkgrd:
         mask = np.ma.masked_where(
-            strainmap.get_slice('mask').astype(bool),
-            np.zeros_like(strainmap.get_slice('mask')))
+            strainmap.get_slice('mask').data.astype(bool),
+            np.zeros_like(strainmap.get_slice('mask').data))
         ax11.matshow(mask,cmap='gray')
         ax12.matshow(mask,cmap='gray')
         ax21.matshow(mask,cmap='gray')
