@@ -107,10 +107,10 @@ def show(
         will be saturated. Controlling the clip values is accomplished using the input
         parameters ``clipvals``, ``min``, and ``max``, and the clipvalues can be returned
         with the ``returnclipvals`` parameter.  ``clipvals`` controls the method by which
-        the clip values are determined, and must be a string in ('minmax','manual',
+        the clip values are determined, and must be a string in ('minmax','absolute',
         'std','centered'). Their behaviors are
             * 'minmax' (default): The min/max values are set to np.min(ar)/np.max(ar)
-            * 'manual': The min/max values are set to ``min``/``max``
+            * 'absolute': The min/max values are set to ``min``/``max``
             * 'std': The min/max values are ``np.median(ar) + N*np.std(ar)``, and
                N is this functions ``min``/``max`` values.
             * 'centered': The min/max values are set to ``c -/+ m``, where by default
@@ -245,7 +245,7 @@ def show(
                   distribution of pixel values in the array, e.g. vmin=0.02
                   will set the minumum display value to saturate the lower 2% of pixels
                 * 'minmax': The vmin/vmax values are np.min(ar)/np.max(r)
-                * 'manual': The vmin/vmax values are set to the values of
+                * 'absolute': The vmin/vmax values are set to the values of
                   the vmin,vmax arguments received by this function
                 * 'std': The vmin/vmax values are ``np.median(ar) -/+ N*np.std(ar)``, and
                    N is this functions min,max vals.
@@ -370,7 +370,7 @@ def show(
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
-    assert intensity_range in ('ordered','manual','minmax','std','centered')  
+    assert intensity_range in ('ordered','absolute','minmax','std','centered')  
     if power is not None:
         scaling = 'power'            
     if scaling == 'none':
@@ -384,7 +384,7 @@ def show(
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
-        if clipvals == 'manual':
+        if clipvals == 'absolute':
             if vmin != None:
                 if vmin > 0.0: vmin = np.log(vmin)
                 else: vmin = np.min(_ar[_mask])
@@ -402,7 +402,7 @@ def show(
             else:
                 _ar = np.power(ar.copy(), power)            
             _mask = np.ones_like(_ar.data,dtype=bool)
-            if intensity_range == 'manual':
+            if intensity_range == 'absolute':
                 if vmin != None: vmin = np.power(vmin,power)
                 if vmax != None: vmax = np.power(vmax,power)
     else:
@@ -422,7 +422,7 @@ def show(
         vmax = vals[ind_vmax]
     elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
-    elif intensity_range == 'manual':
+    elif intensity_range == 'absolute':
         if vmin is None:
             vmin = np.min(_ar)
             print("Warning, vmin not provided, setting to minimum intensity = " + str(vmin))
@@ -460,7 +460,7 @@ def show(
     #     _ar = np.zeros_like(ar.data,dtype=float)
     #     _ar[_mask] = np.log(ar.data[_mask])
     #     _ar[~_mask] = np.nan
-    #     if clipvals == 'manual':
+    #     if clipvals == 'absolute':
     #         if vmin != None:
     #             if vmin > 0: vmin = np.log(vmin)
     #             else: vmin = np.min(_ar[_mask])
@@ -470,7 +470,7 @@ def show(
     #     _ar = np.zeros_like(ar.data,dtype=float)
     #     _ar[_mask] = np.power(ar.data[_mask],power)
     #     _ar[~_mask] = np.nan
-    #     if clipvals == 'manual':
+    #     if clipvals == 'absolute':
     #         if vmin != None: vmin = np.power(vmin,power)
     #         if vmax != None: vmax = np.power(vmax,power)
     # else:
@@ -481,7 +481,7 @@ def show(
     # # Set the clipvalues
     # if clipvals == 'minmax':
     #     vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
-    # elif clipvals == 'manual':
+    # elif clipvals == 'absolute':
     #     assert vmin is not None and vmax is not None
     #     vmin,vmax = min,max
     # elif clipvals == 'std':
@@ -759,10 +759,10 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
 
     Regardless of which overlay is requested, the function must recieve either values
     for Q_pixel_size and Q_pixel_units, or a Calibration instance containing these values.
-    If both are passed, the manually passed values take precedence.
-    If a cartesian grid is requested, (qx0,qy0) are required, either passed manually or
+    If both are passed, the absolutely passed values take precedence.
+    If a cartesian grid is requested, (qx0,qy0) are required, either passed absolutely or
     passed as a Calibration instance with the appropriate (rx,ry) value.
-    If a polar grid is requested, (qx0,qy0,e,theta) are required, again either manually
+    If a polar grid is requested, (qx0,qy0,e,theta) are required, again either absolutely
     or via a Calibration instance.
 
     Any arguments accepted by the show() function (e.g. image scaling, clipvalues, etc)
@@ -776,21 +776,21 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
         Q_pixel_size = Q_pixel_size if Q_pixel_size is not None else \
                        calibration.get_Q_pixel_size()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or absolutely")
     try:
         Q_pixel_units = Q_pixel_units if Q_pixel_units is not None else \
                        calibration.get_Q_pixel_units()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or absolutely")
     if grid or polargrid:
         try:
             qx0 = qx0 if qx0 is not None else calibration.get_qx0(rx,ry)
         except AttributeError:
-            raise Exception("qx0 must be specified, either in calibration or manually")
+            raise Exception("qx0 must be specified, either in calibration or absolutely")
         try:
             qy0 = qy0 if qy0 is not None else calibration.get_qy0(rx,ry)
         except AttributeError:
-            raise Exception("qy0 must be specified, either in calibration or manually")
+            raise Exception("qy0 must be specified, either in calibration or absolutely")
         assert isinstance(qx0,Number), "Error: qx0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(qy0,Number), "Error: qy0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
     if polargrid:
