@@ -428,10 +428,10 @@ def show(
     elif intensity_range == 'absolute':
         if vmin is None:
             vmin = np.min(_ar)
-            print("Warning, vmin not provided, setting to minimum intensity = " + str(vmin))
+            print("Warning, vmin not provided, setting minimum intensity = " + str(vmin))
         if vmax is None:
             vmax = np.max(_ar)
-            print("Warning, vmin not provided, setting to minimum intensity = " + str(vmax))
+            print("Warning, vmax not provided, setting maximum intensity = " + str(vmax))
         # assert vmin is not None and vmax is not None
         # vmin,vmax = vmin,vmax
     elif intensity_range == 'std':
