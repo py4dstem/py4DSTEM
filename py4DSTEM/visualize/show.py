@@ -365,8 +365,8 @@ def show(
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
-        mask = np.ones_like(ar,dtype=bool)
-        ar = np.ma.array(data=ar,mask=mask==False)
+        mask = np.zeros_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask)
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
@@ -408,8 +408,9 @@ def show(
     else:
         raise Exception
 
-    # init array
-    _ar = np.ma.array(data=_ar.data,mask=~_mask)
+    # Create the masked array applying the user mask (this is done before the 
+    # vmin and vmax are determined so the mask affects those)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
     # Set the clipvalues
     if intensity_range == 'manual':
@@ -455,9 +456,6 @@ def show(
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
-    # Create the masked array applying the user mask (this is done after the 
-    # vmin and vmax are determined so the mask doesn't affect those)
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Create colormap with mask_color for bad values
     cm = copy(plt.cm.get_cmap(cmap))
@@ -963,7 +961,7 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     else:
         return fig,ax
 
-def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+def show_ellipses(ar,center,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
                                                         returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
@@ -992,7 +990,7 @@ def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'a':a,'e':e,'theta':theta,'color':color,'fill':fill,
+    d = {'center':center,'a':a,'b':b,'theta':theta,'color':color,'fill':fill,
          'alpha':alpha,'linewidth':linewidth}
     add_ellipses(ax,d)
 
