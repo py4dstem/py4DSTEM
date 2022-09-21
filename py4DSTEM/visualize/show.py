@@ -85,7 +85,7 @@ def show(
 
     Scaling:
         Setting the parameter ``scaling`` will scale the display image. Options are
-        'none', 'auto', power', or 'log'.  If 'power' is specified, the parameter ``power`` must
+        'none', 'auto', 'power', or 'log'.  If 'power' is specified, the parameter ``power`` must
         also be passed. The underlying data is not altered. Values less than or equal to
         zero are set to zero. If the image histogram is displayed using ``hist=True``,
         the scaled image histogram is shown.
@@ -105,17 +105,17 @@ def show(
     Clip values:
         By 'clip values' we mean the lower and upper values at which the display image
         will be saturated. Controlling the clip values is accomplished using the input
-        parameters ``clipvals``, ``min``, and ``max``, and the clipvalues can be returned
+        parameters ``clipvals``, ``vmin``, and ``vmax``, and the clipvalues can be returned
         with the ``returnclipvals`` parameter.  ``clipvals`` controls the method by which
         the clip values are determined, and must be a string in ('minmax','absolute',
         'std','centered'). Their behaviors are
             * 'minmax' (default): The min/max values are set to np.min(ar)/np.max(ar)
-            * 'absolute': The min/max values are set to ``min``/``max``
+            * 'absolute': The min/max values are set to ``vmin``/``vmax``
             * 'std': The min/max values are ``np.median(ar) + N*np.std(ar)``, and
-               N is this functions ``min``/``max`` values.
+               N is this functions ``vmin``/``vmax`` values.
             * 'centered': The min/max values are set to ``c -/+ m``, where by default
               'c' is zero and m is the max(abs(ar-c)), or, the two params can be user
-              specified using  ``min``/``max`` -> ``c``/``m``.
+              specified using  ``vmin``/``vmax`` -> ``c``/``m``.
 
     Masking:
         If a numpy masked array is passed to show, the function will automatically
@@ -240,8 +240,8 @@ def show(
                 * 'log': values where ar<=0 are set to 0
         intensity_range (str): method for setting clipvalues (min and max intensities).  
                         The original name "clipvals" is now deprecated.
-                        Default is 'auto'. Accepted values:
-                * 'ordered': vmin/vmax are set to fractuibs of the
+                        Default is 'ordered'. Accepted values:
+                * 'ordered': vmin/vmax are set to fractions of the
                   distribution of pixel values in the array, e.g. vmin=0.02
                   will set the minumum display value to saturate the lower 2% of pixels
                 * 'minmax': The vmin/vmax values are np.min(ar)/np.max(r)
@@ -292,7 +292,7 @@ def show(
     if min is not None: vmin=min
     if max is not None: vmax=max
     if min is not None or max is not None:
-        warnings.warn("Warning, min/max commands are deprecated. Use vmin/vmax instead.")
+        warnings.warn("Warning, min/max are deprecated. Use vmin/vmax instead.")
     if clipvals is not None:
         warnings.warn("Warning, clipvals is deprecated. Use intensity_range instead.")
         if intensity_range is None:
@@ -413,7 +413,7 @@ def show(
 
     # Set the clipvalues
     if intensity_range == 'manual':
-        warnings.warn('Warning - intensity_range=\'manual\' is deprecated, use \'absolute\' instead')
+        warnings.warn("Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
         intensity_range = 'absolute'
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
@@ -446,59 +446,6 @@ def show(
         vmax = c+m
     else:
         raise Exception
-
-
-    # elif isinstance(ar,np.ma.masked_array):
-    #     pass
-    # else:
-    #     mask = np.ones_like(ar,dtype=bool)
-    #     ar = np.ma.array(data=ar,mask=mask==False)
-
-    # # Perform any scaling
-    # if scaling == 'none':
-    #     _ar = ar.copy()
-    #     _mask = np.ones_like(_ar.data,dtype=bool)
-    # elif scaling == 'log':
-    #     _mask = ar.data>0
-    #     _ar = np.zeros_like(ar.data,dtype=float)
-    #     _ar[_mask] = np.log(ar.data[_mask])
-    #     _ar[~_mask] = np.nan
-    #     if clipvals == 'absolute':
-    #         if vmin != None:
-    #             if vmin > 0: vmin = np.log(vmin)
-    #             else: vmin = np.min(_ar[_mask])
-    #         if vmax != None: vmax = np.log(vmax)
-    # elif scaling == 'power':
-    #     _mask = ar.data>0
-    #     _ar = np.zeros_like(ar.data,dtype=float)
-    #     _ar[_mask] = np.power(ar.data[_mask],power)
-    #     _ar[~_mask] = np.nan
-    #     if clipvals == 'absolute':
-    #         if vmin != None: vmin = np.power(vmin,power)
-    #         if vmax != None: vmax = np.power(vmax,power)
-    # else:
-    #     raise Exception
-
-    # _ar = np.ma.array(data=_ar.data,mask=~_mask)
-
-    # # Set the clipvalues
-    # if clipvals == 'minmax':
-    #     vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
-    # elif clipvals == 'absolute':
-    #     assert vmin is not None and vmax is not None
-    #     vmin,vmax = min,max
-    # elif clipvals == 'std':
-    #     assert vmin is not None and vmax is not None
-    #     m,s = np.nanmedian(_ar),np.nanstd(_ar)
-    #     vmin = m + vmin*s
-    #     vmax = m + vmax*s
-    # elif clipvals == 'centered':
-    #     c = np.nanmean(_ar) if vmin is None else vmin
-    #     m = np.nanmax(np.ma.abs(c-_ar)) if vmax is None else vmax
-    #     vmin = c-m
-    #     vmax = c+m
-    # else:
-    #     raise Exception
 
     # Create or attach to the appropriate Figure and Axis
     if figax is None:
