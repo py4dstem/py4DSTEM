@@ -2,6 +2,7 @@ import numpy as np
 from numpy.lib.arraysetops import isin
 from tqdm import tqdm
 from py4DSTEM.process.calibration import ellipse
+from py4DSTEM.process.utils import tqdmnd
 
 # this fixes figure si
 # bring strain mapping, fit stack code here, rely on visualization package for plotting. also bring in make_mask_array
@@ -59,23 +60,20 @@ def fit_stack(datacube, init_coefs, ri, ro, mask=None):
         coef_cube  - an array of coefficients of the fit
     """
     coefs_array = np.zeros([i for i in datacube.data.shape[0:2]] + [len(init_coefs)])
-    for i in tqdm(range(datacube.R_Nx)):
-        for j in tqdm(range(datacube.R_Ny)):
-            if len(mask.shape) == 2:
-                mask_current = mask
-            elif len(mask.shape) == 4:
-                mask_current = mask[i, j, :, :]
+    for i,j in tqdmnd(datacube.data.shape[0], datacube.data.shape[1], miniters=1, mininterval=0.5):
+        if len(mask.shape) == 2:
+            mask_current = mask
+        elif len(mask.shape) == 4:
+            mask_current = mask[i, j, :, :]
 
-            coefs = ellipse.fit_ellipse_amorphous_ring(
-                datacube.data[i, j, :, :],
-                init_coefs[7],
-                init_coefs[8],
-                ri,
-                ro,
-                p0=init_coefs,
-                mask=mask_current,
-            )[1]
-            coefs_array[i, j] = coefs
+        coefs = ellipse.fit_ellipse_amorphous_ring(
+            datacube.data[i, j, :, :],
+            (init_coefs[6:8]),
+            (ri,ro),
+            p0=init_coefs,
+            mask=mask_current,
+        )[1]
+        coefs_array[i, j] = coefs
 
     return coefs_array
 
@@ -91,9 +89,8 @@ def calculate_coef_strain(coef_cube, r_ref):
         sigma1      inner std of Janus gaussian
         sigma2      outer std of Janus gaussian
         c_bkgd      a constant offset
-        R           center of the Janus gaussian
         x0,y0       the origin
-        B,C         1x^2 + Bxy + Cy^2 = 1
+        A,B,C         x^2 + Bxy + Cy^2 = 1
 
     Accepts:
         coef_cube   - output from fit_stack
@@ -117,17 +114,17 @@ def calculate_coef_strain(coef_cube, r_ref):
                 "r_ref must be a 3 element tuple with elements(r_ref, B_ref, C_ref)."
             )
         # r_ref is a tuple with (r_ref, B_ref, C_ref)
-        A_ref, B_ref, C_ref = 1, r_ref[1], r_ref[2]
-        r_ref = r_ref[0]
+        A_ref, B_ref, C_ref = r_ref[0], r_ref[1], r_ref[2]
     else:
         raise ValueError("r_ref must be a number, or 3 element tuple")
 
-    R = coef_cube[:, :, 6]
-    r_ratio = (
-        R / r_ref
-    )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
+    # R = coef_cube[:, :, 6]
+    # r_ratio = (
+    #     R / r_ref
+    # )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
 
-    A = 1 / r_ratio ** 2
+    r_ratio=1
+    A = coef_cube[:, :, 8] / r_ratio ** 2
     B = coef_cube[:, :, 9] / r_ratio ** 2
     C = coef_cube[:, :, 10] / r_ratio ** 2
 

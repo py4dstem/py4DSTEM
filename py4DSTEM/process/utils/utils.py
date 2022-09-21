@@ -2,7 +2,7 @@
 
 import numpy as np
 from numpy.fft import fftfreq, fftshift
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.spatial import Voronoi
 import math as ma
 import matplotlib.pyplot as plt
@@ -10,13 +10,47 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
+from py4DSTEM.process.utils.multicorr import upsampled_correlation
+from py4DSTEM.utils.tqdmnd import tqdmnd
+
 try:
     from IPython.display import clear_output
 except ImportError:
     def clear_output(wait=True):
         pass
 
-def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None, figsize=(10, 10), scale=None):
+def radial_reduction(
+    ar,
+    x0,
+    y0,
+    binsize=1,
+    fn=np.mean,
+    coords = None):
+    """
+    Evaluate a reduction function on pixels within annular rings centered on (x0,y0),
+    with a ring width of binsize.
+
+    By default, returns the mean value of pixels within each annulus.
+    Some other useful reductions include: np.sum, np.std, np.count, np.median, ...
+
+    When running in a loop, pre-compute the pixel coordinates and pass them in
+    for improved performance, like so:
+        coords = np.mgrid[0:ar.shape[0],0:ar.shape[1]]
+        radial_sums = radial_reduction(ar, x0,y0, coords=coords)
+    """
+    qx,qy = coords if coords else np.mgrid[0:ar.shape[0],0:ar.shape[1]]
+    
+    r = np.floor(np.hypot(qx-x0,qy-y0).ravel()/binsize).astype(np.int64) * binsize
+    edges = np.cumsum(np.bincount(r)[::binsize])
+    slices = [slice(0,edges[0])] + [ slice(edges[i], edges[i+1]) for i in range(len(edges)-1)]
+    rargsort = np.argsort(r)
+    sorted_ar = ar.ravel()[rargsort]
+    reductions = np.array([fn(sorted_ar[s]) for s in slices])
+    
+    return reductions
+
+def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
+                                                        figsize=(10, 10), scale=None):
     fig, ax = plt.subplots(figsize=figsize)
     im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
     divider = make_axes_locatable(ax)
@@ -56,13 +90,12 @@ def sector_mask(shape, centre, radius, angle_range=(0, 360)):
     Return a boolean mask for a circular sector. The start/stop angles in
     `angle_range` should be given in clockwise order.
 
-    :param shape: 2D shape of the mask
-    :param centre: 2D center of the circular sector
-    :param radius: radius of the circular mask
-    :param angle_range: angular range of the circular mask
-    :return:
+    Args:
+        shape: 2D shape of the mask
+        centre: 2D center of the circular sector
+        radius: radius of the circular mask
+        angle_range: angular range of the circular mask
     """
-
     x, y = np.ogrid[:shape[0], :shape[1]]
     cx, cy = centre
     tmin, tmax = np.deg2rad(angle_range)
@@ -94,10 +127,10 @@ def get_qx_qy_1d(M, dx=[1, 1], fft_shifted=False):
     Generates 1D Fourier coordinates for a (Nx,Ny)-shaped 2D array.
     Specifying the dx argument sets a unit size.
 
-    :param M: (2,) shape of the returned array
-    :param dx: (2,) tuple, pixel size
-    :param fft_shifted: True if result should be fft_shifted to have the origin in the center of the array
-    :return:
+    Args:
+        M: (2,) shape of the returned array
+        dx: (2,) tuple, pixel size
+        fft_shifted: True if result should be fft_shifted to have the origin in the center of the array
     """
 
     qxa = fftfreq(M[0], dx[0])
@@ -127,60 +160,71 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     return qx, qy
 
 
-def get_shift(ar1, ar2, corrPower=1):
+def get_shifted_ar(
+    ar,
+    xshift,
+    yshift,
+    periodic=True,
+    bilinear=False,
+    ):
     """
-	Determine the relative shift between a pair of identical arrays, or the shift giving
-	best overlap.
+	Shifts array ar by the shift vector (xshift,yshift), using the either
+    the Fourier shift theorem (i.e. with sinc interpolation), or bilinear
+    resampling. Boundary conditions can be periodic or not.
 
-	Shift determination uses the brightest pixel in the cross correlation, and is thus limited to
-    pixel resolution. corrPower specifies the cross correlation power, with 1 corresponding to a
-    cross correlation and 0 a phase correlation.
+    Args:
+            ar (float): input array
+            xshift (float): shift along axis 0 (x) in pixels
+            yshift (float): shift along axis 1 (y) in pixels
+            periodic (bool): flag for periodic boundary conditions
+            bilinear (bool): flag for bilinear image shifts
 
-	Inputs:
-		ar1,ar2     2D ndarrays
-        corrPower   float between 0 and 1, inclusive. 1=cross correlation, 0=phase correlation
-	Outputs:
-		shiftx,shifty - relative image shift, in pixels
+        Returns:
+            (array) the shifted array
     """
-    cc = get_cross_correlation(ar1, ar2, corrPower)
-    xshift, yshift = np.unravel_index(np.argmax(cc), ar1.shape)
-    return xshift, yshift
 
+    # Apply image shift
+    if bilinear is False:
+        nx, ny = np.shape(ar)
+        qx, qy = make_Fourier_coords2D(nx, ny, 1)
+        nx, ny = float(nx), float(ny)
 
-def get_shifted_ar(ar, xshift, yshift):
-    """
-	Shifts array ar by the shift vector (xshift,yshift), using the Fourier shift theorem (i.e.
-	with sinc interpolation).
-    """
-    nx, ny = np.shape(ar)
-    qx, qy = make_Fourier_coords2D(nx, ny, 1)
-    nx, ny = float(nx), float(ny)
+        w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
+        shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
 
-    w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
-    shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
+    else:
+        xF = (np.floor(xshift)).astype(int)
+        yF = (np.floor(yshift)).astype(int)
+        wx = xshift - xF
+        wy = yshift - yF
+
+        shifted_ar = \
+            np.roll(ar,(xF  ,yF  ),axis=(0,1)) * ((1-wx)*(1-wy)) + \
+            np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
+            np.roll(ar,(xF  ,yF+1),axis=(0,1)) * ((1-wx)*(  wy)) + \
+            np.roll(ar,(xF+1,yF+1),axis=(0,1)) * ((  wx)*(  wy))
+
+    if periodic is False:
+        # Rounded coordinates for boundaries
+        xR = (np.round(xshift)).astype(int)
+        yR = (np.round(yshift)).astype(int)
+
+        if xR > 0:
+            shifted_ar[0:xR,:] = 0
+        elif xR < 0:
+            shifted_ar[xR:,:] = 0
+        if yR > 0:
+            shifted_ar[:,0:yR] = 0
+        elif yR < 0:
+            shifted_ar[:,yR:] = 0
+
     return shifted_ar
 
 
-def get_cross_correlation(ar, kernel, corrPower=1):
-    """
-    Calculates the cross correlation of ar with kernel.
-    corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
-    correlation, and values in between are hybrids.
-    """
-    m = np.fft.fft2(ar) * np.conj(np.fft.fft2(kernel))
-    return np.real(np.fft.ifft2(np.abs(m) ** (corrPower) * np.exp(1j * np.angle(m))))
 
 
-def get_cross_correlation_fk(ar, fourierkernel, corrPower=1):
-    """
-    Calculates the cross correlation of ar with fourierkernel.
-    Here, fourierkernel = np.conj(np.fft.fft2(kernel)); speeds up computation when the same
-    kernel is to be used for multiple cross correlations.
-    corrPower specifies the correlation type, where 1 is a cross correlation, 0 is a phase
-    correlation, and values in between are hybrids.
-    """
-    m = np.fft.fft2(ar) * fourierkernel
-    return np.real(np.fft.ifft2(np.abs(m) ** (corrPower) * np.exp(1j * np.angle(m))))
+
+
 
 
 def get_CoM(ar):
@@ -195,108 +239,6 @@ def get_CoM(ar):
     return xCoM, yCoM
 
 
-def get_maximal_points(ar):
-    """
-    For 2D array ar, returns an array of bools of the same shape which is True for all entries with
-    values larger than all 8 of their nearest neighbors.
-    """
-    return (ar > np.roll(ar, (-1, 0), axis=(0, 1))) & (ar > np.roll(ar, (1, 0), axis=(0, 1))) & \
-           (ar > np.roll(ar, (0, -1), axis=(0, 1))) & (ar > np.roll(ar, (0, 1), axis=(0, 1))) & \
-           (ar > np.roll(ar, (-1, -1), axis=(0, 1))) & (ar > np.roll(ar, (-1, 1), axis=(0, 1))) & \
-           (ar > np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
-
-
-def get_maxima_2D(ar, sigma=0, edgeBoundary=0, minSpacing=0, minRelativeIntensity=0,
-                  relativeToPeak=0, maxNumPeaks=0, subpixel=True):
-    """
-    Finds the indices where the 2D array ar is a local maximum.
-    Optional parameters allow blurring of the array and filtering of the output;
-    setting each of these to 0 (default) turns off these functions.
-
-    Accepts:
-        ar                      (ndarray) a 2D array
-        sigma                   (float) guassian blur std to applyu to ar before finding the maxima
-        edgeBoundary            (int) ignore maxima within edgeBoundary of the array edge
-        minSpacing              (float) if two maxima are found within minSpacing, the dimmer one
-                                is removed
-        minRelativeIntensity    (float) maxima dimmer than minRelativeIntensity compared to the
-                                relativeToPeak'th brightest maximum are removed
-        relativeToPeak          (int) 0=brightest maximum. 1=next brightest, etc.
-        maxNumPeaks             (int) return only the first maxNumPeaks maxima
-        subpixel                (bool) if False, return locally maximal pixels.
-                                if True, perform subpixel fitting
-
-    Returns
-        maxima_x                (ndarray) x-coords of the local maximum, sorted by intensity.
-        maxima_y                (ndarray) y-coords of the local maximum, sorted by intensity.
-        maxima_intensity        (ndarray) intensity of the local maxima
-    """
-    # Get maxima
-    ar = gaussian_filter(ar, sigma)
-    maxima_bool = get_maximal_points(ar)
-
-    # Remove edges
-    if edgeBoundary > 0:
-        assert isinstance(edgeBoundary, (int, np.integer))
-        maxima_bool[:edgeBoundary, :] = False
-        maxima_bool[-edgeBoundary:, :] = False
-        maxima_bool[:, :edgeBoundary] = False
-        maxima_bool[:, -edgeBoundary:] = False
-    elif subpixel is True:
-        maxima_bool[:1, :] = False
-        maxima_bool[-1:, :] = False
-        maxima_bool[:, :1] = False
-        maxima_bool[:, -1:] = False
-
-    # Get indices, sorted by intensity
-    maxima_x, maxima_y = np.nonzero(maxima_bool)
-    dtype = np.dtype([('x', float), ('y', float), ('intensity', float)])
-    maxima = np.zeros(len(maxima_x), dtype=dtype)
-    maxima['x'] = maxima_x
-    maxima['y'] = maxima_y
-    maxima['intensity'] = ar[maxima_x, maxima_y]
-    maxima = np.sort(maxima, order='intensity')[::-1]
-
-    if len(maxima) > 0:
-        # Remove maxima which are too close
-        if minSpacing > 0:
-            deletemask = np.zeros(len(maxima), dtype=bool)
-            for i in range(len(maxima)):
-                if deletemask[i] == False:
-                    tooClose = ((maxima['x'] - maxima['x'][i]) ** 2 + \
-                                (maxima['y'] - maxima['y'][i]) ** 2) < minSpacing ** 2
-                    tooClose[:i + 1] = False
-                    deletemask[tooClose] = True
-            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
-
-        # Remove maxima which are too dim
-        if (minRelativeIntensity > 0) & (len(maxima) > relativeToPeak):
-            assert isinstance(relativeToPeak, (int, np.integer))
-            deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
-            maxima = np.delete(maxima, np.nonzero(deletemask)[0])
-
-        # Remove maxima in excess of maxNumPeaks
-        if maxNumPeaks > 0:
-            assert isinstance(maxNumPeaks, (int, np.integer))
-            if len(maxima) > maxNumPeaks:
-                maxima = maxima[:maxNumPeaks]
-
-        # Subpixel fitting - fit 1D parabolas in x and y to 3 points (maximum, +/- 1 pixel)
-        if subpixel is True:
-            for i in range(len(maxima)):
-                Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])]
-                Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])]
-                Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])]
-                Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1]
-                Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])]
-                Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1]
-                deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
-                deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
-                maxima['x'][i] += deltax
-                maxima['y'][i] += deltay
-                maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
-
-    return maxima['x'], maxima['y'], maxima['intensity']
 
 
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
@@ -305,16 +247,17 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
     Optional parameters allow blurring the array and filtering the output;
     setting each to 0 (default) turns off these functions.
 
-    Accepts:
-        ar                    a 1D array
-        sigma                 gaussian blur std to apply to ar before finding maxima
-        minSpacing            if two maxima are found within minSpacing, the dimmer one is removed
-        minRelativeIntensity  maxima dimmer than minRelativeIntensity compared to the
-                              relativeToPeak'th brightest maximum are removed
-        relativeToPeak        0=brightest maximum. 1=next brightest, etc.
+    Args:
+        ar (1D array):
+        sigma (number): gaussian blur std to apply to ar before finding maxima
+        minSpacing (number): if two maxima are found within minSpacing, the dimmer one
+            is removed
+        minRelativeIntensity (number): maxima dimmer than minRelativeIntensity compared
+            to the relativeToPeak'th brightest maximum are removed
+        relativeToPeak (int): 0=brightest maximum. 1=next brightest, etc.
 
     Returns:
-        An array of indices where ar is a local maximum, sorted by intensity.
+        (array of ints): An array of indices where ar is a local maximum, sorted by intensity.
     """
     assert len(ar.shape) == 1, "ar must be 1D"
     assert isinstance(relativeToPeak, (int, np.integer)), "relativeToPeak must be an int"
@@ -322,7 +265,7 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
         ar = gaussian_filter(ar, sigma)
 
     # Get maxima and intensity arrays
-    maxima_bool = (ar > np.roll(ar, -1)) & (ar > np.roll(ar, +1))
+    maxima_bool = np.logical_and((ar > np.roll(ar, -1)) , (ar >= np.roll(ar, +1)))
     x = np.arange(len(ar))[maxima_bool]
     intensity = ar[maxima_bool]
 
@@ -352,30 +295,22 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
 
 def linear_interpolation_1D(ar, x):
     """
-    Calculates the 1D linear interpolation of array ar at position x using the two nearest elements.
+    Calculates the 1D linear interpolation of array ar at position x using the two
+    nearest elements.
     """
     x0, x1 = int(np.floor(x)), int(np.ceil(x))
     dx = x - x0
     return (1 - dx) * ar[x0] + dx * ar[x1]
 
 
-def linear_interpolation_2D(ar, x, y):
-    """
-    Calculates the 2D linear interpolation of array ar at position x,y using the four nearest
-    array elements.
-    """
-    x0, x1 = int(np.floor(x)), int(np.ceil(x))
-    y0, y1 = int(np.floor(y)), int(np.ceil(y))
-    dx = x - x0
-    dy = y - y0
-    return (1 - dx) * (1 - dy) * ar[x0, y0] + (1 - dx) * dy * ar[x0, y1] + dx * (1 - dy) * ar[x1, y0] + dx * dy * ar[
-        x1, y1]
-
 
 def add_to_2D_array_from_floats(ar, x, y, I):
     """
-    Adds the values I to array ar, distributing the value between the four pixels nearest (x,y) using
-    linear interpolation.  Inputs (x,y,I) may be floats or arrays of floats.
+    Adds the values I to array ar, distributing the value between the four pixels nearest
+    (x,y) using linear interpolation.  Inputs (x,y,I) may be floats or arrays of floats.
+
+    Note that if the same [x,y] coordinate appears more than once in the input array,
+    only the *final* value of I at that coordinate will get added.
     """
     Nx, Ny = ar.shape
     x0, x1 = (np.floor(x)).astype(int), (np.ceil(x)).astype(int)
@@ -389,42 +324,18 @@ def add_to_2D_array_from_floats(ar, x, y, I):
     ar[x1[mask], y1[mask]] += (    dx[mask]) * (    dy[mask]) * I[mask]
     return ar
 
-
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1,
-                       length=100, fill='*'):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    clear_output(wait=True)
-    print('\r{} |{}| {}% {}\r'.format(prefix, bar, percent, suffix))
-    # Print New Line on Complete
-    if iteration == total:
-        print()
-
-
 def bin2D(array, factor, dtype=np.float64):
     """
     Bin a 2D ndarray by binfactor.
 
-    Accepts:
-        array       a 2D numpy array
-        factor      (int) the binning factor
-        dtype       (numpy dtype) datatype for binned array.
-                    defalt is numpy default for np.zeros()
+    Args:
+        array (2D numpy array):
+        factor (int): the binning factor
+        dtype (numpy dtype): datatype for binned array. default is numpy default for
+            np.zeros()
 
     Returns:
-        binned_ar   the binned array
+        the binned array
     """
     x, y = array.shape
     binx, biny = x // factor, y // factor
@@ -443,26 +354,26 @@ def bin2D(array, factor, dtype=np.float64):
 
 def get_voronoi_vertices(voronoi, nx, ny, dist=10):
     """
-    From a scipy.spatial.Voronoi instance, return a list of ndarrays, where each array is shape
-    (N,2) and contains the (x,y) positions of the vertices of a voronoi region.
+    From a scipy.spatial.Voronoi instance, return a list of ndarrays, where each array
+    is shape (N,2) and contains the (x,y) positions of the vertices of a voronoi region.
 
-    The problem this function solves is that in a Voronoi instance, some vertices outside the
-    field of view of the tesselated region are left unspecified; only the existence of a point
-    beyond the field is referenced (which may or may not be 'at infinity'). This function
-    specifies all points, such that the vertices and edges of the tesselation may be directly
-    laid over data.
+    The problem this function solves is that in a Voronoi instance, some vertices outside
+    the field of view of the tesselated region are left unspecified; only the existence
+    of a point beyond the field is referenced (which may or may not be 'at infinity').
+    This function specifies all points, such that the vertices and edges of the
+    tesselation may be directly laid over data.
 
-    Accepts:
-        voronoi     (scipy.spatial.Voronoi) the voronoi tesselation
-        nx          (int) the x field-of-view of the tesselated region
-        ny          (int) the y field-of-view of the tesselated region
-        dist (opt)  (float) place new vertices by extending new voronoi edges outside the frame
-                    by a distance of this factor times the distance of its known vertex from
-                    the frame edge
+    Args:
+        voronoi (scipy.spatial.Voronoi): the voronoi tesselation
+        nx (int): the x field-of-view of the tesselated region
+        ny (int): the y field-of-view of the tesselated region
+        dist (float, optional): place new vertices by extending new voronoi edges outside
+            the frame by a distance of this factor times the distance of its known vertex
+            from the frame edge
 
-    Returns
-        vertex_list (list of ndarrays of shape (N,2)) the (x,y) coords of the vertices of each
-                    voronoi region
+    Returns:
+        (list of ndarrays of shape (N,2)): the (x,y) coords of the vertices of each
+        voronoi region
     """
     assert isinstance(voronoi, Voronoi), "voronoi must be a scipy.spatial.Voronoi instance"
 
@@ -550,12 +461,277 @@ def get_voronoi_vertices(voronoi, nx, ny, dist=10):
 
 def get_ewpc_filter_function(Q_Nx, Q_Ny):
     '''
-    Returns a function for computing the exit wave power cepstrum of a diffraction pattern
-    using a Hanning window. This can be passed as the filter_function in the Bragg disk
-    detection functions (with the probe an array of ones) to find the lattice vectors
-    by the EWPC method (but be careful as the lengths are now in realspace units!)
-    See https://arxiv.org/abs/1911.00984
+    Returns a function for computing the exit wave power cepstrum of a diffraction
+    pattern using a Hanning window. This can be passed as the filter_function in the
+    Bragg disk detection functions (with the probe an array of ones) to find the lattice
+    vectors by the EWPC method (but be careful as the lengths are now in realspace
+    units!) See https://arxiv.org/abs/1911.00984
     '''
     h = np.hanning(Q_Nx)[:,np.newaxis] * np.hanning(Q_Ny)[np.newaxis,:]
     return lambda x: np.abs(np.fft.fftshift(np.fft.fft2(h*np.log(np.maximum(x,0.01)))))**2
+
+
+
+def fourier_resample(
+    array,
+    scale=None,
+    output_size=None,
+    force_nonnegative=False,
+    bandlimit_nyquist=None,
+    bandlimit_power=2,
+    dtype=np.float32):
+    """
+    Resize a 2D array along any dimension, using Fourier interpolation / extrapolation.
+    For 4D input arrays, only the final two axes can be resized.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes (and allows for different
+    scaling along the x,y or kx,ky axes.)
+
+    Args:
+        array (2D/4D numpy array): Input array, or 4D stack of arrays, to be resized.
+        scale (float): scalar value giving the scaling factor for all dimensions
+        output_size (2-tuple of ints): two values giving either the (x,y) output size for 2D, or (kx,ky) for 4D
+        force_nonnegative (bool): Force all outputs to be nonnegative, after filtering
+        bandlimit_nyquist (float): Gaussian filter information limit in Nyquist units (0.5 max in both directions)
+        bandlimit_power (float): Gaussian filter power law scaling (higher is sharper)
+        dtype (numpy dtype): datatype for binned array. default is single precision float
+
+    Returns:
+        the resized array (2D/4D numpy array)
+    """
+
+    # Verify input is 2D or 4D
+    if np.size(array.shape) != 2 and np.size(array.shape) != 4:
+        raise Exception('Function does not support arrays with ' \
+         + str(np.size(array.shape)) + ' dimensions')
+
+    # Get input size from last 2 dimensions
+    input__size = array.shape[-2:]
+
+
+    if scale is not None:
+        assert output_size is None, 'Cannot specify both a scaling factor and output size'
+        assert np.size(scale) == 1, 'scale should be a single value'
+        scale = np.asarray(scale)
+        output_size = (input__size * scale).astype('intp')
+    else:
+        assert scale is None, 'Cannot specify both a scaling factor and output size'
+        assert np.size(output_size) == 2, 'output_size must contain two values'
+        output_size = np.asarray(output_size)
+
+    scale_output = np.prod(output_size) / np.prod(input__size)
+
+
+    if bandlimit_nyquist is not None:
+        kx = np.fft.fftfreq(output_size[0])
+        ky = np.fft.fftfreq(output_size[1])
+        k2 = kx[:,None]**2 + ky[None,:]**2
+        # Gaussian filter 
+        k_filt = np.exp((k2**(bandlimit_power/2))/(-2*bandlimit_nyquist**bandlimit_power))
+
+
+    # generate slices
+    # named as {dimension}_{corner}_{in_/out},
+    # where corner is ul, ur, ll, lr for {upper/lower}{left/right}
+
+    # x slices
+    if output_size[0] > input__size[0]:
+        # x dimension increases
+        x0 = int((input__size[0]+1)//2)
+        x1 = int( input__size[0]   //2)
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0-x1+output_size[0], output_size[0])
+        x_ll_in_ = slice(0-x1+input__size[0], input__size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0-x1+output_size[0], output_size[0])
+        x_lr_in_ = slice(0-x1+input__size[0], input__size[0])
+
+    elif output_size[0] < input__size[0]:
+        # x dimension decreases
+        x0 = int((output_size[0]+1)//2)
+        x1 = int( output_size[0]   //2)
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0-x1+output_size[0], output_size[0])
+        x_ll_in_ = slice(0-x1+input__size[0], input__size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0-x1+output_size[0], output_size[0])
+        x_lr_in_ = slice(0-x1+input__size[0], input__size[0])
+
+    else:
+        # x dimension does not change
+        x_ul_out = slice(None)
+        x_ul_in_ = slice(None)
+
+        x_ll_out = slice(None)
+        x_ll_in_ = slice(None)
+
+        x_ur_out = slice(None)
+        x_ur_in_ = slice(None)
+
+        x_lr_out = slice(None)
+        x_lr_in_ = slice(None)
+
+    #y slices
+    if output_size[1] > input__size[1]:
+        # y increases
+        y0 = int((input__size[1]+1)//2)
+        y1 = int( input__size[1]   //2)
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0-y1+output_size[1], output_size[1])
+        y_ur_in_ = slice(0-y1+input__size[1], input__size[1])
+
+        y_lr_out = slice(0-y1+output_size[1], output_size[1])
+        y_lr_in_ = slice(0-y1+input__size[1], input__size[1])
+
+    elif output_size[1] < input__size[1]:
+        # y decreases
+        y0 = int((output_size[1]+1)//2)
+        y1 = int( output_size[1]   //2)
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0-y1+output_size[1], output_size[1])
+        y_ur_in_ = slice(0-y1+input__size[1], input__size[1])
+
+        y_lr_out = slice(0-y1+output_size[1], output_size[1])
+        y_lr_in_ = slice(0-y1+input__size[1], input__size[1])
+
+    else:
+        # y dimension does not change
+        y_ul_out = slice(None)
+        y_ul_in_ = slice(None)
+
+        y_ll_out = slice(None)
+        y_ll_in_ = slice(None)
+
+        y_ur_out = slice(None)
+        y_ur_in_ = slice(None)
+
+        y_lr_out = slice(None)
+        y_lr_in_ = slice(None)
+
+    if len(array.shape) == 2:
+        # image array        
+        array_resize = np.zeros(output_size, dtype=np.complex64)
+        array_fft = np.fft.fft2(array)
+
+        # copy each quadrant into the resize array
+        array_resize[x_ul_out, y_ul_out] = array_fft[x_ul_in_, y_ul_in_]
+        array_resize[x_ll_out, y_ll_out] = array_fft[x_ll_in_, y_ll_in_]
+        array_resize[x_ur_out, y_ur_out] = array_fft[x_ur_in_, y_ur_in_]
+        array_resize[x_lr_out, y_lr_out] = array_fft[x_lr_in_, y_lr_in_]
+
+        # Band limit if needed
+        if bandlimit_nyquist is not None:
+            array_resize *= k_filt
+
+        # Back to real space
+        array_resize = np.real(np.fft.ifft2(array_resize)).astype(dtype)
+
+
+    elif len(array.shape) == 4:
+        # This case is the same as the 2D case, but loops over the probe index arrays
+
+        # init arrays
+        array_resize = np.zeros((*array.shape[:2], *output_size), dtype)
+        array_fft = np.zeros(input__size, dtype=np.complex64)
+        array_output = np.zeros(output_size, dtype=np.complex64)
+
+        for (Rx,Ry) in tqdmnd(array.shape[0],array.shape[1],desc='Resampling 4D datacube',unit='DP',unit_scale=True):
+            array_fft[:,:] = np.fft.fft2(array[Rx,Ry,:,:])
+            array_output[:,:] = 0
+
+            # copy each quadrant into the resize array
+            array_output[x_ul_out,y_ul_out] = array_fft[x_ul_in_,y_ul_in_]
+            array_output[x_ll_out,y_ll_out] = array_fft[x_ll_in_,y_ll_in_]
+            array_output[x_ur_out,y_ur_out] = array_fft[x_ur_in_,y_ur_in_]
+            array_output[x_lr_out,y_lr_out] = array_fft[x_lr_in_,y_lr_in_]
+
+            # Band limit if needed
+            if bandlimit_nyquist is not None:
+                array_output *= k_filt
+
+            # Back to real space
+            array_resize[Rx,Ry,:,:] = np.real(np.fft.ifft2(array_output)).astype(dtype)
+
+    # Enforce positivity if needed, after filtering
+    if force_nonnegative:
+        array_resize = np.maximum(array_resize,0)
+
+    # Normalization
+    array_resize = array_resize * scale_output
+
+    return array_resize
+
+
+
+
+
+
+#import matplotlib.pyplot as plt
+#from mpl_toolkits.axes_grid1 import make_axes_locatable
+#from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+#import matplotlib.font_manager as fm
+#
+#
+#try:
+#    from IPython.display import clear_output
+#except ImportError:
+#    def clear_output(wait=True):
+#        pass
+#
+#def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
+#                                                        figsize=(10, 10), scale=None):
+#    fig, ax = plt.subplots(figsize=figsize)
+#    im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
+#    divider = make_axes_locatable(ax)
+#    cax = divider.append_axes("right", size="5%", pad=0.05)
+#    plt.colorbar(im, cax=cax)
+#    ax.set_title(title)
+#    fontprops = fm.FontProperties(size=18)
+#    if scale is not None:
+#        scalebar = AnchoredSizeBar(ax.transData,
+#                                   scale[0], scale[1], 'lower right',
+#                                   pad=0.1,
+#                                   color='white',
+#                                   frameon=False,
+#                                   size_vertical=img.shape[0] / 40,
+#                                   fontproperties=fontprops)
+#
+#        ax.add_artist(scalebar)
+#    ax.grid(False)
+#    if savePath is not None:
+#        fig.savefig(savePath + '.png', dpi=600)
+#        fig.savefig(savePath + '.eps', dpi=600)
+#    if show:
+#        plt.show()
+
+
+
+
+
 

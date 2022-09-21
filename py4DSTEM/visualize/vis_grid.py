@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from .show import show,show_points
-from .overlay import add_grid_overlay
+from py4DSTEM.visualize.show import show,show_points
+from py4DSTEM.visualize.overlay import add_grid_overlay
 
 def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
     """
@@ -89,9 +89,9 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
     else:
         return fig,ax
 
-def show_image_grid(get_ar, H, W, axsize=(6,6), returnfig=False, title=None,
-                    titlesize=12, num=None, get_bordercolor=None, get_x=None, 
-                    get_y=None, get_pointcolors=None, get_s=None, **kwargs):
+def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
+                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None, title=None,
+                    get_s=None,open_circles=False, num=1,**kwargs):
     """
     Displays a set of images in a grid.
 

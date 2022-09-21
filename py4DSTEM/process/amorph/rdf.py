@@ -1,11 +1,11 @@
-# Module for extracting radial distribution functions g(r) from a series of diffraction images
-# Process follows closely to procedure covered in:
+# Module for extracting radial distribution functions g(r) from a series of diffraction
+# images. Process follows closely to procedure covered in:
 # Cockayne, D.H.,Annu. Rev. Mater. Res. 37:15987 (2007).
 
 import numpy as np
 from scipy.special import erf
 from scipy.fftpack import dst, idst
-from ..utils import single_atom_scatter
+from py4DSTEM.process.utils import single_atom_scatter
 
 
 def get_radial_intensity(polar_img, polar_mask):
@@ -25,9 +25,10 @@ def fit_scattering_factor(scale, elements, composition, q_arr, units):
     """
     Scale is linear factor
     Elements is an 1D array of atomic numbers.
-    Composition is a 1D array, same length as elements, describing the average atomic composition of the sample.
-    If the Q_coords is a 1D array of Fourier coordinates, given in inverse Angstroms.
-    Units is a string of 'VA' or 'A', which returns the scattering factor in volt angtroms or in angstroms.
+    Composition is a 1D array, same length as elements, describing the average atomic
+    composition of the sample. If the Q_coords is a 1D array of Fourier coordinates,
+    given in inverse Angstroms. Units is a string of 'VA' or 'A', which returns the
+    scattering factor in volt angtroms or in angstroms.
     """
 
     ##TODO: actually do fitting

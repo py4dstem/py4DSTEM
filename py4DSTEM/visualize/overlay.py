@@ -1,12 +1,11 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle,Wedge,Ellipse
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
 from fractions import Fraction
-from ..io import PointList
+from py4DSTEM.io.datastructure import PointList
 
 def add_rectangles(ax,d):
     """
@@ -158,19 +157,20 @@ def add_annuli(ax,d):
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
     # radii
-    assert('Ri' in d.keys())
-    assert('Ro' in d.keys())
-    Ri,Ro = d['Ri'],d['Ro']
-    if isinstance(Ri,Number):
-        Ri = [Ri for i in range(N)]
-    if isinstance(Ro,Number):
-        Ro = [Ro for i in range(N)]
-    assert(isinstance(Ri,list))
-    assert(isinstance(Ro,list))
-    assert(len(Ri)==N)
-    assert(len(Ro)==N)
-    assert(all([isinstance(i,Number) for i in Ri]))
-    assert(all([isinstance(i,Number) for i in Ro]))
+    assert('radii' in d.keys())
+    radii = d['radii']
+    if isinstance(radii,tuple):
+        assert(len(radii)==2)
+        ri = [radii[0] for i in range(N)]
+        ro = [radii[1] for i in range(N)]
+    else:
+        assert(isinstance(radii,list))
+        assert(all([isinstance(x,tuple) for x in radii]))
+        assert(len(radii)==N)
+        ri = [radii[i][0] for i in range(N)]
+        ro = [radii[i][1] for i in range(N)]
+    assert(all([isinstance(i,Number) for i in ri]))
+    assert(all([isinstance(i,Number) for i in ro]))
     # color
     color = d['color'] if 'color' in d.keys() else 'r'
     if isinstance(color,list):
@@ -204,15 +204,15 @@ def add_annuli(ax,d):
         assert(len(linewidth)==N)
         assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','Ri','Ro','color','fill','alpha','linewidth')]
+    kws = [k for k in d.keys() if k not in ('center','radii','color','fill','alpha','linewidth')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the annuli
     for i in range(N):
-        cent,ri,ro,col,f,a,lw = center[i],Ri[i],Ro[i],color[i],fill[i],alpha[i],linewidth[i]
-        annulus = Wedge((cent[1],cent[0]),ro,0,360,width=ro-ri,color=col,fill=f,alpha=a,
+        cent,Ri,Ro,col,f,a,lw = center[i],ri[i],ro[i],color[i],fill[i],alpha[i],linewidth[i]
+        annulus = Wedge((cent[1],cent[0]),Ro,0,360,width=Ro-Ri,color=col,fill=f,alpha=a,
                         linewidth=lw,**kwargs)
         ax.add_patch(annulus)
 
@@ -225,7 +225,7 @@ def add_ellipses(ax,d):
     Parameters:
         center
         a
-        e
+        b
         theta
         color
         fill
@@ -243,6 +243,14 @@ def add_ellipses(ax,d):
     assert(isinstance(a,list))
     N = len(a)
     assert(all([isinstance(i,Number) for i in a]))
+    # semiminor axis length
+    assert('b' in d.keys())
+    b = d['b']
+    if isinstance(b,Number):
+        b = [b]
+    assert(isinstance(b,list))
+    assert(len(b)==N)
+    assert(all([isinstance(i,Number) for i in b]))
     # center
     assert('center' in d.keys())
     center = d['center']
@@ -253,14 +261,6 @@ def add_ellipses(ax,d):
     assert(len(center)==N)
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
-    # ratio of axis lengths
-    assert('e' in d.keys())
-    e = d['e']
-    if isinstance(e,Number):
-        e = [e for i in range(N)]
-    assert(isinstance(e,list))
-    assert(len(e)==N)
-    assert(all([isinstance(i,Number) for i in e]))
     # theta
     assert('theta' in d.keys())
     theta = d['theta']
@@ -310,7 +310,7 @@ def add_ellipses(ax,d):
         assert(len(linestyle)==N)
         assert(all([isinstance(lw,(str)) for lw in linestyle]))
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('center','a','e','theta','color',
+    kws = [k for k in d.keys() if k not in ('center','a','b','theta','color',
                                             'fill','alpha','linewidth','linestyle')]
     kwargs = dict()
     for k in kws:
@@ -318,9 +318,9 @@ def add_ellipses(ax,d):
 
     # add the ellipses
     for i in range(N):
-        cent,_a,_e,_theta,col,f,_alpha,lw,ls = (center[i],a[i],e[i],theta[i],color[i],fill[i],
+        cent,_a,_b,_theta,col,f,_alpha,lw,ls = (center[i],a[i],b[i],theta[i],color[i],fill[i],
                                                 alpha[i],linewidth[i],linestyle[i])
-        ellipse = Ellipse((cent[1],cent[0]),2*_a*_e,2*_a,90-np.degrees(_theta),color=col,fill=f,
+        ellipse = Ellipse((cent[1],cent[0]),2*_b,2*_a,-np.degrees(_theta),color=col,fill=f,
                         alpha=_alpha,linewidth=lw,linestyle=ls,**kwargs)
         ax.add_patch(ellipse)
 
@@ -366,14 +366,21 @@ def add_points(ax,d):
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1.
     assert isinstance(alpha,Number)
+    # open_circles
+    open_circles = d['open_circles'] if 'open_circles' in d.keys() else False
+    assert isinstance(open_circles,bool)
     # additional parameters
-    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha')]
+    kws = [k for k in d.keys() if k not in ('x','y','s','scale','pointcolor','alpha',
+                                            'open_circles')]
     kwargs = dict()
     for k in kws:
         kwargs[k] = d[k]
 
     # add the points
-    ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
+    if open_circles:
+        ax.scatter(y,x,s=scale,edgecolor=color,facecolor='none',alpha=alpha,**kwargs)
+    else:
+        ax.scatter(y,x,s=s*scale/np.max(s),color=color,alpha=alpha,**kwargs)
 
     return
 
@@ -475,12 +482,12 @@ def add_bragg_index_labels(ax,d):
         h,k = braggdirections.data['h'][i],braggdirections.data['k'][i]
         h = str(h) if h>=0 else '$\overline{{{}}}$'.format(np.abs(h))
         k = str(k) if k>=0 else '$\overline{{{}}}$'.format(np.abs(k))
-        s = h+k
+        s = h+','+k
         if include_l:
             l = braggdirections.data['l'][i]
             l = str(l) if l>=0 else '$\overline{{{}}}$'.format(np.abs(l))
             s += l
-        ax.text(y,x,s,color=color,size=size,ha='center',va='center')
+        ax.text(y,x,s,color=color,size=size,ha='center',va='bottom')
 
     return
 
@@ -681,7 +688,7 @@ def add_scalebar(ax,d):
 
     # Add label
     if label:
-        labeltext = str(length_units)+' '+pixelunits
+        labeltext = f'{np.round(length_units,3)}'+' '+pixelunits
         if xshiftdir>0: va='top'
         else: va='bottom'
         ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
@@ -1001,32 +1008,45 @@ def add_rtheta_grid(ar,d):
 
 def get_nice_spacing(Nx,Ny,pixelsize):
     """ Get a nice distance for gridlines, scalebars, etc
-        Returns
-            spacing_units   the spacing in real units
-            spacing_pixels  the spacing in pixels
-            _spacing        the leading digits of the spacing
+
+        Args:
+            Nx,Nx (int): the image dimensions
+            pixelsize (float): the size of each pixel, in some units
+
+        Returns:
+            (3-tuple): A 3-tuple containing:
+
+                * **spacing_units**: the spacing in real units
+                * **spacing_pixels**:the spacing in pixels
+                * **spacing**: the leading digits of the spacing
     """
     D = np.mean((Nx*pixelsize,Ny*pixelsize))/2.
     exp = int(log(D,10))
     if np.sign(log(D,10))<0:
         exp-=1
     base = D/(10**exp)
-    if base>=1 and base<1.25:
-        _spacing=0.4
-    elif base>=1.25 and base<1.75:
+    if base>=1 and base<2.1:
         _spacing=0.5
-    elif base>=1.75 and base<2.5:
-        _spacing=0.75
-    elif base>=2.5 and base<3.25:
+    elif base>=2.1 and base<4.6:
         _spacing=1
-    elif base>=3.25 and base<4.75:
-        _spacing=1.5
-    elif base>=4.75 and base<6:
+    elif base>=4.6 and base<10:
         _spacing=2
-    elif base>=6 and base<8:
-        _spacing=2.5
-    elif base>=8 and base<10:
-        _spacing=3
+    # if base>=1 and base<1.25:
+    #     _spacing=0.4
+    # elif base>=1.25 and base<1.75:
+    #     _spacing=0.5
+    # elif base>=1.75 and base<2.5:
+    #     _spacing=0.75
+    # elif base>=2.5 and base<3.25:
+    #     _spacing=1
+    # elif base>=3.25 and base<4.75:
+    #     _spacing=1.5
+    # elif base>=4.75 and base<6:
+    #     _spacing=2
+    # elif base>=6 and base<8:
+    #     _spacing=2.5
+    # elif base>=8 and base<10:
+    #     _spacing=3
     else:
         raise Exception("how did this happen?? base={}".format(base))
     spacing = _spacing * 10**exp

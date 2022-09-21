@@ -1,42 +1,45 @@
 # Obtain an initial guess at the lattice vectors
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from skimage.transform import radon
 
-from ..utils import get_maxima_1D
+from py4DSTEM.process.utils import get_maxima_1D
 
 def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacing=2,
-                                                                      minRelativeIntensity=0.05):
+                                                           minRelativeIntensity=0.05):
     """
-    Calculates a score function, score(angle), representing the likelihood that angle is a principle
-    lattice direction of the lattice in braggvectormap.
+    Calculates a score function, score(angle), representing the likelihood that angle is
+    a principle lattice direction of the lattice in braggvectormap.
 
     The procedure is as follows:
-    If mask is not None, ignore any data in braggvectormap where mask is False. Useful for removing
-    the unscattered beam, which can dominate the results.
+    If mask is not None, ignore any data in braggvectormap where mask is False. Useful
+    for removing the unscattered beam, which can dominate the results.
     Take the Radon transform of the (masked) Bragg vector map.
     For each angle, get the corresponding slice of the sinogram, and calculate its score.
-    If we let R_theta(r) be the sinogram slice at angle theta, and where r is the sinogram position
-    coordinate, then the score of the slice is given by
+    If we let R_theta(r) be the sinogram slice at angle theta, and where r is the
+    sinogram position coordinate, then the score of the slice is given by
          score(theta) = sum_i(R_theta(r_i)) / N_i
-    Here, r_i are the positions r of all local maxima in R_theta(r), and N_i is the number of such
-    maxima.  Thus the score is large when there are few maxima which are high intensity.
+    Here, r_i are the positions r of all local maxima in R_theta(r), and N_i is the
+    number of such maxima.  Thus the score is large when there are few maxima which are
+    high intensity.
 
-    Accepts:
-        braggvectormap          (ndarray) the Bragg vector map
-        mask                    (ndarray of bools) ignore data in braggvectormap wherever mask==False
-        N_angles                (int) the number of angles at which to calculate the score
-        sigma                   (float) smoothing parameter for local maximum identification
-        minSpacing              (float) if two maxima are found in a radon slice closer than
-                                minSpacing, the dimmer of the two is removed
-        minRelativeIntensity    (float) maxima in each radon slice dimmer than minRelativeIntensity
-                                compared to the most intense maximum are removed
+    Args:
+        braggvectormap (ndarray): the Bragg vector map
+        mask (ndarray of bools): ignore data in braggvectormap wherever mask==False
+        N_angles (int): the number of angles at which to calculate the score
+        sigma (float): smoothing parameter for local maximum identification
+        minSpacing (float): if two maxima are found in a radon slice closer than
+            minSpacing, the dimmer of the two is removed
+        minRelativeIntensity (float): maxima in each radon slice dimmer than
+            minRelativeIntensity compared to the most intense maximum are removed
 
     Returns:
-        scores                  (ndarray, len N_angles, floats) the scores for each angle
-        thetas                  (ndarray, len N_angles, floats) the angles, in radians
-        sinogram                (ndarray) the radon transform of braggvectormap*mask
+        (3-tuple) A 3-tuple containing:
+
+            * **scores**: *(ndarray, len N_angles, floats)* the scores for each angle
+            * **thetas**: *(ndarray, len N_angles, floats)* the angles, in radians
+            * **sinogram**: *(ndarray)* the radon transform of braggvectormap*mask
     """
     # Get sinogram
     thetas = np.linspace(0,180,N_angles)
@@ -71,20 +74,22 @@ def get_lattice_directions_from_scores(thetas, scores, sigma=2, minSpacing=2,
     """
     Get the lattice directions from the scores of the radon transform slices.
 
-    Accepts:
-        thetas                  (ndarray) the angles, in radians
-        scores                  (ndarray) the scores
-        sigma                   (float) gaussian blur for local maxima identification
-        minSpacing              (float) minimum spacing for local maxima identification
-        minRelativeIntensity    (float) minumum intensity, relative to the brightest maximum, for
-                                local maxima identification
-        index1                  (int) specifies which local maximum to use for the first lattice
-                                direction, in order of maximum intensity
-        index2                  (int) specifies the local maximum for the second lattice direction
+    Args:
+        thetas (ndarray): the angles, in radians
+        scores (ndarray): the scores
+        sigma (float): gaussian blur for local maxima identification
+        minSpacing (float): minimum spacing for local maxima identification
+        minRelativeIntensity (float): minumum intensity, relative to the brightest
+            maximum, for local maxima identification
+        index1 (int): specifies which local maximum to use for the first lattice
+            direction, in order of maximum intensity
+        index2 (int): specifies the local maximum for the second lattice direction
 
     Returns:
-        theta1                  (float) the first lattice direction, in radians
-        theta2                  (float) the second lattice direction, in radians
+        (2-tuple) A 2-tuple containing:
+
+            * **theta1**: *(float)* the first lattice direction, in radians
+            * **theta2**: *(float)* the second lattice direction, in radians
     """
     assert len(thetas)==len(scores), "Size of thetas and scores must match"
 
@@ -92,12 +97,12 @@ def get_lattice_directions_from_scores(thetas, scores, sigma=2, minSpacing=2,
     maxima1 = get_maxima_1D(scores, sigma, minSpacing, minRelativeIntensity) # Get maxima
     thetas_max1 = thetas[maxima1]
     scores_max1 = scores[maxima1]
-    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)])      # Sort by intensity
+    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)]) # Sort by intensity
     ar_structured = np.empty(len(thetas_max1),dtype=dtype)
     ar_structured['thetas'] = thetas_max1
     ar_structured['scores'] = scores_max1
     ar_structured = np.sort(ar_structured, order='scores')[::-1]
-    theta1 = ar_structured['thetas'][index1]                                 # Get direction 1
+    theta1 = ar_structured['thetas'][index1]                            # Get direction 1
 
     # Apply sin**2 damping
     scores_damped = scores*np.sin(thetas-theta1)**2
@@ -106,12 +111,12 @@ def get_lattice_directions_from_scores(thetas, scores, sigma=2, minSpacing=2,
     maxima2 = get_maxima_1D(scores_damped, sigma, minSpacing, minRelativeIntensity) # Get maxima
     thetas_max2 = thetas[maxima2]
     scores_max2 = scores[maxima2]
-    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)])      # Sort by intensity
+    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)]) # Sort by intensity
     ar_structured = np.empty(len(thetas_max2),dtype=dtype)
     ar_structured['thetas'] = thetas_max2
     ar_structured['scores'] = scores_max2
     ar_structured = np.sort(ar_structured, order='scores')[::-1]
-    theta2 = ar_structured['thetas'][index2]                                 # Get direction 2
+    theta2 = ar_structured['thetas'][index2]                            # Get direction 2
 
     return theta1, theta2
 
@@ -120,31 +125,35 @@ def get_lattice_vector_lengths(u_theta, v_theta, thetas, sinogram, spacing_thres
     """
     Gets the lengths of the two lattice vectors from their angles and the sinogram.
 
-    First, finds the spacing between peaks in the sinogram slices projected down the u- and v-
-    directions, u_proj and v_proj.  Then, finds the lengths by taking
+    First, finds the spacing between peaks in the sinogram slices projected down the u-
+    and v- directions, u_proj and v_proj.  Then, finds the lengths by taking::
+
         |u| = v_proj/sin(u_theta-v_theta)
         |v| = u_proj/sin(u_theta-v_theta)
 
-    The most important thresholds for this function are spacing_thresh, which discards any detected
-    spacing between adjacent radon projection peaks which deviate from the median spacing by more
-    than this fraction, and minRelativeIntensity, which discards detected maxima (from which spacings
-    are then calculated) below this threshold relative to the brightest maximum.
+    The most important thresholds for this function are spacing_thresh, which discards
+    any detected spacing between adjacent radon projection peaks which deviate from the
+    median spacing by more than this fraction, and minRelativeIntensity, which discards
+    detected maxima (from which spacings are then calculated) below this threshold
+    relative to the brightest maximum.
 
-    Accepts:
-        u_theta                 (float) the angle of u, in radians
-        v_theta                 (float) the angle of v, in radians
-        thetas                  (ndarray) the angles corresponding to the sinogram
-        sinogram                (ndarray) the sinogram
-        spacing_thresh          (float) ignores spacings which are greater than spacing_thresh times
-                                the median spacing
-        sigma                   (float) gaussian blur for local maxima identification
-        minSpacing              (float) minimum spacing for local maxima identification
-        minRelativeIntensity    (float) minumum intensity, relative to the brightest maximum, for
-                                local maxima identification
+    Args:
+        u_theta (float): the angle of u, in radians
+        v_theta (float): the angle of v, in radians
+        thetas (ndarray): the angles corresponding to the sinogram
+        sinogram (ndarray): the sinogram
+        spacing_thresh (float): ignores spacings which are greater than spacing_thresh
+            times the median spacing
+        sigma (float): gaussian blur for local maxima identification
+        minSpacing (float): minimum spacing for local maxima identification
+        minRelativeIntensity (float): minumum intensity, relative to the brightest
+            maximum, for local maxima identification
 
     Returns:
-        u_length                (float) the length of u, in pixels
-        v_length                (float) the length of v, in pixels
+        (2-tuple) A 2-tuple containing:
+
+            * **u_length**: *(float)* the length of u, in pixels
+            * **v_length**: *(float)* the length of v, in pixels
     """
     assert len(thetas)==sinogram.shape[1], "thetas must corresponding to the number of sinogram projection directions."
 

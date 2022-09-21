@@ -4,17 +4,18 @@
 import numpy as np
 from numpy.linalg import lstsq
 from itertools import permutations
-from scipy.ndimage.filters import gaussian_filter
-from scipy.ndimage.morphology import binary_opening, binary_closing, binary_dilation, binary_erosion
+from scipy.ndimage import gaussian_filter
+from scipy.ndimage import binary_opening, binary_closing, binary_dilation, binary_erosion
 from skimage.measure import label
 from sklearn.decomposition import NMF
 
-from ...io.datastructure import PointListArray
+from py4DSTEM.io import PointListArray
 
 
 class BraggVectorClassification(object):
     """
-    A class for classifying 4D-STEM data based on which BPs are found at each diffraction pattern.
+    A class for classifying 4D-STEM data based on which Bragg peaks are found at each
+    diffraction pattern.
 
     A BraggVectorClassification instance enables classification using several methods; a brief
     overview is provided here, with more details in each individual method's documentation.
@@ -70,6 +71,14 @@ class BraggVectorClassification(object):
         get_candidate_class_image:
             as above, for the current candidate class
 
+    Args:
+        braggpeaks (PointListArray): Bragg peaks; must have coords 'qx' and 'qy'
+        Qx (ndarray of floats): x-coords of the voronoi points
+        Qy (ndarray of floats): y-coords of the voronoi points
+        X_is_boolean (bool): if True, populate X with bools (BP is or is not present).
+            if False, populate X with floats (BP c.c. intensities)
+        max_dist (None or number): maximum distance from a given voronoi point a peak
+            can be and still be associated with this label
     """
 
     def __init__(self, braggpeaks, Qx, Qy, X_is_boolean=True, max_dist=None):
@@ -88,32 +97,34 @@ class BraggVectorClassification(object):
         terms of scan positions and Bragg peaks -- which are necessary for any subsequent
         processing.
 
-        Accepts:
-            braggpeaks          (PointListArray) Bragg peaks; must have coords 'qx' and 'qy'
-            Qx                  (ndarray of floats) x-coords of the voronoi points
-            Qy                  (ndarray of floats) y-coords of the voronoi points
-            X_is_boolean        (bool) if True, populate X with bools (BP is or is not present)
-                                if False, populate X with floats (BP c.c. intensities)
-            max_dist            (None or number) maximum distance from a given voronoi point a peak
-                                can be and still be associated with this label
+        Args:
+            braggpeaks (PointListArray): Bragg peaks; must have coords 'qx' and 'qy'
+            Qx (ndarray of floats): x-coords of the voronoi points
+            Qy (ndarray of floats): y-coords of the voronoi points
+            X_is_boolean (bool): if True, populate X with bools (BP is or is not present).
+                if False, populate X with floats (BP c.c. intensities)
+            max_dist (None or number): maximum distance from a given voronoi point a peak
+                can be and still be associated with this label
         """
         assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
         assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
         assert len(Qx)==len(Qy), "Qx and Qy must have same length"
         self.braggpeaks = braggpeaks
-        self.R_Nx = braggpeaks.shape[0]
-        self.R_Ny = braggpeaks.shape[1]
-        self.Qx = Qx
-        self.Qy = Qy
+        self.R_Nx = braggpeaks.shape[0]  #: shape of real space (x)
+        self.R_Ny = braggpeaks.shape[1]  #: shape of real space (y)
+        self.Qx = Qx  #: x-coordinates of the voronoi points
+        self.Qy = Qy  #: y-coordinates of the voronoi points 
 
-        # Get the sets of Bragg peaks present at each scan position
+        #: the sets of Bragg peaks present at each scan position
         self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist)
 
         # Construct X matrix
+        #: first dimension of the data matrix; the number of bragg peaks
         self.N_feat = len(self.Qx)
+        #: second dimension of the data matrix; the number of scan positions
         self.N_meas = self.R_Nx*self.R_Ny
 
-        self.X = np.zeros((self.N_feat,self.N_meas))
+        self.X = np.zeros((self.N_feat,self.N_meas))  #: the data matrix
         for Rx in range(self.R_Nx):
             for Ry in range(self.R_Ny):
                 R = Rx*self.R_Ny + Ry
@@ -134,21 +145,23 @@ class BraggVectorClassification(object):
                                                               X_is_boolean=True,
                                                               n_corr_init=2):
         """
-        Populate the initial classes by finding sets of Bragg peaks that tend to co-occur in the
+        Populate the initial classes by finding sets of Bragg peaks that tend to co-occur
+        in the
         same diffraction patterns.
 
-        Beginning from the sets of Bragg peaks labels for each scan position (determined in
-        __init__), this method gets initial classes by determining which labels are most likely
-        to co-occur with each other -- see get_initial_classes() docstring for more info.  Then
-        the matrices W and H are generated -- see nmf() doscstring for discussion.
+        Beginning from the sets of Bragg peaks labels for each scan position (determined
+        in __init__), this method gets initial classes by determining which labels are
+        most likely to co-occur with each other -- see get_initial_classes() docstring
+        for more info.  Then the matrices W and H are generated -- see nmf() doscstring
+        for discussion.
 
-        Accepts:
-            thresh              (float in [0,1]) threshold for adding new BPs to a class
-            BP_fraction_thresh  (float in [0,1]) algorithm terminates if fewer than this fraction
-                                of the BPs have not been assigned to a class
-            max_iterations      (int) algorithm terminates after this many iterations
-            n_corr_init         (int) seed new classes by finding maxima of the n-point joint
-                                probability function.  Must be 2 or 3.
+        Args:
+            thresh (float in [0,1]): threshold for adding new BPs to a class
+            BP_fraction_thresh (float in [0,1]): algorithm terminates if fewer than this
+                fraction of the BPs have not been assigned to a class
+            max_iterations (int): algorithm terminates after this many iterations
+            n_corr_init (int): seed new classes by finding maxima of the n-point joint
+                probability function.  Must be 2 or 3.
         """
         assert isinstance(X_is_boolean, bool)
         assert isinstance(max_iterations, (int,np.integer))
@@ -184,9 +197,9 @@ class BraggVectorClassification(object):
         """
         Populate the initial classes using a set of user-defined class images.
 
-        Accepts:
-            class_images    (ndarray) must have shape (R_Nx,R_Ny,N_c), where N_c is the number of
-                            classes, and class_images[:,:,i] is the image of class i.
+        Args:
+            class_images (ndarray): must have shape (R_Nx,R_Ny,N_c), where N_c is the
+                number of classes, and class_images[:,:,i] is the image of class i.
         """
         assert class_images.shape[0]==self.R_Nx
         assert class_images.shape[1]==self.R_Ny
@@ -215,39 +228,46 @@ class BraggVectorClassification(object):
         """
         Nonnegative matrix factorization to refine the classes.
 
-        In the matrix factorization performed here, X = WH, where
+        The data matrix ``X`` is factored into two smaller matrices, ``W`` and ``H``::
 
-            X       is the data matrix. It has shape (N_feat,N_meas), where N_feat is the number
-                    of Bragg peak integer labels (i.e. len(Qx)) and N_meas is the number of
-                    diffraction patterns (i.e. R_Nx*R_Ny).  Element X[i,j] represents the value
-                    of the i'th BP in the j'th DP.  The values depend on the flag
-                    datamatrix_is_boolean: if True, X[i,j] is 1 if this BP was present in this
-                    DP, or 0 if not; if False, X[i,j] is the cross correlation intensity of this
-                    BP in this DP.
-            W       the class matrix. It has shape (N_feat,N_c), where N_c is the number of
-                    classes. The i'th column vector, w_i = W[:,i], describes the weight of each
-                    Bragg peak in the i'th class.  w_i has length N_feat, and w_i[j]
-                    describes how strongly the j'th BP is associated with the i'th class.
-            H       the coefficient matrix. It has shape (N_c,N_meas).  The i'th column vector
-                    H[:,i] describes the contribution of each class to scan position i.
+            X = WH
 
-                    Alternatively, we can completely equivalently think of H as a class matrix,
-                    and W as a coeffient matrix.  In this picture, the i'th row vector of H,
-                    h_i = H[i,:], describes the weight of each scan position in the i'th class.
-                    h_i has length N_meas, and h_i[j] describes how strongly the j'th scan
-                    position is associated with the i'th class.  The row vector W[i,:] is then
-                    a coefficient vector, which gives the contributions each of the (H) classes
-                    to the measured values of the i'th BP.  These pictures are related by a
-                    transpose: X = WH is equivalent to X.T = (H.T)(W.T).
+        Here,
 
-        Here, we use nonnegative matrix factorization, i.e. we impose the constrain that, on
-        physical grounds, all elements of X, W, and H should be nonnegative.
+            * ``X``is the data matrix. It has shape (N_feat,N_meas), where N_feat is the
+              number of Bragg peak integer labels (i.e. len(Qx)) and N_meas is the number
+              of diffraction patterns (i.e. R_Nx*R_Ny).  Element X[i,j] represents the
+              value of the i'th BP in the j'th DP.  The values depend on the flag
+              datamatrix_is_boolean: if True, X[i,j] is 1 if this BP was present in this
+              DP, or 0 if not; if False, X[i,j] is the cross correlation intensity of
+              this BP in this DP.
+            * ``W`` is the class matrix. It has shape (N_feat,N_c), where N_c is the
+              number of classes. The i'th column vector, w_i = W[:,i], describes the
+              weight of each Bragg peak in the i'th class.  w_i has length N_feat, and
+              w_i[j] describes how strongly the j'th BP is associated with the i'th
+              class.
+            * ``H`` is the coefficient matrix. It has shape (N_c,N_meas).  The i'th
+              column vector H[:,i] describes the contribution of each class to scan
+              position i.
 
-        The computation itself is performed using the sklearn nmf class. When this method is called,
-        the three relevant matrices should already be defined. This method refines W and H, with up to max_iterations NMF steps.
+        Alternatively, we can completely equivalently think of H as a class matrix,
+        and W as a coeffient matrix.  In this picture, the i'th row vector of H,
+        h_i = H[i,:], describes the weight of each scan position in the i'th class.
+        h_i has length N_meas, and h_i[j] describes how strongly the j'th scan
+        position is associated with the i'th class.  The row vector W[i,:] is then
+        a coefficient vector, which gives the contributions each of the (H) classes
+        to the measured values of the i'th BP.  These pictures are related by a
+        transpose: X = WH is equivalent to X.T = (H.T)(W.T).
 
-        Accepts:
-            max_iterations      (int) the maximum number of NMF steps to take
+        In nonnegative matrix factorization we impose the constrain, here on
+        physical grounds, that all elements of X, W, and H should be nonnegative.
+
+        The computation itself is performed using the sklearn nmf class. When this method
+        is called, the three relevant matrices should already be defined. This method
+        refines W and H, with up to max_iterations NMF steps.
+
+        Args:
+            max_iterations (int): the maximum number of NMF steps to take
         """
         sklearn_nmf = NMF(n_components=self.N_c, init='custom', max_iter=max_iterations)
         self.W_next = sklearn_nmf.fit_transform(self.X, W=self.W, H=self.H)
@@ -258,31 +278,33 @@ class BraggVectorClassification(object):
 
     def split(self, sigma=2, threshold_split=0.25, expand_mask=1, minimum_pixels=1):
         """
-        If any classes contain multiple non-contiguous segments in real space, divide these regions
-        into distinct classes.
+        If any classes contain multiple non-contiguous segments in real space, divide
+        these regions into distinct classes.
 
         Algorithm is as follows:
         First, an image of each class is obtained from its scan position weights.
         Then, the image is convolved with a gaussian of std sigma.
         This is then turned into a binary mask, by thresholding with threshold_split.
-        Stray pixels are eliminated by performing a one pixel binary closing, then binary opening.
+        Stray pixels are eliminated by performing a one pixel binary closing, then binary
+        opening.
         The mask is then expanded by expand_mask pixels.
-        Finally, the contiguous regions of the resulting mask are found. These become the new class
-        components by scan position.
+        Finally, the contiguous regions of the resulting mask are found. These become the
+        new class components by scan position.
 
-        The splitting itself involves creating two classes - i.e. adding a column to W and a row to
-        H.  The new BP classes (W columns) have exactly the same values as the old BP class. The two
-        new scan position classes (H rows) divide up the non-zero entries of the old scan position
-        class into two or more non-intersecting subsets, each of which becomes its own new class.
+        The splitting itself involves creating two classes - i.e. adding a column to W
+        and a row to H.  The new BP classes (W columns) have exactly the same values as
+        the old BP class. The two new scan position classes (H rows) divide up the
+        non-zero entries of the old scan position class into two or more non-intersecting
+        subsets, each of which becomes its own new class.
 
-        Accepts:
-            sigma           (float) std of gaussian kernel used to smooth the class images before
-                            thresholding and splitting.
-            threshold_split (float) used to threshold the class image to create a binary mask.
-            expand_mask     (int) number of pixels by which to expand the mask before separating
-                            into contiguous regions.
-            minimum_pixels  (int) if, after splitting, a potential new class contains fewer than
-                            this number of pixels, ignore it
+        Args:
+            sigma (float): std of gaussian kernel used to smooth the class images before
+                thresholding and splitting.
+            threshold_split (float): used to threshold the class image to create a binary mask.
+            expand_mask (int): number of pixels by which to expand the mask before separating
+                into contiguous regions.
+            minimum_pixels (int): if, after splitting, a potential new class contains fewer than
+                this number of pixels, ignore it
         """
         assert isinstance(expand_mask,(int,np.integer))
         assert isinstance(minimum_pixels,(int,np.integer))
@@ -326,55 +348,57 @@ class BraggVectorClassification(object):
 
     def merge(self, threshBPs=0.1, threshScanPosition=0.1, return_params=True):
         """
-        If any classes contain sufficient overlap in both scan positions and BPs, merge them
-        into a single class.
+        If any classes contain sufficient overlap in both scan positions and BPs, merge
+        them into a single class.
 
         The algorithm is as follows:
-        First, the Pearson correlation coefficient matrix is calculated for the classes according
-        to both their diffraction space, Bragg peak representations (i.e. the correlations of the
-        columns of W) and according to their real space, scan position representations (i.e. the
-        correlations of the rows of H).
-        Class pairs whose BP correlation coefficient exceeds threshBPs and whose scan position
-        correlation coefficient exceed threshScanPosition are deemed 'sufficiently overlapped', and
-        are marked as merge candidates.
-        To account for intransitivity issues (e.g. class pairs 1/2 and 2/3 are merge candidates, but
-        class pair 1/3 is not), merging is then performed beginning with candidate pairs with the
-        greatest product of the two correlation coefficients, skipping later merge candidate pairs
+        First, the Pearson correlation coefficient matrix is calculated for the classes
+        according to both their diffraction space, Bragg peak representations (i.e. the
+        correlations of the columns of W) and according to their real space, scan
+        position representations (i.e. the correlations of the rows of H). Class pairs
+        whose BP correlation coefficient exceeds threshBPs and whose scan position
+        correlation coefficient exceed threshScanPosition are deemed 'sufficiently
+        overlapped', and are marked as merge candidates. To account for intransitivity
+        issues (e.g. class pairs 1/2 and 2/3 are merge candidates, but class pair 1/3 is
+        not), merging is then performed beginning with candidate pairs with the greatest
+        product of the two correlation coefficients, skipping later merge candidate pairs
         if one of the two classes has already been merged.
 
-        The algorithm can be looped until no more merge candidates satisfying the specified
-        thresholds remain with the merge_iterative method.
+        The algorithm can be looped until no more merge candidates satisfying the
+        specified thresholds remain with the merge_iterative method.
 
-        The merging itself involves turning two classes into one by combining a pair of W columns
-        (i.e. the BP representations of the classes) and the corresponding pair of H rows (i.e. the
-        scan position representation of the class) into a single W column / H row. In terms of
-        scan positions, the new row of H is generated by simply adding the two old H rows. In terms
-        of Bragg peaks, the new column of W is generated by adding the two old columns of W, while
-        weighting each by its total intensity in real space (i.e. the sum of its H row).
+        The merging itself involves turning two classes into one by combining a pair of
+        W columns (i.e. the BP representations of the classes) and the corresponding pair
+        of H rows (i.e. the scan position representation of the class) into a single W
+        column / H row. In terms of scan positions, the new row of H is generated by
+        simply adding the two old H rows. In terms of Bragg peaks, the new column of W is
+        generated by adding the two old columns of W, while weighting each by its total
+        intensity in real space (i.e. the sum of its H row).
 
-        Accepts:
-            threshBPs           (float) the threshold for the bragg peaks correlation coefficient,
-                                above which the two classes are considered candidates for merging
-            threshScanPosition  (float) the threshold for the scan position correlation coefficient,
-                                above which two classes are considered candidates for merging
-            return_params       (bool) if True, returns W_corr, H_corr, and merge_candidates.
-                                Otherwise, returns nothing. Incompatible with iterative=True.
+        Args:
+            threshBPs (float): the threshold for the bragg peaks correlation coefficient,
+                above which the two classes are considered candidates for merging
+            threshScanPosition (float): the threshold for the scan position correlation
+                coefficient, above which two classes are considered candidates for
+                merging
+            return_params (bool): if True, returns W_corr, H_corr, and merge_candidates.
+                Otherwise, returns nothing. Incompatible with iterative=True.
         """
 
     def merge_by_class_index(self, i, j):
         """
         Merge classes i and j into a single class.
 
-        Columns i and j of W  pair of W (i.e. the BP representations of the classes) and the
-        corresponding pair of H rows (i.e. the scan position representation of the class) are
-        mergedinto a single W column / H row. In terms of scan positions, the new row of H is
-        generated by simply adding the two old H rows. In terms of Bragg peaks, the new column of
-        W is generated by adding the two old columns of W, while weighting each by its total
-        intensity in real space (i.e. the sum of its H row).
+        Columns i and j of W  pair of W (i.e. the BP representations of the classes) and
+        the corresponding pair of H rows (i.e. the scan position representation of the
+        class) are mergedinto a single W column / H row. In terms of scan positions, the
+        new row of H is generated by simply adding the two old H rows. In terms of Bragg
+        peaks, the new column of W is generated by adding the two old columns of W, while
+        weighting each by its total intensity in real space (i.e. the sum of its H row).
 
-        Accepts:
-            i       (int) index of the first class to merge
-            j       (int) index of the second class to merge
+        Args:
+            i (int): index of the first class to merge
+            j (int): index of the second class to merge
         """
         assert np.all([isinstance(ind,(int,np.integer)) for ind in [i,j]]), "i and j must be ints"
 
@@ -396,20 +420,21 @@ class BraggVectorClassification(object):
     def split_by_class_index(self, i, sigma=2, threshold_split=0.25, expand_mask=1,
                                                                      minimum_pixels=1):
         """
-        If class i contains multiple non-contiguous segments in real space, divide these regions
-        into distinct classes.
+        If class i contains multiple non-contiguous segments in real space, divide these
+        regions into distinct classes.
 
         Algorithm is as described in the docstring for self.split.
 
-        Accepts:
-            i               (int) index of the class to split
-            sigma           (float) std of gaussian kernel used to smooth the class images before
-                            thresholding and splitting.
-            threshold_split (float) used to threshold the class image to create a binary mask.
-            expand_mask     (int) number of pixels by which to expand the mask before separating
-                            into contiguous regions.
-            minimum_pixels  (int) if, after splitting, a potential new class contains fewer than
-                            this number of pixels, ignore it
+        Args:
+            i (int): index of the class to split
+            sigma (float): std of gaussian kernel used to smooth the class images before
+                thresholding and splitting.
+            threshold_split (float): used to threshold the class image to create a binary
+                mask.
+            expand_mask (int): number of pixels by which to expand the mask before
+                separating into contiguous regions.
+            minimum_pixels (int): if, after splitting, a potential new class contains
+                fewer than this number of pixels, ignore it
         """
         assert isinstance(i,(int,np.integer))
         assert isinstance(expand_mask,(int,np.integer))
@@ -457,8 +482,8 @@ class BraggVectorClassification(object):
         """
         Remove class i.
 
-        Accepts:
-            i               (int) index of the class to remove
+        Args:
+            i (int): index of the class to remove
         """
         assert isinstance(i,(int,np.integer))
 
@@ -470,17 +495,18 @@ class BraggVectorClassification(object):
 
     def merge_iterative(self, threshBPs=0.1, threshScanPosition=0.1):
         """
-        If any classes contain sufficient overlap in both scan positions and BPs, merge them
-        into a single class.
+        If any classes contain sufficient overlap in both scan positions and BPs, merge
+        them into a single class.
 
-        Identical to the merge method, with the addition of iterating until no new merge pairs are
-        found.
+        Identical to the merge method, with the addition of iterating until no new merge
+        pairs are found.
 
-        Accepts:
-            threshBPs           (float) the threshold for the bragg peaks correlation coefficient,
-                                above which the two classes are considered candidates for merging
-            threshScanPosition  (float) the threshold for the scan position correlation coefficient,
-                                above which two classes are considered candidates for merging
+        Args:
+            threshBPs (float): the threshold for the bragg peaks correlation coefficient,
+                above which the two classes are considered candidates for merging
+            threshScanPosition (float): the threshold for the scan position correlation
+                coefficient, above which two classes are considered candidates for
+                merging
         """
         proceed = True
         W_ = np.copy(self.W)
@@ -570,14 +596,16 @@ class BraggVectorClassification(object):
         """
         Get a single class, returning both its BP weights and scan position weights.
 
-        Accepts:
-            i           (int) the class index
+        Args:
+            i (int): the class index
 
         Returns:
-            class_BPs   (length N_feat array of floats) the weights of the N_feat Bragg peaks for
-                        this class
-            class_image (shape (R_Nx,R_Ny) array of floats) the weights of each scan position in this
-                        class
+            (2-tuple): A 2-tuple containing:
+
+                * **class_BPs**: *(length N_feat array of floats)* the weights of the
+                  N_feat Bragg peaks for this class
+                * **class_image**: *(shape (R_Nx,R_Ny) array of floats)* the weights of
+                  each scan position in this class
         """
         class_BPs = self.W[:,i]
         class_image = self.H[i,:].reshape((self.R_Nx,self.R_Ny))
@@ -587,12 +615,12 @@ class BraggVectorClassification(object):
         """
         Get a single class, returning its BP weights.
 
-        Accepts:
-            i       (int) the class index
+        Args:
+            i (int): the class index
 
         Returns:
-            class_BPs   (length N_feat array of floats) the weights of the N_feat Bragg peaks for
-                        this class
+            (length N_feat array of floats): the weights of the N_feat Bragg peaks for
+            this class
         """
         return self.W[:,i]
 
@@ -600,12 +628,12 @@ class BraggVectorClassification(object):
         """
         Get a single class, returning its scan position weights.
 
-        Accepts:
-            i       (int) the class index
+        Args:
+            i (int): the class index
 
         Returns:
-            class_image (shape (R_Nx,R_Ny) array of floats) the weights of each scan position in this
-                        class
+            (shape (R_Nx,R_Ny) array of floats): the weights of each scan position in
+            this class
         """
         return self.H[i,:].reshape((self.R_Nx,self.R_Ny))
 
@@ -613,14 +641,16 @@ class BraggVectorClassification(object):
         """
         Get a single candidate class, returning both its BP weights and scan position weights.
 
-        Accepts:
+        Args:
             i           (int) the class index
 
         Returns:
-            class_BPs   (length N_feat array of floats) the weights of the N_feat Bragg peaks for
-                        this class
-            class_image (shape (R_Nx,R_Ny) array of floats) the weights of each scan position in this
-                        class
+            (2-tuple): A 2-tuple containing:
+
+                * **class_BPs**: *(length N_feat array of floats)* the weights of the
+                  N_feat Bragg peaks for this class
+                * **class_image**: *(shape (R_Nx,R_Ny) array of floats)* the weights of
+                  each scan position in this class
         """
         assert self.W_next is not None, "W_next is not assigned."
         assert self.H_next is not None, "H_next is not assigned."
@@ -648,12 +678,12 @@ class BraggVectorClassification(object):
         """
         Get a single candidate class, returning its scan position weights.
 
-        Accepts:
-            i           (int) the class index
+        Args:
+            i (int): the class index
 
         Returns:
-            class_image (shape (R_Nx,R_Ny) array of floats) the weights of each scan position in this
-                        class
+            (shape (R_Nx,R_Ny) array of floats): the weights of each scan position in
+            this class
         """
         assert self.H_next is not None, "H_next is not assigned."
 
@@ -664,29 +694,29 @@ class BraggVectorClassification(object):
 
 def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
     """
-    For each scan position, gets a set of integers, specifying the bragg peaks at this scan
-    position.
+    For each scan position, gets a set of integers, specifying the bragg peaks at this
+    scan position.
 
-    From a set of positions in diffraction space (Qx,Qy), assign each detected bragg peak in the
-    PointListArray braggpeaks a label corresponding to the index of the closest position; thus
-    for a bragg peak at (qx,qy), if the closest position in (Qx,Qy) is (Qx[i],Qy[i]), assign
-    this peak the label i. This is equivalent to assigning each bragg peak (qx,qy) a label
-    according to the Voronoi region it lives in, given a voronoi tesselation seeded from the
-    points (Qx,Qy).
+    From a set of positions in diffraction space (Qx,Qy), assign each detected bragg peak
+    in the PointListArray braggpeaks a label corresponding to the index of the closest
+    position; thus for a bragg peak at (qx,qy), if the closest position in (Qx,Qy) is
+    (Qx[i],Qy[i]), assign this peak the label i. This is equivalent to assigning each
+    bragg peak (qx,qy) a label according to the Voronoi region it lives in, given a
+    voronoi tesselation seeded from the points (Qx,Qy).
 
-    For each scan position, get the set of all indices i for all bragg peaks found at this scan
-    position.
+    For each scan position, get the set of all indices i for all bragg peaks found at
+    this scan position.
 
-    Accepts:
-        braggpeaks          (PointListArray) Bragg peaks; must have coords 'qx' and 'qy'
-        Qx                  (ndarray of floats) x-coords of the voronoi points
-        Qy                  (ndarray of floats) y-coords of the voronoi points
-        max_dist            (None or number) maximum distance from a given voronoi point a peak
-                            can be and still be associated with this label
+    Args:
+        braggpeaks (PointListArray): Bragg peaks; must have coords 'qx' and 'qy'
+        Qx (ndarray of floats): x-coords of the voronoi points
+        Qy (ndarray of floats): y-coords of the voronoi points
+        max_dist (None or number): maximum distance from a given voronoi point a peak
+            can be and still be associated with this label
 
     Returns:
-        braggpeak_labels    (list of lists of sets) the labels found at each scan position.
-                            Scan position (Rx,Ry) is accessed via braggpeak_labels[Rx][Ry]
+        (list of lists of sets) the labels found at each scan position. Scan position
+        (Rx,Ry) is accessed via braggpeak_labels[Rx][Ry]
     """
     assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
     assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
@@ -696,7 +726,7 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
         for Ry in range(braggpeaks.shape[1]):
             s = braggpeak_labels[Rx][Ry]
             pointlist = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(pointlist.length):
+            for i in range(len(pointlist.data)):
                 label = np.argmin(np.hypot(Qx-pointlist.data['qx'][i],Qy-pointlist.data['qy'][i]))
                 if max_dist is not None:
                     if np.hypot(Qx[label]-pointlist.data['qx'][i],Qy[label]-pointlist.data['qy'][i]) < max_dist:
@@ -707,39 +737,42 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
     return braggpeak_labels
 
 
-def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1, max_iterations=200,
-                        n_corr_init=2):
+def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
+                        max_iterations=200, n_corr_init=2):
     """
-    From the sets of Bragg peaks present at each scan position, get an initial guess classes at
-    which Bragg peaks should be grouped together into classes.
+    From the sets of Bragg peaks present at each scan position, get an initial guess
+    classes at which Bragg peaks should be grouped together into classes.
 
     The algorithm is as follows:
-    1. Calculate an n-point correlation function, i.e. the joint probability of any given n
-    BPs coexisting in a diffraction pattern.  n is controlled by n_corr_init, and must be 2 or 3.
-    peaks i, j, and k are all in the same DP.
-    2. Find the BP triplet maximizing the 3-point function; include these three BPs in a class.
-    3. Get all DPs containing the class BPs. From these, find the next most likely BP to also
-    be present.  If its probability of coexisting with the known class BPs is greater than
-    thresh, add it to the class and repeat this step. Otherwise, proceed to the next step.
-    4. Check: if the new class is the same as a class that has already been found, OR if the
-    fraction of BPs which have not yet been placed in a class is less than BP_fraction_thresh,
-    or more than max_iterations have been attempted, finish, returning all classes. Otherwise,
-    set all slices of the 3-point function containing the BPs in the new class to zero, and
-    begin a new iteration, starting at step 2 using the new, altered 3-point function.
+    1. Calculate an n-point correlation function, i.e. the joint probability of any given
+    n BPs coexisting in a diffraction pattern.  n is controlled by n_corr_init, and must
+    be 2 or 3. peaks i, j, and k are all in the same DP.
+    2. Find the BP triplet maximizing the 3-point function; include these three BPs in a
+    class.
+    3. Get all DPs containing the class BPs. From these, find the next most likely BP to
+    also be present.  If its probability of coexisting with the known class BPs is
+    greater than thresh, add it to the class and repeat this step. Otherwise, proceed to
+    the next step.
+    4. Check: if the new class is the same as a class that has already been found, OR if
+    the fraction of BPs which have not yet been placed in a class is less than
+    BP_fraction_thresh, or more than max_iterations have been attempted, finish,
+    returning all classes. Otherwise, set all slices of the 3-point function containing
+    the BPs in the new class to zero, and begin a new iteration, starting at step 2 using
+    the new, altered 3-point function.
 
-    Accepts:
-        N                   (N) the total number of indexed Bragg peaks in the 4D-STEM dataset
-        braggpeak_labels    (list of lists of sets) the Bragg peak labels found at each scan
-                            position; see get_braggpeak_labels_by_scan_position().
-        thresh              (float in [0,1]) threshold for adding new BPs to a class
-        BP_fraction_thresh  (float in [0,1]) algorithm terminates if fewer than this fraction
-                            of the BPs have not been assigned to a class
-        max_iterations      (int) algorithm terminates after this many iterations
-        n_corr_init         (int) seed new classes by finding maxima of the n-point joint
-                            probability function.  Must be 2 or 3.
+    Args:
+        N (int): the total number of indexed Bragg peaks in the 4D-STEM dataset
+        braggpeak_labels (list of lists of sets): the Bragg peak labels found at each
+            scan position; see get_braggpeak_labels_by_scan_position().
+        thresh (float in [0,1]): threshold for adding new BPs to a class
+        BP_fraction_thresh (float in [0,1]): algorithm terminates if fewer than this
+            fraction of the BPs have not been assigned to a class
+        max_iterations (int): algorithm terminates after this many iterations
+        n_corr_init (int): seed new classes by finding maxima of the n-point joint
+            probability function.  Must be 2 or 3.
 
     Returns:
-        BP_sets             (list of sets) the sets of Bragg peaks constituting the classes
+        (list of sets): the sets of Bragg peaks constituting the classes
     """
     assert isinstance(braggpeak_labels[0][0],set)
     assert thresh >= 0 and thresh <= 1
