@@ -271,13 +271,13 @@ class Array:
 
         # if none were passed
         if self.dim_units is None:
-            self.dim_units = [['unknown','pixels'][i] for i in dim_in_pixels]
+            self.dim_units = [['unknown','pixels'][int(i)] for i in dim_in_pixels]
 
         # if some but not all were passed
         elif len(self.dim_units)<self.rank:
             N = len(self.dim_units)
             self.dim_units = [units for units in self.dim_units] + \
-                             [['unknown','pixels'][dim_in_pixels[i]] for i in range(N,self.rank)]
+                             [['unknown','pixels'][int(dim_in_pixels[i])] for i in range(N,self.rank)]
 
         # if all were passed
         elif len(self.dim_units)==self.rank:

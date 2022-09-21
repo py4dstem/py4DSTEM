@@ -4,6 +4,7 @@ from py4DSTEM.io.datastructure import Calibration, DiffractionSlice, RealSlice
 
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like,ListedColormap
@@ -17,15 +18,18 @@ def show(
     figsize=(8,8),
     cmap='gray',
     scaling='none',
-    clipvals='minmax',
+    intensity_range='ordered',
+    clipvals=None,
     vmin=None,
     vmax=None,
     min=None,
     max=None,
-    power=1,
+    power=None,
+    power_offset=True,
+    ticks=True,
     bordercolor=None,
     borderwidth=5,
-    returnclipvals=False,
+    return_intensity_range=False,
     returncax=False,
     returnfig=False,
     figax=None,
@@ -81,7 +85,7 @@ def show(
 
     Scaling:
         Setting the parameter ``scaling`` will scale the display image. Options are
-        'none', 'power', or 'log'.  If 'power' is specified, the parameter ``power`` must
+        'none', 'auto', 'power', or 'log'.  If 'power' is specified, the parameter ``power`` must
         also be passed. The underlying data is not altered. Values less than or equal to
         zero are set to zero. If the image histogram is displayed using ``hist=True``,
         the scaled image histogram is shown.
@@ -89,7 +93,7 @@ def show(
         Examples::
 
             >>> show(ar,scaling='log')
-            >>> show(ar,scaling='power',power=0.5)
+            >>> show(ar,power=0.5)
             >>> show(ar,scaling='power',power=0.5,hist=True)
 
     Histogram:
@@ -98,20 +102,15 @@ def show(
         of bins can be set with ``n_bins``. The upper and lower clip values, indicating
         where the image display will be saturated, are shown with dashed lines.
 
-    Clip values:
-        By 'clip values' we mean the lower and upper values at which the display image
-        will be saturated. Controlling the clip values is accomplished using the input
-        parameters ``clipvals``, ``min``, and ``max``, and the clipvalues can be returned
-        with the ``returnclipvals`` parameter.  ``clipvals`` controls the method by which
-        the clip values are determined, and must be a string in ('minmax','manual',
-        'std','centered'). Their behaviors are
-            * 'minmax' (default): The min/max values are set to np.min(ar)/np.max(ar)
-            * 'manual': The min/max values are set to ``min``/``max``
-            * 'std': The min/max values are ``np.median(ar) + N*np.std(ar)``, and
-               N is this functions ``min``/``max`` values.
-            * 'centered': The min/max values are set to ``c -/+ m``, where by default
-              'c' is zero and m is the max(abs(ar-c)), or, the two params can be user
-              specified using  ``min``/``max`` -> ``c``/``m``.
+    Intensity range:
+        Controlling the lower and upper values at which the display image will be
+        saturated is accomplished with the ``intensity_range`` parameter, or its
+        (soon deprecated) alias ``clipvals``, in combination with ``vmin``,
+        and ``vmax``.  The method by which the upper and lower clip values
+        are determined is controlled by ``intensity_range``, and must be a string in
+        ('ordered','absolute','manual','minmax','std','centered'). See the argument
+        description for ``intensity_range`` for a description of the behavior for each.
+        The clip values can be returned with the ``return_intensity_range`` parameter. 
 
     Masking:
         If a numpy masked array is passed to show, the function will automatically
@@ -230,24 +229,30 @@ def show(
         cmap (colormap): any matplotlib cmap; default is gray
         scaling (str): selects a scaling scheme for the intensity values. Default is
             none. Accepted values:
-                * 'none'
+                * 'none': do not scale intensity values
+                * 'full': fill entire color range with sorted intensity values
+                * 'power': power law scaling
                 * 'log': values where ar<=0 are set to 0
-                * 'power': requires the 'power' argument be set.
-                  values where ar<=0 are set to 0
-        clipvals (str): method for setting clipvalues.  Default is the array min and max
-            values. Accepted values:
-                * 'minmax': The min/max values are np.min(ar)/np.max(r)
-                * 'manual': The min/max values are set to the values of
-                  the min,max arguments received by this function
-                * 'std': The min/max values are ``np.median(ar) -/+ N*np.std(ar)``, and
+        intensity_range (str): method for setting clipvalues (min and max intensities).  
+                        The original name "clipvals" is now deprecated.
+                        Default is 'ordered'. Accepted values:
+                * 'ordered': vmin/vmax are set to fractions of the
+                  distribution of pixel values in the array, e.g. vmin=0.02
+                  will set the minumum display value to saturate the lower 2% of pixels
+                * 'minmax': The vmin/vmax values are np.min(ar)/np.max(r)
+                * 'absolute': The vmin/vmax values are set to the values of
+                  the vmin,vmax arguments received by this function
+                * 'std': The vmin/vmax values are ``np.median(ar) -/+ N*np.std(ar)``, and
                    N is this functions min,max vals.
-                * 'centered': The min/max values are set to ``c -/+ m``, where by default
+                * 'centered': The vmin/vmax values are set to ``c -/+ m``, where by default
                   'c' is zero and m is the max(abs(ar-c), or the two params can be user
-                  specified using the kwargs min/max -> c/m.
-        min (number): behavior depends on clipvals
-        max (number): behavior depends on clipvals
-        vmin,vmax: alias' for min,max
-        power (number): when ``scaling='power'``, specifies the scaling power
+                  specified using the kwargs vmin/vmax -> c/m.
+        vmin (number): min intensity, behavior depends on clipvals
+        vmax (number): max intensity, behavior depends on clipvals
+        min,max: alias' for vmin,vmax, throws deprecation warning
+        power (number): specifies the scaling power
+        power_offset (bool): If true, image has min value subtracted before power scaling
+        ticks (bool):  Turn outer tick marks on or off
         bordercolor (color or None): if not None, add a border of this color.
             The color can be anything matplotlib recognizes as a color.
         borderwidth (number):
@@ -271,6 +276,11 @@ def show(
             multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
+        scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
+            with calibrations is passed, adds a scalebar.  If None and anything else is
+            passed or if False, does not add a scalebar.  If a dict is passed, it is
+            propagated to the add_scalebar function which will attempt to use it to
+            overlay a scalebar.
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -278,10 +288,16 @@ def show(
         if returnfig==True, return the figure and the axis.
     """
 
-    # TODO - set all internal references of min and max to vmin and vmax.
-    # Also throw a warning for using vmin / vmax that they are deprecated.
-    if vmin is not None: min=vmin
-    if vmax is not None: max=vmax
+    # Alias dep
+    if min is not None: vmin=min
+    if max is not None: vmax=max
+    if min is not None or max is not None:
+        warnings.warn("Warning, min/max are deprecated and will not be supported in a future version. Use vmin/vmax instead.")
+    if clipvals is not None:
+        warnings.warn("Warning, clipvals is deprecated and will not be supported in a future version. Use intensity_range instead.")
+        if intensity_range is None:
+            intensity_range = clipvals
+
 
     # plot a grid if `ar` is a list
     if isinstance(ar,list):
@@ -303,7 +319,7 @@ def show(
     # support for native data types
     elif not isinstance(ar,np.ndarray):
         # support for calibration/auto-scalebars
-        if hasattr(ar, 'calibration'):
+        if hasattr(ar, 'calibration') and scalebar != False:
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
@@ -336,63 +352,97 @@ def show(
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
 
-    # otherwise plot one image
-    assert scaling in ('none','log','power','hist')
-    assert clipvals in ('minmax','manual','std','centered')
+    # Otherwise, plot one image
+    
+    # get image from a masked array
     if mask is not None:
         assert mask.shape == ar.shape
         assert is_color_like(mask_color) or mask_color=='empty'
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=~mask)
+            ar = np.ma.array(data=ar,mask=~mask)    
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
-        mask = np.ones_like(ar,dtype=bool)
-        ar = np.ma.array(data=ar,mask=mask==False)
+        mask = np.zeros_like(ar,dtype=bool)
+        ar = np.ma.array(data=ar,mask=mask)
 
-    # Perform any scaling
+    # New intensity scaling logic
+    assert scaling in ('none','full','log','power','hist')
+    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')  
+    if power is not None:
+        scaling = 'power'            
     if scaling == 'none':
         _ar = ar.copy()
         _mask = np.ones_like(_ar.data,dtype=bool)
+    elif scaling == 'full':
+        _ar = np.reshape(ar.ravel().argsort().argsort(),ar.shape) / (ar.size-1)
+        _mask = np.ones_like(_ar.data,dtype=bool)
     elif scaling == 'log':
-        _mask = ar.data>0
+        _mask = ar.data>0.0
         _ar = np.zeros_like(ar.data,dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
-        if clipvals == 'manual':
-            if min != None:
-                if min > 0: min = np.log(min)
-                else: min = np.min(_ar[_mask])
-            if max != None: max = np.log(max)
+        if clipvals == 'absolute':
+            if vmin != None:
+                if vmin > 0.0: vmin = np.log(vmin)
+                else: vmin = np.min(_ar[_mask])
+            if vmax != None: vmax = np.log(vmax)
     elif scaling == 'power':
-        _mask = ar.data>0
-        _ar = np.zeros_like(ar.data,dtype=float)
-        _ar[_mask] = np.power(ar.data[_mask],power)
-        _ar[~_mask] = np.nan
-        if clipvals == 'manual':
-            if min != None: min = np.power(min,power)
-            if max != None: max = np.power(max,power)
+        if power_offset is False:
+            _mask = ar.data>0.0
+            _ar = np.zeros_like(ar.data,dtype=float)
+            _ar[_mask] = np.power(ar.data[_mask],power)
+            _ar[~_mask] = np.nan
+        else:
+            ar_min = np.min(ar)
+            if ar_min < 0:
+                _ar = np.power(ar.copy() - np.min(ar), power)
+            else:
+                _ar = np.power(ar.copy(), power)            
+            _mask = np.ones_like(_ar.data,dtype=bool)
+            if intensity_range == 'absolute':
+                if vmin != None: vmin = np.power(vmin,power)
+                if vmax != None: vmax = np.power(vmax,power)
     else:
         raise Exception
 
-    _ar = np.ma.array(data=_ar.data,mask=~_mask)
+    # Create the masked array applying the user mask (this is done before the 
+    # vmin and vmax are determined so the mask affects those)
+    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
     # Set the clipvalues
-    if clipvals == 'minmax':
+    if intensity_range == 'manual':
+        warnings.warn("Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
+        intensity_range = 'absolute'
+    if intensity_range == 'ordered':
+        if vmin is None: vmin = 0.02
+        if vmax is None: vmax = 0.98
+        vals = np.sort(_ar[~np.isnan(_ar)])
+        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+    elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
-    elif clipvals == 'manual':
-        assert min is not None and max is not None
-        vmin,vmax = min,max
-    elif clipvals == 'std':
-        assert min is not None and max is not None
+    elif intensity_range == 'absolute':
+        if vmin is None:
+            vmin = np.min(_ar)
+            print("Warning, vmin not provided, setting minimum intensity = " + str(vmin))
+        if vmax is None:
+            vmax = np.max(_ar)
+            print("Warning, vmax not provided, setting maximum intensity = " + str(vmax))
+        # assert vmin is not None and vmax is not None
+        # vmin,vmax = vmin,vmax
+    elif intensity_range == 'std':
+        assert vmin is not None and vmax is not None
         m,s = np.nanmedian(_ar),np.nanstd(_ar)
-        vmin = m + min*s
-        vmax = m + max*s
-    elif clipvals == 'centered':
-        c = np.nanmean(_ar) if min is None else min
-        m = np.nanmax(np.ma.abs(c-_ar)) if max is None else max
+        vmin = m + vmin*s
+        vmax = m + vmax*s
+    elif intensity_range == 'centered':
+        c = np.nanmean(_ar) if vmin is None else vmin
+        m = np.nanmax(np.ma.abs(c-_ar)) if vmax is None else vmax
         vmin = c-m
         vmax = c+m
     else:
@@ -406,9 +456,6 @@ def show(
         assert(isinstance(fig,Figure))
         assert(isinstance(ax,Axes))
 
-    # Create the masked array applying the user mask (this is done after the 
-    # vmin and vmax are determined so the mask doesn't affect those)
-    _ar = np.ma.array(data=_ar.data,mask=np.logical_or(ar.mask,~_mask))
 
     # Create colormap with mask_color for bad values
     cm = copy(plt.cm.get_cmap(cmap))
@@ -531,7 +578,7 @@ def show(
 
 
     # Add a scalebar
-    if scalebar is not None:
+    if scalebar is not None and scalebar is not False:
         # Add the grid
         scalebar['Nx'],scalebar['Ny']=ar.shape
         scalebar['pixelsize'] = pixelsize
@@ -573,10 +620,15 @@ def show(
     if rtheta_grid is not None:
         add_rtheta_grid(ax,rtheta_grid)
 
+    # tick marks
+    if ticks is False:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     # Show or return
     returnval = []
     if returnfig: returnval.append((fig,ax))
-    if returnclipvals:
+    if return_intensity_range:
         if scaling == 'log':
             vmin,vmax = np.power(np.e,vmin),np.power(np.e,vmax)
         elif scaling == 'power':
@@ -624,7 +676,6 @@ def show_hist(arr, bins=200, vlines=None, vlinecolor='k', vlinestyle='--',
     plt.xlabel('Intensity')
     if vlines is not None:
         ax.vlines(vlines,0,np.max(counts),color=vlinecolor,ls=vlinestyle)
-
     if not returnhist and not returnfig:
         plt.show()
         return
@@ -656,10 +707,10 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
 
     Regardless of which overlay is requested, the function must recieve either values
     for Q_pixel_size and Q_pixel_units, or a Calibration instance containing these values.
-    If both are passed, the manually passed values take precedence.
-    If a cartesian grid is requested, (qx0,qy0) are required, either passed manually or
+    If both are passed, the absolutely passed values take precedence.
+    If a cartesian grid is requested, (qx0,qy0) are required, either passed absolutely or
     passed as a Calibration instance with the appropriate (rx,ry) value.
-    If a polar grid is requested, (qx0,qy0,e,theta) are required, again either manually
+    If a polar grid is requested, (qx0,qy0,e,theta) are required, again either absolutely
     or via a Calibration instance.
 
     Any arguments accepted by the show() function (e.g. image scaling, clipvalues, etc)
@@ -673,21 +724,21 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
         Q_pixel_size = Q_pixel_size if Q_pixel_size is not None else \
                        calibration.get_Q_pixel_size()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or absolutely")
     try:
         Q_pixel_units = Q_pixel_units if Q_pixel_units is not None else \
                        calibration.get_Q_pixel_units()
     except AttributeError:
-        raise Exception("Q_pixel_size must be specified, either in calibration or manually")
+        raise Exception("Q_pixel_size must be specified, either in calibration or absolutely")
     if grid or polargrid:
         try:
             qx0 = qx0 if qx0 is not None else calibration.get_qx0(rx,ry)
         except AttributeError:
-            raise Exception("qx0 must be specified, either in calibration or manually")
+            raise Exception("qx0 must be specified, either in calibration or absolutely")
         try:
             qy0 = qy0 if qy0 is not None else calibration.get_qy0(rx,ry)
         except AttributeError:
-            raise Exception("qy0 must be specified, either in calibration or manually")
+            raise Exception("qy0 must be specified, either in calibration or absolutely")
         assert isinstance(qx0,Number), "Error: qx0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
         assert isinstance(qy0,Number), "Error: qy0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
     if polargrid:
@@ -910,7 +961,7 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     else:
         return fig,ax
 
-def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
+def show_ellipses(ar,center,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
                                                         returnfig=False,**kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
@@ -939,7 +990,7 @@ def show_ellipses(ar,center,a,e,theta,color='r',fill=True,alpha=0.3,linewidth=2,
         further edited.
     """
     fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'center':center,'a':a,'e':e,'theta':theta,'color':color,'fill':fill,
+    d = {'center':center,'a':a,'b':b,'theta':theta,'color':color,'fill':fill,
          'alpha':alpha,'linewidth':linewidth}
     add_ellipses(ax,d)
 
