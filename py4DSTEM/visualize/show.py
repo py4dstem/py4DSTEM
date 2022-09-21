@@ -102,20 +102,15 @@ def show(
         of bins can be set with ``n_bins``. The upper and lower clip values, indicating
         where the image display will be saturated, are shown with dashed lines.
 
-    Clip values:
-        By 'clip values' we mean the lower and upper values at which the display image
-        will be saturated. Controlling the clip values is accomplished using the input
-        parameters ``clipvals``, ``vmin``, and ``vmax``, and the clipvalues can be returned
-        with the ``returnclipvals`` parameter.  ``clipvals`` controls the method by which
-        the clip values are determined, and must be a string in ('minmax','absolute',
-        'std','centered'). Their behaviors are
-            * 'minmax' (default): The min/max values are set to np.min(ar)/np.max(ar)
-            * 'absolute': The min/max values are set to ``vmin``/``vmax``
-            * 'std': The min/max values are ``np.median(ar) + N*np.std(ar)``, and
-               N is this functions ``vmin``/``vmax`` values.
-            * 'centered': The min/max values are set to ``c -/+ m``, where by default
-              'c' is zero and m is the max(abs(ar-c)), or, the two params can be user
-              specified using  ``vmin``/``vmax`` -> ``c``/``m``.
+    Intensity range:
+        Controlling the lower and upper values at which the display image will be
+        saturated is accomplished with the ``intensity_range`` parameter, or its
+        (soon deprecated) alias ``clipvals``, in combination with ``vmin``,
+        and ``vmax``.  The method by which the upper and lower clip values
+        are determined is controlled by ``intensity_range``, and must be a string in
+        ('ordered','absolute','manual','minmax','std','centered'). See the argument
+        description for ``intensity_range`` for a description of the behavior for each.
+        The clip values can be returned with the ``return_intensity_range`` parameter. 
 
     Masking:
         If a numpy masked array is passed to show, the function will automatically
@@ -292,9 +287,9 @@ def show(
     if min is not None: vmin=min
     if max is not None: vmax=max
     if min is not None or max is not None:
-        warnings.warn("Warning, min/max are deprecated. Use vmin/vmax instead.")
+        warnings.warn("Warning, min/max are deprecated and will not be supported in a future version. Use vmin/vmax instead.")
     if clipvals is not None:
-        warnings.warn("Warning, clipvals is deprecated. Use intensity_range instead.")
+        warnings.warn("Warning, clipvals is deprecated and will not be supported in a future version. Use intensity_range instead.")
         if intensity_range is None:
             intensity_range = clipvals
 
