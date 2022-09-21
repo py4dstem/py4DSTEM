@@ -370,7 +370,7 @@ def show(
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
-    assert intensity_range in ('ordered','absolute','minmax','std','centered')  
+    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')  
     if power is not None:
         scaling = 'power'            
     if scaling == 'none':
@@ -412,6 +412,9 @@ def show(
     _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
+    if intensity_range == 'manual':
+        warnings.warn('Warning - intensity_range=\'manual\' is deprecated, use \'absolute\' instead')
+        intensity_range = 'absolute'
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
         if vmax is None: vmax = 0.98
