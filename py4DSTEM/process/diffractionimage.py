@@ -7,7 +7,8 @@ def get_diffraction_image(
     type,
     mode,
     geometry,
-    shift_center = True,
+    shift_center = False,
+    calibrated = False,
     verbose = True,
     return_mask = False,
 ):
@@ -37,6 +38,7 @@ def get_diffraction_image(
 
     '''
 
+    
     assert type in ('max', 'median', 'mean'),\
         'check doc strings for supported types'
 
@@ -50,18 +52,18 @@ def get_diffraction_image(
         # Get mask
         mask = make_detector(datacube.Rshape, mode, g)
         # if return_mask is True, skip computation
-        if return_mask == True and shift_center == False:
-            return mask
 
     #if no mask 
     else: 
-        mask = np.ones(datacube.Rshape)
+        mask = np.ones(datacube.Rshape, dtype = bool)
 
-    # Calculate diffracton patterns
-
+    if return_mask == True:
+            return mask
+    
     # no center shifting
     if shift_center == False:
-        # compute
+
+        # Calculate diffracton pattern
         diffraction_image = np.zeros(datacube.Qshape)
         for qx,qy in tqdmnd(
             datacube.Q_Nx,
@@ -71,12 +73,44 @@ def get_diffraction_image(
             if type == 'mean':
                 diffraction_image[qx,qy] = np.sum(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
             if type == 'max':
-                diffraction_image[qx,qy] = np.sum(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
+                diffraction_image[qx,qy] = np.max(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
             if type == 'median':
-                diffraction_image[qx,qy] = np.sum(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
+                diffraction_image[qx,qy] = np.median(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
 
     # with center shifting
     else:
+        assert type in ('max', 'mean'),\
+        'check doc strings for supported types'
 
+        # Get calibration metadata
+        assert datacube.calibration.get_origin(), "origin need to be calibrated"
+        x0, y0 = datacube.calibration.get_origin()
+        x0_mean = np.mean(x0)
+        y0_mean = np.mean(y0)
+
+        # get shifts
+        qx_shift = (x0-x0_mean).round().astype(int)
+        qy_shift = (y0-y0_mean).round().astype(int)
+
+
+        # compute
+        diffraction_image = np.zeros(datacube.Qshape)
+        for rx,ry in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            disable = not verbose,
+        ):
+            if mask == True: 
+                # get shifted DP
+                DP = np.roll(
+                    datacube.data[rx, ry, :,:,],
+                    (qx_shift[rx,ry], qy_shift[rx,ry]),
+                    axis=(0,1),
+                    )
+                if type == 'mean':
+                    diffraction_image += DP     
+                if type == 'max':
+                    diffraction_image = np.maximum(diffraction_image, DP)
+            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
     return diffraction_image
