@@ -18,7 +18,8 @@ def show(
     figsize=(8,8),
     cmap='gray',
     scaling='none',
-    clipvals='auto',
+    intensity_range='ordered',
+    clipvals=None,
     vmin=None,
     vmax=None,
     min=None,
@@ -28,7 +29,7 @@ def show(
     ticks=True,
     bordercolor=None,
     borderwidth=5,
-    returnclipvals=False,
+    return_intensity_range=False,
     returncax=False,
     returnfig=False,
     figax=None,
@@ -237,9 +238,10 @@ def show(
                 * 'full': fill entire color range with sorted intensity values
                 * 'power': power law scaling
                 * 'log': values where ar<=0 are set to 0
-        clipvals (str): method for setting clipvalues (min and max intensities).  
+        intensity_range (str): method for setting clipvalues (min and max intensities).  
+                        The original name "clipvals" is now deprecated.
                         Default is 'auto'. Accepted values:
-                * 'auto': vmin/vmax are set to the percentile of the
+                * 'ordered': vmin/vmax are set to fractuibs of the
                   distribution of pixel values in the array, e.g. vmin=0.02
                   will set the minumum display value to saturate the lower 2% of pixels
                 * 'minmax': The vmin/vmax values are np.min(ar)/np.max(r)
@@ -291,6 +293,11 @@ def show(
     if max is not None: vmax=max
     if min is not None or max is not None:
         warnings.warn("Warning, min/max commands are deprecated. Use vmin/vmax instead.")
+    if clipvals is not None:
+        warnings.warn("Warning, clipvals is deprecated. Use intensity_range instead.")
+        if intensity_range is None:
+            intensity_range = clipvals
+
 
     # plot a grid if `ar` is a list
     if isinstance(ar,list):
@@ -363,7 +370,7 @@ def show(
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
-    assert clipvals in ('auto','manual','minmax','std','centered')  
+    assert intensity_range in ('ordered','manual','minmax','std','centered')  
     if power is not None:
         scaling = 'power'            
     if scaling == 'none':
@@ -395,7 +402,7 @@ def show(
             else:
                 _ar = np.power(ar.copy(), power)            
             _mask = np.ones_like(_ar.data,dtype=bool)
-            if clipvals == 'manual':
+            if intensity_range == 'manual':
                 if vmin != None: vmin = np.power(vmin,power)
                 if vmax != None: vmax = np.power(vmax,power)
     else:
@@ -405,7 +412,7 @@ def show(
     _ar = np.ma.array(data=_ar.data,mask=~_mask)
 
     # Set the clipvalues
-    if clipvals == 'auto':
+    if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
         if vmax is None: vmax = 0.98
         vals = np.sort(_ar[~np.isnan(_ar)])
@@ -413,17 +420,23 @@ def show(
         ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
-    elif clipvals == 'minmax':
+    elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
-    elif clipvals == 'manual':
-        assert vmin is not None and vmax is not None
+    elif intensity_range == 'manual':
+        if vmin is None:
+            vmin = np.min(_ar)
+            print("Warning, vmin not provided, setting to minimum intensity = " + str(vmin))
+        if vmax is None:
+            vmax = np.max(_ar)
+            print("Warning, vmin not provided, setting to minimum intensity = " + str(vmax))
+        # assert vmin is not None and vmax is not None
         # vmin,vmax = vmin,vmax
-    elif clipvals == 'std':
+    elif intensity_range == 'std':
         assert vmin is not None and vmax is not None
         m,s = np.nanmedian(_ar),np.nanstd(_ar)
         vmin = m + vmin*s
         vmax = m + vmax*s
-    elif clipvals == 'centered':
+    elif intensity_range == 'centered':
         c = np.nanmean(_ar) if vmin is None else vmin
         m = np.nanmax(np.ma.abs(c-_ar)) if vmax is None else vmax
         vmin = c-m
@@ -667,7 +680,7 @@ def show(
     # Show or return
     returnval = []
     if returnfig: returnval.append((fig,ax))
-    if returnclipvals:
+    if return_intensity_range:
         if scaling == 'log':
             vmin,vmax = np.power(np.e,vmin),np.power(np.e,vmax)
         elif scaling == 'power':
