@@ -1,5 +1,5 @@
 import numpy as np
-import py4DSTEM
+#import py4DSTEM
 from py4DSTEM.io.datastructure import DataCube
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.decomposition import NMF, PCA, FastICA
@@ -391,7 +391,6 @@ class Featurization(object):
         R_Nx (int): x shape real space
         R_Ny (int): y shape real space
         """
-        
         for i in range(len(keys)):
             class_maps = []
             if classification_method[i] == 'nmf':
@@ -437,27 +436,23 @@ class Featurization(object):
                     bw = closing(image > t, square(2))
                     label_image = remove_small_objects(label(bw), size)
                     unique_labels = np.unique(label_image)
-                    #if len(unique_labels) != 0:
                     labelled_temp.extend([(np.where(
                         label_image == unique_labels[k],
                         image, 0)) for k in range(len(unique_labels))])
                 labelled.append(labelled_temp)
-            self.spatially_separated_ims[keys[i]] = labelled
+            if clean == False:
+                self.spatially_separated_ims[keys[i]] = labelled
+            elif clean == True:
+                stacked = [np.dstack(labelled[l]) for l in range(len(labelled)) if len(labelled[l]) > 0]
+                data_list = [stacked[j][:,:,l] for l in range(stacked[j].shape[2])]
+                cc_data = []
+                for m in range(len(stacked)):
+                    data_hard = (stacked[m].max(axis=2,keepdims=1) == stacked[m]) * stacked[m]
+                    data_list_hard = [np.where(data_hard[:,:,n] > threshold, 1, 0) for n in range(data_hard.shape[2])]
+                    cc_data.append([data_list[n] for n in range(len(data_list_hard)) if (np.sum(data_list_hard[n]) > size)])
+                self.spatially_separated_ims[keys[i]] = cc_data
         return
     
-#    def clean_cluster_sets(self, keys, size, threshold):
-#        """
-#        """
-#        cc_data = []
-#        for i in range(len(keys)):
-#            for j in range(len(data)):
-#                data_list = [data[j][:,:,i] for i in range(data[j].shape[2])]
-#                data_hard = (data[j].max(axis=2,keepdims=1) == data[j]) * data[j]
-#                data_list_hard = [np.where(data_hard[:,:,i] > threshold, 1, 0) for i in range(data_hard.shape[2])]
-#                cc_data.append([data_list[i] for i in range(len(data_list_hard)) if (np.sum(data_list_hard[i]) > size)])
-#            cleaned_cluster_ims[keys[i]] = cc_data
-#        return
-
     def consensus(self, keys, threshold = 0, location = 'spatially_separated_ims', method = 'mean', drop = 0):
         """
         Consensus Clustering takes the outcome of a prepared set of 2D images from each cluster and averages the outcomes.
@@ -471,7 +466,6 @@ class Featurization(object):
             no cluster sets will be dropped
         """
         for i in range(len(keys)):
-            print('i = ' + str(i))
             class_dict = {}
             consensus_clusters = []
             if location == 'spatially_separated_ims':
@@ -502,7 +496,7 @@ class Featurization(object):
                             best_sum = current_sum
                             cvalue = l
 
-                    if (best_sum / np.sum(class_im)) > 0:
+                    if best_sum > 0:
                         class_dict['c'+str(cvalue)].append(class_im)
                     else:
                         class_dict['c' + str(len(list(class_dict.keys())))] = [class_im]
