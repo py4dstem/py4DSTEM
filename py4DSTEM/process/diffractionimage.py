@@ -1,12 +1,13 @@
 # Functions for generating diffraction images
 
 import numpy as np
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 def get_diffraction_image(
     datacube,
     type,
-    mode,
-    geometry,
+    mode = None,
+    geometry = None,
     shift_center = False,
     calibrated = False,
     verbose = True,
@@ -44,7 +45,7 @@ def get_diffraction_image(
 
     #create mask
     if geometry is not None: 
-        from py4DSTEM.process.virtual_image import make_detector
+        from py4DSTEM.process.virtualimage import make_detector
         assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
         'check doc strings for supported modes'
         g = geometry
@@ -65,17 +66,18 @@ def get_diffraction_image(
 
         # Calculate diffracton pattern
         diffraction_image = np.zeros(datacube.Qshape)
+
         for qx,qy in tqdmnd(
             datacube.Q_Nx,
             datacube.Q_Ny,
             disable = not verbose,
         ):
             if type == 'mean':
-                diffraction_image[qx,qy] = np.sum(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
-            if type == 'max':
-                diffraction_image[qx,qy] = np.max(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
-            if type == 'median':
-                diffraction_image[qx,qy] = np.median(datacube.data[:,:,qx,qy]*mask[:,:,np.newaxis,np.newaxis], axis=(0,1))
+                diffraction_image[qx,qy] = np.sum(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
+            elif type == 'max':
+                diffraction_image[qx,qy] = np.max(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
+            elif type == 'median':
+                diffraction_image[qx,qy] = np.median(np.squeeze(datacube.data[:,:,qx,qy])*mask)
 
     # with center shifting
     else:
@@ -109,7 +111,7 @@ def get_diffraction_image(
                     )
                 if type == 'mean':
                     diffraction_image += DP     
-                if type == 'max':
+                elif type == 'max':
                     diffraction_image = np.maximum(diffraction_image, DP)
             virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
