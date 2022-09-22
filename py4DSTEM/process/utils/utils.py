@@ -2,7 +2,7 @@
 
 import numpy as np
 from numpy.fft import fftfreq, fftshift
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.spatial import Voronoi
 import math as ma
 import matplotlib.pyplot as plt

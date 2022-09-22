@@ -18,3 +18,8 @@ from py4DSTEM.io import read, save, import_file, print_h5_tree
 from py4DSTEM.utils.configuration_checker import check_config
 
 
+# test paths
+from os.path import dirname,join
+_TESTPATH = join(dirname(__file__), "test/unit_test_data")
+
+
