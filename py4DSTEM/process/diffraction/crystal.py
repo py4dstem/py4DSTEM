@@ -93,7 +93,14 @@ class Crystal:
             self.cell = cell
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " elements")
-
+        
+        # pymatgen flag
+        self.pymatgen_available = False
+        
+        # Calculate lattice parameters
+        self.calculate_lattice()
+        
+    def calculate_lattice(self):
         # calculate unit cell lattice vectors
         a = self.cell[0]
         b = self.cell[1]
@@ -118,9 +125,6 @@ class Crystal:
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
-        # pymatgen flag
-        self.pymatgen_available = False
-        
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -782,44 +786,15 @@ class Crystal:
         """
 
         assert hasattr(self, "struct_factors"), "Compute structure factors first..."
-
-        # k coordinates
-        if k_max is None:
-            k_max = self.k_max
-        k = np.arange(k_min, k_max + k_step, k_step)
-        k_num = k.shape[0]
-
-        # experimental data histogram
-        bigpl = np.concatenate(
-            [
-                bragg_peaks.vectors[i, j].data
-                for i in range(bragg_peaks.shape[0])
-                for j in range(bragg_peaks.shape[1])
-            ]
+        
+        k, int_exp = self.calculate_bragg_peak_histogram(
+            bragg_peaks,
+            bragg_k_power,
+            bragg_intensity_power,
+            k_min,
+            k_max,
+            k_step
         )
-        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
-        int_meas = bigpl["intensity"]
-
-        # get discrete plot from structure factor amplitudes
-        int_exp = np.zeros_like(k)
-        k_px = (qr - k_min) / k_step
-        kf = np.floor(k_px).astype("int")
-        dk = k_px - kf
-
-        sub = np.logical_and(kf >= 0, kf < k_num)
-        int_exp = np.bincount(
-            np.floor(k_px[sub]).astype("int"),
-            weights=(1 - dk[sub]) * int_meas[sub],
-            minlength=k_num,
-        )
-        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
-        int_exp += np.bincount(
-            np.floor(k_px[sub] + 1).astype("int"),
-            weights=dk[sub] * int_meas[sub],
-            minlength=k_num,
-        )
-        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
-        int_exp /= np.max(int_exp)
 
         # Perform fitting
         def fit_profile(k, *coefs):
@@ -895,6 +870,200 @@ class Crystal:
             return bragg_peaks_cali, fig, ax
         else:
             return bragg_peaks_cali
+
+    def calibrate_unit_cell(
+            self,
+            bragg_peaks,
+            coef_index = [0, 0, 0, 3, 3, 3],
+            coef_update = [True, True, True, False, False, False],
+            bragg_k_power = 1.0,
+            bragg_intensity_power = 1.0,
+            k_min = 0.0,
+            k_max = None,
+            k_step = 0.005,
+            k_broadening = 0.02,
+            fit_all_intensities = True,
+            verbose = True,
+            plot_result = False,
+            figsize: Union[list, tuple, np.ndarray] = (12, 6),
+            returnfig = False,
+    ):
+        """
+        Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
+        and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
+
+        Args:
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            a_fit ():
+            b_fit ():
+            c_fit ():
+            alpha_fit ():                       Alpha angle constraint
+            beta_fit ():                        Beta angle constraint
+            gamma_fit ():                       Gamma angle constraint
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
+                                                to change the weighting of longer scattering vectors
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
+            k_broadening (float):               Initial guess for Gaussian broadening of simulated pattern (Å^-1)
+            fit_all_intensities (bool):         Set to true to allow all peak intensities to change independently
+                                                False forces a single intensity scaling.
+            verbose (bool):                     Output the calibrated pixel size.
+            plot_result (bool):                 Plot the resulting fit.
+            figsize (list, tuple, np.ndarray)   Figure size of the plot.
+            returnfig (bool):                   Return handles figure and axis
+
+        Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+
+        """
+        k, int_exp = self.calculate_bragg_peak_histogram(
+            bragg_peaks,
+            bragg_k_power,
+            bragg_intensity_power,
+            k_min,
+            k_max,
+            k_step
+        )
+        
+        #Define Fitting Class
+        class FitCrystal:
+            
+            def __init__(
+                self,
+                crystal,
+                coef_index,
+                coef_update,
+                fit_all_intensities,
+                ):
+                self.coefs_init = crystal.cell
+                self.hkl = crystal.hkl
+                self.struct_factors_int = crystal.struct_factors_int
+                self.coef_index = coef_index
+                self.coef_update = coef_update
+
+            def get_coefs(
+                self,
+                coefs_fit,
+            ):
+                coefs = np.zeros_like(coefs_fit)
+                for a0 in range(6):
+                    if self.coef_update[a0]:
+                        coefs[a0] = coefs_fit[self.coef_index[a0]]
+                    else:
+                        coefs[a0] = self.coefs_init[a0]
+                coefs[6:] = coefs_fit[6:]
+                
+                return coefs
+                
+            def fitfun(self, k, *coefs_fit):
+                coefs = self.get_coefs(coefs_fit=coefs_fit)
+    
+                # Update g vector positions
+                a, b, c = coefs[:3]
+                alpha = np.deg2rad(coefs[3])
+                beta = np.deg2rad(coefs[4])
+                gamma = np.deg2rad(coefs[5])
+                f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+                vol = a*b*c*np.sqrt(1 \
+                    + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+                    - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
+                lat_real = np.array(
+                    [
+                        [a,               0,                 0],
+                        [b*np.cos(gamma), b*np.sin(gamma),   0],
+                        [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
+                    ]
+                )
+                # Inverse lattice, metric tensors
+                metric_real = lat_real @ lat_real.T
+                metric_inv = np.linalg.inv(metric_real)
+                lat_inv = metric_inv @ lat_real
+                g_vec_all = (self.hkl.T @ lat_inv).T
+                g_vec_leng = np.linalg.norm(g_vec_all, axis=0)        
+               
+                # Calculate fitted intensity profile
+                k_broadening = coefs[6]
+                int_scale = coefs[7:]
+                int_sf = calc_1D_profile(
+                    k,
+                    g_vec_leng,
+                    self.struct_factors_int,
+                    k_broadening=k_broadening,
+                    int_scale=int_scale,
+                    normalize_intensity=False,
+                )     
+
+                return int_sf
+
+
+        if fit_all_intensities:
+            fit_crystal = FitCrystal(
+                self,
+                coef_index = coef_index,
+                coef_update = coef_update,
+                fit_all_intensities=fit_all_intensities,
+            )
+            
+            coefs = (
+                *tuple(self.cell),
+                k_broadening,
+                *tuple(np.ones(self.g_vec_leng.shape[0])),
+            )
+            popt, pcov = curve_fit(fit_crystal.fitfun, k, int_exp, p0=coefs)
+        else:
+            coefs = (
+                *tuple(self.cell),
+                k_broadening,
+                1.0,
+            )
+            popt, pcov = curve_fit(fit_crystal.fitfun, k, int_exp, p0=coefs)
+        
+        if verbose:
+            cell_init = self.cell
+        # Update crystal with new lattice parameters
+        self.cell = fit_crystal.get_coefs(popt[:6])
+        self.calculate_lattice()
+        self.calculate_structure_factors(self.k_max)
+        
+        # Output
+        if verbose:
+            # Print unit cell parameters
+            print("Original unit cell = " + str(cell_init))
+            print("Calibrated unit cell = " + str(self.cell))
+        
+        # Plotting
+        if plot_result:
+            k_broadening = popt[6]
+            int_scale = popt[7:]
+            if returnfig:
+                fig, ax = self.plot_scattering_intensity(
+                    bragg_peaks=bragg_peaks,
+                    figsize=figsize,
+                    k_broadening=k_broadening,
+                    int_power_scale=1.0,
+                    int_scale=int_scale,
+                    bragg_k_power=bragg_k_power,
+                    bragg_intensity_power=bragg_intensity_power,
+                    returnfig=True,
+                )
+            else:
+                self.plot_scattering_intensity(
+                    bragg_peaks=bragg_peaks,
+                    figsize=figsize,
+                    k_broadening=k_broadening,
+                    int_power_scale=1.0,
+                    int_scale=int_scale,
+                    bragg_k_power=bragg_k_power,
+                    bragg_intensity_power=bragg_intensity_power,
+                )
+
+        if returnfig and plot_result:
+            return fig, ax
+        else:
+            return
 
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
@@ -1008,3 +1177,68 @@ class Crystal:
                 2 * self.wavelength * np.sum(g * foil_normal[:, None], axis=0)
                 - 2 * foil_normal[2]
             )
+
+    def calculate_bragg_peak_histogram(
+        self,
+        bragg_peaks,
+        bragg_k_power = 1.0,
+        bragg_intensity_power = 1.0,
+        k_min = 0.0,
+        k_max = None,
+        k_step = 0.005
+    ):
+        """
+        Prepare experimental bragg peaks for lattice parameter or unit cell fitting.
+
+        Args:
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
+                                                to change the weighting of longer scattering vectors
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
+
+        Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+        """
+
+        # k coordinates
+        if k_max is None:
+            k_max = self.k_max
+        k = np.arange(k_min, k_max + k_step, k_step)
+        k_num = k.shape[0]
+
+        # experimental data histogram
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.vectors[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
+            ]
+        )
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        int_exp /= np.max(int_exp)
+        return k, int_exp
