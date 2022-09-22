@@ -14,7 +14,11 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
-
+try:
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure
+except ImportError:
+    pass
 
 class Crystal:
     """
@@ -787,6 +791,7 @@ class Crystal:
 
         assert hasattr(self, "struct_factors"), "Compute structure factors first..."
         
+        #Prepare experimental data
         k, int_exp = self.calculate_bragg_peak_histogram(
             bragg_peaks,
             bragg_k_power,
@@ -874,8 +879,8 @@ class Crystal:
     def calibrate_unit_cell(
             self,
             bragg_peaks,
-            coef_index = [0, 0, 0, 3, 3, 3],
-            coef_update = [True, True, True, False, False, False],
+            coef_index = None,
+            coef_update = None,
             bragg_k_power = 1.0,
             bragg_intensity_power = 1.0,
             k_min = 0.0,
@@ -894,12 +899,9 @@ class Crystal:
 
         Args:
             bragg_peaks (BraggVectors):         Input Bragg vectors.
-            a_fit ():
-            b_fit ():
-            c_fit ():
-            alpha_fit ():                       Alpha angle constraint
-            beta_fit ():                        Beta angle constraint
-            gamma_fit ():                       Gamma angle constraint
+            coef_index (list of ints):          List of ints taht act as pointers to cell indices for update
+            coef_update (list of bool):         List of booleans to indicate whether or not to update the cell at
+                                                that position
             bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
                                                 to change the weighting of longer scattering vectors
             bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
@@ -918,7 +920,38 @@ class Crystal:
             bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
             fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
 
+        Details:
+        User has the option to define what is allowed to update in the unit cell. 
+        
+        The default is set to automatically define what can update in a unit cell based on the
+        point group constraints. When either 'coef_index' or 'coef_update' are None, then we
+        automatically pull these constraints from the pointgroup.
+        
+        For example, the default for cubic unit cells is:
+            coef_index = [0, 0, 0, 3, 3, 3]
+            coef_update = [True, True, True, False, False, False]
+        Which allows a, b, and c to update (True in first 3 indices of coef_update)
+        but b and c update based on the value of a (0 in the 1 and 2 positions in coef_index).
+
+        The user has the option to predefine these as well. In the coef_update list, there must
+        be 6 entries and each are boolean. In the coef_index list, there must be 6 entries, with
+        the first 3 entries being between 0 - 2 and the last 3 entries between 3 - 5. These act
+        as pointers to pull the updated parameter from.
+        
         """
+        # initialize structure
+        if coef_index is None or coef_update is None:
+            structure = Structure(
+            self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
+            )
+            self.pointgroup = SpacegroupAnalyzer(structure)
+            assert (
+                self.pointgroup.get_point_group_symbol() in parameter_updates
+                ), "Unrecognized pointgroup returned by pymatgen!"
+            coef_index, coef_update = parameter_updates[ \
+            self.pointgroup.get_point_group_symbol()]
+        
+        #Prepare experimental data
         k, int_exp = self.calculate_bragg_peak_histogram(
             bragg_peaks,
             bragg_k_power,
@@ -1242,3 +1275,40 @@ class Crystal:
         int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
         int_exp /= np.max(int_exp)
         return k, int_exp
+    
+# coef_index and coef_update sets for the fit_unit_cell function, in the order:
+#   [coefs_index, coef_update]
+parameter_updates = {
+    "1": [[0, 1, 2, 3, 4, 5], [True, True, True, True, True, True]], #Triclinic
+    "-1": [[0, 1, 2, 3, 4, 5], [True, True, True, True, True, True]], #Triclinic
+    "2": [[0, 1, 2, 3, 4, 3], [True, True, True, False, True, False]], #Monoclinic
+    "m": [[0, 1, 2, 3, 4, 3], [True, True, True, False, True, False]], #Monoclinic
+    "2/m": [[0, 1, 2, 3, 4, 3], [True, True, True, False, True, False]], #Monoclinic
+    "222": [[0, 1, 2, 3, 3, 3], [True, True, True, False, False, False]], #Orthorhombic
+    "mm2": [[0, 1, 2, 3, 3, 3], [True, True, True, False, False, False]], #Orthorhombic
+    "mmm": [[0, 1, 2, 3, 3, 3], [True, True, True, False, False, False]], #Orthorhombic
+    "4": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "-4": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "4/m": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "422": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "4mm": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "-42m": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "4/mmm": [[0, 0, 2, 3, 3, 3], [True, True, True, False, False, False]], #Tetragonal
+    "3": [[0, 0, 0, 3, 3, 3], [True, True, True, True, True, True]], #Trigonal
+    "-3": [[0, 0, 0, 3, 3, 3], [True, True, True, True, True, True]], #Trigonal
+    "32": [[0, 0, 0, 3, 3, 3], [True, True, True, True, True, True]], #Trigonal
+    "3m": [[0, 0, 0, 3, 3, 3], [True, True, True, True, True, True]], #Trigonal
+    "-3m": [[0, 0, 0, 3, 3, 3], [True, True, True, True, True, True]], #Trigonal
+    "6": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "-6": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "6/m": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "622": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "6mm": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "-6m2": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "6/mmm": [[0, 0, 2, 3, 3, 5], [True, True, True, False, False, True]], #Hexagonal
+    "23": [[0, 0, 0, 3, 3, 3], [True, True, True, False, False, False]], #Cubic
+    "m-3": [[0, 0, 0, 3, 3, 3], [True, True, True, False, False, False]], #Cubic
+    "432": [[0, 0, 0, 3, 3, 3], [True, True, True, False, False, False]], #Cubic
+    "-43m": [[0, 0, 0, 3, 3, 3], [True, True, True, False, False, False]], #Cubic
+    "m-3m": [[0, 0, 0, 3, 3, 3], [True, True, True, False, False, False]], #Cubic
+}
