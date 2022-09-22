@@ -21,12 +21,12 @@ except:
 
 from cupyx.scipy.ndimage import gaussian_filter
 
-from .diskdetection_aiml import _get_latest_model
+from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
 
-from ...io import PointList, PointListArray
-from ...utils.tqdmnd import tqdmnd
-from .kernels import kernels
-from .diskdetection import universal_threshold
+from py4DSTEM.io import PointList, PointListArray
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.process.diskdetection.kernels import kernels
+from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
                           num_attempts = 5,
@@ -219,7 +219,8 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                   peaks = None,
                                   get_maximal_points = None,
                                   blocks = None,
-                                  threads = None):
+                                  threads = None,
+                                  model_path=None):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
