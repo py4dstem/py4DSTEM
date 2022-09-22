@@ -2,7 +2,7 @@
 # with a vacuum probe.
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 
 from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
