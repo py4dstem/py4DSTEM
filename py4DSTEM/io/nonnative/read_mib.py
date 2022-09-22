@@ -302,7 +302,13 @@ def get_hdr_bits(hdr_info):
 
     return hdr_bits
 
-def load_mib(file_path, reshape=True,flip=True,scan=(256,256)):
+def load_mib(
+    file_path, 
+    mem=None, 
+    binfactor=None,
+    reshape=True,
+    flip=True,
+    scan=(256,256)):
     """
     Read a MIB file and return as py4DSTEM DATACUBE"""
     hdr_stuff = parse_hdr(file_path)
@@ -340,7 +346,7 @@ def load_mib(file_path, reshape=True,flip=True,scan=(256,256)):
         """
       
         data = data.reshape(scan[0],scan[1],width,height)
-        print(data.shape)
+        # print(data.shape)
 
     
     py4dstem_data = DataCube(data=data)
