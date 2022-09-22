@@ -279,6 +279,7 @@ def get_virtual_image(
     if calibrated is None:
         if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys: 
             calibrated = True
+            print ('note: setting `calibrated` to True')
         else: 
             calibrated = False
 
@@ -286,6 +287,7 @@ def get_virtual_image(
     if centered is None:
         if self.calibration.get_origin(): 
             centered = True
+            print ('note: setting `centered` to True')
         else: 
             centered = False
 
