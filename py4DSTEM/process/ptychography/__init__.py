@@ -1,1 +1,1 @@
-from .ssb import *
+from py4DSTEM.process.ptychography.ssb import *

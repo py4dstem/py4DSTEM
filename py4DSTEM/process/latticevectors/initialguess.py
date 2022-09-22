@@ -1,10 +1,10 @@
 # Obtain an initial guess at the lattice vectors
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from skimage.transform import radon
 
-from ..utils import get_maxima_1D
+from py4DSTEM.process.utils import get_maxima_1D
 
 def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacing=2,
                                                            minRelativeIntensity=0.05):
