@@ -3,8 +3,7 @@ from os.path import exists, splitext
 from typing import Union, Optional
 
 from py4DSTEM.io.utils import parse_filetype
-from py4DSTEM.io.nonnative import read_empad, read_dm, read_gatan_K2_bin
-from py4DSTEM.io.nonnative.read_mib import load_mib
+from py4DSTEM.io.nonnative import read_empad, read_dm, read_gatan_K2_bin, load_mib
 
 def import_file(
     filepath: Union[str, pathlib.Path],
