@@ -7,7 +7,7 @@ import h5py
 import warnings
 
 from py4DSTEM.io.datastructure.emd.metadata import Metadata
-
+from py4DSTEM.io.datastructure.py4dstem.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
     """
@@ -32,6 +32,13 @@ class Calibration(Metadata):
         >>> c.get_p(rx,ry)
 
     will return the value of `p` at position `rx,ry`.
+
+    The Calibration object is capable of automatically calling the ``calibrate`` method
+    of any other py4DSTEM objects when certain calibrations are updated. The methods
+    that trigger propagation of calibration information are tagged with the 
+    @propagating_calibration decorator. Use the ``register_target`` method
+    to set up an object to recieve calls to ``calibrate``
+
     """
     def __init__(
         self,
@@ -140,6 +147,7 @@ class Calibration(Metadata):
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
 
+    @propagating_calibration
     def set_Q_pixel_units(self,x):
         pix = ('pixels','A^-1','mrad')
         assert(x in pix), f"{x} must be in {pix}"
@@ -147,6 +155,7 @@ class Calibration(Metadata):
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
 
+    @propagating_calibration
     def set_R_pixel_units(self,x):
         self._params['R_pixel_units'] = x
     def get_R_pixel_units(self):
@@ -173,7 +182,6 @@ class Calibration(Metadata):
     def get_qy0_meas(self,rx=None,ry=None):
         return self._get_value('qy0_meas',rx,ry)
 
-    @propagating_calibration
     def set_origin_meas_mask(self,x):
         self._['origin_meas_mask'] = x
     def get_origin_meas_mask(self,rx=None,ry=None):
@@ -196,7 +204,6 @@ class Calibration(Metadata):
             ans = None
         return ans
 
-    @propagating_calibration
     def set_origin_meas(self,x):
         """
         Args:
@@ -397,48 +404,5 @@ class Calibration(Metadata):
 
 
 ########## End of class ##########
-
-
-class propagating_calibration(object):
-    """
-    A decorator which, when attached to a method of Calibration,
-    causes `calibrate` to be called on any objects in the 
-    Calibration object's `_targets` list, following execution of
-    the decorated function.
-    This allows objects associated with the Calibration to 
-    automatically respond to changes in the calibration state.
-    """
-    def __init__(self, func):
-        self.func = func
-
-    def __call__(self, *args, **kwargs):
-        """
-        Update the parameters the caller wanted by calling the wrapped 
-        method, then loop through the list of targetsand call their 
-        `calibrate` methods.
-        """
-        self.func(*args,**kwargs)
-
-        calibration = args[0]
-        for target in calibration._targets:
-            if hasattr(target,'calibrate') and callable(target.calibrate):
-                target.calibrate()
-            else:
-                warnings.warn(f"{target} is registered as a target for calibration propagation but does not appear to have a calibrate() method")
-
-    def __get__(self, instance, owner):
-        """
-        This is some magic to make sure that the Calibration instance
-        on which the decorator was called gets passed through and
-        everything dispatches correctly (by making sure `instance`, 
-        the Calibration instance to which the call was directed, gets
-        placed in the `self` slot of the wrapped method (which is *not*
-        actually bound to the instance due to this decoration.) using
-        partial application of the method.)
-        """
-        from functools import partial
-        return partial(self.__call__, instance)
-
-
 
 
