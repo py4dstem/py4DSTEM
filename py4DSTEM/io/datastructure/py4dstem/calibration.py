@@ -4,7 +4,6 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
-import warnings
 
 from py4DSTEM.io.datastructure.emd.metadata import Metadata
 from py4DSTEM.io.datastructure.py4dstem.propagating_calibration import propagating_calibration
