@@ -1277,7 +1277,7 @@ class Crystal:
         return k, int_exp
     
 # coef_index and coef_update sets for the fit_unit_cell function, in the order:
-#   [coefs_index, coef_update]
+#   [coef_index, coef_update]
 parameter_updates = {
     "1": [[0, 1, 2, 3, 4, 5], [True, True, True, True, True, True]], #Triclinic
     "-1": [[0, 1, 2, 3, 4, 5], [True, True, True, True, True, True]], #Triclinic
