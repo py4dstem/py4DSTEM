@@ -1217,16 +1217,7 @@ def match_single_pattern(
                 phi = corr_in_plane_angle_keep[ind_best_fit]
             else:
                 phi = corr_in_plane_angle[ind_best_fit]
-            if inversion_symmetry and corr_inv[ind_best_fit]:
-                m3z = np.array(
-                    [
-                        [-np.cos(phi), np.sin(phi), 0],
-                        [np.sin(phi), np.cos(phi), 0],
-                        [0, 0, 1],
-                    ]
-                )
-            else:
-                m3z = np.array(
+            m3z = np.array(
                     [
                         [np.cos(phi), np.sin(phi), 0],
                         [-np.sin(phi), np.cos(phi), 0],
@@ -1234,7 +1225,10 @@ def match_single_pattern(
                     ]
                 )
             orientation_matrix = orientation_matrix @ m3z
-
+            if inversion_symmetry and corr_inv[ind_best_fit]:
+                # Rotate 180 degrees around x axis for projected x-mirroring operation
+                orientation_matrix[:,1:] = -orientation_matrix[:,1:] 
+            
             # Output best fit values into Orientation class
             orientation.matrix[match_ind] = orientation_matrix
 
@@ -1598,11 +1592,20 @@ def orientation_map_to_orix_CrystalMap(
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure as pgStructure
 
+    from scipy.spatial.transform import Rotation as R
+
     from py4DSTEM.process.diffraction.utils import element_symbols
 
+    # Convert the orientation matrices into Euler angles
+    angles = np.vstack(
+        [
+        R.from_matrix(matrix.T).as_euler('zxz')
+        for matrix in  orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
+        ]
+    )
+
     # generate a list of Rotation objects from the Euler angles
-    rotations = Rotation.from_euler(
-                                    orientation_map.angles[:,:,ind_orientation].reshape(-1,3), direction='crystal2lab')
+    rotations = Rotation.from_euler(angles, direction='crystal2lab')
 
     # Generate x,y coordinates since orix uses flat data internally
     coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
