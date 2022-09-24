@@ -19,7 +19,7 @@ class DataCube(Array):
         get_dp_max,
         get_dp_mean,
         get_dp_median,
-        get_virtual_image,
+        get_virtual_diffraction,
         get_vacuum_probe,
         find_Bragg_disks,
         get_probe_size,
