@@ -3,7 +3,7 @@
 import numpy as np
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
-def get_diffraction_image(
+def get_virtual_diffraction(
     datacube,
     type,
     mode = None,
@@ -65,7 +65,7 @@ def get_diffraction_image(
     if shift_center == False:
 
         # Calculate diffracton pattern
-        diffraction_image = np.zeros(datacube.Qshape)
+        virtual_diffraction = np.zeros(datacube.Qshape)
 
         for qx,qy in tqdmnd(
             datacube.Q_Nx,
@@ -73,11 +73,11 @@ def get_diffraction_image(
             disable = not verbose,
         ):
             if type == 'mean':
-                diffraction_image[qx,qy] = np.sum(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
+                virtual_diffraction[qx,qy] = np.sum(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
             elif type == 'max':
-                diffraction_image[qx,qy] = np.max(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
+                virtual_diffraction[qx,qy] = np.max(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
             elif type == 'median':
-                diffraction_image[qx,qy] = np.median(np.squeeze(datacube.data[:,:,qx,qy])*mask)
+                virtual_diffraction[qx,qy] = np.median(np.squeeze(datacube.data[:,:,qx,qy])*mask)
 
     # with center shifting
     else:
@@ -96,7 +96,7 @@ def get_diffraction_image(
 
 
         # compute
-        diffraction_image = np.zeros(datacube.Qshape)
+        virtual_diffraction = np.zeros(datacube.Qshape)
         for rx,ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
@@ -110,9 +110,9 @@ def get_diffraction_image(
                     axis=(0,1),
                     )
                 if type == 'mean':
-                    diffraction_image += DP     
+                    virtual_diffraction += DP     
                 elif type == 'max':
-                    diffraction_image = np.maximum(diffraction_image, DP)
+                    virtual_diffraction = np.maximum(virtual_diffraction, DP)
             virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
-    return diffraction_image
+    return virtual_diffraction

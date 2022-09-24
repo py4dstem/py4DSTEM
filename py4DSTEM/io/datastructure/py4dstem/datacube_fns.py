@@ -28,13 +28,13 @@ def add(
 
 # Diffraction imaging
 
-from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
-def get_diffraction_image(
+from py4DSTEM.io.datastructure.py4dstem.virtualdiffraction import VirtualDiffraction
+def get_virtual_diffraction(
     self,
     mode = 'max',
     geometry = None,
     shift_corr = False,
-    name = 'diffraction_image',
+    name = 'virtual_diffracton',
     returncalc = True,
     ):
     """
@@ -57,12 +57,12 @@ def get_diffraction_image(
         returncalc (bool): if True, returns the answer
 
     Returns:
-        (DiffractionImage): the diffraction image
+        (Virtual Diffraction): the diffraction image
     """
 
     # perform computation
-    from py4DSTEM.process.virtualdiffraction import get_diffraction_image
-    dp = get_diffraction_image(
+    from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
+    dp = get_virtual_diffraction(
         self,
         mode = mode,
         geometry = geometry,
@@ -70,7 +70,7 @@ def get_diffraction_image(
     )
 
     # wrap with a py4dstem class
-    dp = DiffractionImage(
+    dp = VirtualDiffraction(
         data = dp,
         name = name,
         mode = mode,
@@ -112,7 +112,7 @@ def get_dp_max(
     Returns:
         (DiffractionImage): the diffraction image
     """
-    dp = get_diffraction_image(
+    dp = get_virtual_diffraction(
         self,
         name = name,
         mode = 'max',
@@ -151,7 +151,7 @@ def get_dp_mean(
     Returns:
         (DiffractionImage): the diffraction image
     """
-    dp = get_diffraction_image(
+    dp = get_virtual_diffraction(
         self,
         name = name,
         mode = 'mean',
@@ -189,7 +189,7 @@ def get_dp_median(
     Returns:
         (DiffractionImage): the diffraction image
     """
-    dp = get_diffraction_image(
+    dp = get_virtual_diffraction(
         self,
         name = name,
         mode = 'median',

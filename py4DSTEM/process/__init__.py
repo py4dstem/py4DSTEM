@@ -1,4 +1,4 @@
-from py4DSTEM.process import diffractionimage
+from py4DSTEM.process import virtualdiffraction
 from py4DSTEM.process import virtualimage
 from py4DSTEM.process import probe
 from py4DSTEM.process import diskdetection

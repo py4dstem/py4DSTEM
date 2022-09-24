@@ -8,7 +8,7 @@ from typing import Optional,Union
 import numpy as np
 import h5py
 
-class DiffractionImage(DiffractionSlice):
+class VirtualDiffraction(DiffractionSlice):
     """
     Stores a diffraction-space shaped 2D image with metadata
     indicating how this image was generated from a datacube.
@@ -48,7 +48,7 @@ class DiffractionImage(DiffractionSlice):
         )
 
         # Set metadata
-        md = Metadata(name='diffractionimage')
+        md = Metadata(name='virtualdiffraction')
         md['mode'] = mode
         md['geometry'] = geometry
         md['shift_corr'] = shift_corr
@@ -62,8 +62,8 @@ class DiffractionImage(DiffractionSlice):
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.datastructure.py4dstem.io import DiffractionImage_from_h5
-        return DiffractionImage_from_h5(group)
+        from py4DSTEM.io.datastructure.py4dstem.io import VirtualDiffraction_from_h5
+        return VirtualDiffraction_from_h5(group)
 
 
 
