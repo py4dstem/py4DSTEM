@@ -21,11 +21,14 @@ class propagating_calibration(object):
         self.func(*args,**kwargs)
 
         calibration = args[0]
-        for target in calibration._targets:
-            if hasattr(target,'calibrate') and callable(target.calibrate):
-                target.calibrate()
-            else:
-                warnings.warn(f"{target} is registered as a target for calibration propagation but does not appear to have a calibrate() method")
+        try:
+            for target in calibration._targets:
+                if hasattr(target,'calibrate') and callable(target.calibrate):
+                    target.calibrate()
+                else:
+                    warnings.warn(f"{target} is registered as a target for calibration propagation but does not appear to have a calibrate() method")
+        except:
+            pass
 
     def __get__(self, instance, owner):
         """
