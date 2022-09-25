@@ -5,7 +5,7 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 
 def get_virtual_diffraction(
     datacube,
-    type,
+    form,
     mode = None,
     geometry = None,
     shift_center = False,
@@ -40,7 +40,7 @@ def get_virtual_diffraction(
     '''
 
     
-    assert type in ('max', 'median', 'mean'),\
+    assert form in ('max', 'median', 'mean'),\
         'check doc strings for supported types'
 
     #create mask
@@ -72,17 +72,17 @@ def get_virtual_diffraction(
             datacube.Q_Ny,
             disable = not verbose,
         ):
-            if type == 'mean':
+            if form == 'mean':
                 virtual_diffraction[qx,qy] = np.sum(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
-            elif type == 'max':
+            elif form == 'max':
                 virtual_diffraction[qx,qy] = np.max(   np.squeeze(datacube.data[:,:,qx,qy])*mask)
-            elif type == 'median':
+            elif form == 'median':
                 virtual_diffraction[qx,qy] = np.median(np.squeeze(datacube.data[:,:,qx,qy])*mask)
 
     # with center shifting
     else:
-        assert type in ('max', 'mean'),\
-        'check doc strings for supported types'
+        assert form in ('max', 'mean'),\
+        'check doc strings for supported forms'
 
         # Get calibration metadata
         assert datacube.calibration.get_origin(), "origin need to be calibrated"
@@ -91,8 +91,8 @@ def get_virtual_diffraction(
         y0_mean = np.mean(y0)
 
         # get shifts
-        qx_shift = (x0-x0_mean).round().astype(int)
-        qy_shift = (y0-y0_mean).round().astype(int)
+        qx_shift = (x0_mean-x0).round().astype(int)
+        qy_shift = (y0_mean-y0).round().astype(int)
 
 
         # compute
@@ -102,17 +102,17 @@ def get_virtual_diffraction(
             datacube.R_Ny,
             disable = not verbose,
         ):
-            if mask == True: 
+            if mask[rx,ry] == True:
                 # get shifted DP
                 DP = np.roll(
-                    datacube.data[rx, ry, :,:,],
+                    datacube.data[rx,ry, :,:,],
                     (qx_shift[rx,ry], qy_shift[rx,ry]),
                     axis=(0,1),
                     )
-                if type == 'mean':
-                    virtual_diffraction += DP     
-                elif type == 'max':
+                if form == 'mean':
+                    virtual_diffraction = virtual_diffraction + DP 
+                    'hello'    
+                elif form == 'max':
                     virtual_diffraction = np.maximum(virtual_diffraction, DP)
-            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
-
+    
     return virtual_diffraction
