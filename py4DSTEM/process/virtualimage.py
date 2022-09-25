@@ -148,8 +148,8 @@ def get_virtual_image(
     else:
 
         # get shifts
-        qx_shift = (x0-x0_mean).round().astype(int)
-        qy_shift = (y0-y0_mean).round().astype(int)
+        qx_shift = (x0_mean-x0).round().astype(int)
+        qy_shift = (y0_mean-y0).round().astype(int)
 
         # if return_mask is True, skip computation
         if return_mask is not False:
