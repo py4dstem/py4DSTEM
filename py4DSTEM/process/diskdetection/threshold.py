@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from ...utils.tqdmnd import tqdmnd
-
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointListArray
 
 
 

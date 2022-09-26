@@ -1,25 +1,25 @@
 import sys, os
 from PyQt5 import QtCore, QtWidgets, QtGui
 import pyqtgraph as pg
-from ..dialogs import SectionLabel
+from py4DSTEM.gui.dialogs import SectionLabel
 import numpy as np
-from ..gui_utils import pg_point_roi
-from ...process.diskdetection.probe import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_edge_gaussian
-from ...process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
-from ...process.diskdetection import get_bragg_vector_map
-from ...process.fit import fit_2D, plane, parabola
-from ...process.calibration.origin import get_origin_from_braggpeaks, center_braggpeaks
+from py4DSTEM.gui.gui_utils import pg_point_roi
+from py4DSTEM.process.diskdetection.probe import get_probe_from_4Dscan_ROI, get_probe_kernel, get_probe_kernel_edge_gaussian
+from py4DSTEM.process.diskdetection import find_Bragg_disks_selected, find_Bragg_disks
+from py4DSTEM.process.diskdetection import get_bragg_vector_map
+from py4DSTEM.process.fit import fit_2D, plane, parabola
+from py4DSTEM.process.calibration.origin import get_origin_from_braggpeaks, center_braggpeaks
 from skimage.transform import radon
-from ...process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice, add_indices_to_braggpeaks
+from py4DSTEM.process.latticevectors import get_radon_scores, get_lattice_directions_from_scores, get_lattice_vector_lengths, generate_lattice, add_indices_to_braggpeaks
 from scipy.ndimage.filters import gaussian_filter
-from ...io import PointList
-from .cmaptopg import cmapToColormap
+from py4DSTEM.io import PointList
+from py4DSTEM.gui.strain.cmaptopg import cmapToColormap
 from matplotlib.cm import get_cmap
-from ...process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
-from ...io import read
-from ...io.native import save, append, is_py4DSTEM_file
-from ...io import DiffractionSlice, RealSlice
-from .ImageViewMasked import ImageViewAlpha
+from py4DSTEM.process.latticevectors import get_strain_from_reference_region, fit_lattice_vectors_all_DPs
+from py4DSTEM.io import read
+from py4DSTEM.io.native import save, append, is_py4DSTEM_file
+from py4DSTEM.io import DiffractionSlice, RealSlice
+from py4DSTEM.gui.strain.ImageViewMasked import ImageViewAlpha
 
 ### use for debugging:
 from pdb import set_trace

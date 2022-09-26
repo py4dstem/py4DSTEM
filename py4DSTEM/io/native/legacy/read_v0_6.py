@@ -3,11 +3,11 @@
 import h5py
 import numpy as np
 from os.path import splitext
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from .read_utils_v0_6 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube, DiffractionSlice, RealSlice
-from ...datastructure import PointList, PointListArray
-from ....process.utils import tqdmnd
+from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.native.legacy.read_utils_v0_6 import get_py4DSTEM_dataobject_info
+from py4DSTEM.io.datastructure import DataCube, DiffractionSlice, RealSlice
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.process.utils import tqdmnd
 
 def read_v0_6(fp, **kwargs):
     """
@@ -269,16 +269,14 @@ def get_diffractionslice_from_grp(g):
     """
     data = np.array(g['data'])
     name = g.name.split('/')[-1]
-    Q_Nx,Q_Ny = data.shape[:2]
     if len(data.shape)==2:
-        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name)
+        return DiffractionSlice(data=data,name=name)
     else:
         lbls = g['dim3']
         if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            with lbls.astype('S64'):
-                lbls = lbls[:]
+            lbls = lbls.astype('S64')[:]
             lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name,slicelabels=lbls)
+        return DiffractionSlice(data=data,name=name,slicelabels=lbls)
 
 def get_realslice_from_grp(g):
     """ Accepts an h5py Group corresponding to a realslice in an open, correctly formatted H5 file,
@@ -286,16 +284,14 @@ def get_realslice_from_grp(g):
     """
     data = np.array(g['data'])
     name = g.name.split('/')[-1]
-    R_Nx,R_Ny = data.shape[:2]
     if len(data.shape)==2:
-        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name)
+        return RealSlice(data=data,name=name)
     else:
         lbls = g['dim3']
         if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            with lbls.astype('S64'):
-                lbls = lbls[:]
+            lbls = lbls.astype('S64')[:]
             lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name,slicelabels=lbls)
+        return RealSlice(data=data,name=name,slicelabels=lbls)
 
 def get_pointlist_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
