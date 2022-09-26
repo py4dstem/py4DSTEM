@@ -68,7 +68,7 @@ def import_file(
     # elif filetype == "kitware_counted":
     #    data = read_kitware_counted(filepath, mem, binfactor, metadata=metadata, **kwargs)
     elif filetype == "mib":
-        data = load_mib(filepath, mem=mem, binfactor=binfactor, scan=(256,256),**kwargs)
+        data = load_mib(filepath, mem=mem, binfactor=binfactor,**kwargs)
     else:
         raise Exception("Bad filetype!")
 

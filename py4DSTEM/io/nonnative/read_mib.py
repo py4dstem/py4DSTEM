@@ -307,10 +307,11 @@ def load_mib(
     mem=None, 
     binfactor=None,
     reshape=True,
-    flip=True,
-    scan=(256,256)):
+    flip=True,**kwargs):
     """
     Read a MIB file and return as py4DSTEM DATACUBE"""
+    # Get scan info from kwargs
+    scan=kwargs.get('scan',(256,256))
     hdr_stuff = parse_hdr(file_path)
     width = hdr_stuff["width"]
     height = hdr_stuff["height"]
