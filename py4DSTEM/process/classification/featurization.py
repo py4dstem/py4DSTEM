@@ -1,5 +1,4 @@
 import numpy as np
-#import py4DSTEM
 from py4DSTEM.io.datastructure import DataCube
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.decomposition import NMF, PCA, FastICA
