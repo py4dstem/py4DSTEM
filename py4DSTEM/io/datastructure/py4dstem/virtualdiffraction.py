@@ -17,25 +17,48 @@ class VirtualDiffraction(DiffractionSlice):
         self,
         data: np.ndarray,
         name: Optional[str] = 'diffractionimage',
+        method: Option[str] = None,
         mode: Optional[str] = None,
         geometry: Optional[Union[tuple,np.ndarray]] = None,
-        shift_corr: bool = False
+        shift_center: bool = False
         ):
         """
         Args:
-            data (np.ndarray): the 2D data
-            name (str): the name
-            mode (str): must be in ('max','mean','median')
-            geometry (variable): indicates the region the image will
-                be computed over. Behavior depends on the argument type:
-                    - None: uses the whole image
-                    - 4-tuple: uses a subcube w/ (rxmin,rxmax,rymin,rymax)
-                    - 2-tuple: (rx,ry), which are numbers or length L arrays.
-                        Uses the specified scan positions.
-                    - `mask`: boolean 2D array
-                    - `mask_float`: floating point 2D array. Valid only for
-                        `mean` mode
-            shift_corr (bool): if True, correct for beam shift
+            data (np.ndarray)   : the 2D data
+            name (str)          : the name
+            method (str)        : defines method used for diffraction pattern, options are
+                                  'mean', 'median', and 'max' 
+            
+            mode (str)          : defines mode for selecting area in real space to use for 
+                                  virtual diffraction. The default is None, which means no
+                                  geometry will be applied and the whole datacube will be used
+                                  for the calculation.
+                Options:
+                    - 'point' uses singular point as detector
+                    - 'circle' or 'circular' uses round detector, like bright field
+                    - 'annular' or 'annulus' uses annular detector, like dark field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'mask' flexible detector, any 2D array
+
+            geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                argument, as follows. The default is None, which means no geometry will be applied
+                and the whole datacube will be used for the calculation.
+                    - 'point': 2-tuple, (rx,ry),
+                       qx and qy are each single float or int to define center
+                    - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                       qx, qy and radius, are each single float or int
+                    - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                       qx, qy, radius_i, and radius_o are each single float or integer
+                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                    - `mask`: flexible detector, any boolean or floating point 2D array with
+                        the same shape as datacube.Rshape
+            
+            calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
+                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            
+            shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
 
         Returns:
             A new DiffractionImage instance
@@ -49,9 +72,10 @@ class VirtualDiffraction(DiffractionSlice):
 
         # Set metadata
         md = Metadata(name='virtualdiffraction')
+        md['methpd'] = method
         md['mode'] = mode
         md['geometry'] = geometry
-        md['shift_corr'] = shift_corr
+        md['shift_center'] = shift_center
         self.metadata = md
 
 
