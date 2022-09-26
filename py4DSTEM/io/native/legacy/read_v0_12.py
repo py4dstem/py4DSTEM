@@ -3,14 +3,14 @@
 import h5py
 import numpy as np
 from os.path import splitext, exists
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from .read_utils_v0_12 import get_py4DSTEM_dataobject_info
-from ...datastructure import DataCube
-from ...datastructure import DiffractionSlice
-from ...datastructure import RealSlice
-from ...datastructure import PointList
-from ...datastructure import PointListArray
-from .... import tqdmnd
+from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.native.legacy.read_utils_v0_12 import get_py4DSTEM_dataobject_info
+from py4DSTEM.io.datastructure import DataCube
+from py4DSTEM.io.datastructure import DiffractionSlice
+from py4DSTEM.io.datastructure import RealSlice
+from py4DSTEM.io.datastructure import PointList
+from py4DSTEM.io.datastructure import PointListArray
+from py4DSTEM import tqdmnd
 
 def read_v0_12(fp, **kwargs):
     """
@@ -79,7 +79,8 @@ def read_v0_12(fp, **kwargs):
     # If metadata is requested
     if 'metadata' in kwargs.keys():
         if kwargs['metadata']:
-            return metadata_from_h5(fp, tg)
+            raise NotImplementedError("Legacy metadata reader missing...")
+            # return metadata_from_h5(fp, tg)
 
     # If data is requested
     elif 'data_id' in kwargs.keys():

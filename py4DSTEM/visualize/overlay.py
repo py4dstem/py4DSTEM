@@ -5,7 +5,7 @@ from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
 from fractions import Fraction
-from ..io.datastructure import PointList
+from py4DSTEM.io.datastructure import PointList
 
 def add_rectangles(ax,d):
     """
@@ -688,15 +688,15 @@ def add_scalebar(ax,d):
 
     # Add label
     if label:
-        labeltext = str(length_units)+' '+pixelunits
+        labeltext = f'{np.round(length_units,3)}'+' '+pixelunits
         if xshiftdir>0: va='top'
         else: va='bottom'
         ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
                 color=labelcolor,alpha=alpha,ha='center',va=va)
 
-    if not ticks:
-        ax.set_xticks([])
-        ax.set_yticks([])
+    # if not ticks:
+    #     ax.set_xticks([])
+    #     ax.set_yticks([])
     return
 
 
@@ -1025,22 +1025,28 @@ def get_nice_spacing(Nx,Ny,pixelsize):
     if np.sign(log(D,10))<0:
         exp-=1
     base = D/(10**exp)
-    if base>=1 and base<1.25:
-        _spacing=0.4
-    elif base>=1.25 and base<1.75:
+    if base>=1 and base<2.1:
         _spacing=0.5
-    elif base>=1.75 and base<2.5:
-        _spacing=0.75
-    elif base>=2.5 and base<3.25:
+    elif base>=2.1 and base<4.6:
         _spacing=1
-    elif base>=3.25 and base<4.75:
-        _spacing=1.5
-    elif base>=4.75 and base<6:
+    elif base>=4.6 and base<10:
         _spacing=2
-    elif base>=6 and base<8:
-        _spacing=2.5
-    elif base>=8 and base<10:
-        _spacing=3
+    # if base>=1 and base<1.25:
+    #     _spacing=0.4
+    # elif base>=1.25 and base<1.75:
+    #     _spacing=0.5
+    # elif base>=1.75 and base<2.5:
+    #     _spacing=0.75
+    # elif base>=2.5 and base<3.25:
+    #     _spacing=1
+    # elif base>=3.25 and base<4.75:
+    #     _spacing=1.5
+    # elif base>=4.75 and base<6:
+    #     _spacing=2
+    # elif base>=6 and base<8:
+    #     _spacing=2.5
+    # elif base>=8 and base<10:
+    #     _spacing=3
     else:
         raise Exception("how did this happen?? base={}".format(base))
     spacing = _spacing * 10**exp

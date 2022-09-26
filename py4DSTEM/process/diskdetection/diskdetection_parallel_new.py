@@ -8,7 +8,7 @@ from dask import delayed
 import dask
 #import dask.bag as db
 from py4DSTEM.io.datastructure import PointListArray, PointList
-from .diskdetection import _find_Bragg_disks_single_DP_FK
+from py4DSTEM.process.diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
 from py4DSTEM.io import PointListArray, PointList, datastructure
 import time
 from dask.diagnostics import ProgressBar

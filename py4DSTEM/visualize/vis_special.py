@@ -3,15 +3,15 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from . import show
-from .overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
-from .overlay import add_points
-from .vis_grid import show_image_grid
-from .vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from ..io.datastructure import DataCube,Calibration,PointList
-from ..process.utils import get_voronoi_vertices,convert_ellipse_params
-from ..process.calibration import double_sided_gaussian
-from ..process.latticevectors import get_selected_lattice_vectors
+from py4DSTEM.visualize import show
+from py4DSTEM.visualize.overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
+from py4DSTEM.visualize.overlay import add_points
+from py4DSTEM.visualize.vis_grid import show_image_grid
+from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
+from py4DSTEM.io.datastructure import DataCube,Calibration,PointList
+from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
+from py4DSTEM.process.calibration import double_sided_gaussian
+from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
 
 def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -341,7 +341,7 @@ def show_strain(strainmap,
                 returnfig=False):
     """
     Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
-    masking each image with strainmap.slices['mask'].
+    masking each image with strainmap.get_slice('mask') 
 
     Args:
         strainmap (RealSlice):
@@ -431,8 +431,9 @@ def show_strain(strainmap,
 
     # Add black background
     if bkgrd:
-        mask = np.ma.masked_where(strainmap.slices['mask'].astype(bool),
-                                  np.zeros_like(strainmap.slices['mask']))
+        mask = np.ma.masked_where(
+            strainmap.get_slice('mask').data.astype(bool),
+            np.zeros_like(strainmap.get_slice('mask').data))
         ax11.matshow(mask,cmap='gray')
         ax12.matshow(mask,cmap='gray')
         ax21.matshow(mask,cmap='gray')
@@ -764,3 +765,97 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
+def show_complex(
+    ar_complex,
+    vmin = None,
+    vmax = None,
+    cbar = True,
+    returnfig = False,
+    **kwargs
+    ):
+    '''
+    Function to plot complex arrays
+    
+    Args: 
+        ar_complex (2d array)   : complex array to be plotted
+        vmin (float, optional)  : minimum absolute value 
+        vmax (float, optional)  : maximum absolute value 
+        cbar (bool)             : if True, include color wheel
+        returnfig (bool)        : if True, the function returns the tuple (figure,axis)
+
+    Returns:
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, return the figure and the axis.
+    '''
+
+    #define min and max
+    amp = np.abs(ar_complex)
+    if vmin is None: 
+        vmin = np.min(amp)
+    if vmax is None: 
+        vmax = np.max(amp)
+    
+    from matplotlib.colors import hsv_to_rgb
+
+    #function for converting to complex colors
+    def Complex2HSV(z, vmin, vmax, hue_start=90):
+        #based on stack overflow 17044052
+        amp = np.abs(z)
+        amp = np.where(amp < vmin, vmin, amp)
+        amp = np.where(amp > vmax, vmax, amp)
+        
+        ph = np.angle(z, deg=1) + hue_start
+        
+        h = (ph % 360) / 360
+        s = 0.85 * np.ones_like(h)
+        v = (amp -vmin) / (vmax - vmin)
+        
+        return hsv_to_rgb(np.dstack((h,s,v)))
+
+    #convert to complex colors
+    rgb = Complex2HSV(ar_complex, vmin, vmax)
+    
+    #plot
+    fig, ax = show(
+        rgb,
+        returnfig = True,
+        **kwargs
+    )
+
+    #add color bar
+    if cbar == True:
+        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+        
+        #create wheel
+        AA = 1000
+        kx = np.fft.fftshift(np.fft.fftfreq(AA))
+        ky = np.fft.fftshift(np.fft.fftfreq(AA))
+        kya,kxa = np.meshgrid(ky,kx)
+        kra = (kya**2+kxa**2)**0.5
+        ktheta = np.arctan2(-kxa,kya)
+        ktheta = kra*np.exp(1j*ktheta)
+        
+        #convert to hsv
+        rgb = Complex2HSV(ktheta, 0, 0.4)
+        ind = kra > 0.4
+        rgb[ind] = [1,1,1]
+        
+        #plot
+        ax0.imshow(
+            rgb
+        )
+
+        #add axes
+        ax0.axhline(AA/2, 0, AA, color = 'k')
+        ax0.axvline(AA/2, 0, AA, color = 'k')
+        ax0.axis('off')
+
+        label_size = 16
+
+        ax0.text(AA, AA/2, 1, fontsize = label_size)
+        ax0.text(AA/2, 0, 'i', fontsize = label_size)
+        ax0.text(AA/2, AA, '-i', fontsize = label_size)
+        ax0.text(0, AA/2, -1, fontsize = label_size)
+
+    if returnfig == True: 
+        return fig, ax
