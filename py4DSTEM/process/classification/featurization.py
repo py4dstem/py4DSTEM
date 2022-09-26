@@ -109,6 +109,7 @@ class Featurization(object):
         self.class_DPs = {}
         self.class_ims = {}
         self.spatially_separated_ims = {}
+        self.consensus_dict = {}
         self.consensus_clusters = {}
         return
 
@@ -420,15 +421,17 @@ class Featurization(object):
             less than 'size' pixels will be removed
         threshold (float): intensity weight of a component to keep
         method (str): filter method, default 'yen'
-        clean (bool): whether or not to 'clean' cluster sets based on overlap - does nothing right now
+        clean (bool): whether or not to 'clean' cluster sets based on overlap, i.e. remove clusters that do not have any unique components
         """
-        for i in range(len(keys)):
+        for k in range(len(keys)):
             labelled = []
-            for j in range(len(self.class_ims[keys[i]])):
+            stacked = []
+            cc_data = []
+            for j in range(len(self.class_ims[keys[k]])):
                 labelled_temp = []
-                for l in range(len(self.class_ims[keys[i]][j])):
-                    image = np.where(self.class_ims[keys[i]][j][l] > threshold, 
-                                    self.class_ims[keys[i]][j][l], 0)
+                for l in range(len(self.class_ims[keys[k]][j])):
+                    image = np.where(self.class_ims[keys[k]][j][l] > threshold, 
+                                    self.class_ims[keys[k]][j][l], 0)
                     if method == 'yen':
                         t=threshold_yen(image)
                     elif method == 'otsu':
@@ -439,21 +442,24 @@ class Featurization(object):
                     labelled_temp.extend([(np.where(
                         label_image == unique_labels[k],
                         image, 0)) for k in range(len(unique_labels))])
-                labelled.append(labelled_temp)
-            if clean == False:
-                self.spatially_separated_ims[keys[i]] = labelled
-            elif clean == True:
-                stacked = [np.dstack(labelled[l]) for l in range(len(labelled)) if len(labelled[l]) > 0]
-                data_list = [stacked[j][:,:,l] for l in range(stacked[j].shape[2])]
-                cc_data = []
-                for m in range(len(stacked)):
-                    data_hard = (stacked[m].max(axis=2,keepdims=1) == stacked[m]) * stacked[m]
-                    data_list_hard = [np.where(data_hard[:,:,n] > threshold, 1, 0) for n in range(data_hard.shape[2])]
-                    cc_data.append([data_list[n] for n in range(len(data_list_hard)) if (np.sum(data_list_hard[n]) > size)])
-                self.spatially_separated_ims[keys[i]] = cc_data
+
+                if clean == False:
+                    labelled.append(labelled_temp)            
+                elif clean == True:
+                    if len(labelled_temp) > 0:
+                        stacked = np.dstack(labelled_temp)
+                        data_hard = (stacked.max(axis=2,keepdims=1) == stacked) * stacked
+                        data_list = [stacked[:,:,x] for x in range(stacked.shape[2])]
+                        data_list_hard = [np.where(data_hard[:,:,n] > threshold, 1, 0) 
+                                          for n in range(data_hard.shape[2])]
+                        labelled.append([data_list[n] for n in range(len(data_list_hard)) 
+                                        if (np.sum(data_list_hard[n]) > size)])
+            if len(labelled_temp) > 0:
+                self.spatially_separated_ims[keys[k]] = labelled
+
         return
     
-    def consensus(self, keys, threshold = 0, location = 'spatially_separated_ims', method = 'mean', drop = 0):
+    def consensus(self, keys, threshold = 0, location = 'spatially_separated_ims', method = 'mean', drop = 0, split = None):
         """
         Consensus Clustering takes the outcome of a prepared set of 2D images from each cluster and averages the outcomes.
 
@@ -463,6 +469,7 @@ class Featurization(object):
         location (str): Where to get the consensus from - after spatial separation = 'spatially_separated_ims'
         method (str): right now, mean is the only method in which to perform consensus clustering
         drop (int): number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
+        split (float): CURRENTLY NOT IMPLEMENTED - splitting threshold - if clusters in a consensus bin have less than the splitting threshold of overlap, create new bin
             no cluster sets will be dropped
         """
         for i in range(len(keys)):
@@ -487,8 +494,8 @@ class Featurization(object):
                         self.spatially_separated_ims[keys[i]][j][m], 0)
                     best_sum = -np.inf
                     for l in range(len(class_dict.keys())):
-                        if l >= len(self.spatially_separated_ims[keys[i]][j]):
-                            break
+                        #if l >= len(self.spatially_separated_ims[keys[i]][j]):
+                        #    break
                         current_sum = np.sum(np.where(
                             class_dict['c'+str(l)][0] > threshold, class_im, 0))
 
@@ -504,15 +511,17 @@ class Featurization(object):
                 
                 key_list = list(class_dict.keys())
                 
-                if method == 'mean':
-                    for n in range(len(key_list)):
-                        if drop > 0:
-                            if len(class_dict[key_list[n]]) <= drop:
-                                continue
-                        consensus_clusters.append(np.mean(np.dstack(
-                            class_dict[key_list[n]]), axis = 2))
+            if method == 'mean':
+                for n in range(len(key_list)):
+                    if drop > 0:
+                        if len(class_dict[key_list[n]]) <= drop:
+                            continue
+                    consensus_clusters.append(np.mean(np.dstack(
+                        class_dict[key_list[n]]), axis = 2))
+            self.consensus_dict[keys[i]] = class_dict
             self.consensus_clusters[keys[i]] = consensus_clusters
             return
+
 
 @ignore_warnings(category=ConvergenceWarning)
 def _nmf_single(x, max_components, merge_thresh, iters, random_state=None,return_all = True):
@@ -589,7 +598,7 @@ def _nmf_single(x, max_components, merge_thresh, iters, random_state=None,return
             H = Hs
     return W_comps, H_comps, W, H
 
-#@ignore_warnings(category=ConvergenceWarning)
+@ignore_warnings(category=ConvergenceWarning)
 def _gmm_single(x, cv, components, iters, random_state=None):
     """
     Runs GMM several times and saves value with best BIC score
