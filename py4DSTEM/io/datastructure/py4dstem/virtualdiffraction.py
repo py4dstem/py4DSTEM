@@ -43,19 +43,21 @@ class VirtualDiffraction(DiffractionSlice):
 
             geometry (variable) : valid entries are determined by the `mode`, values in pixels
                 argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation.
-                    - 'point': 2-tuple, (rx,ry),
-                       qx and qy are each single float or int to define center
-                    - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                       qx, qy and radius, are each single float or int
-                    - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                       qx, qy, radius_i, and radius_o are each single float or integer
-                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                    - `mask`: flexible detector, any boolean or floating point 2D array with
-                        the same shape as datacube.Rshape
-            
+                and the whole datacube will be used for the calculation. If mode is None the geometry 
+                will not be applied.
+                        - 'point': 2-tuple, (rx,ry),
+                           qx and qy are each single float or int to define center
+                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                           qx, qy and radius, are each single float or int
+                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                           qx, qy, radius_i, and radius_o are each single float or integer
+                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                        - `mask`: flexible detector, any boolean or floating point 2D array with
+                            the same shape as datacube.Rshape
+                            
             calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
+            If mode is None the geometry and calibration will not be applied.
             
             shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
                 or the changing of the origin through the scan. The datacube's calibration['origin'] 
