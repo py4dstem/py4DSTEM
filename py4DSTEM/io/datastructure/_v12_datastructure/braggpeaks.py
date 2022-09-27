@@ -2,12 +2,12 @@ import numpy as np
 from copy import copy
 import h5py
 import matplotlib.pyplot as plt
-from .dataobject import DataObject
-from .pointlistarray import PointListArray
-from .pointlist import PointList
-from .diffraction import DiffractionSlice
-from .calibrations import Calibrations
-from ...tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure._v12_datastructure.dataobject import DataObject
+from py4DSTEM.io.datastructure._v12_datastructure.pointlistarray import PointListArray
+from py4DSTEM.io.datastructure._v12_datastructure.pointlist import PointList
+from py4DSTEM.io.datastructure._v12_datastructure.diffraction import DiffractionSlice
+from py4DSTEM.io.datastructure._v12_datastructure.calibrations import Calibrations
+from py4DSTEM.io.tqdmnd import tqdmnd
 
 class BraggPeaks(DataObject):
     """
@@ -81,7 +81,7 @@ class BraggPeaks(DataObject):
         qx0,qy0 = self.calibrations.get_origin()
         if qx0 is not None and qy0 is not None:
             print('...calibrating origin...')
-            from ...process.calibration import center_braggpeaks
+            from py4DSTEM.io.process.calibration import center_braggpeaks
             peaks = center_braggpeaks(peaks,(qx0,qy0))
             if which == 'origin':
                 del(self.peaks[which])
@@ -98,7 +98,7 @@ class BraggPeaks(DataObject):
         p_ellipse = self.calibrations.get_p_ellipse()
         if all([x is not None for x in p_ellipse]):
             print("...calibrating origin...")
-            from ...process.calibration import correct_braggpeak_elliptical_distortions
+            from py4DSTEM.io.process.calibration import correct_braggpeak_elliptical_distortions
             peaks = correct_braggpeak_elliptical_distortions(peaks,p_ellipse)
             if which == 'ellipse':
                 del(self.peaks[which])
@@ -118,7 +118,7 @@ class BraggPeaks(DataObject):
         if dq is not None:
             assert(units is not None)
             print("...calibrating Q pixel size...")
-            from ...process.calibration import calibrate_Bragg_peaks_pixel_size
+            from py4DSTEM.io.process.calibration import calibrate_Bragg_peaks_pixel_size
             peaks = calibrate_Bragg_peaks_pixel_size(peaks,q_pixel_size=dq)
             if which == 'pixel':
                 del(self.peaks[which])
@@ -135,7 +135,7 @@ class BraggPeaks(DataObject):
         flip = self.calibrations.get_QR_flip()
         if all([x is not None for x in (rotation,flip)]):
             print("...calibrating Q/R rotation and flip...")
-            from ...process.calibration import calibrate_bragg_peaks_rotation
+            from py4DSTEM.io.process.calibration import calibrate_bragg_peaks_rotation
             peaks = calibrate_bragg_peaks_rotation(peaks,rotation,flip)
             if which == 'rotation':
                 del(self.peaks[which])
@@ -168,7 +168,7 @@ class BraggPeaks(DataObject):
             which (str): Which to show.  Must be in
                 ('origin','ellipse','pixel','all').
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
         bvm = self.bvms[which].data
         if len(vis_params)==0:
@@ -193,7 +193,7 @@ class BraggPeaks(DataObject):
             which (str): Which data to fit to.  Must be in
                 ('origin','ellipse','pixel','all').
         """
-        from ...process.calibration import fit_ellipse_1D
+        from py4DSTEM.io.process.calibration import fit_ellipse_1D
         assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
         bvm = self.bvms[which].data
         p_ellipse = fit_ellipse_1D(bvm,(bvm.shape[0]/2,bvm.shape[1]/2),radii)
@@ -212,7 +212,7 @@ class BraggPeaks(DataObject):
             which (str): Which data to fit to.  Must be in
                 ('origin','ellipse','pixel','all').
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         assert(which in self.bvms.keys()), "Requested bvm '{}' not found".format(which)
         bvm = self.bvms[which].data
         center = bvm.shape[0]/2,bvm.shape[1]/2
@@ -233,7 +233,7 @@ class BraggPeaks(DataObject):
         """
         TODO: use peaks instead of BVMs. also write a docstring ;ppppp
         """
-        from ...process.utils import radial_integral
+        from py4DSTEM.io.process.utils import radial_integral
         assert(which in self.bvms.keys())
         bvm = self.bvms[which].data
 
@@ -253,7 +253,7 @@ class BraggPeaks(DataObject):
         """
 
         """
-        from ...process.fit import fit_1D_gaussian,gaussian
+        from py4DSTEM.io.process.fit import fit_1D_gaussian,gaussian
         assert(which in self.bvms.keys())
         bvm = self.bvms[which].data
         assert(len(lims)==2)
@@ -276,7 +276,7 @@ class BraggPeaks(DataObject):
             q_ref (number or tuple/list of numbers or None): if not None, plot
                 reference lines at these positions on the q-axis
         """
-        from ...visualize import show_qprofile
+        from py4DSTEM.io.visualize import show_qprofile
         assert(which in self.radial_profiles.keys()), "This radial profile has not been computed"
         profile = self.radial_profiles[which]
         dq = self.calibrations.get_Q_pixel_size()
@@ -305,8 +305,8 @@ class BraggPeaks(DataObject):
             which (str): which calibration state to use
             ymax (number): the upper limit of the y-axis
         """
-        from ...visualize import show_qprofile
-        from ...process.fit import gaussian
+        from py4DSTEM.io.visualize import show_qprofile
+        from py4DSTEM.io.process.fit import gaussian
         assert(which in self.radial_profiles.keys()), "This radial profile hasn't been computed"
         profile = self.radial_profiles[which]
         q,I = profile.data['q'],profile.data['I']
@@ -341,9 +341,9 @@ class BraggPeaks(DataObject):
         assert(self.peaks[which] is not None), "This calibration state has not been computed, please calibrate the peak positions first with `self.calibrate(which = {} )`".format(which)
         peaks = self.peaks[which]
         if which=='raw':
-            from ...process.diskdetection import get_bvm_raw as get_bvm
+            from py4DSTEM.io.process.diskdetection import get_bvm_raw as get_bvm
         else:
-            from ...process.diskdetection import get_bvm
+            from py4DSTEM.io.process.diskdetection import get_bvm
         if which in ('raw','origin','ellipse'): dq=1
         else: dq = self.calibrations.get_Q_pixel_size()
         bvm = DiffractionSlice(
@@ -359,7 +359,7 @@ class BraggPeaks(DataObject):
                 at which stage of calibration to use. Must be in
                 ('raw','origin','ellipse','pixel','all').
         """
-        from ...visualize import show
+        from py4DSTEM.io.visualize import show
         assert(which in ('raw','origin','ellipse','pixel','all')), "Invalid value for argument `which`, {}".format(which)
         assert(self.bvms[which] is not None), "This bvm has not been computed, please compute it first with `self.get_bvm(which = {} )`".format(which)
         bvm = self.bvms[which].data
@@ -393,19 +393,19 @@ def save_braggpeaks_group(group, braggpeaks):
     Expects an open .h5 group and a BraggPeaks instance; saves to the group
     """
     try:
-        n_coords = len(pointlistarray.dtype.names)
+        n_coords = len(braggpeaks.dtype.names)
     except:
         n_coords = 1
-    #coords = np.string_(str([coord for coord in pointlistarray.dtype.names]))
-    group.attrs.create("calibrations", np.string_(str(pointlistarray.dtype)))
+    #coords = np.string_(str([coord for coord in braggpeaks.dtype.names]))
+    group.attrs.create("calibrations", np.string_(str(braggpeaks.dtype)))
     group.attrs.create("dimensions", n_coords)
 
-    pointlist_dtype = h5py.special_dtype(vlen=pointlistarray.dtype)
+    pointlist_dtype = h5py.special_dtype(vlen=braggpeaks.dtype)
     name = "data"
-    dset = group.create_dataset(name,pointlistarray.shape,pointlist_dtype)
+    dset = group.create_dataset(name,braggpeaks.shape,pointlist_dtype)
 
     for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
-        dset[i,j] = pointlistarray.get_pointlist(i,j).data
+        dset[i,j] = braggpeaks.get_pointlist(i,j).data
 
 def get_pointlistarray_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlistarray in an open, correctly formatted H5 file,

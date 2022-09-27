@@ -2,8 +2,8 @@
 
 import pathlib
 from os.path import exists,splitext
-from .native import read_py4DSTEM, is_py4DSTEM_file
-from .nonnative import *
+from py4DSTEM.io.native import read_py4DSTEM, is_py4DSTEM_file
+from py4DSTEM.io.nonnative import *
 
 def read(
     filepath,

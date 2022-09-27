@@ -1,14 +1,14 @@
 # Find the origin of diffraction space
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
-from .probe import get_probe_size
-from ..fit import plane,parabola,bezier_two,fit_2D
-from ..utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-from ...utils.tqdmnd import tqdmnd
-from ...io.datastructure import PointListArray, DataCube
+from py4DSTEM.process.calibration.probe import get_probe_size
+from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
+from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointListArray, DataCube
 
 
 def measure_origin(
@@ -259,7 +259,7 @@ def get_origin_from_braggpeaks(
     # Get guess at position of unscattered beam (x0,y0)
     if center_guess is None:
         if bvm is None:
-            from ..diskdetection.braggvectormap import get_bragg_vector_map_raw
+            from py4DSTEM.process.diskdetection.braggvectormap import get_bragg_vector_map_raw
             braggvectormap_all = get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny)
         else:
             braggvectormap_all = bvm
@@ -392,8 +392,10 @@ def get_origin_beamstop_braggpeaks(
     Returns:
         (2d masked array): the origins
     """
+
     assert(isinstance(braggpeaks,PointListArray))
     R_Nx,R_Ny = braggpeaks.shape
+
 
     # remove peaks outside the annulus
     braggpeaks_masked = braggpeaks.copy()
@@ -452,13 +454,11 @@ def get_origin_beamstop_braggpeaks(
     # return
     mask = found_center
     qx0,qy0 = centers[:,:,0],centers[:,:,1]
+
     return qx0,qy0,mask
 
 
-
-
 ### Functions for fitting the origin
-
 
 def fit_origin(
     data,

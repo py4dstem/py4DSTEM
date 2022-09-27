@@ -15,9 +15,10 @@ from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
-from ..utils import get_cross_correlation_fk, get_maxima_2D
-from ...utils.tqdmnd import tqdmnd
-from ...io import PointList, PointListArray
+from py4DSTEM.process.utils import get_cross_correlation_fk, get_maxima_2D
+from py4DSTEM.process.diskdetection import universal_threshold
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io import PointList, PointListArray
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attempts = 5,
@@ -625,7 +626,7 @@ def find_Bragg_disks_aiml(datacube, probe,
                                                 name=name,
                                                 filter_function=filter_function)
         elif _check_cuda_device_available():
-            from .diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
+            from py4DSTEM.process.diskdetection.diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
             return find_Bragg_disks_aiml_CUDA(datacube,
                                               probe,
                                               num_attempts = num_attempts,
@@ -725,7 +726,7 @@ def _get_latest_model(model_path = None):
         import tensorflow as tf
     except:
         raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
-    from ...io.google_drive_downloader import download_file_from_google_drive
+    from py4DSTEM.io.google_drive_downloader import download_file_from_google_drive
     tf.keras.backend.clear_session()
 
     if model_path is None:

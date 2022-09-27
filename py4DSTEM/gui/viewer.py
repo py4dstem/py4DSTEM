@@ -26,12 +26,12 @@ import pyqtgraph as pg
 import gc
 from pathlib import Path
 
-from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
-from .gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
-from ..io.read import read
-from ..io.native import save, is_py4DSTEM_file
-from ..io.datastructure.datacube import DataCube
-from .strain import *
+from py4DSTEM.gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
+from py4DSTEM.gui.gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
+from py4DSTEM.io.read import read
+from py4DSTEM.io.native import save, is_py4DSTEM_file
+from py4DSTEM.io.datastructure.datacube import DataCube
+from py4DSTEM.gui.strain import *
 
 import IPython
 if IPython.version_info[0] < 4:

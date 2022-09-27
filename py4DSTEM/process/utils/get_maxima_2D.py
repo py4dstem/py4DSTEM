@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from .multicorr import upsampled_correlation
+from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 
 def get_maxima_2D(
@@ -78,7 +78,7 @@ def get_maxima_2D(
     maxima = np.sort(maxima, order='intensity')[::-1]
 
     if len(maxima) == 0:
-            return maxima
+        return maxima
 
 
     # filter

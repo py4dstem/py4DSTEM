@@ -7,9 +7,9 @@ from time import time
 from tqdm import tqdm
 from dataclasses import dataclass
 
-from ...io.datastructure import PointList
-from ..utils import electron_wavelength_angstrom, single_atom_scatter
-from .WK_scattering_factors import compute_WK_factor
+from py4DSTEM.io.datastructure import PointList
+from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
+from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
 
 
 @dataclass
@@ -91,7 +91,7 @@ def calculate_dynamical_structure_factors(
 
     if recompute_kinematic_structure_factors:
         if hasattr(self, "struct_factors"):
-            print("Warning: overriding existing structure factors...")        
+            print("Warning: overriding existing structure factors...")
         self.calculate_structure_factors(
             k_max=k_max / 2.0,
             tol_structure_factor=tol_structure_factor,
@@ -414,9 +414,8 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (
-        2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
-    )  # divide by 2 k_n
+    gamma_fac = 2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
+    gamma = v / gamma_fac  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -441,7 +440,11 @@ def generate_dynamical_diffraction_pattern(
             C @ np.diag(np.exp(2.0j * np.pi * z * gamma)) @ C_inv
             for z in np.atleast_1d(thickness)
         ]
-        return Smatrices, psi_0
+        return (
+            (Smatrices, psi_0, (C, C_inv, gamma, gamma_fac))
+            if return_eigenvectors
+            else (Smatrices, psi_0)
+        )
     elif return_complex:
         # calculate the amplitudes
         amplitudes = [
