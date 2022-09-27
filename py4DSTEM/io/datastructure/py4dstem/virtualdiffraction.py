@@ -17,9 +17,10 @@ class VirtualDiffraction(DiffractionSlice):
         self,
         data: np.ndarray,
         name: Optional[str] = 'diffractionimage',
-        method: Option[str] = None,
+        method: Optional[str] = None,
         mode: Optional[str] = None,
         geometry: Optional[Union[tuple,np.ndarray]] = None,
+        calibrated: Optional[bool] = False,
         shift_center: bool = False
         ):
         """

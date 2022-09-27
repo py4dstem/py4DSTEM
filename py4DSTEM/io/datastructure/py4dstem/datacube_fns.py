@@ -76,11 +76,9 @@ def get_virtual_diffraction(
                 calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
                     The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
                 
-                shift_center (bool) : if True, the mask is shifted at each real space position to
-                    account for any shifting of the origin of the diffraction images. The datacube's
-                    calibration['origin'] parameter must be set (centered = True). The shift applied to each 
-                    pattern is the difference between the local origin position and the mean origin position
-                    over all patterns, rounded to the nearest integer for speed.
+                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
                 
                 verbose (bool)      : if True, show progress bar
             
@@ -106,7 +104,7 @@ def get_virtual_diffraction(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
+        shift_center = shift_center,
         calibrated = calibrated,
     )
 
@@ -134,6 +132,7 @@ def get_dp_max(
             Args:
                 datacube (Datacube) : datacube class object which stores 4D-dataset
                     needed for calculation
+                
                 mode (str)          : defines mode for selecting area in real space to use for 
                                       virtual diffraction. The default is None, which means no
                                       geometry will be applied and the whole datacube will be used
@@ -161,12 +160,9 @@ def get_dp_max(
                 calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
                     The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
                 
-                shift_center (bool) : if True, the mask is shifted at each real space position to
-                    account for any shifting of the origin of the diffraction images. The datacube's
-                    calibration['origin'] parameter must be set (centered = True). The shift applied to each 
-                    pattern is the difference between the local origin position and the mean origin position
-                    over all patterns, rounded to the nearest integer for speed.
-                
+                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
                 verbose (bool)      : if True, show progress bar
             
             Returns:
@@ -174,7 +170,9 @@ def get_dp_max(
     """
 
     # perform computation
+    
     from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
+    
     dp = get_virtual_diffraction(
         self,
         method = method,
@@ -191,7 +189,7 @@ def get_dp_max(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
+        shift_center = shift_center,
         calibrated = calibrated,
     )
 
@@ -219,6 +217,7 @@ def get_dp_mean(
             Args:
                 datacube (Datacube) : datacube class object which stores 4D-dataset
                     needed for calculation
+                
                 mode (str)          : defines mode for selecting area in real space to use for 
                                       virtual diffraction. The default is None, which means no
                                       geometry will be applied and the whole datacube will be used
@@ -246,11 +245,9 @@ def get_dp_mean(
                 calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
                     The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
                 
-                shift_center (bool) : if True, the mask is shifted at each real space position to
-                    account for any shifting of the origin of the diffraction images. The datacube's
-                    calibration['origin'] parameter must be set (centered = True). The shift applied to each 
-                    pattern is the difference between the local origin position and the mean origin position
-                    over all patterns, rounded to the nearest integer for speed.
+                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
                 
                 verbose (bool)      : if True, show progress bar
             
@@ -276,7 +273,7 @@ def get_dp_mean(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
+        shift_center = shift_center,
         calibrated = calibrated,
     )
 
@@ -304,6 +301,7 @@ def get_dp_median(
             Args:
                 datacube (Datacube) : datacube class object which stores 4D-dataset
                     needed for calculation
+                
                 mode (str)          : defines mode for selecting area in real space to use for 
                                       virtual diffraction. The default is None, which means no
                                       geometry will be applied and the whole datacube will be used
@@ -331,11 +329,9 @@ def get_dp_median(
                 calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
                     The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
                 
-                shift_center (bool) : if True, the mask is shifted at each real space position to
-                    account for any shifting of the origin of the diffraction images. The datacube's
-                    calibration['origin'] parameter must be set (centered = True). The shift applied to each 
-                    pattern is the difference between the local origin position and the mean origin position
-                    over all patterns, rounded to the nearest integer for speed.
+                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
                 
                 verbose (bool)      : if True, show progress bar
             
@@ -361,7 +357,7 @@ def get_dp_median(
         name = name,
         mode = mode,
         geometry = geometry,
-        shift_corr = shift_corr,
+        shift_center = shift_center,
         calibrated = calibrated,
     )
 
