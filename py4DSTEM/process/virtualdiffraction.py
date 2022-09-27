@@ -36,7 +36,8 @@ def get_virtual_diffraction(
 
             geometry (variable) : valid entries are determined by the `mode`, values in pixels
                 argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation.
+                and the whole datacube will be used for the calculation. If mode is None the geometry 
+                will not be applied.
                     - 'point': 2-tuple, (rx,ry),
                        qx and qy are each single float or int to define center
                     - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
@@ -48,7 +49,8 @@ def get_virtual_diffraction(
                         the same shape as datacube.Rshape
             
             calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
+                If mode is None the geometry and calibration will not be applied.
             
             shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
                 or the changing of the origin through the scan. The datacube's calibration['origin'] 
@@ -70,7 +72,7 @@ def get_virtual_diffraction(
         'check doc strings for supported types'
 
     #create mask
-    if geometry is not None: 
+    if mode is not None: 
         from py4DSTEM.process.virtualimage import make_detector
         assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
         'check doc strings for supported modes'
