@@ -104,6 +104,7 @@ def get_virtual_diffraction(
     dp = VirtualDiffraction(
         data = dp,
         name = name,
+        method = method,
         mode = mode,
         geometry = geometry,
         shift_center = shift_center,
@@ -191,6 +192,7 @@ def get_dp_max(
     dp = VirtualDiffraction(
         data = dp,
         name = name,
+        method = method,
         mode = mode,
         geometry = geometry,
         shift_center = shift_center,
@@ -277,6 +279,7 @@ def get_dp_mean(
     dp = VirtualDiffraction(
         data = dp,
         name = name,
+        method = method,
         mode = mode,
         geometry = geometry,
         shift_center = shift_center,
@@ -364,6 +367,7 @@ def get_dp_median(
     dp = VirtualDiffraction(
         data = dp,
         name = name,
+        method = method,
         mode = mode,
         geometry = geometry,
         shift_center = shift_center,
