@@ -43,7 +43,7 @@ Then open a conda terminal and run one of the following sets of commands:
 
 ```
 conda update conda
-conda create -n py4dstem python==3.8
+conda create -n py4dstem
 conda activate py4dstem
 conda install -c conda-forge py4dstem pymatgen jupyterlab
 ```
@@ -52,9 +52,9 @@ Or if you would prefer to install only the base modules of **py4DSTEM**, you can
 
 ```
 conda update conda
-conda create -n py4dstem python==3.8
+conda create -n py4dstem
 conda activate py4dstem
-conda install py4dstem
+conda install -c conda-forge py4dstem
 ```
 
 In Windows you should then also run:
@@ -85,7 +85,8 @@ If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, ru
 
 ```
 conda update conda
-conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
 conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install "py4dstem[aiml-cuda]"
 ```
@@ -93,7 +94,8 @@ pip install "py4dstem[aiml-cuda]"
 If you are running on Windows with Nvidia GPU and CUDA capability, run
 ```
 conda update conda
-conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
 conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install "py4dstem[aiml-cuda]"
 ```
@@ -101,7 +103,7 @@ pip install "py4dstem[aiml-cuda]"
 If you are running on Windows without any CUDA capable device or any Mac OS X system, run
 ```
 conda update conda
-conda create -n py4dstem python==3.8
+conda create -n py4dstem
 conda activate py4dstem
 conda install pip
 pip install "py4dstem[aiml]"

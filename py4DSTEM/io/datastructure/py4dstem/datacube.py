@@ -1,8 +1,8 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from ..emd.array import Array
-from .calibration import Calibration
-from .parenttree import ParentTree
+from py4DSTEM.io.datastructure.emd.array import Array
+from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
+from py4DSTEM.io.datastructure.py4dstem.parenttree import ParentTree
 
 from typing import Optional,Union
 import numpy as np
@@ -13,7 +13,7 @@ class DataCube(Array):
     Stores 4D-STEM datasets.
     """
 
-    from .datacube_fns import (
+    from py4DSTEM.io.datastructure.py4dstem.datacube_fns import (
         add,
         get_diffraction_image,
         get_dp_max,
@@ -197,7 +197,7 @@ class DataCube(Array):
 
     # read
     def from_h5(group):
-        from .io import DataCube_from_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import DataCube_from_h5
         return DataCube_from_h5(group)
 
 

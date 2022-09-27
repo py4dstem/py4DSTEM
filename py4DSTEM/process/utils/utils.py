@@ -2,7 +2,7 @@
 
 import numpy as np
 from numpy.fft import fftfreq, fftshift
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.spatial import Voronoi
 import math as ma
 import matplotlib.pyplot as plt
@@ -10,8 +10,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
-from .multicorr import upsampled_correlation
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.process.utils.multicorr import upsampled_correlation
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 try:
     from IPython.display import clear_output

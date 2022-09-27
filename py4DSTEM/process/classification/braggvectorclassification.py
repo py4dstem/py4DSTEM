@@ -4,12 +4,12 @@
 import numpy as np
 from numpy.linalg import lstsq
 from itertools import permutations
-from scipy.ndimage.filters import gaussian_filter
-from scipy.ndimage.morphology import binary_opening, binary_closing, binary_dilation, binary_erosion
+from scipy.ndimage import gaussian_filter
+from scipy.ndimage import binary_opening, binary_closing, binary_dilation, binary_erosion
 from skimage.measure import label
 from sklearn.decomposition import NMF
 
-from ...io import PointListArray
+from py4DSTEM.io import PointListArray
 
 
 class BraggVectorClassification(object):

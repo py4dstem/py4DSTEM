@@ -1,16 +1,17 @@
 # Functions for calculating and making use of the Bragg vector map
 
 import numpy as np
-from ..utils import add_to_2D_array_from_floats
-from ...io.datastructure.emd import PointListArray
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.process.utils import add_to_2D_array_from_floats
+from py4DSTEM.io.datastructure.emd import PointListArray
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 
 def get_bvm(
     braggpeaks,
     Qshape,
-    mode = 'centered'
+    mode = 'centered',
+    Q_pixel_size = 1.0,
     ):
     """
     Gets a Bragg vector map, a 2D histogram of Bragg scattering vectors.
@@ -41,7 +42,8 @@ def get_bvm(
     bvm = fn(
         braggpeaks,
         Q_Nx = Qshape[0],
-        Q_Ny = Qshape[1]
+        Q_Ny = Qshape[1],
+        Q_pixel_size=Q_pixel_size,
     )
 
     return bvm

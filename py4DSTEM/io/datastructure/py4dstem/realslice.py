@@ -1,6 +1,6 @@
 # Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
-from ..emd.array import Array
+from py4DSTEM.io.datastructure.emd.array import Array
 
 from typing import Optional,Union
 import numpy as np
@@ -86,7 +86,7 @@ class RealSlice(Array):
 
     # read
     def from_h5(group):
-        from .io import RealSlice_from_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import RealSlice_from_h5
         return RealSlice_from_h5(group)
 
 
