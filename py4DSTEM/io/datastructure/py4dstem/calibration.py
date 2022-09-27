@@ -6,7 +6,7 @@ from typing import Optional
 import h5py
 
 from py4DSTEM.io.datastructure.emd.metadata import Metadata
-
+from py4DSTEM.io.datastructure.py4dstem.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
     """
@@ -31,10 +31,17 @@ class Calibration(Metadata):
         >>> c.get_p(rx,ry)
 
     will return the value of `p` at position `rx,ry`.
+
+    The Calibration object is capable of automatically calling the ``calibrate`` method
+    of any other py4DSTEM objects when certain calibrations are updated. The methods
+    that trigger propagation of calibration information are tagged with the 
+    @propagating_calibration decorator. Use the ``register_target`` method
+    to set up an object to recieve calls to ``calibrate``
+
     """
     def __init__(
         self,
-        name: Optional[str] ='calibration'
+        name: Optional[str] ='calibration',
         ):
         """
         Args:
@@ -43,6 +50,10 @@ class Calibration(Metadata):
         Metadata.__init__(
             self,
             name=name)
+
+        # List to hold objects that will re-`calibrate` when
+        # certain properties are changed
+        self._targets = []
 
         # set initial pixel values
         self.set_Q_pixel_size(1)
@@ -123,20 +134,27 @@ class Calibration(Metadata):
         return shape
 
     # pixel sizes
+    @propagating_calibration
     def set_Q_pixel_size(self,x):
         self._params['Q_pixel_size'] = x
     def get_Q_pixel_size(self):
         return self._get_value('Q_pixel_size')
+
+    @propagating_calibration
     def set_R_pixel_size(self,x):
         self._params['R_pixel_size'] = x
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
+
+    @propagating_calibration
     def set_Q_pixel_units(self,x):
         pix = ('pixels','A^-1','mrad')
         assert(x in pix), f"{x} must be in {pix}"
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
+
+    @propagating_calibration
     def set_R_pixel_units(self,x):
         self._params['R_pixel_units'] = x
     def get_R_pixel_units(self):
@@ -147,22 +165,28 @@ class Calibration(Metadata):
         self._params['qx0'] = x
     def get_qx0(self,rx=None,ry=None):
         return self._get_value('qx0',rx,ry)
+
     def set_qy0(self,x):
         self._params['qy0'] = x
     def get_qy0(self,rx=None,ry=None):
         return self._get_value('qy0',rx,ry)
+
     def set_qx0_meas(self,x):
         self._params['qx0_meas'] = x
     def get_qx0_meas(self,rx=None,ry=None):
         return self._get_value('qx0_meas',rx,ry)
+
     def set_qy0_meas(self,x):
         self._params['qy0_meas'] = x
     def get_qy0_meas(self,rx=None,ry=None):
         return self._get_value('qy0_meas',rx,ry)
+
     def set_origin_meas_mask(self,x):
         self._['origin_meas_mask'] = x
     def get_origin_meas_mask(self,rx=None,ry=None):
         return self._get_value('origin_meas_mask',rx,ry)
+
+    @propagating_calibration
     def set_origin(self,x):
         """
         Args:
@@ -178,6 +202,7 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
+
     def set_origin_meas(self,x):
         """
         Args:
@@ -198,6 +223,7 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
+
     def set_probe_semiangle(self,x):
         self._params['probe_semiangle'] = x
     def get_probe_semiangle(self):
@@ -234,6 +260,8 @@ class Calibration(Metadata):
         self._params['theta'] = x
     def get_theta(self,rx=None,ry=None):
         return self._get_value('theta',rx,ry)
+
+    @propagating_calibration
     def set_ellipse(self,x):
         """
         Args:
@@ -243,6 +271,8 @@ class Calibration(Metadata):
         self._params['a'] = a
         self._params['b'] = b
         self._params['theta'] = theta
+
+    @propagating_calibration
     def set_p_ellipse(self,x):
         """
         Args:
@@ -270,10 +300,13 @@ class Calibration(Metadata):
         self._params['QR_rotation_degrees'] = x
     def get_QR_rotation_degrees(self):
         return self._get_value('QR_rotation_degrees')
+
     def set_QR_flip(self,x):
         self._params['QR_flip'] = x
     def get_QR_flip(self):
         return self._get_value('QR_flip')
+
+    @propagating_calibration
     def set_QR_rotflip(self, rot_flip):
         """
         Args:
@@ -338,6 +371,24 @@ class Calibration(Metadata):
         return cal
 
 
+    # Methods for assigning objects which will be
+    # auto-calibrated when the Calibration instance is updated
+
+    def register_target(self,new_target):
+        """
+        Register an object to recieve calls to it `calibrate`
+        method when certain calibrations get updated 
+        """
+        self._targets.append(new_target)
+
+    def unregister_target(self,target):
+        """
+        Unlink an object from recieving calls to `calibrate` when
+        certain calibration values are changed
+        """
+        if target in self._targets:
+            self._targets.remove(target)
+
 
     # HDF5 read/write
 
@@ -352,8 +403,5 @@ class Calibration(Metadata):
 
 
 ########## End of class ##########
-
-
-
 
 
