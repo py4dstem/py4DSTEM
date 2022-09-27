@@ -188,9 +188,10 @@ def VirtualDiffraction_from_Array(array):
     # get diffraction image metadata
     try:
         md = array.metadata['virtualdiffraction']
+        method =  md['method']
         mode = md['mode']
-        geo = md['geometry']
-        shift_corr = md['shift_corr']
+        geometry = md['geometry']
+        shift_center = md['shift_center']
     except KeyError:
         er = "VirtualDiffraction metadata could not be found"
         raise Exception(er)
@@ -201,9 +202,10 @@ def VirtualDiffraction_from_Array(array):
     array.__init__(
         data = array.data,
         name = array.name,
+        method = method,
         mode = mode,
-        geometry = geo,
-        shift_corr = shift_corr
+        geometry = geometry,
+        shift_center = shift_center,
     )
     return array
 

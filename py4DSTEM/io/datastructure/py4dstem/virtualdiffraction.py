@@ -75,7 +75,7 @@ class VirtualDiffraction(DiffractionSlice):
 
         # Set metadata
         md = Metadata(name='virtualdiffraction')
-        md['methpd'] = method
+        md['method'] = method
         md['mode'] = mode
         md['geometry'] = geometry
         md['shift_center'] = shift_center
