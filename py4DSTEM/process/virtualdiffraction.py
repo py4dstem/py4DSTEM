@@ -50,12 +50,10 @@ def get_virtual_diffraction(
             calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
                 The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
             
-            shift_center (bool) : if True, the mask is shifted at each real space position to
-                account for any shifting of the origin of the diffraction images. The datacube's
-                calibration['origin'] parameter must be set (centered = True). The shift applied to each 
-                pattern is the difference between the local origin position and the mean origin position
-                over all patterns, rounded to the nearest integer for speed.
-            
+            shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
+                or the changing of the origin through the scan. The datacube's calibration['origin'] 
+                parameter must be set Only 'max' and 'mean' supported for this option.  
+
             verbose (bool)      : if True, show progress bar
             
             return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
@@ -81,7 +79,7 @@ def get_virtual_diffraction(
         if calibrated == True:
                 assert datacube.calibration['R_pixel_units'] == 'A', \
                 'check datacube.calibration. datacube must be calibrated in A to use `calibrated=True`'
-                
+
                 unit_conversion = datacube.calibration['R_pixel_size']
                 if mode == 'point':
                     g = (g[0]/unit_conversion, g[1]/unit_conversion)
