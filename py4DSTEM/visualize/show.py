@@ -419,7 +419,7 @@ def show(
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
         if vmax is None: vmax = 0.98
-        vals = np.sort(_ar[~np.isnan(_ar)])
+        vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
         ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
         ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
         vmin = vals[ind_vmin]
