@@ -2,15 +2,60 @@
 # Author: Tara Mishra, tara.matsci@gmail. 
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
 
-from collections.abc import Sequence
 import numpy as np
-try:
-    import numba as nb
-except ImportError:
-    pass
-from ...utils.tqdmnd import tqdmnd
-from ..datastructure import DataCube
+from py4DSTEM.io.datastructure import DataCube
 import os
+
+def load_mib(
+    file_path, 
+    mem="MEMMAP", 
+    binfactor=1,
+    reshape=True,
+    flip=True,**kwargs):
+    """
+    Read a MIB file and return as py4DSTEM DataCube
+    """
+
+    assert binfactor == 1, "MIB does not support bin-on-load... yet?"
+
+    # Get scan info from kwargs
+    scan = kwargs.get('scan',(256,256))
+    header = parse_hdr(file_path)
+    width = header["width"]
+    height = header["height"]
+    width_height = width * height
+    
+    data = get_mib_memmap(file_path)
+    depth = get_mib_depth(header, file_path)
+    hdr_bits = get_hdr_bits(header)
+
+    if header["Counter Depth (number)"] == 1:
+        # RAW 1 bit data: the header bits are written as uint8 but the frames
+        # are binary and need to be unpacked as such.
+        data = data.reshape(-1, int(width_height / 8 + hdr_bits))
+        data = data[:, hdr_bits:]
+        # get the shape axis 1 before unpackbit
+        s0 = data.shape[0]
+        s1 = data.shape[1]
+        data = np.unpackbits(data)
+        data.reshape(s0, s1 * 8)
+    else:
+        data = data.reshape(-1, int(width_height + hdr_bits))
+        data = data[:, hdr_bits:]
+
+    if header["raw"] == "MIB":
+        data = data.reshape(depth,width,height)
+    else:
+        print('Data type not supported as MIB reader')
+    
+    if reshape:      
+        data = data.reshape(scan[0],scan[1],width,height)
+
+    if mem == "RAM":
+        data = np.array(data) # Load entire dataset into RAM
+
+    py4dstem_data = DataCube(data=data)
+    return py4dstem_data
 
 def manageHeader(fname):
     """Get necessary information from the header of the .mib file.
@@ -168,7 +213,7 @@ def parse_hdr(fp):
 
     return hdr_info
 
-def mib_to_daskarr(fp, mmap_mode="r"):
+def get_mib_memmap(fp, mmap_mode="r"):
     """Reads the binary mib file into a numpy memmap object and returns as dask array object.
     Parameters
     ----------
@@ -208,9 +253,7 @@ def mib_to_daskarr(fp, mmap_mode="r"):
     data_type = data_type.newbyteorder(endian)
 
     data_mem = np.memmap(fp, offset=read_offset, dtype=data_type, mode=mmap_mode)
-    #data_da = da.from_array(data_mem, chunks="auto")
-    data_da = data_mem
-    return data_da
+    return data_mem
 
 def get_mib_depth(hdr_info, fp):
     """Determine the total number of frames based on .mib file size.
@@ -302,92 +345,3 @@ def get_hdr_bits(hdr_info):
 
     return hdr_bits
 
-def load_mib(
-    file_path, 
-    mem=None, 
-    binfactor=None,
-    reshape=True,
-    flip=True,**kwargs):
-    """
-    Read a MIB file and return as py4DSTEM DATACUBE"""
-    # Get scan info from kwargs
-    scan=kwargs.get('scan',(256,256))
-    hdr_stuff = parse_hdr(file_path)
-    width = hdr_stuff["width"]
-    height = hdr_stuff["height"]
-    width_height = width * height
-    
-    data = mib_to_daskarr(file_path)
-    depth = get_mib_depth(hdr_stuff, file_path)
-    hdr_bits = get_hdr_bits(hdr_stuff)
-
-    if hdr_stuff["Counter Depth (number)"] == 1:
-        # RAW 1 bit data: the header bits are written as uint8 but the frames
-        # are binary and need to be unpacked as such.
-        data = data.reshape(-1, int(width_height / 8 + hdr_bits))
-        data = data[:, hdr_bits:]
-        # get the shape axis 1 before unpackbit
-        s0 = data.shape[0]
-        s1 = data.shape[1]
-        data = np.unpackbits(data)
-        data.reshape(s0, s1 * 8)
-    else:
-        data = data.reshape(-1, int(width_height + hdr_bits))
-        data = data[:, hdr_bits:]
-
-    if hdr_stuff["raw"] == "MIB":
-        data = data.reshape(depth,width,height)
-    else:
-        print('Data type not supported as MIB reader')
-    
-    if reshape:
-        """
-        Reshapes the lazy-imported stack of dimensions: (xxxxxx|Det_X, Det_Y) to the correct scan pattern
-        shape: (x, y | Det_X, Det_Y).
-        """
-      
-        data = data.reshape(scan[0],scan[1],width,height)
-        # print(data.shape)
-
-    
-    py4dstem_data = DataCube(data=data)
-    return py4dstem_data
-
-
-#def read_mib(fp, mem="MEMMAP", binfactor=1, metadata=False, sig_shape = (256,256),**kwargs):
-#
-#    """
-#    READ an MIB file
-#
-#    Args:
-#        fp: str Path to the file
-#        mem (str, optional): Specifies how the data should be stored; must be "RAM"
-#            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "MEMMAP".
-#        binfactor: (int, optional): Bin the data, in diffraction space, as it's loaded.
-#            See docstring for py4DSTEM.file.io.read.  Must be 1, retained only for
-#            compatibility.
-#        metadata (bool, optional): if True, returns the file metadata as a Metadata
-#            instance.
-#        sig_shape: (tuple): Shape of the signal. By default we use a 256x256 scan shape
-#
-#    Returns:
-#        (variable): The return value depends on usage:
-#
-#
-#            * if metadata==False, returns the 4D-STEM dataset as a DataCube
-#            * if metadata==True, returns the metadata as a Metadata instance
-#
-#        Note that metadata is read either way - in the latter case ONLY
-#        metadata is read and returned, in the former case a DataCube
-#        is returned with the metadata attached at datacube.metadata
-#    """
-#   
-#    assert mem == "MEMMAP", "K2 files can only be memory-mapped, sorry."
-#    assert binfactor == 1, "K2 files can only be read at full resolution, sorry."
-#
-#    if metadata is True:
-#        return None
-#
-#    data = 0
-#    return DataCube(data)
-#
