@@ -44,7 +44,6 @@ class DataCube(DataObject):
             self.Q_Nx = data.shape[2]  #: diffraction space x pixels
             self.Q_Ny = data.shape[3]  #: diffraction space y pixels
             self.R_N = self.R_Nx*self.R_Ny  #: total number of real space pixels
-        self.update_slice_parsers()
 
         # Containers
         self.diffractionslices = {}
@@ -875,7 +874,6 @@ class DataCube(DataObject):
             R_Nx,R_Ny (int): the scan shape
         """
         self = preprocess.set_scan_shape(self,R_Nx,R_Ny)
-        self.update_slice_parsers()
         self.calibrations.R_Nx = self.R_Nx
         self.calibrations.R_Ny = self.R_Ny
 
@@ -884,7 +882,6 @@ class DataCube(DataObject):
         Swap real and reciprocal space calibrations.
         """
         self = preprocess.swap_RQ(self)
-        self.update_slice_parsers()
         self.calibrations.Q_Nx = self.Q_Nx
         self.calibrations.Q_Ny = self.Q_Ny
         self.calibrations.R_Nx = self.R_Nx
@@ -895,7 +892,6 @@ class DataCube(DataObject):
         Swap real space x and y calibrations.
         """
         self = preprocess.swap_Rxy(self)
-        self.update_slice_parsers()
         self.calibrations.Q_Nx = self.Q_Nx
         self.calibrations.Q_Ny = self.Q_Ny
         self.calibrations.R_Nx = self.R_Nx
@@ -941,12 +937,6 @@ class DataCube(DataObject):
 
 
     ################ Slice data #################
-
-    def update_slice_parsers(self):
-        # define index-sanitizing functions:
-        self.normX = lambda x: np.maximum(0,np.minimum(self.R_Nx-1,x))
-        self.normY = lambda x: np.maximum(0,np.minimum(self.R_Ny-1,x))
-
     def get_diffraction_space_view(self,Rx=0,Ry=0):
         """
         Returns the image in diffraction space, and a Bool indicating success or failure.
