@@ -3,10 +3,10 @@ import warnings
 class propagating_calibration(object):
     """
     A decorator which, when attached to a method of Calibration,
-    causes `calibrate` to be called on any objects in the 
+    causes `calibrate` to be called on any objects in the
     Calibration object's `_targets` list, following execution of
     the decorated function.
-    This allows objects associated with the Calibration to 
+    This allows objects associated with the Calibration to
     automatically respond to changes in the calibration state.
     """
     def __init__(self, func):
@@ -14,8 +14,8 @@ class propagating_calibration(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Update the parameters the caller wanted by calling the wrapped 
-        method, then loop through the list of targetsand call their 
+        Update the parameters the caller wanted by calling the wrapped
+        method, then loop through the list of targetsand call their
         `calibrate` methods.
         """
         self.func(*args,**kwargs)
@@ -31,7 +31,7 @@ class propagating_calibration(object):
         """
         This is some magic to make sure that the Calibration instance
         on which the decorator was called gets passed through and
-        everything dispatches correctly (by making sure `instance`, 
+        everything dispatches correctly (by making sure `instance`,
         the Calibration instance to which the call was directed, gets
         placed in the `self` slot of the wrapped method (which is *not*
         actually bound to the instance due to this decoration.) using
