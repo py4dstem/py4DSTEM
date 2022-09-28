@@ -30,7 +30,7 @@ def calibrate(
         (PointListArray)
     """
     assert(isinstance(braggpeaks,PointListArray))
-    # assert(isinstance(calibration,Calibration))
+    assert(isinstance(calibration,Calibration))
 
     # find calibrations
     c = calibration
