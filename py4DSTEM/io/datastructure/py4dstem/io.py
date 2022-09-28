@@ -33,7 +33,7 @@ def Calibration_from_h5(group:h5py.Group):
 
 def Calibration_from_Metadata(metadata):
     """
-    Converts a Metadata instance to a Calibration instance.
+    Constructs a Calibration object with the dict entries of a Metadata object
 
     Accepts:
         metadata (Metadata)
@@ -42,14 +42,11 @@ def Calibration_from_Metadata(metadata):
         (Calibration)
     """
     from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
-    p = metadata._params
-    metadata.__class__ = Calibration
-    metadata.__init__(
-        name = metadata.name
-    )
-    metadata._params.update(p)
+    
+    cal = Calibration(name = metadata.name)
+    cal._params.update(metadata._params)
 
-    return metadata
+    return cal
 
 
 
