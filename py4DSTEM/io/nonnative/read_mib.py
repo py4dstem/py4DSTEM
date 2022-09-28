@@ -7,24 +7,28 @@ from py4DSTEM.io.datastructure import DataCube
 import os
 
 def load_mib(
-    file_path, 
-    mem="MEMMAP", 
+    file_path,
+    mem="MEMMAP",
     binfactor=1,
     reshape=True,
-    flip=True,**kwargs):
+    flip=True,
+    scan = (256,256),
+    **kwargs):
     """
-    Read a MIB file and return as py4DSTEM DataCube
+    Read a MIB file and return as py4DSTEM DataCube.
+
+    The scan size is not encoded in the MIB metadata - by default it is
+    set to (256,256), and can be modified by passing the keyword `scan`.
     """
 
     assert binfactor == 1, "MIB does not support bin-on-load... yet?"
 
     # Get scan info from kwargs
-    scan = kwargs.get('scan',(256,256))
     header = parse_hdr(file_path)
     width = header["width"]
     height = header["height"]
     width_height = width * height
-    
+
     data = get_mib_memmap(file_path)
     depth = get_mib_depth(header, file_path)
     hdr_bits = get_hdr_bits(header)
@@ -47,8 +51,8 @@ def load_mib(
         data = data.reshape(depth,width,height)
     else:
         print('Data type not supported as MIB reader')
-    
-    if reshape:      
+
+    if reshape:
         data = data.reshape(scan[0],scan[1],width,height)
 
     if mem == "RAM":
