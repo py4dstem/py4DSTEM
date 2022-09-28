@@ -114,6 +114,15 @@ def orientation_plan(
         self.orientation_refine_ratio = 1.0
         self.orientation_refine = False
 
+    if self.pymatgen_available:
+        structure = Structure(
+            self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
+        )
+        self.pointgroup = SpacegroupAnalyzer(structure)
+
+
+
+
     # Handle the "auto" case first, since it works by overriding zone_axis_range,
     #   fiber_axis, and fiber_angles then using the regular parser:
     if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
@@ -121,13 +130,13 @@ def orientation_plan(
         # from pymatgen.core.structure import Structure
 
         # initialize structure
-        structure = Structure(
-            self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
-        )
+        # structure = Structure(
+        #     self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
+        # )
 
         # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
         # self.pointgroup = pointgroup
-        self.pointgroup = SpacegroupAnalyzer(structure)
+        # self.pointgroup = SpacegroupAnalyzer(structure)
 
         assert (
             self.pointgroup.get_point_group_symbol() in orientation_ranges
@@ -147,7 +156,7 @@ def orientation_plan(
         )
 
         # Set a flag so we know pymatgen is available
-        self.pymatgen_available = True
+        # self.pymatgen_available = True
 
 
     if isinstance(zone_axis_range, str):
