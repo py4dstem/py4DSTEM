@@ -412,6 +412,12 @@ def show(
     # vmin and vmax are determined so the mask affects those)
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
+    #set scaling for boolean arrays 
+    if _ar.dtype == 'bool': 
+        intensity_range = 'absolute'
+        vmin = 0
+        vmax = 1
+
     # Set the clipvalues
     if intensity_range == 'manual':
         warnings.warn("Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
@@ -928,7 +934,19 @@ def show_rectangles(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2
     else:
         return fig,ax
 
-def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,**kwargs):
+def show_circles(
+    ar,
+    center, 
+    R,
+    vmin = 0, 
+    vmax = 1,
+    intensity_range = 'ordered',
+    color='r',
+    fill=True,
+    alpha=0.3,
+    linewidth=2,
+    returnfig=False,
+    **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
     To overlay one circle, center must be a single 2-tuple.  To overlay N circles,
@@ -939,19 +957,29 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     parameters not listed below.
 
     Accepts:
-        center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
-        R           (number of list of N numbers) the circles radius
-        color       (valid matplotlib color, or list of N colors)
-        fill        (bool or list of N bools) filled in or empty rectangles
-        alpha       (number, 0 to 1) transparency
-        linewidth   (number)
-
+        vmin            (number, min intensity, behavior depends on clipvals)
+        vmax            (number, max intensity, behavior depends on clipvals)
+        intensity_range (str, method for setting clipvalues (min and max intensities))
+        center          (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
+        R               (number of list of N numbers) the circles radius
+        color           (valid matplotlib color, or list of N colors)
+        fill            (bool or list of N bools) filled in or empty rectangles
+        alpha           (number, 0 to 1) transparency
+        linewidth       (number)
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
         If returnfig==False, the figure and its one axis are returned, and can be
         further edited.
     """
-    fig,ax = show(ar,returnfig=True,**kwargs)
+
+    fig,ax = show(
+        ar, 
+        vmin = vmin, 
+        vmax = vmax, 
+        intensity_range = intensity_range,
+        returnfig=True,**kwargs
+    )
+
     d = {'center':center,'R':R,'color':color,'fill':fill,'alpha':alpha,'linewidth':linewidth}
     add_circles(ax,d)
 
