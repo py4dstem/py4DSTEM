@@ -193,8 +193,11 @@ def VirtualDiffraction_from_Array(array):
         geometry = md['geometry']
         shift_center = md['shift_center']
     except KeyError:
-        er = "VirtualDiffraction metadata could not be found"
-        raise Exception(er)
+        print("Warning: VirtualDiffraction metadata could not be found")
+        method = ''
+        mode = ''
+        geometry = ''
+        shift_center = ''
 
 
     # instantiate as a DiffractionImage
