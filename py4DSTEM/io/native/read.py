@@ -286,6 +286,7 @@ def _get_class(grp):
         'DataCube' : DataCube,
         'DiffractionSlice' : DiffractionSlice,
         'VirtualDiffraction' : VirtualDiffraction,
+        'DiffractionImage' : VirtualDiffraction,
         'RealSlice' : RealSlice,
         'VirtualImage' : VirtualImage,
         'Probe' : Probe,
