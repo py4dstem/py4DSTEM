@@ -41,14 +41,14 @@ def get_virtual_image(
         centered (bool)     : if False (default), the origin is in the upper left corner.
              If True, the mean measured origin in the datacube calibrations
              is set as center. The measured origin is set with datacube.calibration.set_origin()
-             In this case, for example, a centered bright field image could be defined 
+             In this case, for example, a centered bright field image could be defined
              by geometry = ((0,0), R). For `mode="mask"`, has no effect.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-                The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
-                For `mode="mask"`, has no effect.
+            The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
+            For `mode="mask"`, has no effect.
         shift_center (bool) : if True, the mask is shifted at each real space position to
             account for any shifting of the origin of the diffraction images. The datacube's
-            calibration['origin'] parameter must be set (centered = True). The shift applied to each 
+            calibration['origin'] parameter must be set (centered = True). The shift applied to each
             pattern is the difference between the local origin position and the mean origin position
             over all patterns, rounded to the nearest integer for speed.
         verbose (bool)      : if True, show progress bar
@@ -61,7 +61,7 @@ def get_virtual_image(
             virtual image computation at this scan position with `shift_center` set to `True`.
 
     Returns:
-        virtual image (2D-array)
+        (2D array) virtual image
     '''
 
     assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
@@ -101,8 +101,8 @@ def get_virtual_image(
             g = (g[0]/unit_conversion, g[1]/unit_conversion,
                  g[2]/unit_conversion, g[3]/unit_conversion)
 
-    if shift_center == True: 
-        assert centered, "centered must be True" 
+    if shift_center == True:
+        assert centered, "centered must be True"
 
     # Get mask
     mask = make_detector(datacube.Qshape, mode, g)
