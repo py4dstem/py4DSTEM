@@ -48,7 +48,6 @@ def get_virtual_diffraction(
             needed for calculation
         method (str) : defines method used for diffraction pattern, options are
             'mean', 'median', and 'max'
-
         mode (str) : defines mode for selecting area in real space to use for
             virtual diffraction. The default is None, which means no
             geometry will be applied and the whole datacube will be used
@@ -80,7 +79,7 @@ def get_virtual_diffraction(
         verbose (bool)      : if True, show progress bar
 
     Returns:
-        (2D array): the diffraction image
+        (VirtualDiffraction): the diffraction image
     """
 
     # perform computation
@@ -131,7 +130,7 @@ def get_dp_max(
     Args:
         datacube (Datacube) : datacube class object which stores 4D-dataset
             needed for calculation
-        mode (str)          : defines mode for selecting area in real space to use for
+        mode (str) : defines mode for selecting area in real space to use for
                               virtual diffraction. The default is None, which means no
                               geometry will be applied and the whole datacube will be used
                               for the calculation.
@@ -163,7 +162,7 @@ def get_dp_max(
         verbose (bool)      : if True, show progress bar
 
     Returns:
-        (2D array): the diffraction image
+        (VirtualDiffraction): the diffraction image
     """
 
     # perform computation
@@ -245,7 +244,7 @@ def get_dp_mean(
         verbose (bool) : if True, show progress bar
 
     Returns:
-        (2D array): the diffraction image
+        (VirtualDiffraction): the diffraction image
     """
 
     # perform computation
@@ -327,7 +326,7 @@ def get_dp_median(
         verbose (bool)      : if True, show progress bar
 
     Returns:
-        (2D array): the diffraction image
+        (VirtualDiffraction): the diffraction image
     """
 
     # perform computation
