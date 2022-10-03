@@ -110,7 +110,7 @@ def show(
         are determined is controlled by ``intensity_range``, and must be a string in
         ('ordered','absolute','manual','minmax','std','centered'). See the argument
         description for ``intensity_range`` for a description of the behavior for each.
-        The clip values can be returned with the ``return_intensity_range`` parameter. 
+        The clip values can be returned with the ``return_intensity_range`` parameter.
 
     Masking:
         If a numpy masked array is passed to show, the function will automatically
@@ -233,7 +233,7 @@ def show(
                 * 'full': fill entire color range with sorted intensity values
                 * 'power': power law scaling
                 * 'log': values where ar<=0 are set to 0
-        intensity_range (str): method for setting clipvalues (min and max intensities).  
+        intensity_range (str): method for setting clipvalues (min and max intensities).
                         The original name "clipvals" is now deprecated.
                         Default is 'ordered'. Accepted values:
                 * 'ordered': vmin/vmax are set to fractions of the
@@ -353,7 +353,7 @@ def show(
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
 
     # Otherwise, plot one image
-    
+
     # get image from a masked array
     if mask is not None:
         assert mask.shape == ar.shape
@@ -361,7 +361,7 @@ def show(
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=~mask)    
+            ar = np.ma.array(data=ar,mask=~mask)
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
@@ -370,9 +370,9 @@ def show(
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
-    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')  
+    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')
     if power is not None:
-        scaling = 'power'            
+        scaling = 'power'
     if scaling == 'none':
         _ar = ar.copy()
         _mask = np.ones_like(_ar.data,dtype=bool)
@@ -400,7 +400,7 @@ def show(
             if ar_min < 0:
                 _ar = np.power(ar.copy() - np.min(ar), power)
             else:
-                _ar = np.power(ar.copy(), power)            
+                _ar = np.power(ar.copy(), power)
             _mask = np.ones_like(_ar.data,dtype=bool)
             if intensity_range == 'absolute':
                 if vmin != None: vmin = np.power(vmin,power)
@@ -413,7 +413,7 @@ def show(
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
     #set scaling for boolean arrays 
-    if _ar.dtype == 'bool': 
+    if _ar.dtype == 'bool':
         intensity_range = 'absolute'
         vmin = 0
         vmax = 1
@@ -936,11 +936,8 @@ def show_rectangles(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2
 
 def show_circles(
     ar,
-    center, 
+    center,
     R,
-    vmin = 0, 
-    vmax = 1,
-    intensity_range = 'ordered',
     color='r',
     fill=True,
     alpha=0.3,
@@ -957,15 +954,14 @@ def show_circles(
     parameters not listed below.
 
     Accepts:
-        vmin            (number, min intensity, behavior depends on clipvals)
-        vmax            (number, max intensity, behavior depends on clipvals)
-        intensity_range (str, method for setting clipvalues (min and max intensities))
+        ar              (2D array) the data
         center          (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
         R               (number of list of N numbers) the circles radius
         color           (valid matplotlib color, or list of N colors)
         fill            (bool or list of N bools) filled in or empty rectangles
         alpha           (number, 0 to 1) transparency
         linewidth       (number)
+
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
         If returnfig==False, the figure and its one axis are returned, and can be
@@ -973,11 +969,9 @@ def show_circles(
     """
 
     fig,ax = show(
-        ar, 
-        vmin = vmin, 
-        vmax = vmax, 
-        intensity_range = intensity_range,
-        returnfig=True,**kwargs
+        ar,
+        returnfig=True,
+        **kwargs
     )
 
     d = {'center':center,'R':R,'color':color,'fill':fill,'alpha':alpha,'linewidth':linewidth}
