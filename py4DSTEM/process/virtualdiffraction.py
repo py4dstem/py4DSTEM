@@ -13,7 +13,6 @@ def get_virtual_diffraction(
     verbose = True,
     return_mask = False,
 ):
-
     '''
     Function to calculate virtual diffraction
 
@@ -70,33 +69,33 @@ def get_virtual_diffraction(
         g = geometry
 
         if calibrated == True:
-                assert datacube.calibration['R_pixel_units'] == 'A', \
+            assert datacube.calibration['R_pixel_units'] == 'A', \
                 'check datacube.calibration. datacube must be calibrated in A to use `calibrated=True`'
 
-                unit_conversion = datacube.calibration['R_pixel_size']
-                if mode == 'point':
-                    g = (g[0]/unit_conversion, g[1]/unit_conversion)
-                if mode in('circle', 'circular'):
-                    g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                        (g[1]/unit_conversion))
-                if mode in('annulus', 'annular'):
-                    g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                        (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
-                if mode in('rectangle', 'square', 'rectangular') :
-                    g = (g[0]/unit_conversion, g[1]/unit_conversion,
-                         g[2]/unit_conversion, g[3]/unit_conversion)
+            unit_conversion = datacube.calibration['R_pixel_size']
+            if mode == 'point':
+                g = (g[0]/unit_conversion, g[1]/unit_conversion)
+            if mode in('circle', 'circular'):
+                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                    (g[1]/unit_conversion))
+            if mode in('annulus', 'annular'):
+                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                    (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
+            if mode in('rectangle', 'square', 'rectangular') :
+                g = (g[0]/unit_conversion, g[1]/unit_conversion,
+                     g[2]/unit_conversion, g[3]/unit_conversion)
 
         # Get mask
         mask = make_detector(datacube.Rshape, mode, g)
 
     #if no mask 
-    else: 
+    else:
         mask = np.ones(datacube.Rshape, dtype = bool)
-    
+
     # if return_mask is True, skip computation
     if return_mask == True:
-            return mask
-    
+        return mask
+
     # no center shifting
     if shift_center == False:
 
