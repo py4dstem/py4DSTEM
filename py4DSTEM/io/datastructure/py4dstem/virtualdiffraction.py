@@ -1,4 +1,4 @@
-# Defines the DiffractionImage class, which stores 2D, diffraction-shaped data
+# Defines the VirtualDiffraction class, which stores 2D, diffraction-shaped data
 # with metadata about how it was created
 
 from py4DSTEM.io.datastructure.py4dstem.diffractionslice import DiffractionSlice
@@ -25,46 +25,41 @@ class VirtualDiffraction(DiffractionSlice):
         ):
         """
         Args:
-            data (np.ndarray)   : the 2D data
-            name (str)          : the name
-            method (str)        : defines method used for diffraction pattern, options are
-                                  'mean', 'median', and 'max' 
-            
-            mode (str)          : defines mode for selecting area in real space to use for 
-                                  virtual diffraction. The default is None, which means no
-                                  geometry will be applied and the whole datacube will be used
-                                  for the calculation.
-                Options:
+            data (np.ndarray) : the 2D data
+            name (str) : the name
+            method (str) : defines method used for diffraction pattern, options are
+                'mean', 'median', and 'max'
+            mode (str) : defines mode for selecting area in real space to use for
+                virtual diffraction. The default is None, which means no
+                geometry will be applied and the whole datacube will be used
+                for the calculation. Options:
                     - 'point' uses singular point as detector
                     - 'circle' or 'circular' uses round detector, like bright field
                     - 'annular' or 'annulus' uses annular detector, like dark field
                     - 'rectangle', 'square', 'rectangular', uses rectangular detector
                     - 'mask' flexible detector, any 2D array
-
             geometry (variable) : valid entries are determined by the `mode`, values in pixels
                 argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation. If mode is None the geometry 
+                and the whole datacube will be used for the calculation. If mode is None the geometry
                 will not be applied.
-                        - 'point': 2-tuple, (rx,ry),
-                           qx and qy are each single float or int to define center
-                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                           qx, qy and radius, are each single float or int
-                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                           qx, qy, radius_i, and radius_o are each single float or integer
-                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                        - `mask`: flexible detector, any boolean or floating point 2D array with
-                            the same shape as datacube.Rshape
-                            
+                    - 'point': 2-tuple, (rx,ry),
+                       qx and qy are each single float or int to define center
+                    - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                       qx, qy and radius, are each single float or int
+                    - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                       qx, qy, radius_i, and radius_o are each single float or integer
+                    - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                    - `mask`: flexible detector, any boolean or floating point 2D array with
+                        the same shape as datacube.Rshape
             calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
-            If mode is None the geometry and calibration will not be applied.
-            
-            shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
-                or the changing of the origin through the scan. The datacube's calibration['origin'] 
-                parameter must be set Only 'max' and 'mean' supported for this option.  
+                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+                If mode is None the geometry and calibration will not be applied.
+            shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift
+                or the changing of the origin through the scan. The datacube's calibration['origin']
+                parameter must be set Only 'max' and 'mean' supported for this option.
 
         Returns:
-            A new DiffractionImage instance
+            A new VirtualDiffraction instance
         """
         # initialize as a DiffractionSlice
         DiffractionSlice.__init__(
