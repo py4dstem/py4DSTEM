@@ -41,51 +41,46 @@ def get_virtual_diffraction(
     returncalc = True,
     ):
     """
-    Function to calculate virtual diffraction
-            Args:
-                datacube (Datacube) : datacube class object which stores 4D-dataset
-                    needed for calculation
-                
-                method (str)        : defines method used for diffraction pattern, options are
-                                      'mean', 'median', and 'max' 
-                
-                mode (str)          : defines mode for selecting area in real space to use for 
-                                      virtual diffraction. The default is None, which means no
-                                      geometry will be applied and the whole datacube will be used
-                                      for the calculation.
-                    Options:
-                        - 'point' uses singular point as detector
-                        - 'circle' or 'circular' uses round detector, like bright field
-                        - 'annular' or 'annulus' uses annular detector, like dark field
-                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                        - 'mask' flexible detector, any 2D array
+    Function to calculate virtual diffraction patterns
 
-                geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation. If mode is None the geometry 
-                will not be applied.
-                        - 'point': 2-tuple, (rx,ry),
-                           qx and qy are each single float or int to define center
-                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                           qx, qy and radius, are each single float or int
-                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                           qx, qy, radius_i, and radius_o are each single float or integer
-                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                        - `mask`: flexible detector, any boolean or floating point 2D array with
-                            the same shape as datacube.Rshape
-                            
-                calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
-                If mode is None the geometry and calibration will not be applied.
-    
-                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
-                or the changing of the origin through the scan. The datacube's calibration['origin'] 
-                parameter must be set Only 'max' and 'mean' supported for this option.  
-                
-                verbose (bool)      : if True, show progress bar
-            
-            Returns:
-                (2D array): the diffraction image
+    Args:
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        method (str) : defines method used for diffraction pattern, options are
+            'mean', 'median', and 'max'
+
+        mode (str) : defines mode for selecting area in real space to use for
+            virtual diffraction. The default is None, which means no
+            geometry will be applied and the whole datacube will be used
+            for the calculation. Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+            argument, as follows. The default is None, which means no geometry will be applied
+            and the whole datacube will be used for the calculation. If mode is None the geometry
+            will not be applied.
+                - 'point': 2-tuple, (rx,ry),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Rshape
+        calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
+            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            If mode is None the geometry and calibration will not be applied.
+        shift_center (bool) : if True, the difraction patterns are shifted to account for beam shift
+            or the changing of the origin through the scan. The datacube's calibration['origin']
+            parameter must be set Only 'max' and 'mean' supported for this option.
+        verbose (bool)      : if True, show progress bar
+
+    Returns:
+        (2D array): the diffraction image
     """
 
     # perform computation
@@ -132,52 +127,47 @@ def get_dp_max(
     """
     Function to calculate maximum virtual diffraction. Default captures pattern across
     entire 4D-dataset.
-            Args:
-                datacube (Datacube) : datacube class object which stores 4D-dataset
-                    needed for calculation
-                
-                mode (str)          : defines mode for selecting area in real space to use for 
-                                      virtual diffraction. The default is None, which means no
-                                      geometry will be applied and the whole datacube will be used
-                                      for the calculation.
-                    Options:
-                        - 'point' uses singular point as detector
-                        - 'circle' or 'circular' uses round detector, like bright field
-                        - 'annular' or 'annulus' uses annular detector, like dark field
-                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                        - 'mask' flexible detector, any 2D array
 
-                geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation. If mode is None the geometry 
-                will not be applied.
-                        - 'point': 2-tuple, (rx,ry),
-                           qx and qy are each single float or int to define center
-                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                           qx, qy and radius, are each single float or int
-                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                           qx, qy, radius_i, and radius_o are each single float or integer
-                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                        - `mask`: flexible detector, any boolean or floating point 2D array with
-                            the same shape as datacube.Rshape
-                            
-                calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
-                If mode is None the geometry and calibration will not be applied.
-                
-                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
-                or the changing of the origin through the scan. The datacube's calibration['origin'] 
-                parameter must be set Only 'max' and 'mean' supported for this option.  
-                verbose (bool)      : if True, show progress bar
-            
-            Returns:
-                (2D array): the diffraction image
+    Args:
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        mode (str)          : defines mode for selecting area in real space to use for
+                              virtual diffraction. The default is None, which means no
+                              geometry will be applied and the whole datacube will be used
+                              for the calculation.
+            Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+            argument, as follows. The default is None, which means no geometry will be applied
+            and the whole datacube will be used for the calculation. If mode is None the geometry
+            will not be applied.
+                - 'point': 2-tuple, (rx,ry),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Rshape
+        calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
+            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            If mode is None the geometry and calibration will not be applied.
+        shift_center (bool) : if True, the difraction patterns are shifted to account for beam shift
+            or the changing of the origin through the scan. The datacube's calibration['origin']
+            parameter must be set Only 'max' and 'mean' supported for this option.
+        verbose (bool)      : if True, show progress bar
+
+    Returns:
+        (2D array): the diffraction image
     """
 
     # perform computation
-    
     from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
-    
     dp = get_virtual_diffraction(
         self,
         method = method,
@@ -220,47 +210,42 @@ def get_dp_mean(
     """
     Function to calculate mean virtual diffraction. Default captures pattern across
     entire 4D-dataset.
-            Args:
-                datacube (Datacube) : datacube class object which stores 4D-dataset
-                    needed for calculation
-                
-                mode (str)          : defines mode for selecting area in real space to use for 
-                                      virtual diffraction. The default is None, which means no
-                                      geometry will be applied and the whole datacube will be used
-                                      for the calculation.
-                    Options:
-                        - 'point' uses singular point as detector
-                        - 'circle' or 'circular' uses round detector, like bright field
-                        - 'annular' or 'annulus' uses annular detector, like dark field
-                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                        - 'mask' flexible detector, any 2D array
 
-                geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation. If mode is None the geometry 
-                will not be applied.
-                        - 'point': 2-tuple, (rx,ry),
-                           qx and qy are each single float or int to define center
-                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                           qx, qy and radius, are each single float or int
-                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                           qx, qy, radius_i, and radius_o are each single float or integer
-                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                        - `mask`: flexible detector, any boolean or floating point 2D array with
-                            the same shape as datacube.Rshape
-                            
-                calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
-                If mode is None the geometry and calibration will not be applied.
-                
-                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
-                or the changing of the origin through the scan. The datacube's calibration['origin'] 
-                parameter must be set Only 'max' and 'mean' supported for this option.  
-                
-                verbose (bool)      : if True, show progress bar
-            
-            Returns:
-                (2D array): the diffraction image
+    Args:
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        mode (str) : defines mode for selecting area in real space to use for
+            virtual diffraction. The default is None, which means no
+            geometry will be applied and the whole datacube will be used
+            for the calculation. Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+            argument, as follows. The default is None, which means no geometry will be applied
+            and the whole datacube will be used for the calculation. If mode is None the geometry
+            will not be applied.
+                - 'point': 2-tuple, (rx,ry),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                   the same shape as datacube.Rshape
+        calibrated (bool) : if True, geometry is specified in units of 'A' instead of pixels.
+            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            If mode is None the geometry and calibration will not be applied.
+        shift_center (bool) : if True, the diffraction patterns are shifted to account for beam shift
+            or the changing of the origin through the scan. The datacube's calibration['origin']
+            parameter must be set Only 'max' and 'mean' supported for this option.
+        verbose (bool) : if True, show progress bar
+
+    Returns:
+        (2D array): the diffraction image
     """
 
     # perform computation
@@ -307,48 +292,42 @@ def get_dp_median(
     """
     Function to calculate median virtual diffraction. Default captures pattern across
     entire 4D-dataset.
-            Args:
-                datacube (Datacube) : datacube class object which stores 4D-dataset
-                    needed for calculation
-                
-                mode (str)          : defines mode for selecting area in real space to use for 
-                                      virtual diffraction. The default is None, which means no
-                                      geometry will be applied and the whole datacube will be used
-                                      for the calculation.
-                    Options:
-                        - 'point' uses singular point as detector
-                        - 'circle' or 'circular' uses round detector, like bright field
-                        - 'annular' or 'annulus' uses annular detector, like dark field
-                        - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                        - 'mask' flexible detector, any 2D array
 
-                geometry (variable) : valid entries are determined by the `mode`, values in pixels
-                argument, as follows. The default is None, which means no geometry will be applied
-                and the whole datacube will be used for the calculation. If mode is None the geometry 
-                will not be applied.
-                        - 'point': 2-tuple, (rx,ry),
-                           qx and qy are each single float or int to define center
-                        - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
-                           qx, qy and radius, are each single float or int
-                        - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
-                           qx, qy, radius_i, and radius_o are each single float or integer
-                        - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                        - `mask`: flexible detector, any boolean or floating point 2D array with
-                            the same shape as datacube.Rshape
-                            
-                calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-                The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A". 
-                If mode is None the geometry and calibration will not be applied.
-    
-                
-                shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift 
-                or the changing of the origin through the scan. The datacube's calibration['origin'] 
-                parameter must be set Only 'max' and 'mean' supported for this option.  
-                
-                verbose (bool)      : if True, show progress bar
-            
-            Returns:
-                (2D array): the diffraction image
+    Args:
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        mode (str) : defines mode for selecting area in real space to use for
+            virtual diffraction. The default is None, which means no
+            geometry will be applied and the whole datacube will be used
+            for the calculation. Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+            argument, as follows. The default is None, which means no geometry will be applied
+            and the whole datacube will be used for the calculation. If mode is None the geometry
+            will not be applied.
+                - 'point': 2-tuple, (rx,ry),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Rshape
+        calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
+            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
+            If mode is None the geometry and calibration will not be applied.
+        shift_center (bool) : if True, the diffraction patterns are shifted to account for beam shift
+            or the changing of the origin through the scan. The datacube's calibration['origin']
+            parameter must be set Only 'max' and 'mean' supported for this option.
+        verbose (bool)      : if True, show progress bar
+
+    Returns:
+        (2D array): the diffraction image
     """
 
     # perform computation
@@ -425,19 +404,19 @@ def get_virtual_image(
         centered (bool)     : if False, the origin is in the upper left corner.
              If True, the mean measured origin in the datacube calibrations
              is set as center. The measured origin is set with datacube.calibration.set_origin()
-             In this case, for example, a centered bright field image could be defined 
-             by geometry = ((0,0), R). For `mode="mask"`, has no effect. Default is None and will 
+             In this case, for example, a centered bright field image could be defined
+             by geometry = ((0,0), R). For `mode="mask"`, has no effect. Default is None and will
              set to True if the origin has been set.
         calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
             The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
-            For `mode="mask"`, has no effect. Default is None and will set to True if the calibration 
+            For `mode="mask"`, has no effect. Default is None and will set to True if the calibration
             has been set.
         shift_center (bool) : if True, the mask is shifted at each real space position to
             account for any shifting of the origin of the diffraction images. The datacube's
-            calibration['origin'] parameter must be set (centered = True). The shift applied to each 
+            calibration['origin'] parameter must be set (centered = True). The shift applied to each
             pattern is the difference between the local origin position and the mean origin position
-            over all patterns, rounded to the nearest integer for speed. Default is None and will set 
-            to True if centered == True. 
+            over all patterns, rounded to the nearest integer for speed. Default is None and will set
+            to True if centered == True.
         verbose (bool)      : if True, show progress bar
         dask (bool)         : if True, use dask arrays
         return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
@@ -455,27 +434,27 @@ def get_virtual_image(
     """
     #check for calibration
     if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys: 
+        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
             calibrated = True
             print ('note: setting `calibrated` to True')
-        else: 
+        else:
             calibrated = False
 
     #check for centered 
     if centered is None:
-        if self.calibration.get_origin(): 
+        if self.calibration.get_origin():
             centered = True
             print ('note: setting `centered` to True')
-        else: 
+        else:
             centered = False
 
     # logic to determine shift_center
-    if shift_center is None: 
-        if centered: 
+    if shift_center is None:
+        if centered:
             shift_center = True
             print ('note: setting `shift_center` to True')
-        else: 
-            shift_center = False 
+        else:
+            shift_center = False
 
     # perform computation
     from py4DSTEM.process.virtualimage import get_virtual_image
