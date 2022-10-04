@@ -182,7 +182,7 @@ def get_virtual_diffraction(
                 elif method == 'max':
                     virtual_diffraction = np.maximum(virtual_diffraction, DP)
             if method == 'mean':
-                virtual_diffration /= len(mask_indices[0])
+                virtual_diffraction /= len(mask_indices[0])
 
         # ...for floating point masks
         else:
