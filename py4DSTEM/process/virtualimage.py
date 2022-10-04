@@ -221,7 +221,7 @@ def make_detector(
     #point mask 
     if mode == 'point':
         assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
-        mask = np.zeros(shape)
+        mask = np.zeros(shape, dtype=bool)
 
         qx = int(g[0])
         qy = int(g[1])
@@ -252,7 +252,7 @@ def make_detector(
     if mode in('rectangle', 'square', 'rectangular') :
         assert(isinstance(g,tuple) and len(g)==4), \
        'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
-        mask = np.zeros(shape)
+        mask = np.zeros(shape, dtype=bool)
 
         xmin = int(np.round(g[0]))
         xmax = int(np.round(g[1]))
