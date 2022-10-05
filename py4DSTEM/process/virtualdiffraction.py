@@ -63,6 +63,8 @@ def get_virtual_diffraction(
 
     #create mask
     if mode is not None:
+        use_all_points = False
+
         from py4DSTEM.process.virtualimage import make_detector
         assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
         'check doc strings for supported modes'
@@ -92,7 +94,7 @@ def get_virtual_diffraction(
         if mask.dtype == bool:
             mask_is_boolean = True
             mask_indices = np.nonzero(mask)
-        else:
+        else: 
             mask_is_boolean = False
 
     #if no mask 
@@ -100,6 +102,7 @@ def get_virtual_diffraction(
         mask = np.ones(datacube.Rshape, dtype=bool)
         mask_indices = np.nonzero(mask)
         use_all_points = True
+        mask_is_boolean = False
 
     # if return_mask is True, skip computation
     if return_mask == True:
@@ -112,7 +115,7 @@ def get_virtual_diffraction(
     if shift_center == False:
 
         # ...for the whole pattern
-        if use_all_points is None:
+        if use_all_points:
             if method == 'mean':
                 virtual_diffraction = np.mean(datacube.data, axis=(0,1))
             elif method == 'max':
