@@ -108,7 +108,6 @@ def get_virtual_diffraction(
     if return_mask == True:
         return mask
 
-
     # Calculate diffracton pattern...
 
     # ...with no center shifting
@@ -131,7 +130,7 @@ def get_virtual_diffraction(
                 virtual_diffraction = np.max(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
             else:
                 virtual_diffraction = np.median(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
-
+            
         # ...for floating point masks
         else:
             virtual_diffraction = np.zeros(datacube.Qshape)
@@ -146,10 +145,10 @@ def get_virtual_diffraction(
                     virtual_diffraction[qx,qy] = np.max( np.squeeze(datacube.data[:,:,qx,qy])*mask )
                 elif method == 'median':
                     virtual_diffraction[qx,qy] = np.median( np.squeeze(datacube.data[:,:,qx,qy])*mask )
-            # norm by weighting term for means
-            if method == 'mean':
-                virtual_diffraction /= mask
-
+            
+        # norm by weighting term for means
+        if method == 'mean':
+            virtual_diffraction /= np.sum(mask)
 
     # ...with center shifting
     else:
@@ -209,7 +208,7 @@ def get_virtual_diffraction(
                     elif method == 'max':
                         virtual_diffraction = np.maximum(virtual_diffraction, DP*w)
             if method == 'mean':
-                virtual_diffraction /= len(mask_indices[0])
+                virtual_diffraction /= np.sum(mask)
 
     # return
     return virtual_diffraction
