@@ -35,6 +35,11 @@ The tutorials, sample code, module, and function documentation all provide more 
 
 # py4DSTEM Installation
 
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/version.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/installer/conda.svg)](https://conda.anaconda.org/conda-forge)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/latest_release_date.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/downloads.svg)](https://anaconda.org/conda-forge/py4dstem)
+
 The recommended installation for **py4DSTEM** uses the Anaconda python distribution.
 First, download and install Anaconda: www.anaconda.com/download. 
 If you prefer a more lightweight conda client, you can instead install Miniconda: https://docs.conda.io/en/latest/miniconda.html.
