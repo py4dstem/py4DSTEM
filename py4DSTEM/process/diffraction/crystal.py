@@ -808,31 +808,6 @@ class Crystal:
             k_step
         )
 
-        # get discrete plot from structure factor amplitudes
-        int_exp = np.zeros_like(k)
-        k_px = (qr - k_min) / k_step
-        kf = np.floor(k_px).astype("int")
-        dk = k_px - kf
-
-        sub = np.logical_and(kf >= 0, kf < k_num)
-        int_exp = np.bincount(
-            np.floor(k_px[sub]).astype("int"),
-            weights=(1 - dk[sub]) * int_meas[sub],
-            minlength=k_num,
-        )
-        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
-        int_exp += np.bincount(
-            np.floor(k_px[sub] + 1).astype("int"),
-            weights=dk[sub] * int_meas[sub],
-            minlength=k_num,
-        )
-        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
-        sub = np.logical_and(
-            k >= k_min,
-            k <= k_max, 
-            )
-        int_exp /= np.max(int_exp[sub])
-
         # Perform fitting
         def fit_profile(k, *coefs):
             scale_pixel_size = coefs[0]
@@ -941,12 +916,11 @@ class Crystal:
             returnfig = False,
     ):
         """
-        Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
-        and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
+        Solve for the best fit scaling between the computed structure factors and bragg_peaks.
 
         Args:
             bragg_peaks (BraggVectors):         Input Bragg vectors.
-            coef_index (list of ints):          List of ints that act as pointers to cell indices for update
+            coef_index (list of ints):          List of ints that act as pointers to unit cell parameters and angles to update.
             coef_update (list of bool):         List of booleans to indicate whether or not to update the cell at
                                                 that position
             bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
@@ -967,11 +941,21 @@ class Crystal:
             fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
 
         Details:
-        User has the option to define what is allowed to update in the unit cell. 
+        User has the option to define what is allowed to update in the unit cell using the arguments
+        coef_index and coef_update. Each has 6 entries, corresponding to the a, b, c, alpha, beta, gamma
+        parameters of the unit cell, in this order. The coef_update argument is a list of ints specifying
+        whether or not the unit cell value will be allowed to change (True) or must maintain the original
+        value (False) upon fitting. The coef_index argument provides a pointer to the index in which the
+        code will update to. 
+        
+        For example, to update a, b, c, alpha, beta, gamma all independently of eachother, the following
+        arguments should be used:
+            coef_index = [0, 1, 2, 3, 4, 5]
+            coef_update = [True, True, True, True, True, True,]
         
         The default is set to automatically define what can update in a unit cell based on the
-        point group constraints. When either 'coef_index' or 'coef_update' are None, then we
-        automatically pull these constraints from the pointgroup.
+        point group constraints. When either 'coef_index' or 'coef_update' are None, these constraints 
+        will be automatically pulled from the pointgroup.
         
         For example, the default for cubic unit cells is:
             coef_index = [0, 0, 0, 3, 3, 3]
