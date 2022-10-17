@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Union, Optional
 from copy import deepcopy
 from scipy.optimize import curve_fit
+import sys
 
 from py4DSTEM.io.datastructure import PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
@@ -129,6 +130,12 @@ class Crystal:
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
+        # pymatgen flag
+        if 'pymatgen' in sys.modules:
+            self.pymatgen_available = True            
+        else:
+            self.pymatgen_available = False
+        
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -750,8 +757,8 @@ class Crystal:
             bragg_intensity_power = 1.0,
             k_min = 0.0,
             k_max = None,
-            k_step = 0.005,
-            k_broadening = 0.02,
+            k_step = 0.002,
+            k_broadening = 0.002,
             fit_all_intensities = True,
             verbose = True,
             plot_result = False,
@@ -801,6 +808,31 @@ class Crystal:
             k_step
         )
 
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        sub = np.logical_and(
+            k >= k_min,
+            k <= k_max, 
+            )
+        int_exp /= np.max(int_exp[sub])
+
         # Perform fitting
         def fit_profile(k, *coefs):
             scale_pixel_size = coefs[0]
@@ -823,10 +855,12 @@ class Crystal:
                 k_broadening,
                 *tuple(np.ones(self.g_vec_leng.shape[0])),
             )
-            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs)
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
         else:
             coefs = (scale_pixel_size, k_broadening, 1.0)
-            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs)
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
 
         scale_pixel_size = popt[0]
         k_broadening = popt[1]
@@ -849,6 +883,15 @@ class Crystal:
 
         # Plotting
         if plot_result:
+            if int_scale.shape[0] < self.g_vec_leng.shape[0]:
+                int_scale = np.vstack((
+                    int_scale,
+                    np.ones(self.g_vec_leng.shape[0] - int_scale.shape[0])
+                    ))
+            elif int_scale.shape[0] > self.g_vec_leng.shape[0]:
+                print(int_scale.shape[0])
+                int_scale = int_scale[:self.g_vec_leng.shape[0]]
+
             if returnfig:
                 fig, ax = self.plot_scattering_intensity(
                     bragg_peaks=bragg_peaks_cali,
@@ -858,6 +901,8 @@ class Crystal:
                     int_scale=int_scale,
                     bragg_k_power=bragg_k_power,
                     bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
                     returnfig=True,
                 )
             else:
@@ -869,6 +914,8 @@ class Crystal:
                     int_scale=int_scale,
                     bragg_k_power=bragg_k_power,
                     bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
                 )
 
         if returnfig and plot_result:
@@ -899,7 +946,7 @@ class Crystal:
 
         Args:
             bragg_peaks (BraggVectors):         Input Bragg vectors.
-            coef_index (list of ints):          List of ints taht act as pointers to cell indices for update
+            coef_index (list of ints):          List of ints that act as pointers to cell indices for update
             coef_update (list of bool):         List of booleans to indicate whether or not to update the cell at
                                                 that position
             bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
@@ -917,7 +964,6 @@ class Crystal:
             returnfig (bool):                   Return handles figure and axis
 
         Returns:
-            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
             fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
 
         Details:
@@ -1045,14 +1091,28 @@ class Crystal:
                 k_broadening,
                 *tuple(np.ones(self.g_vec_leng.shape[0])),
             )
-            popt, pcov = curve_fit(fit_crystal.fitfun, k, int_exp, p0=coefs)
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(
+                fit_crystal.fitfun, 
+                k, 
+                int_exp, 
+                p0 = coefs,
+                bounds = bounds,
+                )
         else:
             coefs = (
                 *tuple(self.cell),
                 k_broadening,
                 1.0,
             )
-            popt, pcov = curve_fit(fit_crystal.fitfun, k, int_exp, p0=coefs)
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(
+                fit_crystal.fitfun, 
+                k, 
+                int_exp, 
+                p0 = coefs,
+                bounds = bounds,
+                )
         
         if verbose:
             cell_init = self.cell
@@ -1071,6 +1131,15 @@ class Crystal:
         if plot_result:
             k_broadening = popt[6]
             int_scale = popt[7:]
+            if int_scale.shape[0] < self.g_vec_leng.shape[0]:
+                int_scale = np.hstack((
+                    int_scale,
+                    np.ones(self.g_vec_leng.shape[0] - int_scale.shape[0])
+                    ))
+            elif int_scale.shape[0] > self.g_vec_leng.shape[0]:
+                print(int_scale.shape[0])
+                int_scale = int_scale[:self.g_vec_leng.shape[0]]
+
             if returnfig:
                 fig, ax = self.plot_scattering_intensity(
                     bragg_peaks=bragg_peaks,
@@ -1080,6 +1149,8 @@ class Crystal:
                     int_scale=int_scale,
                     bragg_k_power=bragg_k_power,
                     bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
                     returnfig=True,
                 )
             else:
@@ -1091,6 +1162,8 @@ class Crystal:
                     int_scale=int_scale,
                     bragg_k_power=bragg_k_power,
                     bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
                 )
 
         if returnfig and plot_result:
