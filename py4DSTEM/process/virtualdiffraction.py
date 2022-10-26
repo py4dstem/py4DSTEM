@@ -133,7 +133,10 @@ def get_virtual_diffraction(
             
         # ...for floating point masks
         else:
-            virtual_diffraction = np.zeros(datacube.Qshape)
+            if mask.dtype == 'complex':
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            else:
+                virtual_diffraction = np.zeros(datacube.Qshape)
             for qx,qy in tqdmnd(
                 datacube.Q_Nx,
                 datacube.Q_Ny,
@@ -188,7 +191,10 @@ def get_virtual_diffraction(
 
         # ...for floating point masks
         else:
-            virtual_diffraction = np.zeros(datacube.Qshape)
+            if mask.dtype == 'complex':
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            else:
+                virtual_diffraction = np.zeros(datacube.Qshape)
             for rx,ry in tqdmnd(
                 datacube.R_Nx,
                 datacube.R_Ny,

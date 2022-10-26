@@ -135,7 +135,10 @@ def get_virtual_image(
         else:
 
             # compute
-            virtual_image = np.zeros(datacube.Rshape)
+            if mask.dtype == 'complex':
+                virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+            else:
+                virtual_image = np.zeros(datacube.Rshape)
             for rx,ry in tqdmnd(
                 datacube.R_Nx,
                 datacube.R_Ny,
@@ -165,7 +168,11 @@ def get_virtual_image(
             return _mask
 
         # compute
-        virtual_image = np.zeros(datacube.Rshape)
+        if mask.dtype == 'complex':
+            virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+        else:
+            virtual_image = np.zeros(datacube.Rshape)
+        
         for rx,ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
@@ -266,7 +273,6 @@ def make_detector(
         assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
         assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
         mask = g
-
     return mask
 
 
