@@ -163,13 +163,19 @@ class Calibration(Metadata):
     # origin
     def set_qx0(self,x):
         self._params['qx0'] = x
+        self._params['qx0_mean'] = np.mean(np.asarray(x))
     def get_qx0(self,rx=None,ry=None):
         return self._get_value('qx0',rx,ry)
+    def get_qx0_mean(self):
+        return self._get_value('qx0_mean')
 
     def set_qy0(self,x):
         self._params['qy0'] = x
+        self._params['qy0_mean'] = np.mean(np.asarray(x))
     def get_qy0(self,rx=None,ry=None):
         return self._get_value('qy0',rx,ry)
+    def get_qy0_mean(self):
+        return self._get_value('qy0_mean')
 
     def set_qx0_meas(self,x):
         self._params['qx0_meas'] = x
@@ -202,6 +208,10 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
+    def get_origin_mean(self):
+        qx0 = self._get_value('qx0_mean')
+        qy0 = self._get_value('qy0_mean')
+        return qx0,qy0
 
     def set_origin_meas(self,x):
         """

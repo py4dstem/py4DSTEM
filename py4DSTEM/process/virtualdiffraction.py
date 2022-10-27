@@ -130,7 +130,7 @@ def get_virtual_diffraction(
                 virtual_diffraction = np.max(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
             else:
                 virtual_diffraction = np.median(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
-            
+
         # ...for floating point masks
         else:
             if mask.dtype == 'complex':
@@ -148,7 +148,7 @@ def get_virtual_diffraction(
                     virtual_diffraction[qx,qy] = np.max( np.squeeze(datacube.data[:,:,qx,qy])*mask )
                 elif method == 'median':
                     virtual_diffraction[qx,qy] = np.median( np.squeeze(datacube.data[:,:,qx,qy])*mask )
-            
+
         # norm by weighting term for means
         if method == 'mean':
             virtual_diffraction /= np.sum(mask)
@@ -161,8 +161,7 @@ def get_virtual_diffraction(
         # Get calibration metadata
         assert datacube.calibration.get_origin(), "origin needs to be calibrated"
         x0, y0 = datacube.calibration.get_origin()
-        x0_mean = np.mean(x0)
-        y0_mean = np.mean(y0)
+        x0_mean, y0_mean = datacube.calibration.get_origin_mean()
 
         # get shifts
         qx_shift = (x0_mean-x0).round().astype(int)

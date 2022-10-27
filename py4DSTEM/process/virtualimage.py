@@ -72,8 +72,7 @@ def get_virtual_image(
     if centered:
         assert datacube.calibration.get_origin(), "origin need to be calibrated"
         x0, y0 = datacube.calibration.get_origin()
-        x0_mean = np.mean(x0)
-        y0_mean = np.mean(y0)
+        x0_mean, y0_mean = datacube.calibration.get_origin_mean()
     if calibrated:
         assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
         'check datacube.calibration. datacube must be calibrated in A^-1 to use `calibrated=True`'
@@ -172,7 +171,7 @@ def get_virtual_image(
             virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
         else:
             virtual_image = np.zeros(datacube.Rshape)
-        
+
         for rx,ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
