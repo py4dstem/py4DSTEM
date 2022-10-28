@@ -923,7 +923,6 @@ def show_rectangles(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2
     add_rectangles(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -956,7 +955,6 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     add_circles(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -995,7 +993,6 @@ def show_ellipses(ar,center,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
     add_ellipses(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -1030,7 +1027,6 @@ def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,return
     add_annuli(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -1063,7 +1059,6 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
     add_points(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
