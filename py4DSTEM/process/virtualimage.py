@@ -2,6 +2,7 @@
 import numpy as np
 import dask.array as da
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure.py4dstem import Calibration
 
 def get_virtual_image(
     datacube,
@@ -66,48 +67,24 @@ def get_virtual_image(
 
     assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
     'check doc strings for supported modes'
-    g = geometry
-
-    # Get calibration metadata
-    if centered:
-        assert datacube.calibration.get_origin(), "origin need to be calibrated"
-        x0, y0 = datacube.calibration.get_origin()
-        x0_mean, y0_mean = datacube.calibration.get_origin_mean()
-    if calibrated:
-        assert datacube.calibration['Q_pixel_units'] == 'A^-1', \
-        'check datacube.calibration. datacube must be calibrated in A^-1 to use `calibrated=True`'
-
-    # Convert units into detector pixels, if `centered` or `calibrated` are True
-    if centered == True:
-        if mode == 'point':
-            g = (g[0] + x0_mean, g[1] + y0_mean)
-        if mode in('circle', 'circular', 'annulus', 'annular'):
-            g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
-        if mode in('rectangle', 'square', 'rectangular') :
-             g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
-
-    if calibrated == True:
-        unit_conversion = datacube.calibration['Q_pixel_size']
-        if mode == 'point':
-            g = (g[0]/unit_conversion, g[1]/unit_conversion)
-        if mode in('circle', 'circular'):
-            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                (g[1]/unit_conversion))
-        if mode in('annulus', 'annular'):
-            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
-        if mode in('rectangle', 'square', 'rectangular') :
-            g = (g[0]/unit_conversion, g[1]/unit_conversion,
-                 g[2]/unit_conversion, g[3]/unit_conversion)
-
     if shift_center == True:
-        assert centered, "centered must be True"
+        assert centered, "centered must be True if shift_center is True"
+
+    # Get geometry
+    g = get_calibrated_geometry(
+        datacube,
+        mode,
+        geometry,
+        centered,
+        calibrated
+    )
 
     # Get mask
     mask = make_detector(datacube.Qshape, mode, g)
     # if return_mask is True, skip computation
     if return_mask == True and shift_center == False:
         return mask
+
 
     # Calculate images
 
@@ -149,8 +126,10 @@ def get_virtual_image(
     else:
 
         # get shifts
-        qx_shift = (x0_mean-x0).round().astype(int)
-        qy_shift = (y0_mean-y0).round().astype(int)
+        assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
+        qx_shift,qy_shift = datacube.calibration.get_origin_shift()
+        qx_shift = qx_shift.round().astype(int)
+        qy_shift = qy_shift.round().astype(int)
 
         # if return_mask is True, skip computation
         if return_mask is not False:
@@ -186,6 +165,85 @@ def get_virtual_image(
             virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
     return virtual_image
+
+
+def get_calibrated_geometry(
+    calibration,
+    mode,
+    geometry,
+    centered,
+    calibrated
+    ):
+    """
+    Determine the detector geometry in pixels, given some mode and geometry
+    in calibrated units, where the calibration state is specified by {
+    centered, calibrated}
+
+    Args:
+        calibration (Calibration, DataCube, any object with a .calibration attr,
+        or None) Used to retrieve the center positions. If `None`, confirms that
+        centered and calibrated are False then passes
+        mode: see py4DSTEM.process.virtualimage.get_virtual_image
+        geometry: see py4DSTEM.process.virtualimage.get_virtual_image
+        centered: see py4DSTEM.process.virtualimage.get_virtual_image
+        calibrated: see py4DSTEM.process.virtualimage.get_virtual_image
+
+    Returns:
+        (tuple) the geometry in detector pixels
+    """
+    # Parse inputs
+    g = geometry
+    if calibration is None:
+        assert calibrated is False and centered is False
+        return g
+    elif isinstance(calibration, Calibration):
+        cal = calibration
+    else:
+        try:
+            cal = calibration.calibration
+            assert isinstance(cal, Calibration), "`calibration.calibration` must be a Calibration instance"
+        except AttributeError:
+            raise Exception("`calibration` must either be a Calibration instance or have a .calibration attribute")
+
+    # Get calibration metadata
+    if centered:
+        assert cal.get_origin(), "origin need to be calibrated"
+        x0, y0 = cal.get_origin()
+        x0_mean, y0_mean = cal.get_origin_mean()
+    if calibrated:
+        assert cal['Q_pixel_units'] == 'A^-1', \
+        'check calibration - must be calibrated in A^-1 to use `calibrated=True`'
+        unit_conversion = cal.get_Q_pixel_size()
+
+
+    # Convert units into detector pixels
+
+    # Shift center
+    if centered == True:
+        if mode == 'point':
+            g = (g[0] + x0_mean, g[1] + y0_mean)
+        if mode in('circle', 'circular', 'annulus', 'annular'):
+            g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
+        if mode in('rectangle', 'square', 'rectangular') :
+             g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
+
+    # Scale by the detector pixel size
+    if calibrated == True:
+        if mode == 'point':
+            g = (g[0]/unit_conversion, g[1]/unit_conversion)
+        if mode in('circle', 'circular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                (g[1]/unit_conversion))
+        if mode in('annulus', 'annular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
+        if mode in('rectangle', 'square', 'rectangular') :
+            g = (g[0]/unit_conversion, g[1]/unit_conversion,
+                 g[2]/unit_conversion, g[3]/unit_conversion)
+
+    return g
+
+
 
 def make_detector(
     shape,

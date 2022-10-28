@@ -163,19 +163,31 @@ class Calibration(Metadata):
     # origin
     def set_qx0(self,x):
         self._params['qx0'] = x
-        self._params['qx0_mean'] = np.mean(np.asarray(x))
+        x = np.asarray(x)
+        qx0_mean = np.mean(x)
+        qx0_shift = x-qx0_mean
+        self._params['qx0_mean'] = qx0_mean
+        self._params['qx0_shift'] = qx0_shift
     def get_qx0(self,rx=None,ry=None):
         return self._get_value('qx0',rx,ry)
     def get_qx0_mean(self):
         return self._get_value('qx0_mean')
+    def get_qx0shift(self,rx=None,ry=None):
+        return self._get_value('qx0_shift',rx,ry)
 
     def set_qy0(self,x):
         self._params['qy0'] = x
-        self._params['qy0_mean'] = np.mean(np.asarray(x))
+        x = np.asarray(x)
+        qy0_mean = np.mean(x)
+        qy0_shift = x-qy0_mean
+        self._params['qy0_mean'] = qy0_mean
+        self._params['qy0_shift'] = qy0_shift
     def get_qy0(self,rx=None,ry=None):
         return self._get_value('qy0',rx,ry)
     def get_qy0_mean(self):
         return self._get_value('qy0_mean')
+    def get_qy0shift(self,rx=None,ry=None):
+        return self._get_value('qy0_shift',rx,ry)
 
     def set_qx0_meas(self,x):
         self._params['qx0_meas'] = x
@@ -212,6 +224,13 @@ class Calibration(Metadata):
         qx0 = self._get_value('qx0_mean')
         qy0 = self._get_value('qy0_mean')
         return qx0,qy0
+    def get_origin_shift(self,rx=None,ry=None):
+        qx0 = self._get_value('qx0_shift',rx,ry)
+        qy0 = self._get_value('qy0_shift',rx,ry)
+        ans = (qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
 
     def set_origin_meas(self,x):
         """
