@@ -101,10 +101,8 @@ def position_detector(
         # get shifts
         assert cal.get_origin_shift(), "origin shifts need to be calibrated"
         qx_shift,qy_shift = cal.get_origin_shift()
-        print(qx_shift)
         qx_shift = int(np.round(qx_shift[rx,ry]))
         qy_shift = int(np.round(qy_shift[rx,ry]))
-        print(qx_shift,qy_shift)
         mask = np.roll(
             mask,
             (qx_shift, qy_shift),
