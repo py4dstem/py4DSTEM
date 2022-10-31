@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from py4DSTEM.io.datastructure import PointList
 from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
-from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
+from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor, compute_WK_factors
 
 
 @dataclass
@@ -146,7 +146,7 @@ def calculate_dynamical_structure_factors(
 
     # get_f_e returns f^e in units of VÅ^3, with relativistic correction
     # but not yet converted to
-    @lru_cache(maxsize=2 ** 12)
+    # @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, thermal_sigma, method):
         if method == "Lobato":
             # Real lobato factors
@@ -160,41 +160,41 @@ def calculate_dynamical_structure_factors(
             )
         elif method == "WK":
             # Real WK factor
-            return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+            return compute_WK_factors(
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=False,
             )
         elif method == "WK-C":
             # WK, core only
-            return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+            return compute_WK_factors(
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=False,
             )
         elif method == "WK-P":
             # WK, phonon only
-            return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+            return compute_WK_factors(
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=True,
             )
         elif method == "WK-CP":
             # WK, core + phonon
-            return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+            return compute_WK_factors(
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=True,
             )
@@ -210,31 +210,56 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(
-        range(hkl.shape[1]),
+    # for i_hkl in tqdm(
+    #     range(1),#hkl.shape[1]),
+    #     desc=f"Computing {display_names[method]} lookup table",
+    #     disable=not verbose,
+    # ):
+    #     Fscatt = 0.0 + 0.0j
+    #     for i_pos in range(self.positions.shape[0]):
+    #         # Get the appropriate atomic form factor:
+    #         sigma = (
+    #             thermal_sigma[self.numbers[i_pos]]
+    #             if isinstance(thermal_sigma, dict)
+    #             else thermal_sigma
+    #         )
+    #         fe = get_f_e(
+    #             q=g_vec_leng[i_hkl],
+    #             Z=self.numbers[i_pos],
+    #             thermal_sigma=sigma,
+    #             method=method,
+    #         )
+
+    #         Fscatt += fe * np.exp(
+    #             (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
+    #         )
+
+    #     struct_factors[i_hkl] = Fscatt
+    for i_pos in tqdm(
+        range(self.positions.shape[0]),
         desc=f"Computing {display_names[method]} lookup table",
         disable=not verbose,
-    ):
-        Fscatt = 0.0 + 0.0j
-        for i_pos in range(self.positions.shape[0]):
-            # Get the appropriate atomic form factor:
-            sigma = (
-                thermal_sigma[self.numbers[i_pos]]
-                if isinstance(thermal_sigma, dict)
-                else thermal_sigma
-            )
-            fe = get_f_e(
-                q=g_vec_leng[i_hkl],
-                Z=self.numbers[i_pos],
-                thermal_sigma=sigma,
-                method=method,
-            )
+        ):
+        sigma = (
+            thermal_sigma[self.numbers[i_pos]]
+            if isinstance(thermal_sigma, dict)
+            else thermal_sigma
+        )
+        fe = get_f_e(
+            q=g_vec_leng,
+            Z=self.numbers[i_pos],
+            thermal_sigma=sigma,
+            method=method,
+        )
+        # print(hkl.shape)
+        # print(self.positions[i_pos].shape)
 
-            Fscatt += fe * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-
-        struct_factors[i_hkl] = Fscatt
+        # struct_factors += fe * np.exp(
+        #     (2.0j * np.pi) * (hkl * self.positions[i_pos][:,None])
+        # )
+        struct_factors += fe * np.exp(
+            (2.0j * np.pi) * (self.positions[i_pos] @ hkl)
+        )
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
@@ -259,7 +284,7 @@ def calculate_dynamical_structure_factors(
     }
 
     # Clear cached scattering factors to free up RAM
-    get_f_e.cache_clear()
+    # get_f_e.cache_clear()
 
 
 def generate_dynamical_diffraction_pattern(
