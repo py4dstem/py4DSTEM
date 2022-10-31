@@ -216,7 +216,7 @@ def compute_WK_factor(
 
 # @lru_cache(maxsize=1024)
 def compute_WK_factors(
-    g: numpy.ndarray,
+    g: np.ndarray,
     Z: int,
     accelerating_voltage: float,
     thermal_sigma: float = None,
@@ -300,9 +300,10 @@ def compute_WK_factors(
         sub = argu < 1.0
         WK[sub] += A[i] * B[i] * (1.0 - 0.5 * argu[sub])
         sub = np.logical_and(argu>=1.0, argu<20.0)
-        WK[sub] += A[i] / S[sub] ** 2
-        sub = argu>=20.0
         WK[sub] += A[i] * (1.0 - np.exp(-argu[sub])) / S[sub] ** 2
+        sub = argu>=20.0
+        WK[sub] += A[i] / S[sub] ** 2
+
     Freal = 4.0 * np.pi * DWF * WK
 
     if verbose:
