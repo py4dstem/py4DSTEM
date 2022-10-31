@@ -21,9 +21,13 @@ class propagating_calibration(object):
         self.func(*args,**kwargs)
 
         calibration = args[0]
+        assert hasattr(calibration, "_targets"), "Calibration object appears to be in an invalid state. _targets attribute is missing."
         for target in calibration._targets:
             if hasattr(target,'calibrate') and callable(target.calibrate):
-                target.calibrate()
+                try:
+                    target.calibrate()
+                except Exception as err:
+                    print(f"Attempted to calibrate object {target} but this raised an error: {err}")
             else:
                 warnings.warn(f"{target} is registered as a target for calibration propagation but does not appear to have a calibrate() method")
 
