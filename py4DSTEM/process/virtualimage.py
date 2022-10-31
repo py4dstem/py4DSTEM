@@ -289,18 +289,19 @@ def make_bragg_disk_mask(
     Function to make multiple circular masks at a fixed distance from a center, such as Bragg disks around a central beam. 
     There are two methods to specify the distance from the center to make the masks. The first uses a 'bragg_distance' and 
     'offset_angle' to generate vectors for specifying disks. The second uses the vector between the center and one 'end_point' 
-    to create the vector. Only one method can be specified.
+    to specify mask locations. Only one method can be specified.
 
     Args:
         shape (tuple)           : defines shape of mask, for example (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are the mask size
         radius (float)          : radius of circular masks in pixels 
         num_disks(int)          : number of circular masks to make 
         center (2-tuple)        : 'point' (qx,qy) to center masks around. If None, uses center of array 
-        bragg_distance (float)  : for first method: distance from center to circular masks in pixels
-        offset_angle(float)     : for first method: angle to rotate the masks in radians, if angle = 0, the first mask is along 
+        bragg_distance (float)  : for first method, distance from center to circular masks in pixels
+        offset_angle(float)     : for first method, angle to rotate the masks in radians, if offset_angle = 0, the first mask is along 
             the positive x-axis.  
-        end_point (2-tuple)     : for second method: center of first circular disk. Used to generate other mask positions. 
+        end_point (2-tuple)     : for second method, center of first circular disk. Used to generate other mask positions. 
         return_sum (bool)       : If True, return all the circular masks summed together. If False, returns array of masks.
+    
     Returns: 
         if return_sum is True, returns Bragg vector mask
         if return_sum is False, returns array of Bragg vector masks
@@ -324,9 +325,8 @@ def make_bragg_disk_mask(
         theta = 2*np.pi/num_disks*a0 + offset_angle
         rotation_matrix = np.array(([np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]))
         v1 = np.dot(rotation_matrix, v0)
-        disk_centers[a0,0] = v1[0] + center[0] 
-        disk_centers[a0,1] = v1[1] + center[1]
-    
+        disk_centers[a0] = v1 + center
+            
     #create masks 
     masks = np.zeros((num_disks, shape[0], shape[1]))
     for a0 in range(num_disks):
