@@ -34,7 +34,7 @@ class Calibration(Metadata):
 
     The Calibration object is capable of automatically calling the ``calibrate`` method
     of any other py4DSTEM objects when certain calibrations are updated. The methods
-    that trigger propagation of calibration information are tagged with the 
+    that trigger propagation of calibration information are tagged with the
     @propagating_calibration decorator. Use the ``register_target`` method
     to set up an object to recieve calls to ``calibrate``
 
@@ -245,7 +245,7 @@ class Calibration(Metadata):
         if any([x is None for x in ans]):
             ans = None
         return ans
-        
+
 
     # ellipse
     def set_a(self,x):
@@ -377,7 +377,7 @@ class Calibration(Metadata):
     def register_target(self,new_target):
         """
         Register an object to recieve calls to it `calibrate`
-        method when certain calibrations get updated 
+        method when certain calibrations get updated
         """
         self._targets.append(new_target)
 
