@@ -13,7 +13,8 @@ def get_virtual_image(
     shift_center = False,
     verbose = True,
     dask = False,
-    return_mask = False
+    return_mask = False,
+    test_config = False
 ):
     '''
     Function to calculate virtual image
@@ -28,38 +29,46 @@ def get_virtual_image(
                 - 'annular' or 'annulus' uses annular detector, like dark field
                 - 'rectangle', 'square', 'rectangular', uses rectangular detector
                 - 'mask' flexible detector, any 2D array
-        geometry (variable) : valid entries are determined by the `mode`, values in pixels
-            argument, as follows:
+        geometry (variable) : valid entries are determined by the `mode`, values
+            in pixels argument, as follows:
                 - 'point': 2-tuple, (qx,qy),
                    qx and qy are each single float or int to define center
                 - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
                    qx, qy and radius, are each single float or int
-                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
-                   qx, qy, radius_i, and radius_o are each single float or integer
-                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - `mask`: flexible detector, any boolean or floating point 2D array with
-                    the same shape as datacube.Qshape
-        centered (bool)     : if False (default), the origin is in the upper left corner.
-             If True, the mean measured origin in the datacube calibrations
-             is set as center. The measured origin is set with datacube.calibration.set_origin()
-             In this case, for example, a centered bright field image could be defined
-             by geometry = ((0,0), R). For `mode="mask"`, has no effect.
-        calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
-            The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
-            For `mode="mask"`, has no effect.
-        shift_center (bool) : if True, the mask is shifted at each real space position to
-            account for any shifting of the origin of the diffraction images. The datacube's
-            calibration['origin'] parameter must be set (centered = True). The shift applied to each
-            pattern is the difference between the local origin position and the mean origin position
-            over all patterns, rounded to the nearest integer for speed.
-        verbose (bool)      : if True, show progress bar
-        dask (bool)         : if True, use dask arrays
-        return_mask (bool)  : if False (default) returns a virtual image as usual.  If True, does
-            *not* generate or return a virtual image, instead returning the mask that would be
-            used in virtual image computation for any call to this function where
-            `shift_center = False`.  Otherwise, must be a 2-tuple of integers corresponding
-            to a scan position (rx,ry); in this case, returns the mask that would be used for
-            virtual image computation at this scan position with `shift_center` set to `True`.
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),
+                  (radius_i,radius_o))
+                - 'rectangle', 'square', 'rectangular': a 4-tuple,
+                  (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point
+                  2D array with the same shape as datacube.Qshape
+        centered (bool): if False (default), the origin is in the upper left
+            corner. If True, the mean measured origin in the datacube
+            calibrations is set as center. The measured origin is set with
+            datacube.calibration.set_origin(). In this case, for example, a
+            centered bright field image could be defined by
+            geometry = ((0,0), R). For `mode="mask"`, has no effect.
+        calibrated (bool): if True, geometry is specified in units of 'A^-1'
+            instead of pixels. The datacube's calibrations must have its
+            `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
+             no effect.
+        shift_center (bool): if True, the mask is shifted at each real space
+            position to account for any shifting of the origin of the
+            diffraction images. The datacube's calibration['origin'] parameter
+            must be set (centered = True). The shift applied to each pattern is
+            the difference between the local origin position and the mean origin
+            position over all patterns, rounded to the nearest integer for speed.
+        verbose (bool): if True, show progress bar
+        dask (bool): if True, use dask arrays
+        return_mask (bool or tuple): if False (default) returns a virtual image
+            as usual. If True, does *not* generate or return a virtual image,
+            instead returning the mask that would be used in virtual image
+            computation for any call to this function where
+            `shift_center = False`. Otherwise, must be a 2-tuple of integers
+            corresponding to a scan position (rx,ry); in this case, returns the
+            mask that would be used for virtual image computation at this scan
+            position with `shift_center` set to `True`.
+        test_config: if True, returns the Boolean value of (`centered`,
+            `calibrated`,`shift_center`). Does not compute the virtual image.
 
     Returns:
         (2D array) virtual image
@@ -69,6 +78,10 @@ def get_virtual_image(
     'check doc strings for supported modes'
     if shift_center == True:
         assert centered, "centered must be True if shift_center is True"
+    if test_config:
+        for x,y in zip(['centered','calibrated','shift_center'],
+                       [centered,calibrated,shift_center]):
+            print(f"{x} = {y}")
 
     # Get geometry
     g = get_calibrated_geometry(
