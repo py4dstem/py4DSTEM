@@ -299,9 +299,9 @@ def compute_WK_factors(
         #     WK += A[i] * (1.0 - np.exp(-argu)) / S ** 2
         sub = argu < 1.0
         WK[sub] += A[i] * B[i] * (1.0 - 0.5 * argu[sub])
-        sub = np.logical_and(argu>=1.0, argu<20.0)
+        sub = np.logical_and(argu >= 1.0, argu <= 20.0)
         WK[sub] += A[i] * (1.0 - np.exp(-argu[sub])) / S[sub] ** 2
-        sub = argu>=20.0
+        sub = argu > 20.0
         WK[sub] += A[i] / S[sub] ** 2
 
     Freal = 4.0 * np.pi * DWF * WK
@@ -483,7 +483,6 @@ def RI1(BI, BJ, G):
 
 def RI2(BI, BJ, G, U):
     # "ZWEITES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
-
     U2 = U ** 2
     U22 = 0.5 * U2
     G2 = G ** 2
@@ -544,6 +543,8 @@ def RI2(BI, BJ, G, U):
 
     ri2[sub] *= np.pi / G2[sub]
 
+    return ri2
+
     # if EPS <= 0.1:
     #     ri2 = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2))
     #     ri2 = ri2 + BJ * np.log((BI + BJ + U2) / (BJ + U2))
@@ -591,11 +592,11 @@ def RI2(BI, BJ, G, U):
 
     # ri2 = ri2 * np.pi / G2
 
-    return ri2
 
 
 def RIH1(X1, X2, X3):
-    rih1 = np.zeros_like(X1)
+    # "WERTET DEN AUSDRUCK EXP(-X1) * ( EI(X2)-EI(X3) ) AUS"
+    rih1 = np.zeros(X1.shape)
     
     sub = np.logical_and(X2 <= 20.0, X3 <= 20.0)
     rih1[sub] = np.exp(-X1[sub]) * (expi(X2[sub]) - expi(X3[sub]))
@@ -612,7 +613,8 @@ def RIH1(X1, X2, X3):
     rih1[sub] = np.exp(X2[sub] - X1[sub]) * RIH2(X2[sub]) / X2[sub] \
         - np.exp(X3[sub] - X1[sub]) * RIH2(X3[sub]) / X3[sub]
 
-    # # "WERTET DEN AUSDRUCK EXP(-X1) * ( EI(X2)-EI(X3) ) AUS"
+    return rih1
+
     # if (X2 <= 20.0) and (X3 <= 20.0):
     #     rih1 = np.exp(-X1) * (expi(X2) - expi(X3))
     #     return rih1
@@ -626,7 +628,6 @@ def RIH1(X1, X2, X3):
     # else:
     #     rih1 = rih1 - np.exp(-X1) * expi(X3)
 
-    return rih1
 
 
 def RIH2(X):
@@ -634,7 +635,7 @@ def RIH2(X):
     WERTET X*EXP(-X)*EI(X) AUS FUER GROSSE X
     DURCH INTERPOLATION DER TABELLE ... AUS ABRAMOWITZ
     """
-    idx = np.round(200.0 / X).astype('int')
+    idx = np.floor(200.0 / X).astype('int')
 
     sig = RIH2_tabulated_data[idx] + 200.0 * (
         RIH2_tabulated_data[idx + 1] - RIH2_tabulated_data[idx]
