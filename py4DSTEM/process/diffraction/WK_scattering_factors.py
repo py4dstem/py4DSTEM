@@ -519,7 +519,7 @@ def RI2(BI, BJ, G, U):
 
     sub = EPS > 0.1
     ri2[sub] = expi(-0.5 * U2 * G2[sub] * BIUH / BIU) + expi(-0.5 * U2 * G2[sub] * BJUH / BJU)
-    ri2[sub] -= expi(-BIUH * BJUH * G2[sub] / (BIUH + BJUH)) - expi(-0.25 * U2 * G2[sub])
+    ri2[sub] -= (expi(-BIUH * BJUH * G2[sub] / (BIUH + BJUH)) + expi(-0.25 * U2 * G2[sub]))
     ri2[sub] *= 2.0 
     X1 = 0.5 * U2 * G2[sub]
     X2 = 0.25 * U2 * G2[sub]
