@@ -428,6 +428,8 @@ def show(
         vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
         ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
         ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        ind_vmin = np.max([0,ind_vmin])
+        ind_vmax = np.min([len(vals)-1,ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
     elif intensity_range == 'minmax':
