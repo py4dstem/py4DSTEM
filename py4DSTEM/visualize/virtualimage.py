@@ -114,7 +114,7 @@ def position_detector(
 
     show(
         image,
-        mask = np.logical_not(mask),
+        mask = mask,
         mask_color = color,
         mask_alpha = alpha
     )
