@@ -1,18 +1,7 @@
 
 import numpy as np
-import matplotlib.pyplot as plt
-from fractions import Fraction
 from typing import Union, Optional
-from copy import deepcopy
 from scipy.optimize import curve_fit
-import sys
-
-from py4DSTEM.io.datastructure import PointList, PointListArray
-from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
-
-from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
-from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -113,7 +102,7 @@ def calibrate_pixel_size(
     int_scale = np.array(popt[2:])
 
     # Make a copy of bragg_peaks, apply correction
-    bragg_peaks_cali = deepcopy(bragg_peaks)
+    bragg_peaks_cali = bragg_peaks.copy()
     inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
     bragg_peaks_cali.calibration.set_Q_pixel_size(
         inv_Ang_per_pixel / scale_pixel_size
@@ -332,15 +321,14 @@ def calibrate_unit_cell(
 
             return int_sf
 
-
-    if fit_all_intensities:
-        fit_crystal = FitCrystal(
+    fit_crystal = FitCrystal(
             self,
             coef_index = coef_index,
             coef_update = coef_update,
             fit_all_intensities=fit_all_intensities,
         )
         
+    if fit_all_intensities:
         coefs = (
             *tuple(self.cell),
             k_broadening,
