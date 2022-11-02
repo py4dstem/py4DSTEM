@@ -200,7 +200,7 @@ def get_dp_max(
 
 def get_dp_mean(
     self,
-    method = 'max',
+    method = 'mean',
     mode = None,
     geometry = None,
     calibrated = False,
