@@ -8,6 +8,7 @@ from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.process.diskdetection.diskdetection_aiml import find, find_Bragg_disks_aiml
 
 
 
@@ -254,6 +255,7 @@ def _get_function_dictionary():
         "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
         "dc_dask" : _find_Bragg_disks_dask,
         "dc_ipyparallel" : _find_Bragg_disks_ipp,
+        "dc_ml_ai" : find_Bragg_disks_aiml
     }
 
     return d
