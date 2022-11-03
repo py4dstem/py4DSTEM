@@ -30,10 +30,10 @@ def get_virtual_diffraction(
                 - 'annular' or 'annulus' uses annular detector, like dark field
                 - 'rectangle', 'square', 'rectangular', uses rectangular detector
                 - 'mask' flexible detector, any 2D array
-        geometry (variable) : valid entries are determined by the `mode`, values in pixels
-            argument, as follows. The default is None, which means no geometry will be applied
-            and the whole datacube will be used for the calculation. If mode is None the geometry
-            will not be applied.
+        geometry (variable) : valid entries are determined by the `mode`, values
+            in pixels argument, as follows. The default is None, which means no
+            geometry will be applied and the whole datacube will be used for the
+            calculation. If mode is None the geometry will not be applied.
                 - 'point': 2-tuple, (rx,ry),
                    qx and qy are each single float or int to define center
                 - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
@@ -43,16 +43,18 @@ def get_virtual_diffraction(
                 - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
                 - `mask`: flexible detector, any boolean or floating point 2D array with
                     the same shape as datacube.Rshape
-        calibrated (bool)   : if True, geometry is specified in units of 'A' instead of pixels.
-            The datacube's calibrations must have its `"R_pixel_units"` parameter set to "A".
-            If mode is None the geometry and calibration will not be applied.
-        shift_center (bool) : if True, the difraction pattern is shifted to account for beam shift
-            or the changing of the origin through the scan. The datacube's calibration['origin']
-            parameter must be set Only 'max' and 'mean' supported for this option.
-        verbose (bool) : if True, show progress bar
-        return_mask (bool) : if False (default) returns a virtual image as usual.  If True, does
-            *not* generate or return a virtual image, instead returning the mask that would be
-            used in virtual diffraction computation.
+        calibrated (bool): if True, geometry is specified in units of 'A' instead
+            of pixels. The datacube's calibrations must have its `"R_pixel_units"`
+            parameter set to "A". If mode is None the geometry and calibration will
+            not be applied.
+        shift_center (bool): if True, the difraction pattern is shifted to account
+            for beam shift or the changing of the origin through the scan. The
+            datacube's calibration['origin'] parameter must be set Only 'max' and
+            'mean' supported for this option.
+        verbose (bool): if True, show progress bar
+        return_mask (bool): if False (default) returns a virtual image as usual.
+            If True, does *not* generate or return a virtual image, instead
+            returning the mask that would be used in virtual diffraction computation.
 
     Returns:
         (2D array): the diffraction image
@@ -94,7 +96,7 @@ def get_virtual_diffraction(
         if mask.dtype == bool:
             mask_is_boolean = True
             mask_indices = np.nonzero(mask)
-        else: 
+        else:
             mask_is_boolean = False
 
     #if no mask 
@@ -150,7 +152,7 @@ def get_virtual_diffraction(
                     virtual_diffraction[qx,qy] = np.median( np.squeeze(datacube.data[:,:,qx,qy])*mask )
 
         # norm by weighting term for means
-        if method == 'mean':
+        if method == 'mean' and not use_all_points:
             virtual_diffraction /= np.sum(mask)
 
     # ...with center shifting
