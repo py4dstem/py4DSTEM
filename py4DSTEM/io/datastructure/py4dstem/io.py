@@ -148,59 +148,64 @@ def DiffractionSlice_from_Array(array):
 
 
 
-# DiffractionImage
+# VirtualDiffraction
 
 # read
 
-def DiffractionImage_from_h5(group:h5py.Group):
+def VirtualDiffraction_from_h5(group:h5py.Group):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     read mode. Determines if it's a valid Array, and if so loads and
-    returns it as a DiffractionImage. Otherwise, raises an exception.
+    returns it as a VirtualDiffraction. Otherwise, raises an exception.
 
     Accepts:
         group (HDF5 group)
 
     Returns:
-        A DiffractionImage instance
+        A VirtualDiffraction instance
     """
-    diffractionimage = Array_from_h5(group)
-    diffractionimage = DiffractionImage_from_Array(diffractionimage)
-    return diffractionimage
+    virtualdiffraction = Array_from_h5(group)
+    virtualdiffraction = VirtualDiffraction_from_Array(virtualdiffraction)
+    return virtualdiffraction
 
 
-def DiffractionImage_from_Array(array):
+def VirtualDiffraction_from_Array(array):
     """
-    Converts an Array to a DiffractionImage.
+    Converts an Array to a VirtualDiffraction.
 
     Accepts:
         array (Array)
 
     Returns:
-        (DiffractionImage)
+        (VirtualDiffraction)
     """
-    from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
+    from py4DSTEM.io.datastructure.py4dstem.virtualdiffraction import VirtualDiffraction
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
     try:
-        md = array.metadata['diffractionimage']
+        md = array.metadata['virtualdiffraction']
+        method =  md['method']
         mode = md['mode']
-        geo = md['geometry']
-        shift_corr = md['shift_corr']
+        geometry = md['geometry']
+        shift_center = md['shift_center']
     except KeyError:
-        er = "DiffractionImage metadata could not be found"
-        raise Exception(er)
+        print("Warning: VirtualDiffraction metadata could not be found")
+        method = ''
+        mode = ''
+        geometry = ''
+        shift_center = ''
 
 
     # instantiate as a DiffractionImage
-    array.__class__ = DiffractionImage
+    array.__class__ = VirtualDiffraction
     array.__init__(
         data = array.data,
         name = array.name,
+        method = method,
         mode = mode,
-        geometry = geo,
-        shift_corr = shift_corr
+        geometry = geometry,
+        shift_center = shift_center,
     )
     return array
 

@@ -416,13 +416,13 @@ def show_strain(strainmap,
         fig,(ax11,ax12,ax21,ax22) = plt.subplots(1,4,figsize=figsize)
     else:
         fig,(ax11,ax12,ax21,ax22) = plt.subplots(4,1,figsize=figsize)
-    cax11 = show(e_xx,figax=(fig,ax11),min=vmin_exx,max=vmax_exx,clipvals='manual',
+    cax11 = show(e_xx,figax=(fig,ax11),vmin=vmin_exx,vmax=vmax_exx,intensity_range='absolute',
                  cmap=cmap,returncax=True)
-    cax12 = show(e_yy,figax=(fig,ax12),min=vmin_eyy,max=vmax_eyy,clipvals='manual',
+    cax12 = show(e_yy,figax=(fig,ax12),vmin=vmin_eyy,vmax=vmax_eyy,intensity_range='absolute',
                  cmap=cmap,returncax=True)
-    cax21 = show(e_xy,figax=(fig,ax21),min=vmin_exy,max=vmax_exy,clipvals='manual',
+    cax21 = show(e_xy,figax=(fig,ax21),vmin=vmin_exy,vmax=vmax_exy,intensity_range='absolute',
                  cmap=cmap,returncax=True)
-    cax22 = show(theta,figax=(fig,ax22),min=vmin_theta,max=vmax_theta,clipvals='manual',
+    cax22 = show(theta,figax=(fig,ax22),vmin=vmin_theta,vmax=vmax_theta,intensity_range='absolute',
                  cmap=cmap,returncax=True)
     ax11.set_title(r'$\epsilon_{xx}$',size=titlesize)
     ax12.set_title(r'$\epsilon_{yy}$',size=titlesize)

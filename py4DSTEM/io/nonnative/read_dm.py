@@ -9,20 +9,28 @@ from py4DSTEM.io.datastructure import DataCube, Array, Metadata
 from py4DSTEM.process.utils import bin2D
 
 
-def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
+def read_dm(
+    filepath,
+    name="dm_dataset",
+    mem="RAM",
+    binfactor=1,
+    **kwargs
+    ):
     """
     Read a digital micrograph 4D-STEM file.
 
     Args:
         filepath: str or Path Path to the file
-        mem (str, optional): Specifies how the data should be stored; must be "RAM",
-            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "RAM".
-        binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
-            See docstring for py4DSTEM.file.io.read.  Default is 1.
-        metadata (bool, optional): if True, returns the file metadata as a Metadata
-            instance.
+        mem (str, optional): Specifies how the data is stored. Must be
+            "RAM", or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+            is "RAM".
+        binfactor (int, optional): Bin the data, in diffraction space, as it's
+            loaded. See docstring for py4DSTEM.file.io.read.  Default is 1.
+        metadata (bool, optional): if True, returns the file metadata as a
+            Metadata instance.
         kwargs:
-            "dtype": a numpy dtype specifier to use for data binned on load, defaults to np.float32
+            "dtype": a numpy dtype specifier to use for data binned on load,
+                defaults to np.float32
 
     Returns:
        DataCube, if a 4D dataset is found, else Array if a 2D dataset is found
