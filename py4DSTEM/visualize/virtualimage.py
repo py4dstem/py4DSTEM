@@ -109,14 +109,17 @@ def position_detector(
             axis=(0,1)
         )
 
-
     # Display
 
     show(
         image,
         mask = mask,
         mask_color = color,
-        mask_alpha = alpha
+        mask_alpha = alpha, 
+        intensity_range = 'absolute', 
+        vmin = np.log(np.min(image.data)), 
+        vmax = np.log(np.max(image.data)),
+        scaling = 'log'
     )
 
     return
