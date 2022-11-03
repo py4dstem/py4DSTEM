@@ -236,6 +236,9 @@ def beta_parallel_disk_detection(dataset,
     braggvectors._v_uncal = peaks
 
 
+    # TODO Remove ability to return the clinet 
+    # TODO RE-VISIT IF NEEDED TO RETURN
+
     # Clean up dask related stuff
     dask_client.cancel(_temp_peaks) # removes from the dask workers
     del _temp_peaks # deletes the object 

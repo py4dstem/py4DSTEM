@@ -8,6 +8,7 @@ from ...io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from ..utils.get_maxima_2D import get_maxima_2D
 from ..utils.cross_correlate import get_cross_correlation_FT
 from ...utils.tqdmnd import tqdmnd
+# from .diskdetection_parallel_new import beta_parallel_disk_detection
 
 
 
@@ -34,9 +35,10 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
+    dask = None,
 
     _qt_progress_bar = None,
-    ):
+    **kws):
     """
     Finds the Bragg disks in the diffraction patterns represented by `data` by
     cross/phase correlatin with `template`.
@@ -53,10 +55,10 @@ def find_Bragg_disks(
             and returns a instance or length N list of instances of QPoints
 
     For disk detection on a full DataCube, the calculation can be performed
-    on the CPU, GPU or a cluster. By default the CPU is used.  If `CUDA` is set
-    to True, tries to use the GPU.  If `CUDA_batched` is also set to True,
-    batches the FFT/IFFT computations on the GPU. For distribution to a cluster,
-    distributed must be set to a dictionary, with contents describing how
+    on the CPU, GPU, or using dask or ipyparallel. By default the CPU is used.
+    If `CUDA` is set to True, tries to use the GPU.  If `CUDA_batched` is also set
+    to True, batches the FFT/IFFT computations on the GPU. For distribution to a
+    cluster, distributed must be set to a dictionary, with contents describing how
     distributed processing should be performed - see below for details.
 
 
@@ -141,6 +143,9 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
+        dask (dict): if not None, indictates dask should be used. Must then be a
+            dictionary with arguments to pass to the dask detection function.
+            Valid arguments are (...).  See docstring for (...) for details.
         _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
             execution
 
@@ -153,6 +158,8 @@ def find_Bragg_disks(
                 - a (DataCube,rx,ry) 3-tuple, returns a list of QPoints
                     instances
     """
+    # TODO add checks about ensuring Dask and Cuda aren't both passed i.e. ensure user knows
+    # behaviour
 
     # parse args
 
@@ -196,11 +203,13 @@ def find_Bragg_disks(
                 mode = 'dc_GPU'
             else:
                 mode = 'dc_GPU_batched'
+        elif dask is not None: 
+            mode = 'dc_dask'
         else:
             x = _parse_distributed(distributed)
             connect, data_file, cluster_path, distributed_mode = x
             if distributed_mode == 'dask':
-                mode = 'dc_dask'
+                mode = 'dc_dask_old'
             elif distributed_mode == 'ipyparallel':
                 mode = 'dc_ipyparallel'
             else:
@@ -222,6 +231,9 @@ def find_Bragg_disks(
         kws['connect'] = connect
         kws['data_file'] = data_file
         kws['cluster_path'] = cluster_path
+    # dask kwargs
+    if dask is not None:
+        kws.update(dask)
 
     # run and return
     ans = fn(
@@ -243,7 +255,8 @@ def find_Bragg_disks(
     return ans
 
 
-
+# TODO add extra skeleton func which imports betaparallel and returns it if added dask_cuda 
+# TODO add MLAI at some point 
 def _get_function_dictionary():
 
     d = {
@@ -252,14 +265,19 @@ def _get_function_dictionary():
         "dc_CPU" : _find_Bragg_disks_CPU,
         "dc_GPU" : _find_Bragg_disks_CUDA_unbatched,
         "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
-        "dc_dask" : _find_Bragg_disks_dask,
+        "dc_dask_old" : _find_Bragg_disks_dask,
+        # "dc_dask" : beta_parallel_disk_detection,
+        "dc_dask" : place_holder,
+
         "dc_ipyparallel" : _find_Bragg_disks_ipp,
     }
 
     return d
 
-
-
+# TODO change the name to something better
+def place_holder():
+    from .diskdetection_parallel_new import beta_parallel_disk_detection
+    return beta_parallel_disk_detection
 
 
 # Single diffraction pattern
