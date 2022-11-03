@@ -17,17 +17,22 @@ def import_file(
     Supports Gatan DM3/4, some EMPAD file versions, Gatan K2 bin/gtg, and mib
 
     Args:
-        filepath:   Path to the file. For K2 raw datasets, pass the path to the gtg file
-        mem:        "RAM" to load the dataset into ram, "MEMMAP" to produce a memory map
-                        (For K2 raw data, only MEMMAP is supported)
-        binfactor   Diffraction space binning factor for bin-on-load.
-        filetype    Used to override automatic filetype detection.
+        filepath (str or Path): Path to the file.
+        mem (str):  Must be "RAM" or "MEMMAP". Specifies where the data is
+            loaded; "RAM" transfer the data from storage to RAM, while "MEMMAP"
+            leaves the data in storage and creates a memory map which points to
+            the diffraction patterns, allowing them to be retrieved individually
+            from storage.
+        binfactor (int): Diffraction space binning factor for bin-on-load.
+        filetype (str): Used to override automatic filetype detection.
+        **kwargs:
 
-    For documentation of kwargs, refer to the individual readers (currently
-        only the K2 reader uses kwargs.)
+    For documentation of kwargs, refer to the individual readers, in
+    py4DSTEM.io.
 
     Returns:
-        data    DataCube if 4D data is found, else an Array containing 2D or 3D data
+        (DataCube or Array) returns a DataCube if 4D data is found, otherwise
+        returns an Array
 
     """
 
@@ -35,12 +40,13 @@ def import_file(
         filepath, (str, pathlib.Path)
     ), f"filepath must be a string or Path, not {type(filepath)}"
     assert exists(filepath), f"The given filepath: '{filepath}' \ndoes not exist"
-
     assert mem in [
         "RAM",
         "MEMMAP",
     ], 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert isinstance(binfactor, int), "Error: argument binfactor must be an integer"
+    assert isinstance(
+        binfactor, int
+    ), "Error: argument binfactor must be an integer"
     assert binfactor >= 1, "Error: binfactor must be >= 1"
     if binfactor > 1:
         assert (

@@ -38,6 +38,7 @@ def show(
     mask=None,
     mask_color='k',
     mask_alpha=0.,
+    masked_intensity_range=False,
     rectangle=None,
     circle=None,
     annulus=None,
@@ -276,6 +277,10 @@ def show(
             multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
+        masked_intensity_range (bool): controls if masked pixel values are included when
+            determining the display value range; False indicates that all pixel values
+            will be used to determine the intensity range, True indicates only unmasked
+            pixels will be used
         scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
             with calibrations is passed, adds a scalebar.  If None and anything else is
             passed or if False, does not add a scalebar.  If a dict is passed, it is
@@ -287,7 +292,6 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-
     # Alias dep
     if min is not None: vmin=min
     if max is not None: vmax=max
@@ -361,7 +365,7 @@ def show(
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=~mask)
+            ar = np.ma.array(data=ar,mask=np.logical_not(mask))
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
@@ -425,7 +429,10 @@ def show(
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
         if vmax is None: vmax = 0.98
-        vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
+        if masked_intensity_range:
+            vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
+        else:
+            vals = np.sort(_ar.data[~np.isnan(_ar)])
         ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
         ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
         ind_vmin = np.max([0,ind_vmin])
