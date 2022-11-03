@@ -12,7 +12,8 @@ def position_detector(
     calibrated,
     shift_center,
     color = 'r',
-    alpha = 0.4
+    alpha = 0.4,
+    **kwargs
 ):
     """
     Display a diffraction space image with an overlaid mask representing
@@ -40,6 +41,7 @@ def position_detector(
         calibrated: see py4DSTEM.process.get_virtual_image
         shift_center: see py4DSTEM.process.get_virtual_image; if True, `data`
             should be a 3-tuple (DataCube, rx, ry)
+        **kwargs: all additional arguments are passed on to `show`
     """
     # Parse data
     if isinstance(data, DataCube):
@@ -115,11 +117,8 @@ def position_detector(
         image,
         mask = mask,
         mask_color = color,
-        mask_alpha = alpha, 
-        intensity_range = 'absolute', 
-        vmin = np.log(np.min(image.data)), 
-        vmax = np.log(np.max(image.data)),
-        scaling = 'log'
+        mask_alpha = alpha,
+        **kwargs
     )
 
     return
