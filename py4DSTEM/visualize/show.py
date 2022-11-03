@@ -108,7 +108,7 @@ def show(
         (soon deprecated) alias ``clipvals``, in combination with ``vmin``,
         and ``vmax``.  The method by which the upper and lower clip values
         are determined is controlled by ``intensity_range``, and must be a string in
-        ('ordered','absolute','manual','minmax','std','centered'). See the argument
+        ('None','ordered','minmax','absolute','std','centered'). See the argument
         description for ``intensity_range`` for a description of the behavior for each.
         The clip values can be returned with the ``return_intensity_range`` parameter.
 
