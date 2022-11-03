@@ -15,11 +15,12 @@ class DataCube(Array):
 
     from py4DSTEM.io.datastructure.py4dstem.datacube_fns import (
         add,
-        get_diffraction_image,
+        get_virtual_diffraction,
         get_dp_max,
         get_dp_mean,
         get_dp_median,
         get_virtual_image,
+        position_detector,
         get_vacuum_probe,
         find_Bragg_disks,
         get_probe_size,
