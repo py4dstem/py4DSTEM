@@ -35,7 +35,12 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-
+    
+    ML = False,
+    ml_model_path = None, 
+    ml_num_attempts = 1, 
+    ml_batch_size = 8, 
+    
     _qt_progress_bar = None,
     ):
     """
@@ -188,7 +193,7 @@ def find_Bragg_disks(
             er = f"entry {data} for `data` could not be parsed"
             raise Exception(er)
 
-    # CPU/GPU/cluster
+    # CPU/GPU/cluster/ML-AI
     if mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
@@ -197,6 +202,10 @@ def find_Bragg_disks(
                 mode = 'dc_GPU'
             else:
                 mode = 'dc_GPU_batched'
+        elif ML == True:
+            mode = 'dc_ml_ai'
+            # need to check that the probe is in real space
+            assert np.isrealobj(template), "Template dtype not real"
         else:
             x = _parse_distributed(distributed)
             connect, data_file, cluster_path, distributed_mode = x
@@ -223,6 +232,12 @@ def find_Bragg_disks(
         kws['connect'] = connect
         kws['data_file'] = data_file
         kws['cluster_path'] = cluster_path
+    # ML arguments
+    if ML == True:
+        kws['CUDA'] == CUDA
+        kws['ml_model_path'] = ml_model_path
+        kws['ml_num_attempts'] = ml_num_attempts 
+        kws['ml_batch_size'] = ml_batch_size
 
     # run and return
     ans = fn(
