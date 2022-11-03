@@ -650,8 +650,8 @@ def get_probe_size(
     N=100,
     mode = None,
     plot = True,
-    plot_params = {},
     returncal = True,
+    **kwargs,
     ):
     """
     Gets the center and radius of the probe in the diffraction plane.
@@ -727,7 +727,7 @@ def get_probe_size(
             x[0],
             vmin = 0,
             vmax = 1,
-            **plot_params
+            **kwargs
         )
 
     # return
