@@ -609,21 +609,39 @@ def position_detector(
 
 def get_vacuum_probe(
     self,
+    ROI = None,
     name = 'probe',
     returncalc = True,
-    **kwargs
     ):
     """
+    Computes a vacuum probe from the DataCube by aligning and averaging
+    either all or some subset of the diffraction patterns.
+
+    Args:
+        ROI (None or boolean array or tuple): if None, uses the whole
+            datacube. Otherwise, uses a subset of diffraction patterns.
+            If `ROI` is a boolean array, it should be Rspace shaped, and
+            diffraction patterns where True are used. Else should be
+            a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax) of a
+            rectangular region to use.
+
+    Returns:
+        (Probe) a Probe instance
 
     """
 
     # perform computation
     from py4DSTEM.process.probe import get_vacuum_probe
     from py4DSTEM.io.datastructure.py4dstem.probe import Probe
-    x = get_vacuum_probe(
-        self,
-        **kwargs
-    )
+    if ROI is None:
+        x = get_vacuum_probe(
+            self
+        )
+    else:
+        x = get_vacuum_probe(
+            self,
+            ROI = ROI
+        )
 
     # wrap with a py4dstem class
     x = Probe(
