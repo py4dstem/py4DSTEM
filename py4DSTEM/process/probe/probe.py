@@ -332,6 +332,7 @@ def get_probe_from_vacuum_2Dimage(
 
 
 def get_probe_synthetic(
+    data,
     radius,
     width,
     Q_Nx,
