@@ -645,8 +645,7 @@ def get_vacuum_probe(
 
     # wrap with a py4dstem class
     x = Probe(
-        data = x,
-        **kwargs
+        data = x
     )
 
     # add to the tree
