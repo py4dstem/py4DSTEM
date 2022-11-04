@@ -8,7 +8,7 @@ from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.process.diskdetection.diskdetection_aiml import find, find_Bragg_disks_aiml
+from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
 
@@ -194,6 +194,8 @@ def find_Bragg_disks(
             raise Exception(er)
 
     # CPU/GPU/cluster/ML-AI
+
+    
     if mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
@@ -202,10 +204,6 @@ def find_Bragg_disks(
                 mode = 'dc_GPU'
             else:
                 mode = 'dc_GPU_batched'
-        elif ML == True:
-            mode = 'dc_ml_ai'
-            # need to check that the probe is in real space
-            assert np.isrealobj(template), "Template dtype not real"
         else:
             x = _parse_distributed(distributed)
             connect, data_file, cluster_path, distributed_mode = x
@@ -216,8 +214,13 @@ def find_Bragg_disks(
             else:
                 er = f"unrecognized distributed mode {distributed_mode}"
                 raise Exception(er)
+    # overwrite if ML selected
+    if ML:
+        mode = 'dc_ml_ai'
+        # need to check that the probe is in real space
+        assert np.isrealobj(template), "Template dtype not real"
 
-
+    print(mode)
     # select a function
     fns = _get_function_dictionary()
     fn = fns[mode]
@@ -234,7 +237,7 @@ def find_Bragg_disks(
         kws['cluster_path'] = cluster_path
     # ML arguments
     if ML == True:
-        kws['CUDA'] == CUDA
+        kws['CUDA'] = CUDA
         kws['ml_model_path'] = ml_model_path
         kws['ml_num_attempts'] = ml_num_attempts 
         kws['ml_batch_size'] = ml_batch_size
