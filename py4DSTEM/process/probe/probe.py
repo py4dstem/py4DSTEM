@@ -19,23 +19,29 @@ def get_vacuum_probe(
     """
     Takes some data and computes a vacuum probe, using a method
     selected based on the type and shape of `data`, and on other
-    arguments passed.
-
-    If `data` is a DataCube and nothing else is passed, computes a
-    probe using the whole datacube by aligning then averaging all
-    the diffraction images. If `data` is a DataCube and the `ROI`
-    keyword is passed, aligns and averages a subset of the datacube
-    based on the ROI argument's value, which may be a R-space shaped
-    boolean mask, or a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax).
-    Aligned data is also masked outside the central disk.
-
-    If `data` is a 3D array, averages the stack with no alignment, but
-    including masking outside of the central disk.
-
-    If `data` is a 2D array, masks outside the central disk.
+    arguments passed. In each case, points outside the center
+    disk are set to zero.
 
     Args:
-        data (variable): see above
+        data (variable): behavior and additional arguments depend on
+            the type of `data`.  If `data` is a
+                - DataCube: computes a probe using all or some subset of
+                  the diffraction patterns in the datacube, aligning and
+                  averaging those patterns. The whole datacube is used
+                  if the `ROI` argument is not passed.  If `ROI` is
+                  passed, uses a subset of diffraction patterns based on
+                  the ROI argument's value, which may be a either an
+                  R-space shaped boolean mask, or a 4-tuple representing
+                  (Rxmin,Rxmax,Rymin,Rymax) of a rectangular region.
+                - 3D array: averages the stack with no alignment
+                - 2D array: uses this array as the probe.
+                - None: makes a synthetic probe. Additional required
+                  arguments are
+                    - radius (number): the probe radius
+                    - width (number): the width of the region where
+                      the probe intensity drops off from its maximum
+                      to 0.
+                    - Qshape (2 tuple): the shape of diffraction space
 
     Returns:
         (Probe) a Probe instance
@@ -76,7 +82,10 @@ def get_vacuum_probe(
         'synth' : get_probe_synthetic
         }
     fn = functions[mode]
-    probe = fn(data,**kwargs)
+    if mode == 'synth':
+        probe = fn(**kwargs)
+    else:
+        probe = fn(data,**kwargs)
     return probe
 
 
@@ -332,11 +341,9 @@ def get_probe_from_vacuum_2Dimage(
 
 
 def get_probe_synthetic(
-    data,
     radius,
     width,
-    Q_Nx,
-    Q_Ny
+    Qshape
     ):
     """
     Makes a synthetic probe, with the functional form of a disk blurred by a
@@ -347,12 +354,13 @@ def get_probe_synthetic(
         width (float): the blurring of the probe edge. width represents the
             full width of the blur, with x=-w/2 to x=+w/2 about the edge
             spanning values of ~0.12 to 0.88
-        Q_Nx, Q_Ny (int): the diffraction plane dimensions
+        Qshape (2 tuple): the diffraction plane dimensions
 
     Returns:
         (ndarray of shape (Q_Nx,Q_Ny)): the probe
     """
     # Make coords
+    Q_Nx,Q_Ny = Qshape
     qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
     qy,qx = qy - Q_Ny/2., qx-Q_Nx/2.
     qr = np.sqrt(qx**2+qy**2)
