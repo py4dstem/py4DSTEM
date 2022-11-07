@@ -196,6 +196,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
                                                                    int(t2/60), int(t2%60)))
     if global_threshold == True:
+        from py4DSTEM.process.diskdetection import universal_threshold
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name
