@@ -195,8 +195,10 @@ def find_Bragg_disks(
 
     # CPU/GPU/cluster/ML-AI
 
+    if ML:
+        mode = 'dc_ml'
     
-    if mode == 'datacube':
+    elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
         elif distributed is None and CUDA == True:
@@ -215,12 +217,7 @@ def find_Bragg_disks(
                 er = f"unrecognized distributed mode {distributed_mode}"
                 raise Exception(er)
     # overwrite if ML selected
-    if ML:
-        mode = 'dc_ml_ai'
-        # need to check that the probe is in real space
-        assert np.isrealobj(template), "Template dtype not real"
 
-    print(mode)
     # select a function
     fns = _get_function_dictionary()
     fn = fns[mode]
@@ -238,9 +235,9 @@ def find_Bragg_disks(
     # ML arguments
     if ML == True:
         kws['CUDA'] = CUDA
-        kws['ml_model_path'] = ml_model_path
-        kws['ml_num_attempts'] = ml_num_attempts 
-        kws['ml_batch_size'] = ml_batch_size
+        kws['model_path'] = ml_model_path
+        kws['num_attempts'] = ml_num_attempts 
+        kws['batch_size'] = ml_batch_size
 
     # run and return
     ans = fn(
@@ -273,7 +270,7 @@ def _get_function_dictionary():
         "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
         "dc_dask" : _find_Bragg_disks_dask,
         "dc_ipyparallel" : _find_Bragg_disks_ipp,
-        "dc_ml_ai" : find_Bragg_disks_aiml
+        "dc_ml" : find_Bragg_disks_aiml
     }
 
     return d
