@@ -434,6 +434,8 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                                                    int(t2/60), int(t2%60)))
 
     if global_threshold == True:
+        from py4DSTEM.process.diskdetection import universal_threshold
+
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name
