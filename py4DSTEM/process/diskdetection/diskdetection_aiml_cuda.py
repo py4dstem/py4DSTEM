@@ -1,5 +1,4 @@
 # Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
-# Joydeep Munshi
 '''
 
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
@@ -8,6 +7,7 @@ Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 import numpy as np
 from time import time
+from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
 
 try:
     import cupy as cp
@@ -120,8 +120,8 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     """
 
     # Make the peaks PointListArray
-    dtype = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(dtype=dtype, shape=datacube.data.shape[:-2])
+    # dtype = [('qx',float),('qy',float),('intensity',float)]
+    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function: assert callable(filter_function), "filter_function must be callable"
@@ -188,7 +188,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
                                       subpixel = subpixel,
                                       upsample_factor = upsample_factor,
                                       filter_function = filter_function,
-                                      peaks = peaks.get_pointlist(Rx,Ry),
+                                      peaks = peaks.vectors_uncal.get_pointlist(Rx,Ry),
                                       get_maximal_points = get_maximal_points,
                                       blocks = blocks,
                                       threads = threads)
