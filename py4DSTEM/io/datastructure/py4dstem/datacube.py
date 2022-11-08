@@ -37,7 +37,8 @@ class DataCube(Array):
         Q_pixel_size: Optional[Union[float,list]] = 1,
         Q_pixel_units: Optional[Union[str,list]] = 'pixels',
         slicelabels: Optional[Union[bool,list]] = None,
-        calibration: Optional = None,
+        calibration: Optional[Calibration] = None,
+        stack_pointer  = None,
         ):
         """
         Accepts:
@@ -99,6 +100,12 @@ class DataCube(Array):
         self.tree['calibration'].set_R_pixel_units( R_pixel_units )
         self.tree['calibration'].set_Q_pixel_size( Q_pixel_size )
         self.tree['calibration'].set_Q_pixel_units( Q_pixel_units )
+
+        # Add attribute of stack pointer for Dask related stuff
+        # Tacking this here for now 
+        # this can also be used as a quick check for 
+        self.stack_pointer = stack_pointer
+
 
 
 

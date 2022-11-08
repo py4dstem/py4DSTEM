@@ -777,6 +777,7 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
+    dask = None,
 
     _qt_progress_bar = None,
 
@@ -879,6 +880,7 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
+        dask (dict): if not None ... TODO
         _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
             execution
         name (str): name for the output BraggVectors
@@ -924,6 +926,7 @@ def find_Bragg_disks(
         CUDA = CUDA,
         CUDA_batched = CUDA_batched,
         distributed = distributed,
+        dask = dask,
 
         _qt_progress_bar = _qt_progress_bar,
     )

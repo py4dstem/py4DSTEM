@@ -1,8 +1,12 @@
 # Reader for py4DSTEM v0.12 files
 
+from inspect import stack
 import h5py
 import numpy as np
 from os.path import splitext, exists
+
+import dask.array as da
+
 from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
 from py4DSTEM.io.native.legacy.read_utils_v0_12 import get_py4DSTEM_dataobject_info
 from py4DSTEM.io.datastructure import DataCube
@@ -11,6 +15,7 @@ from py4DSTEM.io.datastructure import RealSlice
 from py4DSTEM.io.datastructure import PointList
 from py4DSTEM.io.datastructure import PointListArray
 from py4DSTEM import tqdmnd
+
 
 def read_v0_12(fp, **kwargs):
     """
@@ -287,8 +292,14 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     elif (mem, binfactor) == ("MEMMAP", 1):
         data = g['data']
         stack_pointer = None
+    elif (mem, binfactor) == ("DASK", 1):
+        stack_pointer = g['data']
+        shape = g['data'].shape
+    
+        data = da.from_array(stack_pointer, chunks=(1,1,shape[2], shape[3]))
+    
     name = g.name.split('/')[-1]
-    return DataCube(data=data,name=name)
+    return DataCube(data=data,name=name, stack_pointer=stack_pointer)
 
 
 def get_diffractionslice_from_grp(g):
