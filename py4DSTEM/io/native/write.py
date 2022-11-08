@@ -7,8 +7,8 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists, dirname
 from os import remove
-from .read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
-from ..datastructure import (
+from py4DSTEM.io.native.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from py4DSTEM.io.datastructure import (
     Root,
     Tree,
     Metadata,
@@ -20,7 +20,7 @@ from ..datastructure import (
     DiffractionSlice,
     RealSlice
 )
-from ...version import __version__
+from py4DSTEM.version import __version__
 
 
 def save(

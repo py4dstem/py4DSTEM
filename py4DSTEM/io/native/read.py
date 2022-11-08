@@ -2,12 +2,12 @@
 
 import h5py
 import numpy as np
-from os.path import splitext, exists
+import warnings
+from os.path import splitext, exists,basename,dirname,join
 from typing import Optional, Union
-from os.path import basename,dirname
 
-from .read_utils import is_py4DSTEM_file
-from ..datastructure import (
+from py4DSTEM.io.native.read_utils import is_py4DSTEM_file
+from py4DSTEM.io.datastructure import (
     Root,
     Tree,
     ParentTree,
@@ -18,7 +18,7 @@ from ..datastructure import (
     Calibration,
     DataCube,
     DiffractionSlice,
-    DiffractionImage,
+    VirtualDiffraction,
     RealSlice,
     VirtualImage,
     Probe,
@@ -26,11 +26,11 @@ from ..datastructure import (
     BraggVectors
 )
 
-from .read_utils import get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.native.read_utils import get_py4DSTEM_version, version_is_geq
 
 def read_py4DSTEM(
     filepath,
-    root: Optional[str] = '4DSTEM',
+    root: Optional[str] = None,
     tree: Optional[Union[bool,str]] = True,
     **legacy_options,
     ):
@@ -48,7 +48,11 @@ def read_py4DSTEM(
         root (str): the path to the root data group in the HDF5 file
             to read from. To examine an HDF5 file written by py4DSTEM
             in order to determine this path, call
-            `py4DSTEM.print_h5_tree(filepath)`.
+            `py4DSTEM.print_h5_tree(filepath)`. If left unspecified,
+            looks in the file and if it finds a single top-level
+            object, loads it. If it finds multiple top-level objects,
+            prints a warning and returns a list of root paths to the
+            top-level object found
         tree (bool or str): indicates what data should be loaded,
             relative to the root group specified above.  must be in
             (`True` or `False` or `noroot`).  If set to `False`, the
@@ -69,13 +73,46 @@ def read_py4DSTEM(
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
     # Check the EMD version
-    v = get_py4DSTEM_version(filepath, root.split("/")[0])
-    # print(f"Reading EMD version {v[0]}.{v[1]}.{v[2]}")
+    if root is not None:
+        v = get_py4DSTEM_version(filepath, root.split("/")[0])
+    else:
+        try:
+            with h5py.File(filepath,'r') as f:
+                k = list(f.keys())[0]
+                v = get_py4DSTEM_version(filepath, k)
+        except:
+            raise Exception('error parsing file version...')
 
-    # Use legacy readers for older EMD files
+
+    # Use legacy readers for EMD files with v<13
     if v[1] <= 12:
-        from .legacy import read_py4DSTEM_legacy
+        from py4DSTEM.io.native.legacy import read_py4DSTEM_legacy
         return read_py4DSTEM_legacy(filepath,**legacy_options)
+
+
+    # Read EMD files with v>=13
+
+    # if root is None, determine if there is a single object in the file
+    # if so, set root to that file; otherwise raise an Exception or Warning
+    if root is None:
+        with h5py.File(filepath,'r') as f:
+            l1keys = list(f.keys())
+            if len(l1keys)==0:
+                raise Exception('No top level groups found in this HDF5 file!')
+            elif len(l1keys)>1:
+                warnings.warn('Multiple top level groups found; please specify. Returning group names.')
+                return l1keys
+            else:
+                l2keys = list(f[l1keys[0]].keys())
+                if len(l2keys)==0:
+                    raise Exception('No top level data blocks found in this HDF5 file!')
+                elif len(l2keys)>1:
+                    warnings.warn('Multiple top level data blocks found; please specify. Returning h5 paths to top level data blocks.')
+                    return [join(l1keys[0],k) for k in l2keys]
+                else:
+                    root = join(l1keys[0],l2keys[0])
+                    #this is a windows fix
+                    root = root.replace("\\","/")
 
     # Open h5 file
     with h5py.File(filepath,'r') as f:
@@ -248,7 +285,8 @@ def _get_class(grp):
         'Calibration' : Calibration,
         'DataCube' : DataCube,
         'DiffractionSlice' : DiffractionSlice,
-        'DiffractionImage' : DiffractionImage,
+        'VirtualDiffraction' : VirtualDiffraction,
+        'DiffractionImage' : VirtualDiffraction,
         'RealSlice' : RealSlice,
         'VirtualImage' : VirtualImage,
         'Probe' : Probe,
@@ -269,80 +307,6 @@ def _get_class(grp):
 
 
 
-
-
-
-
-    # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
-    # disambiguate desired data
-#    tgs = get_py4DSTEM_topgroups(filepath)
-#    if 'topgroup' in kwargs.keys():
-#        tg = kwargs['topgroup']
-#        #assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
-#    else:
-#        if len(tgs)==1:
-#            tg = tgs[0]
-#        else:
-#            print("Multiple topgroups were found -- please specify one:")
-#            print("")
-#            for tg in tgs:
-#                print(tg)
-#            return
-#
-#    # Get py4DSTEM version and call the appropriate read function
-#    version = get_py4DSTEM_version(filepath, tg)
-#    if version_is_geq(version,(0,12,0)): return read_v0_12(filepath, **kwargs)
-#    elif version_is_geq(version,(0,9,0)): return read_v0_9(filepath, **kwargs)
-#    elif version_is_geq(version,(0,7,0)): return read_v0_7(filepath, **kwargs)
-#    elif version_is_geq(version,(0,6,0)): return read_v0_6(filepath, **kwargs)
-#    elif version_is_geq(version,(0,5,0)): return read_v0_5(filepath, **kwargs)
-#    else:
-#        raise Exception('Support for legacy v{}.{}.{} files has not been added yet.'.format(version[0],version[1],version[2]))
-
-
-
-
-
-
-
-#    Args:
-#        filepath (str or pathlib.Path): When passed a filepath only,
-#            this function checks if the path points to a valid py4DSTEM
-#            file, then prints its contents to screen.
-#        data_id (int/str/list, optional): Specifies which data to load.
-#            Use integers to specify the data index, or strings to specify
-#            data names. A list or tuple returns a list of DataObjects.
-#            Returns the specified data.
-#        topgroup (str, optional:) Stricty, a py4DSTEM file is considered
-#            to be everything inside a toplevel subdirectory within the HDF5
-#            file, so that if desired one can place many py4DSTEM files inside
-#            a single H5.  In this case, when loading data, the topgroup
-#            argument is passed to indicate which py4DSTEM file to load.
-#            If an H5 containing multiple py4DSTEM files is passed without a
-#            topgroup specified, the topgroup names are printed to screen.
-#        metadata (bool, optional) If True, returns the metadata as a
-#            Metadata instance.
-#        mem (str, optional): Only used if a single DataCube is loaded.
-#            In this case, mem specifies how the data should be stored;
-#            must be "RAM" or "MEMMAP". See docstring for py4DSTEM.file.io.read.
-#            Default is "RAM".
-#        binfactor (int, optional): Only used if a single DataCube is loaded.
-#            In this case, a binfactor of > 1 causes the data to be binned by
-#            this amount as it's loaded.
-#        dtype (dtype, optional): Used when binning data, ignored otherwise.
-#            Defaults to whatever the type of the raw data is, to avoid
-#            enlarging data size. May be useful to avoid wraparound errors
-#            with uint16 data.
-#
-#    Returns:
-#        (variable): The output depends on usage:
-#
-#            * If no input arguments with return values (i.e. data_id or
-#                metadata) are passed, nothing is returned.
-#            * If metadata==True, returns a Metadata instance with the
-#                file metadata.
-#            * Otherwise, a single DataObject or list of DataObjects are
-#                returned, based on the value of the argument data_id.
 
 
 

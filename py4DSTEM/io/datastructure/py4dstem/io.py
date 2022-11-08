@@ -4,10 +4,10 @@ import numpy as np
 import h5py
 from os.path import basename
 
-from ..emd.io import Array_from_h5, Metadata_from_h5
-from ..emd.io import PointList_from_h5
-from ..emd.io import PointListArray_from_h5, PointListArray_to_h5
-from ..emd.io import _write_metadata, _read_metadata
+from py4DSTEM.io.datastructure.emd.io import Array_from_h5, Metadata_from_h5
+from py4DSTEM.io.datastructure.emd.io import PointList_from_h5
+from py4DSTEM.io.datastructure.emd.io import PointListArray_from_h5, PointListArray_to_h5
+from py4DSTEM.io.datastructure.emd.io import _write_metadata, _read_metadata
 
 
 
@@ -33,7 +33,7 @@ def Calibration_from_h5(group:h5py.Group):
 
 def Calibration_from_Metadata(metadata):
     """
-    Converts a Metadata instance to a Calibration instance.
+    Constructs a Calibration object with the dict entries of a Metadata object
 
     Accepts:
         metadata (Metadata)
@@ -41,15 +41,12 @@ def Calibration_from_Metadata(metadata):
     Returns:
         (Calibration)
     """
-    from .calibration import Calibration
-    p = metadata._params
-    metadata.__class__ = Calibration
-    metadata.__init__(
-        name = metadata.name
-    )
-    metadata._params.update(p)
+    from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
+    
+    cal = Calibration(name = metadata.name)
+    cal._params.update(metadata._params)
 
-    return metadata
+    return cal
 
 
 
@@ -87,7 +84,7 @@ def DataCube_from_Array(array):
     Returns:
         datacube (DataCube)
     """
-    from .datacube import DataCube
+    from py4DSTEM.io.datastructure.py4dstem.datacube import DataCube
     assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
     array.__init__(
@@ -136,7 +133,7 @@ def DiffractionSlice_from_Array(array):
     Returns:
         (DiffractionSlice)
     """
-    from .diffractionslice import DiffractionSlice
+    from py4DSTEM.io.datastructure.py4dstem.diffractionslice import DiffractionSlice
     assert(array.rank == 2), "Array must have 2 dimensions"
     array.__class__ = DiffractionSlice
     array.__init__(
@@ -151,59 +148,64 @@ def DiffractionSlice_from_Array(array):
 
 
 
-# DiffractionImage
+# VirtualDiffraction
 
 # read
 
-def DiffractionImage_from_h5(group:h5py.Group):
+def VirtualDiffraction_from_h5(group:h5py.Group):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     read mode. Determines if it's a valid Array, and if so loads and
-    returns it as a DiffractionImage. Otherwise, raises an exception.
+    returns it as a VirtualDiffraction. Otherwise, raises an exception.
 
     Accepts:
         group (HDF5 group)
 
     Returns:
-        A DiffractionImage instance
+        A VirtualDiffraction instance
     """
-    diffractionimage = Array_from_h5(group)
-    diffractionimage = DiffractionImage_from_Array(diffractionimage)
-    return diffractionimage
+    virtualdiffraction = Array_from_h5(group)
+    virtualdiffraction = VirtualDiffraction_from_Array(virtualdiffraction)
+    return virtualdiffraction
 
 
-def DiffractionImage_from_Array(array):
+def VirtualDiffraction_from_Array(array):
     """
-    Converts an Array to a DiffractionImage.
+    Converts an Array to a VirtualDiffraction.
 
     Accepts:
         array (Array)
 
     Returns:
-        (DiffractionImage)
+        (VirtualDiffraction)
     """
-    from .diffractionimage import DiffractionImage
+    from py4DSTEM.io.datastructure.py4dstem.virtualdiffraction import VirtualDiffraction
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
     try:
-        md = array.metadata['diffractionimage']
+        md = array.metadata['virtualdiffraction']
+        method =  md['method']
         mode = md['mode']
-        geo = md['geometry']
-        shift_corr = md['shift_corr']
+        geometry = md['geometry']
+        shift_center = md['shift_center']
     except KeyError:
-        er = "DiffractionImage metadata could not be found"
-        raise Exception(er)
+        print("Warning: VirtualDiffraction metadata could not be found")
+        method = ''
+        mode = ''
+        geometry = ''
+        shift_center = ''
 
 
     # instantiate as a DiffractionImage
-    array.__class__ = DiffractionImage
+    array.__class__ = VirtualDiffraction
     array.__init__(
         data = array.data,
         name = array.name,
+        method = method,
         mode = mode,
-        geometry = geo,
-        shift_corr = shift_corr
+        geometry = geometry,
+        shift_center = shift_center,
     )
     return array
 
@@ -241,7 +243,7 @@ def VirtualImage_from_Array(array):
     Returns:
         (VirtualImage)
     """
-    from .virtualimage import VirtualImage
+    from py4DSTEM.io.datastructure.py4dstem.virtualimage import VirtualImage
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
@@ -249,8 +251,10 @@ def VirtualImage_from_Array(array):
         md = array.metadata['virtualimage']
         mode = md['mode']
         geo = md['geometry']
-        shift_corr = md['shift_corr']
-        eager_compute = md['eager_compute']
+        centered = md._params.get('centered',None)
+        calibrated = md._params.get('calibrated',None)
+        shift_center = md._params.get('shift_center',None)
+        dask = md._params.get('dask',None)
     except KeyError:
         er = "VirtualImage metadata could not be found"
         raise Exception(er)
@@ -263,8 +267,10 @@ def VirtualImage_from_Array(array):
         name = array.name,
         mode = mode,
         geometry = geo,
-        shift_corr = shift_corr,
-        eager_compute = eager_compute
+        centered = centered,
+        calibrated = calibrated,
+        shift_center = shift_center,
+        dask = dask
     )
     return array
 
@@ -301,7 +307,7 @@ def Probe_from_Array(array):
     Returns:
         (Probe)
     """
-    from .probe import Probe
+    from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
@@ -358,7 +364,7 @@ def QPoints_from_PointList(pointlist):
     Returns:
         (QPoints)
     """
-    from .qpoints import QPoints
+    from py4DSTEM.io.datastructure.py4dstem.qpoints import QPoints
     pointlist.__class__ = QPoints
     pointlist.__init__(
         data = pointlist.data,
@@ -429,7 +435,7 @@ def BraggVectors_from_h5(group:h5py.Group):
     Returns:
         A BraggVectors instance
     """
-    from .braggvectors import BraggVectors
+    from py4DSTEM.io.datastructure.py4dstem.braggvectors import BraggVectors
 
     er = f"Group {group} is not a valid BraggVectors group"
     assert("emd_group_type" in group.attrs.keys()), er

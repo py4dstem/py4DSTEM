@@ -1,7 +1,7 @@
 # Defines the DiffractionSlice class, which stores 2(+1)D,
 # diffraction-shaped data
 
-from ..emd.array import Array
+from py4DSTEM.io.datastructure.emd.array import Array
 
 from typing import Optional,Union
 import numpy as np
@@ -44,7 +44,7 @@ class DiffractionSlice(Array):
 
     # read
     def from_h5(group):
-        from .io import DiffractionSlice_from_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import DiffractionSlice_from_h5
         return DiffractionSlice_from_h5(group)
 
 

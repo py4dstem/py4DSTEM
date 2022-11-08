@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
-from .utils import Orientation, OrientationMap, axisEqual3D
-from ..utils import electron_wavelength_angstrom
-from ...utils.tqdmnd import tqdmnd
-from ...io.datastructure import PointList, PointListArray, RealSlice
+from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
+from py4DSTEM.process.utils import electron_wavelength_angstrom
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray, RealSlice
 
 from numpy.linalg import lstsq
 try:
@@ -14,11 +14,6 @@ try:
 except:
     cp = None
 
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
 
 def orientation_plan(
     self,
@@ -114,21 +109,18 @@ def orientation_plan(
         self.orientation_refine_ratio = 1.0
         self.orientation_refine = False
 
-    # Handle the "auto" case first, since it works by overriding zone_axis_range,
-    #   fiber_axis, and fiber_angles then using the regular parser:
-    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
-        # from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        # from pymatgen.core.structure import Structure
-
-        # initialize structure
+    if self.pymatgen_available:
+        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        from pymatgen.core.structure import Structure
         structure = Structure(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
-
-        # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
-        # self.pointgroup = pointgroup
         self.pointgroup = SpacegroupAnalyzer(structure)
 
+
+    # Handle the "auto" case first, since it works by overriding zone_axis_range,
+    #   fiber_axis, and fiber_angles then using the regular parser:
+    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
         assert (
             self.pointgroup.get_point_group_symbol() in orientation_ranges
         ), "Unrecognized pointgroup returned by pymatgen!"
@@ -145,9 +137,6 @@ def orientation_plan(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()},\n"
             f" using arguments: zone_axis_range = \n{zone_axis_range}, \n fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
-
-        # Set a flag so we know pymatgen is available
-        self.pymatgen_available = True
 
 
     if isinstance(zone_axis_range, str):
@@ -766,7 +755,7 @@ def match_orientations(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     progress_bar: bool = True,
 ):
     '''
@@ -805,7 +794,7 @@ def match_single_pattern(
     num_matches_return: int = 1,
     min_number_peaks = 3,
     inversion_symmetry = True,
-    multiple_corr_reset = False,
+    multiple_corr_reset = True,
     plot_polar: bool = False,
     plot_corr: bool = False,
     returnfig: bool = False,
@@ -1217,16 +1206,7 @@ def match_single_pattern(
                 phi = corr_in_plane_angle_keep[ind_best_fit]
             else:
                 phi = corr_in_plane_angle[ind_best_fit]
-            if inversion_symmetry and corr_inv[ind_best_fit]:
-                m3z = np.array(
-                    [
-                        [-np.cos(phi), np.sin(phi), 0],
-                        [np.sin(phi), np.cos(phi), 0],
-                        [0, 0, 1],
-                    ]
-                )
-            else:
-                m3z = np.array(
+            m3z = np.array(
                     [
                         [np.cos(phi), np.sin(phi), 0],
                         [-np.sin(phi), np.cos(phi), 0],
@@ -1234,7 +1214,10 @@ def match_single_pattern(
                     ]
                 )
             orientation_matrix = orientation_matrix @ m3z
-
+            if inversion_symmetry and corr_inv[ind_best_fit]:
+                # Rotate 180 degrees around x axis for projected x-mirroring operation
+                orientation_matrix[:,1:] = -orientation_matrix[:,1:] 
+            
             # Output best fit values into Orientation class
             orientation.matrix[match_ind] = orientation_matrix
 
@@ -1320,7 +1303,7 @@ def match_single_pattern(
             )
 
             remove = np.zeros_like(qx, dtype="bool")
-            scale_int = np.zeros_like(qx)
+            scale_int = np.ones_like(qx)
             for a0 in np.arange(qx.size):
                 d_2 = (bragg_peaks_fit.data["qx"] - qx[a0]) ** 2 + (
                     bragg_peaks_fit.data["qy"] - qy[a0]
@@ -1598,11 +1581,20 @@ def orientation_map_to_orix_CrystalMap(
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure as pgStructure
 
+    from scipy.spatial.transform import Rotation as R
+
     from py4DSTEM.process.diffraction.utils import element_symbols
 
+    # Convert the orientation matrices into Euler angles
+    angles = np.vstack(
+        [
+        R.from_matrix(matrix.T).as_euler('zxz')
+        for matrix in  orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
+        ]
+    )
+
     # generate a list of Rotation objects from the Euler angles
-    rotations = Rotation.from_euler(
-                                    orientation_map.angles[:,:,ind_orientation].reshape(-1,3), direction='crystal2lab')
+    rotations = Rotation.from_euler(angles, direction='crystal2lab')
 
     # Generate x,y coordinates since orix uses flat data internally
     coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)

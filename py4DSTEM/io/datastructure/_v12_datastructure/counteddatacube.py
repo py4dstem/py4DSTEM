@@ -9,11 +9,11 @@ except ImportError:
 import h5py
 
 import numpy as np
-from .dataobject import DataObject
-from .datacube import DataCube
-from ...process import preprocess
-from ...process import virtualimage_viewer as virtualimage
-from ...process.utils import tqdmnd, bin2D
+from py4DSTEM.io.datastructure._v12_datastructure.dataobject import DataObject
+from py4DSTEM.io.datastructure._v12_datastructure.datacube import DataCube
+from py4DSTEM.io.process import preprocess
+from py4DSTEM.io.process import virtualimage_viewer as virtualimage
+from py4DSTEM.io.process.utils import tqdmnd, bin2D
 
 class CountedDataCube(DataObject):
     """

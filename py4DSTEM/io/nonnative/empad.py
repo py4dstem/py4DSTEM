@@ -7,9 +7,9 @@
 
 import numpy as np
 from pathlib import Path
-from ..datastructure import DataCube
-from ...utils.tqdmnd import tqdmnd
-from ...process.utils import bin2D
+from py4DSTEM.io.datastructure import DataCube
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.process.utils import bin2D
 
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
