@@ -65,7 +65,7 @@ def register_dill_serializer():
 # TODO add ML-AI version 
 def _find_Bragg_disks_single_DP_FK_dask_wrapper(arr, *args,**kwargs):
     # THis is needed as _find_Bragg_disks_single_DP_FK takes 2D array these arrays have the wrong shape
-    return _find_Bragg_disks_single(arr[0,0], *args, **kwargs)
+    return _find_Bragg_disks_single_DP_FK(arr[0,0], *args, **kwargs)
 
 
 #### END OF DASK WRAPPER FUNCTIONS ####
