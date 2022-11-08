@@ -136,7 +136,30 @@ class Featurization(object):
         else:
             print(key, "is not a key in the classfication.features dictionary")
         return
-            
+
+    ## DEMO - new cat method
+    #def concatenate_features(self, features, name):
+    #    """
+    #    Make a new Featurization instance from a list of existing Featurization
+    #    istances
+    #
+    #    Args:
+    #        features (list): a list of Featurization instances
+    #    """
+    #    new_feature = Featurization(
+    #        feature = np.concatenate([f.data for f in features]),
+    #        name = name
+    #    )
+    #    return new_feature
+    #
+    # User code:
+    #new_feature = Featurization.concatenate_features(
+    #    [f1, f2, f3],
+    #    name = 'meow'
+    #)
+
+
+
     def concatenate_features(self, keys, output_key):
         """
         Concatenates dataframes in 'key' and saves them to features with key 'output_key'
