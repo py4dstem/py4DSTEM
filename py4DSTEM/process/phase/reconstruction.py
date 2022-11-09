@@ -404,6 +404,7 @@ class Reconstruction:
             )
             ind = np.ravel_multi_index((rx,ry), dataset.data.shape[0:2])
             self.amp_meas[ind] = np.sqrt(np.maximum(meas,0))
+        self.amp_mean = np.mean(self.amp_meas)
 
         # compute inital intensity normalization
         # initial probes
@@ -475,6 +476,7 @@ class Reconstruction:
         self,
         num_iterations = 1,
         step_size = 0.95,
+        plot_convergence = True,
         plot_result = True,
         figsize = (8,8),
         progress_bar = True,
@@ -494,7 +496,7 @@ class Reconstruction:
         for iter in tqdmnd(
             num_iterations,
             desc="reconstructing... ",
-            unit=" iterations",
+            unit=" iteration",
             disable=not progress_bar,
             ):
             # indexing
@@ -520,31 +522,64 @@ class Reconstruction:
             ])
 
             # gradient from difference
-            Psi = np.conj(psi_0) * np.fft.ifft2((
-                self.amp_meas - np.abs(Psi)) * np.exp(1j*np.angle(Psi)))
+            Psi_abs = np.abs(Psi)
+            if not hasattr(self, 'amp_stats'):
+                self.amp_stats = np.mean(np.abs(self.amp_meas - Psi_abs))
+            else:
+                self.amp_stats = np.append(
+                    self.amp_stats,
+                    np.mean(np.abs(self.amp_meas - Psi_abs))
+                )
+            Psi = np.conj(psi_0) * np.fft.ifft2(
+                (self.amp_meas - Psi_abs) * np.exp(1j*np.angle(Psi)))
 
             # back projection
-            grad = np.reshape(np.bincount(
-                (((y0[:,None,None] + self.y_ind[None,None,:]) %  self.recon_size_pixels[1]) + \
-                ((x0[:,None,None] + self.x_ind[None,:,None]) % self.recon_size_pixels[0]) * \
-                self.recon_size_pixels[1]).ravel(),
-                weights = Psi.ravel(),
-                minlength = np.prod(self.recon_size_pixels),
-            ),self.recon_size_pixels) * self.recon_int_norm.astype('complex')
-
-
+            recon_update = np.reshape(
+                np.bincount(
+                    (((y0[:,None,None] + self.y_ind[None,None,:]) %  self.recon_size_pixels[1]) + \
+                    ((x0[:,None,None] + self.x_ind[None,:,None]) % self.recon_size_pixels[0]) * \
+                    self.recon_size_pixels[1]).ravel(),
+                    weights = np.real(Psi).ravel(),
+                    minlength = np.prod(self.recon_size_pixels),
+                ) + \
+                1j*np.bincount(
+                    (((y0[:,None,None] + self.y_ind[None,None,:]) %  self.recon_size_pixels[1]) + \
+                    ((x0[:,None,None] + self.x_ind[None,:,None]) % self.recon_size_pixels[0]) * \
+                    self.recon_size_pixels[1]).ravel(),
+                    weights = np.imag(Psi).ravel(),
+                    minlength = np.prod(self.recon_size_pixels),
+                ),
+                self.recon_size_pixels) * self.recon_int_norm
 
             # update
+            self.recon_object += step_size*recon_update
 
-
+            # other contraints?
 
 
         # plotting
+        if plot_convergence and self.amp_stats.shape[0] > 2:
+            fig,ax = plt.subplots(figsize=(8,4))
+            ax.plot(
+                np.arange(2,self.amp_stats.shape[0]),
+                self.amp_stats[2:] / self.amp_mean,
+                color=(1,0,0,1),
+                )
+            ax.set_xlabel(
+                'Iteration',
+                fontsize=16,
+                )
+            ax.set_ylabel(
+                'Mean Absolute Amplitude Error',
+                fontsize=16,
+                )
+            ax.set_yscale('log')
+
         if plot_result:
             fig,ax = plt.subplots(figsize=figsize)
             ax.imshow(
-                np.angle(grad),
-                # np.angle(self.recon_object),
+                # np.imag(grad),
+                np.angle(self.recon_object),
                 cmap='gray',
                 )
             plt.show()
