@@ -266,7 +266,7 @@ def calculate_dynamical_structure_factors(
     struct_factors /= unit_cell_volume
 
     # Remove structure factors below tolerance level
-    keep = np.abs(struct_factors) > tol_structure_factor
+    keep = np.abs(struct_factors) >= tol_structure_factor
     hkl = hkl[:, keep]
 
     g_vec_all = g_vec_all[:, keep]
