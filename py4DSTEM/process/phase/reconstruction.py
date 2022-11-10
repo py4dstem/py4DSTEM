@@ -199,7 +199,7 @@ class Reconstruction:
             if self.rotation_best_tranpose:
                 print('Diffraction space should be transposed')
             else:
-                print('No diffraction transposed needed')
+                print('No diffraction space transpose needed')
 
     def dpc_recon(
         self,
