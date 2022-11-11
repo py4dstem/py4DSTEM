@@ -196,24 +196,13 @@ def calculate_dynamical_structure_factors(
                 include_phonon=True,
             )
 
-    display_names = {
-        "Lobato": "Lobato-Van Dyck",
-        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
-        "WK": "Weickenmeier-Kohl",
-        "WK-C": "Weickenmeier-Kohl + Core",
-        "WK-P": "Weickenmeier-Kohl + Phonon",
-        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
-    }
-
-    # find all combos of Z and |g| so that we can compute the
-    # atomic scattering factor across only the unique combos
+    # find unique values of Z and |g| for computing atomic form factors
     Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
     g_unique, g_inverse = np.unique(
         np.round(g_vec_leng, g_vec_precision) if g_vec_precision else g_vec_leng,
         return_inverse=True,
     )
 
-    # f_e = np.zeros((self.numbers.size, g_vec_leng.size), dtype=np.complex128)
     f_e_uniq = np.zeros((Z_unique.size, g_unique.size), dtype=np.complex128)
 
     for idx, Z in enumerate(Z_unique):
