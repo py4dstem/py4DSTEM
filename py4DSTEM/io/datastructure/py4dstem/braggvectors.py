@@ -113,9 +113,9 @@ class BraggVectors:
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
-        braggvector_copy._v_uncal = self._v_uncal
+        braggvector_copy._v_uncal = self._v_uncal.copy()
         try:
-            braggvector_copy._v_cal = self._v_cal
+            braggvector_copy._v_cal = self._v_cal.copy()
         except AttributeError:
             pass
         for k in self.metadata.keys():
