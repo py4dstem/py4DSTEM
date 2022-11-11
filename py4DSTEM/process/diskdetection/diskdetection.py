@@ -8,6 +8,7 @@ from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
 
@@ -34,7 +35,12 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-
+    
+    ML = False,
+    ml_model_path = None, 
+    ml_num_attempts = 1, 
+    ml_batch_size = 8, 
+    
     _qt_progress_bar = None,
     ):
     """
@@ -187,8 +193,12 @@ def find_Bragg_disks(
             er = f"entry {data} for `data` could not be parsed"
             raise Exception(er)
 
-    # CPU/GPU/cluster
-    if mode == 'datacube':
+    # CPU/GPU/cluster/ML-AI
+
+    if ML:
+        mode = 'dc_ml'
+    
+    elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
         elif distributed is None and CUDA == True:
@@ -206,7 +216,7 @@ def find_Bragg_disks(
             else:
                 er = f"unrecognized distributed mode {distributed_mode}"
                 raise Exception(er)
-
+    # overwrite if ML selected
 
     # select a function
     fns = _get_function_dictionary()
@@ -222,6 +232,12 @@ def find_Bragg_disks(
         kws['connect'] = connect
         kws['data_file'] = data_file
         kws['cluster_path'] = cluster_path
+    # ML arguments
+    if ML == True:
+        kws['CUDA'] = CUDA
+        kws['model_path'] = ml_model_path
+        kws['num_attempts'] = ml_num_attempts 
+        kws['batch_size'] = ml_batch_size
 
     # run and return
     ans = fn(
@@ -254,6 +270,7 @@ def _get_function_dictionary():
         "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
         "dc_dask" : _find_Bragg_disks_dask,
         "dc_ipyparallel" : _find_Bragg_disks_ipp,
+        "dc_ml" : find_Bragg_disks_aiml
     }
 
     return d

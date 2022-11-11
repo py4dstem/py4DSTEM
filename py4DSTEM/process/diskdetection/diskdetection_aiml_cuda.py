@@ -1,5 +1,4 @@
 # Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
-# Joydeep Munshi
 '''
 
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
@@ -8,6 +7,7 @@ Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 import numpy as np
 from time import time
+from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
 
 try:
     import cupy as cp
@@ -26,7 +26,7 @@ from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
 from py4DSTEM.io import PointList, PointListArray
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diskdetection.kernels import kernels
-from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
+# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
                           num_attempts = 5,
@@ -120,8 +120,8 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     """
 
     # Make the peaks PointListArray
-    coords = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+    # dtype = [('qx',float),('qy',float),('intensity',float)]
+    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function: assert callable(filter_function), "filter_function must be callable"
@@ -146,7 +146,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
         batch_num = int(image_num//batch_size)
 
         datacube_flattened = datacube.data.view()
-        datacube_flattened.shape = (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)
+        datacube_flattened = datacube_flattened.reshape(datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)
 
         for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
             for batch_idx in range(batch_num):
@@ -188,7 +188,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
                                       subpixel = subpixel,
                                       upsample_factor = upsample_factor,
                                       filter_function = filter_function,
-                                      peaks = peaks.get_pointlist(Rx,Ry),
+                                      peaks = peaks.vectors_uncal.get_pointlist(Rx,Ry),
                                       get_maximal_points = get_maximal_points,
                                       blocks = blocks,
                                       threads = threads)
@@ -196,6 +196,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
                                                                    int(t2/60), int(t2%60)))
     if global_threshold == True:
+        from py4DSTEM.process.diskdetection import universal_threshold
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name
@@ -220,7 +221,8 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
                                   get_maximal_points = None,
                                   blocks = None,
                                   threads = None,
-                                  model_path=None):
+                                  model_path=None,
+                                  **kwargs):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
@@ -324,7 +326,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(DP, probe,
         peaks = PointList(coordinates=coords)
     else:
         assert(isinstance(peaks,PointList))
-    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
+    peaks.add_data_by_field((maxima_x, maxima_y, maxima_int))
 
     return peaks
 

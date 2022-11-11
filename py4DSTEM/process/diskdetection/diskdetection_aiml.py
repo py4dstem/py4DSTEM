@@ -1,6 +1,4 @@
 # Functions for finding Bragg disks using AI/ML pipeline
-# Joydeep Munshi
-
 '''
 Functions for finding Braggdisks using AI/ML method using tensorflow
 '''
@@ -10,13 +8,14 @@ import glob
 import json
 import shutil
 import numpy as np
+from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
 
 from scipy.ndimage.filters import gaussian_filter
 from time import time
 from numbers import Number
 
-from py4DSTEM.process.utils import get_cross_correlation_fk, get_maxima_2D
-from py4DSTEM.process.diskdetection import universal_threshold
+from py4DSTEM.process.utils import get_maxima_2D
+# from py4DSTEM.process.diskdetection import universal_threshold
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.io import PointList, PointListArray
 
@@ -128,7 +127,7 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
         assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
 
-    maxima_x,maxima_y,maxima_int = get_maxima_2D(pred,
+    maxima = get_maxima_2D(pred,
                                                  sigma = sigma,
                                                  minRelativeIntensity=minRelativeIntensity,
                                                  minAbsoluteIntensity=minAbsoluteIntensity,
@@ -139,17 +138,17 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
                                                  subpixel=subpixel,
                                                  upsample_factor=upsample_factor)
 
-    maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
+    # maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
-    # Make peaks PointList
-    if peaks is None:
-        coords = [('qx',float),('qy',float),('intensity',float)]
-        peaks = PointList(coordinates=coords)
-    else:
-        assert(isinstance(peaks,PointList))
-    peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
-
-    return peaks
+    # # Make peaks PointList
+    # if peaks is None:
+    #     coords = [('qx',float),('qy',float),('intensity',float)]
+    #     peaks = PointList(coordinates=coords)
+    # else:
+    #     assert(isinstance(peaks,PointList))
+    # peaks.add_tuple_of_nparrays((maxima_x,maxima_y,maxima_int))
+    maxima = QPoints(maxima)
+    return maxima
 
 
 def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
@@ -377,8 +376,8 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
-    coords = [('qx',float),('qy',float),('intensity',float)]
-    peaks = PointListArray(coordinates=coords, shape=(datacube.R_Nx, datacube.R_Ny))
+    # dtype = [('qx',float),('qy',float),('intensity',float)]
+    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function: assert callable(filter_function), "filter_function must be callable"
@@ -426,13 +425,15 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                          subpixel=subpixel,
                                          upsample_factor=upsample_factor,
                                          filter_function=filter_function,
-                                         peaks = peaks.get_pointlist(Rx,Ry),
+                                         peaks = peaks.vectors_uncal.get_pointlist(Rx,Ry),
                                          model_path=model_path)
     t2 = time()-t0
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
                                                                    int(t2/60), int(t2%60)))
 
     if global_threshold == True:
+        from py4DSTEM.process.diskdetection import universal_threshold
+
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name
@@ -457,7 +458,8 @@ def find_Bragg_disks_aiml(datacube, probe,
                           _qt_progress_bar = None,
                           model_path = None,
                           distributed = None,
-                          CUDA = True):
+                          CUDA = True,
+                          **kwargs):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method
     utilizes FCU-Net to predict Bragg disks from diffraction images.
