@@ -26,6 +26,7 @@ def calculate_dynamical_structure_factors(
     thermal_sigma: Optional[Union[float, dict]] = None,
     tol_structure_factor: float = 0.0,
     recompute_kinematic_structure_factors=True,
+    g_vec_precision=None,
     verbose=True,
 ):
     """
@@ -67,6 +68,10 @@ def calculate_dynamical_structure_factors(
                                         of half ensures that every beam in a simulation can couple to
                                         every other beam (no high-angle couplings in the Bloch matrix
                                         are set to zero.)
+        g_vec_precision (optional int): If specified, rounds |g| to this many decimal places so that
+                                        automatic caching of the atomic form factors is not slowed
+                                        down due to floating point errors. Setting this to 3 can give
+                                        substantial speedup at the cost of some reduced accuracy
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
@@ -203,7 +208,10 @@ def calculate_dynamical_structure_factors(
     # find all combos of Z and |g| so that we can compute the
     # atomic scattering factor across only the unique combos
     Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
-    g_unique, g_inverse = np.unique(g_vec_leng, return_inverse=True)
+    g_unique, g_inverse = np.unique(
+        np.round(g_vec_leng, g_vec_precision) if g_vec_precision else g_vec_leng,
+        return_inverse=True,
+    )
 
     # f_e = np.zeros((self.numbers.size, g_vec_leng.size), dtype=np.complex128)
     f_e_uniq = np.zeros((Z_unique.size, g_unique.size), dtype=np.complex128)
