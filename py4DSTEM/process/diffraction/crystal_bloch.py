@@ -219,7 +219,7 @@ def calculate_dynamical_structure_factors(
     for idx, Z in enumerate(Z_unique):
         # get element-specific thermal displacements, if given
         sigma = thermal_sigma[Z] if isinstance(thermal_sigma, dict) else thermal_sigma
-        f_e_uniq[idx, :] = get_f_e(g_unique, Z, thermal_sigma, method)
+        f_e_uniq[idx, :] = get_f_e(g_unique, Z, sigma, method)
 
     # flesh out the dense array of atomic scattering factors
     f_e = f_e_uniq[np.ix_(Z_inverse, g_inverse)]
