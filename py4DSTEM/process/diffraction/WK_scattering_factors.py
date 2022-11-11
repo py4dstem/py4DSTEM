@@ -10,212 +10,7 @@ Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMs
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
-
-# @lru_cache(maxsize=1024)
 def compute_WK_factor(
-    g: float,
-    Z: int,
-    accelerating_voltage: float,
-    thermal_sigma: float = None,
-    include_core: bool = True,
-    include_phonon: bool = True,
-    verbose=False,
-) -> np.complex128:
-    """
-    Compute the Weickenmeier-Kohl atomic scattering factors, using the parameterization
-    of the elastic part and computation of the inelastic part found in EMsoftLib/others.f90.
-    Return value should be in Å.
-
-    This implementation always returns the absorptive, relativistically corrected factors.
-
-    Currently this is mostly a direct translation of the Fortran code, along with
-    the accompanying comments from the original in quotation marks. This could be
-    vectorized and refactored for efficiency.
-
-    This method uses an 8-parameter fit to the elastic form factors, and then computes the
-    absorptive form factors using an analytic solution based on that fitting function. EMsoft would
-    use this routine to precompute and cache the necessary factors before calculating U_g.
-    I follow this route, but use Python's native caching to wrap this function rather than
-    build the lookup table manually. When calling this inside the loop that computes
-    the lattice Fourier coefficients, the cache will quickly build up.
-
-    Args: (note that these values cannot be arrays: the code is not vectorized)
-        g (float):                      Scattering vector magnitude in the crystallographic/py4DSTEM
-                                        convention, 1/d_hkl in units of 1/Å
-        Z (int):                        Atomic number. Data are available for H thru Cf (1 thru 98)
-        accelerating_voltage (float):   Accelerating voltage in eV.
-        thermal_sigma (float):          RMS atomic displacement for TDS, in Å
-                                        (This is often written as 〈u〉in papers)
-        include_core (bool):            If True, include the core loss contribution to the absorptive
-                                        form factors.
-        include_phonon (bool):          If True, include the phonon/TDS contribution to the
-                                        absorptive form factors.
-    Returns:
-        Fscatt (np.complex128):         The computed atomic form factor
-    """
-
-    # the WK Fortran code works in weird units:
-    # lowercase "g", our input, is the standard crystallographic quantity, in Å^-1
-    # uppercase "G" is the "G" in others.f90:FSCATT, g * 2π
-    # uppercase "S" is the "S" in others.f90:FSCATT, G / 4π = g / 2
-    g = np.array(g)
-    G = g * 2.0 * np.pi
-    S = g / 2.0
-
-    if verbose:
-        print(f"S:{S}")
-
-    accelerating_voltage_kV = accelerating_voltage / 1.0e3
-
-    if thermal_sigma is not None:
-        UL = thermal_sigma
-        DWF = np.exp(-0.5 * UL ** 2 * G ** 2)
-    else:
-        UL = 0.0
-        DWF = 1.0
-
-    if verbose:
-        print(f"DWF:{DWF}")
-
-    A = WK_A_param[int(Z) - 1]
-    B = WK_B_param[int(Z) - 1]
-
-    if verbose:
-        print(f"A:{A}")
-        print(f"B:{B}")
-
-    # WEKO(A,B,S)
-    WK = 0.0
-    for i in range(4):
-        argu = B[i] * S ** 2
-        if argu < 1.0:
-            WK += A[i] * B[i] * (1.0 - 0.5 * argu)
-        elif argu > 20.0:
-            WK += A[i] / S ** 2
-        else:
-            WK += A[i] * (1.0 - np.exp(-argu)) / S ** 2
-
-    Freal = 4.0 * np.pi * DWF * WK
-
-    if verbose:
-        print(f"Freal:{Freal}")
-
-    #################################################
-    # calculate "core" contribution, following FCORE:
-    k0 = (
-        2.0 * np.pi / electron_wavelength_angstrom(accelerating_voltage)
-    )  # remember, physicist units here
-
-    if include_core:
-        # "CALCULATE CHARACTERISTIC ENERGY LOSS AND ANGLE"
-        DE = 6.0e-3 * Z
-        theta_e = (
-            DE
-            / (2.0 * accelerating_voltage_kV)
-            * (2.0 * accelerating_voltage_kV + 1022.0)
-            / (accelerating_voltage_kV + 1022.0)
-        )
-
-        # "SCREENING PARAMETER OF YUKAWA POTENTIAL"
-        R = 0.885 * 0.5289 / Z ** (1.0 / 3.0)
-
-        # "CALCULATE NORMALISING ANGLE"
-        TA = 1.0 / (k0 * R)
-
-        # "CALCULATE BRAGG ANGLE"
-        TB = G / (2.0 * k0)
-
-        # "NORMALIZE"
-        OMEGA = 2.0 * TB / TA
-        KAPPA = theta_e / TA
-
-        K2 = KAPPA * KAPPA
-        O2 = OMEGA * OMEGA
-
-        X1 = (
-            OMEGA
-            / ((1.0 + O2) * np.sqrt(O2 + 4.0 * K2))
-            * np.log((OMEGA + np.sqrt(O2 + 4.0 * K2)) / (2.0 * KAPPA))
-        )
-        X2 = (
-            1.0
-            / np.sqrt((1.0 + O2) * (1.0 + O2) + 4.0 * K2 * O2)
-            * np.log(
-                (1.0 + 2.0 * K2 + O2 + np.sqrt((1.0 + O2) * (1.0 + O2) + 4.0 * K2 * O2))
-                / (2.0 * KAPPA * np.sqrt(1.0 + K2))
-            )
-        )
-        if OMEGA > 1e-2:
-            X3 = (
-                1.0
-                / (OMEGA * np.sqrt(O2 + 4.0 * (1.0 + K2)))
-                * np.log(
-                    (OMEGA + np.sqrt(O2 + 4.0 * (1.0 + K2))) / (2.0 * np.sqrt(1.0 + K2))
-                )
-            )
-        else:
-            X3 = 1.0 / (4.0 * (1.0 + K2))
-
-        HI = 2 * Z / (TA * TA) * (-X1 + X2 - X3)
-
-        A0 = 0.5289
-        Fcore = 4.0 / (A0 * A0) * 2.0 * np.pi / (k0 * k0) * HI
-
-        if verbose:
-            print(f"Fcore:{Fcore}")
-    else:
-        Fcore = 0.0
-
-    ##########################################################
-    # calculate phonon contribution, following FPHON(G,UL,A,B)
-    Fphon = 0.0
-    if include_phonon:
-        U2 = UL ** 2
-
-        A1 = A * (4.0 * np.pi) ** 2
-        B1 = B / (4.0 * np.pi) ** 2
-
-        for jj in range(4):
-            Fphon += (
-                A1[jj]
-                * A1[jj]
-                * (
-                    DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL)
-                )
-            )
-            for ii in range(jj + 1):
-                Fphon += (
-                    2.0
-                    * A1[jj]
-                    * A1[ii]
-                    * (
-                        DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL)
-                    )
-                )
-        if verbose:
-            print(f"Fphon:{Fphon}")
-
-    Fimag = (Fcore * DWF) + Fphon
-
-    # perform relativistic correction
-    gamma = (accelerating_voltage_kV + 511.0) / (511.0)
-
-    if verbose:
-        print(f"gamma:{gamma}")
-
-    Fscatt = np.complex128((Freal * gamma) + (1.0j * (Fimag * gamma ** 2 / k0)))
-
-    if verbose:
-        print(f"Fscatt:{Fscatt}")
-
-    return (
-        Fscatt * 0.4787801 * 0.664840340614319 / (4.0 * np.pi)
-    )  # convert to Å, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
-
-
-
-# @lru_cache(maxsize=1024)
-def compute_WK_factors(
     g: np.ndarray,
     Z: int,
     accelerating_voltage: float,
@@ -232,18 +27,15 @@ def compute_WK_factors(
     This implementation always returns the absorptive, relativistically corrected factors.
 
     Currently this is mostly a direct translation of the Fortran code, along with
-    the accompanying comments from the original in quotation marks. This could be
-    vectorized and refactored for efficiency.
+    the accompanying comments from the original in quotation marks. Colin Ophus
+    vectorized it around v0.13.17. Currently it is only vectorized over `g` (i.e.
+    `Z` and all other args must be a single value.)
 
     This method uses an 8-parameter fit to the elastic form factors, and then computes the
-    absorptive form factors using an analytic solution based on that fitting function. EMsoft would
-    use this routine to precompute and cache the necessary factors before calculating U_g.
-    I follow this route, but use Python's native caching to wrap this function rather than
-    build the lookup table manually. When calling this inside the loop that computes
-    the lattice Fourier coefficients, the cache will quickly build up.
+    absorptive form factors using an analytic solution based on that fitting function.
 
     Args: (note that these values cannot be arrays: the code is not vectorized)
-        g (float):                      Scattering vector magnitude in the crystallographic/py4DSTEM
+        g (float/ndarray):              Scattering vector magnitude in the crystallographic/py4DSTEM
                                         convention, 1/d_hkl in units of 1/Å
         Z (int):                        Atomic number. Data are available for H thru Cf (1 thru 98)
         accelerating_voltage (float):   Accelerating voltage in eV.
@@ -287,16 +79,9 @@ def compute_WK_factors(
         print(f"B:{B}")
 
     # WEKO(A,B,S)
-    # WK = 0.0
     WK = np.zeros_like(S)
     for i in range(4):
         argu = B[i] * S ** 2
-        # if argu < 1.0:
-        #     WK += A[i] * B[i] * (1.0 - 0.5 * argu)
-        # elif argu > 20.0:
-        #     WK += A[i] / S ** 2
-        # else:
-        #     WK += A[i] * (1.0 - np.exp(-argu)) / S ** 2
         sub = argu < 1.0
         WK[sub] += A[i] * B[i] * (1.0 - 0.5 * argu[sub])
         sub = np.logical_and(argu >= 1.0, argu <= 20.0)
@@ -354,16 +139,7 @@ def compute_WK_factors(
                 / (2.0 * KAPPA * np.sqrt(1.0 + K2))
             )
         )
-        # if OMEGA > 1e-2:
-        #     X3 = (
-        #         1.0
-        #         / (OMEGA * np.sqrt(O2 + 4.0 * (1.0 + K2)))
-        #         * np.log(
-        #             (OMEGA + np.sqrt(O2 + 4.0 * (1.0 + K2))) / (2.0 * np.sqrt(1.0 + K2))
-        #         )
-        #     )
-        # else:
-        #     X3 = 1.0 / (4.0 * (1.0 + K2))
+
         X3 = np.zeros_like(OMEGA)
         sub = OMEGA > 1e-2
         X3[sub] = (
@@ -441,17 +217,7 @@ def compute_WK_factors(
 def RI1(BI, BJ, G):
     # "ERSTES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
     eps = np.max([BI, BJ]) * G ** 2
-    # if eps <= 0.1:
-    #     ri1 = np.pi * (BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ))
-    #     if G == 0.0:
-    #         return ri1
-    #     temp = 0.5 * BI ** 2 * np.log(BI / (BI + BJ)) + 0.5 * BJ ** 2 * np.log(
-    #         BJ / (BI + BJ)
-    #     )
-    #     temp += 0.75 * (BI ** 2 + BJ ** 2) - 0.25 * (BI + BJ) ** 2
-    #     temp -= 0.5 * (BI - BJ) ** 2
-    #     ri1 += np.pi * G ** 2 * temp
-    #     return ri1
+
     ri1 = np.zeros_like(G)
 
     sub = eps <= 0.1
@@ -545,54 +311,6 @@ def RI2(BI, BJ, G, U):
 
     return ri2
 
-    # if EPS <= 0.1:
-    #     ri2 = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2))
-    #     ri2 = ri2 + BJ * np.log((BI + BJ + U2) / (BJ + U2))
-    #     if U2 > 0.0:  # check if U=0, in which case we will force 0 * ∞ = 0
-    #         ri2 = ri2 + U2 * np.log(U2 / (BJ + U2))
-    #     ri2 = ri2 * np.pi
-    #     if G == 0.0:
-    #         return ri2
-    #     if U2 > 0.0:
-    #         TEMP = 0.5 * U22 * U22 * np.log(BIU * BJU / (U2 * U2))
-    #     else:
-    #         TEMP = 0.0
-    #     TEMP = TEMP + 0.5 * BIUH * BIUH * np.log(BIU / (BIUH + BJUH))
-    #     TEMP = TEMP + 0.5 * BJUH * BJUH * np.log(BJU / (BIUH + BJUH))
-    #     TEMP = TEMP + 0.25 * BIU * BIU + 0.5 * BI * BI
-    #     TEMP = TEMP + 0.25 * BJU * BJU + 0.5 * BJ * BJ
-    #     TEMP = TEMP - 0.25 * (BIUH + BJUH) * (BIUH + BJUH)
-    #     TEMP = TEMP - 0.5 * ((BI * BIU - BJ * BJU) / (BIUH + BJUH)) ** 2
-    #     TEMP = TEMP - U22 * U22
-    #     ri2 = ri2 + np.pi * G2 * TEMP
-    #     return ri2
-
-    # ri2 = expi(-0.5 * U2 * G2 * BIUH / BIU) + expi(-0.5 * U2 * G2 * BJUH / BJU)
-    # ri2 = ri2 - expi(-BIUH * BJUH * G2 / (BIUH + BJUH)) - expi(-0.25 * U2 * G2)
-    # ri2 = 2.0 * ri2
-    # X1 = 0.5 * U2 * G2
-    # X2 = 0.25 * U2 * G2
-    # X3 = 0.25 * U2 * U2 * G2 / BIU
-    # ri2 = ri2 + RIH1(X1, X2, X3)
-
-    # X1 = 0.5 * U2 * G2
-    # X2 = 0.25 * U2 * G2
-    # X3 = 0.25 * U2 * U2 * G2 / BJU
-    # ri2 = ri2 + RIH1(X1, X2, X3)
-
-    # X1 = BIUH * G2
-    # X2 = BIUH * BIUH * G2 / (BIUH + BJUH)
-    # X3 = BIUH * BIUH * G2 / BIU
-    # ri2 = ri2 + RIH1(X1, X2, X3)
-
-    # X1 = BJUH * G2
-    # X2 = BJUH * BJUH * G2 / (BIUH + BJUH)
-    # X3 = BJUH * BJUH * G2 / BJU
-    # ri2 = ri2 + RIH1(X1, X2, X3)
-
-    # ri2 = ri2 * np.pi / G2
-
-
 
 def RIH1(X1, X2, X3):
     # "WERTET DEN AUSDRUCK EXP(-X1) * ( EI(X2)-EI(X3) ) AUS"
@@ -615,20 +333,6 @@ def RIH1(X1, X2, X3):
 
     return rih1
 
-    # if (X2 <= 20.0) and (X3 <= 20.0):
-    #     rih1 = np.exp(-X1) * (expi(X2) - expi(X3))
-    #     return rih1
-    # if X2 > 20.0:
-    #     rih1 = np.exp(X2 - X1) * RIH2(X2) / X2
-    # else:
-    #     rih1 = np.exp(-X1) * expi(X2)
-
-    # if X3 > 20.0:
-    #     rih1 = rih1 - np.exp(X3 - X1) * RIH2(X3) / X3
-    # else:
-    #     rih1 = rih1 - np.exp(-X1) * expi(X3)
-
-
 
 def RIH2(X):
     """
@@ -643,18 +347,9 @@ def RIH2(X):
 
 
     return sig
-    # print()
-    # print(idx)
-
-    
-
-    # idx = int(200.0 / X)
-    # return RIH2_tabulated_data[idx] + 200.0 * (
-    #     RIH2_tabulated_data[idx + 1] - RIH2_tabulated_data[idx]
-    # ) * ((1.0 / X) - 0.5e-3 * idx)
 
 
-# NOTE - This function is not currently used?
+# NOTE - This function is present in EMSoftLib but apparently not used.
 def RIH3(X):
     # "WERTET DEN AUSDRUCK EXP(-X) * EI(X) AUS"
     if X <= 20.0:
