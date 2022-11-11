@@ -200,7 +200,7 @@ def calculate_dynamical_structure_factors(
         "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
     }
 
-    # find all combos of Z and |g| so that we can compute the 
+    # find all combos of Z and |g| so that we can compute the
     # atomic scattering factor across only the unique combos
     Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
     g_unique, g_inverse = np.unique(g_vec_leng, return_inverse=True)
@@ -210,18 +210,17 @@ def calculate_dynamical_structure_factors(
 
     for idx, Z in enumerate(Z_unique):
         # get element-specific thermal displacements, if given
-        sigma = (
-            thermal_sigma[Z]
-            if isinstance(thermal_sigma, dict)
-            else thermal_sigma
-        )
-        f_e_uniq[idx,:] = get_f_e(g_unique, Z, thermal_sigma, method)
+        sigma = thermal_sigma[Z] if isinstance(thermal_sigma, dict) else thermal_sigma
+        f_e_uniq[idx, :] = get_f_e(g_unique, Z, thermal_sigma, method)
 
     # flesh out the dense array of atomic scattering factors
-    f_e= f_e_uniq[np.ix_(Z_inverse,g_inverse)] 
+    f_e = f_e_uniq[np.ix_(Z_inverse, g_inverse)]
 
     # Calculate structure factors
-    struct_factors = np.sum(f_e * np.exp( 2.0j * np.pi * np.squeeze(self.positions[:,None,:] @ hkl)), axis=0)
+    struct_factors = np.sum(
+        f_e * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        axis=0,
+    )
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))

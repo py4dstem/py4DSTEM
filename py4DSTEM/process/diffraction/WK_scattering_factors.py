@@ -10,6 +10,7 @@ Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMs
 by Mark De Graef, who adapted it from Weickenmeier's original f77 code.
 """
 
+
 def compute_WK_factor(
     g: np.ndarray,
     Z: int,
@@ -144,11 +145,12 @@ def compute_WK_factor(
         sub = OMEGA > 1e-2
         X3[sub] = (
             1.0
-                / (OMEGA[sub] * np.sqrt(O2[sub] + 4.0 * (1.0 + K2)))
-                * np.log(
-                    (OMEGA[sub] + np.sqrt(O2[sub] + 4.0 * (1.0 + K2))) / (2.0 * np.sqrt(1.0 + K2))
-                )
+            / (OMEGA[sub] * np.sqrt(O2[sub] + 4.0 * (1.0 + K2)))
+            * np.log(
+                (OMEGA[sub] + np.sqrt(O2[sub] + 4.0 * (1.0 + K2)))
+                / (2.0 * np.sqrt(1.0 + K2))
             )
+        )
         sub = np.logical_not(sub)
         X3[sub] = 1.0 / (4.0 * (1.0 + K2))
 
@@ -175,18 +177,14 @@ def compute_WK_factor(
             Fphon += (
                 A1[jj]
                 * A1[jj]
-                * (
-                    DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL)
-                )
+                * (DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL))
             )
             for ii in range(jj + 1):
                 Fphon += (
                     2.0
                     * A1[jj]
                     * A1[ii]
-                    * (
-                        DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL)
-                    )
+                    * (DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL))
                 )
         if verbose:
             print(f"Fphon:{Fphon}")
@@ -209,7 +207,6 @@ def compute_WK_factor(
     )  # convert to Å, and remove extra physicist factors, as performed in diffraction.f90:427,576,630
 
 
-
 ##############################################
 # Helper integral functions for DW calculation
 
@@ -222,7 +219,7 @@ def RI1(BI, BJ, G):
 
     sub = eps <= 0.1
     ri1[sub] = np.pi * (BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ))
-    
+
     sub = np.logical_and(eps <= 0.1, G > 0.0)
     temp = 0.5 * BI ** 2 * np.log(BI / (BI + BJ)) + 0.5 * BJ ** 2 * np.log(
         BJ / (BI + BJ)
@@ -239,9 +236,13 @@ def RI1(BI, BJ, G):
         - 2.0 * expi(-BI * BJ * G[sub] ** 2 / (BI + BJ))
     )
 
-    ri1[sub] += RIH1(BI * G[sub] ** 2, BI * G[sub] ** 2 * BI / (BI + BJ), BI * G[sub] ** 2)
+    ri1[sub] += RIH1(
+        BI * G[sub] ** 2, BI * G[sub] ** 2 * BI / (BI + BJ), BI * G[sub] ** 2
+    )
 
-    ri1[sub] += RIH1(BJ * G[sub] ** 2, BJ * G[sub] ** 2 * BJ / (BI + BJ), BJ * G[sub] ** 2)
+    ri1[sub] += RIH1(
+        BJ * G[sub] ** 2, BJ * G[sub] ** 2 * BJ / (BI + BJ), BJ * G[sub] ** 2
+    )
     ri1[sub] *= np.pi / G[sub] ** 2
 
     return ri1
@@ -264,8 +265,9 @@ def RI2(BI, BJ, G, U):
     ri2 = np.zeros_like(G)
 
     sub = EPS <= 0.1
-    ri2[sub] = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2)) \
-        + BJ * np.log((BI + BJ + U2) / (BJ + U2))
+    ri2[sub] = (BI + U2) * np.log((BI + BJ + U2) / (BI + U2)) + BJ * np.log(
+        (BI + BJ + U2) / (BJ + U2)
+    )
     if U2 > 0.0:
         ri2[sub] += U2 * np.log(U2 / (BJ + U2))
     ri2[sub] *= np.pi
@@ -284,9 +286,13 @@ def RI2(BI, BJ, G, U):
     ri2[sub] += np.pi * G2[sub] * TEMP
 
     sub = EPS > 0.1
-    ri2[sub] = expi(-0.5 * U2 * G2[sub] * BIUH / BIU) + expi(-0.5 * U2 * G2[sub] * BJUH / BJU)
-    ri2[sub] -= (expi(-BIUH * BJUH * G2[sub] / (BIUH + BJUH)) + expi(-0.25 * U2 * G2[sub]))
-    ri2[sub] *= 2.0 
+    ri2[sub] = expi(-0.5 * U2 * G2[sub] * BIUH / BIU) + expi(
+        -0.5 * U2 * G2[sub] * BJUH / BJU
+    )
+    ri2[sub] -= expi(-BIUH * BJUH * G2[sub] / (BIUH + BJUH)) + expi(
+        -0.25 * U2 * G2[sub]
+    )
+    ri2[sub] *= 2.0
     X1 = 0.5 * U2 * G2[sub]
     X2 = 0.25 * U2 * G2[sub]
     X3 = 0.25 * U2 * U2 * G2[sub] / BIU
@@ -315,21 +321,26 @@ def RI2(BI, BJ, G, U):
 def RIH1(X1, X2, X3):
     # "WERTET DEN AUSDRUCK EXP(-X1) * ( EI(X2)-EI(X3) ) AUS"
     rih1 = np.zeros(X1.shape)
-    
+
     sub = np.logical_and(X2 <= 20.0, X3 <= 20.0)
     rih1[sub] = np.exp(-X1[sub]) * (expi(X2[sub]) - expi(X3[sub]))
 
     sub = np.logical_and(X2 > 20.0, X3 <= 20.0)
-    rih1[sub] = np.exp(X2[sub] - X1[sub]) * RIH2(X2[sub]) / X2[sub] \
-        - np.exp(-X1[sub]) * expi(X3[sub])
+    rih1[sub] = np.exp(X2[sub] - X1[sub]) * RIH2(X2[sub]) / X2[sub] - np.exp(
+        -X1[sub]
+    ) * expi(X3[sub])
 
     sub = np.logical_and(X2 <= 20.0, X3 > 20.0)
-    rih1[sub] = np.exp(-X1[sub]) * expi(X2[sub]) \
+    rih1[sub] = (
+        np.exp(-X1[sub]) * expi(X2[sub])
         - np.exp(X3[sub] - X1[sub]) * RIH2(X3[sub]) / X3[sub]
+    )
 
     sub = np.logical_and(X2 > 20.0, X3 > 20.0)
-    rih1[sub] = np.exp(X2[sub] - X1[sub]) * RIH2(X2[sub]) / X2[sub] \
+    rih1[sub] = (
+        np.exp(X2[sub] - X1[sub]) * RIH2(X2[sub]) / X2[sub]
         - np.exp(X3[sub] - X1[sub]) * RIH2(X3[sub]) / X3[sub]
+    )
 
     return rih1
 
@@ -339,12 +350,11 @@ def RIH2(X):
     WERTET X*EXP(-X)*EI(X) AUS FUER GROSSE X
     DURCH INTERPOLATION DER TABELLE ... AUS ABRAMOWITZ
     """
-    idx = np.floor(200.0 / X).astype('int')
+    idx = np.floor(200.0 / X).astype("int")
 
     sig = RIH2_tabulated_data[idx] + 200.0 * (
         RIH2_tabulated_data[idx + 1] - RIH2_tabulated_data[idx]
     ) * ((1.0 / X) - 0.5e-3 * idx)
-
 
     return sig
 
