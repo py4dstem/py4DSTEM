@@ -18,7 +18,13 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.process.utils import get_shifted_ar
-from py4DSTEM.process.phase.utils import fft_shift, ComplexProbe, polar_symbols, polar_aliases
+from py4DSTEM.process.phase.utils import (
+    fft_shift,
+    ComplexProbe,
+    polar_symbols,
+    polar_aliases,
+)
+
 
 class PhaseReconstruction(metaclass=ABCMeta):
     """
@@ -538,12 +544,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
     def _set_polar_parameters(self, parameters: dict):
         """
         Set the phase of the phase aberration.
-        
+
         Parameters
         ----------
         parameters: dict
             Mapping from aberration symbols to their corresponding values.
-            
+
         Mutates
         -------
         self._polar_parameters: dict
@@ -554,39 +560,39 @@ class PhaseReconstruction(metaclass=ABCMeta):
             if symbol in self._polar_parameters.keys():
                 self._polar_parameters[symbol] = value
 
-            elif symbol == 'defocus':
+            elif symbol == "defocus":
                 self._polar_parameters[polar_aliases[symbol]] = -value
 
             elif symbol in polar_aliases.keys():
                 self._polar_parameters[polar_aliases[symbol]] = value
 
             else:
-                raise ValueError('{} not a recognized parameter'.format(symbol))
-    
+                raise ValueError("{} not a recognized parameter".format(symbol))
+
     def _pad_diffraction_intensities(
         self,
         diffraction_intensities: np.ndarray,
-        region_of_interest_shape: Tuple[int,int]
+        region_of_interest_shape: Tuple[int, int],
     ):
         """
         Common static method to zero-pad diffraction intensities to a certain region of interest shape.
-        
+
         Parameters
         ----------
         diffraction_intensities: (Rx,Ry,Qx,Qy) np.ndarray
             Array of diffraction intensities to be zero-padded
         region_of_interest_shape: (2,) Tuple[int,int]
             Pixel dimensions (Sx,Sy) the CBED patterns will be padded to
-            
+
         Returns
         -------
         padded_diffraction_intensities: (Rx,Ry,Sx,Sy) np.ndarray
             Zero-padded diffraction intensities
         """
-        
+
         xp = self._xp
         diffraction_intensities_shape = np.array(diffraction_intensities.shape[-2:])
-        
+
         if np.all(diffraction_intensities_shape != self._intensities_shape[-2:]):
             raise ValueError()
 
@@ -599,7 +605,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             raise ValueError()
 
         if np.all(diffraction_intensities_shape != region_of_interest_shape):
-            padding_list = [(0, 0),(0,0)]  # No padding along first two dimensions
+            padding_list = [(0, 0), (0, 0)]  # No padding along first two dimensions
             for current_dim, target_dim in zip(
                 diffraction_intensities_shape, region_of_interest_shape
             ):
@@ -610,14 +616,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
             diffraction_intensities = xp.pad(
                 diffraction_intensities, tuple(padding_list), mode="constant"
             )
-            
+
         return diffraction_intensities
-    
+
     def _normalize_diffraction_intensities(
-            self,
-            diffraction_intensities,
-            com_fitted_x,
-            com_fitted_y):
+        self, diffraction_intensities, com_fitted_x, com_fitted_y
+    ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
 
@@ -647,28 +651,26 @@ class PhaseReconstruction(metaclass=ABCMeta):
             for ry in range(self._intensities_shape[1]):
                 amplitudes = xp.asarray(
                     get_shifted_ar(
-                        dps[rx,ry],
-                        -com_x[rx,ry],
-                        -com_y[rx,ry],
-                        bilinear= True)
+                        dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
+                    )
                 )
                 amplitudes /= xp.sum(amplitudes)
-                diffraction_intensities[rx,ry] = xp.sqrt(xp.maximum(amplitudes,0))
-        diffraction_intensities = xp.reshape(diffraction_intensities,(-1,)+tuple(self._region_of_interest_shape))
+                diffraction_intensities[rx, ry] = xp.sqrt(xp.maximum(amplitudes, 0))
+        diffraction_intensities = xp.reshape(
+            diffraction_intensities, (-1,) + tuple(self._region_of_interest_shape)
+        )
         return diffraction_intensities
 
-    def _calculate_scan_positions_in_pixels(
-        self,
-        positions: np.ndarray):
+    def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
         """
         Common static method to compute the initial guess of scan positions in pixels.
-        
+
         Parameters
         ----------
         positions: (J,2) np.ndarray or None
             Input experimental positions [Å].
             If None, a raster scan using experimental parameters is constructed.
-            
+
         Assigns
         -------
         self._object_px_padding: np.ndarray
@@ -686,7 +688,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if positions is None:
             if grid_scan_shape is not None:
-                
+
                 nx, ny = grid_scan_shape
 
                 if step_sizes is not None:
@@ -716,14 +718,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         self._object_px_padding = self._region_of_interest_shape / 2
         positions += self._object_px_padding
-        
+
         return positions
-    
+
     def _wrapped_indices_2D_window(
         self,
         center_position: np.ndarray,
         window_shape: Sequence[int],
-        array_shape: Sequence[int]
+        array_shape: Sequence[int],
     ):
         """
         Computes periodic indices for a window_shape probe centered at center_position, in object of size array_shape.
@@ -740,7 +742,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         window_indices: length-2 tuple of
             The 2D indices of the window
         """
-        
+
         asnumpy = self._asnumpy
         sx, sy = array_shape
         nx, ny = window_shape
@@ -748,11 +750,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         cx, cy = np.round(asnumpy(center_position)).astype(int)
         ox, oy = (cx - nx // 2, cy - ny // 2)
 
-        return np.ix_(np.arange(ox, ox + nx) % sx,np.arange(oy, oy + ny) % sy)
-    
-    def _sum_overlapping_patches(
-        self,
-        patches: np.ndarray):
+        return np.ix_(np.arange(ox, ox + nx) % sx, np.arange(oy, oy + ny) % sy)
+
+    def _sum_overlapping_patches(self, patches: np.ndarray):
         """
         Sum overlapping patches defined into object shaped array
 
@@ -771,38 +771,37 @@ class PhaseReconstruction(metaclass=ABCMeta):
         patch_shape = self._region_of_interest_shape
         array_shape = self._object_shape
 
-        out_array = xp.zeros(array_shape,patches.dtype)
-        for ind,pos in enumerate(positions):
-            indices = self._wrapped_indices_2D_window(
-                pos,
-                patch_shape,
-                array_shape)
-            out_array[indices]+=patches[ind]
+        out_array = xp.zeros(array_shape, patches.dtype)
+        for ind, pos in enumerate(positions):
+            indices = self._wrapped_indices_2D_window(pos, patch_shape, array_shape)
+            out_array[indices] += patches[ind]
 
         return out_array
-    
-    def _sum_overlapping_patches_bincounts_base(
-        self,
-        patches: np.ndarray):
-        """
-        """
-        xp = self._xp
-        x0 = xp.round(self._positions_px[:,0]).astype('int')
-        y0 = xp.round(self._positions_px[:,1]).astype('int')
-        
-        roi_shape = self._region_of_interest_shape
-        x_ind = xp.round(xp.arange(roi_shape[0])-roi_shape[0]/2).astype('int')
-        y_ind = xp.round(xp.arange(roi_shape[1])-roi_shape[1]/2).astype('int')
 
+    def _sum_overlapping_patches_bincounts_base(self, patches: np.ndarray):
+        """ """
+        xp = self._xp
+        x0 = xp.round(self._positions_px[:, 0]).astype("int")
+        y0 = xp.round(self._positions_px[:, 1]).astype("int")
+
+        roi_shape = self._region_of_interest_shape
+        x_ind = xp.round(xp.arange(roi_shape[0]) - roi_shape[0] / 2).astype("int")
+        y_ind = xp.round(xp.arange(roi_shape[1]) - roi_shape[1] / 2).astype("int")
 
         flat_weights = patches.ravel()
-        indices =  ((y0[:,None,None]+y_ind[None,None,:]) % self._object_shape[1])+((x0[:,None,None]+x_ind[None,:,None]) % self._object_shape[0])*self._object_shape[1]
-        counts = xp.bincount(indices.ravel(),weights=flat_weights,minlength=np.prod(self._object_shape))
-        return xp.reshape(counts,self._object_shape)
+        indices = (
+            (y0[:, None, None] + y_ind[None, None, :]) % self._object_shape[1]
+        ) + (
+            (x0[:, None, None] + x_ind[None, :, None]) % self._object_shape[0]
+        ) * self._object_shape[
+            1
+        ]
+        counts = xp.bincount(
+            indices.ravel(), weights=flat_weights, minlength=np.prod(self._object_shape)
+        )
+        return xp.reshape(counts, self._object_shape)
 
-    def _sum_overlapping_patches_bincounts(
-        self,
-        patches: np.ndarray):
+    def _sum_overlapping_patches_bincounts(self, patches: np.ndarray):
         """
         Sum overlapping patches defined into object shaped array using bincounts
 
@@ -821,7 +820,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if xp.iscomplexobj(patches):
             real = self._sum_overlapping_patches_bincounts_base(xp.real(patches))
             imag = self._sum_overlapping_patches_bincounts_base(xp.imag(patches))
-            return real + 1.0j*imag
+            return real + 1.0j * imag
         else:
             return self._sum_overlapping_patches_bincounts_base(patches)
 
@@ -837,17 +836,21 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Column indices for probe patches inside object array
         """
         xp = self._xp
-        x0 = xp.round(self._positions_px[:,0]).astype('int')
-        y0 = xp.round(self._positions_px[:,1]).astype('int')
-        
+        x0 = xp.round(self._positions_px[:, 0]).astype("int")
+        y0 = xp.round(self._positions_px[:, 1]).astype("int")
+
         roi_shape = self._region_of_interest_shape
-        x_ind = xp.round(xp.arange(roi_shape[0])-roi_shape[0]/2).astype('int')
-        y_ind = xp.round(xp.arange(roi_shape[1])-roi_shape[1]/2).astype('int')
-        
+        x_ind = xp.round(xp.arange(roi_shape[0]) - roi_shape[0] / 2).astype("int")
+        y_ind = xp.round(xp.arange(roi_shape[1]) - roi_shape[1] / 2).astype("int")
+
         obj_shape = self._object_shape
-        self._vectorized_patch_indices_row = (x0[:,None,None] + x_ind[None,:,None]) %  obj_shape[0]
-        self._vectorized_patch_indices_col = (y0[:,None,None] + y_ind[None,None,:]) %  obj_shape[1]
-    
+        self._vectorized_patch_indices_row = (
+            x0[:, None, None] + x_ind[None, :, None]
+        ) % obj_shape[0]
+        self._vectorized_patch_indices_col = (
+            y0[:, None, None] + y_ind[None, None, :]
+        ) % obj_shape[1]
+
     @property
     def angular_sampling(self):
         """Angular sampling [mrad]"""
@@ -1384,17 +1387,18 @@ class DPCReconstruction(PhaseReconstruction):
 
         return self
 
+
 class PtychographicReconstruction(PhaseReconstruction):
     """
     Iterative Ptychographic Reconstruction Class.
-    
+
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
     Reconstructed probe dimensions      : (Sx,Sy)
     Reconstructed object dimensions     : (Px,Py)
-    
+
     such that (Sx,Sy) >= (Qx,Qy) is the region-of-interest (ROI) size of our probe
     and (Px,Py) >= (Sx,Sy) is the padded-object size we position our ROI around in.
-    
+
     Parameters
     ----------
     datacube: DataCube
@@ -1412,7 +1416,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         If None, initialized to Probe object with specified semiangle_cutoff, energy, and aberrations
     scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
-        If None, initialized to a grid scan 
+        If None, initialized to a grid scan
     verbose: bool, optional
         If True, various class methods will inherit this and print additional information
     device: str, optional
@@ -1424,7 +1428,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         and angles should be given in radians.
     kwargs:
         Provide the aberration coefficients as keyword arguments.
-        
+
     Assigns
     --------
     self._xp: Callable
@@ -1434,43 +1438,45 @@ class PtychographicReconstruction(PhaseReconstruction):
     self._preprocessed: bool
         Flag to signal object has not yet been preprocessed
     """
+
     def __init__(
         self,
         datacube: DataCube,
         energy: float,
-        region_of_interest_shape: Tuple[int,int] = None,
+        region_of_interest_shape: Tuple[int, int] = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         scan_positions: np.ndarray = None,
         verbose: bool = True,
-        device: str = 'cpu',
+        device: str = "cpu",
         semiangle_cutoff: float = None,
         polar_parameters: Mapping[str, float] = None,
-        **kwargs):
-        
+        **kwargs,
+    ):
+
         # Should probably be abstracted in a device.py similar to:
         # https://github.com/abTEM/abTEM/blob/95da2f5ba900f2530f2689af845be85e96b1129a/abtem/device.py
-        if device == 'cpu':
+        if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-        elif device == 'gpu':
+        elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
-        
+
         for key in kwargs.keys():
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
-                raise ValueError('{} not a recognized parameter'.format(key))
-                
-        self._polar_parameters = dict(zip(polar_symbols, [0.] * len(polar_symbols)))
+                raise ValueError("{} not a recognized parameter".format(key))
+
+        self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
             polar_parameters = {}
 
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
-        
+
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._region_of_interest_shape = region_of_interest_shape
@@ -1480,20 +1486,21 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._datacube = datacube
         self._verbose = verbose
         self._preprocessed = False
-            
+
     def preprocess(
         self,
-        fit_function: str = 'plane',
+        fit_function: str = "plane",
         plot_center_of_mass: bool = True,
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
-        rotation_angles_deg: np.ndarray = np.arange(-90.0,90.0,1.0),
+        rotation_angles_deg: np.ndarray = np.arange(-90.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
-        **kwargs):
+        **kwargs,
+    ):
         """
         Ptychographic preprocessing step.
         Calls the base class methods:
-        
+
         _extract_intensities_and_calibrations_from_datacube,
         _compute_center_of_mass(),
         _solve_CoM_rotation(),
@@ -1503,7 +1510,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         Additionally, it initializes an (Px,Py) array of 1.0j
         and an ideal complex probe using the specified polar parameters.
-        
+
         Parameters
         ----------
         fit_function: str, optional
@@ -1516,12 +1523,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, the initial probe overlaps scanned over the object will be displayed
-            
+
         Assigns
         --------
         self._preprocessed: bool
             Flag to signal object has been preprocessed
-            
+
         Returns
         --------
         self: PtychographicReconstruction
@@ -1529,36 +1536,39 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
-        
+
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube,
-            require_calibrations=False)
-        
+            self._datacube, require_calibrations=False
+        )
+
         self._calculate_intensities_center_of_mass(
             self._intensities,
-            fit_function = fit_function,
-            plot_center_of_mass = plot_center_of_mass,
-            **kwargs)
-        
+            fit_function=fit_function,
+            plot_center_of_mass=plot_center_of_mass,
+            **kwargs,
+        )
+
         self._solve_for_center_of_mass_relative_rotation(
-            rotation_angles_deg = rotation_angles_deg,
-            plot_rotation = plot_rotation,
-            maximize_divergence = maximize_divergence,
-            **kwargs)
-        
+            rotation_angles_deg=rotation_angles_deg,
+            plot_rotation=plot_rotation,
+            maximize_divergence=maximize_divergence,
+            **kwargs,
+        )
+
         self._intensities = self._pad_diffraction_intensities(
-            self._intensities,
-            self._region_of_interest_shape)
-        
+            self._intensities, self._region_of_interest_shape
+        )
+
         self._intensities = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-                )
-        
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+        )
+
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions)
-        
+            self._scan_positions
+        )
+
         # Object Initialization
         if self._object is None:
             pad_x, pad_y = self._object_px_padding
@@ -1575,12 +1585,14 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
         self._positions = self._positions_px.copy()
-        self._positions[:,0] *= self.sampling[0]
-        self._positions[:,1] *= self.sampling[1]
-        
+        self._positions[:, 0] *= self.sampling[0]
+        self._positions[:, 1] *= self.sampling[1]
+
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px_fractional = self._positions_px - xp.round(self._positions_px)
-        
+        self._positions_px_fractional = self._positions_px - xp.round(
+            self._positions_px
+        )
+
         # Vectorized Patches
         self._object_shape = self._object.shape
         self._set_vectorized_patch_indices()
@@ -1594,98 +1606,95 @@ class PtychographicReconstruction(PhaseReconstruction):
                     energy=self._energy,
                     semiangle_cutoff=self._semiangle_cutoff,
                     parameters=self._polar_parameters,
-                    device='cpu' if xp is np else 'gpu',
+                    device="cpu" if xp is np else "gpu",
                 )
                 .build()
                 ._array
             )
-      
+
         else:
             if isinstance(self._probe, ComplexProbe):
                 if self._probe._gpts != self._region_of_interest_shape:
                     raise ValueError()
-                if hasattr(self._probe,'_array'):
+                if hasattr(self._probe, "_array"):
                     self._probe = self._probe._array
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
             else:
-                self._probe = xp.asarray(self._probe,dtype=xp.complex64)
-        
+                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
+
         if plot_probe_overlaps:
 
-            shifted_probes = fft_shift(self._probe,self._positions_px_fractional,xp)
-            probe_intensities = xp.abs(shifted_probes)**2
+            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+            probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-            
-            figsize = kwargs.get('figsize',(8,8))
-            cmap = kwargs.get('cmap','gray')
-            kwargs.pop('figsize', None)
-            kwargs.pop('cmap', None)
-            
-            extent = [0,self.sampling[0]*self._object_shape[0],self.sampling[1]*self._object_shape[1],0]
-            fig,ax = plt.subplots(figsize=figsize)
-            ax.imshow(
-                asnumpy(probe_overlap),
-                extent=extent,
-                cmap=cmap,
-                **kwargs
-                )
+
+            figsize = kwargs.get("figsize", (8, 8))
+            cmap = kwargs.get("cmap", "gray")
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+
+            extent = [
+                0,
+                self.sampling[0] * self._object_shape[0],
+                self.sampling[1] * self._object_shape[1],
+                0,
+            ]
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.imshow(asnumpy(probe_overlap), extent=extent, cmap=cmap, **kwargs)
             ax.scatter(
-                asnumpy(self._positions[:,1]),
-                asnumpy(self._positions[:,0]),
+                asnumpy(self._positions[:, 1]),
+                asnumpy(self._positions[:, 0]),
                 s=2.5,
-                color=(1,0,0,1)
-                )
+                color=(1, 0, 0, 1),
+            )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
             plt.show()
-        
+
         self._preprocessed = True
-        
+
         return self
 
-    def _overlap_projection(
-        self,
-        current_object,
-        current_probe):
-        """
-        """
-        
+    def _overlap_projection(self, current_object, current_probe):
+        """ """
+
         xp = self._xp
-        
-        self._shifted_probes = fft_shift(current_probe,self._positions_px_fractional,xp)
-        exit_waves = current_object[self._vectorized_patch_indices_row,
-                                    self._vectorized_patch_indices_col] * self._shifted_probes
-        
+
+        self._shifted_probes = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
+        exit_waves = (
+            current_object[
+                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            ]
+            * self._shifted_probes
+        )
+
         return xp.fft.fft2(exit_waves)
-    
-    def _fourier_projection(
-        self,
-        amplitudes,
-        fourier_exit_waves):
-        """
-        """
-        
+
+    def _fourier_projection(self, amplitudes, fourier_exit_waves):
+        """ """
+
         xp = self._xp
         abs_fourier_exit_waves = xp.abs(fourier_exit_waves)
         error = xp.mean(xp.abs(amplitudes - abs_fourier_exit_waves))
-        
-        difference_gradient_fourier = (amplitudes - abs_fourier_exit_waves) * xp.exp(1j*xp.angle(fourier_exit_waves))
-        
+
+        difference_gradient_fourier = (amplitudes - abs_fourier_exit_waves) * xp.exp(
+            1j * xp.angle(fourier_exit_waves)
+        )
+
         return difference_gradient_fourier, error
-    
-    def _forward(
-        self,
-        current_object,
-        current_probe,
-        amplitudes):
-        """
-        """
-        
-        fourier_exit_waves = self._overlap_projection(current_object,current_probe)
-        difference_gradient_fourier, error = self._fourier_projection(amplitudes,fourier_exit_waves)
-        
+
+    def _forward(self, current_object, current_probe, amplitudes):
+        """ """
+
+        fourier_exit_waves = self._overlap_projection(current_object, current_probe)
+        difference_gradient_fourier, error = self._fourier_projection(
+            amplitudes, fourier_exit_waves
+        )
+
         return difference_gradient_fourier, error
 
     def _adjoint(
@@ -1694,51 +1703,72 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_probe,
         difference_gradient_fourier,
         fix_probe: bool,
-        normalization_min: float):
-        """
-        """
-        
+        normalization_min: float,
+    ):
+        """ """
+
         xp = self._xp
-        
+
         difference_gradient = xp.fft.ifft2(difference_gradient_fourier)
-        
-        probe_normalization = self._sum_overlapping_patches_bincounts(xp.abs(self._shifted_probes)**2)
-        probe_normalization = 1 / xp.sqrt(probe_normalization**2 + (normalization_min*xp.max(probe_normalization))**2)
-        
-        object_update = self._sum_overlapping_patches_bincounts(xp.conj(self._shifted_probes)*difference_gradient)*probe_normalization
-        
+
+        probe_normalization = self._sum_overlapping_patches_bincounts(
+            xp.abs(self._shifted_probes) ** 2
+        )
+        probe_normalization = 1 / xp.sqrt(
+            probe_normalization**2
+            + (normalization_min * xp.max(probe_normalization)) ** 2
+        )
+
+        object_update = (
+            self._sum_overlapping_patches_bincounts(
+                xp.conj(self._shifted_probes) * difference_gradient
+            )
+            * probe_normalization
+        )
+
         if fix_probe:
             probe_update = None
         else:
             object_normalization = xp.sum(
-                (xp.abs(current_object)**2)[
+                (xp.abs(current_object) ** 2)[
                     self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col],
-                axis=0)
-            object_normalization = 1 / xp.sqrt(object_normalization**2 + (normalization_min*xp.max(object_normalization))**2)
+                    self._vectorized_patch_indices_col,
+                ],
+                axis=0,
+            )
+            object_normalization = 1 / xp.sqrt(
+                object_normalization**2
+                + (normalization_min * xp.max(object_normalization)) ** 2
+            )
 
-            probe_update = xp.sum(
-                xp.conj(current_object)[
-                    self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col] * difference_gradient,
-                axis=0) * object_normalization
+            probe_update = (
+                xp.sum(
+                    xp.conj(current_object)[
+                        self._vectorized_patch_indices_row,
+                        self._vectorized_patch_indices_col,
+                    ]
+                    * difference_gradient,
+                    axis=0,
+                )
+                * object_normalization
+            )
 
         return object_update, probe_update
-    
+
     def _update(
         self,
         current_object,
         object_update,
         current_probe,
         probe_update,
-        step_size: float = 0.9):
-        """
-        """
+        step_size: float = 0.9,
+    ):
+        """ """
         current_object += step_size * object_update
         if probe_update is not None:
             current_probe += step_size * probe_update
         return current_object, current_probe
-    
+
     def reconstruct(
         self,
         max_iter: int = 64,
@@ -1746,17 +1776,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         normalization_min: float = 1e-4,
         warmup_iter: int = 10,
         progress_bar: bool = True,
-        store_iterations: bool = False):
-        """
-        """
+        store_iterations: bool = False,
+    ):
+        """ """
         xp = self._xp
         asnumpy = self._asnumpy
-        
+
         # initialization
         if store_iterations:
-            self._object_iterations=[]
-            self._probe_iterations=[]
-            self._error_iterations=[]
+            self._object_iterations = []
+            self._probe_iterations = []
+            self._error_iterations = []
 
         # main loop
         for a0 in tqdmnd(
@@ -1764,21 +1794,21 @@ class PtychographicReconstruction(PhaseReconstruction):
             desc="Reconstructing object and probe",
             unit=" iter",
             disable=not progress_bar,
-            ):
-            
+        ):
+
             # forward operator
             difference_gradient_fourier, error = self._forward(
-                self._object,
-                self._probe,
-                self._intensities)
+                self._object, self._probe, self._intensities
+            )
 
             # adjoint operator
-            object_update, probe_update  = self._adjoint(
+            object_update, probe_update = self._adjoint(
                 self._object,
                 self._probe,
                 difference_gradient_fourier,
-                fix_probe= a0<warmup_iter,
-                normalization_min = normalization_min)
+                fix_probe=a0 < warmup_iter,
+                normalization_min=normalization_min,
+            )
 
             # update
             self._object, self._probe = self._update(
@@ -1786,218 +1816,254 @@ class PtychographicReconstruction(PhaseReconstruction):
                 object_update,
                 self._probe,
                 probe_update,
-                step_size=step_size)
-            
+                step_size=step_size,
+            )
+
             if store_iterations:
                 self._object_iterations.append(self._object.copy())
                 self._probe_iterations.append(self._probe.copy())
                 self._error_iterations.append(error.item())
-                
+
         # store result
         self.object = asnumpy(self._object)
         self.probe = asnumpy(self._probe)
         self.error = error.item()
-        
+
         return self
-    
+
     def _show_last_iteration(
-        self,
-        cbar:bool,
-        plot_convergence:bool,
-        plot_probe,
-        object_mode:str,
-        **kwargs):
-        """
-        """
-        figsize = kwargs.get('figsize',(5,5))
-        cmap = kwargs.get('cmap','magma')
-        kwargs.pop('figsize',None)
-        kwargs.pop('cmap',None)
-        
+        self, cbar: bool, plot_convergence: bool, plot_probe, object_mode: str, **kwargs
+    ):
+        """ """
+        figsize = kwargs.get("figsize", (5, 5))
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("figsize", None)
+        kwargs.pop("cmap", None)
+
         if plot_convergence:
-            figsize = (figsize[0],figsize[1]+figsize[0]/4)
+            figsize = (figsize[0], figsize[1] + figsize[0] / 4)
             if plot_probe:
-                figsize = (figsize[0]*2,figsize[1])
-                spec = GridSpec(ncols=2, nrows=2,height_ratios=[4, 1], hspace=0.1)
+                figsize = (figsize[0] * 2, figsize[1])
+                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.1)
             else:
-                spec = GridSpec(ncols=1, nrows=2,height_ratios=[4, 1], hspace=0.1)
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.1)
         else:
             if plot_probe:
                 spec = GridSpec(ncols=2, nrows=1)
             else:
                 spec = GridSpec(ncols=1, nrows=1)
-        
-        extent = [0,self.sampling[0]*self._object_shape[0],0,self.sampling[1]*self._object_shape[1]]
-        
+
+        extent = [
+            0,
+            self.sampling[0] * self._object_shape[0],
+            0,
+            self.sampling[1] * self._object_shape[1],
+        ]
+
         fig = plt.figure(figsize=figsize)
-        
+
         if plot_probe:
-            ax = fig.add_subplot(spec[0,0])
-            if object_mode == 'phase':
-                im = ax.imshow(np.angle(self.object),extent=extent,cmap=cmap,**kwargs)
+            ax = fig.add_subplot(spec[0, 0])
+            if object_mode == "phase":
+                im = ax.imshow(
+                    np.angle(self.object), extent=extent, cmap=cmap, **kwargs
+                )
                 ax.set_title(f"Object Phase, error: {self.error:.3e}")
-            elif object_mode == 'amplitude':
-                im = ax.imshow(np.abs(self.object),extent=extent,cmap=cmap,**kwargs)
+            elif object_mode == "amplitude":
+                im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
                 ax.set_title(f"Object Amplitude, error: {self.error:.3e}")
             else:
-                im = ax.imshow(np.abs(self.object)**2,extent=extent,cmap=cmap,**kwargs)
+                im = ax.imshow(
+                    np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
+                )
                 ax.set_title(f"Object Intensity, error: {self.error:.3e}")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            
+
             if cbar:
 
                 divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right",size="5%", pad="2.5%")
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
-                fig.colorbar(im,cax=ax_cb) 
-            
-            probe_extent = [0,self.sampling[0]*self._region_of_interest_shape[0],self.sampling[1]*self._region_of_interest_shape[1],0]
-            ax = fig.add_subplot(spec[0,1])
-            im = ax.imshow(np.abs(self.probe)**2,extent=probe_extent,cmap='Greys_r',**kwargs)
+                fig.colorbar(im, cax=ax_cb)
+
+            probe_extent = [
+                0,
+                self.sampling[0] * self._region_of_interest_shape[0],
+                self.sampling[1] * self._region_of_interest_shape[1],
+                0,
+            ]
+            ax = fig.add_subplot(spec[0, 1])
+            im = ax.imshow(
+                np.abs(self.probe) ** 2, extent=probe_extent, cmap="Greys_r", **kwargs
+            )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
             ax.set_title(f"Probe Reconstruction\n error: {self.error:.3e}")
-            
+
             if cbar:
 
                 divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right",size="5%", pad="2.5%")
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
-                fig.colorbar(im,cax=ax_cb) 
+                fig.colorbar(im, cax=ax_cb)
         else:
             ax = fig.add_subplot(spec[0])
-            if object_mode == 'phase':
-                im = ax.imshow(np.angle(self.object),extent=extent,cmap=cmap,**kwargs)
+            if object_mode == "phase":
+                im = ax.imshow(
+                    np.angle(self.object), extent=extent, cmap=cmap, **kwargs
+                )
                 ax.set_title(f"Object Phase, error: {self.error:.3e}")
-            elif object_mode == 'amplitude':
-                im = ax.imshow(np.abs(self.object),extent=extent,cmap=cmap,**kwargs)
+            elif object_mode == "amplitude":
+                im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
                 ax.set_title(f"Object Amplitude, error: {self.error:.3e}")
             else:
-                im = ax.imshow(np.abs(self.object)**2,extent=extent,cmap=cmap,**kwargs)
+                im = ax.imshow(
+                    np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
+                )
                 ax.set_title(f"Object Intensity, error: {self.error:.3e}")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-        
+
             if cbar:
 
                 divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right",size="5%", pad="2.5%")
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
-                fig.colorbar(im,cax=ax_cb) 
-    
-        if plot_convergence and hasattr(self, '_reconstruction_errors'):
+                fig.colorbar(im, cax=ax_cb)
+
+        if plot_convergence and hasattr(self, "_reconstruction_errors"):
             errors = self._reconstruction_errors
             if plot_probe:
-                ax = fig.add_subplot(spec[1,:])
+                ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
 
-            ax.semilogy(
-                np.arange(len(errors)),
-                errors,
-                **kwargs
-                )
-            ax.set_xlabel('Iteration Number')
-            ax.set_ylabel('Log error')
+            ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+            ax.set_xlabel("Iteration Number")
+            ax.set_ylabel("Log error")
             ax.yaxis.tick_right()
-            
+
         plt.show()
-    
+
     def _show_all_iterations(
         self,
-        cbar:bool,
-        plot_convergence:bool,
-        plot_probe:bool,
-        iterations_grid: Tuple[int,int],
-        object_mode:str,
-        **kwargs):
-        """
-        """
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        iterations_grid: Tuple[int, int],
+        object_mode: str,
+        **kwargs,
+    ):
+        """ """
         asnumpy = self._asnumpy
-        
-        if iterations_grid == 'auto':
-            iterations_grid = (2,4)
-        figsize = kwargs.get('figsize',(13,6.5))
-        cmap = kwargs.get('cmap','magma')
-        kwargs.pop('figsize',None)
-        kwargs.pop('cmap',None)
-        
+
+        if iterations_grid == "auto":
+            iterations_grid = (2, 4)
+        figsize = kwargs.get("figsize", (13, 6.5))
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("figsize", None)
+        kwargs.pop("cmap", None)
+
         if plot_probe:
-            total_grids = (np.prod(iterations_grid)/2).astype('int')
+            total_grids = (np.prod(iterations_grid) / 2).astype("int")
         else:
             total_grids = np.prod(iterations_grid)
         errors = self._error_iterations
         objects = self._object_iterations
         if plot_probe:
             probes = self._probe_iterations
-        max_iter = len(objects)-1
-        
-        if plot_convergence and not plot_probe:
-            grid_range = range(0,max_iter,max_iter//(total_grids-2))
-        else:
-            grid_range = range(0,max_iter,max_iter//(total_grids-1))
-            
-        if plot_probe:
-            grid_range = np.tile(grid_range,2)
-            if plot_convergence:
-                grid_range =grid_range[:-1]
-            
-        extent = [0,self._scan_sampling[0]*self._intensities_shape[0],self._scan_sampling[1]*self._intensities_shape[1],0]
+        max_iter = len(objects) - 1
 
-        gridspec=GridSpec(nrows=iterations_grid[0],ncols=iterations_grid[1],hspace=0)
+        if plot_convergence and not plot_probe:
+            grid_range = range(0, max_iter, max_iter // (total_grids - 2))
+        else:
+            grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+
+        if plot_probe:
+            grid_range = np.tile(grid_range, 2)
+            if plot_convergence:
+                grid_range = grid_range[:-1]
+
+        extent = [
+            0,
+            self._scan_sampling[0] * self._intensities_shape[0],
+            self._scan_sampling[1] * self._intensities_shape[1],
+            0,
+        ]
+
+        gridspec = GridSpec(
+            nrows=iterations_grid[0], ncols=iterations_grid[1], hspace=0
+        )
         fig = plt.figure(figsize=figsize)
 
-        for n,spec in enumerate(gridspec):
+        for n, spec in enumerate(gridspec):
             if plot_convergence and n == len(grid_range):
 
                 ax = fig.add_subplot(spec)
-                ax.semilogy(
-                    np.arange(len(errors)),
-                    errors,
-                    **kwargs
-                    )
-                ax.set_xlabel('Iteration Number')
-                ax.set_ylabel('Log error')
+                ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+                ax.set_xlabel("Iteration Number")
+                ax.set_ylabel("Log error")
                 ax.yaxis.tick_right()
-                ax.set_aspect(max_iter/np.ptp(np.log10(np.array(errors))))
+                ax.set_aspect(max_iter / np.ptp(np.log10(np.array(errors))))
             else:
                 ax = fig.add_subplot(spec)
-                if n//(total_grids) and plot_probe:
-                    im = ax.imshow(np.abs(asnumpy(probes[grid_range[n]]))**2,extent=extent,cmap='Greys_r',**kwargs)
+                if n // (total_grids) and plot_probe:
+                    im = ax.imshow(
+                        np.abs(asnumpy(probes[grid_range[n]])) ** 2,
+                        extent=extent,
+                        cmap="Greys_r",
+                        **kwargs,
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} Probe")
                 else:
-                    if object_mode == 'phase':
-                        im = ax.imshow(np.angle(asnumpy(objects[grid_range[n]])),extent=extent,cmap=cmap,**kwargs)
+                    if object_mode == "phase":
+                        im = ax.imshow(
+                            np.angle(asnumpy(objects[grid_range[n]])),
+                            extent=extent,
+                            cmap=cmap,
+                            **kwargs,
+                        )
                         ax.set_title(f"Iter: {grid_range[n]} Object Phase")
-                    elif object_mode == 'amplitude':
-                        im = ax.imshow(np.abs(asnumpy(objects[grid_range[n]])),extent=extent,cmap=cmap,**kwargs)
+                    elif object_mode == "amplitude":
+                        im = ax.imshow(
+                            np.abs(asnumpy(objects[grid_range[n]])),
+                            extent=extent,
+                            cmap=cmap,
+                            **kwargs,
+                        )
                         ax.set_title(f"Iter: {grid_range[n]} Object Amplitude")
                     else:
-                        im = ax.imshow(np.abs(asnumpy(objects[grid_range[n]]))**2,extent=extent,cmap=cmap,**kwargs)
+                        im = ax.imshow(
+                            np.abs(asnumpy(objects[grid_range[n]])) ** 2,
+                            extent=extent,
+                            cmap=cmap,
+                            **kwargs,
+                        )
                         ax.set_title(f"Iter: {grid_range[n]} Object Intensity")
-                    
+
                     if cbar:
                         divider = make_axes_locatable(ax)
-                        cax = divider.append_axes('right', size='5%', pad='2.5%')
-                        fig.colorbar(im, cax=cax, orientation='vertical')
-                        
+                        cax = divider.append_axes("right", size="5%", pad="2.5%")
+                        fig.colorbar(im, cax=cax, orientation="vertical")
+
                 ax.set_xlabel("x [A]")
                 ax.set_ylabel("y [A]")
 
         fig.tight_layout()
-    
+
     def show(
         self,
-        plot_convergence:bool=False,
-        iterations_grid:Tuple[int,int] = None,
-        cbar:bool=False,
-        plot_probe:bool =True,
-        object_mode: str = 'phase',
-        **kwargs):
+        plot_convergence: bool = False,
+        iterations_grid: Tuple[int, int] = None,
+        cbar: bool = False,
+        plot_probe: bool = True,
+        object_mode: str = "phase",
+        **kwargs,
+    ):
         """
         Displays reconstructed phase object.
-        
+
         Parameters
         --------
         plot_convergence: bool, optional
@@ -2010,30 +2076,38 @@ class PtychographicReconstruction(PhaseReconstruction):
             If true, the reconstructed probe intensity is also displayed
         object_mode: str
             Specifies the attribute of the object to plot, one of 'phase', 'amplitude', 'intensity'
-            
+
         Returns
         --------
         self: PtychographicReconstruction
             Self to accommodate chaining
         """
 
-        if object_mode != 'phase' and object_mode != 'amplitude' and object_mode != 'intensity':
-            raise ValueError(f"object_mode needs to be one of 'phase', 'amplitude', or 'intensity', not {object_mode}")
+        if (
+            object_mode != "phase"
+            and object_mode != "amplitude"
+            and object_mode != "intensity"
+        ):
+            raise ValueError(
+                f"object_mode needs to be one of 'phase', 'amplitude', or 'intensity', not {object_mode}"
+            )
 
         if iterations_grid is None:
             self._show_last_iteration(
                 plot_convergence=plot_convergence,
-                cbar = cbar,
-                plot_probe = plot_probe,
-                object_mode = object_mode,
-                **kwargs)
+                cbar=cbar,
+                plot_probe=plot_probe,
+                object_mode=object_mode,
+                **kwargs,
+            )
         else:
             self._show_all_iterations(
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
-                plot_probe = plot_probe,
-                cbar = cbar,
-                object_mode = object_mode,
-                **kwargs)
-            
+                plot_probe=plot_probe,
+                cbar=cbar,
+                object_mode=object_mode,
+                **kwargs,
+            )
+
         return self
