@@ -17,7 +17,7 @@ from py4DSTEM.io import DataCube
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.process.utils import get_shifted_ar
+from py4DSTEM.process.utils import get_shifted_ar, get_CoM
 from py4DSTEM.process.phase.utils import (
     fft_shift,
     ComplexProbe,
@@ -619,6 +619,53 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         return diffraction_intensities
 
+    def _pad_vacuum_probe_intensity(
+        self,
+        vacuum_probe_intensity: np.ndarray,
+        region_of_interest_shape: Tuple[int, int],
+    ):
+        """
+        Common static method to vacuum probe intensity to a certain region of interest shape.
+
+        Parameters
+        ----------
+        vacuum_probe_intensity: (Qx,Qy) np.ndarray
+            Vacuum probe to be zero-padded
+        region_of_interest_shape: (2,) Tuple[int,int]
+            Pixel dimensions (Sx,Sy) the CBED patterns will be padded to
+
+        Returns
+        -------
+        padded_vacuum_probe: (Sx,Sy) np.ndarray
+            Zero-padded vacuum probe
+        """
+        xp = self._xp
+        vacuum_probe_intensity_shape = np.array(vacuum_probe_intensity.shape)
+        vacuum_probe_intensity = xp.asarray(vacuum_probe_intensity, dtype=xp.float32)
+
+        if any(
+            vp_shape > roi_shape
+            for vp_shape, roi_shape in zip(
+                vacuum_probe_intensity_shape, region_of_interest_shape
+            )
+        ):
+            raise ValueError()
+
+        if np.all(vacuum_probe_intensity_shape != region_of_interest_shape):
+            padding_list = []
+            for current_dim, target_dim in zip(
+                vacuum_probe_intensity_shape, region_of_interest_shape
+            ):
+                pad_value = target_dim - current_dim
+                pad_tuple = (pad_value // 2, pad_value // 2 + pad_value % 2)
+                padding_list.append(pad_tuple)
+
+            vacuum_probe_intensity = xp.pad(
+                vacuum_probe_intensity, tuple(padding_list), mode="constant"
+            )
+
+        return vacuum_probe_intensity
+
     def _normalize_diffraction_intensities(
         self, diffraction_intensities, com_fitted_x, com_fitted_y
     ):
@@ -647,6 +694,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         com_x = asnumpy(com_fitted_x)
         com_y = asnumpy(com_fitted_y)
 
+        mean_intensity = 0
+
         for rx in range(self._intensities_shape[0]):
             for ry in range(self._intensities_shape[1]):
                 amplitudes = xp.asarray(
@@ -654,12 +703,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                     )
                 )
-                amplitudes /= xp.sum(amplitudes)
+                # amplitudes /= xp.sum(amplitudes)
+                mean_intensity += xp.sum(amplitudes)
                 diffraction_intensities[rx, ry] = xp.sqrt(xp.maximum(amplitudes, 0))
         diffraction_intensities = xp.reshape(
             diffraction_intensities, (-1,) + tuple(self._region_of_interest_shape)
         )
-        return diffraction_intensities
+        mean_intensity /= diffraction_intensities.shape[0]
+        return diffraction_intensities, mean_intensity
 
     def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
         """
@@ -1246,7 +1297,7 @@ class DPCReconstruction(PhaseReconstruction):
         im = ax.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
         ax.set_xlabel(f"x [{self._scan_units[0]}]")
         ax.set_ylabel(f"y [{self._scan_units[1]}]")
-        ax.set_title(f"DPC Phase Reconstruction\nRMS error: {self.error:.3f}")
+        ax.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3f}")
 
         if cbar:
 
@@ -1422,7 +1473,9 @@ class PtychographicReconstruction(PhaseReconstruction):
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial Probe guess
+        Semiangle cutoff for the initial probe guess
+    vacuum_probe_intensity: np.ndarray, optional
+        Vacuum probe to use as intensity aperture for initial probe guess
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration magnitudes should be given in Å
         and angles should be given in radians.
@@ -1450,6 +1503,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         verbose: bool = True,
         device: str = "cpu",
         semiangle_cutoff: float = None,
+        vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         **kwargs,
     ):
@@ -1479,6 +1533,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._region_of_interest_shape = region_of_interest_shape
         self._object = initial_object_guess
         self._probe = initial_probe_guess
@@ -1559,7 +1614,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._intensities, self._region_of_interest_shape
         )
 
-        self._intensities = self._normalize_diffraction_intensities(
+        (
+            self._intensities,
+            self._mean_diffraction_intensity,
+        ) = self._normalize_diffraction_intensities(
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
@@ -1599,12 +1657,27 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         # Probe Initialization
         if self._probe is None:
+            if self._vacuum_probe_intensity is not None:
+                self._semiangle_cutoff = np.inf
+                self._vacuum_probe_intensity = self._pad_vacuum_probe_intensity(
+                    self._vacuum_probe_intensity, self._region_of_interest_shape
+                )
+                vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                probe_x0, probe_y0 = get_CoM(vacuum_probe_intensity)
+                shift_x = self._region_of_interest_shape[0] / 2 - probe_x0
+                shift_y = self._region_of_interest_shape[1] / 2 - probe_y0
+                self._vacuum_probe_intensity = xp.asarray(
+                    get_shifted_ar(
+                        vacuum_probe_intensity, shift_x, shift_y, bilinear=True
+                    )
+                )
             self._probe = (
                 ComplexProbe(
                     gpts=self._region_of_interest_shape,
                     sampling=self.sampling,
                     energy=self._energy,
                     semiangle_cutoff=self._semiangle_cutoff,
+                    vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
                     device="cpu" if xp is np else "gpu",
                 )
@@ -1623,6 +1696,10 @@ class PtychographicReconstruction(PhaseReconstruction):
                     self._probe = self._probe.build()._array
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
+
+        # Normalize probe to match mean diffraction intensity
+        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         if plot_probe_overlaps:
 
@@ -1679,7 +1756,10 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         abs_fourier_exit_waves = xp.abs(fourier_exit_waves)
-        error = xp.mean(xp.abs(amplitudes - abs_fourier_exit_waves))
+        error = (
+            xp.mean(xp.abs(amplitudes - abs_fourier_exit_waves) ** 2)
+            / self._mean_diffraction_intensity
+        )
 
         difference_gradient_fourier = (amplitudes - abs_fourier_exit_waves) * xp.exp(
             1j * xp.angle(fourier_exit_waves)
@@ -1769,12 +1849,30 @@ class PtychographicReconstruction(PhaseReconstruction):
             current_probe += step_size * probe_update
         return current_object, current_probe
 
+    def _threshold_object_constraint(self, current_object, pure_phase_object: bool):
+        """ """
+        xp = self._xp
+        phase = xp.exp(1.0j * xp.angle(current_object))
+        if pure_phase_object:
+            amplitude = 1.0
+        else:
+            amplitude = xp.minimum(xp.abs(current_object), 1.0)
+        return amplitude * phase
+
+    def _constraints(self, current_object, current_probe, pure_phase_object: bool):
+        """ """
+        current_object = self._threshold_object_constraint(
+            current_object, pure_phase_object
+        )
+        return current_object, current_probe
+
     def reconstruct(
         self,
         max_iter: int = 64,
         step_size: float = 0.9,
         normalization_min: float = 1e-4,
-        warmup_iter: int = 10,
+        warmup_iter: int = 12,
+        pure_phase_object_iter: int = 64,
         progress_bar: bool = True,
         store_iterations: bool = False,
     ):
@@ -1819,6 +1917,11 @@ class PtychographicReconstruction(PhaseReconstruction):
                 step_size=step_size,
             )
 
+            # constraints
+            self._object, self._probe = self._constraints(
+                self._object, self._probe, pure_phase_object=a0 < pure_phase_object_iter
+            )
+
             if store_iterations:
                 self._object_iterations.append(self._object.copy())
                 self._probe_iterations.append(self._probe.copy())
@@ -1849,6 +1952,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.1)
         else:
             if plot_probe:
+                figsize = (figsize[0] * 2, figsize[1])
                 spec = GridSpec(ncols=2, nrows=1)
             else:
                 spec = GridSpec(ncols=1, nrows=1)
@@ -1863,20 +1967,22 @@ class PtychographicReconstruction(PhaseReconstruction):
         fig = plt.figure(figsize=figsize)
 
         if plot_probe:
+
+            # Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
                     np.angle(self.object), extent=extent, cmap=cmap, **kwargs
                 )
-                ax.set_title(f"Object Phase, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
                 im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
-                ax.set_title(f"Object Amplitude, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Amplitude")
             else:
                 im = ax.imshow(
                     np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
                 )
-                ax.set_title(f"Object Intensity, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
 
@@ -1887,19 +1993,21 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
+            # Probe
             probe_extent = [
                 0,
                 self.sampling[0] * self._region_of_interest_shape[0],
                 self.sampling[1] * self._region_of_interest_shape[1],
                 0,
             ]
+
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
                 np.abs(self.probe) ** 2, extent=probe_extent, cmap="Greys_r", **kwargs
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title(f"Probe Reconstruction\n error: {self.error:.3e}")
+            ax.set_title(f"Reconstructed Probe Intensity")
 
             if cbar:
 
@@ -1907,21 +2015,22 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
+
         else:
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
                 im = ax.imshow(
                     np.angle(self.object), extent=extent, cmap=cmap, **kwargs
                 )
-                ax.set_title(f"Object Phase, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
                 im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
-                ax.set_title(f"Object Amplitude, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Amplitude")
             else:
                 im = ax.imshow(
                     np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
                 )
-                ax.set_title(f"Object Intensity, error: {self.error:.3e}")
+                ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
 
@@ -1932,8 +2041,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
-        if plot_convergence and hasattr(self, "_reconstruction_errors"):
-            errors = self._reconstruction_errors
+        if plot_convergence and hasattr(self, "_error_iterations"):
+            errors = self._error_iterations
             if plot_probe:
                 ax = fig.add_subplot(spec[1, :])
             else:
@@ -1941,9 +2050,10 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             ax.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax.set_xlabel("Iteration Number")
-            ax.set_ylabel("Log error")
+            ax.set_ylabel("Log RMS error")
             ax.yaxis.tick_right()
 
+        fig.suptitle(f"RMS error: {self.error:.3e}")
         plt.show()
 
     def _show_all_iterations(
@@ -2003,7 +2113,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax = fig.add_subplot(spec)
                 ax.semilogy(np.arange(len(errors)), errors, **kwargs)
                 ax.set_xlabel("Iteration Number")
-                ax.set_ylabel("Log error")
+                ax.set_ylabel("Log RMS error")
                 ax.yaxis.tick_right()
                 ax.set_aspect(max_iter / np.ptp(np.log10(np.array(errors))))
             else:
@@ -2024,7 +2134,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                             cmap=cmap,
                             **kwargs,
                         )
-                        ax.set_title(f"Iter: {grid_range[n]} Object Phase")
+                        ax.set_title(f"Iter: {grid_range[n]} Phase")
                     elif object_mode == "amplitude":
                         im = ax.imshow(
                             np.abs(asnumpy(objects[grid_range[n]])),
@@ -2032,7 +2142,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                             cmap=cmap,
                             **kwargs,
                         )
-                        ax.set_title(f"Iter: {grid_range[n]} Object Amplitude")
+                        ax.set_title(f"Iter: {grid_range[n]} Amplitude")
                     else:
                         im = ax.imshow(
                             np.abs(asnumpy(objects[grid_range[n]])) ** 2,
@@ -2040,7 +2150,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                             cmap=cmap,
                             **kwargs,
                         )
-                        ax.set_title(f"Iter: {grid_range[n]} Object Intensity")
+                        ax.set_title(f"Iter: {grid_range[n]} Intensity")
 
                     if cbar:
                         divider = make_axes_locatable(ax)
@@ -2095,9 +2205,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         if iterations_grid is None:
             self._show_last_iteration(
                 plot_convergence=plot_convergence,
-                cbar=cbar,
                 plot_probe=plot_probe,
                 object_mode=object_mode,
+                cbar=cbar,
                 **kwargs,
             )
         else:
@@ -2105,8 +2215,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
-                cbar=cbar,
                 object_mode=object_mode,
+                cbar=cbar,
                 **kwargs,
             )
 
