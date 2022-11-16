@@ -90,9 +90,10 @@ class ComplexProbe:
     def __init__(
         self,
         energy: float,
-        semiangle_cutoff: float,
         gpts: Tuple[int, int],
         sampling: Tuple[float, float],
+        semiangle_cutoff: float = np.inf,
+        vacuum_probe_intensity: np.ndarray = None,
         device: str = "cpu",
         rolloff: float = 2,
         focal_spread: float = 0.0,
@@ -118,6 +119,7 @@ class ComplexProbe:
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
         self._focal_spread = focal_spread
@@ -167,6 +169,13 @@ class ComplexProbe:
 
         xp = self._xp
         semiangle_cutoff = self._semiangle_cutoff / 1000
+
+        if self._vacuum_probe_intensity is not None:
+            vacuum_probe_intensity = xp.asarray(
+                self._vacuum_probe_intensity, dtype=xp.float32
+            )
+            vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
+            return xp.fft.ifftshift(vacuum_probe_amplitude)
 
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
@@ -376,7 +385,7 @@ class ComplexProbe:
     ) -> Union[float, np.ndarray]:
         array = self.evaluate_aberrations(alpha, phi)
 
-        if self._semiangle_cutoff < np.inf:
+        if self._semiangle_cutoff < np.inf or self._vacuum_probe_intensity is not None:
             array *= self.evaluate_aperture(alpha, phi)
 
         if self._focal_spread > 0.0:
@@ -430,16 +439,12 @@ class ComplexProbe:
         xp = self._xp
         asnumpy = self._asnumpy
 
-        figsize = kwargs.get("figsize", (6, 6))
         cmap = kwargs.get("cmap", "Greys_r")
-        kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
         plt.imshow(
-            asnumpy(xp.abs(self._array.T) ** 2),
-            origin="lower",
+            asnumpy(xp.abs(self._array) ** 2),
             cmap=cmap,
-            figsize=figsize,
             **kwargs,
         )
         return self
