@@ -700,7 +700,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             for ry in range(self._intensities_shape[1]):
                 amplitudes = xp.asarray(
                     get_shifted_ar(
-                        dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
+                        dps[rx, ry].T if self._rotation_best_tranpose else dps[rx,ry],
+                        -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                     )
                 )
                 # amplitudes /= xp.sum(amplitudes)
@@ -1593,7 +1594,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=False
+            self._datacube, require_calibrations=True
         )
 
         self._calculate_intensities_center_of_mass(
