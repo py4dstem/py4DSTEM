@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
-from numpy.linalg import lstsq, nnls
+from numpy.linalg import lstsq
+from scipy.optimize import nnls
 
 class Crystal_Phase:
     """
