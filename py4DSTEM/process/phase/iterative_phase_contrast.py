@@ -2,11 +2,12 @@
 
 from typing import Union, Sequence, Mapping, Callable, Iterable, Tuple
 from abc import ABCMeta, abstractmethod
-import warnings
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 import numpy as np
+import warnings
 
 try:
     import cupy as cp
@@ -289,10 +290,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # fix CoM units
         self._com_normalized_x = (
             self._com_measured_x - self._com_fitted_x
-        ) * self._scan_sampling[0]
+        ) * self._reciprocal_sampling[0]
         self._com_normalized_y = (
             self._com_measured_y - self._com_fitted_y
-        ) * self._scan_sampling[1]
+        ) * self._reciprocal_sampling[1]
 
         # Optionally, plot
         if plot_center_of_mass:
@@ -332,7 +333,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
     def _solve_for_center_of_mass_relative_rotation(
         self,
-        rotation_angles_deg: np.ndarray = np.arange(-90.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         **kwargs,
@@ -982,7 +983,7 @@ class DPCReconstruction(PhaseReconstruction):
         plot_center_of_mass: bool = True,
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
-        rotation_angles_deg: np.ndarray = np.arange(-90.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         **kwargs,
     ):
         """
@@ -1040,7 +1041,7 @@ class DPCReconstruction(PhaseReconstruction):
         return self
 
     def _forward(
-        self, padded_phase_object: np.ndarray, mask: np.ndarray, mask_inv: np.ndarray
+            self, padded_phase_object: np.ndarray, mask: np.ndarray, mask_inv: np.ndarray, error: float, step_size: float
     ):
         """
         DPC forward projection:
@@ -1067,16 +1068,17 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         xp = self._xp
+        dx, dy = self._scan_sampling
 
         # centered finite-differences
-        obj_dx = 0.5 * (
+        obj_dx = (
             xp.roll(padded_phase_object, 1, axis=0)
             - xp.roll(padded_phase_object, -1, axis=0)
-        )
-        obj_dy = 0.5 * (
+        )/(2*dx)
+        obj_dy = (
             xp.roll(padded_phase_object, 1, axis=1)
             - xp.roll(padded_phase_object, -1, axis=1)
-        )
+        )/(2*dy)
 
         # difference from measurement
         obj_dx[mask] += self._com_x.ravel()
@@ -1084,14 +1086,17 @@ class DPCReconstruction(PhaseReconstruction):
         obj_dx[mask_inv] = 0
         obj_dy[mask_inv] = 0
 
-        error = xp.sqrt(
+        new_error = xp.sqrt(
             xp.mean(
                 (obj_dx[mask] - xp.mean(obj_dx[mask])) ** 2
                 + (obj_dy[mask] - xp.mean(obj_dy[mask])) ** 2
             )
         )
 
-        return obj_dx, obj_dy, error
+        if new_error > error:
+            step_size /= 2
+
+        return obj_dx, obj_dy, new_error, step_size
 
     def _adjoint(
         self,
@@ -1210,20 +1215,21 @@ class DPCReconstruction(PhaseReconstruction):
         mask = xp.zeros(padded_object_shape, dtype="bool")
         mask[: self._intensities_shape[0], : self._intensities_shape[1]] = True
         mask_inv = xp.logical_not(mask)
+        error = 0.
 
         if store_iterations:
             self._object_phase_iterations = []
             self._error_iterations = []
 
         # Fourier coordinates and operators
-        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._reciprocal_sampling[0])
-        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._reciprocal_sampling[1])
+        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
+        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._scan_sampling[1])
         kya, kxa = xp.meshgrid(ky, kx)
         k_den = kxa**2 + kya**2
         k_den[0, 0] = np.inf
         k_den = 1 / k_den
-        kx_op = -1j * 0.25 * kxa * k_den
-        ky_op = -1j * 0.25 * kya * k_den
+        kx_op = -1j * 0.25 * step_size * kxa * k_den
+        ky_op = -1j * 0.25 * step_size * kya * k_den
 
         # main loop
         for a0 in tqdmnd(
@@ -1234,7 +1240,7 @@ class DPCReconstruction(PhaseReconstruction):
         ):
 
             # forward operator
-            com_dx, com_dy, error = self._forward(padded_phase_object, mask, mask_inv)
+            com_dx, com_dy, error, step_size = self._forward(padded_phase_object, mask, mask_inv, error, step_size)
 
             # adjoint operator
             phase_update = self._adjoint(com_dx, com_dy, kx_op, ky_op)
@@ -1298,7 +1304,7 @@ class DPCReconstruction(PhaseReconstruction):
         im = ax.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
         ax.set_xlabel(f"x [{self._scan_units[0]}]")
         ax.set_ylabel(f"y [{self._scan_units[1]}]")
-        ax.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3f}")
+        ax.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
 
         if cbar:
 
@@ -1390,7 +1396,7 @@ class DPCReconstruction(PhaseReconstruction):
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(
-                    f"Iteration: {grid_range[n]}\nRMS error: {errors[grid_range[n]]:.3f}"
+                    f"Iteration: {grid_range[n]}\nRMS error: {errors[grid_range[n]]:.3e}"
                 )
 
                 if cbar:
@@ -1549,7 +1555,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_center_of_mass: bool = True,
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
-        rotation_angles_deg: np.ndarray = np.arange(-90.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
         **kwargs,
     ):
