@@ -467,7 +467,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 rotation_best_deg = rotation_angles_deg[ind_trans_min]
                 self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
                 self._rotation_best_tranpose = True
-
+   
         # Calculate corrected CoM
         if self._rotation_best_tranpose is False:
             self._com_x = (
@@ -758,7 +758,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         else:
             x = positions[:, 0]
             y = positions[:, 1]
-
+        
         x = (x - np.ptp(x) / 2) / self.sampling[0]
         y = (y - np.ptp(y) / 2) / self.sampling[1]
         x, y = np.meshgrid(x, y, indexing="ij")
@@ -1733,13 +1733,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             fig, ax = plt.subplots(figsize=figsize)
             ax.imshow(asnumpy(probe_overlap), extent=extent, cmap=cmap, **kwargs)
             ax.scatter(
-                asnumpy(self._positions[:, 1]),
                 asnumpy(self._positions[:, 0]),
+                asnumpy(self._positions[:, 1]),
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
+            ax.set_aspect(extent[2]/extent[1])
             plt.show()
 
         self._preprocessed = True
