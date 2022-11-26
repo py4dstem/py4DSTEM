@@ -701,14 +701,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
             for ry in range(self._intensities_shape[1]):
                 amplitudes = xp.asarray(
                     get_shifted_ar(
-                        dps[rx, ry], 
+                        dps[rx, ry].T if self._rotation_best_tranpose else dps[rx,ry],
                         -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                     )
                 )
                 # amplitudes /= xp.sum(amplitudes)
                 mean_intensity += xp.sum(amplitudes)
-
-
                 diffraction_intensities[rx, ry] = xp.sqrt(xp.maximum(amplitudes, 0))
         diffraction_intensities = xp.reshape(
             diffraction_intensities, (-1,) + tuple(self._region_of_interest_shape)
@@ -767,11 +765,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
                 rotation_angle
             ) + y * np.cos(rotation_angle)
-        
-        if self._rotation_best_tranpose:
-            positions = np.array([y.ravel(), x.ravel()]).T
-        else:
-            positions = np.array([x.ravel(), y.ravel()]).T
+
+        positions = np.array([x.ravel(), y.ravel()]).T
         positions -= np.min(positions, axis=0)
 
         self._object_px_padding = self._region_of_interest_shape / 2
