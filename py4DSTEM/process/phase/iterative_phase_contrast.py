@@ -336,6 +336,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
+        force_com_rotation: float = None,
+        force_com_transpose: bool = None,
         **kwargs,
     ):
         """
@@ -351,7 +353,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
             If True, the divergence of the CoM gradient vector field is maximized instead
-
+        force_ com_rotation: float (degrees), optional 
+            Force relative rotation angle between real and reciprocal space
+        force_com_tranpose: bool (optional)
+            Force whether diffraction intensities need to be transposed.
+            
         Assigns
         --------
         self._rotation_curl: np.ndarray
@@ -467,7 +473,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 rotation_best_deg = rotation_angles_deg[ind_trans_min]
                 self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
                 self._rotation_best_tranpose = True
-   
+        
+        if force_com_rotation is not None: 
+            self._rotation_best_rad = np.deg2rad(force_com_rotation)
+            rotation_best_deg = force_com_rotation
+        if force_com_transpose is not None:
+            self._rotation_best_tranpose = force_com_transpose
+
         # Calculate corrected CoM
         if self._rotation_best_tranpose is False:
             self._com_x = (
@@ -494,11 +506,17 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         # Print summary
         if self._verbose:
-            print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees")
-            if self._rotation_best_tranpose:
-                print("Diffraction intensities should be transposed")
+            if force_com_rotation is not None:
+                print(f'Warning: best fit rotation forced to {str(np.round(rotation_best_deg))} degrees.')
             else:
-                print("No need to transpose diffraction intensities")
+                print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees")
+            if force_com_transpose is not None:
+                print(f'Warning: transpose of intensities forced to {force_com_transpose}.')
+            else:
+                if self._rotation_best_tranpose:
+                    print("Diffraction intensities should be transposed")
+                else:
+                    print("No need to transpose diffraction intensities")
 
         # Plot Curl/Div rotation
         if plot_rotation:
@@ -989,6 +1007,9 @@ class DPCReconstruction(PhaseReconstruction):
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        force_com_rotation: float = None,
+        force_com_transpose: bool = None,
+
         **kwargs,
     ):
         """
@@ -1011,7 +1032,10 @@ class DPCReconstruction(PhaseReconstruction):
             If True, the divergence of the CoM gradient vector field is maximized instead
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
-
+        force_ com_rotation: float (degrees), optional 
+            Force relative rotation angle between real and reciprocal space
+        force_com_tranpose: bool (optional)
+            Force whether diffraction intensities need to be transposed.
         Mutates
         --------
         self._preprocessed: bool
@@ -1038,6 +1062,9 @@ class DPCReconstruction(PhaseReconstruction):
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             maximize_divergence=maximize_divergence,
+            calculate_rotation = True, 
+            force_com_rotation = force_com_rotation,
+            force_com_transpose = force_com_transpose,
             **kwargs,
         )
 
@@ -1562,6 +1589,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
+        force_com_rotation: float = None,
+        force_com_transpose: float = None,
         **kwargs,
     ):
         """
@@ -1590,7 +1619,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, the initial probe overlaps scanned over the object will be displayed
-
+        force_ com_rotation: float (degrees), optional 
+            Force relative rotation angle between real and reciprocal space
+        force_com_tranpose: bool (optional)
+            Force whether diffraction intensities need to be transposed.
+            
         Assigns
         --------
         self._preprocessed: bool
@@ -1619,6 +1652,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             maximize_divergence=maximize_divergence,
+            force_com_rotation = force_com_rotation,
+            force_com_transpose = force_com_transpose,
             **kwargs,
         )
 
