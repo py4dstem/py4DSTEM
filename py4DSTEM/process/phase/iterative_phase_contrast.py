@@ -298,7 +298,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # Optionally, plot
         if plot_center_of_mass:
 
-
             figsize = kwargs.get("figsize", (12, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -312,7 +311,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             ]
 
             fig = plt.figure(figsize=figsize)
-            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=0.1)
+            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=0.15)
 
             for ax, arr in zip(grid,[self._com_measured_x,self._com_measured_y,self._com_normalized_x,self._com_normalized_y]):
                 ax.imshow(
@@ -1508,9 +1507,10 @@ class DPCReconstruction(PhaseReconstruction):
 
         if plot_convergence:
             figsize = (figsize[0], figsize[1] + figsize[0] / 4)
-            spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.1)
+            spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             spec = GridSpec(ncols=1, nrows=1)
+        fig = plt.figure(figsize=figsize)
 
         extent = [
             0,
@@ -1519,16 +1519,15 @@ class DPCReconstruction(PhaseReconstruction):
             self._scan_sampling[1] * self._intensities_shape[1],
         ]
 
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(spec[0])
-        im = ax.imshow(self.object_phase.T, extent=extent, cmap=cmap, origin='lower',**kwargs)
-        ax.set_xlabel(f"x [{self._scan_units[0]}]")
-        ax.set_ylabel(f"y [{self._scan_units[1]}]")
-        ax.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
+        ax1 = fig.add_subplot(spec[0])
+        im = ax1.imshow(self.object_phase.T, extent=extent, cmap=cmap, origin='lower',**kwargs)
+        ax1.set_xlabel(f"x [{self._scan_units[0]}]")
+        ax1.set_ylabel(f"y [{self._scan_units[1]}]")
+        ax1.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
 
         if cbar:
 
-            divider = make_axes_locatable(ax)
+            divider = make_axes_locatable(ax1)
             ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
             fig.add_axes(ax_cb)
             fig.colorbar(im, cax=ax_cb)
@@ -1536,12 +1535,11 @@ class DPCReconstruction(PhaseReconstruction):
         if plot_convergence and hasattr(self, "_error_iterations"):
 
             errors = self._error_iterations
-            ax = fig.add_subplot(spec[1])
-
-            ax.semilogy(np.arange(len(errors)), errors, **kwargs)
-            ax.set_xlabel("Iteration Number")
-            ax.set_ylabel("Log RMS error")
-            ax.yaxis.tick_right()
+            ax2=fig.add_subplot(spec[1])
+            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+            ax2.set_xlabel("Iteration Number")
+            ax2.set_ylabel("Log RMS error")
+            ax2.yaxis.tick_right()
 
         plt.show()
 
@@ -1580,51 +1578,48 @@ class DPCReconstruction(PhaseReconstruction):
         errors = self._error_iterations
         phases = self._object_phase_iterations
         max_iter = len(phases) - 1
-
-        if plot_convergence:
-            grid_range = range(0, max_iter, max_iter // (total_grids - 2))
-        else:
-            grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+        grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+        
         extent = [
             0,
             self._scan_sampling[0] * self._intensities_shape[0],
             0,
             self._scan_sampling[1] * self._intensities_shape[1],
         ]
-
-        gridspec = GridSpec(
-            nrows=iterations_grid[0], ncols=iterations_grid[1], hspace=0
-        )
+        
+        if plot_convergence:
+            figsize = (figsize[0], figsize[1] + figsize[0] / 4)
+            spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
+        else:
+            spec = GridSpec(ncols=1,nrows=1)
         fig = plt.figure(figsize=figsize)
+            
+        grid = ImageGrid(
+                fig,spec[0],
+                nrows_ncols=iterations_grid,
+                axes_pad=(0.75,0.5) if cbar else 0.5,
+                cbar_mode="each" if cbar else None,
+                cbar_pad = "2.5%" if cbar else None)
 
-        for n, spec in enumerate(gridspec):
+        for n, ax in enumerate(grid):
+            im = ax.imshow(
+                asnumpy(phases[grid_range[n]].T), extent=extent, origin='lower',cmap=cmap, **kwargs
+            )
+            ax.set_xlabel(f"x [{self._scan_units[0]}]")
+            ax.set_ylabel(f"y [{self._scan_units[1]}]")
+            if cbar:
+                grid.cbar_axes[n].colorbar(im)
+            ax.set_title(
+                f"Iteration: {grid_range[n]}\nRMS error: {errors[grid_range[n]]:.3e}"
+            )
 
-            if plot_convergence and n == len(grid_range):
+        if plot_convergence:
 
-                ax = fig.add_subplot(spec)
-                ax.semilogy(np.arange(len(errors)), errors, **kwargs)
-                ax.set_xlabel("Iteration Number")
-                ax.set_ylabel("Log RMS error")
-                ax.yaxis.tick_right()
-                ax.set_aspect(max_iter / np.ptp(np.log10(np.array(errors))))
-
-            else:
-                ax = fig.add_subplot(spec)
-                im = ax.imshow(
-                    asnumpy(phases[grid_range[n]].T), extent=extent, origin='lower',cmap=cmap, **kwargs
-                )
-                ax.set_xlabel(f"x [{self._scan_units[0]}]")
-                ax.set_ylabel(f"y [{self._scan_units[1]}]")
-                ax.set_title(
-                    f"Iteration: {grid_range[n]}\nRMS error: {errors[grid_range[n]]:.3e}"
-                )
-
-                if cbar:
-                    divider = make_axes_locatable(ax)
-                    cax = divider.append_axes("right", size="5%", pad="2.5%")
-                    fig.colorbar(im, cax=cax, orientation="vertical")
-
-        #fig.tight_layout()
+            ax2=fig.add_subplot(spec[1])
+            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+            ax2.set_xlabel("Iteration Number")
+            ax2.set_ylabel("Log RMS error")
+            ax2.yaxis.tick_right()
 
     def show(
         self,
