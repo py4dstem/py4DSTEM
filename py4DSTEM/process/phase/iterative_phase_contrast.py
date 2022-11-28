@@ -311,14 +311,15 @@ class PhaseReconstruction(metaclass=ABCMeta):
             ]
 
             fig = plt.figure(figsize=figsize)
-            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=0.15)
+            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=(0.25,0.5))
 
-            for ax, arr in zip(grid,[self._com_measured_x,self._com_measured_y,self._com_normalized_x,self._com_normalized_y]):
+            for ax, arr, title in zip(grid,[self._com_measured_x,self._com_measured_y,self._com_normalized_x,self._com_normalized_y],['CoM_x','CoM_y','Normalized CoM_x', 'Normalized CoM_y']):
                 ax.imshow(
                     asnumpy(arr.T), extent=extent, origin='lower',cmap=cmap, **kwargs
                     )
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
+                ax.set_title(title)
 
             plt.show()
 
@@ -1938,7 +1939,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
             figsize = kwargs.get("figsize", (8, 8))
-            cmap = kwargs.get("cmap", "gray")
+            cmap = kwargs.get("cmap", "Greys_r")
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
 
@@ -2172,27 +2173,35 @@ class PtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
+        
+
+        extent = [
+            0,
+            self.sampling[0] * self._object_shape[0],
+            0,
+            self.sampling[1] * self._object_shape[1],
+        ]
+        
+        probe_extent = [
+            0,
+            self.sampling[0] * self._region_of_interest_shape[0],
+            0,
+            self.sampling[1] * self._region_of_interest_shape[1],
+        ]
 
         if plot_convergence:
             figsize = (figsize[0], figsize[1] + figsize[0] / 4)
             if plot_probe:
                 figsize = (figsize[0] * 2, figsize[1])
-                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.1)
+                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15, width_ratios = [(extent[1]/extent[3])/(probe_extent[1]/probe_extent[3]),1], wspace=0.35)
             else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.1)
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             if plot_probe:
                 figsize = (figsize[0] * 2, figsize[1])
-                spec = GridSpec(ncols=2, nrows=1)
+                spec = GridSpec(ncols=2, nrows=1, width_ratios = [(extent[1]/extent[3])/(probe_extent[1]/probe_extent[3]),1], wspace=0.35)
             else:
                 spec = GridSpec(ncols=1, nrows=1)
-
-        extent = [
-            0,
-            self.sampling[0] * self._object_shape[0],
-            self.sampling[1] * self._object_shape[1],
-            0,
-        ]
 
         fig = plt.figure(figsize=figsize)
 
@@ -2202,45 +2211,34 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object.T), extent=extent, cmap=cmap, **kwargs
+                    np.angle(self.object.T), extent=extent, cmap=cmap,origin='lower', **kwargs
                 )
-                ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, **kwargs)
-                ax.set_title(f"Reconstructed Object Amplitude")
+                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs)
             else:
                 im = ax.imshow(
-                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, **kwargs
+                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, origin='lower',**kwargs
                 )
-                ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
+            ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
             # Probe
-            probe_extent = [
-                0,
-                self.sampling[0] * self._region_of_interest_shape[0],
-                self.sampling[1] * self._region_of_interest_shape[1],
-                0,
-            ]
-
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
-                np.abs(self.probe) ** 2, extent=probe_extent, cmap="Greys_r", **kwargs
+                np.abs(self.probe.T) ** 2, extent=probe_extent, cmap="Greys_r", origin='lower',**kwargs
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title(f"Reconstructed Probe Intensity")
-
+            ax.set_title(f"Reconstructed probe intensity")
+            
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
@@ -2250,19 +2248,17 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object.T), extent=extent, cmap=cmap, **kwargs
+                    np.angle(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs
                 )
-                ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, **kwargs)
-                ax.set_title(f"Reconstructed Object Amplitude")
+                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs)
             else:
                 im = ax.imshow(
-                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, **kwargs
+                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, origin='lower',**kwargs
                 )
-                ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
+            ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
 
@@ -2300,97 +2296,129 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if iterations_grid == "auto":
             iterations_grid = (2, 4)
-        figsize = kwargs.get("figsize", (13, 6.5))
+        else:
+            if plot_probe and iterations_grid[0] != 2:
+                raise ValueError()
+
+        figsize = kwargs.get("figsize", (12, 6))
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
+        
+        errors = self._error_iterations
+        objects = self._object_iterations
 
         if plot_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
+            probes = self._probe_iterations
         else:
             total_grids = np.prod(iterations_grid)
-        errors = self._error_iterations
-        objects = self._object_iterations
-        if plot_probe:
-            probes = self._probe_iterations
         max_iter = len(objects) - 1
-
-        if plot_convergence and not plot_probe:
-            grid_range = range(0, max_iter, max_iter // (total_grids - 2))
-        else:
-            grid_range = range(0, max_iter, max_iter // (total_grids - 1))
-
-        if plot_probe:
-            grid_range = np.tile(grid_range, 2)
-            if plot_convergence:
-                grid_range = grid_range[:-1]
-
+        grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+        
         extent = [
             0,
-            self._scan_sampling[0] * self._intensities_shape[0],
-            self._scan_sampling[1] * self._intensities_shape[1],
+            self.sampling[0] * self._object_shape[0],
             0,
+            self.sampling[1] * self._object_shape[1],
         ]
 
-        gridspec = GridSpec(
-            nrows=iterations_grid[0], ncols=iterations_grid[1], hspace=0
-        )
-        fig = plt.figure(figsize=figsize)
-
-        for n, spec in enumerate(gridspec):
-            if plot_convergence and n == len(grid_range):
-
-                ax = fig.add_subplot(spec)
-                ax.semilogy(np.arange(len(errors)), errors, **kwargs)
-                ax.set_xlabel("Iteration Number")
-                ax.set_ylabel("Log RMS error")
-                ax.yaxis.tick_right()
-                ax.set_aspect(max_iter / np.ptp(np.log10(np.array(errors))))
+        probe_extent = [
+            0,
+            self.sampling[0] * self._region_of_interest_shape[0],
+            0,
+            self.sampling[1] * self._region_of_interest_shape[1],
+        ]
+        
+        if plot_convergence:
+            figsize = (figsize[0], figsize[1] + figsize[0] / 4)
+            if plot_probe:
+                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
             else:
-                ax = fig.add_subplot(spec)
-                if n // (total_grids) and plot_probe:
-                    im = ax.imshow(
-                        np.abs(asnumpy(probes[grid_range[n]].T)) ** 2,
-                        extent=extent,
-                        cmap="Greys_r",
-                        **kwargs,
-                    )
-                    ax.set_title(f"Iter: {grid_range[n]} Probe")
-                else:
-                    if object_mode == "phase":
-                        im = ax.imshow(
-                            np.angle(asnumpy(objects[grid_range[n]].T)),
-                            extent=extent,
-                            cmap=cmap,
-                            **kwargs,
-                        )
-                        ax.set_title(f"Iter: {grid_range[n]} Phase")
-                    elif object_mode == "amplitude":
-                        im = ax.imshow(
-                            np.abs(asnumpy(objects[grid_range[n]].T)),
-                            extent=extent,
-                            cmap=cmap,
-                            **kwargs,
-                        )
-                        ax.set_title(f"Iter: {grid_range[n]} Amplitude")
-                    else:
-                        im = ax.imshow(
-                            np.abs(asnumpy(objects[grid_range[n]].T)) ** 2,
-                            extent=extent,
-                            cmap=cmap,
-                            **kwargs,
-                        )
-                        ax.set_title(f"Iter: {grid_range[n]} Intensity")
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
+        else:
+            if plot_probe:
+                spec = GridSpec(ncols=1,nrows=2)
+            else:
+                spec = GridSpec(ncols=1,nrows=1)
 
-                    if cbar:
-                        divider = make_axes_locatable(ax)
-                        cax = divider.append_axes("right", size="5%", pad="2.5%")
-                        fig.colorbar(im, cax=cax, orientation="vertical")
+        fig = plt.figure(figsize=figsize)
+            
+        grid = ImageGrid(
+                fig,
+                spec[0],
+                nrows_ncols=(1,iterations_grid[1]) if plot_probe else iterations_grid,
+                axes_pad=(0.75,0.5) if cbar else 0.5,
+                cbar_mode="each" if cbar else None,
+                cbar_pad = "2.5%" if cbar else None)
 
+        for n, ax in enumerate(grid):
+            if object_mode == "phase":
+                im = ax.imshow(
+                    np.angle(asnumpy(objects[grid_range[n]].T)),
+                    extent=extent,
+                    cmap=cmap,
+                    origin='lower',
+                    **kwargs,
+                )
+                ax.set_title(f"Iter: {grid_range[n]} Phase")
+            elif object_mode == "amplitude":
+                im = ax.imshow(
+                    np.abs(asnumpy(objects[grid_range[n]].T)),
+                    extent=extent,
+                    cmap=cmap,
+                    origin='lower',
+                    **kwargs,
+                )
+                ax.set_title(f"Iter: {grid_range[n]} Amplitude")
+            else:
+                im = ax.imshow(
+                    np.abs(asnumpy(objects[grid_range[n]].T)) ** 2,
+                    extent=extent,
+                    origin='lower',
+                    cmap=cmap,
+                    **kwargs,
+                )
+                ax.set_title(f"Iter: {grid_range[n]} Intensity")
+
+            ax.set_xlabel("x [A]")
+            ax.set_ylabel("y [A]")
+            if cbar:
+                grid.cbar_axes[n].colorbar(im)
+
+        if plot_probe:
+            grid = ImageGrid(
+                    fig,spec[1],
+                    nrows_ncols=(1,iterations_grid[1]),
+                    axes_pad=(0.75,0.5) if cbar else 0.5,
+                    cbar_mode="each" if cbar else None,
+                    cbar_pad = "2.5%" if cbar else None)
+
+            for n, ax in enumerate(grid):
+                im = ax.imshow(
+                    np.abs(asnumpy(probes[grid_range[n]].T)) ** 2,
+                    extent=probe_extent,
+                    cmap="Greys_r",
+                    origin='lower',
+                    **kwargs,
+                )
+                ax.set_title(f"Iter: {grid_range[n]} Probe")
+            
                 ax.set_xlabel("x [A]")
                 ax.set_ylabel("y [A]")
 
-        fig.tight_layout()
+                if cbar:
+                    grid.cbar_axes[n].colorbar(im)
+       
+        if plot_convergence:
+            if plot_probe:
+                ax2=fig.add_subplot(spec[2])
+            else:
+                ax2=fig.add_subplot(spec[1])
+            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+            ax2.set_xlabel("Iteration Number")
+            ax2.set_ylabel("Log RMS error")
+            ax2.yaxis.tick_right()
 
     def show(
         self,
