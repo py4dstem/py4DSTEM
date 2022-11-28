@@ -4,7 +4,7 @@ from typing import Union, Sequence, Mapping, Callable, Iterable, Tuple
 from abc import ABCMeta, abstractmethod
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable, ImageGrid
 
 import numpy as np
 import warnings
@@ -298,6 +298,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # Optionally, plot
         if plot_center_of_mass:
 
+
             figsize = kwargs.get("figsize", (12, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -309,26 +310,17 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 0,
                 self._scan_sampling[1] * self._intensities_shape[1],
             ]
-            fig, ax = plt.subplots(2, 2, figsize=figsize)
 
-            ax[0, 0].imshow(
-                asnumpy(self._com_measured_x), extent=extent, cmap=cmap, **kwargs
-            )
-            ax[0, 1].imshow(
-                asnumpy(self._com_measured_y), extent=extent, cmap=cmap, **kwargs
-            )
-            ax[1, 0].imshow(
-                asnumpy(self._com_normalized_x), extent=extent, cmap=cmap, **kwargs
-            )
-            ax[1, 1].imshow(
-                asnumpy(self._com_normalized_y), extent=extent, cmap=cmap, **kwargs
-            )
+            fig = plt.figure(figsize=figsize)
+            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=0.1)
 
-            for ax_flat in ax.flatten():
-                ax_flat.set_xlabel(f"x [{self._scan_units[0]}]")
-                ax_flat.set_ylabel(f"y [{self._scan_units[1]}]")
+            for ax, arr in zip(grid,[self._com_measured_x,self._com_measured_y,self._com_normalized_x,self._com_normalized_y]):
+                ax.imshow(
+                    asnumpy(arr.T), extent=extent, origin='lower',cmap=cmap, **kwargs
+                    )
+                ax.set_xlabel(f"x [{self._scan_units[0]}]")
+                ax.set_ylabel(f"y [{self._scan_units[1]}]")
 
-            fig.tight_layout()
             plt.show()
 
     def _solve_for_center_of_mass_relative_rotation(
@@ -353,9 +345,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
             If True, the divergence of the CoM gradient vector field is maximized instead
-        force_ com_rotation: float (degrees), optional 
+        force_com_rotation: float (degrees), optional 
             Force relative rotation angle between real and reciprocal space
-        force_com_tranpose: bool (optional)
+        force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
             
         Assigns
@@ -366,7 +358,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Array of transposed CoM curl for each angle
         self._rotation_best_rad: float
             Rotation angle which minimizes CoM curl, in radians
-        self._rotation_best_tranpose: bool
+        self._rotation_best_transpose: bool
             Whether diffraction intensities need to be transposed to minimize CoM curl
         self._com_x: xp.ndarray
             Corrected horizontal center of mass gradient, on calculation device
@@ -388,100 +380,351 @@ class PhaseReconstruction(metaclass=ABCMeta):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        rotation_angles_deg = xp.asarray(rotation_angles_deg)
-        rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
-
-        # Untransposed
-        com_measured_x = (
-            xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
-            - xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
-        )
-        com_measured_y = (
-            xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
-            + xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
-        )
-
-        if maximize_divergence:
-            com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-            com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-            self._rotation_div = xp.mean(
-                xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
-            )
-        else:
-            com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-            com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-            self._rotation_curl = xp.mean(
-                xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
-            )
-
-        # Transposed
-        com_measured_x = (
-            xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
-            - xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
-        )
-        com_measured_y = (
-            xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
-            + xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
-        )
-
-        if maximize_divergence:
-            com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-            com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-            self._rotation_div_transpose = xp.mean(
-                xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
-            )
-        else:
-            com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-            com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-            self._rotation_curl_transpose = xp.mean(
-                xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
-            )
-
-        rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
-        rotation_angles_deg = asnumpy(rotation_angles_deg)
-
-        # Find lowest curl/ maximum div value
-        if maximize_divergence:
-            # Maximize Divergence
-            ind_max = xp.argmax(self._rotation_div).item()
-            ind_trans_max = xp.argmax(self._rotation_div_transpose).item()
-
-            if (
-                self._rotation_div[ind_max]
-                >= self._rotation_div_transpose[ind_trans_max]
-            ):
-                rotation_best_deg = rotation_angles_deg[ind_max]
-                self._rotation_best_rad = rotation_angles_rad[ind_max]
-                self._rotation_best_tranpose = False
-            else:
-                rotation_best_deg = rotation_angles_deg[ind_trans_max]
-                self._rotation_best_rad = rotation_angles_rad[ind_trans_max]
-                self._rotation_best_tranpose = True
-        else:
-            # Minimize Curl
-            ind_min = xp.argmin(self._rotation_curl).item()
-            ind_trans_min = xp.argmin(self._rotation_curl_transpose).item()
-
-            if (
-                self._rotation_curl[ind_min]
-                <= self._rotation_curl_transpose[ind_trans_min]
-            ):
-                rotation_best_deg = rotation_angles_deg[ind_min]
-                self._rotation_best_rad = rotation_angles_rad[ind_min]
-                self._rotation_best_tranpose = False
-            else:
-                rotation_best_deg = rotation_angles_deg[ind_trans_min]
-                self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
-                self._rotation_best_tranpose = True
-        
-        if force_com_rotation is not None: 
+        if force_com_rotation is not None:
+            # Rotation known
+            
             self._rotation_best_rad = np.deg2rad(force_com_rotation)
-            rotation_best_deg = force_com_rotation
-        if force_com_transpose is not None:
-            self._rotation_best_tranpose = force_com_transpose
+            
+            if self._verbose:
+                warnings.warn(
+                    f"Best fit rotation forced to {str(np.round(force_com_rotation))} degrees.",
+                    UserWarning,
+                    )
 
+            if force_com_transpose is not None:
+                # Transpose known
+                
+                self._rotation_best_transpose = force_com_transpose
+                
+                if self._verbose:
+                    warnings.warn(
+                        f"Transpose of intensities forced to {force_com_transpose}.",
+                        UserWarning,
+                        )
+
+            else:
+                # Rotation known, transpose unknown
+                com_measured_x = (
+                    xp.cos(self._rotation_best_rad) * self._com_normalized_x
+                    - xp.sin(self._rotation_best_rad) * self._com_normalized_y
+                )
+                com_measured_y = (
+                    xp.sin(self._rotation_best_rad) * self._com_normalized_x
+                    + xp.cos(self._rotation_best_rad) * self._com_normalized_y
+                )
+                if maximize_divergence:
+                    com_grad_x_x = com_measured_x[2:, 1:-1] - com_measured_x[:-2, 1:-1]
+                    com_grad_y_y = com_measured_y[1:-1, 2:] - com_measured_y[1:-1, :-2]
+                    rotation_div = xp.mean(xp.abs(com_grad_x_x + com_grad_y_y))
+                else:
+                    com_grad_x_y = com_measured_x[1:-1, 2:] - com_measured_x[1:-1, :-2]
+                    com_grad_y_x = com_measured_y[2:, 1:-1] - com_measured_y[:-2, 1:-1]
+                    rotation_curl = xp.mean(xp.abs(com_grad_y_x - com_grad_x_y))
+
+                com_measured_x = (
+                    xp.cos(self._rotation_best_rad) * self._com_normalized_y
+                    - xp.sin(self._rotation_best_rad) * self._com_normalized_x
+                )
+                com_measured_y = (
+                    xp.sin(self._rotation_best_rad) * self._com_normalized_y
+                    + xp.cos(self._rotation_best_rad) * self._com_normalized_x
+                )
+                if maximize_divergence:
+                    com_grad_x_x = com_measured_x[2:, 1:-1] - com_measured_x[:-2, 1:-1]
+                    com_grad_y_y = com_measured_y[1:-1, 2:] - com_measured_y[1:-1, :-2]
+                    rotation_div_transpose = xp.mean(xp.abs(com_grad_x_x + com_grad_y_y))
+                else:
+                    com_grad_x_y = com_measured_x[1:-1, 2:] - com_measured_x[1:-1, :-2]
+                    com_grad_y_x = com_measured_y[2:, 1:-1] - com_measured_y[:-2, 1:-1]
+                    rotation_curl_transpose = xp.mean(xp.abs(com_grad_y_x - com_grad_x_y))
+
+                if maximize_divergence:
+                    self._rotation_best_transpose = rotation_div_transpose > rotation_div
+                else:
+                    self._rotation_best_transpose = rotation_curl_transpose < rotation_curl
+
+                if self._verbose:
+                    if self._rotation_best_transpose:
+                        print("Diffraction intensities should be transposed.")
+                    else:
+                        print("No need to transpose diffraction intensities.")
+
+        else:
+            # Rotation unknown
+            if force_com_transpose is not None:
+                # Transpose known, rotation unknown
+                
+                self._rotation_best_transpose = force_com_transpose
+                
+                if self._verbose:
+                    warnings.warn(
+                        f"Transpose of intensities forced to {force_com_transpose}.",
+                        UserWarning,
+                        )
+
+                rotation_angles_deg = xp.asarray(rotation_angles_deg)
+                rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
+
+                if self._rotation_best_transpose:
+                    com_measured_x = (
+                        xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
+                        - xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
+                    )
+                    com_measured_y = (
+                        xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
+                        + xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
+                    )
+       
+                    rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
+                    rotation_angles_deg = asnumpy(rotation_angles_deg)
+
+                    if maximize_divergence:
+                        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        self._rotation_div_transpose = xp.mean(
+                            xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
+                        )
+                        
+                        ind_trans_max = xp.argmax(self._rotation_div_transpose).item()
+                        rotation_best_deg = rotation_angles_deg[ind_trans_max]
+                        self._rotation_best_rad = rotation_angles_rad[ind_trans_max]
+
+                    else:
+                        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        self._rotation_curl_transpose = xp.mean(
+                            xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
+                        )
+                        
+                        ind_trans_min = xp.argmin(self._rotation_curl_transpose).item()
+                        rotation_best_deg = rotation_angles_deg[ind_trans_min]
+                        self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
+
+                else:
+                    com_measured_x = (
+                        xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
+                        - xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
+                    )
+                    com_measured_y = (
+                        xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
+                        + xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
+                    )
+       
+                    rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
+                    rotation_angles_deg = asnumpy(rotation_angles_deg)
+                    
+                    if maximize_divergence:
+                        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        self._rotation_div = xp.mean(
+                            xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
+                        )
+                        
+                        ind_max = xp.argmax(self._rotation_div).item()
+                        rotation_best_deg = rotation_angles_deg[ind_max]
+                        self._rotation_best_rad = rotation_angles_rad[ind_max]
+
+                    else:
+                        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        self._rotation_curl = xp.mean(
+                            xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
+                        )
+                        
+                        ind_min = xp.argmin(self._rotation_curl).item()
+                        rotation_best_deg = rotation_angles_deg[ind_min]
+                        self._rotation_best_rad = rotation_angles_rad[ind_min]
+
+                if self._verbose:
+                    print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees.")
+
+                if plot_rotation:
+
+                    figsize = kwargs.get("figsize", (12, 12))
+                    fig, ax = plt.subplots(figsize=figsize)
+
+                    if self._rotation_best_transpose:
+                        ax.plot(
+                            rotation_angles_deg,
+                            asnumpy(self._rotation_div_transpose)
+                            if maximize_divergence
+                            else asnumpy(self._rotation_curl_transpose),
+                            label="CoM after transpose",
+                        )
+                    else:
+                        ax.plot(
+                            rotation_angles_deg,
+                            asnumpy(self._rotation_div)
+                            if maximize_divergence
+                            else asnumpy(self._rotation_curl),
+                            label="CoM",
+                        )
+
+                    y_r = ax.get_ylim()
+                    ax.plot(
+                        np.ones(2) * rotation_best_deg,
+                        y_r,
+                        color=(0, 0, 0, 1),
+                    )
+
+                    ax.legend(loc="best")
+                    ax.set_xlabel("Rotation [degrees]")
+                    if maximize_divergence:
+                        aspect_ratio = np.ptp(self._rotation_div_transpose) if self._rotation_best_transpose else np.ptp(self._rotation_div)
+                        ax.set_ylabel("Mean Absolute Divergence")
+                        ax.set_aspect(
+                            np.ptp(rotation_angles_deg) / aspect_ratio / 4
+                        )
+                    else:
+                        aspect_ratio = np.ptp(self._rotation_curl_transpose) if self._rotation_best_transpose else np.ptp(self._rotation_curl)
+                        ax.set_ylabel("Mean Absolute Curl")
+                        ax.set_aspect(
+                            np.ptp(rotation_angles_deg) / aspect_ratio / 4
+                        )
+                    fig.tight_layout()
+                    plt.show()
+
+            else:
+
+                # Transpose unknown, rotation unknown
+                rotation_angles_deg = xp.asarray(rotation_angles_deg)
+                rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
+
+                # Untransposed
+                com_measured_x = (
+                    xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
+                    - xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
+                )
+                com_measured_y = (
+                    xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
+                    + xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
+                )
+
+                if maximize_divergence:
+                    com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                    com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    self._rotation_div = xp.mean(
+                        xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
+                    )
+                else:
+                    com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                    com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    self._rotation_curl = xp.mean(
+                        xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
+                    )
+
+                # Transposed
+                com_measured_x = (
+                    xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
+                    - xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
+                )
+                com_measured_y = (
+                    xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
+                    + xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
+                )
+
+                if maximize_divergence:
+                    com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                    com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    self._rotation_div_transpose = xp.mean(
+                        xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
+                    )
+                else:
+                    com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                    com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    self._rotation_curl_transpose = xp.mean(
+                        xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
+                    )
+
+                rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
+                rotation_angles_deg = asnumpy(rotation_angles_deg)
+
+                # Find lowest curl/ maximum div value
+                if maximize_divergence:
+                    # Maximize Divergence
+                    ind_max = xp.argmax(self._rotation_div).item()
+                    ind_trans_max = xp.argmax(self._rotation_div_transpose).item()
+
+                    if (
+                        self._rotation_div[ind_max]
+                        >= self._rotation_div_transpose[ind_trans_max]
+                    ):
+                        rotation_best_deg = rotation_angles_deg[ind_max]
+                        self._rotation_best_rad = rotation_angles_rad[ind_max]
+                        self._rotation_best_transpose = False
+                    else:
+                        rotation_best_deg = rotation_angles_deg[ind_trans_max]
+                        self._rotation_best_rad = rotation_angles_rad[ind_trans_max]
+                        self._rotation_best_transpose = True
+                else:
+                    # Minimize Curl
+                    ind_min = xp.argmin(self._rotation_curl).item()
+                    ind_trans_min = xp.argmin(self._rotation_curl_transpose).item()
+
+                    if (
+                        self._rotation_curl[ind_min]
+                        <= self._rotation_curl_transpose[ind_trans_min]
+                    ):
+                        rotation_best_deg = rotation_angles_deg[ind_min]
+                        self._rotation_best_rad = rotation_angles_rad[ind_min]
+                        self._rotation_best_transpose = False
+                    else:
+                        rotation_best_deg = rotation_angles_deg[ind_trans_min]
+                        self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
+                        self._rotation_best_transpose = True
+                
+                # Print summary
+                if self._verbose:
+                    print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees.")
+                    if self._rotation_best_transpose:
+                        print("Diffraction intensities should be transposed.")
+                    else:
+                        print("No need to transpose diffraction intensities.")
+
+                # Plot Curl/Div rotation
+                if plot_rotation:
+
+                    figsize = kwargs.get("figsize", (12, 12))
+                    fig, ax = plt.subplots(figsize=figsize)
+
+                    ax.plot(
+                        rotation_angles_deg,
+                        asnumpy(self._rotation_div)
+                        if maximize_divergence
+                        else asnumpy(self._rotation_curl),
+                        label="CoM",
+                    )
+                    ax.plot(
+                        rotation_angles_deg,
+                        asnumpy(self._rotation_div_transpose)
+                        if maximize_divergence
+                        else asnumpy(self._rotation_curl_transpose),
+                        label="CoM after transpose",
+                    )
+                    y_r = ax.get_ylim()
+                    ax.plot(
+                        np.ones(2) * rotation_best_deg,
+                        y_r,
+                        color=(0, 0, 0, 1),
+                    )
+
+                    ax.legend(loc="best")
+                    ax.set_xlabel("Rotation [degrees]")
+                    if maximize_divergence:
+                        ax.set_ylabel("Mean Absolute Divergence")
+                        ax.set_aspect(
+                            np.ptp(rotation_angles_deg) / np.maximum(np.ptp(self._rotation_div),np.ptp(self._rotation_div_transpose)) / 4
+                        )
+                    else:
+                        ax.set_ylabel("Mean Absolute Curl")
+                        ax.set_aspect(
+                            np.ptp(rotation_angles_deg) / np.maximum(np.ptp(self._rotation_curl),np.ptp(self._rotation_curl_transpose)) / 4
+                        )
+                    fig.tight_layout()
+                    plt.show()
+                
         # Calculate corrected CoM
-        if self._rotation_best_tranpose is False:
+        if self._rotation_best_transpose is False:
             self._com_x = (
                 xp.cos(self._rotation_best_rad) * self._com_normalized_x
                 - xp.sin(self._rotation_best_rad) * self._com_normalized_y
@@ -504,61 +747,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self.com_x = asnumpy(self._com_x)
         self.com_y = asnumpy(self._com_y)
 
-        # Print summary
-        if self._verbose:
-            if force_com_rotation is not None:
-                print(f'Warning: best fit rotation forced to {str(np.round(rotation_best_deg))} degrees.')
-            else:
-                print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees")
-            if force_com_transpose is not None:
-                print(f'Warning: transpose of intensities forced to {force_com_transpose}.')
-            else:
-                if self._rotation_best_tranpose:
-                    print("Diffraction intensities should be transposed")
-                else:
-                    print("No need to transpose diffraction intensities")
-
-        # Plot Curl/Div rotation
-        if plot_rotation:
-
-            figsize = kwargs.get("figsize", (12, 12))
-            fig, ax = plt.subplots(figsize=figsize)
-
-            ax.plot(
-                rotation_angles_deg,
-                asnumpy(self._rotation_div)
-                if maximize_divergence
-                else asnumpy(self._rotation_curl),
-                label="CoM",
-            )
-            ax.plot(
-                rotation_angles_deg,
-                asnumpy(self._rotation_div_transpose)
-                if maximize_divergence
-                else asnumpy(self._rotation_curl_transpose),
-                label="CoM after transpose",
-            )
-            y_r = ax.get_ylim()
-            ax.plot(
-                np.ones(2) * rotation_best_deg,
-                y_r,
-                color=(0, 0, 0, 1),
-            )
-
-            ax.legend(loc="best")
-            ax.set_xlabel("Rotation [degrees]")
-            if maximize_divergence:
-                ax.set_ylabel("Mean Absolute Divergence")
-                ax.set_aspect(
-                    np.ptp(rotation_angles_deg) / np.ptp(self._rotation_div) / 4
-                )
-            else:
-                ax.set_ylabel("Mean Absolute Curl")
-                ax.set_aspect(
-                    np.ptp(rotation_angles_deg) / np.ptp(self._rotation_curl) / 4
-                )
-            fig.tight_layout()
-            plt.show()
 
     def _set_polar_parameters(self, parameters: dict):
         """
@@ -786,7 +974,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 rotation_angle
             ) + y * np.cos(rotation_angle)
         
-        if self._rotation_best_tranpose:
+        if self._rotation_best_transpose:
             positions = np.array([y.ravel(), x.ravel()]).T
         else:
             positions = np.array([x.ravel(), y.ravel()]).T
@@ -1034,7 +1222,7 @@ class DPCReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         force_ com_rotation: float (degrees), optional 
             Force relative rotation angle between real and reciprocal space
-        force_com_tranpose: bool (optional)
+        force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
         Mutates
         --------
@@ -1333,7 +1521,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(spec[0])
-        im = ax.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
+        im = ax.imshow(self.object_phase.T, extent=extent, cmap=cmap, origin='lower',**kwargs)
         ax.set_xlabel(f"x [{self._scan_units[0]}]")
         ax.set_ylabel(f"y [{self._scan_units[1]}]")
         ax.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
@@ -1423,7 +1611,7 @@ class DPCReconstruction(PhaseReconstruction):
             else:
                 ax = fig.add_subplot(spec)
                 im = ax.imshow(
-                    asnumpy(phases[grid_range[n]]), extent=extent, cmap=cmap, **kwargs
+                    asnumpy(phases[grid_range[n]].T), extent=extent, origin='lower',cmap=cmap, **kwargs
                 )
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
@@ -1436,7 +1624,7 @@ class DPCReconstruction(PhaseReconstruction):
                     cax = divider.append_axes("right", size="5%", pad="2.5%")
                     fig.colorbar(im, cax=cax, orientation="vertical")
 
-        fig.tight_layout()
+        #fig.tight_layout()
 
     def show(
         self,
@@ -1619,9 +1807,9 @@ class PtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, the initial probe overlaps scanned over the object will be displayed
-        force_ com_rotation: float (degrees), optional 
+        force_com_rotation: float (degrees), optional 
             Force relative rotation angle between real and reciprocal space
-        force_com_tranpose: bool (optional)
+        force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
             
         Assigns
@@ -1762,11 +1950,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             extent = [
                 0,
                 self.sampling[0] * self._object_shape[0],
-                self.sampling[1] * self._object_shape[1],
                 0,
+                self.sampling[1] * self._object_shape[1],
             ]
             fig, ax = plt.subplots(figsize=figsize)
-            ax.imshow(asnumpy(probe_overlap), extent=extent, cmap=cmap, **kwargs)
+            ax.imshow(asnumpy(probe_overlap.T), extent=extent, cmap=cmap, origin='lower', **kwargs)
             ax.scatter(
                 asnumpy(self._positions[:, 0]),
                 asnumpy(self._positions[:, 1]),
@@ -1775,7 +1963,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_aspect(extent[2]/extent[1])
             plt.show()
 
         self._preprocessed = True
@@ -2008,8 +2195,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         extent = [
             0,
             self.sampling[0] * self._object_shape[0],
-            0,
             self.sampling[1] * self._object_shape[1],
+            0,
         ]
 
         fig = plt.figure(figsize=figsize)
@@ -2020,15 +2207,15 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object), extent=extent, cmap=cmap, **kwargs
+                    np.angle(self.object.T), extent=extent, cmap=cmap, **kwargs
                 )
                 ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
+                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, **kwargs)
                 ax.set_title(f"Reconstructed Object Amplitude")
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
+                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, **kwargs
                 )
                 ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
@@ -2068,15 +2255,15 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object), extent=extent, cmap=cmap, **kwargs
+                    np.angle(self.object.T), extent=extent, cmap=cmap, **kwargs
                 )
                 ax.set_title(f"Reconstructed Object Phase")
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object), extent=extent, cmap=cmap, **kwargs)
+                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, **kwargs)
                 ax.set_title(f"Reconstructed Object Amplitude")
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2, extent=extent, cmap=cmap, **kwargs
+                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, **kwargs
                 )
                 ax.set_title(f"Reconstructed Object Intensity")
             ax.set_xlabel("x [A]")
@@ -2168,7 +2355,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax = fig.add_subplot(spec)
                 if n // (total_grids) and plot_probe:
                     im = ax.imshow(
-                        np.abs(asnumpy(probes[grid_range[n]])) ** 2,
+                        np.abs(asnumpy(probes[grid_range[n]].T)) ** 2,
                         extent=extent,
                         cmap="Greys_r",
                         **kwargs,
@@ -2177,7 +2364,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 else:
                     if object_mode == "phase":
                         im = ax.imshow(
-                            np.angle(asnumpy(objects[grid_range[n]])),
+                            np.angle(asnumpy(objects[grid_range[n]].T)),
                             extent=extent,
                             cmap=cmap,
                             **kwargs,
@@ -2185,7 +2372,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                         ax.set_title(f"Iter: {grid_range[n]} Phase")
                     elif object_mode == "amplitude":
                         im = ax.imshow(
-                            np.abs(asnumpy(objects[grid_range[n]])),
+                            np.abs(asnumpy(objects[grid_range[n]].T)),
                             extent=extent,
                             cmap=cmap,
                             **kwargs,
@@ -2193,7 +2380,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                         ax.set_title(f"Iter: {grid_range[n]} Amplitude")
                     else:
                         im = ax.imshow(
-                            np.abs(asnumpy(objects[grid_range[n]])) ** 2,
+                            np.abs(asnumpy(objects[grid_range[n]].T)) ** 2,
                             extent=extent,
                             cmap=cmap,
                             **kwargs,
