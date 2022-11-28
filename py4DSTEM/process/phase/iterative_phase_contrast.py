@@ -311,12 +311,21 @@ class PhaseReconstruction(metaclass=ABCMeta):
             ]
 
             fig = plt.figure(figsize=figsize)
-            grid = ImageGrid(fig,111,nrows_ncols=(2,2),axes_pad=(0.25,0.5))
+            grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=(0.25, 0.5))
 
-            for ax, arr, title in zip(grid,[self._com_measured_x,self._com_measured_y,self._com_normalized_x,self._com_normalized_y],['CoM_x','CoM_y','Normalized CoM_x', 'Normalized CoM_y']):
+            for ax, arr, title in zip(
+                grid,
+                [
+                    self._com_measured_x,
+                    self._com_measured_y,
+                    self._com_normalized_x,
+                    self._com_normalized_y,
+                ],
+                ["CoM_x", "CoM_y", "Normalized CoM_x", "Normalized CoM_y"],
+            ):
                 ax.imshow(
-                    asnumpy(arr.T), extent=extent, origin='lower',cmap=cmap, **kwargs
-                    )
+                    asnumpy(arr.T), extent=extent, origin="lower", cmap=cmap, **kwargs
+                )
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
@@ -345,11 +354,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
             If True, the divergence of the CoM gradient vector field is maximized instead
-        force_com_rotation: float (degrees), optional 
+        force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
-            
+
         Assigns
         --------
         self._rotation_curl: np.ndarray
@@ -382,25 +391,25 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if force_com_rotation is not None:
             # Rotation known
-            
+
             self._rotation_best_rad = np.deg2rad(force_com_rotation)
-            
+
             if self._verbose:
                 warnings.warn(
                     f"Best fit rotation forced to {str(np.round(force_com_rotation))} degrees.",
                     UserWarning,
-                    )
+                )
 
             if force_com_transpose is not None:
                 # Transpose known
-                
+
                 self._rotation_best_transpose = force_com_transpose
-                
+
                 if self._verbose:
                     warnings.warn(
                         f"Transpose of intensities forced to {force_com_transpose}.",
                         UserWarning,
-                        )
+                    )
 
             else:
                 # Rotation known, transpose unknown
@@ -432,16 +441,24 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 if maximize_divergence:
                     com_grad_x_x = com_measured_x[2:, 1:-1] - com_measured_x[:-2, 1:-1]
                     com_grad_y_y = com_measured_y[1:-1, 2:] - com_measured_y[1:-1, :-2]
-                    rotation_div_transpose = xp.mean(xp.abs(com_grad_x_x + com_grad_y_y))
+                    rotation_div_transpose = xp.mean(
+                        xp.abs(com_grad_x_x + com_grad_y_y)
+                    )
                 else:
                     com_grad_x_y = com_measured_x[1:-1, 2:] - com_measured_x[1:-1, :-2]
                     com_grad_y_x = com_measured_y[2:, 1:-1] - com_measured_y[:-2, 1:-1]
-                    rotation_curl_transpose = xp.mean(xp.abs(com_grad_y_x - com_grad_x_y))
+                    rotation_curl_transpose = xp.mean(
+                        xp.abs(com_grad_y_x - com_grad_x_y)
+                    )
 
                 if maximize_divergence:
-                    self._rotation_best_transpose = rotation_div_transpose > rotation_div
+                    self._rotation_best_transpose = (
+                        rotation_div_transpose > rotation_div
+                    )
                 else:
-                    self._rotation_best_transpose = rotation_curl_transpose < rotation_curl
+                    self._rotation_best_transpose = (
+                        rotation_curl_transpose < rotation_curl
+                    )
 
                 if self._verbose:
                     if self._rotation_best_transpose:
@@ -453,14 +470,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
             # Rotation unknown
             if force_com_transpose is not None:
                 # Transpose known, rotation unknown
-                
+
                 self._rotation_best_transpose = force_com_transpose
-                
+
                 if self._verbose:
                     warnings.warn(
                         f"Transpose of intensities forced to {force_com_transpose}.",
                         UserWarning,
-                        )
+                    )
 
                 rotation_angles_deg = xp.asarray(rotation_angles_deg)
                 rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
@@ -474,28 +491,36 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         xp.sin(rotation_angles_rad) * self._com_normalized_y[None]
                         + xp.cos(rotation_angles_rad) * self._com_normalized_x[None]
                     )
-       
+
                     rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
                     rotation_angles_deg = asnumpy(rotation_angles_deg)
 
                     if maximize_divergence:
-                        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-                        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        com_grad_x_x = (
+                            com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                        )
+                        com_grad_y_y = (
+                            com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        )
                         self._rotation_div_transpose = xp.mean(
                             xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
                         )
-                        
+
                         ind_trans_max = xp.argmax(self._rotation_div_transpose).item()
                         rotation_best_deg = rotation_angles_deg[ind_trans_max]
                         self._rotation_best_rad = rotation_angles_rad[ind_trans_max]
 
                     else:
-                        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-                        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        com_grad_x_y = (
+                            com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                        )
+                        com_grad_y_x = (
+                            com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        )
                         self._rotation_curl_transpose = xp.mean(
                             xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
                         )
-                        
+
                         ind_trans_min = xp.argmin(self._rotation_curl_transpose).item()
                         rotation_best_deg = rotation_angles_deg[ind_trans_min]
                         self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
@@ -509,34 +534,44 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         xp.sin(rotation_angles_rad) * self._com_normalized_x[None]
                         + xp.cos(rotation_angles_rad) * self._com_normalized_y[None]
                     )
-       
+
                     rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
                     rotation_angles_deg = asnumpy(rotation_angles_deg)
-                    
+
                     if maximize_divergence:
-                        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-                        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        com_grad_x_x = (
+                            com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                        )
+                        com_grad_y_y = (
+                            com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                        )
                         self._rotation_div = xp.mean(
                             xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
                         )
-                        
+
                         ind_max = xp.argmax(self._rotation_div).item()
                         rotation_best_deg = rotation_angles_deg[ind_max]
                         self._rotation_best_rad = rotation_angles_rad[ind_max]
 
                     else:
-                        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-                        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        com_grad_x_y = (
+                            com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                        )
+                        com_grad_y_x = (
+                            com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                        )
                         self._rotation_curl = xp.mean(
                             xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
                         )
-                        
+
                         ind_min = xp.argmin(self._rotation_curl).item()
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         self._rotation_best_rad = rotation_angles_rad[ind_min]
 
                 if self._verbose:
-                    print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees.")
+                    print(
+                        f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees."
+                    )
 
                 if plot_rotation:
 
@@ -570,17 +605,21 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     ax.legend(loc="best")
                     ax.set_xlabel("Rotation [degrees]")
                     if maximize_divergence:
-                        aspect_ratio = np.ptp(self._rotation_div_transpose) if self._rotation_best_transpose else np.ptp(self._rotation_div)
+                        aspect_ratio = (
+                            np.ptp(self._rotation_div_transpose)
+                            if self._rotation_best_transpose
+                            else np.ptp(self._rotation_div)
+                        )
                         ax.set_ylabel("Mean Absolute Divergence")
-                        ax.set_aspect(
-                            np.ptp(rotation_angles_deg) / aspect_ratio / 4
-                        )
+                        ax.set_aspect(np.ptp(rotation_angles_deg) / aspect_ratio / 4)
                     else:
-                        aspect_ratio = np.ptp(self._rotation_curl_transpose) if self._rotation_best_transpose else np.ptp(self._rotation_curl)
-                        ax.set_ylabel("Mean Absolute Curl")
-                        ax.set_aspect(
-                            np.ptp(rotation_angles_deg) / aspect_ratio / 4
+                        aspect_ratio = (
+                            np.ptp(self._rotation_curl_transpose)
+                            if self._rotation_best_transpose
+                            else np.ptp(self._rotation_curl)
                         )
+                        ax.set_ylabel("Mean Absolute Curl")
+                        ax.set_aspect(np.ptp(rotation_angles_deg) / aspect_ratio / 4)
                     fig.tight_layout()
                     plt.show()
 
@@ -601,14 +640,22 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 )
 
                 if maximize_divergence:
-                    com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-                    com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    com_grad_x_x = (
+                        com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                    )
+                    com_grad_y_y = (
+                        com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    )
                     self._rotation_div = xp.mean(
                         xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
                     )
                 else:
-                    com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-                    com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    com_grad_x_y = (
+                        com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                    )
+                    com_grad_y_x = (
+                        com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    )
                     self._rotation_curl = xp.mean(
                         xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
                     )
@@ -624,14 +671,22 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 )
 
                 if maximize_divergence:
-                    com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-                    com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    com_grad_x_x = (
+                        com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+                    )
+                    com_grad_y_y = (
+                        com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+                    )
                     self._rotation_div_transpose = xp.mean(
                         xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
                     )
                 else:
-                    com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-                    com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    com_grad_x_y = (
+                        com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+                    )
+                    com_grad_y_x = (
+                        com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+                    )
                     self._rotation_curl_transpose = xp.mean(
                         xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
                     )
@@ -672,10 +727,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         rotation_best_deg = rotation_angles_deg[ind_trans_min]
                         self._rotation_best_rad = rotation_angles_rad[ind_trans_min]
                         self._rotation_best_transpose = True
-                
+
                 # Print summary
                 if self._verbose:
-                    print(f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees.")
+                    print(
+                        f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees."
+                    )
                     if self._rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
                     else:
@@ -713,16 +770,26 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     if maximize_divergence:
                         ax.set_ylabel("Mean Absolute Divergence")
                         ax.set_aspect(
-                            np.ptp(rotation_angles_deg) / np.maximum(np.ptp(self._rotation_div),np.ptp(self._rotation_div_transpose)) / 4
+                            np.ptp(rotation_angles_deg)
+                            / np.maximum(
+                                np.ptp(self._rotation_div),
+                                np.ptp(self._rotation_div_transpose),
+                            )
+                            / 4
                         )
                     else:
                         ax.set_ylabel("Mean Absolute Curl")
                         ax.set_aspect(
-                            np.ptp(rotation_angles_deg) / np.maximum(np.ptp(self._rotation_curl),np.ptp(self._rotation_curl_transpose)) / 4
+                            np.ptp(rotation_angles_deg)
+                            / np.maximum(
+                                np.ptp(self._rotation_curl),
+                                np.ptp(self._rotation_curl_transpose),
+                            )
+                            / 4
                         )
                     fig.tight_layout()
                     plt.show()
-                
+
         # Calculate corrected CoM
         if self._rotation_best_transpose is False:
             self._com_x = (
@@ -746,7 +813,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # 'Public'-facing attributes as numpy arrays
         self.com_x = asnumpy(self._com_x)
         self.com_y = asnumpy(self._com_y)
-
 
     def _set_polar_parameters(self, parameters: dict):
         """
@@ -907,13 +973,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
             for ry in range(self._intensities_shape[1]):
                 amplitudes = xp.asarray(
                     get_shifted_ar(
-                        dps[rx, ry], 
-                        -com_x[rx, ry], -com_y[rx, ry], bilinear=True
+                        dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                     )
                 )
                 # amplitudes /= xp.sum(amplitudes)
                 mean_intensity += xp.sum(amplitudes)
-
 
                 diffraction_intensities[rx, ry] = xp.sqrt(xp.maximum(amplitudes, 0))
         diffraction_intensities = xp.reshape(
@@ -964,7 +1028,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         else:
             x = positions[:, 0]
             y = positions[:, 1]
-        
+
         x = (x - np.ptp(x) / 2) / self.sampling[0]
         y = (y - np.ptp(y) / 2) / self.sampling[1]
         x, y = np.meshgrid(x, y, indexing="ij")
@@ -973,7 +1037,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
                 rotation_angle
             ) + y * np.cos(rotation_angle)
-        
+
         if self._rotation_best_transpose:
             positions = np.array([y.ravel(), x.ravel()]).T
         else:
@@ -1197,7 +1261,6 @@ class DPCReconstruction(PhaseReconstruction):
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
-
         **kwargs,
     ):
         """
@@ -1220,7 +1283,7 @@ class DPCReconstruction(PhaseReconstruction):
             If True, the divergence of the CoM gradient vector field is maximized instead
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
-        force_ com_rotation: float (degrees), optional 
+        force_ com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
@@ -1250,9 +1313,9 @@ class DPCReconstruction(PhaseReconstruction):
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             maximize_divergence=maximize_divergence,
-            calculate_rotation = True, 
-            force_com_rotation = force_com_rotation,
-            force_com_transpose = force_com_transpose,
+            calculate_rotation=True,
+            force_com_rotation=force_com_rotation,
+            force_com_transpose=force_com_transpose,
             **kwargs,
         )
 
@@ -1261,7 +1324,12 @@ class DPCReconstruction(PhaseReconstruction):
         return self
 
     def _forward(
-            self, padded_phase_object: np.ndarray, mask: np.ndarray, mask_inv: np.ndarray, error: float, step_size: float
+        self,
+        padded_phase_object: np.ndarray,
+        mask: np.ndarray,
+        mask_inv: np.ndarray,
+        error: float,
+        step_size: float,
     ):
         """
         DPC forward projection:
@@ -1294,11 +1362,11 @@ class DPCReconstruction(PhaseReconstruction):
         obj_dx = (
             xp.roll(padded_phase_object, 1, axis=0)
             - xp.roll(padded_phase_object, -1, axis=0)
-        )/(2*dx)
+        ) / (2 * dx)
         obj_dy = (
             xp.roll(padded_phase_object, 1, axis=1)
             - xp.roll(padded_phase_object, -1, axis=1)
-        )/(2*dy)
+        ) / (2 * dy)
 
         # difference from measurement
         obj_dx[mask] += self._com_x.ravel()
@@ -1435,7 +1503,7 @@ class DPCReconstruction(PhaseReconstruction):
         mask = xp.zeros(padded_object_shape, dtype="bool")
         mask[: self._intensities_shape[0], : self._intensities_shape[1]] = True
         mask_inv = xp.logical_not(mask)
-        error = 0.
+        error = 0.0
 
         if store_iterations:
             self._object_phase_iterations = []
@@ -1460,7 +1528,9 @@ class DPCReconstruction(PhaseReconstruction):
         ):
 
             # forward operator
-            com_dx, com_dy, error, step_size = self._forward(padded_phase_object, mask, mask_inv, error, step_size)
+            com_dx, com_dy, error, step_size = self._forward(
+                padded_phase_object, mask, mask_inv, error, step_size
+            )
 
             # adjoint operator
             phase_update = self._adjoint(com_dx, com_dy, kx_op, ky_op)
@@ -1521,7 +1591,9 @@ class DPCReconstruction(PhaseReconstruction):
         ]
 
         ax1 = fig.add_subplot(spec[0])
-        im = ax1.imshow(self.object_phase.T, extent=extent, cmap=cmap, origin='lower',**kwargs)
+        im = ax1.imshow(
+            self.object_phase.T, extent=extent, cmap=cmap, origin="lower", **kwargs
+        )
         ax1.set_xlabel(f"x [{self._scan_units[0]}]")
         ax1.set_ylabel(f"y [{self._scan_units[1]}]")
         ax1.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
@@ -1536,7 +1608,7 @@ class DPCReconstruction(PhaseReconstruction):
         if plot_convergence and hasattr(self, "_error_iterations"):
 
             errors = self._error_iterations
-            ax2=fig.add_subplot(spec[1])
+            ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
             ax2.set_ylabel("Log RMS error")
@@ -1580,31 +1652,37 @@ class DPCReconstruction(PhaseReconstruction):
         phases = self._object_phase_iterations
         max_iter = len(phases) - 1
         grid_range = range(0, max_iter, max_iter // (total_grids - 1))
-        
+
         extent = [
             0,
             self._scan_sampling[0] * self._intensities_shape[0],
             0,
             self._scan_sampling[1] * self._intensities_shape[1],
         ]
-        
+
         if plot_convergence:
             figsize = (figsize[0], figsize[1] + figsize[0] / 4)
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
-            spec = GridSpec(ncols=1,nrows=1)
+            spec = GridSpec(ncols=1, nrows=1)
         fig = plt.figure(figsize=figsize)
-            
+
         grid = ImageGrid(
-                fig,spec[0],
-                nrows_ncols=iterations_grid,
-                axes_pad=(0.75,0.5) if cbar else 0.5,
-                cbar_mode="each" if cbar else None,
-                cbar_pad = "2.5%" if cbar else None)
+            fig,
+            spec[0],
+            nrows_ncols=iterations_grid,
+            axes_pad=(0.75, 0.5) if cbar else 0.5,
+            cbar_mode="each" if cbar else None,
+            cbar_pad="2.5%" if cbar else None,
+        )
 
         for n, ax in enumerate(grid):
             im = ax.imshow(
-                asnumpy(phases[grid_range[n]].T), extent=extent, origin='lower',cmap=cmap, **kwargs
+                asnumpy(phases[grid_range[n]].T),
+                extent=extent,
+                origin="lower",
+                cmap=cmap,
+                **kwargs,
             )
             ax.set_xlabel(f"x [{self._scan_units[0]}]")
             ax.set_ylabel(f"y [{self._scan_units[1]}]")
@@ -1616,7 +1694,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         if plot_convergence:
 
-            ax2=fig.add_subplot(spec[1])
+            ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
             ax2.set_ylabel("Log RMS error")
@@ -1803,11 +1881,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, the initial probe overlaps scanned over the object will be displayed
-        force_com_rotation: float (degrees), optional 
+        force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
-            
+
         Assigns
         --------
         self._preprocessed: bool
@@ -1836,8 +1914,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             maximize_divergence=maximize_divergence,
-            force_com_rotation = force_com_rotation,
-            force_com_transpose = force_com_transpose,
+            force_com_rotation=force_com_rotation,
+            force_com_transpose=force_com_transpose,
             **kwargs,
         )
 
@@ -1950,7 +2028,13 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self.sampling[1] * self._object_shape[1],
             ]
             fig, ax = plt.subplots(figsize=figsize)
-            ax.imshow(asnumpy(probe_overlap.T), extent=extent, cmap=cmap, origin='lower', **kwargs)
+            ax.imshow(
+                asnumpy(probe_overlap.T),
+                extent=extent,
+                cmap=cmap,
+                origin="lower",
+                **kwargs,
+            )
             ax.scatter(
                 asnumpy(self._positions[:, 0]),
                 asnumpy(self._positions[:, 1]),
@@ -2173,7 +2257,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
-        
 
         extent = [
             0,
@@ -2181,7 +2264,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             0,
             self.sampling[1] * self._object_shape[1],
         ]
-        
+
         probe_extent = [
             0,
             self.sampling[0] * self._region_of_interest_shape[0],
@@ -2193,13 +2276,31 @@ class PtychographicReconstruction(PhaseReconstruction):
             figsize = (figsize[0], figsize[1] + figsize[0] / 4)
             if plot_probe:
                 figsize = (figsize[0] * 2, figsize[1])
-                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15, width_ratios = [(extent[1]/extent[3])/(probe_extent[1]/probe_extent[3]),1], wspace=0.35)
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=2,
+                    height_ratios=[4, 1],
+                    hspace=0.15,
+                    width_ratios=[
+                        (extent[1] / extent[3]) / (probe_extent[1] / probe_extent[3]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
             else:
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             if plot_probe:
                 figsize = (figsize[0] * 2, figsize[1])
-                spec = GridSpec(ncols=2, nrows=1, width_ratios = [(extent[1]/extent[3])/(probe_extent[1]/probe_extent[3]),1], wspace=0.35)
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=1,
+                    width_ratios=[
+                        (extent[1] / extent[3]) / (probe_extent[1] / probe_extent[3]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
             else:
                 spec = GridSpec(ncols=1, nrows=1)
 
@@ -2211,13 +2312,27 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object.T), extent=extent, cmap=cmap,origin='lower', **kwargs
+                    np.angle(self.object.T),
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
                 )
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs)
+                im = ax.imshow(
+                    np.abs(self.object.T),
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
+                )
             else:
                 im = ax.imshow(
-                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, origin='lower',**kwargs
+                    np.abs(self.object.T) ** 2,
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
                 )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
@@ -2232,12 +2347,16 @@ class PtychographicReconstruction(PhaseReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
-                np.abs(self.probe.T) ** 2, extent=probe_extent, cmap="Greys_r", origin='lower',**kwargs
+                np.abs(self.probe.T) ** 2,
+                extent=probe_extent,
+                cmap="Greys_r",
+                origin="lower",
+                **kwargs,
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
             ax.set_title(f"Reconstructed probe intensity")
-            
+
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
@@ -2248,13 +2367,27 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs
+                    np.angle(self.object.T),
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
                 )
             elif object_mode == "amplitude":
-                im = ax.imshow(np.abs(self.object.T), extent=extent, cmap=cmap, origin='lower',**kwargs)
+                im = ax.imshow(
+                    np.abs(self.object.T),
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
+                )
             else:
                 im = ax.imshow(
-                    np.abs(self.object.T) ** 2, extent=extent, cmap=cmap, origin='lower',**kwargs
+                    np.abs(self.object.T) ** 2,
+                    extent=extent,
+                    cmap=cmap,
+                    origin="lower",
+                    **kwargs,
                 )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
@@ -2304,7 +2437,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
-        
+
         errors = self._error_iterations
         objects = self._object_iterations
 
@@ -2315,7 +2448,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             total_grids = np.prod(iterations_grid)
         max_iter = len(objects) - 1
         grid_range = range(0, max_iter, max_iter // (total_grids - 1))
-        
+
         extent = [
             0,
             self.sampling[0] * self._object_shape[0],
@@ -2329,7 +2462,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             0,
             self.sampling[1] * self._region_of_interest_shape[1],
         ]
-        
+
         if plot_convergence:
             figsize = (figsize[0], figsize[1] + figsize[0] / 4)
             if plot_probe:
@@ -2338,19 +2471,20 @@ class PtychographicReconstruction(PhaseReconstruction):
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
         else:
             if plot_probe:
-                spec = GridSpec(ncols=1,nrows=2)
+                spec = GridSpec(ncols=1, nrows=2)
             else:
-                spec = GridSpec(ncols=1,nrows=1)
+                spec = GridSpec(ncols=1, nrows=1)
 
         fig = plt.figure(figsize=figsize)
-            
+
         grid = ImageGrid(
-                fig,
-                spec[0],
-                nrows_ncols=(1,iterations_grid[1]) if plot_probe else iterations_grid,
-                axes_pad=(0.75,0.5) if cbar else 0.5,
-                cbar_mode="each" if cbar else None,
-                cbar_pad = "2.5%" if cbar else None)
+            fig,
+            spec[0],
+            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
+            axes_pad=(0.75, 0.5) if cbar else 0.5,
+            cbar_mode="each" if cbar else None,
+            cbar_pad="2.5%" if cbar else None,
+        )
 
         for n, ax in enumerate(grid):
             if object_mode == "phase":
@@ -2358,7 +2492,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     np.angle(asnumpy(objects[grid_range[n]].T)),
                     extent=extent,
                     cmap=cmap,
-                    origin='lower',
+                    origin="lower",
                     **kwargs,
                 )
                 ax.set_title(f"Iter: {grid_range[n]} Phase")
@@ -2367,7 +2501,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     np.abs(asnumpy(objects[grid_range[n]].T)),
                     extent=extent,
                     cmap=cmap,
-                    origin='lower',
+                    origin="lower",
                     **kwargs,
                 )
                 ax.set_title(f"Iter: {grid_range[n]} Amplitude")
@@ -2375,7 +2509,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 im = ax.imshow(
                     np.abs(asnumpy(objects[grid_range[n]].T)) ** 2,
                     extent=extent,
-                    origin='lower',
+                    origin="lower",
                     cmap=cmap,
                     **kwargs,
                 )
@@ -2388,33 +2522,35 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if plot_probe:
             grid = ImageGrid(
-                    fig,spec[1],
-                    nrows_ncols=(1,iterations_grid[1]),
-                    axes_pad=(0.75,0.5) if cbar else 0.5,
-                    cbar_mode="each" if cbar else None,
-                    cbar_pad = "2.5%" if cbar else None)
+                fig,
+                spec[1],
+                nrows_ncols=(1, iterations_grid[1]),
+                axes_pad=(0.75, 0.5) if cbar else 0.5,
+                cbar_mode="each" if cbar else None,
+                cbar_pad="2.5%" if cbar else None,
+            )
 
             for n, ax in enumerate(grid):
                 im = ax.imshow(
                     np.abs(asnumpy(probes[grid_range[n]].T)) ** 2,
                     extent=probe_extent,
                     cmap="Greys_r",
-                    origin='lower',
+                    origin="lower",
                     **kwargs,
                 )
                 ax.set_title(f"Iter: {grid_range[n]} Probe")
-            
+
                 ax.set_xlabel("x [A]")
                 ax.set_ylabel("y [A]")
 
                 if cbar:
                     grid.cbar_axes[n].colorbar(im)
-       
+
         if plot_convergence:
             if plot_probe:
-                ax2=fig.add_subplot(spec[2])
+                ax2 = fig.add_subplot(spec[2])
             else:
-                ax2=fig.add_subplot(spec[1])
+                ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
             ax2.set_ylabel("Log RMS error")
