@@ -505,7 +505,7 @@ def fourier_translation_operator(
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
-    result = xp.exp(-2.0j * np.pi * kx * x) + xp.exp(-2.0j * np.pi * ky * y)
+    result = xp.exp(-2.0j * np.pi * kx * x) * xp.exp(-2.0j * np.pi * ky * y)
 
     if len(positions_shape) == 1:
         return result[0]
