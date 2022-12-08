@@ -188,19 +188,19 @@ class WholePatternFit:
                     **fit_opts
                 )
             else:
-                # opt = least_squares(
-                #     self._pattern_error,
-                #     self.x0,
-                #     bounds=(self.lower_bound, self.upper_bound),
-                #     **fit_opts
-                # )
-                opt = minimize(
-                    lambda x: np.sum(self._pattern_error(x)**2),
+                opt = least_squares(
+                    self._pattern_error,
                     self.x0,
-                    callback=lambda x: self._fevals.append(x),
-                    bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)]
+                    bounds=(self.lower_bound, self.upper_bound),
                     **fit_opts
                 )
+                # opt = minimize(
+                #     lambda x: np.sum(self._pattern_error(x)**2),
+                #     self.x0,
+                #     callback=lambda x: self._fevals.append(x),
+                #     bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)]
+                #     **fit_opts
+                # )
 
             self.fit_data[rx, ry, :] = opt.x
 
@@ -217,6 +217,33 @@ class WholePatternFit:
             ind = self.model_param_inds[i] + 2
             for j, k in enumerate(m.params.keys()):
                 m.params[k].initial_value = x[ind + j]
+
+    def show_model_grid(self,x):
+        if x is None:
+            x = self.mean_CBED_fit.x
+
+        self.current_glob["global_x0"] = x[0]
+        self.current_glob["global_y0"] = x[1]
+        self.current_glob["global_r"] = np.hypot(
+            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+        )
+
+        N = len(self.model)
+        cols = int(np.ceil(np.sqrt(N)))
+        rows = (N + 1) // cols
+
+        fig, ax = plt.subplots(rows,cols, constrained_layout=True)
+
+        for i,(a,m) in enumerate(zip(ax.flat, self.model)):
+            DP = np.zeros((self.datacube.Q_Nx,self.datacube.Q_Ny))
+            ind = self.model_param_inds[i] + 2
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+
+            a.matshow(DP,cmap='turbo')
+            a.axis('off')
+            a.text(0.5,0.92,m.name,transform=a.transAxes,ha='center',va='center')
+
+        plt.show()
 
     def _pattern_error(self, x):
 
