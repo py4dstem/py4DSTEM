@@ -1,13 +1,16 @@
-"""Module for reconstructing phase objects from 4DSTEM experiments using iterative methods, namely DPC and ptychography."""
+"""
+Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
+namely DPC and ptychography.
+"""
 
-from typing import Union, Sequence, Mapping, Callable, Iterable, Tuple
-from abc import ABCMeta, abstractmethod
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import make_axes_locatable, ImageGrid
-
-import numpy as np
 import warnings
+from abc import ABCMeta, abstractmethod
+from typing import Mapping, Sequence, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 
 try:
     import cupy as cp
@@ -15,16 +18,12 @@ except ImportError:
     cp = None
 
 from py4DSTEM.io import DataCube
-from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.calibration import fit_origin
+from py4DSTEM.process.phase.utils import (ComplexProbe, fft_shift,
+                                          polar_aliases, polar_symbols)
+from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.process.utils import get_shifted_ar, get_CoM
-from py4DSTEM.process.phase.utils import (
-    fft_shift,
-    ComplexProbe,
-    polar_symbols,
-    polar_aliases,
-)
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 class PhaseReconstruction(metaclass=ABCMeta):
@@ -37,7 +36,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     @abstractmethod
     def preprocess(self):
         """
-        Abstract method all subclasses must define which prepares measured intensities.
+        Abstract method subclasses must define which prepares measured intensities.
 
         For DPC, this includes:
         - Fitting diffraction intensitie's CoM and rotation
@@ -54,46 +53,51 @@ class PhaseReconstruction(metaclass=ABCMeta):
     @abstractmethod
     def _forward(self):
         """
-        Abstract method all subclasses must define to perform forward projection.
+        Abstract method subclasses must define to perform forward projection.
 
         For DPC, this consists of differentiating the current object estimate.
-        For Ptychography, this consists of an overlap projection followed by a Fourier projection.
+        For Ptychography, this consists of overlap and Fourier projections.
         """
         pass
 
     @abstractmethod
     def _adjoint(self):
         """
-        Abstract method all subclasses must define to perform forward projection.
+        Abstract method subclasses must define to perform forward projection.
 
         For DPC, this consists of Fourier-integrating the CoM gradient.
-        For Ptychography, this consists of inverting the modified Fourier amplitude followed by 'stitching' the probe/object update patches.
+        For Ptychography, this consists of inverting the modified Fourier amplitude,
+        followed by 'stitching' the probe/object update patches.
         """
         pass
 
     @abstractmethod
     def _update(self):
-        """Abstract method all subclasses must define to update current probe/object estimates."""
+        """
+        Abstract method subclasses must define to update current object estimates.
+        """
         pass
 
     @abstractmethod
     def reconstruct(self):
         """
-        Abstract method all subclasses must define which performs the reconstruction
+        Abstract method subclasses must define which performs the reconstruction
         by calling the subclass _forward(), _adjoint(), and _update() methods.
         """
         pass
 
     @abstractmethod
-    def show(self):
-        """Abstract method all subclasses must define to postprocess and display reconstruction outputs."""
+    def visualize(self):
+        """
+        Abstract method subclasses must define to postprocess and display results.
+        """
         pass
 
     def _extract_intensities_and_calibrations_from_datacube(
         self, datacube: DataCube, require_calibrations: bool = False
     ):
         """
-        Common preprocessing method to extract intensities and calibrations from datacube
+        Common method to extract intensities and calibrations from datacube.
 
         Parameters
         ----------
@@ -151,7 +155,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 raise ValueError("Real-space calibrations must be given in 'A'")
 
             warnings.warn(
-                "Iterative reconstruction will not be quantitative unless you specify real-space calibrations in 'A'",
+                """Iterative reconstruction will not be quantitative unless you specify
+                real-space calibrations in 'A'""",
                 UserWarning,
             )
 
@@ -174,7 +179,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 )
 
             warnings.warn(
-                "Iterative reconstruction will not be quantitative unless you specify appropriate reciprocal-space calibrations",
+                """Iterative reconstruction will not be quantitative unless you specify
+                appropriate reciprocal-space calibrations""",
                 UserWarning,
             )
 
@@ -206,7 +212,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 self._reciprocal_units = ("A^-1",) * 2
         else:
             raise ValueError(
-                f"Reciprocal-space calibrations must be given in 'A^-1' or 'mrad', not {reciprocal_space_units}"
+                f"""Reciprocal-space calibrations must be given in 'A^-1' or 'mrad',
+                not {reciprocal_space_units}"""
             )
 
     def _calculate_intensities_center_of_mass(
@@ -224,7 +231,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         intensities: (Rx,Ry,Qx,Qy) xp.ndarray
             Raw intensities array stored on device, with dtype xp.float32
         fit_function: str, optional
-            2D fitting function for CoM fitting. Must be 'plane' or 'parabola' or 'bezier_two'
+            2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: bool, optional
             If True, the computed and normalized CoM arrays will be displayed
 
@@ -342,9 +349,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         **kwargs,
     ):
         """
-        Common preprocessing method to solve for the relative rotation between real and reciprocal space.
-        We do this by minimizing the curl of the vector field.
-        Alternatively, we could also maximing the divergence of the vector field.
+        Common method to solve for the relative rotation between scan directions
+        and the reciprocal coordinate system. We do this by minimizing the curl of the
+        CoM gradient vector field or, alternatively, maximizing the divergence.
 
         Parameters
         ----------
@@ -353,7 +360,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
-            If True, the divergence of the CoM gradient vector field is maximized instead
+            If True, the divergence of the CoM gradient vector field is maximized
         force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
@@ -396,7 +403,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
             if self._verbose:
                 warnings.warn(
-                    f"Best fit rotation forced to {str(np.round(force_com_rotation))} degrees.",
+                    f"""Best fit rotation forced to
+                    {str(np.round(force_com_rotation))} degrees.""",
                     UserWarning,
                 )
 
@@ -570,7 +578,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 if self._verbose:
                     print(
-                        f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees."
+                        f"""Best fit rotation =
+                        {str(np.round(rotation_best_deg))} degrees."""
                     )
 
                 if plot_rotation:
@@ -731,7 +740,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 # Print summary
                 if self._verbose:
                     print(
-                        f"Best fit rotation = {str(np.round(rotation_best_deg))} degrees."
+                        f"""Best fit rotation =
+                        {str(np.round(rotation_best_deg))} degrees."""
                     )
                     if self._rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
@@ -848,7 +858,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         region_of_interest_shape: Tuple[int, int],
     ):
         """
-        Common static method to zero-pad diffraction intensities to a certain region of interest shape.
+        Common static method to zero-pad diffraction intensities to a certain shape.
 
         Parameters
         ----------
@@ -898,7 +908,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         region_of_interest_shape: Tuple[int, int],
     ):
         """
-        Common static method to vacuum probe intensity to a certain region of interest shape.
+        Common static method to pad vacuum-probe intensity to a certain shape.
 
         Parameters
         ----------
@@ -1056,7 +1066,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         array_shape: Sequence[int],
     ):
         """
-        Computes periodic indices for a window_shape probe centered at center_position, in object of size array_shape.
+        Computes periodic indices for a window_shape probe centered at center_position,
+        in object of size array_shape.
+
         Parameters
         ----------
         center_position: (2,) np.ndarray
@@ -1087,7 +1099,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         Parameters
         ----------
         patches: (Rx*Ry,Sx,Sy) np.ndarray
-            self._positions_px length array of self._region_of_interest shape patches to sum
+            Patches to sum
 
         Returns
         -------
@@ -1136,7 +1148,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         Parameters
         ----------
         patches: (Rx*Ry,Sx,Sy) np.ndarray
-            self._positions_px length array of self._region_of_interest shape patches to sum
+            Patches to sum
 
         Returns
         -------
@@ -1209,9 +1221,9 @@ class DPCReconstruction(PhaseReconstruction):
     datacube: DataCube
         Input 4D diffraction pattern intensities
     energy: float, optional
-        The electron energy of the wave functions this contrast transfer function will be applied to in eV
+        The electron energy of the wave functions in eV
     verbose: bool, optional
-        If True, various class methods will inherit this and print additional information
+        If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
 
@@ -1274,13 +1286,13 @@ class DPCReconstruction(PhaseReconstruction):
         Parameters
         ----------
         fit_function: str, optional
-            2D fitting function for CoM fitting. Must be 'plane' or 'parabola' or 'bezier_two'
+            2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: bool, optional
             If True, the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
-            If True, the divergence of the CoM gradient vector field is maximized instead
+            If True, the divergence of the CoM gradient vector field is maximized
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
         force_ com_rotation: float (degrees), optional
@@ -1756,21 +1768,21 @@ class PtychographicReconstruction(PhaseReconstruction):
     datacube: DataCube
         Input 4D diffraction pattern intensities
     energy: float
-        The electron energy of the wave functions this contrast transfer function will be applied to in eV
+        The electron energy of the wave functions in eV
     region_of_interest_shape: Tuple[int,int]
         Pixel dimensions (Sx,Sy) of the region of interest (ROI)
-        If None, the ROI dimensions are taken as the diffraction intensities dimensions (Qx,Qy)
+        If None, the ROI dimensions are taken as the intensity dimensions (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
     initial_probe_guess: np.ndarray, optional
-        Initial guess for complex-valued probe of dimensions (Sx,Sy)
-        If None, initialized to Probe object with specified semiangle_cutoff, energy, and aberrations
+        Initial guess for complex-valued probe of dimensions (Sx,Sy). If None,
+        initialized to ComplexProbe with semiangle_cutoff, energy, and aberrations
     scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     verbose: bool, optional
-        If True, various class methods will inherit this and print additional information
+        If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     semiangle_cutoff: float, optional
@@ -1778,8 +1790,8 @@ class PtychographicReconstruction(PhaseReconstruction):
     vacuum_probe_intensity: np.ndarray, optional
         Vacuum probe to use as intensity aperture for initial probe guess
     polar_parameters: dict, optional
-        Mapping from aberration symbols to their corresponding values. All aberration magnitudes should be given in Å
-        and angles should be given in radians.
+        Mapping from aberration symbols to their corresponding values. All aberration
+        magnitudes should be given in Å and angles should be given in radians.
     kwargs:
         Provide the aberration coefficients as keyword arguments.
 
@@ -1872,7 +1884,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         Parameters
         ----------
         fit_function: str, optional
-            2D fitting function for CoM fitting. Must be 'plane' or 'parabola' or 'bezier_two'
+            2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: bool, optional
             If True, the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
@@ -1880,7 +1892,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
-            If True, the initial probe overlaps scanned over the object will be displayed
+            If True, initial probe overlaps scanned over the object will be displayed
         force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
@@ -2192,7 +2204,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         store_iterations: bool = False,
     ):
         """ """
-        xp = self._xp
         asnumpy = self._asnumpy
 
         # initialization
@@ -2355,7 +2366,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title(f"Reconstructed probe intensity")
+            ax.set_title("Reconstructed probe intensity")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2579,7 +2590,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
         object_mode: str
-            Specifies the attribute of the object to plot, one of 'phase', 'amplitude', 'intensity'
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude', 'intensity'
 
         Returns
         --------
@@ -2593,7 +2605,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             and object_mode != "intensity"
         ):
             raise ValueError(
-                f"object_mode needs to be one of 'phase', 'amplitude', or 'intensity', not {object_mode}"
+                f"""object_mode needs to be one of 'phase', 'amplitude',
+                or 'intensity', not {object_mode}"""
             )
 
         if iterations_grid is None:
