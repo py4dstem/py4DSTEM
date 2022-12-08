@@ -197,6 +197,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
         x0: float = 0.0,
         y0: float = 0.0,
         exclude_indices: list = [],
+        include_indices: list = None,
+        verbose=False,
     ):
         self.disk_radius = disk_radius
         self.disk_width = disk_width
@@ -220,27 +222,35 @@ class SyntheticDiskLattice(WPFModelPrototype):
         params["vx"] = Parameter(vx)
         params["vy"] = Parameter(vy)
 
-        u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
-        self.u_inds = u_inds.ravel()
-        self.v_inds = v_inds.ravel()
-
-        delete_mask = np.zeros_like(self.u_inds, dtype=bool)
         Q_Nx = WPF.global_args["Q_Nx"]
         Q_Ny = WPF.global_args["Q_Ny"]
 
-        for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
-            x = x0 + (u * params["ux"].initial_value) + (v * params["vx"].initial_value)
-            y = y0 + (u * params["uy"].initial_value) + (v * params["vy"].initial_value)
-            if [u, v] in exclude_indices:
-                delete_mask[i] = True
-            elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
-                delete_mask[i] = True
-                print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
-            else:
-                params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
+        if include_indices is None:
+            u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
+            self.u_inds = u_inds.ravel()
+            self.v_inds = v_inds.ravel()
 
-        self.u_inds = self.u_inds[~delete_mask]
-        self.v_inds = self.v_inds[~delete_mask]
+            delete_mask = np.zeros_like(self.u_inds, dtype=bool)
+            for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
+                x = x0 + (u * params["ux"].initial_value) + (v * params["vx"].initial_value)
+                y = y0 + (u * params["uy"].initial_value) + (v * params["vy"].initial_value)
+                if [u, v] in exclude_indices:
+                    delete_mask[i] = True
+                elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
+                    delete_mask[i] = True
+                    if verbose:
+                        print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                else:
+                    params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
+
+            self.u_inds = self.u_inds[~delete_mask]
+            self.v_inds = self.v_inds[~delete_mask]
+        else:
+            for ind in include_indices:
+                params[f"[{ind[0]},{ind[1]}] Intensity"] = Parameter(intensity_0)
+            inds = np.array(include_indices)
+            self.u_inds = inds[:,0]
+            self.v_inds = inds[:,1]
 
         self.refine_radius = refine_radius
         self.refine_width = refine_width
@@ -401,6 +411,7 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        verbose=False,
     ):
 
         name = "Complex Overlapped Disk Lattice"
@@ -450,7 +461,8 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
                 delete_mask[i] = True
             elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
                 delete_mask[i] = True
-                print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                if verbose:
+                    print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
             else:
                 params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
                 if u == 0 and v == 0:
@@ -513,6 +525,7 @@ class KernelDiskLattice(WPFModelPrototype):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        verbose=False,
     ):
 
         name = "Custom Kernel Disk Lattice"
@@ -562,7 +575,8 @@ class KernelDiskLattice(WPFModelPrototype):
                 delete_mask[i] = True
             elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
                 delete_mask[i] = True
-                print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                if verbose:
+                    print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
             else:
                 params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
 
