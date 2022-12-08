@@ -19,8 +19,12 @@ except ImportError:
 
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import (ComplexProbe, fft_shift,
-                                          polar_aliases, polar_symbols)
+from py4DSTEM.process.phase.utils import (
+    ComplexProbe,
+    fft_shift,
+    polar_aliases,
+    polar_symbols,
+)
 from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.utils.tqdmnd import tqdmnd
@@ -155,8 +159,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 raise ValueError("Real-space calibrations must be given in 'A'")
 
             warnings.warn(
-                """Iterative reconstruction will not be quantitative unless you specify
-                real-space calibrations in 'A'""",
+                (
+                    "Iterative reconstruction will not be quantitative unless you specify "
+                    "real-space calibrations in 'A'"
+                ),
                 UserWarning,
             )
 
@@ -179,8 +185,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 )
 
             warnings.warn(
-                """Iterative reconstruction will not be quantitative unless you specify
-                appropriate reciprocal-space calibrations""",
+                (
+                    "Iterative reconstruction will not be quantitative unless you specify "
+                    "appropriate reciprocal-space calibrations"
+                ),
                 UserWarning,
             )
 
@@ -212,8 +220,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 self._reciprocal_units = ("A^-1",) * 2
         else:
             raise ValueError(
-                f"""Reciprocal-space calibrations must be given in 'A^-1' or 'mrad',
-                not {reciprocal_space_units}"""
+                (
+                    "Reciprocal-space calibrations must be given in 'A^-1' or 'mrad', "
+                    f"not {reciprocal_space_units}"
+                )
             )
 
     def _calculate_intensities_center_of_mass(
@@ -403,8 +413,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
             if self._verbose:
                 warnings.warn(
-                    f"""Best fit rotation forced to
-                    {str(np.round(force_com_rotation))} degrees.""",
+                    (
+                        "Best fit rotation forced to "
+                        f"{str(np.round(force_com_rotation))} degrees."
+                    ),
                     UserWarning,
                 )
 
@@ -578,8 +590,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 if self._verbose:
                     print(
-                        f"""Best fit rotation =
-                        {str(np.round(rotation_best_deg))} degrees."""
+                        (
+                            "Best fit rotation = "
+                            f"{str(np.round(rotation_best_deg))} degrees."
+                        )
                     )
 
                 if plot_rotation:
@@ -740,8 +754,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 # Print summary
                 if self._verbose:
                     print(
-                        f"""Best fit rotation =
-                        {str(np.round(rotation_best_deg))} degrees."""
+                        (
+                            "Best fit rotation = "
+                            f"{str(np.round(rotation_best_deg))} degrees."
+                        )
                     )
                     if self._rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
@@ -858,7 +874,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         region_of_interest_shape: Tuple[int, int],
     ):
         """
-        Common static method to zero-pad diffraction intensities to a certain shape.
+        Common method to zero-pad diffraction intensities to a certain shape.
 
         Parameters
         ----------
@@ -908,7 +924,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         region_of_interest_shape: Tuple[int, int],
     ):
         """
-        Common static method to pad vacuum-probe intensity to a certain shape.
+        Common method to pad vacuum-probe intensity to a certain shape.
 
         Parameters
         ----------
@@ -986,7 +1002,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                     )
                 )
-                # amplitudes /= xp.sum(amplitudes)
                 mean_intensity += xp.sum(amplitudes)
 
                 diffraction_intensities[rx, ry] = xp.sqrt(xp.maximum(amplitudes, 0))
@@ -1119,7 +1134,19 @@ class PhaseReconstruction(metaclass=ABCMeta):
         return out_array
 
     def _sum_overlapping_patches_bincounts_base(self, patches: np.ndarray):
-        """ """
+        """
+        Base bincouts overlapping patches sum function, operating on real-valued arrays.
+
+        Parameters
+        ----------
+        patches: (Rx*Ry,Sx,Sy) np.ndarray
+            Patches to sum
+
+        Returns
+        -------
+        out_array: (Px,Py) np.ndarray
+            Summed array
+        """
         xp = self._xp
         x0 = xp.round(self._positions_px[:, 0]).astype("int")
         y0 = xp.round(self._positions_px[:, 1]).astype("int")
@@ -1143,7 +1170,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
     def _sum_overlapping_patches_bincounts(self, patches: np.ndarray):
         """
-        Sum overlapping patches defined into object shaped array using bincounts
+        Sum overlapping patches defined into object shaped array using bincounts.
+        Calls _sum_overlapping_patches_bincounts_base on Real and Imaginary parts.
 
         Parameters
         ----------
@@ -1247,8 +1275,6 @@ class DPCReconstruction(PhaseReconstruction):
         device: str = "cpu",
     ):
 
-        # Should probably be abstracted away in a device.py similar to:
-        # https://github.com/abTEM/abTEM/blob/master/abtem/device.py
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -1266,13 +1292,13 @@ class DPCReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
-        fit_function: str = "plane",
-        plot_center_of_mass: bool = True,
-        plot_rotation: bool = True,
-        maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        maximize_divergence: bool = False,
+        fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
+        plot_center_of_mass: bool = True,
+        plot_rotation: bool = True,
         **kwargs,
     ):
         """
@@ -1285,20 +1311,21 @@ class DPCReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
-        fit_function: str, optional
-            2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        plot_center_of_mass: bool, optional
-            If True, the computed and fitted CoM arrays will be displayed
-        plot_rotation: bool, optional
-            If True, the CoM curl minimization search result will be displayed
-        maximize_divergence: bool, optional
-            If True, the divergence of the CoM gradient vector field is maximized
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
+        maximize_divergence: bool, optional
+            If True, the divergence of the CoM gradient vector field is maximized
+        fit_function: str, optional
+            2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         force_ com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
+        plot_center_of_mass: bool, optional
+            If True, the computed and fitted CoM arrays will be displayed
+        plot_rotation: bool, optional
+            If True, the CoM curl minimization search result will be displayed
+
         Mutates
         --------
         self._preprocessed: bool
@@ -1325,7 +1352,6 @@ class DPCReconstruction(PhaseReconstruction):
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             maximize_divergence=maximize_divergence,
-            calculate_rotation=True,
             force_com_rotation=force_com_rotation,
             force_com_transpose=force_com_transpose,
             **kwargs,
@@ -1356,6 +1382,10 @@ class DPCReconstruction(PhaseReconstruction):
             Mask of object inside padded array
         mask_inv: np.ndarray
             Inverse mask of object inside padded array
+        error: float
+            Current error estimate
+        step_size: float
+            Current reconstruction step-size
 
         Returns
         --------
@@ -1365,6 +1395,8 @@ class DPCReconstruction(PhaseReconstruction):
             Forward-projected vertical CoM gradient
         error: float
             Updated estimate error
+        step_size: float
+            Updated reconstruction step-size. Halved if error increased.
         """
 
         xp = self._xp
@@ -1493,10 +1525,10 @@ class DPCReconstruction(PhaseReconstruction):
             Reconstructed phase object, as a numpy array
         self.error: float
             RMS error
-        self._object_phase_iterations, optional
-            max_iter length list storing reconstructed phase objects at each iteration
-        self._error_iterations, optional
-            max_iter length list storing RMS errors at each iteration
+        self.object_phase_iterations, optional
+            Reconstructed phase objects at each iteration as numpy arrays
+        self.error_iterations, optional
+            RMS errors at each iteration
 
         Returns
         --------
@@ -1518,8 +1550,8 @@ class DPCReconstruction(PhaseReconstruction):
         error = 0.0
 
         if store_iterations:
-            self._object_phase_iterations = []
-            self._error_iterations = []
+            self.object_phase_iterations = []
+            self.error_iterations = []
 
         # Fourier coordinates and operators
         kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
@@ -1553,12 +1585,14 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
             if store_iterations:
-                self._object_phase_iterations.append(
-                    padded_phase_object[
-                        : self._intensities_shape[0], : self._intensities_shape[1]
-                    ].copy()
+                self.object_phase_iterations.append(
+                    asnumpy(
+                        padded_phase_object[
+                            : self._intensities_shape[0], : self._intensities_shape[1]
+                        ].copy()
+                    )
                 )
-                self._error_iterations.append(error.item())
+                self.error_iterations.append(error.item())
 
         # crop result
         self._object_phase = padded_phase_object[
@@ -1569,7 +1603,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         return self
 
-    def _show_last_iteration(
+    def _visualize_last_iteration(
         self, cbar: bool = False, plot_convergence: bool = False, **kwargs
     ):
         """
@@ -1628,7 +1662,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         plt.show()
 
-    def _show_all_iterations(
+    def _visualize_all_iterations(
         self,
         cbar: bool,
         plot_convergence: bool,
@@ -1650,7 +1684,6 @@ class DPCReconstruction(PhaseReconstruction):
 
         asnumpy = self._asnumpy
 
-        # TODO: 'auto' is likely not a good name
         if iterations_grid == "auto":
             iterations_grid = (2, 4)
 
@@ -1660,8 +1693,8 @@ class DPCReconstruction(PhaseReconstruction):
         kwargs.pop("cmap", None)
 
         total_grids = np.prod(iterations_grid)
-        errors = self._error_iterations
-        phases = self._object_phase_iterations
+        errors = self.error_iterations
+        phases = self.object_phase_iterations
         max_iter = len(phases) - 1
         grid_range = range(0, max_iter, max_iter // (total_grids - 1))
 
@@ -1673,7 +1706,7 @@ class DPCReconstruction(PhaseReconstruction):
         ]
 
         if plot_convergence:
-            figsize = (figsize[0], figsize[1] + figsize[0] / 4)
+            figsize = (figsize[0], figsize[1] + figsize[1] / 4)
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             spec = GridSpec(ncols=1, nrows=1)
@@ -1712,7 +1745,9 @@ class DPCReconstruction(PhaseReconstruction):
             ax2.set_ylabel("Log RMS error")
             ax2.yaxis.tick_right()
 
-    def show(
+            spec.tight_layout(fig)
+
+    def visualize(
         self,
         plot_convergence: bool = False,
         iterations_grid: Tuple[int, int] = None,
@@ -1726,10 +1761,10 @@ class DPCReconstruction(PhaseReconstruction):
         --------
         plot_convergence: bool, optional
             If true, the RMS error plot is displayed
-        cbar: bool, optional
-            If true, displays a colorbar
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
+        cbar: bool, optional
+            If true, displays a colorbar
 
         Returns
         --------
@@ -1738,11 +1773,11 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         if iterations_grid is None:
-            self._show_last_iteration(
+            self._visualize_last_iteration(
                 plot_convergence=plot_convergence, cbar=cbar, **kwargs
             )
         else:
-            self._show_all_iterations(
+            self._visualize_all_iterations(
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 cbar=cbar,
@@ -2411,7 +2446,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
-        if plot_convergence and hasattr(self, "_error_iterations"):
+        if plot_convergence and hasattr(self, "error_iterations"):
             errors = self._error_iterations
             if plot_probe:
                 ax = fig.add_subplot(spec[1, :])
@@ -2605,8 +2640,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             and object_mode != "intensity"
         ):
             raise ValueError(
-                f"""object_mode needs to be one of 'phase', 'amplitude',
-                or 'intensity', not {object_mode}"""
+                (
+                    "object_mode needs to be one of 'phase', 'amplitude', "
+                    f"or 'intensity', not {object_mode}"
+                )
             )
 
         if iterations_grid is None:
