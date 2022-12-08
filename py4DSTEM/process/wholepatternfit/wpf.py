@@ -8,6 +8,7 @@ import numpy as np
 from scipy.optimize import least_squares, minimize
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
+from matplotlib.gridspec import GridSpec
 
 
 class WholePatternFit:
@@ -105,6 +106,8 @@ class WholePatternFit:
         self.current_glob = self.global_args.copy()
 
         self._fevals = []
+        self._xevals = []
+        self._cost_history = []
 
         if self.hasJacobian & self.use_jacobian:
             opt = least_squares(
@@ -115,19 +118,19 @@ class WholePatternFit:
                 **fit_opts
             )
         else:
-            # opt = least_squares(
-            #     self._pattern_error,
-            #     self.x0,
-            #     bounds=(self.lower_bound, self.upper_bound),
-            #     **fit_opts
-            # )
-            opt = minimize(
-                lambda x: np.sum(self._pattern_error(x)**2),
+            opt = least_squares(
+                self._pattern_error,
                 self.x0,
-                callback=lambda x: self._fevals.append(x),
-                bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)],
+                bounds=(self.lower_bound, self.upper_bound),
                 **fit_opts
             )
+            # opt = minimize(
+            #     lambda x: np.sum(self._pattern_error(x)**2),
+            #     self.x0,
+            #     callback=lambda x: self._fevals.append(x),
+            #     bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)],
+            #     **fit_opts
+            # )
 
         self.mean_CBED_fit = opt
 
@@ -136,8 +139,8 @@ class WholePatternFit:
         gs = GridSpec(2,2,figure=fig)
 
         ax = fig.add_subplot(gs[0,0])
-        # err_hist = np.array([np.sum((dp-self.meanCBED)**2) for dp in self._fevals])
-        err_hist = np.array([np.sum((WPF._pattern(dp)-WPF.meanCBED)**2) for dp in WPF._fevals])
+        err_hist = np.array(self._cost_history)
+        # err_hist = np.array([np.sum((self._pattern(dp)-self.meanCBED)**2) for dp in self._fevals])
         ax.plot(err_hist)
         ax.set_ylabel("Sum Squared Error")
         ax.set_xlabel("Iterations")
@@ -148,12 +151,14 @@ class WholePatternFit:
         CyRd = mpl_c.LinearSegmentedColormap.from_list("CyRd",["#00ccff","#ffffff","#ff0000"])
         im = ax.matshow(err_im := -(DP - self.meanCBED),
             cmap=CyRd,vmin=-np.abs(err_im).max()/4,vmax=np.abs(err_im).max()/4)
-        fig.colorbar(im)
+        # fig.colorbar(im)
         ax.axis('off')
 
         ax = fig.add_subplot(gs[1,:])
         ax.matshow(np.hstack((DP,self.meanCBED))**0.25,cmap='jet')
         ax.axis('off')
+        ax.text(0.25,0.92,"Refined",transform=ax.transAxes,ha='center',va='center')
+        ax.text(0.75,0.92,"Mean CBED",transform=ax.transAxes,ha='center',va='center')
 
         plt.show()
 
@@ -232,7 +237,7 @@ class WholePatternFit:
         if self._track:
             self._fevals.append(DP)
             self._xevals.append(x)
-            # self._cost_history.append(np.sum(DP**2))
+        self._cost_history.append(np.sum(DP**2))
 
         return DP.ravel()
 
