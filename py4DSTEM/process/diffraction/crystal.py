@@ -1,0 +1,1024 @@
+# Functions for calculating diffraction patterns, matching them to experiments, and creating orientation and phase maps.
+
+import numpy as np
+import matplotlib.pyplot as plt
+from fractions import Fraction
+from typing import Union, Optional
+from copy import deepcopy
+from scipy.optimize import curve_fit
+import sys
+
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
+from py4DSTEM.utils.tqdmnd import tqdmnd
+
+from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
+from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
+from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
+
+
+class Crystal:
+    """
+    A class storing a single crystal structure, and associated diffraction data.
+
+    """
+
+    # Various methods for the Crystal class are implemented in a separate file. This
+    # import statement inside the class declaration imports them as methods of the class!
+    # (see https://stackoverflow.com/a/47562412)
+
+    # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
+    from py4DSTEM.process.diffraction.crystal_ACOM import (
+        orientation_plan,
+        match_orientations,
+        match_single_pattern,
+        calculate_strain,
+        save_ang_file,
+        symmetry_reduce_directions,
+        orientation_map_to_orix_CrystalMap,
+        save_ang_file,
+    )
+
+    from py4DSTEM.process.diffraction.crystal_viz import (
+        plot_structure,
+        plot_structure_factors,
+        plot_scattering_intensity,
+        plot_orientation_zones,
+        plot_orientation_plan,
+        plot_orientation_maps,
+        plot_fiber_orientation_maps,
+    )
+
+    # Dynamical diffraction calculations are implemented in crystal_bloch.py
+    from py4DSTEM.process.diffraction.crystal_bloch import (
+        generate_dynamical_diffraction_pattern,
+        generate_CBED,
+        calculate_dynamical_structure_factors,
+    )
+
+    def __init__(
+        self,
+        positions,
+        numbers,
+        cell,
+    ):
+        """
+        Args:
+            positions (np.array): fractional coordinates of each atom in the cell
+            numbers (np.array): Z number for each atom in the cell
+            cell (np.array): specify the unit cell, using a variable number of parameters
+                1 number: the lattice parameter for a cubic cell
+                3 numbers: the three lattice parameters for an orthorhombic cell
+                6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+
+        """
+        # Initialize Crystal
+        self.positions = np.asarray(positions)  #: fractional atomic coordinates
+
+        #: atomic numbers - if only one value is provided, assume all atoms are same species
+        numbers = np.asarray(numbers, dtype="intp")
+        if np.size(numbers) == 1:
+            self.numbers = np.ones(self.positions.shape[0], dtype="intp") * numbers
+        elif np.size(numbers) == self.positions.shape[0]:
+            self.numbers = numbers
+        else:
+            raise Exception("Number of positions and atomic numbers do not match")
+
+        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma]
+        cell = np.asarray(cell, dtype="float_")
+        if np.size(cell) == 1:
+            self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
+        elif np.size(cell) == 3:
+            self.cell = np.hstack([cell, 90, 90, 90])
+        elif np.size(cell) == 6:
+            self.cell = cell
+        else:
+            raise Exception("Cell cannot contain " + np.size(cell) + " elements")
+
+        # calculate unit cell lattice vectors
+        a = self.cell[0]
+        b = self.cell[1]
+        c = self.cell[2]
+        alpha = np.deg2rad(self.cell[3])
+        beta = np.deg2rad(self.cell[4])
+        gamma = np.deg2rad(self.cell[5])
+        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+        vol = a*b*c*np.sqrt(1 \
+            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
+        self.lat_real = np.array(
+            [
+                [a,               0,                 0],
+                [b*np.cos(gamma), b*np.sin(gamma),   0],
+                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
+            ]
+        )
+
+        # Inverse lattice, metric tensors
+        self.metric_real = self.lat_real @ self.lat_real.T
+        self.metric_inv = np.linalg.inv(self.metric_real)
+        self.lat_inv = self.metric_inv @ self.lat_real
+
+        # pymatgen flag
+        if 'pymatgen' in sys.modules:
+            self.pymatgen_available = True            
+        else:
+            self.pymatgen_available = False
+        
+
+    def from_CIF(CIF, conventional_standard_structure=True):
+        """
+        Create a Crystal object from a CIF file, using pymatgen to import the CIF
+
+        Note that pymatgen typically prefers to return primitive unit cells,
+        which can be overridden by setting conventional_standard_structure=True.
+
+        Args:
+            CIF: (str or Path) path to the CIF File
+            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
+                instead of the primitive unit cell pymatgen typically returns
+        """
+        from pymatgen.io.cif import CifParser
+
+        parser = CifParser(CIF)
+
+        structure = parser.get_structures()[0]
+
+        return Crystal.from_pymatgen_structure(
+            structure, conventional_standard_structure=conventional_standard_structure
+        )
+
+    def from_pymatgen_structure(
+        structure=None,
+        formula=None,
+        space_grp=None,
+        MP_key=None,
+        conventional_standard_structure=True,
+    ):
+        """
+        Create a Crystal object from a pymatgen Structure object.
+        If a Materials Project API key is installed, you may pass
+        the Materials Project ID of a structure, which will be
+        fetched through the MP API. For setup information see:
+        https://pymatgen.org/usage.html#setting-the-pmg-mapi-key-in-the-config-file.
+        Alternatively, Materials Porject API key can be pass as an argument through
+        the function (MP_key). To get your API key, please visit Materials Project website
+        and login/sign up using your email id. Once logged in, go to the dashboard
+        to generate your own API key (https://materialsproject.org/dashboard).
+
+        Note that pymatgen typically prefers to return primitive unit cells,
+        which can be overridden by setting conventional_standard_structure=True.
+
+        Args:
+            structure:      (pymatgen Structure or str), if specified as a string, it will be considered
+                            as a Materials Project ID of a structure, otherwise it will accept only
+                            pymatgen Structure object. if None, MP database will be queried using the
+                            specified formula and/or space groups for the available structure
+            formula:        (str), pretty formula to search in the MP database, (note that the forumlas in MP
+                            database are not always formatted in the conventional order. Please
+                            visit Materials Project website for information (https://materialsproject.org/)
+                            if None, structure argument must not be None
+            space_grp:      (int) space group number of the forumula provided to query MP database. If None, MP will search
+                            for all the available space groups for the formula provided and will consider the
+                            one with lowest unit cell volume, only specify when using formula to search MP
+                            database
+            MP_key:         (str) Materials Project API key
+            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
+                            instead of the primitive unit cell pymatgen returns
+
+        """
+        import pymatgen as mg
+        if structure is not None:
+            if isinstance(structure, str):
+                from mp_api.client import MPRester
+                with  MPRester(MP_key) as mpr:
+                    structure = mpr.get_structure_by_material_id(structure)
+
+            assert isinstance(
+                structure, mg.core.Structure
+            ), "structure must be pymatgen Structure object"
+
+            structure = (
+                mg.symmetry.analyzer.SpacegroupAnalyzer(
+                    structure
+                ).get_conventional_standard_structure()
+                if conventional_standard_structure
+                else structure
+            )
+        else:
+            from mp_api.client import MPRester
+            with MPRester(MP_key) as mpr: 
+                if formula is None:
+                    raise Exception(
+                        "Atleast a formula needs to be provided to query from MP database!!"
+                    )
+                query = mpr.query(
+                    criteria={"pretty_formula": formula},
+                    properties=["structure", "icsd_ids", "spacegroup"],
+                )
+                if space_grp:
+                    query = [
+                        query[i]
+                        for i in range(len(query))
+                        if mg.symmetry.analyzer.SpacegroupAnalyzer(
+                            query[i]["structure"]
+                        ).get_space_group_number()
+                        == space_grp
+                    ]
+                selected = query[
+                    np.argmin(
+                        [query[i]["structure"].lattice.volume for i in range(len(query))]
+                    )
+                ]
+                structure = (
+                    mg.symmetry.analyzer.SpacegroupAnalyzer(
+                        selected["structure"]
+                    ).get_conventional_standard_structure()
+                    if conventional_standard_structure
+                    else selected["structure"]
+                )
+
+        positions = structure.frac_coords  #: fractional atomic coordinates
+
+        cell = np.array(
+            [
+                structure.lattice.a,
+                structure.lattice.b,
+                structure.lattice.c,
+                structure.lattice.alpha,
+                structure.lattice.beta,
+                structure.lattice.gamma,
+            ]
+        )
+
+        numbers = np.array([s.species.elements[0].Z for s in structure])
+
+        return Crystal(positions, numbers, cell)
+
+    def from_unitcell_parameters(
+        latt_params,
+        elements,
+        positions,
+        space_group=None,
+        lattice_type="cubic",
+        from_cartesian=False,
+        conventional_standard_structure=True,
+    ):
+
+        """
+        Create a Crystal using pymatgen to generate unit cell manually from user inputs
+
+        Args:
+                latt_params:         (list of floats) list of lattice parameters. For example, for cubic: latt_params = [a],
+                                     for hexagonal: latt_params = [a, c], for monoclinic: latt_params = [a,b,c,beta],
+                                     and in general: latt_params = [a,b,c,alpha,beta,gamma]
+                elements:            (list of strings) list of elements, for example for SnS: elements = ["Sn", "S"]
+                positions:           (list) list of (x,y,z) positions for each element present in the elements, default: fractional coord
+                space_group:         (optional) (string or int) space group of the crystal system, if specified, unit cell will be created using
+                                     pymatgen Structure.from_spacegroup function
+                lattice_type:        (string) type of crystal family: cubic, hexagonal, triclinic etc; default: 'cubic'
+                from_cartesian:      (bool) if True, positions will be considered as cartesian, default: False
+                conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
+                                     instead of the primitive unit cell pymatgen returns
+        Returns:
+                Crystal object
+
+        """
+
+        import pymatgen as mg
+
+        if lattice_type == "cubic":
+            assert (
+                len(latt_params) == 1
+            ), "Only 1 lattice parameter is expected for cubic: a, but given {}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.cubic(latt_params[0])
+        elif lattice_type == "hexagonal":
+            assert (
+                len(latt_params) == 2
+            ), "2 lattice parametere are expected for hexagonal: a, c, but given {len(latt_params)}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.hexagonal(latt_params[0], latt_params[1])
+        elif lattice_type == "tetragonal":
+            assert (
+                len(latt_params) == 2
+            ), "2 lattice parametere are expected for tetragonal: a, c, but given {len(latt_params)}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.tetragonal(latt_params[0], latt_params[1])
+        elif lattice_type == "orthorhombic":
+            assert (
+                len(latt_params) == 3
+            ), "3 lattice parametere are expected for orthorhombic: a, b, c, but given {len(latt_params)}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.orthorhombic(
+                latt_params[0], latt_params[1], latt_params[2]
+            )
+        elif lattice_type == "monoclinic":
+            assert (
+                len(latt_params) == 4
+            ), "4 lattice parametere are expected for monoclinic: a, b, c, beta,  but given {len(latt_params)}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.monoclinic(
+                latt_params[0], latt_params[1], latt_params[2], latt_params[3]
+            )
+        else:
+            assert (
+                len(latt_params) == 6
+            ), "all 6 lattice parametere are expected: a, b, c, alpha, beta, gamma, but given {len(latt_params)}".format(
+                len(latt_params)
+            )
+            lattice = mg.core.Lattice.from_parameters(
+                latt_params[0],
+                latt_params[1],
+                latt_params[2],
+                latt_params[3],
+                latt_params[4],
+                latt_params[5],
+            )
+
+        if space_group:
+            structure = mg.core.Structure.from_spacegroup(
+                space_group,
+                lattice,
+                elements,
+                positions,
+                coords_are_cartesian=from_cartesian,
+            )
+        else:
+            structure = mg.core.Structure(
+                lattice, elements, positions, coords_are_cartesian=from_cartesian
+            )
+
+        return Crystal.from_pymatgen_structure(structure)
+
+    def setup_diffraction(
+        self, accelerating_voltage: float
+    ):
+        """
+        Set up attributes used for diffraction calculations without going
+        through the full ACOM pipeline.
+        """
+        self.accel_voltage = accelerating_voltage
+        self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+
+    def calculate_structure_factors(
+        self,
+        k_max: float = 2.0,
+        tol_structure_factor: float = 1e-4,
+        return_intensities: bool = False,
+    ):
+        """
+        Calculate structure factors for all hkl indices up to max scattering vector k_max
+
+        Args:
+            k_max (numpy float):                max scattering vector to include (1/Angstroms)
+            tol_structure_factor (numpy float): tolerance for removing low-valued structure factors
+        """
+
+        # Store k_max
+        self.k_max = np.asarray(k_max)
+
+        # Find shortest lattice vector direction
+        k_test = np.vstack(
+            [
+                self.lat_inv[0, :],
+                self.lat_inv[1, :],
+                self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :],
+                self.lat_inv[0, :] + self.lat_inv[2, :],
+                self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] + self.lat_inv[2, :],
+                self.lat_inv[0, :] + self.lat_inv[1, :] - self.lat_inv[2, :],
+                self.lat_inv[0, :] - self.lat_inv[1, :] - self.lat_inv[2, :],
+            ]
+        )
+        k_leng_min = np.min(np.linalg.norm(k_test, axis=1))
+
+        # Tile lattice vectors
+        num_tile = np.ceil(self.k_max / k_leng_min)
+        ya, xa, za = np.meshgrid(
+            np.arange(-num_tile, num_tile + 1),
+            np.arange(-num_tile, num_tile + 1),
+            np.arange(-num_tile, num_tile + 1),
+        )
+        hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
+        # g_vec_all = self.lat_inv @ hkl
+        g_vec_all =  (hkl.T @ self.lat_inv).T
+
+        # Delete lattice vectors outside of k_max
+        keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
+        self.hkl = hkl[:, keep]
+        self.g_vec_all = g_vec_all[:, keep]
+        self.g_vec_leng = np.linalg.norm(self.g_vec_all, axis=0)
+
+        # Calculate single atom scattering factors
+        # Note this can be sped up a lot, but we may want to generalize to allow non-1.0 occupancy in the future.
+        f_all = np.zeros(
+            (np.size(self.g_vec_leng, 0), self.positions.shape[0]), dtype="float_"
+        )
+        for a0 in range(self.positions.shape[0]):
+            atom_sf = single_atom_scatter([self.numbers[a0]], [1], self.g_vec_leng, "A")
+            atom_sf.get_scattering_factor([self.numbers[a0]], [1], self.g_vec_leng, "A")
+            f_all[:, a0] = atom_sf.fe
+
+        # Calculate structure factors
+        self.struct_factors = np.zeros(np.size(self.g_vec_leng, 0), dtype="complex64")
+        for a0 in range(self.positions.shape[0]):
+            self.struct_factors += f_all[:, a0] * np.exp(
+                (2j * np.pi)
+                * np.sum(
+                    self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+                )
+            )
+
+        # Divide by unit cell volume
+        unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
+        self.struct_factors /= unit_cell_volume
+
+        # Remove structure factors below tolerance level
+        keep = np.abs(self.struct_factors) > tol_structure_factor
+        self.hkl = self.hkl[:, keep]
+
+        self.g_vec_all = self.g_vec_all[:, keep]
+        self.g_vec_leng = self.g_vec_leng[keep]
+        self.struct_factors = self.struct_factors[keep]
+
+        # Structure factor intensities
+        self.struct_factors_int = np.abs(self.struct_factors) ** 2
+
+        if return_intensities:
+            q_SF = np.linspace(0, self.k_max, 250)
+            I_SF = np.zeros_like(q_SF)
+            for i in range(self.g_vec_leng.shape[0]):
+                idx = np.argmin(np.abs(q_SF - self.g_vec_leng[i]))
+                I_SF[idx] += self.struct_factors_int[i]
+            I_SF = I_SF / np.max(I_SF)
+
+            return (q_SF, I_SF)
+
+    def generate_diffraction_pattern(
+        self,
+        orientation: Optional[Orientation] = None,
+        ind_orientation: Optional[int] = 0,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_lattice: Optional[np.ndarray] = None,
+        proj_x_lattice: Optional[np.ndarray] = None,
+        foil_normal_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+        foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
+        sigma_excitation_error: float = 0.02,
+        tol_excitation_error_mult: float = 3,
+        tol_intensity: float = 1e-4,
+        k_max: Optional[float] = None,
+        keep_qz = False,
+        return_orientation_matrix=False,
+    ):
+        """
+        Generate a single diffraction pattern, return all peaks as a pointlist.
+
+        Args:
+            orientation (Orientation):       an Orientation class object 
+            ind_orientation                  If input is an Orientation class object with multiple orientations,
+                                             this input can be used to select a specific orientation.
+            
+            orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
+            zone_axis_lattice (array):        (3,) projection direction in lattice indices
+            proj_x_lattice (array):           (3,) x-axis direction in lattice indices
+            zone_axis_cartesian (array):     (3,) cartesian projection direction
+            proj_x_cartesian (array):        (3,) cartesian projection direction
+
+            foil_normal:                     3 element foil normal - set to None to use zone_axis
+            proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+            accel_voltage (float):           Accelerating voltage in Volts. If not specified,
+                                             we check to see if crystal already has voltage specified.
+            sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+            tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
+            tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
+            k_max (float):                   Maximum scattering vector
+            keep_qz (bool):                  Flag to return out-of-plane diffraction vectors
+            return_orientation_matrix (bool): Return the orientation matrix
+
+        Returns:
+            bragg_peaks (PointList):         list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
+            orientation_matrix (array):      3x3 orientation matrix (optional)
+        """
+
+        if not (hasattr(self, "wavelength") and hasattr(
+            self, "accel_voltage"
+        )):
+            print("Accelerating voltage not set. Assuming 300 keV!")
+            self.setup_diffraction(300e3)
+
+
+        # Tolerance for angular tests
+        tol = 1e-6
+
+        # Parse orientation inputs
+        if orientation is not None:
+            if ind_orientation is None:
+                orientation_matrix = orientation.matrix[0]
+            else:
+                orientation_matrix = orientation.matrix[ind_orientation]
+        elif orientation_matrix is None:
+            orientation_matrix = self.parse_orientation(
+                zone_axis_lattice,
+                proj_x_lattice,
+                zone_axis_cartesian,
+                proj_x_cartesian)
+
+        # Get foil normal direction
+        if foil_normal_lattice is not None:
+            foil_normal = self.lattice_to_cartesian(np.array(foil_normal_lattice))
+        elif foil_normal_cartesian is not None:
+            foil_normal = np.array(foil_normal_cartesian)
+        else:
+            foil_normal = None
+            # foil_normal = orientation_matrix[:,2]
+
+        # Rotate crystal into desired projection
+        g = orientation_matrix.T @ self.g_vec_all
+
+
+        # Calculate excitation errors
+        if foil_normal is None:
+            sg = self.excitation_errors(g)
+        else:
+            foil_normal = (orientation_matrix.T \
+                @ (-1*foil_normal[:,None]/np.linalg.norm(foil_normal))).ravel()
+            sg = self.excitation_errors(g, foil_normal)
+
+        # Threshold for inclusion in diffraction pattern
+        sg_max = sigma_excitation_error * tol_excitation_error_mult
+        keep = np.abs(sg) <= sg_max
+
+        # Maximum scattering angle cutoff
+        if k_max is not None:
+            keep_kmax = np.linalg.norm(g,axis=0) <= k_max
+            keep = np.logical_and(keep, keep_kmax)
+
+        g_diff = g[:, keep]
+
+        # Diffracted peak intensities and labels
+        g_int = self.struct_factors_int[keep] * np.exp(
+            (sg[keep] ** 2) / (-2 * sigma_excitation_error ** 2)
+        )
+        hkl = self.hkl[:, keep]
+
+        # Intensity tolerance
+        keep_int = g_int > tol_intensity
+
+        # Output peaks
+        gx_proj = g_diff[0,keep_int]
+        gy_proj = g_diff[1,keep_int]
+
+        # Diffracted peak labels
+        h = hkl[0, keep_int]
+        k = hkl[1, keep_int]
+        l = hkl[2, keep_int]
+
+        # Output as PointList
+        if keep_qz:
+            gz_proj = g_diff[2,keep_int]
+            pl_dtype = np.dtype([
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("qz", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
+            )
+            if np.any(keep_int):
+                bragg_peaks.add_data_by_field(
+                                              [
+                                              gx_proj,
+                                              gy_proj,
+                                              gz_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
+        else:
+            pl_dtype = np.dtype([
+                    ("qx", "float64"),
+                    ("qy", "float64"),
+                    ("intensity", "float64"),
+                    ("h", "int"),
+                    ("k", "int"),
+                    ("l", "int"),
+                ])
+            bragg_peaks = PointList(
+                np.array([],dtype=pl_dtype)
+            )
+            if np.any(keep_int):
+                bragg_peaks.add_data_by_field([
+                                              gx_proj,
+                                              gy_proj,
+                                              g_int[keep_int],
+                                              h,k,l])
+
+        if return_orientation_matrix:
+            return bragg_peaks, orientation_matrix
+        else:
+            return bragg_peaks
+
+    def generate_ring_pattern(
+        self, 
+        k_max = 2.0,
+        use_bloch = False,
+        thickness = None,
+        bloch_params = None,
+        orientation_plan_params = None,
+        sigma_excitation_error = 0.02,
+        tol_intensity = 1e-3,
+        plot_rings = True,
+        plot_params = {},
+        return_calc = True,
+    ):
+        """
+        Calculate polycrystalline diffraction pattern from structure
+        
+        Args: 
+            k_max (float):                  Maximum scattering vector
+            use_bloch (bool):               if true, use dynamic instead of kinematic approach
+            thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
+                                            only needed for dynamical calculations
+            bloch_params (dict):            optional, parameters to calculate dynamical structure factor, 
+                                            see calculate_dynamical_structure_factors doc strings
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan, 
+                                            see orientation_plan doc strings
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) 
+                                            in units of inverse Angstroms
+            tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
+            plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
+            return_calc (bool):             return radii and intensities 
+
+        Returns: 
+            radii_unique (np array):        radii of ring pattern in units of scattering vector k
+            intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
+        """ 
+       
+        if use_bloch: 
+            assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
+            assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
+            
+        if not hasattr(self, "struct_factors"):
+            self.calculate_structure_factors(
+                k_max = k_max, 
+            )
+    
+        #check accelerating voltage 
+        if hasattr(self, "accel_voltage"): 
+            accelerating_voltage = self.accel_voltage
+        else: 
+            self.accel_voltage = 300e3
+            print("Accelerating voltage not set. Assuming 300 keV!")
+        
+        #check orientation plan
+        if not hasattr(self, "orientation_vecs"):
+            if orientation_plan_params is None: 
+                orientation_plan_params = {
+                    'zone_axis_range': 'auto',
+                    'angle_step_zone_axis': 4, 
+                    'angle_step_in_plane': 4,
+                }    
+            self.orientation_plan(
+                **orientation_plan_params,
+            )
+
+        #calculate intensity and radius for rings 
+        radii = []
+        intensity = []
+        for a0 in range(self.orientation_vecs.shape[0]):
+            if use_bloch:
+                beams = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+                pattern = self.generate_dynamical_diffraction_pattern(
+                    beams = beams,
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    thickness = thickness,
+                )
+            else:  
+                pattern = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+
+            intensity.append(pattern['intensity'])
+            radii.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
+        
+        intensity = np.concatenate(intensity)
+        radii = np.concatenate(radii)
+
+        radii_unique,idx,inv,cts = np.unique(radii, return_counts=True, return_index=True,return_inverse=True)
+        intensity_unique = np.bincount(inv,weights=intensity)
+
+        if plot_rings == True:
+            from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern 
+            plot_ring_pattern(radii_unique, 
+                intensity_unique, 
+                **plot_params
+            )
+
+        if return_calc == True: 
+            return radii_unique, intensity_unique
+
+
+    def calibrate_pixel_size(
+            self,
+            bragg_peaks,
+            scale_pixel_size = 1.0,
+            bragg_k_power = 1.0,
+            bragg_intensity_power = 1.0,
+            k_min = 0.0,
+            k_max = None,
+            k_step = 0.002,
+            k_broadening = 0.002,
+            fit_all_intensities = True,
+            verbose = True,
+            plot_result = False,
+            figsize: Union[list, tuple, np.ndarray] = (12, 6),
+            returnfig = False,
+    ):
+        """
+        Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
+        and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
+
+        Args:
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            scale_pixel_size (float):           Initial guess for scaling of the existing pixel size
+                                                If the pixel size is currently uncalibrated, this is a
+                                                guess of the pixel size in Å^-1. If the pixel size is already
+                                                (approximately) calibrated, this is the scaling factor to
+                                                correct that existing calibration.
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
+                                                to change the weighting of longer scattering vectors
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
+            k_broadening (float):               Initial guess for Gaussian broadening of simulated pattern (Å^-1)
+            fit_all_intensities (bool):         Set to true to allow all peak intensities to change independently
+                                                False forces a single intensity scaling.
+            verbose (bool):                     Output the calibrated pixel size.
+            plot_result (bool):                 Plot the resulting fit.
+            figsize (list, tuple, np.ndarray)   Figure size of the plot.
+            returnfig (bool):                   Return handles figure and axis
+
+        Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+
+        """
+
+        assert hasattr(self, "struct_factors"), "Compute structure factors first..."
+
+        # k coordinates
+        if k_max is None:
+            k_max = self.k_max
+        k = np.arange(k_min, k_max + k_step, k_step)
+        k_num = k.shape[0]
+
+        # experimental data histogram
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.vectors[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
+            ]
+        )
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        sub = np.logical_and(
+            k >= k_min,
+            k <= k_max, 
+            )
+        int_exp /= np.max(int_exp[sub])
+
+        # Perform fitting
+        def fit_profile(k, *coefs):
+            scale_pixel_size = coefs[0]
+            k_broadening = coefs[1]
+            int_scale = coefs[2:]
+
+            int_sf = calc_1D_profile(
+                k,
+                self.g_vec_leng * scale_pixel_size,
+                self.struct_factors_int,
+                k_broadening=k_broadening,
+                int_scale=int_scale,
+                normalize_intensity=False,
+            )
+            return int_sf
+
+        if fit_all_intensities:
+            coefs = (
+                scale_pixel_size,
+                k_broadening,
+                *tuple(np.ones(self.g_vec_leng.shape[0])),
+            )
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
+        else:
+            coefs = (scale_pixel_size, k_broadening, 1.0)
+            bounds = (0.0, np.inf)
+            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
+
+        scale_pixel_size = popt[0]
+        k_broadening = popt[1]
+        int_scale = np.array(popt[2:])
+
+        # Make a copy of bragg_peaks, apply correction
+        bragg_peaks_cali = deepcopy(bragg_peaks)
+        inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
+        bragg_peaks_cali.calibration.set_Q_pixel_size(
+            inv_Ang_per_pixel / scale_pixel_size
+        )
+        bragg_peaks_cali.calibration.set_Q_pixel_units("A^-1")
+        bragg_peaks_cali.calibrate()
+
+        # Output
+        if verbose:
+            p = bragg_peaks_cali.calibration.get_Q_pixel_size()
+            u = bragg_peaks_cali.calibration.get_Q_pixel_units()
+            print("Calibrated pixel size = " + str(np.round(p, decimals=8)) + " " + u)
+
+        # Plotting
+        if plot_result:
+            if returnfig:
+                fig, ax = self.plot_scattering_intensity(
+                    bragg_peaks=bragg_peaks_cali,
+                    figsize=figsize,
+                    k_broadening=k_broadening,
+                    int_power_scale=1.0,
+                    int_scale=int_scale,
+                    bragg_k_power=bragg_k_power,
+                    bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
+                    returnfig=True,
+                )
+            else:
+                self.plot_scattering_intensity(
+                    bragg_peaks=bragg_peaks_cali,
+                    figsize=figsize,
+                    k_broadening=k_broadening,
+                    int_power_scale=1.0,
+                    int_scale=int_scale,
+                    bragg_k_power=bragg_k_power,
+                    bragg_intensity_power=bragg_intensity_power,
+                    k_min=k_min,
+                    k_max=k_max,
+                )
+
+        if returnfig and plot_result:
+            return bragg_peaks_cali, fig, ax
+        else:
+            return bragg_peaks_cali
+
+    # Vector conversions and other utilities for Crystal classes
+    def cartesian_to_lattice(self, vec_cartesian):
+        vec_lattice = self.lat_inv @ vec_cartesian
+        return vec_lattice / np.linalg.norm(vec_lattice)
+
+    def lattice_to_cartesian(self, vec_lattice):
+        vec_cartesian = self.lat_real.T @ vec_lattice
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
+
+    def hexagonal_to_lattice(self, vec_hexagonal):
+        return np.array([
+            2.0*vec_hexagonal[0] + vec_hexagonal[1],
+            2.0*vec_hexagonal[1] + vec_hexagonal[0] ,
+            vec_hexagonal[3]
+            ])
+
+    def lattice_to_hexagonal(self, vec_lattice):
+        return np.array([
+            (2.0*vec_lattice[0] - vec_lattice[1])/3.0,
+            (2.0*vec_lattice[1] - vec_lattice[0])/3.0,
+            (-vec_lattice[0] - vec_lattice[1])/3.0,
+            vec_lattice[2]
+            ])
+
+    def cartesian_to_miller(self, vec_cartesian):
+        vec_miller = self.lat_real.T @ self.metric_inv @ vec_cartesian 
+        return vec_miller / np.linalg.norm(vec_miller)
+
+    def miller_to_cartesian(self, vec_miller):
+        vec_cartesian = self.lat_inv.T @ self.metric_real @ vec_miller
+        return vec_cartesian / np.linalg.norm(vec_cartesian)
+
+    def rational_ind(
+        self, 
+        vec,
+        tol_den = 1000,
+        ):
+        # This function rationalizes the indices of a vector, up to 
+        # some tolerance. Returns integers to prevent rounding errors.
+        vec = np.array(vec,dtype='float64')
+        sub = np.abs(vec) > 0
+        if np.sum(sub) > 0:
+            for ind in np.argwhere(sub):
+                frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
+                vec *= np.round(frac.denominator)
+            vec = np.round(vec \
+                / np.gcd.reduce(np.round(np.abs(vec[sub])).astype('int'))
+                ).astype('int')
+
+        return vec
+
+    def parse_orientation(
+        self,
+        zone_axis_lattice=None,
+        proj_x_lattice=None,
+        zone_axis_cartesian=None,
+        proj_x_cartesian=None,
+    ):
+        # This helper function parse the various types of orientation inputs,
+        # and returns the normalized, projected (x,y,z) cartesian vectors in
+        # the form of an orientation matrix.
+
+        if zone_axis_lattice is not None:
+            proj_z = np.array(zone_axis_lattice)
+            if proj_z.shape[0] == 4:
+                proj_z = self.hexagonal_to_lattice(proj_z)
+            proj_z = self.lattice_to_cartesian(proj_z)
+        elif zone_axis_cartesian is not None:
+            proj_z = np.array(zone_axis_cartesian)
+        else:
+            proj_z = np.array([0, 0, 1])
+
+        if proj_x_lattice is not None:
+            proj_x = np.array(proj_x_lattice)
+            if proj_x.shape[0] == 4:
+                proj_x = self.hexagonal_to_lattice(proj_x)
+            proj_x = self.lattice_to_cartesian(proj_x)
+        elif proj_x_cartesian is not None:
+            proj_x = np.array(proj_x_cartesian)
+        else:
+            if np.abs(proj_z[2]) > 1 - 1e-6:
+                proj_x = np.cross(np.array([0, 1, 0]), proj_z)
+            else:
+                proj_x = np.array([0, 0, -1])
+
+        # Generate orthogonal coordinate system, normalize
+        proj_y = np.cross(proj_z, proj_x)
+        proj_x = np.cross(proj_y, proj_z)
+        proj_x = proj_x / np.linalg.norm(proj_x)
+        proj_y = proj_y / np.linalg.norm(proj_y)
+        proj_z = proj_z / np.linalg.norm(proj_z)
+
+        return np.vstack((proj_x, proj_y, proj_z)).T
+
+    def excitation_errors(
+        self,
+        g,
+        foil_normal=None,
+    ):
+        """
+        Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda].
+        If foil normal is not specified, we assume it is [0,0,-1].
+        """
+        if foil_normal is None:
+            return (2 * g[2, :] - self.wavelength * np.sum(g * g, axis=0)) / (
+                2 - 2 * self.wavelength * g[2, :]
+            )
+        else:
+            return (2 * g[2, :] - self.wavelength * np.sum(g * g, axis=0)) / (
+                2 * self.wavelength * np.sum(g * foil_normal[:, None], axis=0)
+                - 2 * foil_normal[2]
+            )

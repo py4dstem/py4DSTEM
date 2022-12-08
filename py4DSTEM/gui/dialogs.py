@@ -137,7 +137,7 @@ class LoadPreprocessSaveWidget(QtWidgets.QWidget):
         optionLine.addWidget(self.loadRadioGatan)
 
         line2 = QtWidgets.QHBoxLayout()
-        line2.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignRight)
+        line2.addWidget(self.pushButton_BrowseFiles,0,QtCore.Qt.AlignLeft)
 
         load_widget_layout.addLayout(line1)
         load_widget_layout.addLayout(optionLine)
