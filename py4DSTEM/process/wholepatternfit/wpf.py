@@ -1,5 +1,5 @@
-from ...file.datastructure import DataCube
-from ..utils import tqdmnd
+from py4DSTEM.io import DataCube
+from py4DSTEM import tqdmnd
 from . import WPFModelPrototype
 
 from typing import Optional
@@ -64,9 +64,10 @@ class WholePatternFit:
         self.fit_power = fit_power
 
         # for debugging: tracks all function evals
-        self._track = True
+        self._track = False
         self._fevals = []
         self._xevals = []
+        # self._cost_history = []
 
     def add_model(self, model: WPFModelPrototype):
         self.model.append(model)
@@ -189,6 +190,7 @@ class WholePatternFit:
         if self._track:
             self._fevals.append(DP)
             self._xevals.append(x)
+            # self._cost_history.append(np.sum(DP**2))
 
         return DP.ravel()
 
