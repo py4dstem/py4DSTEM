@@ -19,18 +19,19 @@
 #############################################################################################
 
 from __future__ import division, print_function
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
 import sys, os
 import pyqtgraph as pg
 import gc
+from pathlib import Path
 
-from .dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
-from .utils import sibling_path, pg_point_roi, LQCollection
-from ..file.io.read import read
-from ..file.io.write import save_dataobject
-from ..file.datastructure.datacube import DataCube
-from .strain import *
+from py4DSTEM.gui.dialogs import ControlPanel, PreprocessingWidget, SaveWidget, EditMetadataWidget
+from py4DSTEM.gui.gui_utils import sibling_path, pg_point_roi, LQCollection, datacube_selector
+from py4DSTEM.io.read import read
+from py4DSTEM.io.native import save, is_py4DSTEM_file
+from py4DSTEM.io.datastructure.datacube import DataCube
+from py4DSTEM.gui.strain import *
 
 import IPython
 if IPython.version_info[0] < 4:
@@ -55,7 +56,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.qtapp = QtWidgets.QApplication.instance()
         if not self.qtapp:
             self.qtapp = QtWidgets.QApplication(argv)
-            
         QtWidgets.QMainWindow.__init__(self)
         self.this_dir, self.this_filename = os.path.split(__file__)
 
@@ -67,11 +67,15 @@ class DataViewer(QtWidgets.QMainWindow):
         self.main_window = QtWidgets.QWidget()
         self.main_window.setWindowTitle("py4DSTEM")
 
+        icon = QtGui.QIcon(str(Path(__file__).parent.absolute() / "logo.png"))
+        self.setWindowIcon(icon)
+        self.qtapp.setWindowIcon(icon)
+
         # Set up sub-windows and arrange into primary py4DSTEM window
         self.setup_diffraction_space_widget()
         self.setup_real_space_widget()
         self.setup_control_widget()
-        self.setup_console_widget()
+        #self.setup_console_widget()
         self.setup_main_window()
 
         # Set up temporary datacube
@@ -86,12 +90,15 @@ class DataViewer(QtWidgets.QMainWindow):
         self.diffraction_space_widget.normRadioChanged()
 
         if len(argv) > 1:
+            from PyQt5.QtWidgets import QApplication
+            QApplication.processEvents()
             path = os.path.abspath(argv[1])
             try:
                 self.settings.data_filename.val = path
                 self.load_file()
-            except Exception:
-                print(f"Tried to set file to {path} but something went wrong...")
+            except Exception as err:
+                print(f"Tried to set file to {path} but something went wrong, got error:")
+                print(err)
 
 
     ###############################################
@@ -107,9 +114,9 @@ class DataViewer(QtWidgets.QMainWindow):
         self.control_widget.setWindowTitle("Control Panel")
 
         ############################ Controls ###############################
-        # For each control:                                                 #
+        # For each control:                                                 # 
         #   -creates items in self.settings                                 #
-        #   -connects UI changes to updates in self.settings                #
+        #   -connects UI changes to updates in self.settings                # 
         #   -connects updates in self.settings items to function calls      #
         #   -connects button clicks to function calls                       #
         #####################################################################
@@ -273,7 +280,7 @@ class DataViewer(QtWidgets.QMainWindow):
     # the process directory.                                         #
     # Additional functionality here should be avoided, to ensure     #
     # consistent output between processing run through the GUI       #
-    # or from the command line.                                      #
+    # or from the command line.                                      # 
     ##################################################################
 
     def launch_strain(self):
@@ -282,11 +289,6 @@ class DataViewer(QtWidgets.QMainWindow):
         self.strain_window.setup_tabs()
 
     ################ Load ################
-    def couldnt_find_file(self,fname):
-        msg = QtWidgets.QMessageBox()
-        msg.setText("Couldn't find filepath {0}".format(fname))
-        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-        msg.exec_()
 
     def Unidentified_file(self,fname):
         msg = QtWidgets.QMessageBox()
@@ -299,12 +301,6 @@ class DataViewer(QtWidgets.QMainWindow):
         Loads a file by creating and storing a DataCube object.
         """
         fname = self.settings.data_filename.val
-
-        #Check that file exists
-        if not os.path.exists(fname):
-            self.couldnt_find_file(fname)
-            return
-
         print("Loading file",fname)
 
         # Instantiate DataCube object
@@ -314,16 +310,22 @@ class DataViewer(QtWidgets.QMainWindow):
         # load based on chosen mode:
         if self.control_widget.widget_LoadPreprocessSave.widget.loadRadioAuto.isChecked():
             #auto mode
-            self.datacube = read(fname)
-            if type(self.datacube) == str : 
+            if is_py4DSTEM_file(fname):
+                self.datacube = datacube_selector(fname)
+            else:
+                self.datacube = read(fname)
+            if type(self.datacube) == str :
                 self.Unidentified_file(fname)
                 #Reset view
                 self.__init__(sys.argv)
                 return
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioMMAP.isChecked():
-            self.datacube = read(fname, load='dmmmap')
+            if is_py4DSTEM_file(fname):
+                self.datacube = datacube_selector(fname)
+            else:
+                self.datacube = read(fname, mem="MEMMAP")
         elif self.control_widget.widget_LoadPreprocessSave.widget.loadRadioGatan.isChecked():
-            self.datacube = read(fname, load='gatan_bin')
+            self.datacube = read(fname, ft='gatan_bin')
 
         # Update scan shape information
         self.settings.R_Nx.update_value(self.datacube.R_Nx)
@@ -582,7 +584,7 @@ class DataViewer(QtWidgets.QMainWindow):
     def execute_saveas(self):
         f = self.save_widget.lineEdit_SavePath.text()
         print("Saving file to {}".format(f))
-        save_dataobject(self.datacube,f)
+        save(f,self.datacube)
         self.save_widget.close()
 
     def save_directory(self):
@@ -746,14 +748,13 @@ class DataViewer(QtWidgets.QMainWindow):
 
     def update_diffraction_space_view(self):
         roi_state = self.real_space_point_selector.saveState()
-        x0,y0 = roi_state['pos']
+        y0,x0 = roi_state['pos']
         xc,yc = int(x0+1),int(y0+1)
 
         # Set the diffraction space image
         new_diffraction_space_view, success = self.datacube.get_diffraction_space_view(xc,yc)
         if success:
             self.diffraction_space_view = new_diffraction_space_view
-
             self.real_space_view_text.setText(f"[{xc},{yc}]")
 
             # rescale DP as selected (0 means raw, does no scaling)
@@ -770,7 +771,7 @@ class DataViewer(QtWidgets.QMainWindow):
                 self.diffraction_space_view = np.abs(np.fft.fftshift(np.fft.fft2(np.log(
                     (h*(self.diffraction_space_view - np.min(self.diffraction_space_view))) + 1))))**2
 
-            self.diffraction_space_widget.setImage(self.diffraction_space_view,
+            self.diffraction_space_widget.setImage(self.diffraction_space_view.T,
                                                    autoLevels=False,autoRange=False)
         else:
             pass
@@ -783,13 +784,13 @@ class DataViewer(QtWidgets.QMainWindow):
         if detector_shape == 0:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
 
                 #update the label:
                 self.diffraction_space_view_text.setText(
@@ -801,13 +802,13 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 1:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
 
             # Get the virtual image and set the real space view
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
@@ -815,7 +816,7 @@ class DataViewer(QtWidgets.QMainWindow):
         elif detector_shape == 2:
             # Get slices corresponding to ROI
             slices, transforms = self.virtual_detector_roi_outer.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
-            slice_x,slice_y = slices
+            slice_y, slice_x = slices
             slices_inner, transforms = self.virtual_detector_roi_inner.getArraySlice(self.datacube.data[0,0,:,:], self.diffraction_space_widget.getImageItem())
             slice_inner_x,slice_inner_y = slices_inner
             R = 0.5*((slice_inner_x.stop-slice_inner_x.start)/(slice_x.stop-slice_x.start) + (slice_inner_y.stop-slice_inner_y.start)/(slice_y.stop-slice_y.start))
@@ -824,7 +825,7 @@ class DataViewer(QtWidgets.QMainWindow):
             new_real_space_view, success = self.get_virtual_image(slice_x,slice_y,R)
             if success:
                 self.real_space_view = new_real_space_view
-                self.real_space_widget.setImage(self.real_space_view,autoLevels=True)
+                self.real_space_widget.setImage(self.real_space_view.T,autoLevels=True)
             else:
                 pass
 
@@ -886,3 +887,8 @@ class DataViewer(QtWidgets.QMainWindow):
 
 
 ################################ End of class ##################################
+
+
+
+
+

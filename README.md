@@ -1,143 +1,222 @@
-# py4DSTEM: open source processing and analysis of 4D-STEM data
-[![DOI](https://zenodo.org/badge/148587083.svg)](https://zenodo.org/badge/latestdoi/148587083)
 
-The aim of py4DSTEM is to provide a comprehensive suite of tools for interacting with, visualizing, and analyzing 4DSTEM data.
-Intended applications include generating virtual images; classification and segmentation; mapping orientation, crystallinity, and strain fields; and other analytical tools including ptychography and fluctuation electron microscopy.
+> :warning: **py4DSTEM version 0.13 update** :warning: Warning, this is a major update and we expect some workflows to break.  To install the previous version of **py4DSTEM**, please use the command line:
+```
+pip install py4dstem==0.12.23
+```
 
-py4DSTEM can be used at three distinct levels of interaction.
-A graphical user interface facilites rapid data exploration, and live testing and tuning of analysis parameters.
-For analysis requiring greater user control, py4DSTEM can be run and interfaced directly from the command line using a python 3 interpreter.
-For large scale projects, py4DSTEM enables automated batch processing of many 4DSTEM datasets.
 
-py4DSTEM is open source, copyleft software.
-It is free to use, alter, or build on, provided that any work derived from py4DSTEM is also kept free and open.
 
-## Quick overview
+![py4DSTEM logo](/images/py4DSTEM_logo.png)
 
-4DSTEM is a powerful, versatile, emerging technique in the field nanocharacterization.
-This section provides a brief description of what 4D-STEM is, some of the challenges associated with 4D-STEM, and how py4DSTEM helps address these challenges.
+**py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data. Additional information:
 
-### What is 4D-STEM?
+- [Our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications.
+- [The py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html).
+- [Our open access 4D-STEM review in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927619000497) describing this project and demonstrating a variety of applications.
 
-In a Scanning Transmission Electron Microscopy Experiment (STEM), a beam of high energy electrons is focused to a very fine probe - on the order of or, often, smaller than the atomic lattice spacings - and rastered across the surface of the sample.
-In traditional STEM, a (two dimensional) image is formed by populating the value of each pixel by the number of electrons (times a scaling factor) scattered into a detector at each beam position.
-The geometry of the detector - it's size, shape, and position in the microscope's diffraction plane - determines which electrons are collected.
-As a result, different detector geometries can give rise to rather different images, by varying which electron scattering processes dominate image contrast.
-For instance, high-angle annular dark-field detectors collect only electrons scattered to high angles, and are popular because image contrast then generally scales monotonically with the projected potential of the sample.
 
-4D-STEM stands for 4-Dimensional Scanning Transmission Electron Microscopy.
-In 4D-STEM, the standard STEM detectors, which integrate all electrons scattered over a large region, are replaced with a pixellated detector, which instead detects the electron flux scattered to each angle in the diffraction plane.
-While a typical STEM image therefore produces a single number for each position of the electron beam, a 4D-STEM dataset produces a two dimensional map of diffraction space intensities for each beam position.
-The resulting four dimensional data hypercube can be collapsed in real space to yield information comparable to nanobeam electron diffraction experiment.
-Alternatively, it can be collapsed in diffraction space to yield a variety of `virtual images', corresponding to both traditional STEM imaging modes as well as more exotic virtual imaging modalities.
 
-More information still can be extracted by coherently combining the real and reciprocal space pictures.
+# What is 4D-STEM?
+
+In a traditional STEM experiment, a beam of high energy electrons is focused to a very fine probe - on the order of, or even smaller than, the spacing between atoms - and rastered across the surface of the sample. A conventional two-dimensional STEM image is formed by populating the value of each pixel with the electron flux through a detector at the corresponding beam position. In 4D-STEM, a pixelated detector is used instead, where a 2D image of the diffracted probe is recorded at every rastered probe position. A 4D-STEM scan thus results in a 4D data array.
+
+
+4D-STEM data is information rich.
+A datacube can be collapsed in real space to yield information comparable to nanobeam electron diffraction experiment, or in diffraction space to yield a variety of virtual images, corresponding to both traditional STEM imaging modes as well as more exotic virtual imaging modalities.
 The structure, symmetries, and spacings of Bragg disks can be used to extract spatially resolved maps of crystallinity, grain orientations, and lattice strain.
-Redundant information in overlapping Bragg disks can be leveraged to deconvolve the electron beam shape from the sample structure, yielding the sample potential itself.
-Variance in the data intensity can be used to extract correlation functions describing the short and medium range order and disorder.
+Redundant information in overlapping Bragg disks can be leveraged to calculate the sample potential.
+Structure in the diffracted halos of amorphous systems can be used to describe the short and medium range order.
 
-
-### What are some of the challenges of analysis of 4D-STEM data?
-
-In terms of hardware, 4D-STEM has been made possible by the advent of electron detectors with the speed and dynamic range necessary to capture complete diffraction patterns at each scan position at collection speeds fast enough that sample drift is not prohibitive.
-In terms of data analysis, 4D-STEM is where the field of STEM butts heads with the big data problem.
-A typical 4D-STEM scan can generate a gigabyte of data in under a minute, where the specific data rate depends on the detector - and will continue to increase with new hardware developements.
-The capacity to handle terabytes of raw data from a single session is required.
-
-The size and complexity of 4D-STEM data makes the initial stages of data screening and preprocessing both more challenging and more important.
-The ability to quickly scan through data becomes non-trivial, as many possible 2D slices through a given 4D datacube are possible, and which are most relavant will vary on a case-by-case basis.
-For these large datasets, compression without sacrificing useful information takes on increasing importance.
-
-Analysis of 4D-STEM data can involve significant amounts of data processing.
-A growing number of excellent studies devoted to untangling these complex datasets in the most useful ways can be found in the literature, demonstrating 4D-STEM based mapping of everything from strain to local magnetic fields to non-spectroscopic composition maps and much more.
-At this stage, these works tend to operate on the scale of individual datasets, demonstrating the principles and requisite machinery for new forms of 4D-STEM data analysis.
-However, maximizing the impact of these tools to answer the broadest possible array of scientifc questions requires accessibility, scalability, and reproducibility.
-In light of the size of the data and the variety and complexity of approaches to its analyses, these represent significant challenges.
-
-
-### How does py4DSTEM help?
-
-py4DSTEM is here to help!
+**py4DSTEM** supports many different modes of 4DSTEM analysis.
+The tutorials, sample code, module, and function documentation all provide more detailed discussion on some of the analytical methods possible with this code.
 
 
 
 
-## Getting started
+# py4DSTEM Installation
 
-### Installation
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/version.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/installer/conda.svg)](https://conda.anaconda.org/conda-forge)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/latest_release_date.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/downloads.svg)](https://anaconda.org/conda-forge/py4dstem)
 
-py4DSTEM uses python 3, and the Anaconda python distribution is highly recommended.
-Download and installation instructions for Anaconda can be found at www.anaconda.com/download.
+The recommended installation for **py4DSTEM** uses the Anaconda python distribution.
+First, download and install Anaconda: www.anaconda.com/download. 
+If you prefer a more lightweight conda client, you can instead install Miniconda: https://docs.conda.io/en/latest/miniconda.html.
+Then open a conda terminal and run one of the following sets of commands:
 
-Next, ensure the dependencies (see below) are installed in a python 3 environment.  In anaconda, you can use:
 
 ```
-conda install hyperspy -c conda-forge
-conda install h5py
-conda install pyqtgraph
-conda install PyQt5
-pip install ncempy
+conda update conda
+conda create -n py4dstem
+conda activate py4dstem
+conda install -c conda-forge py4dstem pymatgen jupyterlab
 ```
 
-Note that as ncempy is installed with pip rather than conda, anaconda users should make sure that pip is pointing to their anaconda installation (rather than some other python version).  You can check by calling `which pip`, and confirming that the output is a path somewhere inside your anaconda directory.
-
-To get the py4DSTEM package, use the 'Clone or Download' link on this page to copy the py4DSTEM repository somewhere on your system.  From the command line, you can navigate the the directory where you'd like to put py4DSTEM, and run:
+Or if you would prefer to install only the base modules of **py4DSTEM**, you can instead run these command lines:
 
 ```
-git clone https://github.com/bsavitzky/py4DSTEM.git
+conda update conda
+conda create -n py4dstem
+conda activate py4dstem
+conda install -c conda-forge py4dstem
 ```
 
-Finally, navigate to the py4DSTEM root directory and run the setup.py script by calling:
+In Windows you should then also run:
 
 ```
-pip install .
+conda install pywin32
 ```
 
-That's it!
+In order, these commands
+- ensure your installation of anaconda is up-to-date
+- make a virtual environment - see below!
+- enter the environment
+- make sure your new environment talks nicely to pip, a tool for installing Python packages
+- use pip to install py4DSTEM
+- on Windows: enable python to talk to the windows API
 
-To install in "editable" mode, so changes you make to the source code are available without reinstalling, run:
-```python
-pip install -e .
+Please note that virtual environments are used in the instructions above, to make sure packages that have different dependencies don't conflict with one another.
+Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+You can do this in the command line with `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
+
+
+
+# Advanced installation - ML functionality
+
+To install the py4dstem with AI/ML functionality, follow the steps below.
+
+If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, run
+
 ```
-(You do need to restart your IPython kernel for changes to take effect there.)
-
-### Running py4DSTEM with the GUI
-
-Ensure you are in the conda environment you installed in, and run:
-
+conda update conda
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
+conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
+pip install "py4dstem[aiml-cuda]"
 ```
+
+If you are running on Windows with Nvidia GPU and CUDA capability, run
+```
+conda update conda
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
+conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
+pip install "py4dstem[aiml-cuda]"
+```
+
+If you are running on Windows without any CUDA capable device or any Mac OS X system, run
+```
+conda update conda
+conda create -n py4dstem
+conda activate py4dstem
+conda install pip
+pip install "py4dstem[aiml]"
+```
+
+
+
+# Running the GUI
+
+At this stage of development, most of the analyses possible with py4DSTEM are accomplished using the code in .py scripts or .ipynb jupyter notebooks -- discussed further immediately below.
+Our intention is to support many of these analyses through the GUI eventually.
+At present the primary utility of the GUI is for browsing and visualizing 4D-STEM data.
+Stay tuned for further developments!
+
+To open the GUI from a terminal, run
+```
+conda activate py4dstem
 py4dstem
 ```
 
-### Running py4DSTEM from an python interpreter
-
-In a python interpreter, py4DSTEM can now be imported in the usual way:
-
+A filename can be passed as a command line argument to the GUI to open that file immediately:
 ```
-import py4DSTEM
+conda activate py4dstem
+py4dstem path/to/data/file.h5
 ```
+
+
+
+# Running the code
+
+The anaconda navigator can be used to launch various python interfaces, including Jupyter Notebooks, JupyterLab, PyCharm, and others.
+
+From any python interpreter inside the `py4dstem` conda environment, you can import **py4DSTEM** to access all its modules and functions using `import py4DSTEM`.
+
+
+At this point you'll need code, and data!
+Sample code lives in the top level directory called `sample_code`.
+To run these files, you can download this repository from github by clicking on the green 'Code' button, unzip the files, and place them somewhere on your system.
+Then navigate to the `sample_code` directory on your local filesystem, choose a sample `.ipynb` or `.py` file, and try running it.
+
+
+Sample datasets are provided [here](https://drive.google.com/drive/folders/1GmxF1ltY7hBU4d5ZK8INXjaRW5Etnw_4).
+Links to individual datasets are provided in the sample code files which make use of them.
+Once you've selected a file of sample code to run, find the link in that file to the dataset it uses, download and place it somewhere in your filesystem, then edit the filepath in the code to indicate where you've put that data.
+
+The largest collection of py4DSTEM workflows can be found on the tutorial repo here: https://github.com/py4dstem/py4DSTEM_tutorials
+
+
+
+# More information
+
+### For contributors
+
+Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff4500535dba).
+
+
+### Scientific papers which use **py4DSTEM**
+
+See a list [here](docs/papers.md).
 
 
 ### Dependencies
 
-* hyperspy
+* numpy
+* scipy
 * h5py
-* pyqtgraph
+* ncempy
+* numba
+* scikit-image
+* scikit-learn
 * PyQt5
+* pyqtgraph
+* qtconsole
+* ipywidgets
+* tqdm
+* gdown
 
 
-## Versioning
+### Optional dependencies
+
+* ipyparallel
+* dask
+* cupy
+* pymatgen
 
 
-v. 0.6
 
 
-## License
+
+# Acknowledgements
+
+If you use py4DSTEM for a scientific study, please cite [our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477). You are also free to use the py4DSTEM [logo in PDF format](images/py4DSTEM_logo_54.pdf) or [logo in PNG format](images/py4DSTEM_logo_54_export.png) for presentations or posters.
+
+
+[![TRI logo](/images/toyota_research_institute.png)](https://www.tri.global/)
+
+
+The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and development time which made this project possible.
+
+[![DOE logo](/images/DOE_logo.png)](https://www.energy.gov/science/bes/basic-energy-sciences/)
+
+Additional funding has been provided by the US Department of Energy, Office of Science, Basic Energy Sciences.
+
+
+
+### License
 
 GNU GPLv3
 
-
-## Acknowledgements
-
-The developers gratefully acknowledge the financial support of the Toyota Research Institute for the research and developement time which made this project possible.
-
+**py4DSTEM** is open source software distributed under a GPLv3 license.
+It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open.

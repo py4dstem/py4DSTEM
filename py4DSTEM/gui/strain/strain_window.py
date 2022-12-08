@@ -5,8 +5,8 @@ import sys, os
 import pyqtgraph as pg
 import gc
 
-from .panels import *
-from ..utils import sibling_path, pg_point_roi, LQCollection
+from py4DSTEM.gui.strain.panels import *
+from py4DSTEM.gui.gui_utils import sibling_path, pg_point_roi, LQCollection
 
 
 class StrainMappingWindow(QtWidgets.QMainWindow):

@@ -1,8 +1,8 @@
 # Functions for differential phase contrast imaging
 
 import numpy as np
-from ..utils import make_Fourier_coords2D, print_progress_bar
-from ...file.datastructure import DataCube
+from py4DSTEM.process.utils import make_Fourier_coords2D, tqdmnd
+from py4DSTEM.io import DataCube
 
 ############################# DPC Functions ################################
 
@@ -10,25 +10,30 @@ def get_CoM_images(datacube, mask=None, normalize=True):
     """
     Calculates two images - center of mass x and y - from a 4D-STEM datacube.
 
-    The centers of mass are returned in units of pixels and in the Qx/Qy detector coordinate system.
+    The centers of mass are returned in units of pixels and in the Qx/Qy detector
+    coordinate system.
 
-    Accepts:
-        datacube        (DataCube) the 4D-STEM data
-        mask            (2D array) optionally, calculate the CoM only in the areas where mask==True
-        normalize       (bool) if true, subtract off the mean of the CoM images
+    Args:
+        datacube (DataCube): the 4D-STEM data
+        mask (2D array): optionally, calculate the CoM only in the areas where mask==True. The function will cast the input array to a bool dtype
+        normalize (bool): if true, subtract off the mean of the CoM images
 
     Returns:
-        CoMx            (2D array) the center of mass x coordinate
-        CoMy            (2D array) the center of mass y coordinate
+        (2-tuple of 2d arrays): the center of mass coordinates, (x,y)
     """
     assert isinstance(datacube, DataCube)
     assert isinstance(normalize, bool)
 
     # Coordinates
     qy,qx = np.meshgrid(np.arange(datacube.Q_Ny),np.arange(datacube.Q_Nx))
-    if mask is not None:
-        qx *= mask
-        qy *= mask
+    if mask is None:
+        mask = np.ones_like(qx).astype(bool)
+    else:
+        assert qy.shape == mask.shape, f"The mask shape {mask.shape} must equal the diffraction pattern shape {qy.shape}."
+        mask = mask.astype(bool)
+
+    qx *= mask
+    qy *= mask
 
     # Get CoM
     CoMx = np.zeros((datacube.R_Nx,datacube.R_Ny))
@@ -48,44 +53,52 @@ def get_CoM_images(datacube, mask=None, normalize=True):
     return CoMx, CoMy
 
 def get_rotation_and_flip_zerocurl(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=1,
-                                                                       return_costs=False):
+                                                           return_costs=False):
     """
-    Find the rotation offset between real space and diffraction space, and whether there exists a
-    relative axis flip their coordinate systems, starting from the premise that the CoM changes
-    must have zero curl everywhere.
+    Find the rotation offset between real space and diffraction space, and whether there
+    exists a relative axis flip their coordinate systems, starting from the premise that
+    the CoM changes must have zero curl everywhere.
 
-    The idea of the algorithm is to find the rotation which best preserves self-consistency in the
-    observed CoM changes.  By 'self-consistency', we refer to the requirement that the CoM changes -
-    because they correspond to a gradient - must be a conservative vector field (i.e. path
-    independent).  This condition fails to be met when there exists some rotational offset between
-    real and diffraction space. Thus this algorithm performs gradient descent to minimize the square
-    of the sums of all the 4-pixel closed loop line integrals, while varying the rotation angle of
-    the diffraction space (CoMx/CoMy) axes.
+    The idea of the algorithm is to find the rotation which best preserves
+    self-consistency in the observed CoM changes.  By 'self-consistency', we refer to the
+    requirement that the CoM changes - because they correspond to a gradient - must be a
+    conservative vector field (i.e. path independent).  This condition fails to be met
+    when there exists some rotational offset between real and diffraction space. Thus
+    this algorithm performs gradient descent to minimize the square of the sums of all
+    the 4-pixel closed loop line integrals, while varying the rotation angle of the
+    diffraction space (CoMx/CoMy) axes.
 
-    Accepts:
-        CoMx            (2D array) the x coordinates of the diffraction space centers of mass
-        CoMy            (2D array) the y coordinates of the diffraction space centers of mass
-        Q_Nx            (int) the x shape of diffraction space
-        Q_Ny            (int) the y shape of diffraction space
-        n_iter          (int) the number of gradient descent iterations
-        stepsize        (float) the gradient descent step size (i.e. change to theta in a single
-                        step, relative to the gradient)
-        return_costs    (bool) if True, returns the theta values and costs, both with and without an
-                        axis flip, for all gradient descent steps, for diagnostic purposes
+    Args:
+        CoMx (2D array): the x coordinates of the diffraction space centers of mass
+        CoMy (2D array): the y coordinates of the diffraction space centers of mass
+        Q_Nx (int): the x shape of diffraction space
+        Q_Ny (int): the y shape of diffraction space
+        n_iter (int): the number of gradient descent iterations
+        stepsize (float): the gradient descent step size (i.e. change to theta in a
+            single step, relative to the gradient)
+        return_costs (bool): if True, returns the theta values and costs, both with and
+            without an axis flip, for all gradient descent steps, for diagnostic purposes
 
     Returns:
-        theta           (float) the rotation angle between the real and diffraction space coordinate,
-                        in radians
-        flip            (bool) if True, the real and diffraction space coordinates are flipped
-                        relative to one another.  By convention, we take flip=True to correspond to
-                        the change CoMy --> -CoMy.
-        thetas          (float) returned iff return_costs is True. The theta values at each gradient
-                        descent step for flip=False. In radians.
-        costs           (float) returned iff return_costs is True. The cost values at each gradient
-                        descent step for flip=False
-        thetas_f        (float) returned iff return_costs is True. The theta values for flip=True
-                        descent step for flip=False
-        costs_f         (float) returned iff return_costs is True. The cost values for flip=False
+        (variable): If ``return_costs==False`` (default), returns a 2-tuple consisting of
+
+            * **theta**: *(float)* the rotation angle between the real and diffraction
+              space coordinate, in radians
+            * **flip**: *(bool)* if True, the real and diffraction space coordinates are
+              flipped relative to one another.  By convention, we take flip=True to
+              correspond to the change CoMy --> -CoMy.
+
+        If ``return_costs==True``, returns a 6-tuple consisting of the two values listed
+        above, followed by:
+
+            * **thetas**: *(float)* returned iff return_costs is True. The theta values
+              at each gradient descent step for flip=False. In radians.
+        * **costs**: *(float)* returned iff return_costs is True. The cost values at each
+          gradient descent step for flip=False
+        * **thetas_f**: *(float)* returned iff return_costs is True. The theta values for
+          flip=True descent step for flip=False
+        * **costs_f**: *(float)* returned iff return_costs is True. The cost values for
+          flip=False
     """
     # Cost function coefficients, with / without flip
     term1 = np.roll(CoMx,(0,-1),axis=(0,1)) - np.roll(CoMx,( 0,+1),axis=(0,1)) + \
@@ -135,75 +148,80 @@ def get_rotation_and_flip_zerocurl(CoMx, CoMy, Q_Nx, Q_Ny, n_iter=100, stepsize=
     else:
         return theta, flip
 
-def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, regLowPass=0.5,
-                                      regHighPass=100, stepsize=1, n_iter=1, return_stds=False,
-                                      verbose=True):
+def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2,
+                                      regLowPass=0.5, regHighPass=100, stepsize=1,
+                                      n_iter=1, return_stds=False):
     """
-    Find the rotation offset between real space and diffraction space, and whether there exists a
-    relative axis flip their coordinate systems, starting from the premise that the contrast of the
-    phase reconstruction should be maximized when the RQ rotation is correctly set.
+    Find the rotation offset between real space and diffraction space, and whether there
+    exists a relative axis flip their coordinate systems, starting from the premise that
+    the contrast of the phase reconstruction should be maximized when the RQ rotation is
+    correctly set.
 
-    The idea of the algorithm is to perform a phase reconstruction for various values of the RQ
-    rotation, and with and without an RQ flip, and then calculate the standard deviation of the
-    resulting images.  The rotation and flip which maximize the standard deviation are then returned.
-    Note that answer should be correct up to a 180 degree rotation, corresponding to a complete
-    contrast reversal.  From these two options, the correct rotation can then be selected manually
-    by noting that for the correct rotation, atomic sites should be bright and the absence of atoms
-    dark.  Physically, the presence of two degenerate solutions is related to the electron charge,
-    with the incorrect, contrast reversed solution corresponding to electrons with a charge of +e.
+    The idea of the algorithm is to perform a phase reconstruction for various values of
+    the RQ rotation, and with and without an RQ flip, and then calculate the standard
+    deviation of the resulting images.  The rotation and flip which maximize the standard
+    deviation are then returned. Note that answer should be correct up to a 180 degree
+    rotation, corresponding to a complete contrast reversal.  From these two options, the
+    correct rotation can then be selected manually by noting that for the correct
+    rotation, atomic sites should be bright and the absence of atoms dark.  Physically,
+    the presence of two degenerate solutions is related to the electron charge,
+    with the incorrect, contrast reversed solution corresponding to electrons with a
+    charge of +e.
 
-    Accepts:
-        CoMx            (2D array) the x coordinates of the diffraction space centers of mass
-        CoMy            (2D array) the y coordinates of the diffraction space centers of mass
-        N_thetas        (int) the number of theta values to use
-        regLowPass      (float) passed to get_phase_from_CoM; low pass regularization term for the
-                        Fourier integration operators
-        regHighPass     (float) passed to get_phase_from_CoM; high pass regularization term for the
-                        Fourier integration operators
-        paddingfactor   (int) passed to get_phase_from_CoM; padding to add to the CoM arrays for
-                        boundry condition handling. 1 corresponds to no padding, 2 to doubling the
-                        array size, etc.
-        stepsize        (float) passed to get_phase_from_CoM; the stepsize in the iteration step
-                        which updates the phase
-        n_iter          (int) passed to get_phase_from_CoM; the number of iterations
-        return_stds     (bool) if True, returns the theta values and costs, both with and without an
-                        axis flip, for all gradient descent steps, for diagnostic purposes
-        verbose         (bool) if True, display progress bar during calculation
+    Args:
+        CoMx (2D array): the x coordinates of the diffraction space centers of mass
+        CoMy (2D array): the y coordinates of the diffraction space centers of mass
+        N_thetas (int): the number of theta values to use
+        regLowPass (float): passed to get_phase_from_CoM; low pass regularization term
+            for the Fourier integration operators
+        regHighPass (float): passed to get_phase_from_CoM; high pass regularization term
+            for the Fourier integration operators
+        paddingfactor (int): passed to get_phase_from_CoM; padding to add to the CoM
+            arrays for boundry condition handling. 1 corresponds to no padding, 2 to
+            doubling the array size, etc.
+        stepsize (float): passed to get_phase_from_CoM; the stepsize in the iteration
+            step which updates the phase
+        n_iter (int): passed to get_phase_from_CoM; the number of iterations
+        return_stds (bool): if True, returns the theta values and costs, both with and
+            without an axis flip, for all gradient descent steps, for diagnostic purposes
+        verbose (bool): if True, display progress bar during calculation
 
     Returns:
-        theta           (float) the rotation angle between the real and diffraction space
-                        coordinates, in radians.
-        flip            (bool) if True, the real and diffraction space coordinates are flipped
-                        relative to one another.  By convention, we take flip=True to correspond to
-                        the change CoMy --> -CoMy.
-        thetas          (float) returned iff return_costs is True. The theta values. In radians.
-        stds           (float) returned iff return_costs is True. The cost values at each gradient
-                        descent step for flip=False
-        stds_f         (float) returned iff return_costs is True. The cost values for flip=False
+        (5-tuple) A 5-tuple containing:
+
+            * **theta**: *(float)* the rotation angle between the real and diffraction
+              space coordinates, in radians.
+            * **flip**: *(bool)* if True, the real and diffraction space coordinates are
+              flipped relative to one another.  By convention, we take flip=True to
+              correspond to the change CoMy --> -CoMy.
+            * **thetas**: *(float)* returned iff return_costs is True. The theta values.
+              In radians.
+            * **stds**: *(float)* returned iff return_costs is True. The cost values at
+              each gradient descent step for flip=False
+            * **stds_f**: *(float)* returned iff return_costs is True. The cost values
+              for flip=False
     """
     thetas = np.linspace(0,2*np.pi,N_thetas)
     stds = np.zeros(N_thetas)
     stds_f = np.zeros(N_thetas)
 
     # Unflipped
-    for i,theta in enumerate(thetas):
+    for i in tqdmnd(range(thetas.shape[0])):
+        theta = thetas[i]
         phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=False,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
                                           n_iter=n_iter)
         stds[i] = np.std(phase)
-        if verbose:
-            print_progress_bar(i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
 
     # Flipped
-    for i,theta in enumerate(thetas):
+    for i in tqdmnd(range(thetas.shape[0])):
+        theta = thetas[i]
         phase, error = get_phase_from_CoM(CoMx, CoMy, theta=theta, flip=True,
                                           regLowPass=regLowPass, regHighPass=regHighPass,
                                           paddingfactor=paddingfactor, stepsize=stepsize,
                                           n_iter=n_iter)
         stds_f[i] = np.std(phase)
-        if verbose:
-            print_progress_bar(N_thetas+i+1, 2*N_thetas, prefix='Analyzing:', suffix='Complete.', length=50)
 
     flip = np.max(stds_f)>np.max(stds)
     if flip:
@@ -216,67 +234,89 @@ def get_rotation_and_flip_maxcontrast(CoMx, CoMy, N_thetas, paddingfactor=2, reg
     else:
         return theta, flip
 
-def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100, paddingfactor=2,
-                                                stepsize=1, n_iter=10, phase_init=None):
+def get_phase_from_CoM(
+    CoMx, 
+    CoMy, 
+    theta, 
+    flip, 
+    regLowPass=0.5, 
+    regHighPass=100,
+    paddingfactor=2, 
+    stepsize=1, 
+    n_iter=10, 
+    phase_init=None,
+    progress_bar = False,
+    ):
     """
     Calculate the phase of the sample transmittance from the diffraction centers of mass.
-    A bare bones description of the approach taken here is below - for detailed discussion of the
-    relevnt theory, see, e.g.:
+    A bare bones description of the approach taken here is below - for detailed
+    discussion of the relevant theory, see, e.g.::
+
         Ishizuka et al, Microscopy (2017) 397-405
         Close et al, Ultramicroscopy 159 (2015) 124-137
         Wadell and Chapman, Optik 54 (1979) No. 2, 83-96
 
-    The idea here is that the deflection of the center of mass of the electron beam in the
-    diffraction plane scales linearly with the gradient of the phase of the sample transmittance.
-    When this correspondence holds, it is therefore possible to invert the differential equation and
-    extract the phase itself.* The primary assumption made is that the sample is well
-    described as a pure phase object (i.e. the real part of the transmittance is 1). The inversion
-    is performed in this algorithm in Fourier space, i.e. using the Fourier transform property
-    that derivatives in real space are turned into multiplication in Fourier space.
+    The idea here is that the deflection of the center of mass of the electron beam in
+    the diffraction plane scales linearly with the gradient of the phase of the sample
+    transmittance. When this correspondence holds, it is therefore possible to invert the
+    differential equation and extract the phase itself.* The primary assumption made is
+    that the sample is well described as a pure phase object (i.e. the real part of the
+    transmittance is 1). The inversion is performed in this algorithm in Fourier space,
+    i.e. using the Fourier transform property that derivatives in real space are turned
+    into multiplication in Fourier space.
 
-    *Note: because in DPC a differential equation is being inverted - i.e. the  fundamental theorem
-    of calculus is invoked - one might be tempted to call this "integrated differential phase
-    contrast".  Strictly speaking, this term is redundant - performing an integration is simply how
-    DPC works.  Anyone who tells you otherwise is selling something.
+    *Note: because in DPC a differential equation is being inverted - i.e. the
+    fundamental theorem of calculus is invoked - one might be tempted to call this
+    "integrated differential phase contrast".  Strictly speaking, this term is redundant
+    - performing an integration is simply how DPC works.  Anyone who tells you otherwise
+    is selling something.
 
-    Accepts:
-        CoMx            (2D array) the diffraction space centers of mass x coordinates
-        CoMy            (2D array) the diffraction space centers of mass y coordinates
-        theta           (float) the rotational offset between real and diffraction space coordinates
-        flip            (bool) whether or not the real and diffraction space coords contain a
+    Args:
+        CoMx (2D array): the diffraction space centers of mass x coordinates
+        CoMy (2D array): the diffraction space centers of mass y coordinates
+        theta (float): the rotational offset between real and diffraction space
+            coordinates
+        flip (bool): whether or not the real and diffraction space coords contain a
                         relative flip
-        regLowPass      (float) low pass regularization term for the Fourier integration operators
-        regHighPass     (float) high pass regularization term for the Fourier integration operators
-        paddingfactor   (int) padding to add to the CoM arrays for boundry condition handling.
-                        1 corresponds to no padding, 2 to doubling the array size, etc.
-        stepsize        (float) the stepsize in the iteration step which updates the phase
-        n_iter          (int) the number of iterations
-        phase_init      (2D array) initial guess for the phase
+        regLowPass (float): low pass regularization term for the Fourier integration
+            operators
+        regHighPass (float): high pass regularization term for the Fourier integration
+            operators
+        paddingfactor (int): padding to add to the CoM arrays for boundry condition
+            handling. 1 corresponds to no padding, 2 to doubling the array size, etc.
+        stepsize (float): the stepsize in the iteration step which updates the phase
+        n_iter (int): the number of iterations
+        phase_init (2D array): initial guess for the phase
+        progress_bar (bool):  Enable progressbar
 
     Returns:
-        phase           (2D array) the phase of the sample transmittance
-        error           (1D array) the error - RMSD of the phase gradients compared to the CoM - at
-                        each iteration step
+        (2-tuple) A 2-tuple containing:
+
+            * **phase**: *(2D array)* the phase of the sample transmittance, in radians
+            * **error**: *(1D array)* the error - RMSD of the phase gradients compared
+              to the CoM - at each iteration step
     """
-    assert isinstance(flip,bool)
+    assert isinstance(flip,(bool,np.bool_))
     assert isinstance(paddingfactor,(int,np.integer))
     assert isinstance(n_iter,(int,np.integer))
 
     # Coordinates
     R_Nx,R_Ny = CoMx.shape
     R_Nx_padded,R_Ny_padded = R_Nx*paddingfactor,R_Ny*paddingfactor
-    qx,qy = make_Fourier_coords2D(R_Nx_padded,R_Ny_padded,pixelSize=1)
-    qr2 = qx**2 + qy**2
 
-    # Invese operators
+    qx = np.fft.fftfreq(R_Nx_padded)
+    qy = np.fft.rfftfreq(R_Ny_padded)
+    qr2 = qx[:,None]**2 + qy[None,:]**2
+
+    # Inverse operators
     denominator = qr2 + regHighPass + qr2**2*regLowPass
     _ = np.seterr(divide='ignore')
     denominator = 1./denominator
     denominator[0,0] = 0
     _ = np.seterr(divide='warn')
-    f = 1j * 0.25 * stepsize
-    qxOperator = f*qx*denominator
-    qyOperator = f*qy*denominator
+    f = 1j * -0.25*stepsize
+    qxOperator = f*qx[:,None]*denominator
+    qyOperator = f*qy[None,:]*denominator
 
     # Perform rotation and flipping
     if not flip:
@@ -299,7 +339,12 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         phase[:R_Nx,:R_Ny] = phase_init
 
     # Iterative reconstruction
-    for i in range(n_iter):
+    for i in tqdmnd(
+        range(n_iter),
+        desc="Reconstructing phase",
+        unit=" iterations",
+        disable=not progress_bar,
+        ):
 
         # Update gradient estimates using measured CoM values
         dx[mask] -= CoMx_rot.ravel()
@@ -308,7 +353,7 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         dy[maskInv] = 0
 
         # Calculate reconstruction update
-        update = np.real(np.fft.ifft2( np.fft.fft2(dx)*qxOperator + np.fft.fft2(dy)*qyOperator))
+        update = np.fft.irfft2( np.fft.rfft2(dx)*qxOperator + np.fft.rfft2(dy)*qyOperator)
 
         # Apply update
         phase += stepsize*update
@@ -321,6 +366,11 @@ def get_phase_from_CoM(CoMx, CoMy, theta, flip, regLowPass=0.5, regHighPass=100,
         xDiff = dx[mask] - CoMx_rot.ravel()
         yDiff = dy[mask] - CoMy_rot.ravel()
         error[i] = np.sqrt(np.mean((xDiff-np.mean(xDiff))**2 + (yDiff-np.mean(yDiff))**2))
+
+        # Halve step size if error is increasing
+        if i>0:
+            if error[i] > error[i-1]:
+                stepsize /= 2
 
     phase = phase[:R_Nx,:R_Ny]
 
@@ -335,26 +385,27 @@ def construct_illumation(shape, size, keV, aperture, ap_in_mrad=True,
     Makes a probe wave function, in the sample plane.
 
     The arguments shape and size together describe a rectangular region in which the
-    illumination of the beam is calculated, with the probe placed at the center of this region.
-    size gives the region size (xsize,ysize), in units of Angstroms.
-    shape describes the sampling (Nx,Ny), i.e. the number of pixels spanning the grid, in the x
-    and y directions.
+    illumination of the beam is calculated, with the probe placed at the center of this
+    region. size gives the region size (xsize,ysize), in units of Angstroms.
+    shape describes the sampling (Nx,Ny), i.e. the number of pixels spanning the grid,
+    in the x and y directions.
 
-    Accepts:
-        shape           (2-tuple of ints) the number of pixels (Nx,Ny) making grid in which
-                        the illumination is calculated.
-        size            (2-tuple of floats) the size (xsize,ysize) of the grid, in real space.
-        keV             (float) the energe of the probe electrons, in keV
-        aperture        (float) the probe forming aperture size. Units are specified by ap_in_mrad.
-        ap_in_mrad      (bool) if True, aperture describes the aperture size in mrads, i.e. it
-                        specifies the convergence semi-angle.
-                        If False, aperture describes the aperture size in inverse Angstroms
-        df              (float) probe defocus, in Angstroms, with negative values corresponding to
-                        overfocus.
-        cs              (float) the 3rd order spherical aberration coefficient, in mm
-        c5              (float) the 5th order spherical aberration coefficient, in mm
-        return_qspace   (bool) if True, return the probe in the diffraction plane, rather than the
-                        sample plane.
+    Args:
+        shape (2-tuple of ints): the number of pixels (Nx,Ny) making grid in which
+            the illumination is calculated.
+        size (2-tuple of floats): the size (xsize,ysize) of the grid, in real space.
+        keV (float): the energe of the probe electrons, in keV
+        aperture (float): the probe forming aperture size. Units are specified by
+            ap_in_mrad.
+        ap_in_mrad (bool): if True, aperture describes the aperture size in mrads, i.e.
+            it specifies the convergence semi-angle. If False, aperture describes the
+            aperture size in inverse Angstroms
+        df (float): probe defocus, in Angstroms, with negative values corresponding to
+            overfocus.
+        cs (float): the 3rd order spherical aberration coefficient, in mm
+        c5 (float): the 5th order spherical aberration coefficient, in mm
+        return_qspace (bool): if True, return the probe in the diffraction plane, rather
+            than the sample plane.
     """
     # Get shapes
     Nx,Ny = shape
@@ -362,7 +413,7 @@ def construct_illumation(shape, size, keV, aperture, ap_in_mrad=True,
 
     # Get diffraction space coordinates
     qsize = (float(Nx)/xsize,float(Ny)/ysize)
-    qx,qy = make_qspace_coords(shape, qsize)
+    qx, qy = make_Fourier_coords2D(qsize[0],qsize[1])
     qr = np.sqrt(qx**2 + qy**2)
 
     # Get electron wavenumber and aperture size
@@ -381,22 +432,22 @@ def construct_illumation(shape, size, keV, aperture, ap_in_mrad=True,
 
 def sph_aberration(qr, lam, df=0, cs=0, c5=0):
     """
-    Calculates the aberration function chi as a function of diffraction space radial coordinates qr
-    for an electron with wavelength lam.
+    Calculates the aberration function chi as a function of diffraction space radial
+    coordinates qr for an electron with wavelength lam.
 
-    Note that this function only considers the rotationally symmetric terms of chi (i.e. spherical
-    aberration) up to 5th order.  Non-rotationally symmetric terms (coma, stig, etc) and higher
-    order terms (c7, etc) are not considered.
+    Note that this function only considers the rotationally symmetric terms of chi (i.e.
+    spherical aberration) up to 5th order.  Non-rotationally symmetric terms (coma, stig,
+    etc) and higher order terms (c7, etc) are not considered.
 
-    Accepts:
-        qr      (float or array) diffraction space radial coordinate(s), in inverse Angstroms
-        lam     (float) wavelength of electron, in Angstroms
-        df      (float) probe defocus, in Angstroms
-        cs      (float) probe 3rd order spherical aberration coefficient, in mm
-        c5      (float) probe 5th order spherical aberration coefficient, in mm
+    Args:
+        qr (float or array): diffraction space radial coordinate(s), in inverse Angstroms
+        lam (float): wavelength of electron, in Angstroms
+        df (float): probe defocus, in Angstroms
+        cs (float): probe 3rd order spherical aberration coefficient, in mm
+        c5 (float): probe 5th order spherical aberration coefficient, in mm
 
     Returns:
-        chi     (float) the aberation function
+        (float): the aberation function
     """
     p = lam*qr
     chi = df*np.square(p)/2.0 + cs*1e7*np.power(p,4)/4.0 + c5*1e7*np.power(p,6)/6.0
@@ -408,30 +459,30 @@ def sph_aberration(qr, lam, df=0, cs=0, c5=0):
 
 def get_relativistic_mass_correction(E):
     """
-    Calculates the relativistic mass correction (i.e. the Lorentz factor, gamma) for an electron
-    with kinetic energy E, in eV.
-    See, e.g., Kirkland, 'Advanced Computing in Electron Microscopy', Eq. 2.2.
+    Calculates the relativistic mass correction (i.e. the Lorentz factor, gamma) for an
+    electron with kinetic energy E, in eV. See, e.g., Kirkland, 'Advanced Computing in
+    Electron Microscopy', Eq. 2.2.
 
-    Accepts:
-        E       (float) electron energy, in eV
+    Args:
+        E (float): electron energy, in eV
 
     Returns:
-        gamma   (float) relativistic mass correction factor
+        (float): relativistic mass correction factor
     """
     m0c2 = 5.109989461e5    # electron rest mass, in eV
     return (m0c2 + E)/m0c2
 
 def get_wavenumber(E):
     """
-    Calculates the relativistically corrected wavenumber k0 (reciprocal of wavelength) for an
-    electron with kinetic energy E, in eV.
-    See, e.g., Kirkland, 'Advanced Computing in Electron Microscopy', Eq. 2.5.
+    Calculates the relativistically corrected wavenumber k0 (reciprocal of wavelength)
+    for an electron with kinetic energy E, in eV. See, e.g., Kirkland, 'Advanced
+    Computing in Electron Microscopy', Eq. 2.5.
 
-    Accepts:
-        E       (float) electron energy, in eV
+    Args:
+        E (float): electron energy, in eV
 
     Returns:
-        k0      (float) relativistically corrected wavenumber
+        (float): relativistically corrected wavenumber
     """
     hc = 1.23984193e4       # Planck's constant times the speed of light in eV Angstroms
     m0c2 = 5.109989461e5    # electron rest mass, in eV
@@ -439,47 +490,27 @@ def get_wavenumber(E):
 
 def get_interaction_constant(E):
     """
-    Calculates the interaction constant, sigma, to convert electrostatic potential (in V Angstroms)
-    to radians. Units of this constant are rad/(V Angstrom).
+    Calculates the interaction constant, sigma, to convert electrostatic potential (in
+    V Angstroms) to radians. Units of this constant are rad/(V Angstrom).
     See, e.g., Kirkland, 'Advanced Computing in Electron Microscopy', Eq. 2.5.
 
-    Accepts:
-        E       (float) electron energy, in eV
+    Args:
+        E (float): electron energy, in eV
 
     Returns:
-        m       (float) relativistically corrected electron mass
+        (float): relativistically corrected electron mass
     """
     h = 6.62607004e-34      # Planck's constant in Js
     me = 9.10938356e-31     # Electron rest mass in kg
     qe = 1.60217662e-19     # Electron charge in C
     k0 = get_wavenumber(E)           # Electron wavenumber in inverse Angstroms
     gamma = get_relativistic_mass_correction(E)   # Relativistic mass correction
-    return 2*np.pi*gamma*me*qe/(k0*1e-20*h**2)
-
+    return 2*np.pi*gamma*me*qe*1e-20/(k0*h**2)
 
 
 ####################### Utility functions ##########################
 
-# def make_qspace_coords(shape,qsize):
-#     """
-#     Creates a diffraction space coordinate grid.
-# 
-#     Number of pixels in the grid (sampling) is given by shape = (Nx,Ny).
-#     Extent of the grid is given by qsize = (xsize,ysize), where xsize,ysize are in inverse length
-#     units, and are the number of pixels divided by the real space size.
-# 
-#     Accepts:
-#         shape       (2-tuple of ints) grid shape
-#         qsize       (2-tuple of floats) grid size, in reciprocal length units
-# 
-#     Returns:
-#         qx          (2D ndarray) the x diffraction space coordinates
-#         qy          (2D ndarray) the y diffraction space coordinates
-#     """
-#     qx = np.fft.fftfreq(shape[0])*qsize[0]
-#     qy = np.fft.fftfreq(shape[1])*qsize[1]
-#     return qx,qy
-# 
+
 # def pad_shift(ar, x, y):
 #     """
 #     Similar to np.roll, but designed for special handling of zero padded matrices.
