@@ -218,7 +218,7 @@ class WholePatternFit:
             for j, k in enumerate(m.params.keys()):
                 m.params[k].initial_value = x[ind + j]
 
-    def show_model_grid(self,x):
+    def show_model_grid(self,x=None):
         if x is None:
             x = self.mean_CBED_fit.x
 
