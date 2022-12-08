@@ -5,7 +5,9 @@ from . import WPFModelPrototype
 from typing import Optional
 import numpy as np
 
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, minimize
+import matplotlib.pyplot as plt
+import matplotlib.colors as mpl_c
 
 
 class WholePatternFit:
@@ -113,14 +115,47 @@ class WholePatternFit:
                 **fit_opts
             )
         else:
-            opt = least_squares(
-                self._pattern_error,
+            # opt = least_squares(
+            #     self._pattern_error,
+            #     self.x0,
+            #     bounds=(self.lower_bound, self.upper_bound),
+            #     **fit_opts
+            # )
+            opt = minimize(
+                lambda x: np.sum(self._pattern_error(x)**2),
                 self.x0,
-                bounds=(self.lower_bound, self.upper_bound),
+                callback=lambda x: self._fevals.append(x),
+                bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)],
                 **fit_opts
             )
 
         self.mean_CBED_fit = opt
+
+        # Plotting
+        fig = plt.figure(constrained_layout=True,figsize=(7,7))
+        gs = GridSpec(2,2,figure=fig)
+
+        ax = fig.add_subplot(gs[0,0])
+        # err_hist = np.array([np.sum((dp-self.meanCBED)**2) for dp in self._fevals])
+        err_hist = np.array([np.sum((WPF._pattern(dp)-WPF.meanCBED)**2) for dp in WPF._fevals])
+        ax.plot(err_hist)
+        ax.set_ylabel("Sum Squared Error")
+        ax.set_xlabel("Iterations")
+        ax.set_yscale("log")
+
+        DP = self._pattern(self.mean_CBED_fit.x)
+        ax = fig.add_subplot(gs[0,1])
+        CyRd = mpl_c.LinearSegmentedColormap.from_list("CyRd",["#00ccff","#ffffff","#ff0000"])
+        im = ax.matshow(err_im := -(DP - self.meanCBED),
+            cmap=CyRd,vmin=-np.abs(err_im).max()/4,vmax=np.abs(err_im).max()/4)
+        fig.colorbar(im)
+        ax.axis('off')
+
+        ax = fig.add_subplot(gs[1,:])
+        ax.matshow(np.hstack((DP,self.meanCBED))**0.25,cmap='jet')
+        ax.axis('off')
+
+        plt.show()
 
         return opt
 
@@ -148,10 +183,17 @@ class WholePatternFit:
                     **fit_opts
                 )
             else:
-                opt = least_squares(
-                    self._pattern_error,
+                # opt = least_squares(
+                #     self._pattern_error,
+                #     self.x0,
+                #     bounds=(self.lower_bound, self.upper_bound),
+                #     **fit_opts
+                # )
+                opt = minimize(
+                    lambda x: np.sum(self._pattern_error(x)**2),
                     self.x0,
-                    bounds=(self.lower_bound, self.upper_bound),
+                    callback=lambda x: self._fevals.append(x),
+                    bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)]
                     **fit_opts
                 )
 
