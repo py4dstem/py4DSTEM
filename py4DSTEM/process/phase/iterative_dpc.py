@@ -479,7 +479,7 @@ class DPCReconstruction(PhaseReconstruction):
         errors = self.error_iterations
         phases = self.object_phase_iterations
         max_iter = len(phases) - 1
-        grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+        grid_range = range(0, max_iter+1, max_iter // (total_grids - 1))
 
         extent = [
             0,

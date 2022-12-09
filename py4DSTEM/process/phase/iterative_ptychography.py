@@ -980,7 +980,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         else:
             total_grids = np.prod(iterations_grid)
         max_iter = len(objects) - 1
-        grid_range = range(0, max_iter, max_iter // (total_grids - 1))
+        grid_range = range(0, max_iter+1, max_iter // (total_grids - 1))
 
         extent = [
             0,
