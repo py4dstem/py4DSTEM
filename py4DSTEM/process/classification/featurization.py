@@ -113,17 +113,14 @@ class Featurization(object):
         self.features = np.concatenate(self.features, feature, axis = 1)
         return
     
-    def delete_feature(self, index):
+    def delete_features(self, index):
         """
         Deletes feature columns from the feature array
         
         Args:
-            index (int, float, str): A key which will be removed
+            index (int, list): A key which will be removed
         """
-        if remove_key is not None:
-            print("The feature stored at", key, "has been removed.")
-        else:
-            print(key, "is not a key in the classfication.features dictionary")
+        self.features = np.delete(self.features, index, axis = 1)
         return
     
     # User code:
