@@ -6,8 +6,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
 from skimage.filters import threshold_otsu, threshold_yen
-from skimage.segmentation import clear_border
-from skimage.measure import label, regionprops
+from skimage.measure import label
 from skimage.morphology import closing, square, remove_small_objects
 
 class Featurization(object):
@@ -101,63 +100,31 @@ class Featurization(object):
             self.features = np.concatenate(features, axis=1)
         else:
             raise TypeError('features must be either a single np.ndarray of shape 2 or 3 or a list of np.ndarrays')
-
-        # self.pca = {}
-        # self.ica = {}
-        # self.nmf = {}
-        # self.nmf_comps = {}
-        # self.Ws = {}
-        # self.Hs = {}
-        # self.W = {}
-        # self.H = {}
-        # self.gmm = {}
-        # self.gmm_labels = {}
-        # self._gmm_proba = {}
-        # self.class_DPs = {}
-        # self.class_ims = {}
-        # self.spatially_separated_ims = {}
-        # self.consensus_dict = {}
-        # self.consensus_clusters = {}
         return
 
-    # def add_feature(self, key, feature):
-    #     """
-    #     Add a feature to the features dictionary
+    def add_features(self, feature):
+        """
+        Add a feature to the end of the features array
         
-    #     Args:
-    #         key (int, float, str): A key in which a feature can be accessed from
-    #         feature (ndarray): The feature associated with the key
-    #     """
-    #     self.features[key] = feature
-    #     return
+        Args:
+            key (int, float, str): A key in which a feature can be accessed from
+            feature (ndarray): The feature associated with the key
+        """
+        self.features = np.concatenate(self.features, feature, axis = 1)
+        return
     
-    # def remove_feature(self, key):
-    #     """
-    #     Removes a feature to the feature dictionary
+    def delete_feature(self, index):
+        """
+        Deletes feature columns from the feature array
         
-    #     Args:
-    #         key (int, float, str): A key which will be removed
-    #     """
-    #     remove_key = self.features.pop(key, None)
-    #     if remove_key is not None:
-    #         print("The feature stored at", key, "has been removed.")
-    #     else:
-    #         print(key, "is not a key in the classfication.features dictionary")
-    #     return
-
-    # def concatenate_features(self, features, name):
-    #    """
-    #    Make a new Featurization instance from a list of existing Featurization
-    #    istances
-    
-    #    Args:
-    #        features (list): a list of Featurization instances
-    #    """
-    #    new_feature = Featurization(
-    #        feature = np.concatenate([f.data for f in features]),
-    #        name = name
-    #    )
-    #    return new_feature
+        Args:
+            index (int, float, str): A key which will be removed
+        """
+        if remove_key is not None:
+            print("The feature stored at", key, "has been removed.")
+        else:
+            print(key, "is not a key in the classfication.features dictionary")
+        return
     
     # User code:
     # new_feature = Featurization.concatenate_features(
@@ -174,24 +141,6 @@ class Featurization(object):
     #         output_key (int, float, str) the key in which the concatenated array will be stored
     #     """
     #     self.features[output_key] = np.concatenate([self.features[keys[i]] for i in range(len(keys))], axis = 1)
-    #     return
-    
-    # def update_features(self, keys, classification_method):
-    #     """
-    #     Updates the features dictionary with dimensionality reduced components for use downstream.
-    #     New keys will be called "key_location"
-        
-    #     Args:
-    #         keys (list of str): List of strings
-    #         classification_method (str) indicate where to get feature matrix from
-    #     """
-    #     for i in range(len(keys)):
-    #         if classification_method == 'nmf':
-    #             self.features[keys[i] + '_nmf'] = self.W[keys[i]]
-    #         elif classification_method == 'pca':
-    #             self.features[keys[i] + '_pca'] = self.pca[keys[i]]
-    #         elif classification_method == 'ica':
-    #             self.features[keys[i] + '_ica'] = self.ica[keys[i]]
     #     return
     
     # def mean_feature(self, keys, replace = False):
@@ -309,7 +258,15 @@ class Featurization(object):
         self.ica = ica.fit_transform(self.features)
         return
     
-    def NMF(self, max_components, merge_thresh, num_models, iterations = 1, random_state = None, return_all = True):
+    def NMF(
+        self,
+        max_components, 
+        merge_thresh, num_models, 
+        max_iterations = 1, 
+        random_state = None, 
+        save_all_models = True,
+        return_results = False
+    ):
         """
         Performs nmf iteratively on input features
         
@@ -317,21 +274,25 @@ class Featurization(object):
             max_components (int): number of initial components to start the first NMF iteration
             merge_thresh (float): correlation threshold to merge features
             num_models (int): Number of independent models to run (number of learners that will be combined in consensus)
-            iterations (int): number of iterations. Default 1, which runs traditional NMF
+            max_iterations (int): number of iterations. Default 1, which runs traditional NMF
             random_state (int): random state
-            return_all (bool): Whether or not to return all of the models - default is to return
-            all outputs for consensus clustering
+            save_all_models (bool): Whether or not to return all of the models - default is to return
+                all outputs for consensus clustering
+            return_results (bool): Whether or not to return the final class weights
         """
-        self.Ws, self.Hs, self.W, self.H = _nmf_single(
+        self.W = _nmf_single(
             self.features,
             max_components=max_components,
             merge_thresh = merge_thresh,
             num_models = num_models,
-            iterations = iterations, 
+            max_iterations = max_iterations, 
             random_state = random_state,
-            return_all = return_all
+            save_all_models = save_all_models
             )
-        return
+        if return_results == True:
+            return self.W
+        else:
+            return
         
     def GMM(self, cv, components, num_models, random_state = None):
         """
@@ -367,16 +328,14 @@ class Featurization(object):
                 x_ = np.where(self.W[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
                     class_pattern += datacube.data[x_[x],0] * self.W[x_[x],l]
-                class_patterns.append((class_pattern - np.min(class_pattern)) 
-                                        / (np.max(class_pattern) - np.min(class_pattern)))
+                class_patterns.append(class_pattern  / np.sum(self.W[x_, l]))
         elif classification_method == 'gmm':
             for l in range(np.max(self.gmm_labels)):
                 class_pattern = np.zeros((datacube.data.shape[2], datacube.data.shape[3]))
                 x_ = np.where(self.gmm_proba[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
                     class_pattern += datacube.data[x_[x],0] * self.gmm_proba[x_[x],l]
-                class_patterns.append((class_pattern - np.min(class_pattern)) 
-                                        / (np.max(class_pattern) - np.min(class_pattern)))
+                class_patterns.append(class_pattern / np.sum(self.gmm_proba[x_,l]))
         self.class_DPs = class_patterns
         return
         
@@ -431,6 +390,9 @@ class Featurization(object):
                     t=threshold_yen(image)
                 elif method == 'otsu':
                     t = threshold_otsu(image)
+                else:
+                    print(method + ' method is not supported. Please use yen or otsu instead.')
+                    break
                 bw = closing(image > t, square(2))
                 label_image = remove_small_objects(label(bw), size)
                 unique_labels = np.unique(label_image)
@@ -495,7 +457,7 @@ class Featurization(object):
                         best_sum = current_sum
                         cvalue = l
                 if best_sum > 0:
-                    class_dict['c'+str(cvalue)].append(class_im)
+                    class_dict['c' + str(cvalue)].append(class_im)
                 else:
                     class_dict['c' + str(len(list(class_dict.keys())))] = [class_im]
                 class_dict['c'+str(cvalue)].append(class_im)
@@ -514,88 +476,94 @@ class Featurization(object):
 
 
 @ignore_warnings(category=ConvergenceWarning)
-def _nmf_single(x, max_components, merge_thresh, num_models, iterations, random_state=None, return_all = True):
+def _nmf_single(
+        x, 
+        max_components,
+        merge_thresh, 
+        num_models, 
+        max_iterations, 
+        random_state=None, 
+        save_all_models = True
+    ):
     """
     Performs NMF on single feature matrix, which is an nd.array
     
     Args:
-        x (ndarray)
-        max_components
-        merge_thresh
-        num_models
-        
-        Returns
-        Ws
-        Hs
-        W
-        H
+        x (np.ndarray):
+        max_components (int): number of initial components to start the first NMF iteration
+        merge_thresh (float): correlation threshold to merge features
+        num_models (int): Number of independent models to run (number of learners that will be combined in consensus)
+        iterations (int): number of iterations. Default 1, which runs traditional NMF
+        random_state (int): random state
+        save_all_models (bool): Whether or not to return all of the models - default is to save
+            all outputs for consensus clustering
     """
+    #Prepare error, random seed
     err = np.inf    
     if random_state == None:
         rng = np.random.RandomState(seed = 42)
     else:
         seed = random_state
-    if return_all == True:
+    if save_all_models == True:
         W = []
-        H = []
-        W_comps = []
-        H_comps = []
+        
+    #Big loop through all models
     for i in range(num_models):
         if random_state == None:
             seed = rng.randint(5000)
         n_comps = max_components
         recon_error, counter = 0, 0
         Hs, Ws = [], []
-        for z in range(max_components):
+        
+        #Inner loop for iterative NMF
+        for z in range(max_iterations):
             nmf = NMF(n_components = n_comps, random_state = seed)
+
             if counter == 0:
                 nmf_temp = nmf.fit_transform(x)
             else:
-                nmf_temp = nmf.fit_transform(nmf_temp)
+                with np.errstate(invalid='raise',divide='raise'):
+                    try:
+                        nmf_temp_2 = nmf.fit_transform(nmf_temp)
+                    except FloatingPointError:
+                        print('Warning encountered in NMF: Returning last result')
+                        break
             Ws.append(nmf_temp)
             Hs.append(np.transpose(nmf.components_))
             recon_error += nmf.reconstruction_err_
             counter += 1
-            if counter >= iterations:
-                break
-            tril = np.tril(np.corrcoef(nmf_temp, rowvar = False), k = -1)
+            if counter > 1:
+                with np.errstate(invalid='raise',divide='raise'):
+                    try:
+                        tril = np.tril(np.corrcoef(nmf_temp_2, rowvar = False), k = -1)
+                        nmf_temp = nmf_temp_2
+                    except FloatingPointError:
+                        print('Warning encountered in correlation: Returning last result. Try larger merge_thresh.')
+                        break
+            else:
+                tril = np.tril(np.corrcoef(nmf_temp, rowvar = False), k = -1)
+                
+            #Merge correlated features
             if np.nanmax(tril) >= merge_thresh:
                 inds = np.argwhere(tril >= merge_thresh)
                 for n in range(inds.shape[0]):
                     nmf_temp[:, inds[n,0]] += nmf_temp[:,inds[n,1]]
                 ys_sorted = np.sort(np.unique(inds[n,1]))[::-1]
-                #print(ys_sorted.shape[0])
                 for n in range(ys_sorted.shape[0]):
                     nmf_temp = np.delete(nmf_temp, ys_sorted[n], axis=1)
-                #print('checkpoint_2')
             else:
-                #print('checkpoint_3')
-                #print(counter)
                 break
             n_comps = nmf_temp.shape[1] - 1
-            #print(n_comps)
             if n_comps <= 2:
                 break
-        if return_all == True:
+       
+        if save_all_models == True:
             W.append(nmf_temp)
-            W_comps.append(Ws)
-            H_comps.append(Hs)
-            if len(Hs) > 2:
-                #H.append(np.transpose(np.linalg.multi_dot(Hs)))
-                continue
-            else:
-                H.append(Hs)
+
         elif (recon_error / counter) < err:
             err = (recon_error / counter)
-            W_comps = Ws
-            H_comps = Hs
             W = nmf_temp
-        elif len(Hs) >= 2:
-            #H = np.transpose(np.linalg.multi_dot(H_comps))
-            continue
-        else:
-            H = Hs
-    return W_comps, H_comps, W, H
+    return W
 
 @ignore_warnings(category=ConvergenceWarning)
 def _gmm_single(x, cv, components, num_models, random_state=None, return_all=True):
