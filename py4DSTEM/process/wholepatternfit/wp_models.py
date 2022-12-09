@@ -366,10 +366,10 @@ class SyntheticDiskLattice(WPFModelPrototype):
             J[:, 1] += dy
 
             # insert lattice vector derivatives
-            J[:, offset] += u * dx
-            J[:, offset + 1] += u * dy
-            J[:, offset + 2] += v * dx
-            J[:, offset + 3] += v * dy
+            J[:, offset] += (x-x0) * dx
+            J[:, offset + 1] += (x-x0) * dy
+            J[:, offset + 2] += (y-y0) * dx
+            J[:, offset + 3] += (y-y0) * dy
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
