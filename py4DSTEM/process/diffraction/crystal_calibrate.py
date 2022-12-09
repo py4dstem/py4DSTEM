@@ -119,7 +119,7 @@ def calibrate_pixel_size(
     # Plotting
     if plot_result:
         if int_scale.shape[0] < self.g_vec_leng.shape[0]:
-            int_scale = np.vstack((
+            int_scale = np.hstack((
                 int_scale,
                 np.ones(self.g_vec_leng.shape[0] - int_scale.shape[0])
                 ))
