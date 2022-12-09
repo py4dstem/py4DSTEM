@@ -1,377 +1,223 @@
 # Functions for generating diffraction images
 
 import numpy as np
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
-
-
-def get_diffraction_image(
+def get_virtual_diffraction(
     datacube,
-    mode,
+    method,
+    mode = None,
     geometry = None,
-    shift_corr = False
-    ):
-    """
-    Computes and returns a diffraction image from `datacube`. The
-    kind of diffraction image (max, mean, median) is specified by the
-    `mode` argument, and the region it is computed over is specified
-    by the `geometry` argument.
+    calibrated = False,
+    shift_center = False,
+    verbose = True,
+    return_mask = False,
+):
+    '''
+    Function to calculate virtual diffraction
 
     Args:
-        datacube (Datacube)
-        mode (str): must be in ('max','mean','median')
-        geometry (variable): indicates the region the image will
-            be computed over. Behavior depends on the argument type:
-                - None: uses the whole image
-                - 4-tuple: uses a subcube w/ (rxmin,rxmax,rymin,rymax)
-                - 2-tuple: (rx,ry), which are length L arrays.
-                    Uses the specified scan positions.
-                - `mask`: boolean 2D array
-                - `mask_float`: floating point 2D array. Valid only for
-                    `mean` mode
-        shift_corr (bool): if True, correct for beam shift
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        method (str) : defines method used for diffraction pattern, options are
+            'mean', 'median', and 'max'
+        mode (str)  : defines mode for selecting area in real space to use for
+            virtual diffraction. The default is None, which means no
+            geometry will be applied and the whole datacube will be used
+            for the calculation. Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values
+            in pixels argument, as follows. The default is None, which means no
+            geometry will be applied and the whole datacube will be used for the
+            calculation. If mode is None the geometry will not be applied.
+                - 'point': 2-tuple, (rx,ry),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((rx,ry),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Rshape
+        calibrated (bool): if True, geometry is specified in units of 'A' instead
+            of pixels. The datacube's calibrations must have its `"R_pixel_units"`
+            parameter set to "A". If mode is None the geometry and calibration will
+            not be applied.
+        shift_center (bool): if True, the difraction pattern is shifted to account
+            for beam shift or the changing of the origin through the scan. The
+            datacube's calibration['origin'] parameter must be set Only 'max' and
+            'mean' supported for this option.
+        verbose (bool): if True, show progress bar
+        return_mask (bool): if False (default) returns a virtual image as usual.
+            If True, does *not* generate or return a virtual image, instead
+            returning the mask that would be used in virtual diffraction computation.
 
     Returns:
         (2D array): the diffraction image
+    '''
 
-    """
-    # parse args
-    assert( mode in ('max','mean','median') )
-    if geometry is None:
-        region = 'all'
-    elif isinstance(geometry, tuple):
-        if len(geometry) == 4:
-            region = 'subcube'
-        elif len(geometry) == 2:
-            region = 'selected'
+    assert method in ('max', 'median', 'mean'),\
+        'check doc strings for supported types'
+
+    #create mask
+    if mode is not None:
+        use_all_points = False
+
+        from py4DSTEM.process.virtualimage import make_detector
+        assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
+        'check doc strings for supported modes'
+        g = geometry
+
+        if calibrated == True:
+            assert datacube.calibration['R_pixel_units'] == 'A', \
+                'check datacube.calibration. datacube must be calibrated in A to use `calibrated=True`'
+
+            unit_conversion = datacube.calibration['R_pixel_size']
+            if mode == 'point':
+                g = (g[0]/unit_conversion, g[1]/unit_conversion)
+            if mode in('circle', 'circular'):
+                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                    (g[1]/unit_conversion))
+            if mode in('annulus', 'annular'):
+                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                    (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
+            if mode in('rectangle', 'square', 'rectangular') :
+                g = (g[0]/unit_conversion, g[1]/unit_conversion,
+                     g[2]/unit_conversion, g[3]/unit_conversion)
+
+        # Get mask
+        mask = make_detector(datacube.Rshape, mode, g)
+
+        # Determine if mask is boolean and if so, vectorize
+        if mask.dtype == bool:
+            mask_is_boolean = True
+            mask_indices = np.nonzero(mask)
         else:
-            raise Exception("invalid `geometry` argument passed")
-    elif isinstance(geometry, np.ndarray):
-        er = "`geometry` and `datacube` diffraction space shapes must match"
-        assert( geometry.shape == datacube.Rshape ), er
-        if geometry.dtype == bool:
-            region = 'mask'
+            mask_is_boolean = False
+
+    #if no mask 
+    else:
+        mask = np.ones(datacube.Rshape, dtype=bool)
+        mask_indices = np.nonzero(mask)
+        use_all_points = True
+        mask_is_boolean = False
+
+    # if return_mask is True, skip computation
+    if return_mask == True:
+        return mask
+
+    # Calculate diffracton pattern...
+
+    # ...with no center shifting
+    if shift_center == False:
+
+        # ...for the whole pattern
+        if use_all_points:
+            if method == 'mean':
+                virtual_diffraction = np.mean(datacube.data, axis=(0,1))
+            elif method == 'max':
+                virtual_diffraction = np.max(datacube.data, axis=(0,1))
+            else:
+                virtual_diffraction = np.median(datacube.data, axis=(0,1))
+
+        # ...for boolean masks
+        elif mask_is_boolean:
+            if method == 'mean':
+                virtual_diffraction = np.mean(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
+            elif method == 'max':
+                virtual_diffraction = np.max(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
+            else:
+                virtual_diffraction = np.median(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
+
+        # ...for floating point masks
         else:
-            er = "non-boolean masks are only supported for 'mean' mode"
-            assert( mode == 'mean' ), er
-            region = 'mask_float'
-
-
-    # select a function
-    function_dict = _make_function_dict()
-    fn = function_dict[mode][region][shift_corr]
-
-    # run and return
-    dp = fn(datacube, geometry)
-    return dp
-
-
-
-def _make_function_dict():
-    """
-    Creates a dictionary to select which function to call
-    """
-    function_dict = {
-        # mode
-        'max' : {
-            # geometry
-            'all' : {
-                # shift correction
-                True : _exception_shiftcorr,
-                False : _get_dp_max_all
-            },
-            'subcube' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_max_subcube
-            },
-            'selected' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_max_selected
-            },
-            'mask' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_max_mask
-            },
-            'mask_float' : {
-                True : _exception_shiftcorr,
-                False : _exception_nofloat
-            },
-        },
-
-        # mode
-        'mean' : {
-            # geometry
-            'all' : {
-                # shift correction
-                True : _exception_shiftcorr,
-                False : _get_dp_mean_all
-            },
-            'subcube' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_mean_subcube
-            },
-            'selected' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_mean_selected
-            },
-            'mask' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_mean_mask
-            },
-            'mask_float' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_mean_mask_float
-            },
-        },
-
-        # mode
-        'median' : {
-            # geometry
-            'all' : {
-                # shift correction
-                True : _exception_shiftcorr,
-                False : _get_dp_median_all
-            },
-            'subcube' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_median_subcube
-            },
-            'selected' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_median_selected
-            },
-            'mask' : {
-                True : _exception_shiftcorr,
-                False : _get_dp_median_mask
-            },
-            'mask_float' : {
-                True : _exception_shiftcorr,
-                False : _exception_nofloat
-            },
-        },
-
-    }
-
-    return function_dict
-
-
-def _exception(**kwargs):
-    raise Exception('this function has not been added yet!')
-def _exception_shiftcorr(**kwargs):
-    raise Exception('shift corrected functions have not been added yet!')
-def _exception_nofloat(**kwargs):
-    raise Exception('floating point masks are only valid in "mean" mode!')
-
-
-
-
-# Max
-
-def get_dp_max(
-    datacube,
-    geometry = None,
-    shift_corr = False
-    ):
-    """
-    Returns the maximal value of each diffraction space detector pixel.
-
-    Args:
-        datacube (Datacube)
-        geometry (variable): specifies the region used in the computation.
-            See the `py4DSTEM.process.virtualimage.get_diffraction_image`
-            docstring for details.
-        shift_corr (bool): if True, corrects for beam shift
-
-    Returns:
-        (2D array): the maximal diffraction pattern
-    """
-    return get_diffraction_image(
-        datacube,
-        mode = 'max',
-        geometry = geometry,
-        shift_corr = shift_corr
-    )
-
-
-# no shift correction
-
-def _get_dp_max_all(datacube,geometry=None):
-    """
-    """
-    dp = np.max(datacube.data, axis=(0,1))
-    return dp
-
-def _get_dp_max_subcube(datacube,geometry):
-    """
-    """
-    xmin,xmax,ymin,ymax = geometry
-    dp = np.max(datacube.data[xmin:xmax,ymin:ymax,:,:], axis=(0,1))
-    return dp
-
-def _get_dp_max_selected(datacube,geometry):
-    """
-    """
-    rx,ry = geometry
-    dp = np.max(datacube.data[rx,ry,:,:], axis=(0))
-    return dp
-
-def _get_dp_max_mask(datacube,geometry):
-    """
-    """
-    geometry = geometry.astype(bool)
-    dp = np.max(datacube.data[geometry,:,:], axis=(0))
-    return dp
-
-
-
-# TODO add shift correction
-
-
-
-
-
-
-
-# Median
-
-def get_dp_median(
-    datacube,
-    geometry = None,
-    shift_corr = False
-    ):
-    """
-    Returns the median value of each diffraction space detector pixel.
-
-    Args:
-        datacube (Datacube)
-        geometry (variable): specifies the region used in the computation.
-            See the `py4DSTEM.process.virtualimage.get_diffraction_image`
-            docstring for details.
-        shift_corr (bool): if True, corrects for beam shift
-
-    Returns:
-        (2D array): the median diffraction pattern
-    """
-    return get_diffraction_image(
-        datacube,
-        mode = 'median',
-        geometry = geometry,
-        shift_corr = shift_corr
-    )
-
-
-# no shift correction
-
-def _get_dp_median_all(datacube,geometry=None):
-    """
-    """
-    dp = np.median(datacube.data, axis=(0,1))
-    return dp
-
-def _get_dp_median_subcube(datacube,geometry):
-    """
-    """
-    xmin,xmax,ymin,ymax = geometry
-    dp = np.median(datacube.data[xmin:xmax,ymin:ymax,:,:], axis=(0,1))
-    return dp
-
-def _get_dp_median_selected(datacube,geometry):
-    """
-    """
-    rx,ry = geometry
-    dp = np.median(datacube.data[rx,ry,:,:], axis=(0))
-    return dp
-
-def _get_dp_median_mask(datacube,geometry):
-    """
-    """
-    geometry = geometry.astype(bool)
-    dp = np.median(datacube.data[geometry,:,:], axis=(0))
-    return dp
-
-
-
-# TODO add shift correction
-
-
-
-
-
-
-
-# Median
-
-def get_dp_mean(
-    datacube,
-    geometry = None,
-    shift_corr = False
-    ):
-    """
-    Returns the mean value of each diffraction space detector pixel.
-
-    Args:
-        datacube (Datacube)
-        geometry (variable): specifies the region used in the computation.
-            See the `py4DSTEM.process.virtualimage.get_diffraction_image`
-            docstring for details.
-        shift_corr (bool): if True, corrects for beam shift
-
-    Returns:
-        (2D array): the mean diffraction pattern
-    """
-    return get_diffraction_image(
-        datacube,
-        mode = 'mean',
-        geometry = geometry,
-        shift_corr = shift_corr
-    )
-
-
-# no shift correction
-
-def _get_dp_mean_all(datacube,geometry=None):
-    """
-    """
-    dp = np.mean(datacube.data, axis=(0,1))
-    return dp
-
-def _get_dp_mean_subcube(datacube,geometry):
-    """
-    """
-    xmin,xmax,ymin,ymax = geometry
-    dp = np.mean(datacube.data[xmin:xmax,ymin:ymax,:,:], axis=(0,1))
-    return dp
-
-def _get_dp_mean_selected(datacube,geometry):
-    """
-    """
-    rx,ry = geometry
-    dp = np.mean(datacube.data[rx,ry,:,:], axis=(0))
-    return dp
-
-def _get_dp_mean_mask(datacube,geometry):
-    """
-    """
-    geometry = geometry.astype(bool)
-    dp = np.mean(datacube.data[geometry,:,:], axis=(0))
-    return dp
-
-def _get_dp_mean_mask_float(datacube,geometry):
-    """
-    """
-    mask = geometry>0
-    dp = np.average(datacube.data[mask,:,:],
-        weights=geometry[mask], axis=(0))
-    return dp
-
-
-
-# TODO add shift correction
-
-
-
-
-
-
-
+            if mask.dtype == 'complex':
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            else:
+                virtual_diffraction = np.zeros(datacube.Qshape)
+            for qx,qy in tqdmnd(
+                datacube.Q_Nx,
+                datacube.Q_Ny,
+                disable = not verbose,
+            ):
+                if method == 'mean':
+                    virtual_diffraction[qx,qy] = np.sum( np.squeeze(datacube.data[:,:,qx,qy])*mask )
+                elif method == 'max':
+                    virtual_diffraction[qx,qy] = np.max( np.squeeze(datacube.data[:,:,qx,qy])*mask )
+                elif method == 'median':
+                    virtual_diffraction[qx,qy] = np.median( np.squeeze(datacube.data[:,:,qx,qy])*mask )
+
+        # norm by weighting term for means
+        if method == 'mean' and not use_all_points:
+            virtual_diffraction /= np.sum(mask)
+
+    # ...with center shifting
+    else:
+        assert method in ('max', 'mean'),\
+            "only 'mean' and 'max' are supported for center-shifted virtual diffraction"
+
+        # Get calibration metadata
+        assert datacube.calibration.get_origin(), "origin needs to be calibrated"
+        x0, y0 = datacube.calibration.get_origin()
+        x0_mean, y0_mean = datacube.calibration.get_origin_mean()
+
+        # get shifts
+        qx_shift = (x0_mean-x0).round().astype(int)
+        qy_shift = (y0_mean-y0).round().astype(int)
+
+
+        # compute...
+
+        # ...for boolean masks / whole datacubes
+        if mask_is_boolean or use_all_points:
+            virtual_diffraction = np.zeros(datacube.Qshape)
+            for rx,ry in zip(mask_indices[0],mask_indices[1]):
+                # get shifted DP
+                DP = np.roll(
+                    datacube.data[rx,ry, :,:,],
+                    (qx_shift[rx,ry], qy_shift[rx,ry]),
+                    axis=(0,1),
+                    )
+                # compute
+                if method == 'mean':
+                    virtual_diffraction += DP
+                elif method == 'max':
+                    virtual_diffraction = np.maximum(virtual_diffraction, DP)
+            if method == 'mean':
+                virtual_diffraction /= len(mask_indices[0])
+
+        # ...for floating point masks
+        else:
+            if mask.dtype == 'complex':
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            else:
+                virtual_diffraction = np.zeros(datacube.Qshape)
+            for rx,ry in tqdmnd(
+                datacube.R_Nx,
+                datacube.R_Ny,
+                disable = not verbose,
+            ):
+                # get shifted DP
+                DP = np.roll(
+                    datacube.data[rx,ry, :,:,],
+                    (qx_shift[rx,ry], qy_shift[rx,ry]),
+                    axis=(0,1),
+                    )
+                # compute
+                w = mask[rx,ry]
+                if w > 0:
+                    if method == 'mean':
+                        virtual_diffraction += DP*w
+                    elif method == 'max':
+                        virtual_diffraction = np.maximum(virtual_diffraction, DP*w)
+            if method == 'mean':
+                virtual_diffraction /= np.sum(mask)
+
+    # return
+    return virtual_diffraction
 
 

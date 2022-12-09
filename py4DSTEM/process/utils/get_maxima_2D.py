@@ -78,7 +78,7 @@ def get_maxima_2D(
     maxima = np.sort(maxima, order='intensity')[::-1]
 
     if len(maxima) == 0:
-            return maxima
+        return maxima
 
 
     # filter

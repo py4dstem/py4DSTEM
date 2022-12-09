@@ -694,9 +694,9 @@ def add_scalebar(ax,d):
         ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
                 color=labelcolor,alpha=alpha,ha='center',va=va)
 
-    if not ticks:
-        ax.set_xticks([])
-        ax.set_yticks([])
+    # if not ticks:
+    #     ax.set_xticks([])
+    #     ax.set_yticks([])
     return
 
 
