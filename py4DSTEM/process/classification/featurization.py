@@ -10,7 +10,6 @@ from skimage.segmentation import clear_border
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square, remove_small_objects
 
-
 class Featurization(object):
     """
     A class for feature selection, modification, and classification of 4D-STEM data based on a user defined
@@ -91,6 +90,7 @@ class Featurization(object):
                         'feature array must be of dimensions (R_Nx*R_Ny, num_features) or (R_Nx, R_Ny, num_features)'
                         )  
         elif isinstance(features, list):
+            #check types - all must be either numpy or featurization instances?
             for i in range(len(features)):
                 if features[i].shape == 3:
                     features[i] = features[i].reshape(R_Nx*R_Ny, features.shape[-1])
@@ -319,7 +319,7 @@ class Featurization(object):
             num_models (int): Number of independent models to run (number of learners that will be combined in consensus)
             iterations (int): number of iterations. Default 1, which runs traditional NMF
             random_state (int): random state
-            return_all (bool): Whether or not to return all of the iterations in 'iters' - default is to return
+            return_all (bool): Whether or not to return all of the models - default is to return
             all outputs for consensus clustering
         """
         self.Ws, self.Hs, self.W, self.H = _nmf_single(
@@ -340,7 +340,7 @@ class Featurization(object):
         Args:
             cv (str): covariance type - must be 'spherical', 'tied', 'diag', or 'full'
             components (int): number of components
-            iters (int): number of iterations
+            num_models (int): number of models to run
             random_state (int): random state
         """
         self.gmm, self.gmm_labels, self.gmm_proba = _gmm_single(
@@ -363,18 +363,18 @@ class Featurization(object):
         class_patterns = []
         if classification_method== 'nmf':
             for l in range(self.W.shape[1]):
-                class_pattern = np.zeros((dc.data.shape[2], dc.data.shape[3]))
+                class_pattern = np.zeros((datacube.data.shape[2], datacube.data.shape[3]))
                 x_ = np.where(self.W[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
-                    class_pattern += dc.data[x_[x],0] * self.W[x_[x],l]
+                    class_pattern += datacube.data[x_[x],0] * self.W[x_[x],l]
                 class_patterns.append((class_pattern - np.min(class_pattern)) 
                                         / (np.max(class_pattern) - np.min(class_pattern)))
         elif classification_method == 'gmm':
             for l in range(np.max(self.gmm_labels)):
-                class_pattern = np.zeros((dc.data.shape[2], dc.data.shape[3]))
+                class_pattern = np.zeros((datacube.data.shape[2], datacube.data.shape[3]))
                 x_ = np.where(self.gmm_proba[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
-                    class_pattern += dc.data[x_[x],0] * self.gmm_proba[x_[x],l]
+                    class_pattern += datacube.data[x_[x],0] * self.gmm_proba[x_[x],l]
                 class_patterns.append((class_pattern - np.min(class_pattern)) 
                                         / (np.max(class_pattern) - np.min(class_pattern)))
         self.class_DPs = class_patterns
@@ -564,19 +564,25 @@ def _nmf_single(x, max_components, merge_thresh, num_models, iterations, random_
                 for n in range(inds.shape[0]):
                     nmf_temp[:, inds[n,0]] += nmf_temp[:,inds[n,1]]
                 ys_sorted = np.sort(np.unique(inds[n,1]))[::-1]
+                #print(ys_sorted.shape[0])
                 for n in range(ys_sorted.shape[0]):
-                    np.delete(nmf_temp, ys_sorted[n], axis=1)
+                    nmf_temp = np.delete(nmf_temp, ys_sorted[n], axis=1)
+                #print('checkpoint_2')
             else:
+                #print('checkpoint_3')
+                #print(counter)
                 break
             n_comps = nmf_temp.shape[1] - 1
-            if n_comps <= 1:
+            #print(n_comps)
+            if n_comps <= 2:
                 break
         if return_all == True:
             W.append(nmf_temp)
             W_comps.append(Ws)
             H_comps.append(Hs)
-            if len(H_comps) > 1: #bug here
-                H.append(np.transpose(np.linalg.multi_dot(Hs)))
+            if len(Hs) > 2:
+                #H.append(np.transpose(np.linalg.multi_dot(Hs)))
+                continue
             else:
                 H.append(Hs)
         elif (recon_error / counter) < err:
@@ -585,7 +591,8 @@ def _nmf_single(x, max_components, merge_thresh, num_models, iterations, random_
             H_comps = Hs
             W = nmf_temp
         elif len(Hs) >= 2:
-            H = np.transpose(np.linalg.multi_dot(H_comps))
+            #H = np.transpose(np.linalg.multi_dot(H_comps))
+            continue
         else:
             H = Hs
     return W_comps, H_comps, W, H
