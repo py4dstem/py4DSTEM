@@ -1765,11 +1765,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         scan_positions: np.ndarray = None,
+        vacuum_probe_intensity: np.ndarray = None,
+        semiangle_cutoff: float = None,
+        polar_parameters: Mapping[str, float] = None,
         verbose: bool = True,
         device: str = "cpu",
-        semiangle_cutoff: float = None,
-        vacuum_probe_intensity: np.ndarray = None,
-        polar_parameters: Mapping[str, float] = None,
         **kwargs,
     ):
 
@@ -1825,12 +1825,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         _extract_intensities_and_calibrations_from_datacube,
         _compute_center_of_mass(),
         _solve_CoM_rotation(),
-        _pad_diffraction_intensities()
         _normalize_diffraction_intensities()
         _calculate_scan_positions_in_px()
 
         Additionally, it initializes an (Px,Py) array of 1.0j
-        and an ideal complex probe using the specified polar parameters.
+        and a complex probe using the specified polar parameters.
 
         Parameters
         ----------
@@ -1840,6 +1839,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             If True, the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
+        maximize_divergence: bool, optional
+            If True, the divergence of the CoM gradient vector field is maximized
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
@@ -1883,7 +1884,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         (
-            self._intensities,
+            self._amplitudes,
             self._mean_diffraction_intensity,
             self._angular_sampling
         ) = self._normalize_diffraction_intensities(
@@ -1892,6 +1893,9 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._com_fitted_y,
             self._region_of_interest_shape
         )
+
+        # explicitly delete namespace
+        del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
@@ -1929,18 +1933,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = self._pad_vacuum_probe_intensity(
-                    self._vacuum_probe_intensity, self._region_of_interest_shape
-                )
-                vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(vacuum_probe_intensity)
+                self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                if self._intensities_shape[-2] != self._region_of_interest_shape[0] or self._intensities_shape[-1] != self._region_of_interest_shape[1]:
+                    self._vacuum_probe_intensity = fourier_resample(self._vacuum_probe_intensity,output_size=self._region_of_interest_shape)
+                probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity)
                 shift_x = self._region_of_interest_shape[0] / 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] / 2 - probe_y0
                 self._vacuum_probe_intensity = xp.asarray(
                     get_shifted_ar(
-                        vacuum_probe_intensity, shift_x, shift_y, bilinear=True
+                        self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True
                     )
                 )
+
             self._probe = (
                 ComplexProbe(
                     gpts=self._region_of_interest_shape,
@@ -1968,6 +1972,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         # Normalize probe to match mean diffraction intensity
+        #if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
@@ -1977,7 +1982,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
-            figsize = kwargs.get("figsize", (8, 8))
+            figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "Greys_r")
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
@@ -1989,30 +1994,65 @@ class PtychographicReconstruction(PhaseReconstruction):
                 0,
             ]
 
-            fig, ax = plt.subplots(figsize=figsize)
-            ax.imshow(
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+            fig, (ax1, ax2) = plt.subplots(1,2,figsize=figsize)
+
+            ax1.imshow(
+                    asnumpy(xp.abs(self._probe)**2),
+                    extent=probe_extent,
+                    cmap=cmap,
+                    **kwargs,
+                    )
+            ax1.set_xlabel("x [A]")
+            ax1.set_ylabel("y [A]")
+            ax1.set_title("Initial Probe Guess")
+
+            ax2.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax.scatter(
+            ax2.scatter(
                 asnumpy(self._positions[:, 1]),
                 asnumpy(self._positions[:, 0]),
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
-            ax.set_xlim((extent[0],extent[1]))
-            ax.set_ylim((extent[2],extent[3]))
+            ax2.set_xlabel("x [A]")
+            ax2.set_ylabel("y [A]")
+            ax2.set_xlim((extent[0],extent[1]))
+            ax2.set_ylim((extent[2],extent[3]))
+            ax2.set_title("Object Field of View")
+
+            fig.tight_layout()
 
         self._preprocessed = True
 
         return self
 
     def _overlap_projection(self, current_object, current_probe):
-        """ """
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        fourier_exit_waves:np.ndarray
+            object * probe overlaps in reciprocal space
+        """
 
         xp = self._xp
 
@@ -2029,7 +2069,23 @@ class PtychographicReconstruction(PhaseReconstruction):
         return xp.fft.fft2(exit_waves)
 
     def _fourier_projection(self, amplitudes, fourier_exit_waves):
-        """ """
+        """
+        Ptychographic fourier projection method.
+
+        Parameters
+        --------
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        fourier_exit_waves: np.ndarray
+            object * probe overlaps in reciprocal space
+
+        Returns
+        --------
+        difference_gradient_fourier:np.ndarray
+            Difference between measured and estimated exit waves in reciprocal space
+        error: float
+            Reconstruction error
+        """
 
         xp = self._xp
         abs_fourier_exit_waves = xp.abs(fourier_exit_waves)
@@ -2045,7 +2101,26 @@ class PtychographicReconstruction(PhaseReconstruction):
         return difference_gradient_fourier, error
 
     def _forward(self, current_object, current_probe, amplitudes):
-        """ """
+        """
+        Ptychographic forward operator.
+        Calls _overlap_projection() and _fourier_projection().
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+
+        Returns
+        --------
+        difference_gradient_fourier:np.ndarray
+            Difference between measured and estimated exit waves in reciprocal space
+        error: float
+            Reconstruction error
+        """
 
         fourier_exit_waves = self._overlap_projection(current_object, current_probe)
         difference_gradient_fourier, error = self._fourier_projection(
@@ -2062,7 +2137,30 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe: bool,
         normalization_min: float,
     ):
-        """ """
+        """
+        Ptychographic adjoint operator.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        difference_gradient_fourier:np.ndarray
+            Difference between measured and estimated exit waves in reciprocal space
+        fix_probe: bool, optional
+            If True, probe will not be updated
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+
+        Returns
+        --------
+        object_update: np.ndarray
+            Negative object gradient
+        probe_update: np.ndarray
+            Negative probe gradient. If fix_probe is True returns None
+        """
 
         xp = self._xp
 
@@ -2120,14 +2218,51 @@ class PtychographicReconstruction(PhaseReconstruction):
         probe_update,
         step_size: float = 0.9,
     ):
-        """ """
+        """
+        Ptychographic update operator.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        object_update: np.ndarray
+            Negative object gradient
+        current_probe: np.ndarray
+            Current probe estimate
+        probe_update: np.ndarray
+            Negative probe gradient
+        step_size: float, optional
+            Update step size
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
         current_object += step_size * object_update
         if probe_update is not None:
             current_probe += step_size * probe_update
         return current_object, current_probe
 
     def _threshold_object_constraint(self, current_object, pure_phase_object: bool):
-        """ """
+        """
+        Ptychographic threshold constraint.
+        Used for avoiding the scaling ambiguity between probe and object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
         xp = self._xp
         phase = xp.exp(1.0j * xp.angle(current_object))
         if pure_phase_object:
@@ -2136,11 +2271,61 @@ class PtychographicReconstruction(PhaseReconstruction):
             amplitude = xp.minimum(xp.abs(current_object), 1.0)
         return amplitude * phase
 
-    def _constraints(self, current_object, current_probe, pure_phase_object: bool):
-        """ """
+    def _probe_center_of_mass_constraint(self,current_probe):
+        """
+        Ptychographic threshold constraint.
+        Used for avoiding the scaling ambiguity between probe and object.
+
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        probe_center = xp.array(self._region_of_interest_shape)/2
+        probe_intensity = asnumpy(xp.abs(current_probe)**2)
+
+        probe_x0, probe_y0 = get_CoM(probe_intensity)
+        shifted_probe      = fft_shift(current_probe, probe_center - xp.array([probe_x0,probe_y0]), xp)
+
+        return shifted_probe
+
+
+    def _constraints(self, current_object, current_probe, pure_phase_object: bool, fix_com: bool):
+        """
+        Ptychographic constraints operator.
+        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
         current_object = self._threshold_object_constraint(
             current_object, pure_phase_object
         )
+        if fix_com:
+            current_probe= self._probe_center_of_mass_constraint(
+                current_probe
+            )
         return current_object, current_probe
 
     def reconstruct(
@@ -2149,11 +2334,36 @@ class PtychographicReconstruction(PhaseReconstruction):
         step_size: float = 0.9,
         normalization_min: float = 1e-4,
         warmup_iter: int = 12,
+        fix_com: bool = True,
         pure_phase_object_iter: int = 64,
         progress_bar: bool = True,
         store_iterations: bool = False,
     ):
-        """ """
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        max_iter: int, optional
+            Maximum number of iterations to run
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        warmup_iter: int, optional
+            Number of iterations to run before updating probe estimate
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+        store_iterations: bool, optional
+            If True, reconstructed objects and probes are stored at each iteration
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
         asnumpy = self._asnumpy
 
         # initialization
@@ -2172,7 +2382,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             # forward operator
             difference_gradient_fourier, error = self._forward(
-                self._object, self._probe, self._intensities
+                self._object, self._probe, self._amplitudes
             )
 
             # adjoint operator
@@ -2195,7 +2405,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             # constraints
             self._object, self._probe = self._constraints(
-                self._object, self._probe, pure_phase_object=a0 < pure_phase_object_iter
+                self._object, self._probe, pure_phase_object=a0 < pure_phase_object_iter, fix_com = a0 >= warmup_iter
             )
 
             if store_iterations:
@@ -2213,7 +2423,22 @@ class PtychographicReconstruction(PhaseReconstruction):
     def _visualize_last_iteration(
             self, cbar: bool, plot_convergence: bool, plot_probe: bool, object_mode: str, **kwargs
     ):
-        """ """
+        """
+        Displays last reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        plot_convergence: bool, optional
+            If true, the RMS error plot is displayed
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        object_mode: str
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude', 'intensity'
+
+        """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
@@ -2375,7 +2600,24 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_mode: str,
         **kwargs,
     ):
-        """ """
+        """
+        Displays all reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        plot_convergence: bool, optional
+            If true, the RMS error plot is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        object_mode: str
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude', 'intensity'
+
+        """
         asnumpy = self._asnumpy
 
         if iterations_grid == "auto":
@@ -2514,7 +2756,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         **kwargs,
     ):
         """
-        Displays reconstructed phase object.
+        Displays reconstructed object and probe.
 
         Parameters
         --------
