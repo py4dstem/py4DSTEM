@@ -181,12 +181,11 @@ def fit_origin(
                 'H':2,
                 'W':3,
                 'cmap':'RdBu',
-                'clipvals':'manual',
+                'intensity_range':'absolute',
                 'vmin':-1*plot_range,
                 'vmax':1*plot_range,
                 'axsize':(6,2),
-                }
-
+            }
         show_image_grid(
             lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_res_plot,
                       qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_res_plot][i],
