@@ -430,11 +430,12 @@ class ComplexProbe:
         """Builds complex probe in the center of the region of interest."""
         xp = self._xp
         array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
+        #if self._vacuum_probe_intensity is not None:
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
 
-    def show(self, **kwargs):
+    def visualize(self, **kwargs):
         """Plots the probe amplitude."""
         xp = self._xp
         asnumpy = self._asnumpy
