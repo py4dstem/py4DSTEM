@@ -328,6 +328,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
             x = x0 + (u * ux) + (v * vx)
             y = y0 + (u * uy) + (v * vy)
 
+            disk_intensity = args[i+6]
+
             # if (x > 0) & (x < kwargs["Q_Nx"]) & (y > 0) & (y < kwargs["Q_Nx"]):
             r_disk = np.maximum(
                 5e-1,
@@ -362,14 +364,14 @@ class SyntheticDiskLattice(WPFModelPrototype):
             # dy[np.isnan(dy)] = 0.0
 
             # insert global positional derivatives
-            J[:, 0] += dx
-            J[:, 1] += dy
+            J[:, 0] += disk_intensity * dx
+            J[:, 1] += disk_intensity * dy
 
             # insert lattice vector derivatives
-            J[:, offset] += (x-x0) * dx
-            J[:, offset + 1] += (x-x0) * dy
-            J[:, offset + 2] += (y-y0) * dx
-            J[:, offset + 3] += (y-y0) * dy
+            J[:, offset] += disk_intensity * u * dx
+            J[:, offset + 1] += disk_intensity * u * dy
+            J[:, offset + 2] += disk_intensity * v * dx
+            J[:, offset + 3] += disk_intensity * v * dy
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
