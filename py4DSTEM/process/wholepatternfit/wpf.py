@@ -124,13 +124,6 @@ class WholePatternFit:
                 bounds=(self.lower_bound, self.upper_bound),
                 **fit_opts
             )
-            # opt = minimize(
-            #     lambda x: np.sum(self._pattern_error(x)**2),
-            #     self.x0,
-            #     callback=lambda x: self._fevals.append(x),
-            #     bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)],
-            #     **fit_opts
-            # )
 
         self.mean_CBED_fit = opt
 
@@ -178,6 +171,7 @@ class WholePatternFit:
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
             self.current_pattern = self.datacube.data[rx, ry, :, :]
             self.current_glob = self.global_args.copy()
+            self._cost_history = [] # clear this so it doesn't grow: TODO make this not stupid
 
             if self.hasJacobian & self.use_jacobian:
                 opt = least_squares(
@@ -194,13 +188,6 @@ class WholePatternFit:
                     bounds=(self.lower_bound, self.upper_bound),
                     **fit_opts
                 )
-                # opt = minimize(
-                #     lambda x: np.sum(self._pattern_error(x)**2),
-                #     self.x0,
-                #     callback=lambda x: self._fevals.append(x),
-                #     bounds=[(lb,ub) for lb,ub in zip(self.lower_bound,self.upper_bound)]
-                #     **fit_opts
-                # )
 
             self.fit_data[rx, ry, :] = opt.x
 
