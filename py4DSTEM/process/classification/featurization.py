@@ -1,5 +1,6 @@
 import numpy as np
 from py4DSTEM.io.datastructure import DataCube
+from py4DSTEM.visualize import show_image_grid
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.decomposition import NMF, PCA, FastICA
 from sklearn.mixture import GaussianMixture
@@ -48,22 +49,19 @@ class Featurization(object):
         ICA:
             Independent Component Analysis to refine features.
         NMF:
-            (traditional) Nonnegative Matrix Factorization to refine features.
-        nmf_iterative:
-            Iterative Nonnegative Matrix Factorization to refine features. Performed iteratively by merging
-            [add more details later]
+            Performs either traditional or iterative Nonnegative Matrix Factorization (NMF) to refine features.
+
         gmm:
-            Gaussian mixture model to predict class labels. Fits a gaussian based on covariance of features
-            [add more details later]
+            Gaussian mixture model to predict class labels. Fits a gaussian based on covariance of features.
     
     Class Examination Methods
         get_class_DPs:
             Gets weighted class diffraction patterns (DPs) for an NMF or GMM operation
         get_class_ims:
-            Gets weighted class images (ims) for an NMF or FMM operation
+            Gets weighted class images (ims) for an NMF or GMM operation
     """
     
-    def __init__(self, features, R_Nx, R_Ny):
+    def __init__(self, features, R_Nx, R_Ny, name):
         """
         Initializes classification instance.
         
@@ -75,9 +73,11 @@ class Featurization(object):
             features (list): A list of ndarrays which will each be associated with value stored at the key in the same index within the list
             R_Nx (int): The real space x dimension of the dataset
             R_Ny (int): The real space y dimension of the dataset
+            name (str): The name of the featurization object
         """
         self.R_Nx = R_Nx
         self.R_Ny = R_Ny
+        self.name = name
 
         if isinstance(features, np.ndarray):
             if len(features.shape) == 3:
@@ -258,14 +258,17 @@ class Featurization(object):
     def NMF(
         self,
         max_components, 
-        merge_thresh, num_models, 
+        num_models, 
+        merge_thresh = 1,
         max_iterations = 1, 
         random_state = None, 
         save_all_models = True,
         return_results = False
     ):
         """
-        Performs nmf iteratively on input features
+        Performs either traditional Nonnegative Matrix Factoriation (NMF) or iteratively on input features.
+        For Traditional NMF:
+            set either merge_threshold = 1, max_iterations = 1, or both. Default is to set 
         
         Args:
             max_components (int): number of initial components to start the first NMF iteration
@@ -364,7 +367,13 @@ class Featurization(object):
         self.class_ims = class_maps
         return
 
-    def spatial_separation(self, size, threshold = 0, method = 'yen', clean = True):
+    def spatial_separation(
+            self,
+            size,
+            threshold = 0,
+            method = 'yen',
+            clean = True
+        ):
         """
         Identify spatially distinct regions from class images and separate based on a threshold and size.
         
@@ -375,63 +384,91 @@ class Featurization(object):
             method (str): filter method, default 'yen'
             clean (bool): whether or not to 'clean' cluster sets based on overlap, i.e. remove clusters that do not have any unique components
         """
+        #Prepare for separation
         labelled = []
         stacked = []
-        cc_data = []
+        
+        #Loop through all models
         for j in range(len(self.class_ims)):
-            labelled_temp = []
+            separated_temp = []
+            
+            #Loop through class images in each model to filtered and separate class images
             for l in range(len(self.class_ims[j])):
                 image = np.where(self.class_ims[j][l] > threshold, 
                                 self.class_ims[j][l], 0)
                 if method == 'yen':
-                    t=threshold_yen(image)
+                    t = threshold_yen(image)
+                    bw = closing(image > t, square(2))
+                    label_image = remove_small_objects(label(bw), size)
                 elif method == 'otsu':
                     t = threshold_otsu(image)
+                    bw = closing(image > t, square(2))
+                    label_image = remove_small_objects(label(bw), size)
+                elif method == None:
+                    label_image = remove_small_objects(label(image), size)
                 else:
-                    print(method + ' method is not supported. Please use yen or otsu instead.')
+                    print(method + ' method is not supported. Please use yen, otsu, or None instead.')
                     break
-                bw = closing(image > t, square(2))
-                label_image = remove_small_objects(label(bw), size)
                 unique_labels = np.unique(label_image)
-                labelled_temp.extend([(np.where(
-                    label_image == unique_labels[k],
-                    image, 0)) for k in range(len(unique_labels))])
-
-            if clean == False:
-                labelled.append(labelled_temp)            
-            elif clean == True:
-                if len(labelled_temp) > 0:
-                    stacked = np.dstack(labelled_temp)
-                    data_hard = (stacked.max(axis=2,keepdims=1) == stacked) * stacked
-                    data_list = [stacked[:,:,x] for x in range(stacked.shape[2])]
+                separated_temp.extend(
+                    [(np.where(label_image == unique_labels[k+1],image, 0)) 
+                    for k in range(len(unique_labels)-1)
+                    ])
+            
+            if len(separated_temp) > 0:
+                if clean == True:
+                    data_ndarray = np.dstack(separated_temp)
+                    data_hard = (data_ndarray.max(axis=2,keepdims=1) == data_ndarray) * data_ndarray
+                    data_list = [data_ndarray[:,:,x] for x in range(data_ndarray.shape[2])]
                     data_list_hard = [np.where(data_hard[:,:,n] > threshold, 1, 0) 
                                         for n in range(data_hard.shape[2])]
                     labelled.append([data_list[n] for n in range(len(data_list_hard)) 
-                                    if (np.sum(data_list_hard[n]) > size)])
-        if len(labelled_temp) > 0:
+                                    if (np.sum(data_list_hard[n]) > size)])            
+                else:
+                    labelled.append(separated_temp)
+            else:
+                continue
+                 
+        if len(labelled) > 0:
             self.spatially_separated_ims = labelled
+        else:
+            print('No distinct regions found in any models. Try modifying threshold, size, or method.')
 
         return
     
-    def consensus(self, threshold = 0, location = 'spatially_separated_ims', method = 'mean', drop = 0, split = None):
+    def consensus(
+            self, 
+            threshold = 0, 
+            location = 'spatially_separated_ims', 
+            method = 'mean', 
+            drop = 0, 
+            split = None
+        ):
         """
         Consensus Clustering takes the outcome of a prepared set of 2D images from each cluster and averages the outcomes.
 
         Args:
             threshold (float): Threshold weights, default 0
             location (str): Where to get the consensus from - after spatial separation = 'spatially_separated_ims'
-            method (str): right now, mean is the only method in which to perform consensus clustering
+            method (str): Method in which to combine the consensus clusters - either mean or median.
             drop (int): number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
             split (float): CURRENTLY NOT IMPLEMENTED - splitting threshold - if clusters in a consensus bin have less than the splitting threshold of overlap, create new bin
                 no cluster sets will be dropped
         """
+        # Set up for consensus clustering
         class_dict = {}
         consensus_clusters = []
-        if location == 'spatially_separated_ims':
-            ncluster = [len(self.spatially_separated_ims[j]) 
-                        for j in range(len(self.spatially_separated_ims))]
-            max_cluster_ind = np.where(ncluster == np.max(ncluster))[0][0]
+        
+        if location != 'spatially_separated_ims':
+            print('Consensus clustering only supported after performing the spatial separation method.')
+            return
+        
+        #Find model with largest number of clusters for label correspondence
+        ncluster = [len(self.spatially_separated_ims[j]) 
+                    for j in range(len(self.spatially_separated_ims))]
+        max_cluster_ind = np.where(ncluster == np.max(ncluster))[0][0]
 
+        # Label Correspondence
         for k in range(len(self.spatially_separated_ims[max_cluster_ind])):   
             class_dict['c'+str(k)] = [np.where(
                 self.spatially_separated_ims[max_cluster_ind][k] > threshold, 
@@ -443,13 +480,13 @@ class Featurization(object):
             for m in range(len(self.spatially_separated_ims[j])):
                 class_im = np.where(
                     self.spatially_separated_ims[j][m] > threshold, 
-                    self.spatially_separated_ims[j][m], 0)
+                    self.spatially_separated_ims[j][m], 0
+                )
                 best_sum = -np.inf
                 for l in range(len(class_dict.keys())):
-                    #if l >= len(self.spatially_separated_ims[j]):
-                    #    break
                     current_sum = np.sum(np.where(
-                        class_dict['c'+str(l)][0] > threshold, class_im, 0))
+                        class_dict['c'+str(l)][0] > threshold, class_im, 0)
+                    )
                     if current_sum >= best_sum:
                         best_sum = current_sum
                         cvalue = l
@@ -457,9 +494,9 @@ class Featurization(object):
                     class_dict['c' + str(cvalue)].append(class_im)
                 else:
                     class_dict['c' + str(len(list(class_dict.keys())))] = [class_im]
-                class_dict['c'+str(cvalue)].append(class_im)
             key_list = list(class_dict.keys())
-            
+         
+        #Consensus clustering   
         if method == 'mean':
             for n in range(len(key_list)):
                 if drop > 0:
@@ -467,8 +504,18 @@ class Featurization(object):
                         continue
                 consensus_clusters.append(np.mean(np.dstack(
                     class_dict[key_list[n]]), axis = 2))
+        elif method == 'median':
+            for n in range(len(key_list)):
+                if drop > 0:
+                    if len(class_dict[key_list[n]]) <= drop:
+                        continue
+                consensus_clusters.append(np.median(np.dstack(
+                    class_dict[key_list[n]]), axis = 2))
+        else:
+            print('Only mean and median consensus methods currently supported.')    
         self.consensus_dict = class_dict
-        self.consensus_clusters = consensus_clusters
+        self.consensus_clusters = consensus_clusters        
+        
         return
 
 
@@ -529,7 +576,9 @@ def _nmf_single(
             Hs.append(np.transpose(nmf.components_))
             recon_error += nmf.reconstruction_err_
             counter += 1
-            if counter > 1:
+            if counter >= max_iterations:
+                break
+            elif counter > 1:
                 with np.errstate(invalid='raise',divide='raise'):
                     try:
                         tril = np.tril(np.corrcoef(nmf_temp_2, rowvar = False), k = -1)
