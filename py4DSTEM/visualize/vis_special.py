@@ -308,37 +308,39 @@ def show_class_BPs_grid(ar,H,W,x,y,get_s,s2,color='r',color2='y',returnfig=False
     else:
         return fig,axs
 
-def show_strain(strainmap,
-                vrange_exx,
-                vrange_theta,
-                vrange_exy=None,
-                vrange_eyy=None,
-                bkgrd=True,
-                show_cbars=('exx','eyy','exy','theta'),
-                bordercolor='k',
-                borderwidth=1,
-                titlesize=24,
-                ticklabelsize=16,
-                ticknumber=5,
-                unitlabelsize=24,
-                show_axes=True,
-                axes_x0=0,
-                axes_y0=0,
-                xaxis_x=1,
-                xaxis_y=0,
-                axes_length=10,
-                axes_width=1,
-                axes_color='r',
-                xaxis_space='Q',
-                labelaxes=True,
-                QR_rotation=0,
-                axes_labelsize=12,
-                axes_labelcolor='r',
-                axes_plots=('exx'),
-                cmap='RdBu_r',
-                layout=0,
-                figsize=(12,12),
-                returnfig=False):
+def show_strain(
+    strainmap,
+    vrange_exx,
+    vrange_theta,
+    vrange_exy=None,
+    vrange_eyy=None,
+    flip_theta = False,
+    bkgrd=True,
+    show_cbars=('exx','eyy','exy','theta'),
+    bordercolor='k',
+    borderwidth=1,
+    titlesize=24,
+    ticklabelsize=16,
+    ticknumber=5,
+    unitlabelsize=24,
+    show_axes=True,
+    axes_x0=0,
+    axes_y0=0,
+    xaxis_x=1,
+    xaxis_y=0,
+    axes_length=10,
+    axes_width=1,
+    axes_color='r',
+    xaxis_space='Q',
+    labelaxes=True,
+    QR_rotation=0,
+    axes_labelsize=12,
+    axes_labelcolor='r',
+    axes_plots=('exx'),
+    cmap='RdBu_r',
+    layout=0,
+    figsize=(12,12),
+    returnfig=False):
     """
     Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
     masking each image with strainmap.get_slice('mask') 
@@ -349,6 +351,7 @@ def show_strain(strainmap,
         vrange_theta (length 2 list or tuple):
         vrange_exy (length 2 list or tuple):
         vrange_eyy (length 2 list or tuple):
+        flip_theta (bool): if True, take negative of angle 
         bkgrd (bool):
         show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
             tuple containing any, all, or none of ('exx','eyy','exy','theta').
@@ -408,6 +411,8 @@ def show_strain(strainmap,
     e_yy = np.ma.array(strainmap.get_slice('e_yy').data,mask=strainmap.get_slice('mask').data==False)
     e_xy = np.ma.array(strainmap.get_slice('e_xy').data,mask=strainmap.get_slice('mask').data==False)
     theta = np.ma.array(strainmap.get_slice('theta').data,mask=strainmap.get_slice('mask').data==False)
+    if flip_theta == True: 
+        theta = - theta 
 
     # Plot
     if layout==0:
@@ -416,14 +421,38 @@ def show_strain(strainmap,
         fig,(ax11,ax12,ax21,ax22) = plt.subplots(1,4,figsize=figsize)
     else:
         fig,(ax11,ax12,ax21,ax22) = plt.subplots(4,1,figsize=figsize)
-    cax11 = show(e_xx,figax=(fig,ax11),vmin=vmin_exx,vmax=vmax_exx,intensity_range='absolute',
-                 cmap=cmap,returncax=True)
-    cax12 = show(e_yy,figax=(fig,ax12),vmin=vmin_eyy,vmax=vmax_eyy,intensity_range='absolute',
-                 cmap=cmap,returncax=True)
-    cax21 = show(e_xy,figax=(fig,ax21),vmin=vmin_exy,vmax=vmax_exy,intensity_range='absolute',
-                 cmap=cmap,returncax=True)
-    cax22 = show(theta,figax=(fig,ax22),vmin=vmin_theta,vmax=vmax_theta,intensity_range='absolute',
-                 cmap=cmap,returncax=True)
+    cax11 = show(
+        e_xx,
+        figax=(fig,ax11),
+        vmin=vmin_exx,
+        vmax=vmax_exx,
+        intensity_range='absolute',
+        cmap=cmap,
+        returncax=True)
+    cax12 = show(
+        e_yy,
+        figax=(fig,ax12),
+        vmin=vmin_eyy,
+        vmax=vmax_eyy,
+        intensity_range='absolute',
+        cmap=cmap,
+        returncax=True)
+    cax21 = show(
+        e_xy,
+        figax=(fig,ax21),
+        vmin=vmin_exy,
+        vmax=vmax_exy,
+        intensity_range='absolute',
+        cmap=cmap,
+        returncax=True)
+    cax22 = show(
+        theta,
+        figax=(fig,ax22),
+        vmin=vmin_theta,
+        vmax=vmax_theta,
+        intensity_range='absolute',
+        cmap=cmap,
+        returncax=True)
     ax11.set_title(r'$\epsilon_{xx}$',size=titlesize)
     ax12.set_title(r'$\epsilon_{yy}$',size=titlesize)
     ax21.set_title(r'$\epsilon_{xy}$',size=titlesize)
