@@ -89,19 +89,44 @@ class Featurization(object):
                         'feature array must be of dimensions (R_Nx*R_Ny, num_features) or (R_Nx, R_Ny, num_features)'
                         )  
         elif isinstance(features, list):
-            #check types - all must be either numpy or featurization instances?
-            for i in range(len(features)):
-                if features[i].shape == 3:
-                    features[i] = features[i].reshape(R_Nx*R_Ny, features.shape[-1])
-                if features[i].shape != 2:
-                    raise ValueError(
-                        'feature array(s) in list must be of dimensions (R_Nx*R_Ny, num_features) or (R_Nx, R_Ny, num_features)'
-                        )  
-            self.features = np.concatenate(features, axis=1)
+            if all(isinstance(f, np.ndarray) for f in features):
+                for i in range(len(features)):
+                    if features[i].shape == 3:
+                        features[i] = features[i].reshape(R_Nx*R_Ny, features.shape[-1])
+                    if len(features[i].shape) != 2:
+                        raise ValueError(
+                            'feature array(s) in list must be of dimensions (R_Nx*R_Ny, num_features) or (R_Nx, R_Ny, num_features)'
+                            )  
+                self.features = np.concatenate(features, axis=1)
+            elif all(isinstance(f, Featurization) for f in features):
+                raise TypeError('List of Featurization instances must be initialized using the concatenate_features method.')
+            else:
+                raise TypeError('Entries in list must be np.ndarrays for initialization of the Featurization instance.') 
         else:
-            raise TypeError('features must be either a single np.ndarray of shape 2 or 3 or a list of np.ndarrays')
+            raise TypeError('Features must be either a single np.ndarray of shape 2 or 3 or a list of np.ndarrays or featurization instances.')
         return
 
+    def concatenate_features(features, name):
+        """
+        Concatenates featurization instances (features) and outputs a new Featurization instance
+        containing the concatenated features from each featurization instance.
+        
+        Args:
+            features (list): A list of keys to be concatenated into one array
+            name (str): the key in which the concatenated array will be stored
+        """
+        R_Nxs = [features[i].R_Nx for i in range(len(features))]
+        R_Nys = [features[i].R_Ny for i in range(len(features))]
+        if len(np.unique(R_Nxs)) != 1 or len(np.unique(R_Nys)) != 1:
+            raise ValueError('Can only concatenate Featurization instances with same R_Nx and R_Ny')
+        new_instance = Featurization(
+                np.concatenate([features[i].features for i in range(len(features))], axis = 1),
+                R_Nx = R_Nxs[0],
+                R_Ny = R_Nys[0],
+                name = name
+            )
+        return new_instance
+    
     def add_features(self, feature):
         """
         Add a feature to the end of the features array
@@ -122,23 +147,6 @@ class Featurization(object):
         """
         self.features = np.delete(self.features, index, axis = 1)
         return
-    
-    # User code:
-    # new_feature = Featurization.concatenate_features(
-    #    [f1, f2, f3],
-    #    name = 'meow'
-    # )
-
-    # def concatenate_features(self, list, output_key):
-    #     """
-    #     Concatenates dataframes in 'key' and saves them to features with key 'output_key'
-        
-    #     Args:
-    #         keys (list) A list of keys to be concatenated into one array
-    #         output_key (int, float, str) the key in which the concatenated array will be stored
-    #     """
-    #     self.features[output_key] = np.concatenate([self.features[keys[i]] for i in range(len(keys))], axis = 1)
-    #     return
     
     # def mean_feature(self, keys, replace = False):
     #     """
@@ -399,19 +407,32 @@ class Featurization(object):
                 if method == 'yen':
                     t = threshold_yen(image)
                     bw = closing(image > t, square(2))
-                    label_image = remove_small_objects(label(bw), size)
+                    labelled_image = label(bw)
+                    if np.sum(labelled_image) > size:
+                        large_labelled_image = remove_small_objects(labelled_image, size)
+                    else:
+                        large_labelled_image = labelled_image
                 elif method == 'otsu':
                     t = threshold_otsu(image)
                     bw = closing(image > t, square(2))
-                    label_image = remove_small_objects(label(bw), size)
+                    labelled_image = label(bw)
+                    if np.sum(labelled_image) > size:
+                        large_labelled_image = remove_small_objects(labelled_image, size)
+                    else:
+                        large_labelled_image = labelled_image
                 elif method == None:
-                    label_image = remove_small_objects(label(image), size)
+                    labelled_image = label(image)
+                    if np.sum(labelled_image) > size:
+                        large_labelled_image = remove_small_objects(labelled_image, size)
+                    else:
+                        large_labelled_image = labelled_image
+                    
                 else:
                     print(method + ' method is not supported. Please use yen, otsu, or None instead.')
                     break
-                unique_labels = np.unique(label_image)
+                unique_labels = np.unique(large_labelled_image)
                 separated_temp.extend(
-                    [(np.where(label_image == unique_labels[k+1],image, 0)) 
+                    [(np.where(large_labelled_image == unique_labels[k+1],image, 0)) 
                     for k in range(len(unique_labels)-1)
                     ])
             
@@ -440,9 +461,10 @@ class Featurization(object):
             self, 
             threshold = 0, 
             location = 'spatially_separated_ims', 
+            split = 0,
             method = 'mean', 
-            drop = 0, 
-            split = None
+            drop_bins= 0, 
+            
         ):
         """
         Consensus Clustering takes the outcome of a prepared set of 2D images from each cluster and averages the outcomes.
@@ -450,18 +472,33 @@ class Featurization(object):
         Args:
             threshold (float): Threshold weights, default 0
             location (str): Where to get the consensus from - after spatial separation = 'spatially_separated_ims'
+            split_value (float): Threshold in which to separate classes during label correspondence (Default 0). 
+                            This should be proportional to the expected class weights- the sum of the weights in the current
+                            class image that match nonzero values in each bin are calculated and then checked for splitting.
             method (str): Method in which to combine the consensus clusters - either mean or median.
-            drop (int): number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
-            split (float): CURRENTLY NOT IMPLEMENTED - splitting threshold - if clusters in a consensus bin have less than the splitting threshold of overlap, create new bin
-                no cluster sets will be dropped
+            drop_bins (int): number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
+        
+        Details:
+            This method involves 2 steps: Label correspondence and consensus clustering. 
+            
+            Label correspondence sorts the classes found by the independent models into bins based on class overlap in real space. 
+            Arguments related to label correspondence are the threshold and split_value. The threshold is related
+            to the weights of the independent classes. If the weight of the observation in the class is less than the threshold, it
+            will be set to 0. The split_value indicates the extent of similarity the independent classes must have before intializing
+            a new bin. The default is 0 - this means if the class of interest has 0 overlap with the identified bins, a new bin will
+            be created. The value is based on the sum of the weights in the current class image that match the nonzero values in the
+            current bins.
+            
+            Consensus clustering combines these sorted bin into 1 class based on the selected method (either 'mean' which takes 
+            the average of the bin, or 'median' which takes the median of the bin). Bins with less than the drop_bins value will 
+            not be included in the final results.  
         """
         # Set up for consensus clustering
         class_dict = {}
         consensus_clusters = []
         
         if location != 'spatially_separated_ims':
-            print('Consensus clustering only supported after performing the spatial separation method.')
-            return
+            raise ValueError('Consensus clustering only supported for location = spatially_separated_ims.')
         
         #Find model with largest number of clusters for label correspondence
         ncluster = [len(self.spatially_separated_ims[j]) 
@@ -490,7 +527,7 @@ class Featurization(object):
                     if current_sum >= best_sum:
                         best_sum = current_sum
                         cvalue = l
-                if best_sum > 0:
+                if best_sum > split:
                     class_dict['c' + str(cvalue)].append(class_im)
                 else:
                     class_dict['c' + str(len(list(class_dict.keys())))] = [class_im]
@@ -499,15 +536,15 @@ class Featurization(object):
         #Consensus clustering   
         if method == 'mean':
             for n in range(len(key_list)):
-                if drop > 0:
-                    if len(class_dict[key_list[n]]) <= drop:
+                if drop_bins > 0:
+                    if len(class_dict[key_list[n]]) <= drop_bins:
                         continue
                 consensus_clusters.append(np.mean(np.dstack(
                     class_dict[key_list[n]]), axis = 2))
         elif method == 'median':
             for n in range(len(key_list)):
-                if drop > 0:
-                    if len(class_dict[key_list[n]]) <= drop:
+                if drop_bins > 0:
+                    if len(class_dict[key_list[n]]) <= drop_bins:
                         continue
                 consensus_clusters.append(np.median(np.dstack(
                     class_dict[key_list[n]]), axis = 2))
