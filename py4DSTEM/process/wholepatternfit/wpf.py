@@ -128,7 +128,7 @@ class WholePatternFit:
         self.mean_CBED_fit = opt
 
         # Plotting
-        fig = plt.figure(constrained_layout=True,figsize=(7,7))
+        fig = plt.figure(constrained_layout=True,figsize=(12,12))
         gs = GridSpec(2,2,figure=fig)
 
         ax = fig.add_subplot(gs[0,0])
@@ -167,6 +167,7 @@ class WholePatternFit:
         self._fevals = []
 
         self.fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
+        self.fit_metrics = np.zeros((self.datacube.R_Nx,self.datacube.R_Ny,4))
 
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
             self.current_pattern = self.datacube.data[rx, ry, :, :]
@@ -190,6 +191,9 @@ class WholePatternFit:
                 )
 
             self.fit_data[rx, ry, :] = opt.x
+            self.fit_metrics[rx,ry,:] = [opt.cost, opt.optimality, opt.nfev, opt.status]
+
+        return self.fit_data, self.fit_metrics
 
     def accept_mean_CBED_fit(self):
         x = self.mean_CBED_fit.x
@@ -205,7 +209,7 @@ class WholePatternFit:
             for j, k in enumerate(m.params.keys()):
                 m.params[k].initial_value = x[ind + j]
 
-    def show_model_grid(self,x=None):
+    def show_model_grid(self,x=None,**plot_kwargs):
         if x is None:
             x = self.mean_CBED_fit.x
 
@@ -219,7 +223,9 @@ class WholePatternFit:
         cols = int(np.ceil(np.sqrt(N)))
         rows = (N + 1) // cols
 
-        fig, ax = plt.subplots(rows,cols, constrained_layout=True)
+        kwargs = dict(constrained_layout=True)
+        kwargs.update(plot_kwargs)
+        fig, ax = plt.subplots(rows,cols, **kwargs)
 
         for i,(a,m) in enumerate(zip(ax.flat, self.model)):
             DP = np.zeros((self.datacube.Q_Nx,self.datacube.Q_Ny))
@@ -227,10 +233,56 @@ class WholePatternFit:
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
             a.matshow(DP,cmap='turbo')
-            a.axis('off')
             a.text(0.5,0.92,m.name,transform=a.transAxes,ha='center',va='center')
+        for a in ax.flat:
+            a.axis('off')
 
         plt.show()
+
+    def show_lattice_points(self,returnfig=False,*args,**kwargs):
+        fig,ax = plt.subplots(*args,**kwargs)
+        ax.matshow(self.meanCBED**0.5,cmap='turbo')
+        for m in self.model:
+            if "Lattice" in m.name:
+                ux,uy = m.params['ux'].initial_value, m.params['uy'].initial_value
+                vx,vy = m.params['vx'].initial_value, m.params['vy'].initial_value
+                
+                lat = np.array([[ux,uy],[vx,vy]])
+                inds = np.stack([m.u_inds,m.v_inds],axis=1)
+                
+                spots = inds @ lat
+                spots[:,0] += self.global_args['global_x0']
+                spots[:,1] += self.global_args['global_y0']
+                
+                ax.scatter(spots[:,1],spots[:,0],marker='x')
+                
+        return (fig,ax) if returnfig else plt.show()
+
+    def get_lattice_maps(self):
+        assert(hasattr(self,"fit_data")), "Please run fitting first!"
+
+        lattices = [
+            (i,m) 
+            for i,m in enumerate(self.model) 
+            if "lattice" in type(m).__name__.lower()
+        ]
+
+        g_maps = []
+        for (i,l) in lattices:
+            param_list = list(l.params.keys())
+            lattice_offset = param_list.index("ux")
+            data_offset = self.model_param_inds[i] + 2 + lattice_offset
+            
+            data = self.fit_data[:,:,data_offset:data_offset+4]
+
+            g_map = py4DSTEM.io.RealSlice(
+                np.dstack((data,np.ones(data.shape[:2],dtype=np.bool_))),
+                slicelabels=['g1x','g1y','g2x','g2y','mask'],
+                name=l.name,
+            )
+            g_maps.append(g_map)
+
+        return g_maps
 
     def _pattern_error(self, x):
 
