@@ -203,7 +203,7 @@ def calibrate_unit_cell(
     Details:
     User has the option to define what is allowed to update in the unit cell using the arguments
     coef_index and coef_update. Each has 6 entries, corresponding to the a, b, c, alpha, beta, gamma
-    parameters of the unit cell, in this order. The coef_update argument is a list of ints specifying
+    parameters of the unit cell, in this order. The coef_update argument is a list of bools specifying
     whether or not the unit cell value will be allowed to change (True) or must maintain the original
     value (False) upon fitting. The coef_index argument provides a pointer to the index in which the
     code will update to. 
@@ -221,12 +221,14 @@ def calibrate_unit_cell(
         coef_index = [0, 0, 0, 3, 3, 3]
         coef_update = [True, True, True, False, False, False]
     Which allows a, b, and c to update (True in first 3 indices of coef_update)
-    but b and c update based on the value of a (0 in the 1 and 2 positions in coef_index).
+    but b and c update based on the value of a (0 in the 1 and 2 list entries in coef_index) such 
+    that a = b = c. While coef_update is False for alpha, beta, and gamma (entries 3, 4, 5), no
+    updates will be made to the angles.
 
-    The user has the option to predefine these as well. In the coef_update list, there must
-    be 6 entries and each are boolean. In the coef_index list, there must be 6 entries, with
-    the first 3 entries being between 0 - 2 and the last 3 entries between 3 - 5. These act
-    as pointers to pull the updated parameter from.
+    The user has the option to predefine coef_index or coef_update to override defaults.  In the 
+    coef_update list, there must be 6 entries and each are boolean. In the coef_index list, there 
+    must be 6 entries, with the first 3 entries being between 0 - 2 and the last 3 entries between 
+    3 - 5. These act as pointers to pull the updated parameter from.
     
     """
     # initialize structure
