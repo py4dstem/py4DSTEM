@@ -1,15 +1,16 @@
-from typing import Union, Sequence, Mapping, Callable, Iterable, Tuple
+from typing import Mapping, Tuple, Union
+
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
 import numpy as np
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.process.calibration import fit_origin
+from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
@@ -432,7 +433,7 @@ class ComplexProbe:
         """Builds complex probe in the center of the region of interest."""
         xp = self._xp
         array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
-        #if self._vacuum_probe_intensity is not None:
+        # if self._vacuum_probe_intensity is not None:
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
@@ -543,10 +544,10 @@ def calculate_center_of_mass(
     intensities: np.ndarray,
     fit_function: str = "plane",
     plot_center_of_mass: bool = True,
-    scan_sampling: Tuple[float,float] = (1.,1.),
-    reciprocal_sampling: Tuple[float,float] = (1.,1.),
-    scan_units: Tuple[str,str] = ('pixels','pixels'),
-    device:str = 'cpu',
+    scan_sampling: Tuple[float, float] = (1.0, 1.0),
+    reciprocal_sampling: Tuple[float, float] = (1.0, 1.0),
+    scan_units: Tuple[str, str] = ("pixels", "pixels"),
+    device: str = "cpu",
     **kwargs,
 ):
     """
@@ -581,11 +582,11 @@ def calculate_center_of_mass(
     com_measured_x/y and com_normalized_x/y, optional
         Measured and normalized CoM gradients
     """
-    
+
     if device == "cpu":
         xp = np
         asnumpy = np.asarray
-        if isinstance(intensities,np.ndarray):
+        if isinstance(intensities, np.ndarray):
             intensities = asnumpy(intensities)
         else:
             intensities = cp.asnumpy(intensities)
@@ -622,12 +623,8 @@ def calculate_center_of_mass(
     com_fitted_y = xp.asarray(or_fits[1])
 
     # fix CoM units
-    com_normalized_x = (
-        com_measured_x - com_fitted_x
-    ) * reciprocal_sampling[0]
-    com_normalized_y = (
-        com_measured_y - com_fitted_y
-    ) * reciprocal_sampling[1]
+    com_normalized_x = (com_measured_x - com_fitted_x) * reciprocal_sampling[0]
+    com_normalized_y = (com_measured_y - com_fitted_y) * reciprocal_sampling[1]
 
     # Optionally, plot
     if plot_center_of_mass:
@@ -664,13 +661,14 @@ def calculate_center_of_mass(
 
     return asnumpy(com_normalized_x), asnumpy(com_normalized_y)
 
+
 def center_of_mass_relative_rotation(
     com_normalized_x: np.ndarray,
     com_normalized_y: np.ndarray,
     rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
     plot_rotation: bool = True,
     maximize_divergence: bool = False,
-    device:str = 'cpu',
+    device: str = "cpu",
     **kwargs,
 ):
     """
@@ -715,11 +713,11 @@ def center_of_mass_relative_rotation(
     if device == "cpu":
         xp = np
         asnumpy = np.asarray
-        if isinstance(com_normalized_x,np.ndarray):
+        if isinstance(com_normalized_x, np.ndarray):
             com_normalized_x = asnumpy(com_normalized_x)
         else:
             com_normalized_x = cp.asnumpy(com_normalized_x)
-        if isinstance(com_normalized_y,np.ndarray):
+        if isinstance(com_normalized_y, np.ndarray):
             com_normalized_y = asnumpy(com_normalized_y)
         else:
             com_normalized_y = cp.asnumpy(com_normalized_y)
@@ -745,25 +743,13 @@ def center_of_mass_relative_rotation(
     )
 
     if maximize_divergence:
-        com_grad_x_x = (
-            com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-        )
-        com_grad_y_y = (
-            com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-        )
-        rotation_div = xp.mean(
-            xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
-        )
+        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
+        rotation_div = xp.mean(xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1))
     else:
-        com_grad_x_y = (
-            com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-        )
-        com_grad_y_x = (
-            com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-        )
-        rotation_curl = xp.mean(
-            xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
-        )
+        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
+        rotation_curl = xp.mean(xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1))
 
     # Transposed
     com_measured_x = (
@@ -776,22 +762,14 @@ def center_of_mass_relative_rotation(
     )
 
     if maximize_divergence:
-        com_grad_x_x = (
-            com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-        )
-        com_grad_y_y = (
-            com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-        )
+        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
+        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
         rotation_div_transpose = xp.mean(
             xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
         )
     else:
-        com_grad_x_y = (
-            com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-        )
-        com_grad_y_x = (
-            com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-        )
+        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
+        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
         rotation_curl_transpose = xp.mean(
             xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
         )
@@ -805,10 +783,7 @@ def center_of_mass_relative_rotation(
         ind_max = xp.argmax(rotation_div).item()
         ind_trans_max = xp.argmax(rotation_div_transpose).item()
 
-        if (
-            rotation_div[ind_max]
-            >= rotation_div_transpose[ind_trans_max]
-        ):
+        if rotation_div[ind_max] >= rotation_div_transpose[ind_trans_max]:
             rotation_best_deg = rotation_angles_deg[ind_max]
             rotation_best_rad = rotation_angles_rad[ind_max]
             rotation_best_transpose = False
@@ -821,10 +796,7 @@ def center_of_mass_relative_rotation(
         ind_min = xp.argmin(rotation_curl).item()
         ind_trans_min = xp.argmin(rotation_curl_transpose).item()
 
-        if (
-            rotation_curl[ind_min]
-            <= rotation_curl_transpose[ind_trans_min]
-        ):
+        if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
             rotation_best_deg = rotation_angles_deg[ind_min]
             rotation_best_rad = rotation_angles_rad[ind_min]
             rotation_best_transpose = False
@@ -834,12 +806,7 @@ def center_of_mass_relative_rotation(
             rotation_best_transpose = True
 
     # Print summary
-    print(
-        (
-            "Best fit rotation = "
-            f"{str(np.round(rotation_best_deg))} degrees."
-        )
-    )
+    print(("Best fit rotation = " f"{str(np.round(rotation_best_deg))} degrees."))
     if rotation_best_transpose:
         print("Diffraction intensities should be transposed.")
     else:
@@ -853,9 +820,7 @@ def center_of_mass_relative_rotation(
 
         ax.plot(
             rotation_angles_deg,
-            asnumpy(rotation_div)
-            if maximize_divergence
-            else asnumpy(rotation_curl),
+            asnumpy(rotation_div) if maximize_divergence else asnumpy(rotation_curl),
             label="CoM",
         )
         ax.plot(
@@ -920,4 +885,3 @@ def center_of_mass_relative_rotation(
     com_y = asnumpy(com_y)
 
     return com_x, com_y, rotation_best_deg, rotation_best_transpose
-
