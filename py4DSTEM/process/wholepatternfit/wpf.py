@@ -151,10 +151,11 @@ class WholePatternFit:
             vmax=np.abs(err_im).max() / 4,
         )
         # fig.colorbar(im)
+        ax.set_title("Error")
         ax.axis("off")
 
         ax = fig.add_subplot(gs[1, :])
-        ax.matshow(np.hstack((DP, self.meanCBED)) ** 0.25, cmap="jet")
+        ax.matshow(np.hstack((DP, self.meanCBED)) ** 0.25, cmap="turbo")
         ax.axis("off")
         ax.text(0.25, 0.92, "Refined", transform=ax.transAxes, ha="center", va="center")
         ax.text(
@@ -174,10 +175,8 @@ class WholePatternFit:
         self._track = False
         self._fevals = []
 
-        self.fit_data = np.zeros(
-            (self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0])
-        )
-        self.fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
+        fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
+        fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
 
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
             self.current_pattern = self.datacube.data[rx, ry, :, :]
@@ -202,13 +201,39 @@ class WholePatternFit:
                     **fit_opts,
                 )
 
-            self.fit_data[rx, ry, :] = opt.x
-            self.fit_metrics[rx, ry, :] = [
+            fit_data[rx, ry, :] = opt.x
+            fit_metrics[rx, ry, :] = [
                 opt.cost,
                 opt.optimality,
                 opt.nfev,
                 opt.status,
             ]
+
+        # Convert to RealSlices
+        model_names = []
+        for m in self.model:
+            n = m.name
+            if n in model_names:
+                i = 1
+                while n in model_names:
+                    n = m.name + "_" + str(i)
+                    i += 1
+            model_names.append(n)
+
+        param_names = ["global_x0", "global_y0"] + [
+            n + "/" + k
+            for m, n in zip(self.model, model_names)
+            for k in m.params.keys()
+        ]
+
+        self.fit_data = RealSlice(fit_data, name="Fit Data", slicelabels=param_names)
+        self.fit_metrics = RealSlice(
+            fit_metrics,
+            name="Fit Metrics",
+            slicelabels=["cost", "optimality", "nfev", "status"],
+        )
+
+        self.show_fit_metrics()
 
         return self.fit_data, self.fit_metrics
 
@@ -276,6 +301,55 @@ class WholePatternFit:
 
         return (fig, ax) if returnfig else plt.show()
 
+    def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
+        assert hasattr(self, "fit_metrics"), "Please run fitting first!"
+
+        kwargs = dict(figsize=(14, 12), constrained_layout=True)
+        kwargs.update(subplots_kwargs)
+        fig, ax = plt.subplots(2, 2, **kwargs)
+        im = ax[0, 0].matshow(self.fit_metrics["cost"].data, norm=mpl_c.LogNorm())
+        ax[0, 0].set_title("Final Cost Function")
+        fig.colorbar(im, ax=ax[0, 0])
+
+        opt_cmap = mpl_c.ListedColormap(
+            (
+                (0.8941176470588236, 0.10196078431372549, 0.10980392156862745),
+                (0.21568627450980393, 0.49411764705882355, 0.7215686274509804),
+                (0.30196078431372547, 0.6862745098039216, 0.2901960784313726),
+                (0.596078431372549, 0.3058823529411765, 0.6392156862745098),
+                (1.0, 0.4980392156862745, 0.0),
+                (1.0, 1.0, 0.2),
+            )
+        )
+        im = ax[0, 1].matshow(
+            self.fit_metrics["status"].data, cmap=opt_cmap, vmin=-1.5, vmax=4.5
+        )
+        cbar = fig.colorbar(im, ax=ax[0, 1], ticks=[-1, 0, 1, 2, 3, 4])
+        cbar.ax.set_yticklabels(
+            [
+                "MINPACK Error",
+                "Max f evals exceeded",
+                "$gtol$ satisfied",
+                "$ftol$ satisfied",
+                "$xtol$ satisfied",
+                "$xtol$ & $ftol$ satisfied",
+            ]
+        )
+        ax[0, 1].set_title("Optimizer Status")
+        fig.set_facecolor("w")
+
+        im = ax[1, 0].matshow(self.fit_metrics["optimality"].data, norm=mpl_c.LogNorm())
+        ax[1, 0].set_title("First Order Optimality")
+        fig.colorbar(im, ax=ax[1, 0])
+
+        im = ax[1, 1].matshow(self.fit_metrics["nfev"].data)
+        ax[1, 1].set_title("Number f evals")
+        fig.colorbar(im, ax=ax[1, 1])
+
+        fig.set_facecolor("w")
+
+        return (fig, ax) if returnfig else plt.show()
+
     def get_lattice_maps(self):
         assert hasattr(self, "fit_data"), "Please run fitting first!"
 
@@ -291,7 +365,8 @@ class WholePatternFit:
             lattice_offset = param_list.index("ux")
             data_offset = self.model_param_inds[i] + 2 + lattice_offset
 
-            data = self.fit_data[:, :, data_offset : data_offset + 4]
+            # TODO: Use proper RealSlice semantics for access
+            data = self.fit_data.data[:, :, data_offset : data_offset + 4]
 
             g_map = RealSlice(
                 np.dstack((data, np.ones(data.shape[:2], dtype=np.bool_))),
