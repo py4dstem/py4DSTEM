@@ -324,7 +324,7 @@ class Featurization(object):
             return self.gmm
         return
 
-    def get_class_DPs(self, datacube, classification_method, thresh):
+    def get_class_DPs(self, datacube, method, thresh):
         """
         Returns weighted class patterns based on classification instance
         datacube must be vectorized in real space (shape = (R_Nx * R_Ny, 1, Q_Nx, Q_Ny)
@@ -334,20 +334,59 @@ class Featurization(object):
             datacube (py4DSTEM datacube):   Vectorized in real space, with shape (R_Nx * R_Ny, Q_Nx, Q_Ny)
         """
         class_patterns = []
-        if classification_method== 'nmf':
+        datacube_shape = datacube.data.shape
+        if len(datacube.data.shape) != 3:
+            try:
+                datacube.data = datacube.data.reshape(self.R_Nx*self.R_Ny, datacube.data.shape[2], datacube.data.shape[3])
+            except:
+                raise ValueError('Datacube must have same R_Nx and R_Ny dimensions as Featurization instance.')
+        if method == 'nmf':
+            if self.W == list:
+                return ValueError('Method not implmented for multiple NMF models, either return 1 model or perform spatial separation first.')
             for l in range(self.W.shape[1]):
-                class_pattern = np.zeros((datacube.data.shape[2], datacube.data.shape[3]))
+                class_pattern = np.zeros((datacube.data.shape[1], datacube.data.shape[2]))
                 x_ = np.where(self.W[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
                     class_pattern += datacube.data[x_[x],0] * self.W[x_[x],l]
                 class_patterns.append(class_pattern  / np.sum(self.W[x_, l]))
-        elif classification_method == 'gmm':
+        elif method == 'gmm':
+            if self.gmm_labels == list:
+                return ValueError('Method not implmented for multiple GMM models, either return 1 model or perform spatial separation first.')
             for l in range(np.max(self.gmm_labels)):
-                class_pattern = np.zeros((datacube.data.shape[2], datacube.data.shape[3]))
+                class_pattern = np.zeros((datacube.data.shape[1], datacube.data.shape[2]))
                 x_ = np.where(self.gmm_proba[:,l] > thresh)[0]
                 for x in range(x_.shape[0]):
                     class_pattern += datacube.data[x_[x],0] * self.gmm_proba[x_[x],l]
                 class_patterns.append(class_pattern / np.sum(self.gmm_proba[x_,l]))
+        elif method == 'pca':
+            for l in range(self.pca.shape[1]):
+                class_pattern = np.zeros((datacube.data.shape[1],datacube.data.shape[2]))
+                x_ = np.where(self.pca[:,l] > thresh)[0]
+                for x in range(x_.shape[0]):
+                    class_pattern += datacube.data[x_[x]] * self.pca[x_[x],l]
+                class_patterns.append(class_pattern / np.sum(self.pca[x_,l]))
+            class_patterns = [class_patterns]
+        elif method == 'spatially_separated_ims':
+            for l in range(len(self.spatially_separated_ims)):
+                small_class_patterns = []
+                for j in range(len(self.spatially_separated_ims[l])):
+                    class_pattern = np.zeros((datacube.data.shape[1], datacube.data.shape[2]))
+                    x_ = np.where(self.spatially_separated_ims[l][j].reshape(self.R_Nx*self.R_Ny,1) > thresh)[0]
+                    for x in range(x_.shape[0]):
+                        class_pattern += datacube.data[x_[x]] * self.spatially_separated_ims[l][j].reshape(self.R_Nx*self.R_Ny,1)[x_[x]]
+                    small_class_patterns.append(class_pattern / np.sum(self.spatially_separated_ims[l][j].reshape(self.R_Nx*self.R_Ny,1)[x_]))
+                class_patterns.append(small_class_patterns)
+        elif method == 'consensus_clusters':
+            for j in range(len(self.consensus_clusters)):
+                class_pattern = np.zeros((datacube.data.shape[1], datacube.data.shape[2]))
+                x_ = np.where(self.consensus_clusters[j].reshape(self.R_Nx*self.R_Ny,1) > thresh)[0]
+                for x in range(x_.shape[0]):
+                    class_pattern += datacube.data[x_[x]] * self.consensus_clusters[j].reshape(self.R_Nx*self.R_Ny,1)[x_[x]]
+                class_patterns.append(class_pattern / np.sum(self.consensus_clusters[j].reshape(self.R_Nx*self.R_Ny,1)[x_]))
+            class_patterns = [class_patterns]
+        else:
+            raise ValueError('method not accepted. Try NMF, GMM, PCA, ICA, spatially_separated_ims, or consensus_clustering.')
+        datacube.data = datacube.data.reshape(datacube_shape)        
         self.class_DPs = class_patterns
         return
         
@@ -356,10 +395,10 @@ class Featurization(object):
         Returns weighted class maps based on classification instance
         
         Args:
-            classification_method (str): either 'nmf' or 'gmm' - finds location of clusters
+            classification_method (str): Location to retrieve class images from  - NMF, GMM, PCA, or ICA
         """
         class_maps = []
-        if classification_method == 'nmf':
+        if classification_method == 'NMF':
             if type(self.W) == list:
                 for l in range(len(self.W)):
                     small_class_maps = []
@@ -369,7 +408,8 @@ class Featurization(object):
             else:
                 for l in range(self.W.shape[1]):
                     class_maps.append(self.W[:,l].reshape(self.R_Nx,self.R_Ny))
-        elif classification_method == 'gmm':
+                class_maps = [class_maps]
+        elif classification_method == 'GMM':
             if type(self.gmm_labels) == list:
                 for l in range(len(self.gmm_labels)):
                     small_class_maps = []
@@ -381,6 +421,17 @@ class Featurization(object):
                 for l in range((np.max(self.gmm_labels))):
                     R_vals = np.where(self.gmm_labels[l].reshape(self.R_Nx,self.R_Ny) == l, 1, 0)
                     class_maps.append(R_vals * self.gmm_proba[:,l].reshape(self.R_Nx, self.R_Ny))
+                class_maps = [class_maps]
+        elif classification_method == 'PCA':
+            for i in range(self.pca.shape[1]):
+                class_maps.append(self.pca[:,i].reshape(self.R_Nx, self.R_Ny))
+            class_maps = [class_maps]
+        elif classification_method == 'ICA':
+            for i in range(self.ica.shape[1]):
+                class_maps.append(self.ica[:,i].reshape(self.R_Nx, self.R_Ny))
+            class_maps = [class_maps]
+        else:
+            raise ValueError('classification_method not accepted. Try NMF, GMM, PCA, or ICA.')
         self.class_ims = class_maps
         return
 
