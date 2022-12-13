@@ -1,6 +1,5 @@
 import numpy as np
 from py4DSTEM.io.datastructure import DataCube
-from py4DSTEM.visualize import show_image_grid
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.decomposition import NMF, PCA, FastICA
 from sklearn.mixture import GaussianMixture
@@ -13,20 +12,18 @@ from skimage.morphology import closing, square, remove_small_objects
 class Featurization(object):
     """
     A class for feature selection, modification, and classification of 4D-STEM data based on a user defined
-    set of input features for each pattern. Features are stored under Featurization.features and can be
-    accessed with their key assigned upon initialization. 
+    array of input features for each pattern. Features are stored under Featurization. Features and can be
+    used for a variety of unsupervised classification tasks.
     
     Initialization methods:
         __init__:
-            Creates dictionaries to store features in "self.features".
+            Creates instance of featurization.
     
     Feature Dictionary Modification Methods
         add_feature:
-            Adds a matrix to be stored at self.features[key]
+            Adds features to the features array
         remove_feature:
-            Removes a key-value pair at the self.features[key]
-        update_features:
-            Updates an NMF, PCA, or ICA reduced feature set to the self.features location.    
+            Removes features to the features array
     
     Feature Preprocessing Methods
         MinMaxScaler:
@@ -51,7 +48,7 @@ class Featurization(object):
         NMF:
             Performs either traditional or iterative Nonnegative Matrix Factorization (NMF) to refine features.
 
-        gmm:
+        GMM:
             Gaussian mixture model to predict class labels. Fits a gaussian based on covariance of features.
     
     Class Examination Methods
@@ -70,10 +67,10 @@ class Featurization(object):
         2. Initializes the empty dictionaries for feature modification and classification
         
         Args:
-            features (list): A list of ndarrays which will each be associated with value stored at the key in the same index within the list
-            R_Nx (int): The real space x dimension of the dataset
-            R_Ny (int): The real space y dimension of the dataset
-            name (str): The name of the featurization object
+            features (list):    A list of ndarrays which will each be associated with value stored at the key in the same index within the list
+            R_Nx (int):         The real space x dimension of the dataset
+            R_Ny (int):         The real space y dimension of the dataset
+            name (str):         The name of the featurization object
         """
         self.R_Nx = R_Nx
         self.R_Ny = R_Ny
@@ -109,11 +106,12 @@ class Featurization(object):
     def concatenate_features(features, name):
         """
         Concatenates featurization instances (features) and outputs a new Featurization instance
-        containing the concatenated features from each featurization instance.
+        containing the concatenated features from each featurization instance. R_Nx, R_Ny will be
+        inherited from the featurization instances and must be consistent across objects.
         
         Args:
-            features (list): A list of keys to be concatenated into one array
-            name (str): the key in which the concatenated array will be stored
+            features (list):    A list of keys to be concatenated into one array
+            name (str):         The name of the featurization instance
         """
         R_Nxs = [features[i].R_Nx for i in range(len(features))]
         R_Nys = [features[i].R_Ny for i in range(len(features))]
@@ -132,8 +130,8 @@ class Featurization(object):
         Add a feature to the end of the features array
         
         Args:
-            key (int, float, str): A key in which a feature can be accessed from
-            feature (ndarray): The feature associated with the key
+            key (int, float, str):  A key in which a feature can be accessed from
+            feature (ndarray):      The feature associated with the key
         """
         self.features = np.concatenate(self.features, feature, axis = 1)
         return
@@ -148,55 +146,44 @@ class Featurization(object):
         self.features = np.delete(self.features, index, axis = 1)
         return
     
-    # def mean_feature(self, keys, replace = False):
-    #     """
-    #     Takes columnwise mean of feature in key. if replace = True, replaces value in key with
-    #     mean value over entire feature
+    def mean_feature(self, index):
+        """
+        Takes columnwise mean and replaces features in 'index'.
         
-    #     Args:
-    #         keys (list of str): List of strings in which to conduct the calculation on
-    #         replace (bool): Whether or not to replace the feature in place or create a new feature set
-    #     """
-    #     if replace == True:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i]] = np.mean(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     elif replace == False:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i] + '_mean'] = np.mean(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     return
+        Args:
+            index (list of int): Indices of features to take the mean of. New feature array is placed in self.features.
+        """
+        mean_features = np.mean(self.features[:,index], axis = 1)
+        mean_features = mean_features.reshape(mean_features.shape[0], 1)
+        cleaned_features = np.delete(self.features, index, axis=1)
+        self.features = np.concatenate([cleaned_features, mean_features], axis=1)
+        return
 
-    # def median_feature(self, keys, replace = False):
-    #     """
-    #     Takes columnwise median of feature in key. if replace = True, replaces value in key with
-    #     median value over entire feature
+    def median_feature(self, index):
+        """
+        Takes columnwise median and replaces features in 'index'. New feature array is placed in self.features.
         
-    #     Args:
-    #         keys (list of str): List of strings in which to conduct the calculation on
-    #         replace (bool): Whether or not to replace the feature in place or create a new feature set
-    #     """
-    #     if replace == True:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i]] = np.median(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     elif replace == False:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i] + '_median'] = np.median(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     return
+        Args:
+            index (list of int): Indices of features to take the median of.
+        """
+        median_features = np.median(self.features[:,index], axis = 1)
+        median_features = median_features.reshape(median_features.shape[0], 1)
+        cleaned_features = np.delete(self.features, index, axis=1)
+        self.features = np.concatenate([cleaned_features, median_features], axis=1)
+        return
     
-    # def max_feature(self, keys, replace = False):
-    #     """
-    #     Takes the columnwise max of the ndarray located 
+    def max_feature(self, index):
+        """
+        Takes columnwise max and replaces features in 'index'. New feature array is placed in self.features.
         
-    #     Args:
-    #         keys (list of str): List of strings in which to conduct the calculation on
-    #         replace (bool): Whether or not to replace the feature in place or create a new feature set
-    #     """
-    #     if replace == True:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i]] = np.max(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     elif replace == False:
-    #         for i in range(len(keys)):
-    #             self.features[keys[i] + '_max'] = np.max(self.features[keys[i]], axis = 1).reshape(self.features[keys[i]].shape[0],1)
-    #     return
+        Args:
+            index (list of int): Indices of features to take the max of.
+        """
+        max_features = np.max(self.features[:,index], axis = 1)
+        max_features = max_features.reshape(max_features.shape[0], 1)
+        cleaned_features = np.delete(self.features, index, axis=1)
+        self.features = np.concatenate([cleaned_features, max_features], axis=1)
+        return
 
     def MinMaxScaler(self, return_scaled = True):
         """
@@ -241,7 +228,7 @@ class Featurization(object):
         else:
             return
     
-    def PCA(self, components, return_results = True):
+    def PCA(self, components, return_results = False):
         """
         Performs PCA on features
         
@@ -250,9 +237,11 @@ class Featurization(object):
         """
         pca = PCA(n_components = components)
         self.pca = pca.fit_transform(self.features)
-        return self.pca
+        if return_results == True:
+            return self.pca
+        return
 
-    def ICA(self, components):
+    def ICA(self, components, return_results = True):
         """
         Performs ICA on features
         
@@ -261,6 +250,8 @@ class Featurization(object):
         """
         ica = FastICA(n_components = components)
         self.ica = ica.fit_transform(self.features)
+        if return_results == True:
+            return self.ica
         return
     
     def NMF(
@@ -269,7 +260,7 @@ class Featurization(object):
         num_models, 
         merge_thresh = 1,
         max_iterations = 1, 
-        random_state = None, 
+        random_seed = None, 
         save_all_models = True,
         return_results = False
     ):
@@ -279,14 +270,25 @@ class Featurization(object):
             set either merge_threshold = 1, max_iterations = 1, or both. Default is to set 
         
         Args:
-            max_components (int): number of initial components to start the first NMF iteration
-            merge_thresh (float): correlation threshold to merge features
-            num_models (int): Number of independent models to run (number of learners that will be combined in consensus)
-            max_iterations (int): number of iterations. Default 1, which runs traditional NMF
-            random_state (int): random state
-            save_all_models (bool): Whether or not to return all of the models - default is to return
-                all outputs for consensus clustering
-            return_results (bool): Whether or not to return the final class weights
+            max_components (int):   Number of initial components to start the first NMF iteration
+            merge_thresh (float):   Correlation threshold to merge features
+            num_models (int):       Number of independent models to run (number of learners that will be combined in consensus).
+            max_iterations (int):   Number of iterations. Default 1, which runs traditional NMF
+            random_seed (int):      Random seed.
+            save_all_models (bool): Whether or not to return all of the models - default is to return all outputs for consensus clustering.
+                                        if False, will only return the model with the lowest NMF reconstruction error.
+            return_results (bool):  Whether or not to return the final class weights
+        
+        Details:
+            This method may require trial and error for proper selection of parameters. To perform traditional NMF, the 
+            defaults should be used:
+                merge_thresh = 1
+                max_iterations = 1
+            Note that the max_components in this case will be equivalent to the number of classes the NMF model identifies.
+            
+            Iterative NMF calculates the correlation between all of the output columns from an NMF iteration, merges the
+            features correlated above the merge_thresh, and performs NMF until either max_iterations is reached or until
+            no more columns are correlated above merge_thresh.
         """
         self.W = _nmf_single(
             self.features,
@@ -294,30 +296,32 @@ class Featurization(object):
             merge_thresh = merge_thresh,
             num_models = num_models,
             max_iterations = max_iterations, 
-            random_state = random_state,
+            random_seed = random_seed,
             save_all_models = save_all_models
-            )
+        )
         if return_results == True:
             return self.W
-        else:
-            return
+        return
         
-    def GMM(self, cv, components, num_models, random_state = None):
+    def GMM(self, cv, components, num_models, random_seed = None, return_results = False):
         """
         Performs gaussian mixture model on input features
         
         Args:
-            cv (str): covariance type - must be 'spherical', 'tied', 'diag', or 'full'
-            components (int): number of components
-            num_models (int): number of models to run
-            random_state (int): random state
+            cv (str):           Covariance type - must be 'spherical', 'tied', 'diag', or 'full'
+            components (int):   Number of components
+            num_models (int):   Number of models to run
+            random_seed (int): Random seed
         """
         self.gmm, self.gmm_labels, self.gmm_proba = _gmm_single(
             self.features,
             cv=cv,
             components = components,
             num_models = num_models, 
-            random_state = random_state)
+            random_seed = random_seed
+        )
+        if return_results == True:
+            return self.gmm
         return
 
     def get_class_DPs(self, datacube, classification_method, thresh):
@@ -326,8 +330,8 @@ class Featurization(object):
         datacube must be vectorized in real space (shape = (R_Nx * R_Ny, 1, Q_Nx, Q_Ny)
         
         Args:
-            classification_method (str): either 'nmf' or 'gmm' - finds location of clusters
-            datacube: Vectorized in real space, with shape (R_Nx * R_Ny, Q_Nx, Q_Ny)
+            classification_method (str):    Either 'nmf' or 'gmm' - finds location of clusters
+            datacube (py4DSTEM datacube):   Vectorized in real space, with shape (R_Nx * R_Ny, Q_Nx, Q_Ny)
         """
         class_patterns = []
         if classification_method== 'nmf':
@@ -366,11 +370,16 @@ class Featurization(object):
                 for l in range(self.W.shape[1]):
                     class_maps.append(self.W[:,l].reshape(self.R_Nx,self.R_Ny))
         elif classification_method == 'gmm':
-            if type(self.W) == list:
-                raise ValueError('Method not implemented yet, sorry!')
+            if type(self.gmm_labels) == list:
+                for l in range(len(self.gmm_labels)):
+                    small_class_maps = []
+                    for k in range(np.max(self.gmm_labels[l])):
+                        R_vals = np.where(self.gmm_labels[l].reshape(self.R_Nx, self.R_Ny) == k, 1, 0)
+                        small_class_maps.append(R_vals * self.gmm_proba[l][:,k].reshape(self.R_Nx, self.R_Ny))
+                    class_maps.append(small_class_maps)
             else:
                 for l in range((np.max(self.gmm_labels))):
-                    R_vals = np.where(self.gmm_labels.reshape(self.R_Nx,self.R_Ny) == l, 1, 0)
+                    R_vals = np.where(self.gmm_labels[l].reshape(self.R_Nx,self.R_Ny) == l, 1, 0)
                     class_maps.append(R_vals * self.gmm_proba[:,l].reshape(self.R_Nx, self.R_Ny))
         self.class_ims = class_maps
         return
@@ -379,18 +388,19 @@ class Featurization(object):
             self,
             size,
             threshold = 0,
-            method = 'yen',
+            method = None,
             clean = True
         ):
         """
         Identify spatially distinct regions from class images and separate based on a threshold and size.
         
         Args:
-            size (int): number of pixels which is the minimum to keep a class - all spatially distinct regions with
-                less than 'size' pixels will be removed
-            threshold (float): intensity weight of a component to keep
-            method (str): filter method, default 'yen'
-            clean (bool): whether or not to 'clean' cluster sets based on overlap, i.e. remove clusters that do not have any unique components
+            size (int):         Number of pixels which is the minimum to keep a class - all spatially distinct regions with
+                                    less than 'size' pixels will be removed
+            threshold (float):  Intensity weight of a component to keep
+            method (str):       (Optional) Filter method, default None. Accepts options 'yen' and 'otsu'.
+            clean (bool):       Whether or not to 'clean' cluster sets based on overlap, i.e. remove clusters that do not have 
+                                    any unique components
         """
         #Prepare for separation
         labelled = []
@@ -470,13 +480,13 @@ class Featurization(object):
         Consensus Clustering takes the outcome of a prepared set of 2D images from each cluster and averages the outcomes.
 
         Args:
-            threshold (float): Threshold weights, default 0
-            location (str): Where to get the consensus from - after spatial separation = 'spatially_separated_ims'
-            split_value (float): Threshold in which to separate classes during label correspondence (Default 0). 
-                            This should be proportional to the expected class weights- the sum of the weights in the current
-                            class image that match nonzero values in each bin are calculated and then checked for splitting.
-            method (str): Method in which to combine the consensus clusters - either mean or median.
-            drop_bins (int): number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
+            threshold (float):      Threshold weights, default 0
+            location (str):         Where to get the consensus from - after spatial separation = 'spatially_separated_ims'
+            split_value (float):    Threshold in which to separate classes during label correspondence (Default 0). This should be 
+                                        proportional to the expected class weights- the sum of the weights in the current class image 
+                                        that match nonzero values in each bin are calculated and then checked for splitting.
+            method (str):           Method in which to combine the consensus clusters - either mean or median.
+            drop_bins (int):        Number of clusters needed in each class to keep cluster set in the consensus. Default 0, meaning
         
         Details:
             This method involves 2 steps: Label correspondence and consensus clustering. 
@@ -563,34 +573,34 @@ def _nmf_single(
         merge_thresh, 
         num_models, 
         max_iterations, 
-        random_state=None, 
+        random_seed=None, 
         save_all_models = True
     ):
     """
     Performs NMF on single feature matrix, which is an nd.array
     
     Args:
-        x (np.ndarray):
-        max_components (int): number of initial components to start the first NMF iteration
-        merge_thresh (float): correlation threshold to merge features
-        num_models (int): Number of independent models to run (number of learners that will be combined in consensus)
-        iterations (int): number of iterations. Default 1, which runs traditional NMF
-        random_state (int): random state
+        x (np.ndarray):         Feature array
+        max_components (int):   Number of initial components to start the first NMF iteration
+        merge_thresh (float):   Correlation threshold to merge features
+        num_models (int):       Number of independent models to run (number of learners that will be combined in consensus)
+        iterations (int):       Number of iterations. Default 1, which runs traditional NMF
+        random_seed (int):      Random seed
         save_all_models (bool): Whether or not to return all of the models - default is to save
-            all outputs for consensus clustering
+                                    all outputs for consensus clustering
     """
     #Prepare error, random seed
     err = np.inf    
-    if random_state == None:
+    if random_seed == None:
         rng = np.random.RandomState(seed = 42)
     else:
-        seed = random_state
+        seed = random_seed
     if save_all_models == True:
         W = []
         
     #Big loop through all models
     for i in range(num_models):
-        if random_state == None:
+        if random_seed == None:
             seed = rng.randint(5000)
         n_comps = max_components
         recon_error, counter = 0, 0
@@ -649,34 +659,42 @@ def _nmf_single(
     return W
 
 @ignore_warnings(category=ConvergenceWarning)
-def _gmm_single(x, cv, components, num_models, random_state=None, return_all=True):
+def _gmm_single(
+        x,
+        cv,
+        components,
+        num_models,
+        random_seed=None,
+        return_all=True
+    ):
     """
     Runs GMM several times and saves value with best BIC score
     
     Args:
-        keys (list of str): List of strings associated with features
-        cv (list of str): covariance
-        components (list of ints)
-        num_models (int)
+        x (np.ndarray):             Data
+        cv (list of str):           Covariance, must be 'spherical', 'tied', 'diag', or 'full'
+        components (list of ints):  Number of output clusters
+        num_models (int):           Number of models to run. Only one is returned
+        random_seed (int):          Random seed
+        return_all (bool):          Whether or not to return all models.
         
         Returns:
-        best_gmm
-        best_gmm_labels
-        best_gmm_proba
+        gmm_list OR best_gmm:           List of class identity or classes for best model
+        gmm_labels OR best_gmm_labels:  Label list for all models or labels for best model
+        gmm_proba OR best_gmm_proba:    Probability list of class belonging or probability for best model
     """
     if return_all == True:
         gmm_list = []
         gmm_labels = []
         gmm_proba = []
     lowest_bic = np.infty
-    bic = []
     bic_temp = 0
-    if random_state == None:
+    if random_seed == None:
         rng = np.random.RandomState(seed = 42)
     else:
-        seed = random_state
+        seed = random_seed
     for n in range(num_models):
-        if random_state == None:
+        if random_seed == None:
             seed = rng.randint(5000)
         for j in range(len(components)):
             for cv_type in cv:
@@ -684,16 +702,19 @@ def _gmm_single(x, cv, components, num_models, random_state=None, return_all=Tru
                                       covariance_type=cv_type, random_state = seed)
                 labels = gmm.fit_predict(x)
                 bic_temp = gmm.bic(x)    
-        if return_all == True:
-            gmm_list.append(gmm)
-            gmm_labels.append(labels)
-            gmm_proba.append(gmm.predict_proba(x))
-        elif bic_temp < lowest_bic:
-            lowest_bic = bic_temp
-            best_gmm = gmm
-            best_gmm_labels = labels
-            best_gmm_proba = gmm.predict_proba(x)
+                
+                if return_all == True:
+                    gmm_list.append(gmm)
+                    gmm_labels.append(labels)
+                    gmm_proba.append(gmm.predict_proba(x))
+                    
+                elif return_all == False:
+                    if (bic_temp < lowest_bic):
+                        lowest_bic = bic_temp
+                        best_gmm = gmm
+                        best_gmm_labels = labels
+                        best_gmm_proba = gmm.predict_proba(x)
+            
     if return_all == True:
         return gmm_list, gmm_labels, gmm_proba
-    else:
-        return best_gmm, best_gmm_labels, best_gmm_proba
+    return best_gmm, best_gmm_labels, best_gmm_proba
