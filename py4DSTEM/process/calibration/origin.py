@@ -212,21 +212,24 @@ def get_origin_from_braggpeaks(
     """
     Gets the diffraction shifts using detected Bragg disk positions.
 
-    First, a guess at the unscattered beam position is determined, either by taking the
-    CoM of the Bragg vector map, or by taking its maximal pixel.  If the CoM is used, an
-    additional refinement step is used where we take the CoM of a Bragg vector map
-    contructed from a first guess at the central Bragg peaks (as opposed to the BVM of all
-    BPs). Once a unscattered beam position is determined, the Bragg peak closest to this
-    position is identified. The shifts in these peaks positions from their average are
-    returned as the diffraction shifts.
+    If a center guess is not specified, first, a guess at the unscattered beam position is determined, 
+    either by taking the CoM of the Bragg vector map, or by taking its maximal pixel.  Once a unscattered 
+    beam position is determined, the Bragg peak closest to this position is identified. The shifts in these 
+    peaks positions from their average are returned as the diffraction shifts.
 
     Args:
         braggpeaks (PointListArray): the Bragg peak positions
         Q_shape (tuple of ints): the shape of diffration space
         center_guess (tuple of ints):   initial guess for the center
         score_method (string):     Method used to find center peak
+            -'intensity': finds the most intense Bragg peak near the center
+            -'distance': finds the closest Bragg peak to the center 
+            -'intensity weighted distance': determines center through a combination of 
+                weighting distance and intensity
         findcenter (str): specifies the method for determining the unscattered beam
-            position options: 'CoM', or 'max'
+            position options: 'CoM', or 'max.' Only used if center_guess is None. 
+            CoM (default) finds the center of mass of bragg ector map. 'max' uses
+            the maximum value in the bragg vector map. 
         bvm (array or None): the braggvector map. If None (default), the bvm is
             calculated
 
