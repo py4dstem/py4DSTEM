@@ -1,4 +1,4 @@
-from py4DSTEM.io import DataCube
+from py4DSTEM.io import DataCube, RealSlice
 from py4DSTEM import tqdmnd
 from . import WPFModelPrototype
 
@@ -272,10 +272,10 @@ class WholePatternFit:
             param_list = list(l.params.keys())
             lattice_offset = param_list.index("ux")
             data_offset = self.model_param_inds[i] + 2 + lattice_offset
-            
+
             data = self.fit_data[:,:,data_offset:data_offset+4]
 
-            g_map = py4DSTEM.io.RealSlice(
+            g_map = RealSlice(
                 np.dstack((data,np.ones(data.shape[:2],dtype=np.bool_))),
                 slicelabels=['g1x','g1y','g2x','g2y','mask'],
                 name=l.name,
