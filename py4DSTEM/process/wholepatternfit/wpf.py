@@ -115,23 +115,23 @@ class WholePatternFit:
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
-                **fit_opts
+                **fit_opts,
             )
         else:
             opt = least_squares(
                 self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
-                **fit_opts
+                **fit_opts,
             )
 
         self.mean_CBED_fit = opt
 
         # Plotting
-        fig = plt.figure(constrained_layout=True,figsize=(12,12))
-        gs = GridSpec(2,2,figure=fig)
+        fig = plt.figure(constrained_layout=True, figsize=(12, 12))
+        gs = GridSpec(2, 2, figure=fig)
 
-        ax = fig.add_subplot(gs[0,0])
+        ax = fig.add_subplot(gs[0, 0])
         err_hist = np.array(self._cost_history)
         # err_hist = np.array([np.sum((self._pattern(dp)-self.meanCBED)**2) for dp in self._fevals])
         ax.plot(err_hist)
@@ -140,18 +140,26 @@ class WholePatternFit:
         ax.set_yscale("log")
 
         DP = self._pattern(self.mean_CBED_fit.x)
-        ax = fig.add_subplot(gs[0,1])
-        CyRd = mpl_c.LinearSegmentedColormap.from_list("CyRd",["#00ccff","#ffffff","#ff0000"])
-        im = ax.matshow(err_im := -(DP - self.meanCBED),
-            cmap=CyRd,vmin=-np.abs(err_im).max()/4,vmax=np.abs(err_im).max()/4)
+        ax = fig.add_subplot(gs[0, 1])
+        CyRd = mpl_c.LinearSegmentedColormap.from_list(
+            "CyRd", ["#00ccff", "#ffffff", "#ff0000"]
+        )
+        im = ax.matshow(
+            err_im := -(DP - self.meanCBED),
+            cmap=CyRd,
+            vmin=-np.abs(err_im).max() / 4,
+            vmax=np.abs(err_im).max() / 4,
+        )
         # fig.colorbar(im)
-        ax.axis('off')
+        ax.axis("off")
 
-        ax = fig.add_subplot(gs[1,:])
-        ax.matshow(np.hstack((DP,self.meanCBED))**0.25,cmap='jet')
-        ax.axis('off')
-        ax.text(0.25,0.92,"Refined",transform=ax.transAxes,ha='center',va='center')
-        ax.text(0.75,0.92,"Mean CBED",transform=ax.transAxes,ha='center',va='center')
+        ax = fig.add_subplot(gs[1, :])
+        ax.matshow(np.hstack((DP, self.meanCBED)) ** 0.25, cmap="jet")
+        ax.axis("off")
+        ax.text(0.25, 0.92, "Refined", transform=ax.transAxes, ha="center", va="center")
+        ax.text(
+            0.75, 0.92, "Mean CBED", transform=ax.transAxes, ha="center", va="center"
+        )
 
         plt.show()
 
@@ -166,13 +174,17 @@ class WholePatternFit:
         self._track = False
         self._fevals = []
 
-        self.fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
-        self.fit_metrics = np.zeros((self.datacube.R_Nx,self.datacube.R_Ny,4))
+        self.fit_data = np.zeros(
+            (self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0])
+        )
+        self.fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
 
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
             self.current_pattern = self.datacube.data[rx, ry, :, :]
             self.current_glob = self.global_args.copy()
-            self._cost_history = [] # clear this so it doesn't grow: TODO make this not stupid
+            self._cost_history = (
+                []
+            )  # clear this so it doesn't grow: TODO make this not stupid
 
             if self.hasJacobian & self.use_jacobian:
                 opt = least_squares(
@@ -180,18 +192,23 @@ class WholePatternFit:
                     self.x0,
                     jac=self._jacobian,
                     bounds=(self.lower_bound, self.upper_bound),
-                    **fit_opts
+                    **fit_opts,
                 )
             else:
                 opt = least_squares(
                     self._pattern_error,
                     self.x0,
                     bounds=(self.lower_bound, self.upper_bound),
-                    **fit_opts
+                    **fit_opts,
                 )
 
             self.fit_data[rx, ry, :] = opt.x
-            self.fit_metrics[rx,ry,:] = [opt.cost, opt.optimality, opt.nfev, opt.status]
+            self.fit_metrics[rx, ry, :] = [
+                opt.cost,
+                opt.optimality,
+                opt.nfev,
+                opt.status,
+            ]
 
         return self.fit_data, self.fit_metrics
 
@@ -209,14 +226,15 @@ class WholePatternFit:
             for j, k in enumerate(m.params.keys()):
                 m.params[k].initial_value = x[ind + j]
 
-    def show_model_grid(self,x=None,**plot_kwargs):
+    def show_model_grid(self, x=None, **plot_kwargs):
         if x is None:
             x = self.mean_CBED_fit.x
 
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
         self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+            (self.current_glob["xArray"] - x[0]),
+            (self.current_glob["yArray"] - x[1]),
         )
 
         N = len(self.model)
@@ -225,59 +243,59 @@ class WholePatternFit:
 
         kwargs = dict(constrained_layout=True)
         kwargs.update(plot_kwargs)
-        fig, ax = plt.subplots(rows,cols, **kwargs)
+        fig, ax = plt.subplots(rows, cols, **kwargs)
 
-        for i,(a,m) in enumerate(zip(ax.flat, self.model)):
-            DP = np.zeros((self.datacube.Q_Nx,self.datacube.Q_Ny))
+        for i, (a, m) in enumerate(zip(ax.flat, self.model)):
+            DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-            a.matshow(DP,cmap='turbo')
-            a.text(0.5,0.92,m.name,transform=a.transAxes,ha='center',va='center')
+            a.matshow(DP, cmap="turbo")
+            a.text(0.5, 0.92, m.name, transform=a.transAxes, ha="center", va="center")
         for a in ax.flat:
-            a.axis('off')
+            a.axis("off")
 
         plt.show()
 
-    def show_lattice_points(self,returnfig=False,*args,**kwargs):
-        fig,ax = plt.subplots(*args,**kwargs)
-        ax.matshow(self.meanCBED**0.5,cmap='turbo')
+    def show_lattice_points(self, returnfig=False, *args, **kwargs):
+        fig, ax = plt.subplots(*args, **kwargs)
+        ax.matshow(self.meanCBED**0.5, cmap="turbo")
         for m in self.model:
             if "Lattice" in m.name:
-                ux,uy = m.params['ux'].initial_value, m.params['uy'].initial_value
-                vx,vy = m.params['vx'].initial_value, m.params['vy'].initial_value
-                
-                lat = np.array([[ux,uy],[vx,vy]])
-                inds = np.stack([m.u_inds,m.v_inds],axis=1)
-                
+                ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value
+                vx, vy = m.params["vx"].initial_value, m.params["vy"].initial_value
+
+                lat = np.array([[ux, uy], [vx, vy]])
+                inds = np.stack([m.u_inds, m.v_inds], axis=1)
+
                 spots = inds @ lat
-                spots[:,0] += self.global_args['global_x0']
-                spots[:,1] += self.global_args['global_y0']
-                
-                ax.scatter(spots[:,1],spots[:,0],marker='x')
-                
-        return (fig,ax) if returnfig else plt.show()
+                spots[:, 0] += self.global_args["global_x0"]
+                spots[:, 1] += self.global_args["global_y0"]
+
+                ax.scatter(spots[:, 1], spots[:, 0], marker="x")
+
+        return (fig, ax) if returnfig else plt.show()
 
     def get_lattice_maps(self):
-        assert(hasattr(self,"fit_data")), "Please run fitting first!"
+        assert hasattr(self, "fit_data"), "Please run fitting first!"
 
         lattices = [
-            (i,m) 
-            for i,m in enumerate(self.model) 
+            (i, m)
+            for i, m in enumerate(self.model)
             if "lattice" in type(m).__name__.lower()
         ]
 
         g_maps = []
-        for (i,l) in lattices:
+        for (i, l) in lattices:
             param_list = list(l.params.keys())
             lattice_offset = param_list.index("ux")
             data_offset = self.model_param_inds[i] + 2 + lattice_offset
 
-            data = self.fit_data[:,:,data_offset:data_offset+4]
+            data = self.fit_data[:, :, data_offset : data_offset + 4]
 
             g_map = RealSlice(
-                np.dstack((data,np.ones(data.shape[:2],dtype=np.bool_))),
-                slicelabels=['g1x','g1y','g2x','g2y','mask'],
+                np.dstack((data, np.ones(data.shape[:2], dtype=np.bool_))),
+                slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
                 name=l.name,
             )
             g_maps.append(g_map)
@@ -291,14 +309,15 @@ class WholePatternFit:
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
         self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+            (self.current_glob["xArray"] - x[0]),
+            (self.current_glob["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-        DP = (DP ** self.fit_power - self.current_pattern ** self.fit_power) * self.mask
+        DP = (DP**self.fit_power - self.current_pattern**self.fit_power) * self.mask
 
         if self._track:
             self._fevals.append(DP)
@@ -314,14 +333,15 @@ class WholePatternFit:
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
         self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+            (self.current_glob["xArray"] - x[0]),
+            (self.current_glob["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
             m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
 
-        return (DP ** self.fit_power) * self.mask
+        return (DP**self.fit_power) * self.mask
 
     def _jacobian(self, x):
 
@@ -330,7 +350,8 @@ class WholePatternFit:
         self.current_glob["global_x0"] = x[0]
         self.current_glob["global_y0"] = x[1]
         self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]), (self.current_glob["yArray"] - x[1]),
+            (self.current_glob["xArray"] - x[0]),
+            (self.current_glob["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
