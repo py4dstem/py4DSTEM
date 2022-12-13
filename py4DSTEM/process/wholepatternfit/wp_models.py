@@ -30,7 +30,9 @@ class WPFModelPrototype:
     """
 
     def __init__(
-        self, name: str, params: dict,
+        self,
+        name: str,
+        params: dict,
     ):
         self.name = name
         self.params = params
@@ -107,32 +109,32 @@ class GaussianBackground(WPFModelPrototype):
         super().__init__(name, params)
 
     def global_center_func(self, DP: np.ndarray, sigma, level, **kwargs) -> None:
-        DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+        DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma**2))
 
     def global_center_jacobian(
         self, J: np.ndarray, sigma, level, offset: int, **kwargs
     ) -> None:
 
-        exp_expr = np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+        exp_expr = np.exp(kwargs["global_r"] ** 2 / (-2 * sigma**2))
 
         # dF/d(global_x0)
         J[:, 0] += (
-            level * (kwargs["xArray"] - kwargs["global_x0"]) * exp_expr / sigma ** 2
+            level * (kwargs["xArray"] - kwargs["global_x0"]) * exp_expr / sigma**2
         ).ravel()
 
         # dF/d(global_y0)
         J[:, 1] += (
-            level * (kwargs["yArray"] - kwargs["global_y0"]) * exp_expr / sigma ** 2
+            level * (kwargs["yArray"] - kwargs["global_y0"]) * exp_expr / sigma**2
         ).ravel()
 
         # dF/s(sigma)
-        J[:, offset] = (level * kwargs["global_r"] ** 2 * exp_expr / sigma ** 3).ravel()
+        J[:, offset] = (level * kwargs["global_r"] ** 2 * exp_expr / sigma**3).ravel()
 
         # dF/d(level)
         J[:, offset + 1] = exp_expr.ravel()
 
     def local_center_func(self, DP: np.ndarray, sigma, level, x0, y0, **kwargs) -> None:
-        DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma ** 2))
+        DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma**2))
 
     def local_center_jacobian(
         self, J: np.ndarray, sigma, level, x0, y0, offset: int, **kwargs
@@ -144,15 +146,15 @@ class GaussianBackground(WPFModelPrototype):
             * ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma ** 2)
+                / (-2 * sigma**2)
             )
-            / sigma ** 3
+            / sigma**3
         ).ravel()
 
         # dF/d(level)
         J[:, offset + 1] = np.exp(
             ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-            / (-2 * sigma ** 2)
+            / (-2 * sigma**2)
         ).ravel()
 
         # dF/d(x0)
@@ -161,9 +163,9 @@ class GaussianBackground(WPFModelPrototype):
             * (kwargs["xArray"] - x0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma ** 2)
+                / (-2 * sigma**2)
             )
-            / sigma ** 2
+            / sigma**2
         ).ravel()
 
         # dF/d(y0)
@@ -172,9 +174,9 @@ class GaussianBackground(WPFModelPrototype):
             * (kwargs["yArray"] - y0)
             * np.exp(
                 ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma ** 2)
+                / (-2 * sigma**2)
             )
-            / sigma ** 2
+            / sigma**2
         ).ravel()
 
 
@@ -232,14 +234,24 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
             delete_mask = np.zeros_like(self.u_inds, dtype=bool)
             for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
-                x = x0 + (u * params["ux"].initial_value) + (v * params["vx"].initial_value)
-                y = y0 + (u * params["uy"].initial_value) + (v * params["vy"].initial_value)
+                x = (
+                    x0
+                    + (u * params["ux"].initial_value)
+                    + (v * params["vx"].initial_value)
+                )
+                y = (
+                    y0
+                    + (u * params["uy"].initial_value)
+                    + (v * params["vy"].initial_value)
+                )
                 if [u, v] in exclude_indices:
                     delete_mask[i] = True
                 elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
                     delete_mask[i] = True
                     if verbose:
-                        print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                        print(
+                            f"Excluding peak [{u},{v}] because it is outside the pattern..."
+                        )
                 else:
                     params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
 
@@ -249,8 +261,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
             for ind in include_indices:
                 params[f"[{ind[0]},{ind[1]}] Intensity"] = Parameter(intensity_0)
             inds = np.array(include_indices)
-            self.u_inds = inds[:,0]
-            self.v_inds = inds[:,1]
+            self.u_inds = inds[:, 0]
+            self.v_inds = inds[:, 1]
 
         self.refine_radius = refine_radius
         self.refine_width = refine_width
@@ -328,7 +340,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
             x = x0 + (u * ux) + (v * vx)
             y = y0 + (u * uy) + (v * vy)
 
-            disk_intensity = args[i+6]
+            disk_intensity = args[i + 6]
 
             # if (x > 0) & (x < kwargs["Q_Nx"]) & (y > 0) & (y < kwargs["Q_Nx"]):
             r_disk = np.maximum(
@@ -392,7 +404,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     * args[i + 4]
                     * top_exp
                     * (r_disk - disk_radius)
-                    / (disk_width ** 2 * (1.0 + top_exp) ** 2)
+                    / (disk_width**2 * (1.0 + top_exp) ** 2)
                 ).ravel()
                 # dW[np.isnan(dW)] = 0.0
                 J[:, offset + len(args) - 1] += dW
@@ -464,11 +476,15 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
             elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
                 delete_mask[i] = True
                 if verbose:
-                    print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                    print(
+                        f"Excluding peak [{u},{v}] because it is outside the pattern..."
+                    )
             else:
                 params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
                 if u == 0 and v == 0:
-                    params[f"[{u}, {v}] Phase"] = Parameter(0., 0., 0.)  # direct beam clamped at zero phase
+                    params[f"[{u}, {v}] Phase"] = Parameter(
+                        0.0, 0.0, 0.0
+                    )  # direct beam clamped at zero phase
                 else:
                     params[f"[{u}, {v}] Phase"] = Parameter(0.01, -np.pi, np.pi)
 
@@ -578,7 +594,9 @@ class KernelDiskLattice(WPFModelPrototype):
             elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
                 delete_mask[i] = True
                 if verbose:
-                    print(f"Excluding peak [{u},{v}] because it is outside the pattern...")
+                    print(
+                        f"Excluding peak [{u},{v}] because it is outside the pattern..."
+                    )
             else:
                 params[f"[{u},{v}] Intensity"] = Parameter(intensity_0)
 
@@ -617,4 +635,3 @@ class KernelDiskLattice(WPFModelPrototype):
                     )
                 )
             ) ** 2
-
