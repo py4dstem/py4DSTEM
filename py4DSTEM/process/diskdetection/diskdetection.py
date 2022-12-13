@@ -36,7 +36,8 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-    dask = None,
+    dask : bool = False,
+    dask_params : dict = None,
 
     _qt_progress_bar = None,
     **kws):
@@ -204,7 +205,7 @@ def find_Bragg_disks(
                 mode = 'dc_GPU'
             else:
                 mode = 'dc_GPU_batched'
-        elif dask is not None: 
+        elif dask: 
             mode = 'dc_dask'
         else:
             x = _parse_distributed(distributed)
@@ -233,8 +234,8 @@ def find_Bragg_disks(
         kws['data_file'] = data_file
         kws['cluster_path'] = cluster_path
     # dask kwargs
-    if dask is not None:
-        kws.update(dask)
+    if dask_params is not None:
+        kws.update(dask_params)
 
     # run and return
     ans = fn(
@@ -740,6 +741,7 @@ def _parse_distributed(distributed):
 
     elif "dask" in distributed:
         mode = 'dask'
+        print(type(distributed))
         if "client" in distributed["dask"]:
             connect = distributed["dask"]["client"]
         else:

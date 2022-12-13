@@ -777,12 +777,15 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-    dask = None,
+    dask = True,
+    dask_params = None,
 
     _qt_progress_bar = None,
 
     name = 'braggvectors',
     returncalc = True,
+
+    **kwargs
     ):
     """
     Finds the Bragg disks by cross correlation with `template`.
@@ -927,8 +930,10 @@ def find_Bragg_disks(
         CUDA_batched = CUDA_batched,
         distributed = distributed,
         dask = dask,
+        dask_params = dask_params,
 
         _qt_progress_bar = _qt_progress_bar,
+        **kwargs
     )
 
 
