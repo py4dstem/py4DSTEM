@@ -1658,6 +1658,9 @@ def calculate_strain(
     k_max: Optional[float] = None,
     min_num_peaks = 5,
     rotation_range = None,
+    mask_from_corr = True,
+    corr_range = (0, 2),
+    corr_normalize = True,
     progress_bar = True,
     ):
     '''
@@ -1679,6 +1682,10 @@ def calculate_strain(
         k_max (float):                   Maximum scattering vector
         min_num_peaks (int):             Minimum number of peaks required.
         rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
+        progress_bar (bool):             Show progress bar
+        mask_from_corr (bool):           Use ACOM correlation signal for mask
+        corr_range (np.ndarray):         Range of correlation signals for mask
+        corr_normalize (bool):           Normalize correlation signal before masking
 
     Returns:
         strain_map (RealSlice):  strain tensor
@@ -1693,7 +1700,17 @@ def calculate_strain(
             5)),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
-    strain_map.get_slice('mask').data[:] = 1.0
+    if mask_from_corr:
+        corr_range = np.array(corr_range)
+        corr_mask = orientation_map.corr[:,:,0]
+        if corr_normalize:
+            corr_mask /= np.mean(corr_mask)
+        corr_mask = np.clip((corr_mask - corr_range[0]) \
+            / (corr_range[1]-corr_range[0]),0,1)
+        strain_map.get_slice('mask').data[:] = corr_mask
+
+    else:
+        strain_map.get_slice('mask').data[:] = 1.0
 
     # init values
     if corr_kernel_size is None:
