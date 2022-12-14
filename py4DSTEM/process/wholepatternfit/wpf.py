@@ -173,7 +173,7 @@ class WholePatternFit:
 
         return opt
 
-    def fit_all_patterns(self, **fit_opts):
+    def fit_all_patterns(self, restart=False, **fit_opts):
 
         # make sure we have the latest parameters
         self._scrape_model_params()
@@ -181,6 +181,9 @@ class WholePatternFit:
         # set tracking off
         self._track = False
         self._fevals = []
+
+        if restart:
+            assert hasattr(self, "fit_data"), "No existing data for restart!"
 
         fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
         fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
@@ -192,10 +195,12 @@ class WholePatternFit:
                 []
             )  # clear this so it doesn't grow: TODO make this not stupid
 
+            x0 = self.fit_data.data[rx, ry] if restart else self.x0
+
             if self.hasJacobian & self.use_jacobian:
                 opt = least_squares(
                     self._pattern_error,
-                    self.x0,
+                    x0,
                     jac=self._jacobian,
                     bounds=(self.lower_bound, self.upper_bound),
                     **fit_opts,
@@ -203,7 +208,7 @@ class WholePatternFit:
             else:
                 opt = least_squares(
                     self._pattern_error,
-                    self.x0,
+                    x0,
                     bounds=(self.lower_bound, self.upper_bound),
                     **fit_opts,
                 )
