@@ -375,9 +375,9 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    centered = None,
-    calibrated = None,
-    shift_center = None,
+    centered = False,
+    calibrated = False,
+    shift_center = False,
     verbose = True,
     dask = False,
     return_mask = False,
@@ -412,19 +412,20 @@ def get_virtual_image(
              the calibrations and sets to True if the mean origin is found,
              and False if not.  The origin can set with
              datacube.calibration.set_origin().  For `mode="mask"`,
-             has no effect. Default is None.
+             has no effect. Default is False.
         calibrated (bool): if True, geometry is specified in units of 'A^-1'
             instead of pixels. The datacube's calibrations must have its
             `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-            no effect. Default is None and will set to True if the calibration
-            has been set.
+            no effect. If None will set to True if the calibration
+            has been set. Default is False.
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
             images. The datacube's calibration['origin'] parameter must be set
             (centered = True). The shift applied to each pattern is the
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True.
+            Default is None and will set to True if centered == True and the origin
+            is set to match datacube.Rshape. Default is False.
         verbose (bool): if True, show progress bar
         dask (bool): if True, use dask arrays
         return_mask (bool): if False (default) returns a virtual image as usual.
@@ -460,7 +461,7 @@ def get_virtual_image(
 
     # logic to determine shift_center
     if shift_center is None:
-        if centered:
+        if centered and self.calibration.get_origin()[0].shape == self.Rshape:
             shift_center = True
         else:
             shift_center = False
@@ -553,7 +554,8 @@ def position_detector(
             (centered = True). The shift applied to each pattern is the
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True.
+            Default is None and will set to True if centered == True and the origin
+            is set to match datacube.Rshape.
         test_config: if True, performs no calculations; instead, checks the
             dataset's calibrations and prints to screen which calibrations
             will be applied when the function is run.
@@ -575,7 +577,7 @@ def position_detector(
 
     #check for centered 
     if centered is None:
-        if self.calibration.get_origin():
+        if self.calibration.get_origin() and self.calibration.get_origin()[0].shape == self.Rshape:
             centered = True
         else:
             centered = False
