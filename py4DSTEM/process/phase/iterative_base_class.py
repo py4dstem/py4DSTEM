@@ -94,7 +94,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         pass
 
     def _extract_intensities_and_calibrations_from_datacube(
-        self, datacube: DataCube, require_calibrations: bool = False
+        self,
+        datacube: DataCube, 
+        require_calibrations: bool = False, 
+        dp_mask: np.ndarray = None, 
     ):
         """
         Common method to extract intensities and calibrations from datacube.
@@ -105,6 +108,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
+        dp_mask: ndarray 
+            If not None, apply mask to datacube amplitude
 
         Assigns
         --------
@@ -141,7 +146,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # Copies intensities to device casting to float32
         xp = self._xp
         self._intensities = xp.asarray(datacube.data, dtype=xp.float32)
-        self._intensities_shape = np.array(self._intensities.shape)
+            
+        if dp_mask is not None:      
+            assert dp_mask.shape == self._intensities.shape[-2:], "mask shape must match Qshape"
+            self._intensities =  self._intensities * xp.asarray(dp_mask, dtype=xp.float32)
+            
+        self._intensities_shape = np.array(self._intensities.shape)  
         self._intensities_sum = xp.sum(self._intensities, axis=(-2, -1))
 
         # Extracts calibrations

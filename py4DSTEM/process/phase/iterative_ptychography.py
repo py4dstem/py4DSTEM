@@ -60,6 +60,8 @@ class PtychographicReconstruction(PhaseReconstruction):
     scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    dp_mask: ndarray, optional 
+        Mask for datacube intensities, must be same size as Qshape 
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -96,6 +98,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         semiangle_cutoff: float = None,
         polar_parameters: Mapping[str, float] = None,
+        dp_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         **kwargs,
@@ -138,6 +141,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._probe = initial_probe_guess
         self._scan_positions = scan_positions
         self._datacube = datacube
+        self._dp_mask = dp_mask
         self._verbose = verbose
         self._object_padding_px = object_padding_px
         self._preprocessed = False
@@ -200,7 +204,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=True
+            self._datacube, 
+            require_calibrations=True,
+            dp_mask = self._dp_mask
         )
 
         self._calculate_intensities_center_of_mass(
