@@ -41,7 +41,7 @@ class Crystal_Phase:
         self.name = name
         return
         
-    def add_orientation_maps(
+    def set_orientation_maps(
         self,
         orientation_maps
     ):
@@ -60,7 +60,7 @@ class Crystal_Phase:
         
         return
     
-    def show_all_phase_maps(
+    def plot_all_phase_maps(
         self,
         method,
         map_scale_values = None,
@@ -86,7 +86,7 @@ class Crystal_Phase:
             print('Method not yet implemented.')
         return
     
-    def show_phase_map(
+    def plot_phase_map(
         self,
         method,
         index = 0,
@@ -119,10 +119,32 @@ class Crystal_Phase:
             print('Method not yet implemented.')
         return
     
-    def quantify_phase_map(
+    # Potentially introduce a way to check best match out of all orientations in phase plan and plug into model
+    # to quantify phase
+    
+    # def phase_plan(
+    #     self,
+    #     method,
+    #     zone_axis_range: np.ndarray = np.array([[0, 1, 1], [1, 1, 1]]),
+    #     angle_step_zone_axis: float = 2.0,
+    #     angle_coarse_zone_axis: float = None,
+    #     angle_refine_range: float = None,
+    #     angle_step_in_plane: float = 2.0,
+    #     accel_voltage: float = 300e3,
+    #     intensity_power: float = 0.25,
+    #     tol_peak_delete=None,
+    #     tol_distance: float = 0.01,
+    #     fiber_axis = None,
+    #     fiber_angles = None,
+    # ):
+    #     return
+    
+    def quantify_phase(
         self,
         pointlistarray,
         method = 'nnls',
+        use_phase_orientations = True,
+        set_phase_orientations = None,
     ):
         """
         Quantification of the phase of a crystal based on the crystal instances and the pointlistarray.
@@ -145,8 +167,56 @@ class Crystal_Phase:
     
     def quantify_phase_pointlist(
         self,
-        pointlist,
-        method = 'nnls'
+        pointlistarray,
+        position,
+        tolerance_distance,
+        method = 'nnls', 
+        ind_orientation = 0,
+        use_phase_orientations = True,
+        set_phase_orientations = None,
     ):
-        results = pointlist
-        return results
+        """
+        
+        Args:
+            pointlisarray (pointlist): _description_
+            position (tuple/list?): position of pointlist in pointlistarray
+            use_phase_orientations (bool, optional): _description_. Defaults to True.
+            set_phase_orientations (_type_, optional): _description_. Defaults to Nonemethod='nnls'.
+
+        Returns:
+            _type_: _description_
+        """
+        pointlist = pointlistarray.get_pointlist(position[0], position[1])
+        pl_intensities = pointlist['intensity']
+        
+        #Prepare Matches for modeling
+        if use_phase_orientations == True:
+            pointlist_peak_matches = []
+            for m in range(len(self.orientation_maps)):
+                phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
+                bragg_peaks_fit = self.crystals[m].generate_diffraction_pattern(
+                    self.orientation_maps[m].get_orientation(position[0], position[1]),
+                    ind_orientation = ind_orientation
+                    )
+                for d in range(pointlist['qx'].shape[0]):
+                    distances = []
+                    for p in range(bragg_peaks_fit['qx'].shape[0]):
+                        distances.append(
+                            np.sqrt((pointlist['qx'][d] - bragg_peaks_fit['qx'][p])**2 + 
+                                    (pointlist['qy'][d]-bragg_peaks_fit['qy'][p])**2)
+                        )
+                    ind = np.where(distances == np.min(distances))[0][0]
+                    if distances[ind] <= tolerance_distance:
+                        phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
+                    else:
+                        continue   
+                pointlist_peak_matches.append(phase_peak_match_intensities)
+            pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
+        
+        if method == 'nnls':    
+            self.phase_weights, self.phase_residuals = nnls(
+                pointlist_peak_intensity_matches.reshape(
+                    pl_intensities.shape[0],pointlist_peak_intensity_matches.shape[-1]),
+                pl_intensities
+            ) 
+        return
