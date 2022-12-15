@@ -169,13 +169,16 @@ def get_virtual_image(
             datacube.R_Ny,
             disable = not verbose,
         ):
-            # get shifted mask
-            _mask = np.roll(
-                mask,
-                (qx_shift[rx,ry], qy_shift[rx,ry]),
-                axis=(0,1)
-            )
-            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
+            if np.isscalar(qx_shift):
+                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+            else:
+                # get shifted mask if needed 
+                _mask = np.roll(
+                    mask,
+                    (qx_shift[rx,ry], qy_shift[rx,ry]),
+                    axis=(0,1)
+                )
+                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
 
     return virtual_image
 
