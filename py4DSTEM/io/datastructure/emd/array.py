@@ -177,8 +177,10 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        self.shape = self.data.shape
-        self.rank = self.data.ndim
+        @property
+        def shape(self):
+            return self.data.shape
+        self.rank = self.data.ndim   # rank differs from data.ndim by 1 if the Array is a stack
 
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
