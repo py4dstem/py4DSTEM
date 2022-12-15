@@ -142,6 +142,7 @@ class Crystal_Phase:
     def quantify_phase(
         self,
         pointlistarray,
+        tolerance_distance,
         method = 'nnls',
         use_phase_orientations = True,
         set_phase_orientations = None,
@@ -156,10 +157,26 @@ class Crystal_Phase:
         Details:
         """
         if isinstance(pointlistarray, PointListArray):
+
+            phase_weights = np.zeros((
+                pointlistarray.shape[0],
+                pointlistarray.shape[1],
+                len(self.orientation_maps)
+                ))
+            phase_residuals = np.zeros(pointlistarray.shape)
             for Rx, Ry in tqdmnd(pointlistarray.shape[0], pointlistarray.shape[1]):
-                pointlist = pointlistarray.get_pointlist(Rx, Ry)
-                #results = quantify_phase_pointlist(pointlist, )
-                continue
+                phase_weight, phase_residual = self.quantify_phase_pointlist(
+                    pointlistarray,
+                    position = [Rx, Ry],
+                    tolerance_distance=tolerance_distance,
+                    method = method,
+                    use_phase_orientations = use_phase_orientations,
+                    set_phase_orientations = set_phase_orientations
+                )
+                phase_weights[Rx,Ry,:] = phase_weight
+                phase_residuals[Rx,Ry] = phase_residual
+            self.phase_weights = phase_weights
+            self.phase_residuals = phase_residuals
             return
         else:
             return TypeError('pointlistarray must be of type pointlistarray.')
@@ -214,9 +231,9 @@ class Crystal_Phase:
             pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
         
         if method == 'nnls':    
-            self.phase_weights, self.phase_residuals = nnls(
+            phase_weights, phase_residuals = nnls(
                 pointlist_peak_intensity_matches.reshape(
                     pl_intensities.shape[0],pointlist_peak_intensity_matches.shape[-1]),
                 pl_intensities
-            ) 
-        return
+            )
+            return phase_weights, phase_residuals
