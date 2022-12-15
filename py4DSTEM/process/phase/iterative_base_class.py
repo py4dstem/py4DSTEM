@@ -910,6 +910,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 intensities = get_shifted_ar(
                     dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                 )
+                # intensities = get_shifted_ar(
+                #     dps[rx, ry], dps.shape[2]/2, dps.shape[3]/2, bilinear=True
+                # )
 
                 if need_to_resample:
                     intensities = fourier_resample(
