@@ -378,6 +378,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             fig.tight_layout()
 
         self._preprocessed = True
+        self._no_processing = True
 
         return self
 
@@ -781,7 +782,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             self.object_iterations = []
             self.probe_iterations = []
             self.error_iterations = []
-
+        if self._no_processing == False: 
+            print('Warning: already run reconstruction. Re-run pre-processing for fresh start.')
+            
+        self._no_processing = False
         # main loop
         for a0 in tqdmnd(
             max_iter,
