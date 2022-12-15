@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-
+import scipy
 try:
     import cupy as cp
+    import cupyx
 except ImportError:
     cp = None
 
@@ -103,9 +104,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
+            # from scipy.ndimage import gaussian_filter
+            # self._gaussian_filter = gaussian_filter
+            from scipy.ndimage import median_filter
+            self._median_filter = median_filter
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
+            # from cupyx.scipy.ndimage import gaussian_filter 
+            # self._gaussian_filter = gaussian_filter
+            from cupyx.scipy.ndimage import median_filter 
+            self._median_filter = median_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -268,7 +277,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     self._vacuum_probe_intensity = fourier_resample(
                         self._vacuum_probe_intensity,
                         output_size=self._region_of_interest_shape,
-                    )
+                    )    
                 probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity)
                 shift_x = self._region_of_interest_shape[0] / 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] / 2 - probe_y0
@@ -308,7 +317,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         # if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
-
+        self._probe_initial = self._probe.copy()
+        self._probe_fft_initial =xp.fft.fft2(self._probe_initial)
+        
         if plot_probe_overlaps:
 
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
@@ -344,7 +355,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             ax1.set_xlabel("x [A]")
             ax1.set_ylabel("y [A]")
-            ax1.set_title("Initial Probe Guess")
+            ax1.set_title("Initial Probe Intensity")
 
             ax2.imshow(
                 asnumpy(probe_overlap),
@@ -541,6 +552,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 * object_normalization
             )
 
+
         return object_update, probe_update
 
     def _update(
@@ -631,9 +643,58 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         return shifted_probe
+    
+    def _probe_median_constraint(self, current_probe, kernel):
+        """
+        Use for median filtering probe amplitude
 
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+        kernel: float 
+            Kernel size 
+        Returns
+        --------
+        median_probe: np.ndarray
+            Median filtered probe estimate
+        """
+        xp = self._xp        
+        
+        median_probe_amplitude = self._median_filter(xp.abs(current_probe), size = kernel)
+        median_probe_phase = xp.angle(current_probe)
+        median_probe = median_probe_amplitude * xp.exp(1j*median_probe_phase)
+        
+        return median_probe
+    
+    def _probe_amplitude_constraint(self, current_probe):
+        """
+        Use for median filtering probe amplitude
+
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+        kernel: float 
+            Kernel size 
+        Returns
+        --------
+        median_probe: np.ndarray
+            Median filtered probe estimate
+        """
+        xp = self._xp        
+    
+        amplitude  = xp.abs(self._probe_fft_initial)
+        current_probe_fft = xp.fft.fft2(current_probe)
+        phase = xp.exp(1j*xp.angle(current_probe_fft))
+        
+        constrained_probe = amplitude*phase
+        constrained_probe = xp.fft.ifft2(constrained_probe)
+        
+        return constrained_probe
+    
     def _constraints(
-        self, current_object, current_probe, pure_phase_object: bool, fix_com: bool
+        self, current_object, current_probe, pure_phase_object: bool, fix_com: bool, median_filter, fix_probe_amplitude
     ):
         """
         Ptychographic constraints operator.
@@ -658,17 +719,26 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_object = self._threshold_object_constraint(
             current_object, pure_phase_object
         )
+        
+        xp = self._xp
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
+        if median_filter[0]:
+            current_probe = self._probe_median_constraint(current_probe, median_filter[1])
+        if fix_probe_amplitude:
+            current_probe = self._probe_amplitude_constraint(current_probe)
         return current_object, current_probe
-
+        
+        
     def reconstruct(
         self,
         max_iter: int = 64,
         step_size: float = 0.9,
         normalization_min: float = 1e-2,
-        warmup_iter: int = 12,
+        fix_probe: int = 12,
         fix_com: bool = True,
+        median_filter: tuple = (0,0,0),
+        fix_probe_amplitude: int =  64,
         pure_phase_object_iter: int = 64,
         progress_bar: bool = True,
         store_iterations: bool = False,
@@ -684,8 +754,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             Update step size
         normalization_min: float, optional
             Probe normalization minimum as a fraction of the maximum overlap intensity
-        warmup_iter: int, optional
-            Number of iterations to run before updating probe estimate
+        fix_probe: int, optional
+            Number of iterations to run with a fixed probe before updating probe estimate
+        fix_com: bool, optional 
+            If True, fixes center of mass of probe
+        median_filter: 3-tuple, optional (start iteration, stop iteration, kernel size) 
+            Defines which iterations to add median filtering to the probe
+        fix_probe_amplitude: int, optional 
+            Number of iterations to run with a fixed probe amplitude
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
         progress_bar: bool, optional
@@ -724,7 +800,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 difference_gradient_fourier,
-                fix_probe=a0 < warmup_iter,
+                fix_probe=a0 < fix_probe,
                 normalization_min=normalization_min,
             )
 
@@ -742,7 +818,9 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 pure_phase_object=a0 < pure_phase_object_iter,
-                fix_com=a0 >= warmup_iter,
+                fix_com= fix_com and a0 >= fix_probe,
+                median_filter = (median_filter[0]<=a0 and median_filter[1]>a0, median_filter[2]), 
+                fix_probe_amplitude = a0 < fix_probe_amplitude
             )
 
             if store_iterations:
@@ -865,7 +943,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
-
+                        
             # Probe
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
