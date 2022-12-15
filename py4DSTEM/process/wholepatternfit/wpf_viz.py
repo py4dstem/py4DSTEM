@@ -51,8 +51,10 @@ def show_lattice_points(self, returnfig=False, *args, **kwargs):
             spots[:, 0] += self.global_args["global_x0"]
             spots[:, 1] += self.global_args["global_y0"]
 
-            ax.scatter(spots[:, 1], spots[:, 0], marker="x")
+            ax.scatter(spots[:, 1], spots[:, 0], marker="x", label=m.name)
 
+    ax.legend()
+    
     return (fig, ax) if returnfig else plt.show()
 
 def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
