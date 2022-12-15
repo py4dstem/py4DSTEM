@@ -1,6 +1,6 @@
 from py4DSTEM.io import DataCube, RealSlice
 from py4DSTEM import tqdmnd
-from . import WPFModelPrototype
+from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype
 
 from typing import Optional
 import numpy as np
@@ -70,6 +70,8 @@ class WholePatternFit:
 
         self.global_args["Q_Nx"] = datacube.Q_Nx
         self.global_args["Q_Ny"] = datacube.Q_Ny
+
+        self.current_glob = self.global_args.copy()
 
         self.fit_power = fit_power
 
