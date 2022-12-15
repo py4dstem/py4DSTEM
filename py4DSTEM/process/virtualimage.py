@@ -103,6 +103,18 @@ def get_virtual_image(
 
     # no center shifting
     if shift_center == False:
+        if centered == True: 
+            assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
+            qx_shift,qy_shift = datacube.calibration.get_origin_shift()
+            if not np.isscalar(qx_shift): 
+                qx_shift = np.mean(qx_shift)
+                qy_shift = np.mean(qy_shift)
+
+            mask = np.roll(
+                mask,
+                (qx_shift, qy_shift),
+                axis=(0,1)
+            )
 
         # dask 
         if dask == True:
@@ -140,6 +152,7 @@ def get_virtual_image(
 
         # get shifts
         assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
+        assert datacube.calibration.get_origin_shift()[0].shape == datacube.Rshape, "origin need to be calibrated"
         qx_shift,qy_shift = datacube.calibration.get_origin_shift()
         qx_shift = qx_shift.round().astype(int)
         qy_shift = qy_shift.round().astype(int)
