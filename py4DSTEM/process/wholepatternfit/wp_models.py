@@ -94,8 +94,7 @@ class DCBackground(WPFModelPrototype):
 
 
 class GaussianBackground(WPFModelPrototype):
-    def __init__(self, sigma, intensity, global_center=True, x0=0.0, y0=0.0):
-        name = "Gaussian Background"
+    def __init__(self, sigma, intensity, global_center=True, x0=0.0, y0=0.0, name = "Gaussian Background"):
         params = {"sigma": Parameter(sigma), "intensity": Parameter(intensity)}
         if global_center:
             self.func = self.global_center_func
@@ -200,12 +199,12 @@ class SyntheticDiskLattice(WPFModelPrototype):
         y0: float = 0.0,
         exclude_indices: list = [],
         include_indices: list = None,
+        name = "Synthetic Disk Lattice",
         verbose=False,
     ):
         self.disk_radius = disk_radius
         self.disk_width = disk_width
 
-        name = "Synthetic Disk Lattice"
         params = {}
 
         if global_center:
@@ -425,10 +424,10 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        name = "Complex Overlapped Disk Lattice",
         verbose=False,
     ):
 
-        name = "Complex Overlapped Disk Lattice"
         params = {}
 
         # if global_center:
@@ -543,10 +542,10 @@ class KernelDiskLattice(WPFModelPrototype):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        name = "Custom Kernel Disk Lattice",
         verbose=False,
     ):
 
-        name = "Custom Kernel Disk Lattice"
         params = {}
 
         # if global_center:

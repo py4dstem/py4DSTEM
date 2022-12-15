@@ -116,20 +116,26 @@ class WholePatternFit:
         self._xevals = []
         self._cost_history = []
 
+        default_opts = {
+            "method":'trf',
+            "verbose":1,
+        }
+        default_opts.update(fit_opts)
+
         if self.hasJacobian & self.use_jacobian:
             opt = least_squares(
                 self._pattern_error,
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
-                **fit_opts,
+                **default_opts,
             )
         else:
             opt = least_squares(
                 self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
-                **fit_opts,
+                **default_opts,
             )
 
         self.mean_CBED_fit = opt
@@ -140,7 +146,6 @@ class WholePatternFit:
 
         ax = fig.add_subplot(gs[0, 0])
         err_hist = np.array(self._cost_history)
-        # err_hist = np.array([np.sum((self._pattern(dp)-self.meanCBED)**2) for dp in self._fevals])
         ax.plot(err_hist)
         ax.set_ylabel("Sum Squared Error")
         ax.set_xlabel("Iterations")
