@@ -454,7 +454,7 @@ def get_virtual_image(
 
     #check for centered 
     if centered is None:
-        if self.calibration.get_origin():
+        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
             centered = True
         else:
             centered = False
@@ -570,7 +570,7 @@ def position_detector(
 
     #check for calibration and set function configutions
     if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
+        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
             calibrated = True
         else:
             calibrated = False
