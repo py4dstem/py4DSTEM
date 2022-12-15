@@ -396,7 +396,7 @@ def get_virtual_image(
             - 'annular' or 'annulus' uses annular detector, like dark field
             - 'rectangle', 'square', 'rectangular', uses rectangular detector
             - 'mask' flexible detector, any 2D array
-    geometry (variable) : valid entries are determined by the `mode`, values in
+        geometry (variable) : valid entries are determined by the `mode`, values in
         pixels argument, as follows:
             - 'point': 2-tuple, (qx,qy), ints
             - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
@@ -424,8 +424,8 @@ def get_virtual_image(
             (centered = True). The shift applied to each pattern is the
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True and the origin
-            is set to match datacube.Rshape. Default is False.
+            Default is None and will set to True if the origin is set for each position 
+            in real space. Default is False.
         verbose (bool): if True, show progress bar
         dask (bool): if True, use dask arrays
         return_mask (bool): if False (default) returns a virtual image as usual.
@@ -461,7 +461,7 @@ def get_virtual_image(
 
     # logic to determine shift_center
     if shift_center is None:
-        if centered and self.calibration.get_origin()[0].shape == self.Rshape:
+        if self.calibration.get_origin()[0].shape == self.Rshape:
             shift_center = True
         else:
             shift_center = False
@@ -570,14 +570,14 @@ def position_detector(
 
     #check for calibration and set function configutions
     if calibrated is None:
-        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
+        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
             calibrated = True
         else:
             calibrated = False
 
     #check for centered 
     if centered is None:
-        if self.calibration.get_origin() and self.calibration.get_origin()[0].shape == self.Rshape:
+        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
             centered = True
         else:
             centered = False
