@@ -38,6 +38,8 @@ class DPCReconstruction(PhaseReconstruction):
     ----------
     datacube: DataCube
         Input 4D diffraction pattern intensities
+    dp_mask: ndarray, optional 
+        Mask for datacube intensities, must be same size as Qshape 
     energy: float, optional
         The electron energy of the wave functions in eV
     verbose: bool, optional
@@ -60,6 +62,7 @@ class DPCReconstruction(PhaseReconstruction):
     def __init__(
         self,
         datacube: DataCube,
+        dp_mask: np.ndarray = None,
         energy: float = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -79,7 +82,8 @@ class DPCReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._region_of_interest_shape = None
         self._preprocessed = False
-
+        self._dp_mask = dp_mask 
+        
     def preprocess(
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -128,7 +132,9 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=False
+            self._datacube, 
+            require_calibrations=False, 
+            dp_mask = self._dp_mask
         )
 
         self._calculate_intensities_center_of_mass(
