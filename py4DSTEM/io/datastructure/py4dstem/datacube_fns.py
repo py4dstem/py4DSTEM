@@ -711,7 +711,7 @@ def get_probe_size(
     from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
 
     if mode is None:
-        print('no mode speficied, using mean diffraciton pattern')
+        print('no mode specified, using mean diffraction pattern')
         assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
         DP = self.tree['dp_mean'].data
     elif type(mode) == str:
