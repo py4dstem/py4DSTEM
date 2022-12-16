@@ -139,7 +139,6 @@ def get_virtual_image(
 
         # get shifts
         assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
-        assert datacube.calibration.get_origin_shift()[0].shape == datacube.Rshape, "origin need to be calibrated"
         qx_shift,qy_shift = datacube.calibration.get_origin_shift()
         qx_shift = qx_shift.round().astype(int)
         qy_shift = qy_shift.round().astype(int)

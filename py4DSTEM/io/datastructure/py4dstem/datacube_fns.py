@@ -408,24 +408,20 @@ def get_virtual_image(
         centered (bool): if False, the origin is in the upper left corner.
              If True, the origin is set to the mean origin in the datacube
              calibrations, so that a bright-field image could be specified
-             with, e.g., geometry = ((0,0),R). If `None` is passed, checks
-             the calibrations and sets to True if the mean origin is found,
-             and False if not.  The origin can set with
+             with, e.g., geometry = ((0,0),R).  The origin can set with
              datacube.calibration.set_origin().  For `mode="mask"`,
              has no effect. Default is False.
         calibrated (bool): if True, geometry is specified in units of 'A^-1'
             instead of pixels. The datacube's calibrations must have its
             `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-            no effect. If None will set to True if the calibration
-            has been set. Default is False.
+            no effect. Default is False.
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
             images. The datacube's calibration['origin'] parameter must be set
             (centered = True). The shift applied to each pattern is the
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if the origin is set for each position 
-            in real space. Default is False.
+            Default is False.
         verbose (bool): if True, show progress bar
         dask (bool): if True, use dask arrays
         return_mask (bool): if False (default) returns a virtual image as usual.
@@ -439,40 +435,9 @@ def get_virtual_image(
             add anything to the datacube's tree.
         name (str): the output object's name
         returncalc (bool): if True, returns the output
-        test_config: if True, returns the Boolean value of (`centered`,
-            `calibrated`,`shift_center`). Does not compute the virtual image.
-
     Returns:
         (Optional): if returncalc is True, returns the VirtualImage
     """
-    #check for calibration and set function configutions
-    if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
-            calibrated = True
-        else:
-            calibrated = False
-
-    #check for centered 
-    if centered is None:
-        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
-            centered = True
-        else:
-            centered = False
-
-    # logic to determine shift_center
-    if shift_center is None:
-        if self.calibration.get_origin()[0].shape == self.Rshape:
-            shift_center = True
-        else:
-            shift_center = False
-
-    if test_config:
-        for x,y in zip(['centered','calibrated','shift_center'],
-                       [centered,calibrated,shift_center]):
-            print(f"{x} = {y}")
-        return
-
-
     # perform computation
     from py4DSTEM.process.virtualimage import get_virtual_image
     im = get_virtual_image(
@@ -538,57 +503,20 @@ def position_detector(
         centered (bool): if False, the origin is in the upper left corner.
              If True, the origin is set to the mean origin in the datacube
              calibrations, so that a bright-field image could be specified
-             with, e.g., geometry = ((0,0),R). If `None` is passed, checks
-             the calibrations and sets to True if the mean origin is found,
-             and False if not.  The origin can set with
+             with, e.g., geometry = ((0,0),R). The origin can set with
              datacube.calibration.set_origin().  For `mode="mask"`,
-             has no effect. Default is None.
+             has no effect. Default is False.
         calibrated (bool): if True, geometry is specified in units of 'A^-1'
             instead of pixels. The datacube's calibrations must have its
             `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-            no effect. Default is None and will set to True if the calibration
-            has been set.
+            no effect. 
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
             images. The datacube's calibration['origin'] parameter must be set
             (centered = True). The shift applied to each pattern is the
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True and the origin
-            is set to match datacube.Rshape.
-        test_config: if True, performs no calculations; instead, checks the
-            dataset's calibrations and prints to screen which calibrations
-            will be applied when the function is run.
     """
-    # parse inputs
-    if scan_position is None:
-        data = self
-        shift_center = False
-    else:
-        data = (self,scan_position[0],scan_position[1])
-        shift_center = True
-
-    #check for calibration and set function configutions
-    if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
-            calibrated = True
-        else:
-            calibrated = False
-
-    #check for centered 
-    if centered is None:
-        if self.calibration.get_qx0_mean() and self.calibration.get_qy0_mean():
-            centered = True
-        else:
-            centered = False
-
-    if test_config:
-        for x,y in zip(['centered','calibrated','shift_center'],
-                       [centered,calibrated,shift_center]):
-            print(f"{x} = {y}")
-        return
-
-
     # make and show visualization
     from py4DSTEM.visualize import position_detector
     position_detector(
@@ -601,8 +529,6 @@ def position_detector(
         color = 'r',
         alpha = 0.4
     )
-
-
 
 
 
