@@ -964,9 +964,10 @@ def plot_orientation_maps(
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
     show_axes: bool = True,
-    camera_dist=None,
-    plot_limit=None,
-    swap_axes_xy_limits=False,
+    camera_dist = None,
+    plot_limit = None,
+    plot_layout = 0,
+    swap_axes_xy_limits = False,
     returnfig: bool = False,
     progress_bar=False,
 ):
@@ -984,7 +985,9 @@ def plot_orientation_maps(
         figbound (array):                   2 elements defining figure boundary
         show_axes (bool):                   Flag setting whether orienation map axes are visible.
         camera_dist (float):                distance of camera from legend
-        plot_limit (array):                 2x3 array defining plot boundaries of egend
+        plot_limit (array):                 2x3 array defining plot boundaries of legend
+        plot_layout (int):                  subplot layout: 0 - 1 row, 3 col
+                                                            1 - 3 row, 1 col
         swap_axes_xy_limits (bool):         swap x and y boundaries for legend (not sure why we need this in some cases)
         returnfig (bool):                   set to True to return figure and axes handles
         progress_bar (bool):                Enable progressbar when calculating orientation images.
@@ -1179,15 +1182,26 @@ def plot_orientation_maps(
     # plotting frame
     # fig, ax = plt.subplots(1, 3, figsize=figsize)
     fig = plt.figure(figsize=figsize)
-    ax_x = fig.add_axes(
-        [0.0+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
-    ax_z = fig.add_axes(
-        [0.4+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
-    ax_l = fig.add_axes(
-        [0.8+figbound[0], 0.0, 0.2-2*+figbound[0], 1.0],
-        projection='3d',
-        elev=el,
-        azim=az)
+    if plot_layout == 0:
+        ax_x = fig.add_axes(
+            [0.0+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
+        ax_z = fig.add_axes(
+            [0.4+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
+        ax_l = fig.add_axes(
+            [0.8+figbound[0], 0.0, 0.2-2*+figbound[0], 1.0],
+            projection='3d',
+            elev=el,
+            azim=az)
+    elif plot_layout == 1:
+        ax_x = fig.add_axes(
+            [0.0, 0.0+figbound[0], 1.0, 0.4-2*+figbound[0]])
+        ax_z = fig.add_axes(
+            [0.0, 0.4+figbound[0], 1.0, 0.4-2*+figbound[0]])
+        ax_l = fig.add_axes(
+            [0.0, 0.8+figbound[0], 1.0, 0.2-2*+figbound[0]],
+            projection='3d',
+            elev=el,
+            azim=az)
 
     # orientation images
     if self.pymatgen_available:
