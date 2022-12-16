@@ -517,6 +517,14 @@ def position_detector(
             difference between the local origin position and the mean origin
             position over all patterns, rounded to the nearest integer for speed.
     """
+  
+    # parse inputs
+    if scan_position is None:
+        data = self
+        shift_center = False
+    else:
+        data = (self,scan_position[0],scan_position[1])
+        
     # make and show visualization
     from py4DSTEM.visualize import position_detector
     position_detector(
