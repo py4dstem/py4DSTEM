@@ -820,9 +820,9 @@ def show_complex(
     #define min and max
     amp = np.abs(ar_complex)
     if vmin is None: 
-        vmin = np.min(amp)
+        vmin = np.min(amp)*0.98
     if vmax is None: 
-        vmax = np.max(amp)
+        vmax = np.max(amp)*0.02
     
     from matplotlib.colors import hsv_to_rgb
 
