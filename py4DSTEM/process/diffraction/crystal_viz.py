@@ -858,6 +858,9 @@ def plot_diffraction_pattern(
             bragg_peaks.data["intensity"] ** (power_markers / 2)
         )
 
+    # Apply marker size limits to primary plot
+    marker_size = np.clip(marker_size, min_marker_size, max_marker_size)
+
     if bragg_peaks_compare is None:
         ax.scatter(
             bragg_peaks.data["qy"], bragg_peaks.data["qx"], s=marker_size, facecolor="k"
