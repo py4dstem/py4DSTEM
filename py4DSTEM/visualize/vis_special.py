@@ -819,11 +819,22 @@ def show_complex(
 
     #define min and max
     amp = np.abs(ar_complex)
-    if vmin is None: 
-        vmin = np.min(amp)*0.98
-    if vmax is None: 
-        vmax = np.max(amp)*0.02
-    
+    if np.max(amp) == np.min(amp):
+        if vmin is None: vmin = 0 
+        if vmax is None: vmax = np.max(amp)
+    else:
+        if vmin is None: vmin = 0.02
+        if vmax is None: vmax = 0.98
+        ind_vmin = np.round((amp.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((amp.shape[0]-1)*vmax).astype('int')
+        vals = np.sort(amp[~np.isnan(amp)])
+        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        ind_vmin = np.max([0,ind_vmin])
+        ind_vmax = np.min([len(vals)-1,ind_vmax])
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+
     from matplotlib.colors import hsv_to_rgb
 
     #function for converting to complex colors
