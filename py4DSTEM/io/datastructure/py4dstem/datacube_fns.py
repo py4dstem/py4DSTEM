@@ -417,11 +417,10 @@ def get_virtual_image(
             no effect. Default is False.
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
-            images. The datacube's calibration['origin'] parameter must be set
-            (centered = True). The shift applied to each pattern is the
-            difference between the local origin position and the mean origin
-            position over all patterns, rounded to the nearest integer for speed.
-            Default is False.
+            images. The datacube's calibration['origin'] parameter must be set. 
+            The shift applied to each pattern is the difference between the local 
+            origin position and the mean origin position over all patterns, 
+            rounded to the nearest integer for speed. Default is False.
         verbose (bool): if True, show progress bar
         dask (bool): if True, use dask arrays
         return_mask (bool): if False (default) returns a virtual image as usual.
@@ -512,10 +511,10 @@ def position_detector(
             no effect. 
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
-            images. The datacube's calibration['origin'] parameter must be set
-            (centered = True). The shift applied to each pattern is the
-            difference between the local origin position and the mean origin
-            position over all patterns, rounded to the nearest integer for speed.
+            images. The datacube's calibration['origin'] parameter must be set. 
+            The shift applied to each pattern is the difference between the local 
+            origin position and the mean origin position over all patterns, 
+            rounded to the nearest integer for speed.
     """
   
     # parse inputs
@@ -524,7 +523,7 @@ def position_detector(
         shift_center = False
     else:
         data = (self,scan_position[0],scan_position[1])
-        
+
     # make and show visualization
     from py4DSTEM.visualize import position_detector
     position_detector(
