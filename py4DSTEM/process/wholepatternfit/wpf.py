@@ -57,21 +57,7 @@ class WholePatternFit:
             self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
 
         # set up the global arguments
-        self.global_args = {}
-
-        self.global_args["global_x0"] = x0 if x0 else datacube.Q_Nx / 2.0
-        self.global_args["global_y0"] = y0 if y0 else datacube.Q_Ny / 2.0
-
-        xArray, yArray = np.mgrid[0 : datacube.Q_Nx, 0 : datacube.Q_Ny]
-        self.global_args["xArray"] = xArray
-        self.global_args["yArray"] = yArray
-
-        self.global_args["global_r"] = np.hypot((xArray - x0) ** 2, (yArray - y0) ** 2)
-
-        self.global_args["Q_Nx"] = datacube.Q_Nx
-        self.global_args["Q_Ny"] = datacube.Q_Ny
-
-        self.current_glob = self.global_args.copy()
+        self._setup_static_data()
 
         self.fit_power = fit_power
 
@@ -98,12 +84,7 @@ class WholePatternFit:
 
         # update parameters:
         self._scrape_model_params()
-
-        # set the current active pattern to the mean CBED:
-        self.current_pattern = self.meanCBED
-        self.current_glob = self.global_args.copy()
-
-        return self._pattern(self.x0)
+        return self._pattern(self.x0, self.static_data.copy())
 
     def fit_to_mean_CBED(self, **fit_opts):
 
@@ -111,8 +92,8 @@ class WholePatternFit:
         self._scrape_model_params()
 
         # set the current active pattern to the mean CBED:
-        self.current_pattern = self.meanCBED
-        self.current_glob = self.global_args.copy()
+        current_pattern = self.meanCBED
+        shared_data = self.static_data.copy()
 
         self._fevals = []
         self._xevals = []
@@ -130,6 +111,7 @@ class WholePatternFit:
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
+                args=(current_pattern,shared_data),
                 **default_opts,
             )
         else:
@@ -137,6 +119,7 @@ class WholePatternFit:
                 self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
+                args=(current_pattern,shared_data),
                 **default_opts,
             )
 
@@ -196,8 +179,8 @@ class WholePatternFit:
         fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
 
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-            self.current_pattern = self.datacube.data[rx, ry, :, :]
-            self.current_glob = self.global_args.copy()
+            current_pattern = self.datacube.data[rx, ry, :, :]
+            shared_data = self.static_data.copy()
             self._cost_history = (
                 []
             )  # clear this so it doesn't grow: TODO make this not stupid
@@ -210,6 +193,7 @@ class WholePatternFit:
                     x0,
                     jac=self._jacobian,
                     bounds=(self.lower_bound, self.upper_bound),
+                    args=(current_pattern, shared_data),
                     **fit_opts,
                 )
             else:
@@ -217,6 +201,7 @@ class WholePatternFit:
                     self._pattern_error,
                     x0,
                     bounds=(self.lower_bound, self.upper_bound),
+                    args=(current_pattern, shared_data),
                     **fit_opts,
                 )
 
@@ -258,11 +243,11 @@ class WholePatternFit:
 
     def accept_mean_CBED_fit(self):
         x = self.mean_CBED_fit.x
-        self.global_args["global_x0"] = x[0]
-        self.global_args["global_y0"] = x[1]
+        self.static_data["global_x0"] = x[0]
+        self.static_data["global_y0"] = x[1]
 
-        self.global_args["global_r"] = np.hypot(
-            (self.global_args["xArray"] - x[0]), (self.global_args["yArray"] - x[1])
+        self.static_data["global_r"] = np.hypot(
+            (self.static_data["xArray"] - x[0]), (self.static_data["yArray"] - x[1])
         )
 
         for i, m in enumerate(self.model):
@@ -297,22 +282,32 @@ class WholePatternFit:
 
         return g_maps
 
-    def _pattern_error(self, x):
+    def _setup_static_data(self):
+        self.static_data = {}
+
+        xArray, yArray = np.mgrid[0 : self.datacube.Q_Nx, 0 : self.datacube.Q_Ny]
+        self.static_data["xArray"] = xArray
+        self.static_data["yArray"] = yArray
+
+        self.static_data["Q_Nx"] = self.datacube.Q_Nx
+        self.static_data["Q_Ny"] = self.datacube.Q_Ny
+
+    def _pattern_error(self, x, current_pattern, shared_data):
 
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
-        self.current_glob["global_x0"] = x[0]
-        self.current_glob["global_y0"] = x[1]
-        self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]),
-            (self.current_glob["yArray"] - x[1]),
+        shared_data["global_x0"] = x[0]
+        shared_data["global_y0"] = x[1]
+        shared_data["global_r"] = np.hypot(
+            (shared_data["xArray"] - x[0]),
+            (shared_data["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
 
-        DP = (DP**self.fit_power - self.current_pattern**self.fit_power) * self.mask
+        DP = (DP**self.fit_power - current_pattern**self.fit_power) * self.mask
 
         if self._track:
             self._fevals.append(DP)
@@ -321,39 +316,39 @@ class WholePatternFit:
 
         return DP.ravel()
 
-    def _pattern(self, x):
+    def _pattern(self, x, shared_data):
 
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
-        self.current_glob["global_x0"] = x[0]
-        self.current_glob["global_y0"] = x[1]
-        self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]),
-            (self.current_glob["yArray"] - x[1]),
+        shared_data["global_x0"] = x[0]
+        shared_data["global_y0"] = x[1]
+        shared_data["global_r"] = np.hypot(
+            (shared_data["xArray"] - x[0]),
+            (shared_data["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
 
         return (DP**self.fit_power) * self.mask
 
-    def _jacobian(self, x):
+    def _jacobian(self, x, current_pattern, shared_data):
         # TODO: automatic mixed analytic/finite difference
 
         J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams + 2))
 
-        self.current_glob["global_x0"] = x[0]
-        self.current_glob["global_y0"] = x[1]
-        self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]),
-            (self.current_glob["yArray"] - x[1]),
+        shared_data["global_x0"] = x[0]
+        shared_data["global_y0"] = x[1]
+        shared_data["global_r"] = np.hypot(
+            (shared_data["xArray"] - x[0]),
+            (shared_data["yArray"] - x[1]),
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
             m.jacobian(
-                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **self.current_glob
+                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **shared_data
             )
 
         return J * self.mask.ravel()[:, np.newaxis]
@@ -365,7 +360,7 @@ class WholePatternFit:
         self.lower_bound = np.zeros_like(self.x0)
 
         self.x0[0:2] = np.array(
-            [self.global_args["global_x0"], self.global_args["global_y0"]]
+            [self.static_data["global_x0"], self.static_data["global_y0"]]
         )
         self.upper_bound[0:2] = self.global_xy0_ub
         self.lower_bound[0:2] = self.global_xy0_lb
