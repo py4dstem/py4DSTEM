@@ -29,6 +29,44 @@ class WholePatternFit:
         meanCBED: Optional[np.ndarray] = None,
         fit_power: float = 1,
     ):
+        """
+        Perform pixelwise fits using composable models and numerical optimization.
+
+        Instantiate components of the fit model using the objects in wp_models,
+        and add them to the WPF object using ``add_model``.
+        All fitting parameters, including ``x0`` and ``y0``, can be specified as
+        floats or, if the parameter should be bounded, as a tuple with the format:
+            (initial guess, lower bound, upper bound)
+        Then, refine the initial guess using ``fit_to_mean_CBED``. If the initial
+        refinement is good, save it using ``accept_mean_CBED_fit``, which updates
+        the initial guesses in each model object.
+
+        Then, refine the model to each diffraction pattern in the dataset using
+        ``fit_all_patterns``. The fit results are returned in RealSlice objects
+        with slice labels corresponding to the names of each model and their
+        parameters.
+
+        To map strain, use ``get_lattice_maps`` to extract RealSice object with 
+        the refined g vectors at each point, and then use the ordinary py4DSTEM
+        strain mapping pipeline
+
+        Parameters
+        ----------
+        datacube : (DataCube)
+        x0, y0 : Optional float or np.ndarray to specify the initial guess for the origin
+            of diffraction space, in pixels
+        mask : Optional np.ndarray to specify which pixels in the diffraction pattern
+            should be used for computing the loss function. Pixels occluded by a beamstop
+            or fixed detector should be set to False so they do not contribte to the loss
+        use_jacobian: bool, whether or not to use the analytic Jacobians for each model
+            in the optimizer. When False, finite differences is used for all gradient evaluations
+        meanCBED: Optional np.ndarray, used to specify the diffraction pattern used
+            for initial refinement of the parameters. If not specified, the average across
+            all scan positions is computed
+        fit_power: float, diffraction patterns are raised to this power, sets the gamma 
+            level at which the patterns are compared
+
+        """
         self.datacube = datacube
         self.meanCBED = (
             meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
