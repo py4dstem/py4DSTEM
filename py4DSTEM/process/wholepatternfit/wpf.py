@@ -46,7 +46,7 @@ class WholePatternFit:
         with slice labels corresponding to the names of each model and their
         parameters.
 
-        To map strain, use ``get_lattice_maps`` to extract RealSice object with 
+        To map strain, use ``get_lattice_maps`` to extract RealSice object with
         the refined g vectors at each point, and then use the ordinary py4DSTEM
         strain mapping pipeline
 
@@ -63,7 +63,7 @@ class WholePatternFit:
         meanCBED: Optional np.ndarray, used to specify the diffraction pattern used
             for initial refinement of the parameters. If not specified, the average across
             all scan positions is computed
-        fit_power: float, diffraction patterns are raised to this power, sets the gamma 
+        fit_power: float, diffraction patterns are raised to this power, sets the gamma
             level at which the patterns are compared
 
         """
@@ -138,8 +138,8 @@ class WholePatternFit:
         self._cost_history = []
 
         default_opts = {
-            "method":'trf',
-            "verbose":1,
+            "method": "trf",
+            "verbose": 1,
         }
         default_opts.update(fit_opts)
 
@@ -149,7 +149,7 @@ class WholePatternFit:
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
-                args=(current_pattern,shared_data),
+                args=(current_pattern, shared_data),
                 **default_opts,
             )
         else:
@@ -157,7 +157,7 @@ class WholePatternFit:
                 self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
-                args=(current_pattern,shared_data),
+                args=(current_pattern, shared_data),
                 **default_opts,
             )
 
@@ -385,9 +385,7 @@ class WholePatternFit:
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
-            m.jacobian(
-                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **shared_data
-            )
+            m.jacobian(J, *x[ind : ind + m.nParams].tolist(), offset=ind, **shared_data)
 
         return J * self.mask.ravel()[:, np.newaxis]
 
