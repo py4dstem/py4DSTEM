@@ -155,13 +155,14 @@ def filter_hot_pixels(
     Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
 
     Args:
-            datacube (DataCube):      py4DSTEM Datacube
-            thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
-            ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        datacube (DataCube):      py4DSTEM Datacube
+        thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+        ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        return_mask (bool): if True, returns the filter mask
 
-        Returns:
-            datacube                     datacube
-            mask (bool):                 (optional) the bad pixel mask
+    Returns:
+        datacube                     datacube
+        mask (bool):                 (optional) the bad pixel mask
     """
 
     # Mean image over all probe positions
