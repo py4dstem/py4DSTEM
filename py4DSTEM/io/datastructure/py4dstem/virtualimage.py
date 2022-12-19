@@ -53,8 +53,7 @@ class VirtualImage(RealSlice):
                  by geometry = ((0,0), R). For `mode="mask"`, has no effect.
             calibrated (bool)   : if True, geometry is specified in units of 'A^-1' instead of pixels.
                 The datacube's calibrations must have its `"Q_pixel_units"` parameter set to "A^-1".
-                Setting `calibrated=True` automatically performs centering, regardless of the
-                value of the `centered` argument. For `mode="mask"`, has no effect.
+                For `mode="mask"`, has no effect.
             shift_center (bool) : if True, the mask is shifted at each real space position to
                 account for any shifting of the origin of the diffraction images. The datacube's
                 calibration['origin'] parameter must be set. The shift applied to each pattern is

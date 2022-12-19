@@ -14,11 +14,6 @@ try:
 except:
     cp = None
 
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
 
 def orientation_plan(
     self,
@@ -114,21 +109,18 @@ def orientation_plan(
         self.orientation_refine_ratio = 1.0
         self.orientation_refine = False
 
-    # Handle the "auto" case first, since it works by overriding zone_axis_range,
-    #   fiber_axis, and fiber_angles then using the regular parser:
-    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
-        # from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        # from pymatgen.core.structure import Structure
-
-        # initialize structure
+    if self.pymatgen_available:
+        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        from pymatgen.core.structure import Structure
         structure = Structure(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
-
-        # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
-        # self.pointgroup = pointgroup
         self.pointgroup = SpacegroupAnalyzer(structure)
 
+
+    # Handle the "auto" case first, since it works by overriding zone_axis_range,
+    #   fiber_axis, and fiber_angles then using the regular parser:
+    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
         assert (
             self.pointgroup.get_point_group_symbol() in orientation_ranges
         ), "Unrecognized pointgroup returned by pymatgen!"
@@ -145,9 +137,6 @@ def orientation_plan(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()},\n"
             f" using arguments: zone_axis_range = \n{zone_axis_range}, \n fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
-
-        # Set a flag so we know pymatgen is available
-        self.pymatgen_available = True
 
 
     if isinstance(zone_axis_range, str):
