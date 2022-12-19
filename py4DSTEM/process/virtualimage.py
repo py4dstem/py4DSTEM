@@ -219,7 +219,7 @@ def get_calibrated_geometry(
 
     # Get calibration metadata
     if centered:
-        assert cal.get_qx0_mean(), "origin need to be calibrated" 
+        assert cal.get_qx0_mean(), "origin needs to be calibrated" 
         x0_mean, y0_mean = cal.get_origin_mean()
 
     if calibrated:
