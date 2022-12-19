@@ -119,8 +119,8 @@ class WholePatternFit:
         self._cost_history = []
 
         default_opts = {
-            "method":'trf',
-            "verbose":1,
+            "method": "trf",
+            "verbose": 1,
         }
         default_opts.update(fit_opts)
 
@@ -343,19 +343,25 @@ class WholePatternFit:
 
         J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams + 2))
 
-        self.current_glob["global_x0"] = x[0]
-        self.current_glob["global_y0"] = x[1]
-        self.current_glob["global_r"] = np.hypot(
-            (self.current_glob["xArray"] - x[0]),
-            (self.current_glob["yArray"] - x[1]),
+        global_params = self.global_args.copy()
+        global_params.update(
+            {
+                "global_x0": x[0],
+                "global_y0": x[1],
+                "global_r": np.hypot(
+                    (self.current_glob["xArray"] - x[0]),
+                    (self.current_glob["yArray"] - x[1]),
+                ),
+            }
         )
 
         for i, m in enumerate(self.model):
             ind = self.model_param_inds[i] + 2
             m.jacobian(
-                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **self.current_glob
+                J, *x[ind : ind + m.nParams].tolist(), offset=ind, **global_params
             )
 
+        # NOTE: This does not respect self.fit_power!!!
         return J * self.mask.ravel()[:, np.newaxis]
 
     def _scrape_model_params(self):
