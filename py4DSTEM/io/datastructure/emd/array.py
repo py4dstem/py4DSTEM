@@ -177,9 +177,6 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        @property
-        def shape(self):
-            return self.data.shape
         self.rank = self.data.ndim   # rank differs from data.ndim by 1 if the Array is a stack
 
         self.tree = Tree()
@@ -290,7 +287,9 @@ class Array:
             raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
-
+    @property
+    def shape(self):
+        return self.data.shape
 
     #### Methods
 
