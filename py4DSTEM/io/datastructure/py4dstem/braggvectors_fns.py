@@ -458,7 +458,7 @@ def get_strain_from_reference_g1g2(self, mask, returncalc = False):
     if returncalc:
         return strainmap_reference_g1g2
 
-def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
+def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True, flip_theta = False):
     """
     Starting from a strain map defined with respect to the xy coordinate system of
     diffraction space, i.e. where exx and eyy are the compression/tension along the Qx
@@ -485,6 +485,7 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
         strainmap_raw,
         xaxis_x = g_reference[0],
         xaxis_y = g_reference[1],
+        flip_theta = flip_theta
     )
 
     if returncalc:

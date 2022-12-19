@@ -314,6 +314,7 @@ def show_strain(
     vrange_theta,
     vrange_exy=None,
     vrange_eyy=None,
+    flip_theta = False,
     bkgrd=True,
     show_cbars=('exx','eyy','exy','theta'),
     bordercolor='k',
@@ -350,6 +351,7 @@ def show_strain(
         vrange_theta (length 2 list or tuple):
         vrange_exy (length 2 list or tuple):
         vrange_eyy (length 2 list or tuple):
+        flip_theta (bool): if True, take negative of angle 
         bkgrd (bool):
         show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
             tuple containing any, all, or none of ('exx','eyy','exy','theta').
@@ -409,6 +411,8 @@ def show_strain(
     e_yy = np.ma.array(strainmap.get_slice('e_yy').data,mask=strainmap.get_slice('mask').data==False)
     e_xy = np.ma.array(strainmap.get_slice('e_xy').data,mask=strainmap.get_slice('mask').data==False)
     theta = np.ma.array(strainmap.get_slice('theta').data,mask=strainmap.get_slice('mask').data==False)
+    if flip_theta == True: 
+        theta = - theta 
 
     # Plot
     if layout==0:
@@ -805,21 +809,32 @@ def show_complex(
         ar_complex (2d array)   : complex array to be plotted
         vmin (float, optional)  : minimum absolute value 
         vmax (float, optional)  : maximum absolute value 
+        vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g. 
+        vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
         cbar (bool)             : if True, include color wheel
         returnfig (bool)        : if True, the function returns the tuple (figure,axis)
-
+        
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     '''
 
     #define min and max
-    amp = np.abs(ar_complex)
-    if vmin is None: 
-        vmin = np.min(amp)
-    if vmax is None: 
-        vmax = np.max(amp)
-    
+    amp = np.abs(ar_complex)  
+    if np.max(amp) == np.min(amp):
+        if vmin is None: vmin = 0 
+        if vmax is None: vmax = np.max(amp)
+    else:
+        if vmin is None: vmin = 0.02
+        if vmax is None: vmax = 0.98
+        vals = np.sort(amp[~np.isnan(amp)])
+        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        ind_vmin = np.max([0,ind_vmin])
+        ind_vmax = np.min([len(vals)-1,ind_vmax])
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+
     from matplotlib.colors import hsv_to_rgb
 
     #function for converting to complex colors
@@ -843,6 +858,9 @@ def show_complex(
     #plot
     fig, ax = show(
         rgb,
+        vmin = 0, 
+        vmax = 1,
+        intensity_range= 'absolute',
         returnfig = True,
         **kwargs
     )
