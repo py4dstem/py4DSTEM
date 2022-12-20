@@ -25,6 +25,177 @@ def add(
     self.tree[data.name] = data
 
 
+# Preprocessing
+
+def set_scan_shape(
+    self,
+    Rshape
+    ):
+    """
+    Reshape the data given the real space scan shape.
+
+    Accepts:
+        Rshape (2-tuple)
+    """
+    from py4DSTEM.preprocess import set_scan_shape
+    assert len(Rshape)==2, "Rshape must have a length of 2"
+    d = set_scan_shape(self,Rshape[0],Rshape[1])
+    return d
+
+def swap_RQ(
+    self
+    ):
+    """
+    Swaps the first and last two dimensions of the 4D datacube.
+    """
+    from py4DSTEM.preprocess import swap_RQ
+    d = swap_RQ(self)
+    return d
+
+def swap_Rxy(
+    self
+    ):
+    """
+    Swaps the real space x and y coordinates.
+    """
+    from py4DSTEM.preprocess import swap_Rxy
+    d = swap_Rxy(self)
+    return d
+
+def swap_Qxy(
+    self
+    ):
+    """
+    Swaps the diffraction space x and y coordinates.
+    """
+    from py4DSTEM.preprocess import swap_Qxy
+    d = swap_Qxy(self)
+    return d
+
+def crop_Q(
+    self,
+    ROI
+    ):
+    """
+    Crops the data in diffraction space about the region specified by ROI.
+
+    Accepts:
+        ROI (4-tuple): Specifies (Qx_min,Qx_max,Qy_min,Qy_max)
+    """
+    from py4DSTEM.preprocess import crop_data_diffraction
+    assert len(ROI)==4, "Crop region `ROI` must have length 4"
+    d = crop_data_diffraction(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    return d
+
+def crop_R(
+    self,
+    ROI
+    ):
+    """
+    Crops the data in real space about the region specified by ROI.
+
+    Accepts:
+        ROI (4-tuple): Specifies (Rx_min,Rx_max,Ry_min,Ry_max)
+    """
+    from py4DSTEM.preprocess import crop_data_real
+    assert len(ROI)==4, "Crop region `ROI` must have length 4"
+    d = crop_data_real(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    return d
+
+def bin_Q(
+    self,
+    N
+    ):
+    """
+    Bins the data in diffraction space by bin factor N
+
+    Accepts:
+        N (int): the binning factor
+    """
+    from py4DSTEM.preprocess import bin_data_diffraction
+    d = bin_data_diffraction(self,N)
+    return d
+
+def bin_Q_mmap(
+    self,
+    N,
+    dtype=np.float32
+    ):
+    """
+    Bins the data in diffraction space by bin factor N for memory mapped data
+
+    Accepts:
+        N (int): the binning factor
+        dtype: the data type
+    """
+    from py4DSTEM.preprocess import bin_data_mmap
+    d = bin_data_mmap(self,N)
+    return d
+
+def bin_R(
+    self,
+    N
+    ):
+    """
+    Bins the data in real space by bin factor N
+
+    Accepts:
+        N (int): the binning factor
+    """
+    from py4DSTEM.preprocess import bin_data_real
+    d = bin_data_real(self,N)
+    return d
+
+def thin_R(
+    self,
+    N
+    ):
+    """
+    Reduces the data in real space by skipping every N patterns in the x and y directions.
+
+    Accepts:
+        N (int): the thinning factor
+    """
+    from py4DSTEM.preprocess import thin_data_real
+    d = thin_data_real(self,N)
+    return d
+
+def filter_hot_pixels(
+    self,
+    thresh,
+    ind_compare=1,
+    return_mask=False
+    ):
+    """
+    This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
+    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity
+    values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
+    Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
+    Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
+
+    Args:
+        datacube (DataCube):
+        thresh (float): threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+        ind_compare (int): which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        return_mask (bool): if True, returns the filter mask
+
+    Returns:
+        datacube (DataCube)
+        mask (optional, boolean Array) the bad pixel mask
+    """
+    from py4DSTEM.preprocess import filter_hot_pixels
+    d = filter_hot_pixels(
+        self,
+        thresh,
+        ind_compare,
+        return_mask,
+    )
+    return d
+
+
+
+
+
 
 # Diffraction imaging
 
