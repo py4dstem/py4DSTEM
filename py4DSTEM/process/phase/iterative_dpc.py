@@ -39,7 +39,7 @@ class DPCReconstruction(PhaseReconstruction):
     datacube: DataCube
         Input 4D diffraction pattern intensities
     dp_mask: ndarray, optional 
-        Mask for datacube intensities, must be same size as Qshape 
+        Mask for datacube intensities (Qx,Qy) 
     energy: float, optional
         The electron energy of the wave functions in eV
     verbose: bool, optional
