@@ -116,20 +116,6 @@ def bin_Q(
     d = bin_data_diffraction(self,N)
     return d
 
-def bin_R(
-    self,
-    N
-    ):
-    """
-    Bins the data in real space by bin factor N
-
-    Accepts:
-        N (int): the binning factor
-    """
-    from py4DSTEM.preprocess import bin_data_real
-    d = bin_data_real(self,N)
-    return d
-
 def bin_Q_mmap(
     self,
     N,
@@ -144,6 +130,34 @@ def bin_Q_mmap(
     """
     from py4DSTEM.preprocess import bin_data_mmap
     d = bin_data_mmap(self,N)
+    return d
+
+def bin_R(
+    self,
+    N
+    ):
+    """
+    Bins the data in real space by bin factor N
+
+    Accepts:
+        N (int): the binning factor
+    """
+    from py4DSTEM.preprocess import bin_data_real
+    d = bin_data_real(self,N)
+    return d
+
+def thin_R(
+    self,
+    N
+    ):
+    """
+    Reduces the data in real space by skipping every N patterns in the x and y directions.
+
+    Accepts:
+        N (int): the thinning factor
+    """
+    from py4DSTEM.preprocess import thin_data_real
+    d = thin_data_real(self,N)
     return d
 
 def filter_hot_pixels(
