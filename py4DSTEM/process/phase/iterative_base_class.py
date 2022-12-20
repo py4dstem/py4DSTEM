@@ -27,7 +27,6 @@ from py4DSTEM.process.utils import (
     get_shifted_ar,
 )
 
-
 class PhaseReconstruction(metaclass=ABCMeta):
     """
     Base phase reconstruction class.

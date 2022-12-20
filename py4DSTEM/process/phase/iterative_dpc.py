@@ -85,7 +85,7 @@ class DPCReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._region_of_interest_shape = None
         self._preprocessed = False
-        self._dp_mask = dp_mask 
+        self._dp_mask = dp_mask
         
     def preprocess(
         self,
@@ -294,6 +294,7 @@ class DPCReconstruction(PhaseReconstruction):
 
     def reconstruct(
         self,
+        reset: bool = False,
         padding_factor: float = 2,
         max_iter: int = 64,
         step_size: float = 1.0,
@@ -306,6 +307,8 @@ class DPCReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        reset: bool, optional
+            If True, previous reconstructions are ignored
         padding_factor: float, optional
             Factor to pad object by to reduce periodic artifacts
         max_iter: int, optional
@@ -360,12 +363,12 @@ class DPCReconstruction(PhaseReconstruction):
         ky_op = -1j * 0.25 * kya * k_den
 
         # Restart
-        if not hasattr(self,'_padded_phase_object'):
+        if not hasattr(self,'_padded_phase_object') or reset:
             self.error = np.inf
             self._step_size = step_size
             self._padded_phase_object = xp.zeros(padded_object_shape)
 
-        if store_iterations and not hasattr(self,'object_phase_iterations'):
+        if store_iterations and (not hasattr(self,'object_phase_iterations') or reset):
             self.object_phase_iterations = []
             self.error_iterations = []
 
