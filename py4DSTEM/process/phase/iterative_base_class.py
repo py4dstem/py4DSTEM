@@ -4,14 +4,12 @@ namely DPC and ptychography.
 """
 
 import warnings
-warnings.simplefilter(action="always",category=UserWarning)
-
 from abc import ABCMeta, abstractmethod
 from typing import Sequence
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
 import numpy as np
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 try:
     import cupy as cp
@@ -20,12 +18,15 @@ except ImportError:
 
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import polar_aliases, polar_symbols
+from py4DSTEM.process.phase.utils import polar_aliases
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
     fourier_resample,
     get_shifted_ar,
 )
+
+warnings.simplefilter(action="always", category=UserWarning)
+
 
 class PhaseReconstruction(metaclass=ABCMeta):
     """
@@ -96,9 +97,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,
-        datacube: DataCube, 
-        require_calibrations: bool = False, 
-        dp_mask: np.ndarray = None, 
+        datacube: DataCube,
+        require_calibrations: bool = False,
+        dp_mask: np.ndarray = None,
     ):
         """
         Common method to extract intensities and calibrations from datacube.
@@ -109,7 +110,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
-        dp_mask: ndarray 
+        dp_mask: ndarray
             If not None, apply mask to datacube amplitude
 
         Assigns
@@ -147,13 +148,18 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # Copies intensities to device casting to float32
         xp = self._xp
         self._intensities = xp.asarray(datacube.data, dtype=xp.float32)
-            
+
         if dp_mask is not None:
             if dp_mask.shape != self._intensities.shape[-2:]:
-                raise ValueError(f"Mask shape should be (Qx,Qy):{self.intensities.shape[-2:]}, not {dp_mask.shape}")
+                raise ValueError(
+                    (
+                        f"Mask shape should be (Qx,Qy):{self.intensities.shape[-2:]}, "
+                        "not {dp_mask.shape}"
+                    )
+                )
             self._intensities *= xp.asarray(dp_mask, dtype=xp.float32)
-            
-        self._intensities_shape = np.array(self._intensities.shape)  
+
+        self._intensities_shape = np.array(self._intensities.shape)
         self._intensities_sum = xp.sum(self._intensities, axis=(-2, -1))
 
         # Extracts calibrations
@@ -876,7 +882,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         com_fitted_y,
         region_of_interest_shape,
         bandlimit_nyquist=None,
-        bandlimit_power=2
+        bandlimit_power=2,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -927,9 +933,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 if need_to_resample:
                     intensities = fourier_resample(
-                        intensities, output_size=region_of_interest_shape,
-                        bandlimit_nyquist = bandlimit_nyquist,
-                        bandlimit_power = bandlimit_power,
+                        intensities,
+                        output_size=region_of_interest_shape,
+                        bandlimit_nyquist=bandlimit_nyquist,
+                        bandlimit_power=bandlimit_power,
                     )
 
                 intensities = xp.asarray(intensities)
