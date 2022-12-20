@@ -4,7 +4,7 @@ namely DPC and ptychography.
 """
 
 import warnings
-warnings.simplefilter(action="always")
+warnings.simplefilter(action="always",category=UserWarning)
 
 from typing import Mapping, Tuple
 
@@ -362,6 +362,13 @@ class DPCReconstruction(PhaseReconstruction):
         kx_op = -1j * 0.25 * kxa * k_den
         ky_op = -1j * 0.25 * kya * k_den
 
+        if reset is None and hasattr(self,'error'):
+            warnings.warn(
+                    ("Continuing reconstruction from previous result. "
+                      "Use reset=True for a fresh start." ),
+                    UserWarning,
+            )
+
         # Restart
         if not hasattr(self,'_padded_phase_object') or reset:
             self.error = np.inf
@@ -371,13 +378,6 @@ class DPCReconstruction(PhaseReconstruction):
         if store_iterations and (not hasattr(self,'object_phase_iterations') or reset):
             self.object_phase_iterations = []
             self.error_iterations = []
-
-        if reset is None and hasattr(self,'error'):
-            warnings.warn(
-                    ("Continuing reconstruction from previous result. "
-                      "Use reset=True for a fresh start." ),
-                    UserWarning,
-            )
 
         # main loop
         for a0 in tqdmnd(
