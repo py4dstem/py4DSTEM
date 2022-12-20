@@ -4,9 +4,7 @@ namely DPC and ptychography.
 """
 
 import warnings
-warnings.simplefilter(action="always",category=UserWarning)
-
-from typing import Mapping, Tuple
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,14 +18,9 @@ except ImportError:
 
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
-from py4DSTEM.process.phase.utils import (
-    ComplexProbe,
-    fft_shift,
-    polar_aliases,
-    polar_symbols,
-)
-from py4DSTEM.process.utils import fourier_resample, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
+
+warnings.simplefilter(action="always", category=UserWarning)
 
 
 class DPCReconstruction(PhaseReconstruction):
@@ -41,8 +34,8 @@ class DPCReconstruction(PhaseReconstruction):
     ----------
     datacube: DataCube
         Input 4D diffraction pattern intensities
-    dp_mask: ndarray, optional 
-        Mask for datacube intensities (Qx,Qy) 
+    dp_mask: ndarray, optional
+        Mask for datacube intensities (Qx,Qy)
     energy: float, optional
         The electron energy of the wave functions in eV
     verbose: bool, optional
@@ -86,7 +79,7 @@ class DPCReconstruction(PhaseReconstruction):
         self._region_of_interest_shape = None
         self._preprocessed = False
         self._dp_mask = dp_mask
-        
+
     def preprocess(
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -135,9 +128,7 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, 
-            require_calibrations=False, 
-            dp_mask = self._dp_mask
+            self._datacube, require_calibrations=False, dp_mask=self._dp_mask
         )
 
         self._calculate_intensities_center_of_mass(
@@ -362,20 +353,22 @@ class DPCReconstruction(PhaseReconstruction):
         kx_op = -1j * 0.25 * kxa * k_den
         ky_op = -1j * 0.25 * kya * k_den
 
-        if reset is None and hasattr(self,'error'):
+        if reset is None and hasattr(self, "error"):
             warnings.warn(
-                    ("Continuing reconstruction from previous result. "
-                      "Use reset=True for a fresh start." ),
-                    UserWarning,
+                (
+                    "Continuing reconstruction from previous result. "
+                    "Use reset=True for a fresh start."
+                ),
+                UserWarning,
             )
 
         # Restart
-        if not hasattr(self,'_padded_phase_object') or reset:
+        if not hasattr(self, "_padded_phase_object") or reset:
             self.error = np.inf
             self._step_size = step_size
             self._padded_phase_object = xp.zeros(padded_object_shape)
 
-        if store_iterations and (not hasattr(self,'object_phase_iterations') or reset):
+        if store_iterations and (not hasattr(self, "object_phase_iterations") or reset):
             self.object_phase_iterations = []
             self.error_iterations = []
 
@@ -389,8 +382,8 @@ class DPCReconstruction(PhaseReconstruction):
 
             if self._step_size < stopping_criterion:
                 warnings.warn(
-                        f"Step-size has decreased below stopping criterion {stopping_criterion}.",
-                        UserWarning,
+                    f"Step-size has decreased below stopping criterion {stopping_criterion}.",
+                    UserWarning,
                 )
                 break
 
@@ -511,7 +504,7 @@ class DPCReconstruction(PhaseReconstruction):
         errors = self.error_iterations
         phases = self.object_phase_iterations
         max_iter = len(phases) - 1
-        grid_range = range(0, max_iter+1, max_iter // (total_grids - 1))
+        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
 
         extent = [
             0,
@@ -598,4 +591,3 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         return self
-

@@ -4,15 +4,13 @@ namely DPC and ptychography.
 """
 
 import warnings
-warnings.simplefilter(action="always",category=UserWarning)
-
 from typing import Mapping, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-import scipy
+
 try:
     import cupy as cp
 except ImportError:
@@ -28,6 +26,8 @@ from py4DSTEM.process.phase.utils import (
 )
 from py4DSTEM.process.utils import fourier_resample, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
+
+warnings.simplefilter(action="always", category=UserWarning)
 
 
 class PtychographicReconstruction(PhaseReconstruction):
@@ -62,8 +62,8 @@ class PtychographicReconstruction(PhaseReconstruction):
     scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    dp_mask: ndarray, optional 
-        Mask for datacube intensities (Qx,Qy) 
+    dp_mask: ndarray, optional
+        Mask for datacube intensities (Qx,Qy)
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -110,11 +110,13 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._xp = np
             self._asnumpy = np.asarray
             from scipy.ndimage import gaussian_filter
+
             self._gaussian_filter = gaussian_filter
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
             from cupyx.scipy.ndimage import gaussian_filter
+
             self._gaussian_filter = gaussian_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
@@ -155,7 +157,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         bandlimit_nyquist: float = None,
-        bandlimit_power:float = 2,
+        bandlimit_power: float = 2,
         **kwargs,
     ):
         """
@@ -204,9 +206,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, 
-            require_calibrations=True,
-            dp_mask = self._dp_mask
+            self._datacube, require_calibrations=True, dp_mask=self._dp_mask
         )
 
         self._calculate_intensities_center_of_mass(
@@ -234,8 +234,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._com_fitted_x,
             self._com_fitted_y,
             self._region_of_interest_shape,
-            bandlimit_nyquist = bandlimit_nyquist,
-            bandlimit_power = bandlimit_power,
+            bandlimit_nyquist=bandlimit_nyquist,
+            bandlimit_power=bandlimit_power,
         )
 
         # explicitly delete namespace
@@ -287,9 +287,9 @@ class PtychographicReconstruction(PhaseReconstruction):
                     self._vacuum_probe_intensity = fourier_resample(
                         self._vacuum_probe_intensity,
                         output_size=self._region_of_interest_shape,
-                        bandlimit_nyquist = bandlimit_nyquist,
-                        bandlimit_power = bandlimit_power,
-                    )    
+                        bandlimit_nyquist=bandlimit_nyquist,
+                        bandlimit_power=bandlimit_power,
+                    )
                 probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity)
                 shift_x = self._region_of_interest_shape[0] / 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] / 2 - probe_y0
@@ -329,10 +329,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         # if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
-        
+
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
-        
+
         if plot_probe_overlaps:
 
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
@@ -565,7 +565,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 * object_normalization
             )
 
-
         return object_update, probe_update
 
     def _update(
@@ -629,7 +628,9 @@ class PtychographicReconstruction(PhaseReconstruction):
             amplitude = xp.minimum(xp.abs(current_object), 1.0)
         return amplitude * phase
 
-    def _object_smoothness_constraint(self, current_object, gaussian_blur_sigma, pure_phase_object):
+    def _object_smoothness_constraint(
+        self, current_object, gaussian_blur_sigma, pure_phase_object
+    ):
         """
         Ptychographic smoothness constraint.
         Used for blurring object.
@@ -654,10 +655,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         if pure_phase_object:
             amplitude = xp.abs(current_object)
             phase = xp.angle(current_object)
-            phase = gaussian_filter(phase,gaussian_blur_sigma)
-            current_object = amplitude * xp.exp(1.0j *phase)
+            phase = gaussian_filter(phase, gaussian_blur_sigma)
+            current_object = amplitude * xp.exp(1.0j * phase)
         else:
-            current_object = gaussian_filter(current_object,gaussian_blur_sigma)
+            current_object = gaussian_filter(current_object, gaussian_blur_sigma)
 
         return current_object
 
@@ -688,7 +689,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         return shifted_probe
-    
+
     def _probe_fourier_amplitude_constraint(self, current_probe):
         """
         Ptychographic probe Fourier-amplitude constraint.
@@ -703,16 +704,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         constrained_probe: np.ndarray
             Fourier-amplitude constrained probe estimate
         """
-        xp = self._xp        
-    
+        xp = self._xp
+
         current_probe_fft = xp.fft.fft2(current_probe)
         current_probe_fft_phase = xp.angle(current_probe_fft)
-        
-        constrained_probe_fft = self._probe_initial_fft_amplitude*xp.exp(1j*current_probe_fft_phase)
+
+        constrained_probe_fft = self._probe_initial_fft_amplitude * xp.exp(
+            1j * current_probe_fft_phase
+        )
         constrained_probe = xp.fft.ifft2(constrained_probe_fft)
-        
+
         return constrained_probe
-    
+
     def _probe_finite_support_constraint(self, current_probe):
         """
         Ptychographic probe support constraint.
@@ -727,11 +730,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         constrained_probe: np.ndarray
             Finite-support constrained probe estimate
         """
-        
+
         return current_probe * self._probe_support_mask
-    
+
     def _constraints(
-        self, current_object, current_probe, pure_phase_object, gaussian_blur_sigma, fix_com, fix_probe_fourier_amplitude
+        self,
+        current_object,
+        current_probe,
+        pure_phase_object,
+        gaussian_blur_sigma,
+        fix_com,
+        fix_probe_fourier_amplitude,
     ):
         """
         Ptychographic constraints operator.
@@ -759,10 +768,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         constrained_probe: np.ndarray
             Constrained probe estimate
         """
-        
+
         if gaussian_blur_sigma is not None:
-            current_object = self._object_smoothness_constraint(current_object,gaussian_blur_sigma, pure_phase_object)
-        
+            current_object = self._object_smoothness_constraint(
+                current_object, gaussian_blur_sigma, pure_phase_object
+            )
+
         current_object = self._object_threshold_constraint(
             current_object, pure_phase_object
         )
@@ -771,12 +782,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
 
         current_probe = self._probe_finite_support_constraint(current_probe)
-        
+
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         return current_object, current_probe
-        
+
     def reconstruct(
         self,
         reset: bool = None,
@@ -787,7 +798,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe_iter: int = 0,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
-        fix_probe_fourier_amplitude_iter: int =  0,
+        fix_probe_fourier_amplitude_iter: int = 0,
         pure_phase_object_iter: int = 0,
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
@@ -809,11 +820,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             Probe normalization minimum as a fraction of the maximum overlap intensity
         fix_probe: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
-        fix_com: bool, optional 
+        fix_com: bool, optional
             If True, fixes center of mass of probe
         gaussian_blur_sigma: float, optional
             Standard deviation of gaussian kernel
-        fix_probe_amplitude: int, optional 
+        fix_probe_amplitude: int, optional
             Number of iterations to run with a fixed probe amplitude
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
@@ -831,7 +842,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         # initialization
-        if store_iterations and (not hasattr(self,'object_iterations') or reset):
+        if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
             self.error_iterations = []
@@ -839,19 +850,27 @@ class PtychographicReconstruction(PhaseReconstruction):
         if reset:
             self._object = self._object_initial.copy()
             self._probe = self._probe_initial.copy()
-        elif reset is None and hasattr(self,'error'):
-                warnings.warn(
-                        ("Continuing reconstruction from previous result. "
-                          "Use reset=True for a fresh start." ),
-                        UserWarning,
-                )
+        elif reset is None and hasattr(self, "error"):
+            warnings.warn(
+                (
+                    "Continuing reconstruction from previous result. "
+                    "Use reset=True for a fresh start."
+                ),
+                UserWarning,
+            )
 
         # Probe support mask initialization
         x = xp.linspace(-1, 1, self._region_of_interest_shape[0], endpoint=False)
         y = xp.linspace(-1, 1, self._region_of_interest_shape[1], endpoint=False)
         xx, yy = xp.meshgrid(x, y, indexing="ij")
         self._probe_support_mask = xp.exp(
-            -(((xx / probe_support_relative_radius) ** 2 + (yy / probe_support_relative_radius) ** 2) ** probe_support_supergaussian_degree)
+            -(
+                (
+                    (xx / probe_support_relative_radius) ** 2
+                    + (yy / probe_support_relative_radius) ** 2
+                )
+                ** probe_support_supergaussian_degree
+            )
         )
 
         # main loop
@@ -872,7 +891,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 difference_gradient_fourier,
-                fix_probe = a0 < fix_probe_iter,
+                fix_probe=a0 < fix_probe_iter,
                 normalization_min=normalization_min,
             )
 
@@ -889,10 +908,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._object, self._probe = self._constraints(
                 self._object,
                 self._probe,
-                pure_phase_object = a0 < pure_phase_object_iter,
-                gaussian_blur_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None,
-                fix_com = fix_com and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude = a0 < fix_probe_fourier_amplitude_iter
+                pure_phase_object=a0 < pure_phase_object_iter,
+                gaussian_blur_sigma=gaussian_blur_sigma
+                if a0 < gaussian_blur_iter
+                else None,
+                fix_com=fix_com and a0 >= fix_probe_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
             )
 
             if store_iterations:
@@ -1015,7 +1036,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
-                        
+
             # Probe
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
@@ -1130,7 +1151,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         else:
             total_grids = np.prod(iterations_grid)
         max_iter = len(objects) - 1
-        grid_range = range(0, max_iter+1, max_iter // (total_grids - 1))
+        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
 
         extent = [
             0,
