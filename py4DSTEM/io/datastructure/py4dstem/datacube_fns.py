@@ -25,6 +25,177 @@ def add(
     self.tree[data.name] = data
 
 
+# Preprocessing
+
+def set_scan_shape(
+    self,
+    Rshape
+    ):
+    """
+    Reshape the data given the real space scan shape.
+
+    Accepts:
+        Rshape (2-tuple)
+    """
+    from py4DSTEM.preprocess import set_scan_shape
+    assert len(Rshape)==2, "Rshape must have a length of 2"
+    d = set_scan_shape(self,Rshape[0],Rshape[1])
+    return d
+
+def swap_RQ(
+    self
+    ):
+    """
+    Swaps the first and last two dimensions of the 4D datacube.
+    """
+    from py4DSTEM.preprocess import swap_RQ
+    d = swap_RQ(self)
+    return d
+
+def swap_Rxy(
+    self
+    ):
+    """
+    Swaps the real space x and y coordinates.
+    """
+    from py4DSTEM.preprocess import swap_Rxy
+    d = swap_Rxy(self)
+    return d
+
+def swap_Qxy(
+    self
+    ):
+    """
+    Swaps the diffraction space x and y coordinates.
+    """
+    from py4DSTEM.preprocess import swap_Qxy
+    d = swap_Qxy(self)
+    return d
+
+def crop_Q(
+    self,
+    ROI
+    ):
+    """
+    Crops the data in diffraction space about the region specified by ROI.
+
+    Accepts:
+        ROI (4-tuple): Specifies (Qx_min,Qx_max,Qy_min,Qy_max)
+    """
+    from py4DSTEM.preprocess import crop_data_diffraction
+    assert len(ROI)==4, "Crop region `ROI` must have length 4"
+    d = crop_data_diffraction(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    return d
+
+def crop_R(
+    self,
+    ROI
+    ):
+    """
+    Crops the data in real space about the region specified by ROI.
+
+    Accepts:
+        ROI (4-tuple): Specifies (Rx_min,Rx_max,Ry_min,Ry_max)
+    """
+    from py4DSTEM.preprocess import crop_data_real
+    assert len(ROI)==4, "Crop region `ROI` must have length 4"
+    d = crop_data_real(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    return d
+
+def bin_Q(
+    self,
+    N
+    ):
+    """
+    Bins the data in diffraction space by bin factor N
+
+    Accepts:
+        N (int): the binning factor
+    """
+    from py4DSTEM.preprocess import bin_data_diffraction
+    d = bin_data_diffraction(self,N)
+    return d
+
+def bin_Q_mmap(
+    self,
+    N,
+    dtype=np.float32
+    ):
+    """
+    Bins the data in diffraction space by bin factor N for memory mapped data
+
+    Accepts:
+        N (int): the binning factor
+        dtype: the data type
+    """
+    from py4DSTEM.preprocess import bin_data_mmap
+    d = bin_data_mmap(self,N)
+    return d
+
+def bin_R(
+    self,
+    N
+    ):
+    """
+    Bins the data in real space by bin factor N
+
+    Accepts:
+        N (int): the binning factor
+    """
+    from py4DSTEM.preprocess import bin_data_real
+    d = bin_data_real(self,N)
+    return d
+
+def thin_R(
+    self,
+    N
+    ):
+    """
+    Reduces the data in real space by skipping every N patterns in the x and y directions.
+
+    Accepts:
+        N (int): the thinning factor
+    """
+    from py4DSTEM.preprocess import thin_data_real
+    d = thin_data_real(self,N)
+    return d
+
+def filter_hot_pixels(
+    self,
+    thresh,
+    ind_compare=1,
+    return_mask=False
+    ):
+    """
+    This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
+    applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity
+    values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
+    Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
+    Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
+
+    Args:
+        datacube (DataCube):
+        thresh (float): threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+        ind_compare (int): which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        return_mask (bool): if True, returns the filter mask
+
+    Returns:
+        datacube (DataCube)
+        mask (optional, boolean Array) the bad pixel mask
+    """
+    from py4DSTEM.preprocess import filter_hot_pixels
+    d = filter_hot_pixels(
+        self,
+        thresh,
+        ind_compare,
+        return_mask,
+    )
+    return d
+
+
+
+
+
 
 # Diffraction imaging
 
@@ -375,9 +546,9 @@ def get_virtual_image(
     self,
     mode,
     geometry,
-    centered = None,
-    calibrated = None,
-    shift_center = None,
+    centered = False,
+    calibrated = False,
+    shift_center = False,
     verbose = True,
     dask = False,
     return_mask = False,
@@ -396,7 +567,7 @@ def get_virtual_image(
             - 'annular' or 'annulus' uses annular detector, like dark field
             - 'rectangle', 'square', 'rectangular', uses rectangular detector
             - 'mask' flexible detector, any 2D array
-    geometry (variable) : valid entries are determined by the `mode`, values in
+        geometry (variable) : valid entries are determined by the `mode`, values in
         pixels argument, as follows:
             - 'point': 2-tuple, (qx,qy), ints
             - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
@@ -408,23 +579,19 @@ def get_virtual_image(
         centered (bool): if False, the origin is in the upper left corner.
              If True, the origin is set to the mean origin in the datacube
              calibrations, so that a bright-field image could be specified
-             with, e.g., geometry = ((0,0),R). If `None` is passed, checks
-             the calibrations and sets to True if the mean origin is found,
-             and False if not.  The origin can set with
+             with, e.g., geometry = ((0,0),R).  The origin can set with
              datacube.calibration.set_origin().  For `mode="mask"`,
-             has no effect. Default is None.
+             has no effect. Default is False.
         calibrated (bool): if True, geometry is specified in units of 'A^-1'
             instead of pixels. The datacube's calibrations must have its
             `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-            no effect. Default is None and will set to True if the calibration
-            has been set.
+            no effect. Default is False.
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
-            images. The datacube's calibration['origin'] parameter must be set
-            (centered = True). The shift applied to each pattern is the
-            difference between the local origin position and the mean origin
-            position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True.
+            images. The datacube's calibration['origin'] parameter must be set. 
+            The shift applied to each pattern is the difference between the local 
+            origin position and the mean origin position over all patterns, 
+            rounded to the nearest integer for speed. Default is False.
         verbose (bool): if True, show progress bar
         dask (bool): if True, use dask arrays
         return_mask (bool): if False (default) returns a virtual image as usual.
@@ -438,40 +605,9 @@ def get_virtual_image(
             add anything to the datacube's tree.
         name (str): the output object's name
         returncalc (bool): if True, returns the output
-        test_config: if True, returns the Boolean value of (`centered`,
-            `calibrated`,`shift_center`). Does not compute the virtual image.
-
     Returns:
         (Optional): if returncalc is True, returns the VirtualImage
     """
-    #check for calibration and set function configutions
-    if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
-            calibrated = True
-        else:
-            calibrated = False
-
-    #check for centered 
-    if centered is None:
-        if self.calibration.get_origin():
-            centered = True
-        else:
-            centered = False
-
-    # logic to determine shift_center
-    if shift_center is None:
-        if centered:
-            shift_center = True
-        else:
-            shift_center = False
-
-    if test_config:
-        for x,y in zip(['centered','calibrated','shift_center'],
-                       [centered,calibrated,shift_center]):
-            print(f"{x} = {y}")
-        return
-
-
     # perform computation
     from py4DSTEM.process.virtualimage import get_virtual_image
     im = get_virtual_image(
@@ -537,55 +673,27 @@ def position_detector(
         centered (bool): if False, the origin is in the upper left corner.
              If True, the origin is set to the mean origin in the datacube
              calibrations, so that a bright-field image could be specified
-             with, e.g., geometry = ((0,0),R). If `None` is passed, checks
-             the calibrations and sets to True if the mean origin is found,
-             and False if not.  The origin can set with
+             with, e.g., geometry = ((0,0),R). The origin can set with
              datacube.calibration.set_origin().  For `mode="mask"`,
-             has no effect. Default is None.
+             has no effect. Default is False.
         calibrated (bool): if True, geometry is specified in units of 'A^-1'
             instead of pixels. The datacube's calibrations must have its
             `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-            no effect. Default is None and will set to True if the calibration
-            has been set.
+            no effect. 
         shift_center (bool): if True, the mask is shifted at each real space
             position to account for any shifting of the origin of the diffraction
-            images. The datacube's calibration['origin'] parameter must be set
-            (centered = True). The shift applied to each pattern is the
-            difference between the local origin position and the mean origin
-            position over all patterns, rounded to the nearest integer for speed.
-            Default is None and will set to True if centered == True.
-        test_config: if True, performs no calculations; instead, checks the
-            dataset's calibrations and prints to screen which calibrations
-            will be applied when the function is run.
+            images. The datacube's calibration['origin'] parameter must be set. 
+            The shift applied to each pattern is the difference between the local 
+            origin position and the mean origin position over all patterns, 
+            rounded to the nearest integer for speed.
     """
+  
     # parse inputs
     if scan_position is None:
         data = self
         shift_center = False
     else:
         data = (self,scan_position[0],scan_position[1])
-        shift_center = True
-
-    #check for calibration and set function configutions
-    if calibrated is None:
-        if self.calibration['Q_pixel_units'] == 'A^-1' and 'qx0' in self.calibration.keys:
-            calibrated = True
-        else:
-            calibrated = False
-
-    #check for centered 
-    if centered is None:
-        if self.calibration.get_origin():
-            centered = True
-        else:
-            centered = False
-
-    if test_config:
-        for x,y in zip(['centered','calibrated','shift_center'],
-                       [centered,calibrated,shift_center]):
-            print(f"{x} = {y}")
-        return
-
 
     # make and show visualization
     from py4DSTEM.visualize import position_detector
@@ -599,8 +707,6 @@ def position_detector(
         color = 'r',
         alpha = 0.4
     )
-
-
 
 
 
