@@ -294,7 +294,7 @@ class DPCReconstruction(PhaseReconstruction):
 
     def reconstruct(
         self,
-        reset: bool = False,
+        reset: bool = None,
         padding_factor: float = 2,
         max_iter: int = 64,
         step_size: float = 1.0,
@@ -371,6 +371,13 @@ class DPCReconstruction(PhaseReconstruction):
         if store_iterations and (not hasattr(self,'object_phase_iterations') or reset):
             self.object_phase_iterations = []
             self.error_iterations = []
+
+        if reset is None and hasattr(self,'error'):
+            warnings.warn(
+                    ("Continuing reconstruction from previous result. "
+                      "Use reset=True for a fresh start." ),
+                    UserWarning,
+            )
 
         # main loop
         for a0 in tqdmnd(
