@@ -3,6 +3,9 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely DPC and ptychography.
 """
 
+import warnings
+warnings.simplefilter(action="always")
+
 from typing import Mapping, Tuple
 
 import matplotlib.pyplot as plt
@@ -257,6 +260,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         else:
             self._object = xp.asarray(self._object, dtype=xp.complex64)
 
+        self._object_initial = self._object.copy()
+
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
         self._positions = self._positions_px.copy()
         self._positions[:, 0] *= self.sampling[0]
@@ -384,7 +389,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             fig.tight_layout()
 
         self._preprocessed = True
-        self._no_processing = True
 
         return self
 
@@ -739,14 +743,15 @@ class PtychographicReconstruction(PhaseReconstruction):
         
     def reconstruct(
         self,
+        reset: bool = None,
         max_iter: int = 64,
         step_size: float = 0.9,
         normalization_min: float = 1e-2,
-        fix_probe: int = 12,
+        fix_probe: int = 0,
         fix_com: bool = True,
         median_filter: tuple = (0,0,0),
-        fix_probe_amplitude: int =  64,
-        pure_phase_object_iter: int = 64,
+        fix_probe_amplitude: int =  0,
+        pure_phase_object_iter: int = 0,
         progress_bar: bool = True,
         store_iterations: bool = False,
     ):
@@ -755,6 +760,8 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         Parameters
         --------
+        reset: bool, optional
+            If True, previous reconstructions are ignored
         max_iter: int, optional
             Maximum number of iterations to run
         step_size: float, optional
@@ -784,14 +791,21 @@ class PtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         # initialization
-        if store_iterations:
+        if store_iterations and (not hasattr(self,'object_iterations') or reset):
             self.object_iterations = []
             self.probe_iterations = []
             self.error_iterations = []
-        if self._no_processing == False: 
-            print('Warning: already run reconstruction. Re-run pre-processing for fresh start.')
-            
-        self._no_processing = False
+
+        if reset:
+            self._object = self._object_initial.copy()
+            self._probe = self._probe_initial.copy()
+        elif reset is None and hasattr(self,'error'):
+                warnings.warn(
+                        ("Continuing reconstruction from previous result. "
+                          "Use reset=True for a fresh start." ),
+                        UserWarning,
+                )
+
         # main loop
         for a0 in tqdmnd(
             max_iter,
