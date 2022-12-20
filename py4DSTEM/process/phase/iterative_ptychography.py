@@ -61,7 +61,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     dp_mask: ndarray, optional 
-        Mask for datacube intensities, must be same size as Qshape 
+        Mask for datacube intensities (Qx,Qy) 
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
