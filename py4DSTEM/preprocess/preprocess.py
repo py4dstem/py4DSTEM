@@ -141,6 +141,39 @@ def bin_data_real(datacube, bin_factor):
         datacube.data = datacube.data.reshape(int(R_Nx/bin_factor),bin_factor,int(R_Ny/bin_factor),bin_factor,Q_Nx,Q_Ny).sum(axis=(1,3))
         return datacube
 
+def thin_data_real(datacube, thinning_factor):
+    """
+    Reduces data size by a factor of `thinning_factor`^2 by skipping every `thinning_factor` beam positions in both x and y.
+    """
+    Rshape0 = datacube.Rshape
+    Rshapef = tuple([x//thinning_factor for x in Rshape0])
+
+    # allocate memory
+    data = np.empty(
+        (Rshapef[0],Rshapef[1],datacube.Qshape[0],datacube.Qshape[1]),
+        dtype = datacube.data.dtype
+    )
+
+    # populate data
+    for rx,ry in tqdmnd(Rshapef[0],Rshapef[1]):
+
+        rx0 = rx*thinning_factor
+        ry0 = ry*thinning_factor
+        data[rx,ry,:,:] = datacube[rx0,ry0,:,:]
+
+    datacube.data = data
+    return datacube
+
+
+
+#        binned_diffraction_image = py4DSTEM.preprocess.bin2D(
+#            diffraction_image,
+#            N_Q
+#        )
+
+#        data[rx,ry,:,:] = binned_diffraction_image
+
+
 def filter_hot_pixels(
     datacube,
     thresh,
