@@ -165,15 +165,6 @@ def thin_data_real(datacube, thinning_factor):
     return datacube
 
 
-
-#        binned_diffraction_image = py4DSTEM.preprocess.bin2D(
-#            diffraction_image,
-#            N_Q
-#        )
-
-#        data[rx,ry,:,:] = binned_diffraction_image
-
-
 def filter_hot_pixels(
     datacube,
     thresh,
