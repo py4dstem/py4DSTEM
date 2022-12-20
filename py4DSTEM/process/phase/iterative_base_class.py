@@ -4,7 +4,7 @@ namely DPC and ptychography.
 """
 
 import warnings
-warnings.simplefilter(action="always")
+warnings.simplefilter(action="always",category=UserWarning)
 
 from abc import ABCMeta, abstractmethod
 from typing import Sequence
@@ -875,6 +875,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         com_fitted_x,
         com_fitted_y,
         region_of_interest_shape,
+        bandlimit_nyquist=None,
+        bandlimit_power=2
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -922,13 +924,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 intensities = get_shifted_ar(
                     dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                 )
-                # intensities = get_shifted_ar(
-                #     dps[rx, ry], dps.shape[2]/2, dps.shape[3]/2, bilinear=True
-                # )
 
                 if need_to_resample:
                     intensities = fourier_resample(
-                        intensities, output_size=region_of_interest_shape
+                        intensities, output_size=region_of_interest_shape,
+                        bandlimit_nyquist = bandlimit_nyquist,
+                        bandlimit_power = bandlimit_power,
                     )
 
                 intensities = xp.asarray(intensities)
