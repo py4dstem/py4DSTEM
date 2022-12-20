@@ -26,7 +26,6 @@ def add(
 
 
 # Preprocessing
-from py4DSTEM import preprocess
 
 def set_scan_shape(
     self,
@@ -38,8 +37,9 @@ def set_scan_shape(
     Accepts:
         Rshape (2-tuple)
     """
+    from py4DSTEM.preprocess import set_scan_shape
     assert len(Rshape)==2, "Rshape must have a length of 2"
-    d = preprocess.set_scan_shape(self,Rshape[0],Rshape[1])
+    d = set_scan_shape(self,Rshape[0],Rshape[1])
     return d
 
 def swap_RQ(
@@ -48,7 +48,8 @@ def swap_RQ(
     """
     Swaps the first and last two dimensions of the 4D datacube.
     """
-    d = preprocess.swap_RQ(self)
+    from py4DSTEM.preprocess import swap_RQ
+    d = swap_RQ(self)
     return d
 
 def swap_Rxy(
@@ -57,7 +58,8 @@ def swap_Rxy(
     """
     Swaps the real space x and y coordinates.
     """
-    d = preprocess.swap_Rxy(self)
+    from py4DSTEM.preprocess import swap_Rxy
+    d = swap_Rxy(self)
     return d
 
 def swap_Qxy(
@@ -66,7 +68,8 @@ def swap_Qxy(
     """
     Swaps the diffraction space x and y coordinates.
     """
-    d = preprocess.swap_Qxy(self)
+    from py4DSTEM.preprocess import swap_Qxy
+    d = swap_Qxy(self)
     return d
 
 def crop_Q(
@@ -79,8 +82,9 @@ def crop_Q(
     Accepts:
         ROI (4-tuple): Specifies (Qx_min,Qx_max,Qy_min,Qy_max)
     """
+    from py4DSTEM.preprocess import crop_data_diffraction
     assert len(ROI)==4, "Crop region `ROI` must have length 4"
-    d = preprocess.crop_data_diffraction(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    d = crop_data_diffraction(self,ROI[0],ROI[1],ROI[2],ROI[3])
     return d
 
 def crop_R(
@@ -93,8 +97,9 @@ def crop_R(
     Accepts:
         ROI (4-tuple): Specifies (Rx_min,Rx_max,Ry_min,Ry_max)
     """
+    from py4DSTEM.preprocess import crop_data_real
     assert len(ROI)==4, "Crop region `ROI` must have length 4"
-    d = preprocess.crop_data_real(self,ROI[0],ROI[1],ROI[2],ROI[3])
+    d = crop_data_real(self,ROI[0],ROI[1],ROI[2],ROI[3])
     return d
 
 def bin_Q(
@@ -107,7 +112,8 @@ def bin_Q(
     Accepts:
         N (int): the binning factor
     """
-    d = preprocess.bin_data_diffraction(self,N)
+    from py4DSTEM.preprocess import bin_data_diffraction
+    d = bin_data_diffraction(self,N)
     return d
 
 def bin_R(
@@ -120,7 +126,8 @@ def bin_R(
     Accepts:
         N (int): the binning factor
     """
-    d = preprocess.bin_data_real(self,N)
+    from py4DSTEM.preprocess import bin_data_real
+    d = bin_data_real(self,N)
     return d
 
 def bin_Q_mmap(
@@ -135,7 +142,8 @@ def bin_Q_mmap(
         N (int): the binning factor
         dtype: the data type
     """
-    d = preprocess.bin_data_mmap(self,N)
+    from py4DSTEM.preprocess import bin_data_mmap
+    d = bin_data_mmap(self,N)
     return d
 
 def filter_hot_pixels(
@@ -161,7 +169,8 @@ def filter_hot_pixels(
         datacube (DataCube)
         mask (optional, boolean Array) the bad pixel mask
     """
-    d = preprocess.filter_hot_pixels(
+    from py4DSTEM.preprocess import filter_hot_pixels
+    d = filter_hot_pixels(
         self,
         thresh,
         ind_compare,
