@@ -239,6 +239,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         # explicitly delete namespace
+        self._num_diffraction_patterns = self._amplitudes.shape[0]
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
@@ -262,14 +263,15 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._object_initial = self._object.copy()
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
-        self._positions = self._positions_px.copy()
-        self._positions[:, 0] *= self.sampling[0]
-        self._positions[:, 1] *= self.sampling[1]
-
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
         self._positions_px_fractional = self._positions_px - xp.round(
             self._positions_px
         )
+
+        self._positions_px_initial = self._positions_px.copy()
+        self._positions_initial = self._positions_px_initial.copy()
+        self._positions_initial[:, 0] *= self.sampling[0]
+        self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
         self._object_shape = self._object.shape
@@ -377,8 +379,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 **kwargs,
             )
             ax2.scatter(
-                asnumpy(self._positions[:, 1]),
-                asnumpy(self._positions[:, 0]),
+                self.positions[:, 1],
+                self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
@@ -486,12 +488,73 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return difference_gradient_fourier, error
 
+    def _position_correction(
+        self,
+        current_object,
+        current_probe,
+        difference_gradient,
+    ):
+        """
+        Ptychographic parallel position correction.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        difference_gradient: np.ndarray
+            Difference between measured and estimated exit waves
+
+        Returns
+        --------
+        positions_update: np.ndarray
+            Negative positions gradient. If fix_positions is True returns None
+        """
+
+        xp = self._xp
+        dx, dy = self._scan_sampling
+
+        obj_dx = (
+            xp.roll(current_object, -1, axis=0) - xp.roll(current_object, 1, axis=0)
+        ) / (2 * dx)
+        obj_dy = (
+            xp.roll(current_object, -1, axis=1) - xp.roll(current_object, 1, axis=1)
+        ) / (2 * dy)
+
+        exit_waves_dx = (
+            obj_dx[
+                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            ]
+            * self._shifted_probes
+        )
+
+        exit_waves_dy = (
+            obj_dy[
+                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            ]
+            * self._shifted_probes
+        )
+
+        displacements_x = xp.sum(
+            xp.real(xp.conj(exit_waves_dx) * difference_gradient), axis=(-2, -1)
+        ) / xp.sum(xp.abs(exit_waves_dx) ** 2, axis=(-2, -1))
+
+        displacements_y = xp.sum(
+            xp.real(xp.conj(exit_waves_dy) * difference_gradient), axis=(-2, -1)
+        ) / xp.sum(xp.abs(exit_waves_dy) ** 2, axis=(-2, -1))
+
+        positions_update = xp.column_stack((displacements_x, displacements_y))
+
+        return positions_update
+
     def _adjoint(
         self,
         current_object,
         current_probe,
         difference_gradient_fourier,
         fix_probe: bool,
+        fix_positions: bool,
         normalization_min: float,
     ):
         """
@@ -508,6 +571,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Difference between measured and estimated exit waves in reciprocal space
         fix_probe: bool, optional
             If True, probe will not be updated
+        fix_positions: bool, optional
+            If True, positions will not be updated
         normalization_min: float, optional
             Probe normalization minimum as a fraction of the maximum overlap intensity
 
@@ -517,6 +582,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Negative object gradient
         probe_update: np.ndarray
             Negative probe gradient. If fix_probe is True returns None
+        positions_update: np.ndarray
+            Negative positions gradient. If fix_positions is True returns None
         """
 
         xp = self._xp
@@ -565,7 +632,16 @@ class PtychographicReconstruction(PhaseReconstruction):
                 * object_normalization
             )
 
-        return object_update, probe_update
+        if fix_positions:
+            positions_update = None
+        else:
+            positions_update = self._position_correction(
+                current_object,
+                current_probe,
+                difference_gradient,
+            )
+
+        return object_update, probe_update, positions_update
 
     def _update(
         self,
@@ -573,7 +649,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_update,
         current_probe,
         probe_update,
+        current_positions,
+        positions_update,
         step_size: float = 0.9,
+        positions_step_size: float = 0.9,
     ):
         """
         Ptychographic update operator.
@@ -588,8 +667,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         probe_update: np.ndarray
             Negative probe gradient
+        current_positions: np.ndarray
+            Current positions estimate
+        positions_update: np.ndarray
+            Negative positions gradient
         step_size: float, optional
             Update step size
+        positions_step_size: float, optional
+            Positions update step size
 
         Returns
         --------
@@ -597,11 +682,15 @@ class PtychographicReconstruction(PhaseReconstruction):
             Updated object estimate
         updated_probe: np.ndarray
             Updated probe estimate
+        updated_positions: np.ndarray
+            Updated positions estimate
         """
         current_object += step_size * object_update
         if probe_update is not None:
             current_probe += step_size * probe_update
-        return current_object, current_probe
+        if positions_update is not None:
+            current_positions += positions_step_size * positions_update
+        return current_object, current_probe, current_positions
 
     def _object_threshold_constraint(self, current_object, pure_phase_object):
         """
@@ -699,6 +788,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         --------
         current_probe: np.ndarray
             Current probe estimate
+
         Returns
         --------
         constrained_probe: np.ndarray
@@ -725,6 +815,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         --------
         current_probe: np.ndarray
             Current probe estimate
+
         Returns
         --------
         constrained_probe: np.ndarray
@@ -733,14 +824,45 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return current_probe * self._probe_support_mask
 
+    def _positions_center_of_mass_constraint(self, current_positions):
+        """
+        Ptychographic position center of mass constraint.
+        Additionally updates vectorized indices used in _overlap_projection.
+
+        Parameters
+        --------
+        current_positions: np.ndarray
+            Current positions estimate
+
+        Assigns
+        --------
+        self._positions_px_fractional: np.ndarray
+            Updated fractional positions used to shift probes
+
+        Returns
+        --------
+        constrained_positions: np.ndarray
+            CoM constrained positions estimate
+        """
+        xp = self._xp
+
+        current_positions -= xp.mean(current_positions, axis=0) - self._positions_px_com
+        self._positions_px_fractional = current_positions - xp.round(current_positions)
+
+        self._set_vectorized_patch_indices()
+
+        return current_positions
+
     def _constraints(
         self,
         current_object,
         current_probe,
+        current_positions,
         pure_phase_object,
         gaussian_blur_sigma,
         fix_com,
         fix_probe_fourier_amplitude,
+        fix_positions,
     ):
         """
         Ptychographic constraints operator.
@@ -752,6 +874,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Current object estimate
         current_probe: np.ndarray
             Current probe estimate
+        current_positions: np.ndarray
+            Current positions estimate
         pure_phase_object: bool
             If True, object amplitude is set to unity
         gaussian_blur_sigma: float
@@ -760,6 +884,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             If True, probe CoM is fixed to the center
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is set to initial probe
+        fix_positions: bool
+            If True, positions are not updated
 
         Returns
         --------
@@ -767,6 +893,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         constrained_probe: np.ndarray
             Constrained probe estimate
+        constrained_positions: np.ndarray
+            Constrained positions estimate
         """
 
         if gaussian_blur_sigma is not None:
@@ -786,16 +914,23 @@ class PtychographicReconstruction(PhaseReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
-        return current_object, current_probe
+        if not fix_positions:
+            current_positions = self._positions_center_of_mass_constraint(
+                current_positions
+            )
+
+        return current_object, current_probe, current_positions
 
     def reconstruct(
         self,
         reset: bool = None,
         max_iter: int = 64,
         step_size: float = 0.9,
+        positions_step_size: float = 0.9,
         normalization_min: float = 1e-2,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        fix_positions_iter: int = np.inf,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
         fix_probe_fourier_amplitude_iter: int = 0,
@@ -816,14 +951,24 @@ class PtychographicReconstruction(PhaseReconstruction):
             Maximum number of iterations to run
         step_size: float, optional
             Update step size
+        positions_step_size: float, optional
+            Positions update step size
         normalization_min: float, optional
             Probe normalization minimum as a fraction of the maximum overlap intensity
-        fix_probe: int, optional
+        fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        fix_positions_iter: int, optional
+            Number of iterations to run with fixed positions before updating positions estimate
         fix_com: bool, optional
             If True, fixes center of mass of probe
         gaussian_blur_sigma: float, optional
             Standard deviation of gaussian kernel
+        gaussian_blur_iter: int, optional
+            Number of iterations to run before applying object smoothness constraint
+        probe_support_relative_radius: float, optional
+            Radius of probe supergaussian support in scaled pixel units, between (0,1]
+        probe_support_supergaussian_degree: float, optional
+            Degree supergaussian support is raised to, higher is sharper cutoff
         fix_probe_amplitude: int, optional
             Number of iterations to run with a fixed probe amplitude
         pure_phase_object: bool, optional
@@ -887,33 +1032,39 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
             # adjoint operator
-            object_update, probe_update = self._adjoint(
+            object_update, probe_update, positions_update = self._adjoint(
                 self._object,
                 self._probe,
                 difference_gradient_fourier,
                 fix_probe=a0 < fix_probe_iter,
+                fix_positions=a0 < fix_positions_iter,
                 normalization_min=normalization_min,
             )
 
             # update
-            self._object, self._probe = self._update(
+            self._object, self._probe, self._positions_px = self._update(
                 self._object,
                 object_update,
                 self._probe,
                 probe_update,
+                self._positions_px,
+                positions_update,
                 step_size=step_size,
+                positions_step_size=positions_step_size,
             )
 
             # constraints
-            self._object, self._probe = self._constraints(
+            gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
+
+            self._object, self._probe, self._positions_px = self._constraints(
                 self._object,
                 self._probe,
+                self._positions_px,
                 pure_phase_object=a0 < pure_phase_object_iter,
-                gaussian_blur_sigma=gaussian_blur_sigma
-                if a0 < gaussian_blur_iter
-                else None,
+                gaussian_blur_sigma=gaussian_sigma,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                fix_positions=a0 < fix_positions_iter,
             )
 
             if store_iterations:
@@ -1320,3 +1471,18 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    @property
+    def positions(self):
+        """Probe positions [A]"""
+
+        if self.angular_sampling is None:
+            return None
+
+        asnumpy = self._asnumpy
+
+        positions = self._positions_px.copy()
+        positions[:, 0] *= self.sampling[0]
+        positions[:, 1] *= self.sampling[1]
+
+        return asnumpy(positions)
