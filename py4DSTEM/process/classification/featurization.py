@@ -1,5 +1,6 @@
 import numpy as np
-from py4DSTEM.io.datastructure import DataCube
+from py4DSTEM.io.datastructure import DataCube, PointListArray
+from py4DSTEM.process.utils import tqdmnd 
 from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.decomposition import NMF, PCA, FastICA
 from sklearn.mixture import GaussianMixture
@@ -17,7 +18,11 @@ class Featurization(object):
     
     Initialization methods:
         __init__:
-            Creates instance of featurization.
+            Creates instance of featurization
+        concatenate_features:
+            Creates instance of featurization from a list of featurization instances
+        from_braggvectors:
+            Creates instance of featurization from a BraggVectors instance
     
     Feature Dictionary Modification Methods
         add_feature:
@@ -47,7 +52,6 @@ class Featurization(object):
             Independent Component Analysis to refine features.
         NMF:
             Performs either traditional or iterative Nonnegative Matrix Factorization (NMF) to refine features.
-
         GMM:
             Gaussian mixture model to predict class labels. Fits a gaussian based on covariance of features.
     
@@ -71,6 +75,9 @@ class Featurization(object):
             R_Nx (int):         The real space x dimension of the dataset
             R_Ny (int):         The real space y dimension of the dataset
             name (str):         The name of the featurization object
+        
+        Returns:
+            new_instance:       New Featurization instance
         """
         self.R_Nx = R_Nx
         self.R_Ny = R_Ny
@@ -103,6 +110,93 @@ class Featurization(object):
             raise TypeError('Features must be either a single np.ndarray of shape 2 or 3 or a list of np.ndarrays or featurization instances.')
         return
 
+    def from_braggvectors(
+        braggvectors,
+        bins_x,
+        bins_y,
+        intensity_scale,
+        name,
+        mask=None,
+    ):
+        """
+        Initialize a featurization instance from a BraggVectors instance
+        
+        Args:
+            braggvectors (BraggVectors):    BraggVectors instance containing calibrations
+            bins_x (int):                   Number of pixels per bin in x direction
+            bins_y (int):                   Number of pixels per bin in y direction
+            intensity_scale (float):        Value to scale intensity of detected disks by
+            name (str):                     Name of featurization instance
+            mask (bool):                    Mask to remove disks in unwanted positions in diffraction space
+        
+        Returns:
+            new_instance:                   Featurization instance
+        
+        Details:
+            Transforms the calibrated pointlistarray in BraggVectors instance into a numpy array
+            that can be clustered using the methods in featurization.
+        """
+        
+        Q_Nx, Q_Ny = braggvectors.Qshape[0], braggvectors.Qshape[1]
+        nx_bins, ny_bins = int(np.ceil(Q_Nx / bins_x)), int(np.ceil(Q_Ny / bins_y))
+        n_bins = nx_bins * ny_bins
+        
+        try:
+            pointlistarray = braggvectors._v_cal.copy()
+        except AttributeError:
+            er = 'No calibrated bragg vectors found. Try running .calibrate()!'
+            raise Exception(er)
+        try:
+            q_pixel_size = braggvectors.calibration.get_Q_pixel_size()
+        except AttributeError:
+            er = 'No q_pixel_size found. Please set value and recalibrate before continuing.'
+            raise Exception(er)
+            
+        peak_data = np.zeros((pointlistarray.shape[0], pointlistarray.shape[1], n_bins))
+        
+        # Create Bragg Disk Features
+        for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1]):
+            pointlist = pointlistarray.get_pointlist(Rx,Ry)
+            if pointlist.data.shape[0] == 0:
+                continue
+            
+            if mask is not None:
+                deletemask = np.zeros(pointlist.length, dtype=bool)
+                for i in range(pointlist.length):
+                    deletemask = np.where((mask[
+                        np.rint((pointlist.data['qx']/q_pixel_size) + Q_Nx/2).astype(int),
+                        np.rint((pointlist.data['qy']/q_pixel_size) + Q_Ny/2).astype(int) 
+                        ] == False), True, False) 
+                    pointlist.remove(deletemask)
+                    
+            for i in range(pointlist.data.shape[0]):
+                floor_x = np.rint((pointlist.data[i][0]/q_pixel_size +Q_Nx/2)/bins_x)
+                floor_y = np.rint((pointlist.data[i][1]/q_pixel_size + Q_Ny/2)/bins_y)
+                binval_ff = int((floor_x * ny_bins) + floor_y)
+                binval_cf = int(((floor_x + 1) * ny_bins) + floor_y)
+                
+                #Distribute Peaks
+                if intensity_scale == 0:
+                    try:
+                        peak_data[Rx,Ry,binval_ff] += 1
+                        peak_data[Rx,Ry,binval_ff + 1] += 1
+                        peak_data[Rx,Ry,binval_cf] += 1
+                        peak_data[Rx,Ry,binval_cf + 1] += 1
+                    except IndexError:
+                        continue
+                else:  
+                    try:  
+                        peak_data[Rx,Ry,binval_ff] += pointlist.data[i][2]*intensity_scale
+                        peak_data[Rx,Ry,binval_ff + 1] += pointlist.data[i][2]*intensity_scale
+                        peak_data[Rx,Ry,binval_cf] += pointlist.data[i][2]*intensity_scale
+                        peak_data[Rx,Ry,binval_cf + 1] += pointlist.data[i][2]*intensity_scale
+                    except IndexError:
+                        continue
+        
+        peak_data.reshape(pointlistarray.shape[0]*pointlistarray.shape[1], n_bins)
+        new_instance = Featurization(peak_data,pointlistarray.shape[0],pointlistarray.shape[1], name)                    
+        return new_instance
+    
     def concatenate_features(features, name):
         """
         Concatenates featurization instances (features) and outputs a new Featurization instance
@@ -112,6 +206,9 @@ class Featurization(object):
         Args:
             features (list):    A list of keys to be concatenated into one array
             name (str):         The name of the featurization instance
+            
+        Returns:
+            new_instance:       Featurization instance
         """
         R_Nxs = [features[i].R_Nx for i in range(len(features))]
         R_Nys = [features[i].R_Ny for i in range(len(features))]
@@ -489,8 +586,7 @@ class Featurization(object):
                         large_labelled_image = labelled_image
                     
                 else:
-                    print(method + ' method is not supported. Please use yen, otsu, or None instead.')
-                    break
+                    raise ValueError(method + ' method is not supported. Please use yen, otsu, or None instead.')
                 unique_labels = np.unique(large_labelled_image)
                 separated_temp.extend(
                     [(np.where(large_labelled_image == unique_labels[k+1],image, 0)) 
@@ -514,7 +610,7 @@ class Featurization(object):
         if len(labelled) > 0:
             self.spatially_separated_ims = labelled
         else:
-            print('No distinct regions found in any models. Try modifying threshold, size, or method.')
+            raise ValueError('No distinct regions found in any models. Try modifying threshold, size, or method.')
 
         return
     
@@ -610,7 +706,7 @@ class Featurization(object):
                 consensus_clusters.append(np.median(np.dstack(
                     class_dict[key_list[n]]), axis = 2))
         else:
-            print('Only mean and median consensus methods currently supported.')    
+            raise ValueError('Only mean and median consensus methods currently supported.')    
         self.consensus_dict = class_dict
         self.consensus_clusters = consensus_clusters        
         
