@@ -141,6 +141,30 @@ def bin_data_real(datacube, bin_factor):
         datacube.data = datacube.data.reshape(int(R_Nx/bin_factor),bin_factor,int(R_Ny/bin_factor),bin_factor,Q_Nx,Q_Ny).sum(axis=(1,3))
         return datacube
 
+def thin_data_real(datacube, thinning_factor):
+    """
+    Reduces data size by a factor of `thinning_factor`^2 by skipping every `thinning_factor` beam positions in both x and y.
+    """
+    Rshape0 = datacube.Rshape
+    Rshapef = tuple([x//thinning_factor for x in Rshape0])
+
+    # allocate memory
+    data = np.empty(
+        (Rshapef[0],Rshapef[1],datacube.Qshape[0],datacube.Qshape[1]),
+        dtype = datacube.data.dtype
+    )
+
+    # populate data
+    for rx,ry in tqdmnd(Rshapef[0],Rshapef[1]):
+
+        rx0 = rx*thinning_factor
+        ry0 = ry*thinning_factor
+        data[rx,ry,:,:] = datacube[rx0,ry0,:,:]
+
+    datacube.data = data
+    return datacube
+
+
 def filter_hot_pixels(
     datacube,
     thresh,
@@ -155,13 +179,14 @@ def filter_hot_pixels(
     Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
 
     Args:
-            datacube (DataCube):      py4DSTEM Datacube
-            thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
-            ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        datacube (DataCube):      py4DSTEM Datacube
+        thresh (float):           threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
+        ind_compare (int):        which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
+        return_mask (bool): if True, returns the filter mask
 
-        Returns:
-            datacube                     datacube
-            mask (bool):                 (optional) the bad pixel mask
+    Returns:
+        datacube                     datacube
+        mask (bool):                 (optional) the bad pixel mask
     """
 
     # Mean image over all probe positions
