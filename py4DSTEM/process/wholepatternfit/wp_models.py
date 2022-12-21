@@ -344,8 +344,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
             self.func = self.global_center_func
             self.jacobian = self.global_center_jacobian
 
-            x0 = WPF.global_args["global_x0"]
-            y0 = WPF.global_args["global_y0"]
+            x0 = WPF.static_data["global_x0"]
+            y0 = WPF.static_data["global_y0"]
         else:
             params["x center"] = Parameter(x0)
             params["y center"] = Parameter(y0)
@@ -356,8 +356,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
         params["vx"] = Parameter(vx)
         params["vy"] = Parameter(vy)
 
-        Q_Nx = WPF.global_args["Q_Nx"]
-        Q_Ny = WPF.global_args["Q_Ny"]
+        Q_Nx = WPF.static_data["Q_Nx"]
+        Q_Ny = WPF.static_data["Q_Ny"]
 
         if include_indices is None:
             u_inds, v_inds = np.mgrid[-u_max : u_max + 1, -v_max : v_max + 1]
@@ -567,8 +567,8 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         #     self.func = self.global_center_func
         #     self.jacobian = self.global_center_jacobian
 
-        #     x0 = WPF.global_args["global_x0"]
-        #     y0 = WPF.global_args["global_y0"]
+        #     x0 = WPF.static_data["global_x0"]
+        #     y0 = WPF.static_data["global_y0"]
         # else:
         #     params["x center"] = Parameter(x0)
         #     params["y center"] = Parameter(y0)
@@ -586,20 +586,20 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         self.v_inds = v_inds.ravel()
 
         delete_mask = np.zeros_like(self.u_inds, dtype=bool)
-        Q_Nx = WPF.global_args["Q_Nx"]
-        Q_Ny = WPF.global_args["Q_Ny"]
+        Q_Nx = WPF.static_data["Q_Nx"]
+        Q_Ny = WPF.static_data["Q_Ny"]
 
         self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis, :], (Q_Nx, 1))
         self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:, np.newaxis], (1, Q_Ny))
 
         for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
             x = (
-                WPF.global_args["global_x0"]
+                WPF.static_data["global_x0"]
                 + (u * params["ux"].initial_value)
                 + (v * params["vx"].initial_value)
             )
             y = (
-                WPF.global_args["global_y0"]
+                WPF.static_data["global_y0"]
                 + (u * params["uy"].initial_value)
                 + (v * params["vy"].initial_value)
             )
@@ -685,8 +685,8 @@ class KernelDiskLattice(WPFModelPrototype):
         #     self.func = self.global_center_func
         #     self.jacobian = self.global_center_jacobian
 
-        #     x0 = WPF.global_args["global_x0"]
-        #     y0 = WPF.global_args["global_y0"]
+        #     x0 = WPF.static_data["global_x0"]
+        #     y0 = WPF.static_data["global_y0"]
         # else:
         #     params["x center"] = Parameter(x0)
         #     params["y center"] = Parameter(y0)
@@ -704,20 +704,20 @@ class KernelDiskLattice(WPFModelPrototype):
         self.v_inds = v_inds.ravel()
 
         delete_mask = np.zeros_like(self.u_inds, dtype=bool)
-        Q_Nx = WPF.global_args["Q_Nx"]
-        Q_Ny = WPF.global_args["Q_Ny"]
+        Q_Nx = WPF.static_data["Q_Nx"]
+        Q_Ny = WPF.static_data["Q_Ny"]
 
         self.yqArray = np.tile(np.fft.fftfreq(Q_Ny)[np.newaxis, :], (Q_Nx, 1))
         self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:, np.newaxis], (1, Q_Ny))
 
         for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
             x = (
-                WPF.global_args["global_x0"]
+                WPF.static_data["global_x0"]
                 + (u * params["ux"].initial_value)
                 + (v * params["vx"].initial_value)
             )
             y = (
-                WPF.global_args["global_y0"]
+                WPF.static_data["global_y0"]
                 + (u * params["uy"].initial_value)
                 + (v * params["vy"].initial_value)
             )

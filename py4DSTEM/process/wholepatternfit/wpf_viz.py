@@ -9,11 +9,19 @@ def show_model_grid(self, x=None, **plot_kwargs):
     if x is None:
         x = self.mean_CBED_fit.x
 
-    self.current_glob["global_x0"] = x[0]
-    self.current_glob["global_y0"] = x[1]
-    self.current_glob["global_r"] = np.hypot(
-        (self.current_glob["xArray"] - x[0]),
-        (self.current_glob["yArray"] - x[1]),
+    shared_data = self.static_data.copy()
+    shared_data["global_x0"] = x[0]
+    shared_data["global_y0"] = x[1]
+    shared_data["global_r"] = np.hypot(
+        (shared_data["xArray"] - x[0]),
+        (shared_data["yArray"] - x[1]),
+    )
+
+    shared_data["global_x0"] = x[0]
+    shared_data["global_y0"] = x[1]
+    shared_data["global_r"] = np.hypot(
+        (shared_data["xArray"] - x[0]),
+        (shared_data["yArray"] - x[1]),
     )
 
     N = len(self.model)
@@ -27,7 +35,7 @@ def show_model_grid(self, x=None, **plot_kwargs):
     for i, (a, m) in enumerate(zip(ax.flat, self.model)):
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
         ind = self.model_param_inds[i] + 2
-        m.func(DP, *x[ind : ind + m.nParams].tolist(), **self.current_glob)
+        m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
 
         a.matshow(DP, cmap="turbo")
         a.text(0.5, 0.92, m.name, transform=a.transAxes, ha="center", va="center")
@@ -48,13 +56,13 @@ def show_lattice_points(self, returnfig=False, *args, **kwargs):
             inds = np.stack([m.u_inds, m.v_inds], axis=1)
 
             spots = inds @ lat
-            spots[:, 0] += self.global_args["global_x0"]
-            spots[:, 1] += self.global_args["global_y0"]
+            spots[:, 0] += self.static_data["global_x0"]
+            spots[:, 1] += self.static_data["global_y0"]
 
             ax.scatter(spots[:, 1], spots[:, 0], marker="x", label=m.name)
 
     ax.legend()
-    
+
     return (fig, ax) if returnfig else plt.show()
 
 def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
