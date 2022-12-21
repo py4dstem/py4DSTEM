@@ -314,6 +314,7 @@ def show_strain(
     vrange_theta,
     vrange_exy=None,
     vrange_eyy=None,
+    flip_theta = False,
     bkgrd=True,
     show_cbars=('exx','eyy','exy','theta'),
     bordercolor='k',
@@ -350,6 +351,7 @@ def show_strain(
         vrange_theta (length 2 list or tuple):
         vrange_exy (length 2 list or tuple):
         vrange_eyy (length 2 list or tuple):
+        flip_theta (bool): if True, take negative of angle 
         bkgrd (bool):
         show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
             tuple containing any, all, or none of ('exx','eyy','exy','theta').
@@ -409,6 +411,8 @@ def show_strain(
     e_yy = np.ma.array(strainmap.get_slice('e_yy').data,mask=strainmap.get_slice('mask').data==False)
     e_xy = np.ma.array(strainmap.get_slice('e_xy').data,mask=strainmap.get_slice('mask').data==False)
     theta = np.ma.array(strainmap.get_slice('theta').data,mask=strainmap.get_slice('mask').data==False)
+    if flip_theta == True: 
+        theta = - theta 
 
     # Plot
     if layout==0:

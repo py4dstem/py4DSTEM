@@ -137,7 +137,7 @@ def get_strain_from_reference_region(g1g2_map, mask):
     strain_map = get_strain_from_reference_g1g2(g1g2_map,g1,g2)
     return strain_map
 
-def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y):
+def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y, flip_theta):
     """
     Starting from a strain map defined with respect to the xy coordinate system of
     diffraction space, i.e. where exx and eyy are the compression/tension along the Qx
@@ -162,7 +162,6 @@ def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y):
     """
     assert isinstance(unrotated_strain_map, RealSlice)
     assert np.all([key in ['e_xx','e_xy','e_yy','theta','mask'] for key in unrotated_strain_map.slicelabels])
-
     theta = -np.arctan2(xaxis_y,xaxis_x)
     cost = np.cos(theta)
     sint = np.sin(theta)
@@ -177,8 +176,10 @@ def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y):
     rotated_strain_map.data[:,:,0] = cost2*unrotated_strain_map.get_slice('e_xx').data - 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + sint2*unrotated_strain_map.get_slice('e_yy').data
     rotated_strain_map.data[:,:,1] = cost*sint*(unrotated_strain_map.get_slice('e_xx').data-unrotated_strain_map.get_slice('e_yy').data) + (cost2-sint2)*unrotated_strain_map.get_slice('e_xy').data
     rotated_strain_map.data[:,:,2] = sint2*unrotated_strain_map.get_slice('e_xx').data + 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + cost2*unrotated_strain_map.get_slice('e_yy').data
-    rotated_strain_map.data[:,:,3] = unrotated_strain_map.get_slice('theta').data
-
+    if flip_theta == True:
+        rotated_strain_map.data[:,:,3] = -unrotated_strain_map.get_slice('theta').data
+    else: 
+        rotated_strain_map.data[:,:,3] = unrotated_strain_map.get_slice('theta').data
     rotated_strain_map.data[:,:,4] = unrotated_strain_map.get_slice('mask').data
     return rotated_strain_map
 

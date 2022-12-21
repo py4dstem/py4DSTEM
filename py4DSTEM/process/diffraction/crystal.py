@@ -15,7 +15,11 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
-
+try:
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure
+except ImportError:
+    pass
 
 class Crystal:
     """
@@ -49,6 +53,11 @@ class Crystal:
         plot_fiber_orientation_maps,
     )
 
+    from py4DSTEM.process.diffraction.crystal_calibrate import (
+        calibrate_pixel_size,
+        calibrate_unit_cell
+    )
+    
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
     from py4DSTEM.process.diffraction.crystal_bloch import (
         generate_dynamical_diffraction_pattern,
@@ -94,7 +103,14 @@ class Crystal:
             self.cell = cell
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " elements")
-
+        
+        # pymatgen flag
+        self.pymatgen_available = False
+        
+        # Calculate lattice parameters
+        self.calculate_lattice()
+        
+    def calculate_lattice(self):
         # calculate unit cell lattice vectors
         a = self.cell[0]
         b = self.cell[1]
@@ -738,178 +754,6 @@ class Crystal:
             return radii_unique, intensity_unique
 
 
-    def calibrate_pixel_size(
-            self,
-            bragg_peaks,
-            scale_pixel_size = 1.0,
-            bragg_k_power = 1.0,
-            bragg_intensity_power = 1.0,
-            k_min = 0.0,
-            k_max = None,
-            k_step = 0.002,
-            k_broadening = 0.002,
-            fit_all_intensities = True,
-            verbose = True,
-            plot_result = False,
-            figsize: Union[list, tuple, np.ndarray] = (12, 6),
-            returnfig = False,
-    ):
-        """
-        Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
-        and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
-
-        Args:
-            bragg_peaks (BraggVectors):         Input Bragg vectors.
-            scale_pixel_size (float):           Initial guess for scaling of the existing pixel size
-                                                If the pixel size is currently uncalibrated, this is a
-                                                guess of the pixel size in Å^-1. If the pixel size is already
-                                                (approximately) calibrated, this is the scaling factor to
-                                                correct that existing calibration.
-            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
-                                                to change the weighting of longer scattering vectors
-            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
-            k_min (float):                      min k value for fitting range (Å^-1)
-            k_max (float):                      max k value for fitting range (Å^-1)
-            k_step (float):                     step size of k in fitting range (Å^-1)
-            k_broadening (float):               Initial guess for Gaussian broadening of simulated pattern (Å^-1)
-            fit_all_intensities (bool):         Set to true to allow all peak intensities to change independently
-                                                False forces a single intensity scaling.
-            verbose (bool):                     Output the calibrated pixel size.
-            plot_result (bool):                 Plot the resulting fit.
-            figsize (list, tuple, np.ndarray)   Figure size of the plot.
-            returnfig (bool):                   Return handles figure and axis
-
-        Returns:
-            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
-            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
-
-        """
-
-        assert hasattr(self, "struct_factors"), "Compute structure factors first..."
-
-        # k coordinates
-        if k_max is None:
-            k_max = self.k_max
-        k = np.arange(k_min, k_max + k_step, k_step)
-        k_num = k.shape[0]
-
-        # experimental data histogram
-        bigpl = np.concatenate(
-            [
-                bragg_peaks.vectors[i, j].data
-                for i in range(bragg_peaks.shape[0])
-                for j in range(bragg_peaks.shape[1])
-            ]
-        )
-        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
-        int_meas = bigpl["intensity"]
-
-        # get discrete plot from structure factor amplitudes
-        int_exp = np.zeros_like(k)
-        k_px = (qr - k_min) / k_step
-        kf = np.floor(k_px).astype("int")
-        dk = k_px - kf
-
-        sub = np.logical_and(kf >= 0, kf < k_num)
-        int_exp = np.bincount(
-            np.floor(k_px[sub]).astype("int"),
-            weights=(1 - dk[sub]) * int_meas[sub],
-            minlength=k_num,
-        )
-        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
-        int_exp += np.bincount(
-            np.floor(k_px[sub] + 1).astype("int"),
-            weights=dk[sub] * int_meas[sub],
-            minlength=k_num,
-        )
-        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
-        sub = np.logical_and(
-            k >= k_min,
-            k <= k_max, 
-            )
-        int_exp /= np.max(int_exp[sub])
-
-        # Perform fitting
-        def fit_profile(k, *coefs):
-            scale_pixel_size = coefs[0]
-            k_broadening = coefs[1]
-            int_scale = coefs[2:]
-
-            int_sf = calc_1D_profile(
-                k,
-                self.g_vec_leng * scale_pixel_size,
-                self.struct_factors_int,
-                k_broadening=k_broadening,
-                int_scale=int_scale,
-                normalize_intensity=False,
-            )
-            return int_sf
-
-        if fit_all_intensities:
-            coefs = (
-                scale_pixel_size,
-                k_broadening,
-                *tuple(np.ones(self.g_vec_leng.shape[0])),
-            )
-            bounds = (0.0, np.inf)
-            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
-        else:
-            coefs = (scale_pixel_size, k_broadening, 1.0)
-            bounds = (0.0, np.inf)
-            popt, pcov = curve_fit(fit_profile, k, int_exp, p0=coefs, bounds=bounds)
-
-        scale_pixel_size = popt[0]
-        k_broadening = popt[1]
-        int_scale = np.array(popt[2:])
-
-        # Make a copy of bragg_peaks, apply correction
-        bragg_peaks_cali = deepcopy(bragg_peaks)
-        inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
-        bragg_peaks_cali.calibration.set_Q_pixel_size(
-            inv_Ang_per_pixel / scale_pixel_size
-        )
-        bragg_peaks_cali.calibration.set_Q_pixel_units("A^-1")
-        bragg_peaks_cali.calibrate()
-
-        # Output
-        if verbose:
-            p = bragg_peaks_cali.calibration.get_Q_pixel_size()
-            u = bragg_peaks_cali.calibration.get_Q_pixel_units()
-            print("Calibrated pixel size = " + str(np.round(p, decimals=8)) + " " + u)
-
-        # Plotting
-        if plot_result:
-            if returnfig:
-                fig, ax = self.plot_scattering_intensity(
-                    bragg_peaks=bragg_peaks_cali,
-                    figsize=figsize,
-                    k_broadening=k_broadening,
-                    int_power_scale=1.0,
-                    int_scale=int_scale,
-                    bragg_k_power=bragg_k_power,
-                    bragg_intensity_power=bragg_intensity_power,
-                    k_min=k_min,
-                    k_max=k_max,
-                    returnfig=True,
-                )
-            else:
-                self.plot_scattering_intensity(
-                    bragg_peaks=bragg_peaks_cali,
-                    figsize=figsize,
-                    k_broadening=k_broadening,
-                    int_power_scale=1.0,
-                    int_scale=int_scale,
-                    bragg_k_power=bragg_k_power,
-                    bragg_intensity_power=bragg_intensity_power,
-                    k_min=k_min,
-                    k_max=k_max,
-                )
-
-        if returnfig and plot_result:
-            return bragg_peaks_cali, fig, ax
-        else:
-            return bragg_peaks_cali
-
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
         vec_lattice = self.lat_inv @ vec_cartesian
@@ -1022,3 +866,69 @@ class Crystal:
                 2 * self.wavelength * np.sum(g * foil_normal[:, None], axis=0)
                 - 2 * foil_normal[2]
             )
+
+    def calculate_bragg_peak_histogram(
+        self,
+        bragg_peaks,
+        bragg_k_power = 1.0,
+        bragg_intensity_power = 1.0,
+        k_min = 0.0,
+        k_max = None,
+        k_step = 0.005
+    ):
+        """
+        Prepare experimental bragg peaks for lattice parameter or unit cell fitting.
+
+        Args:
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
+                                                to change the weighting of longer scattering vectors
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
+
+        Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+        """
+
+        # k coordinates
+        if k_max is None:
+            k_max = self.k_max
+        k = np.arange(k_min, k_max + k_step, k_step)
+        k_num = k.shape[0]
+
+        # experimental data histogram
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.vectors[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
+            ]
+        )
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        int_exp /= np.max(int_exp)
+        return k, int_exp
+    
