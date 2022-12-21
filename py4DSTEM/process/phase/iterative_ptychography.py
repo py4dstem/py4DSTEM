@@ -481,9 +481,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             Reconstruction error
         """
 
-        fourier_exit_waves = self._overlap_projection(current_object, current_probe)
+        self._fourier_exit_waves = self._overlap_projection(
+            current_object, current_probe
+        )
         difference_gradient_fourier, error = self._fourier_projection(
-            amplitudes, fourier_exit_waves
+            amplitudes, self._fourier_exit_waves
         )
 
         return difference_gradient_fourier, error
@@ -548,6 +550,76 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return positions_update
 
+    def _position_correction_alternative(
+        self, current_object, current_probe, amplitudes
+    ):
+        """
+        Alternative ptychographic parallel position correction.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        amplitudes: np.ndarray
+            Measured amplitudes
+
+        Returns
+        --------
+        positions_update: np.ndarray
+            Negative positions gradient. If fix_positions is True returns None
+        """
+
+        xp = self._xp
+        # dx, dy = self._scan_sampling
+        dx, dy = (1.0, 1.0)
+
+        obj_dx = (
+            xp.roll(current_object, -1, axis=0) - xp.roll(current_object, 1, axis=0)
+        ) / (2 * dx)
+        obj_dy = (
+            xp.roll(current_object, -1, axis=1) - xp.roll(current_object, 1, axis=1)
+        ) / (2 * dy)
+
+        exit_waves_dx_fft = xp.fft.fft2(
+            obj_dx[
+                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            ]
+            * self._shifted_probes
+        )
+
+        exit_waves_dy_fft = xp.fft.fft2(
+            obj_dy[
+                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            ]
+            * self._shifted_probes
+        )
+
+        fourier_exit_waves_conj = xp.conj(self._fourier_exit_waves)
+        estimated_intensity = xp.abs(self._fourier_exit_waves) ** 2
+        measured_intensity = amplitudes**2
+
+        flat_shape = (self._num_diffraction_patterns, -1)
+        difference_intensity = (measured_intensity - estimated_intensity).reshape(
+            flat_shape
+        )
+
+        partial_intensity_dx = 2 * xp.real(
+            exit_waves_dx_fft * fourier_exit_waves_conj
+        ).reshape(flat_shape)
+        partial_intensity_dy = 2 * xp.real(
+            exit_waves_dy_fft * fourier_exit_waves_conj
+        ).reshape(flat_shape)
+
+        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
+
+        positions_update = xp.einsum(
+            "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
+        )
+
+        return positions_update
+
     def _adjoint(
         self,
         current_object,
@@ -555,6 +627,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         difference_gradient_fourier,
         fix_probe: bool,
         fix_positions: bool,
+        alternative_position_correction: bool,
         normalization_min: float,
     ):
         """
@@ -634,6 +707,13 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if fix_positions:
             positions_update = None
+        elif alternative_position_correction:
+            positions_update = self._position_correction_alternative(
+                current_object,
+                current_probe,
+                self._amplitudes,
+            )
+
         else:
             positions_update = self._position_correction(
                 current_object,
@@ -931,6 +1011,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_com: bool = True,
         fix_probe_iter: int = 0,
         fix_positions_iter: int = np.inf,
+        alternative_position_correction: bool = False,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
         fix_probe_fourier_amplitude_iter: int = 0,
@@ -995,6 +1076,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         if reset:
             self._object = self._object_initial.copy()
             self._probe = self._probe_initial.copy()
+            self._positions_px = self._positions_px_initial.copy()
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            self._set_vectorized_patch_indices()
         elif reset is None and hasattr(self, "error"):
             warnings.warn(
                 (
@@ -1039,6 +1125,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fix_probe=a0 < fix_probe_iter,
                 fix_positions=a0 < fix_positions_iter,
                 normalization_min=normalization_min,
+                alternative_position_correction=alternative_position_correction,
             )
 
             # update
