@@ -95,7 +95,7 @@ class WholePatternFit:
             self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
 
         # set up the global arguments
-        self._setup_static_data()
+        self._setup_static_data(x0,y0)
 
         self.fit_power = fit_power
 
@@ -174,7 +174,7 @@ class WholePatternFit:
         ax.set_xlabel("Iterations")
         ax.set_yscale("log")
 
-        DP = self._pattern(self.mean_CBED_fit.x)
+        DP = self._pattern(self.mean_CBED_fit.x, shared_data)
         ax = fig.add_subplot(gs[0, 1])
         CyRd = mpl_c.LinearSegmentedColormap.from_list(
             "CyRd", ["#00ccff", "#ffffff", "#ff0000"]
@@ -320,7 +320,7 @@ class WholePatternFit:
 
         return g_maps
 
-    def _setup_static_data(self):
+    def _setup_static_data(self,x0,y0):
         self.static_data = {}
 
         xArray, yArray = np.mgrid[0 : self.datacube.Q_Nx, 0 : self.datacube.Q_Ny]
@@ -329,6 +329,13 @@ class WholePatternFit:
 
         self.static_data["Q_Nx"] = self.datacube.Q_Nx
         self.static_data["Q_Ny"] = self.datacube.Q_Ny
+
+        self.static_data["global_x0"] = x0
+        self.static_data["global_y0"] = y0
+        self.static_data["global_r"] = np.hypot(
+            (self.static_data["xArray"] - x0),
+            (self.static_data["yArray"] - y0),
+        )
 
     def _pattern_error(self, x, current_pattern, shared_data):
 
