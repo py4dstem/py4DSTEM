@@ -177,30 +177,17 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        @property
-        def shape(self):
-            return self.data.shape
-        self.rank = self.data.ndim   # rank differs from data.ndim by 1 if the Array is a stack
-
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
-
-        # flag to help assign dim names and units
-        dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
 
         ## Handle array stacks
 
         if slicelabels is None:
-            self.depth = 0
             self.is_stack = False
 
         else:
-            self.depth = self.shape[-1]
-            self.shape = self.shape[:-1]
-            dim_in_pixels = dim_in_pixels[:-1]
-            self.rank -= 1
             self.is_stack = True
 
             # Populate labels
@@ -218,6 +205,7 @@ class Array:
 
         ## Set dim vectors
 
+        dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
         # if none were passed
         if self.dims is None:
             self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
@@ -290,9 +278,28 @@ class Array:
             raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
+    # Shape properties
 
+    @property
+    def shape(self):
+        if not self.is_stack:
+            return self.data.shape
+        else:
+            return self.data.shape[:-1]
 
-    #### Methods
+    @property
+    def depth(self):
+        if not self.is_stack:
+            return 0
+        else:
+            return self.data.shape[-1]
+
+    @property
+    def rank(self):
+        if not self.is_stack:
+            return self.data.ndim
+        else:
+            return self.data.ndim - 1
 
 
     ## Slicing
