@@ -146,6 +146,7 @@ class Crystal_Phase:
         method = 'nnls',
         use_phase_orientations = True,
         set_phase_orientations = None,
+        mask_peaks = None
     ):
         """
         Quantification of the phase of a crystal based on the crystal instances and the pointlistarray.
@@ -171,7 +172,8 @@ class Crystal_Phase:
                     tolerance_distance=tolerance_distance,
                     method = method,
                     use_phase_orientations = use_phase_orientations,
-                    set_phase_orientations = set_phase_orientations
+                    set_phase_orientations = set_phase_orientations,
+                    mask_peaks = mask_peaks
                 )
                 phase_weights[Rx,Ry,:] = phase_weight
                 phase_residuals[Rx,Ry] = phase_residual
@@ -191,14 +193,16 @@ class Crystal_Phase:
         ind_orientation = 0,
         use_phase_orientations = True,
         set_phase_orientations = None,
+        mask_peaks = None
     ):
         """
         
         Args:
-            pointlisarray (pointlist): _description_
-            position (tuple/list?): position of pointlist in pointlistarray
-            use_phase_orientations (bool, optional): _description_. Defaults to True.
-            set_phase_orientations (_type_, optional): _description_. Defaults to Nonemethod='nnls'.
+            pointlisarray (pointlistarray):             pointlistarray to quantify phase of
+            position (tuple/list?):                     position of pointlist in pointlistarray
+            use_phase_orientations (bool, optional):    _description_. Defaults to True.
+            set_phase_orientations (list, optional):    List of set phase orientations for each structure
+            mask_peaks (list, optional):
 
         Returns:
             _type_: _description_
@@ -228,12 +232,25 @@ class Crystal_Phase:
                     else:
                         continue   
                 pointlist_peak_matches.append(phase_peak_match_intensities)
+            
             pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
+            pointlist_peak_intensity_matches = pointlist_peak_intensity_matches.reshape(
+                pl_intensities.shape[0],
+                pointlist_peak_intensity_matches.shape[-1]
+                )
+            
+            if mask_peaks is not None:
+                for i in range(len(mask_peaks)):
+                    if mask_peaks[i] == None:
+                        continue
+                    inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
+                    
+                    for mask in range(len(inds_mask)):
+                        pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
         
         if method == 'nnls':    
             phase_weights, phase_residuals = nnls(
-                pointlist_peak_intensity_matches.reshape(
-                    pl_intensities.shape[0],pointlist_peak_intensity_matches.shape[-1]),
+                pointlist_peak_intensity_matches,
                 pl_intensities
             )
             return phase_weights, phase_residuals
