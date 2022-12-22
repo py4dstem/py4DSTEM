@@ -13,8 +13,20 @@ class DataCube(Array):
     Stores 4D-STEM datasets.
     """
 
+    # import class methods
     from py4DSTEM.io.datastructure.py4dstem.datacube_fns import (
         add,
+        set_scan_shape,
+        swap_RQ,
+        swap_Rxy,
+        swap_Qxy,
+        crop_Q,
+        crop_R,
+        bin_Q,
+        bin_Q_mmap,
+        bin_R,
+        thin_R,
+        filter_hot_pixels,
         get_virtual_diffraction,
         get_dp_max,
         get_dp_mean,
