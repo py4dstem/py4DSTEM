@@ -168,6 +168,8 @@ class Calibration(Metadata):
         qx0_shift = x-qx0_mean
         self._params['qx0_mean'] = qx0_mean
         self._params['qx0_shift'] = qx0_shift
+    def set_qx0_mean(self,x):
+        self._params['qx0_mean'] = x
     def get_qx0(self,rx=None,ry=None):
         return self._get_value('qx0',rx,ry)
     def get_qx0_mean(self):
@@ -182,6 +184,8 @@ class Calibration(Metadata):
         qy0_shift = x-qy0_mean
         self._params['qy0_mean'] = qy0_mean
         self._params['qy0_shift'] = qy0_shift
+    def set_qy0_mean(self,x):
+        self._params['qy0_mean'] = x
     def get_qy0(self,rx=None,ry=None):
         return self._get_value('qy0',rx,ry)
     def get_qy0_mean(self):
@@ -264,8 +268,8 @@ class Calibration(Metadata):
         """
         probe_semiangle, qx0, qy0 = x
         self.set_probe_semiangle(probe_semiangle)
-        self.set_qx0(qx0)
-        self.set_qy0(qy0)
+        self.set_qx0_mean(qx0)
+        self.set_qy0_mean(qy0)
     def get_probe_param(self):
         probe_semiangle = self._get_value('probe_semiangle')
         qx0 = self._get_value('qx0')

@@ -103,7 +103,6 @@ def get_virtual_image(
 
     # no center shifting
     if shift_center == False:
-
         # dask 
         if dask == True:
 
@@ -220,9 +219,9 @@ def get_calibrated_geometry(
 
     # Get calibration metadata
     if centered:
-        assert cal.get_origin(), "origin need to be calibrated"
-        x0, y0 = cal.get_origin()
+        assert cal.get_qx0_mean(), "origin needs to be calibrated" 
         x0_mean, y0_mean = cal.get_origin_mean()
+
     if calibrated:
         assert cal['Q_pixel_units'] == 'A^-1', \
         'check calibration - must be calibrated in A^-1 to use `calibrated=True`'
