@@ -87,7 +87,7 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
-        plot_center_of_mass: bool = True,
+        plot_center_of_mass: str = 'default',
         plot_rotation: bool = True,
         **kwargs,
     ):
@@ -111,8 +111,9 @@ class DPCReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
-        plot_center_of_mass: bool, optional
-            If True, the computed and fitted CoM arrays will be displayed
+        plot_center_of_mass: str, optional
+            If 'default', the corrected CoM arrays will be displayed
+            If 'all', the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
 
@@ -134,13 +135,12 @@ class DPCReconstruction(PhaseReconstruction):
         self._calculate_intensities_center_of_mass(
             self._intensities,
             fit_function=fit_function,
-            plot_center_of_mass=plot_center_of_mass,
-            **kwargs,
         )
 
         self._solve_for_center_of_mass_relative_rotation(
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
+            plot_center_of_mass=plot_center_of_mass,
             maximize_divergence=maximize_divergence,
             force_com_rotation=force_com_rotation,
             force_com_transpose=force_com_transpose,

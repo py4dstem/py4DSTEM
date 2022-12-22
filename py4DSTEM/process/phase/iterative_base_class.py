@@ -244,8 +244,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         intensities: np.ndarray,
         fit_function: str = "plane",
-        plot_center_of_mass: bool = True,
-        **kwargs,
     ):
         """
         Common preprocessing function to compute and fit diffraction intensities CoM
@@ -256,8 +254,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Raw intensities array stored on device, with dtype xp.float32
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        plot_center_of_mass: bool, optional
-            If True, the computed and normalized CoM arrays will be displayed
 
         Assigns
         --------
@@ -279,11 +275,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self._region_of_interest_shape: Tuple[int,int]
             Pixel dimensions (Sx,Sy) of the region of interest
             Commonly set to diffraction intensity dimensions (Qx,Qy)
-
-        Displays
-        --------
-        self._com_measured_x/y and self._com_normalized_x/y, optional
-            Measured and normalized CoM gradients
         """
 
         xp = self._xp
@@ -325,43 +316,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
             self._com_measured_y - self._com_fitted_y
         ) * self._reciprocal_sampling[1]
 
-        # Optionally, plot
-        if plot_center_of_mass:
-
-            figsize = kwargs.get("figsize", (8, 8))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
-
-            extent = [
-                0,
-                self._scan_sampling[1] * self._intensities_shape[1],
-                self._scan_sampling[0] * self._intensities_shape[0],
-                0,
-            ]
-
-            fig = plt.figure(figsize=figsize)
-            grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=(0.25, 0.5))
-
-            for ax, arr, title in zip(
-                grid,
-                [
-                    self._com_measured_x,
-                    self._com_measured_y,
-                    self._com_normalized_x,
-                    self._com_normalized_y,
-                ],
-                ["CoM_x", "CoM_y", "Normalized CoM_x", "Normalized CoM_y"],
-            ):
-                ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
-                ax.set_xlabel(f"x [{self._scan_units[0]}]")
-                ax.set_ylabel(f"y [{self._scan_units[1]}]")
-                ax.set_title(title)
-
     def _solve_for_center_of_mass_relative_rotation(
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
+        plot_center_of_mass: str = 'default',
         maximize_divergence: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
@@ -378,6 +337,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Array of angles in degrees to perform curl minimization over
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
+        plot_center_of_mass: str, optional
+            If 'default', the corrected CoM arrays will be displayed
+            If 'all', the computed and fitted CoM arrays will be displayed
         maximize_divergence: bool, optional
             If True, the divergence of the CoM gradient vector field is maximized
         force_com_rotation: float (degrees), optional
@@ -408,6 +370,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         --------
         self._rotation_curl/div vs rotation_angles_deg, optional
             Vector calculus quantity being minimized/maximized
+        self._com_measured_x/y, self._com_normalized_x/y and self.com_x/y, optional
+            Measured and normalized CoM gradients
         rotation_best_deg, optional
             Summary statistics
         """
@@ -846,6 +810,81 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # 'Public'-facing attributes as numpy arrays
         self.com_x = asnumpy(self._com_x)
         self.com_y = asnumpy(self._com_y)
+
+        # Optionally, plot CoM
+        if plot_center_of_mass == 'all':
+
+            figsize = kwargs.get("figsize", (8, 12))
+            cmap = kwargs.get("cmap", "RdBu_r")
+            kwargs.pop("cmap", None)
+            kwargs.pop("figsize", None)
+
+            extent = [
+                0,
+                self._scan_sampling[1] * self._intensities_shape[1],
+                self._scan_sampling[0] * self._intensities_shape[0],
+                0,
+            ]
+
+            fig = plt.figure(figsize=figsize)
+            grid = ImageGrid(fig, 111, nrows_ncols=(3, 2), axes_pad=(0.25, 0.5))
+
+            for ax, arr, title in zip(
+                grid,
+                [
+                    self._com_measured_x,
+                    self._com_measured_y,
+                    self._com_normalized_x,
+                    self._com_normalized_y,
+                    self.com_x,
+                    self.com_y,
+                ],
+                [
+                    "CoM_x",
+                    "CoM_y",
+                    "Normalized CoM_x",
+                    "Normalized CoM_y",
+                    "Corrected CoM_x",
+                    "Corrected CoM_y",
+                ],
+            ):
+                ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
+                ax.set_xlabel(f"x [{self._scan_units[0]}]")
+                ax.set_ylabel(f"y [{self._scan_units[1]}]")
+                ax.set_title(title)
+        
+        elif plot_center_of_mass == 'default':
+
+            figsize = kwargs.get("figsize", (8, 4))
+            cmap = kwargs.get("cmap", "RdBu_r")
+            kwargs.pop("cmap", None)
+            kwargs.pop("figsize", None)
+
+            extent = [
+                0,
+                self._scan_sampling[1] * self._intensities_shape[1],
+                self._scan_sampling[0] * self._intensities_shape[0],
+                0,
+            ]
+
+            fig = plt.figure(figsize=figsize)
+            grid = ImageGrid(fig, 111, nrows_ncols=(1, 2), axes_pad=(0.25, 0.5))
+
+            for ax, arr, title in zip(
+                grid,
+                [
+                    self.com_x,
+                    self.com_y,
+                ],
+                [
+                    "Corrected CoM_x",
+                    "Corrected CoM_y",
+                ],
+            ):
+                ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
+                ax.set_xlabel(f"x [{self._scan_units[0]}]")
+                ax.set_ylabel(f"y [{self._scan_units[1]}]")
+                ax.set_title(title)
 
     def _set_polar_parameters(self, parameters: dict):
         """
