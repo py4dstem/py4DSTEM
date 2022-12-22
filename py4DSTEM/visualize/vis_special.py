@@ -809,21 +809,32 @@ def show_complex(
         ar_complex (2d array)   : complex array to be plotted
         vmin (float, optional)  : minimum absolute value 
         vmax (float, optional)  : maximum absolute value 
+        vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g. 
+        vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
         cbar (bool)             : if True, include color wheel
         returnfig (bool)        : if True, the function returns the tuple (figure,axis)
-
+        
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     '''
 
     #define min and max
-    amp = np.abs(ar_complex)
-    if vmin is None: 
-        vmin = np.min(amp)
-    if vmax is None: 
-        vmax = np.max(amp)
-    
+    amp = np.abs(ar_complex)  
+    if np.max(amp) == np.min(amp):
+        if vmin is None: vmin = 0 
+        if vmax is None: vmax = np.max(amp)
+    else:
+        if vmin is None: vmin = 0.02
+        if vmax is None: vmax = 0.98
+        vals = np.sort(amp[~np.isnan(amp)])
+        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
+        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        ind_vmin = np.max([0,ind_vmin])
+        ind_vmax = np.min([len(vals)-1,ind_vmax])
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+
     from matplotlib.colors import hsv_to_rgb
 
     #function for converting to complex colors
@@ -847,6 +858,9 @@ def show_complex(
     #plot
     fig, ax = show(
         rgb,
+        vmin = 0, 
+        vmax = 1,
+        intensity_range= 'absolute',
         returnfig = True,
         **kwargs
     )
