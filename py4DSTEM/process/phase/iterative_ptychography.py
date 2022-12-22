@@ -149,7 +149,7 @@ class PtychographicReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: bool = True,
+        plot_center_of_mass: str = 'default',
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -177,8 +177,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         ----------
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        plot_center_of_mass: bool, optional
-            If True, the computed and fitted CoM arrays will be displayed
+        plot_center_of_mass: str, optional
+            If 'default', the corrected CoM arrays will be displayed
+            If 'all', the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
@@ -212,13 +213,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._calculate_intensities_center_of_mass(
             self._intensities,
             fit_function=fit_function,
-            plot_center_of_mass=plot_center_of_mass,
-            **kwargs,
         )
 
         self._solve_for_center_of_mass_relative_rotation(
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
+            plot_center_of_mass=plot_center_of_mass,
             maximize_divergence=maximize_divergence,
             force_com_rotation=force_com_rotation,
             force_com_transpose=force_com_transpose,
