@@ -332,12 +332,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     self._com_measured_y,
                     self._com_normalized_x,
                     self._com_normalized_y,
-                ],[
-                "CoM_x", 
-                "CoM_y", 
-                "Normalized CoM_x", 
-                "Normalized CoM_y",
                 ],
+                ["CoM_x", "CoM_y", "Normalized CoM_x", "Normalized CoM_y"],
             ):
                 ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
@@ -348,7 +344,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
-        plot_center_of_mass: bool = True,
         maximize_divergence: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
@@ -833,42 +828,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # 'Public'-facing attributes as numpy arrays
         self.com_x = asnumpy(self._com_x)
         self.com_y = asnumpy(self._com_y)
-
-        # Optionally, plot corrected center of mass
-        if plot_center_of_mass:
-
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
-
-            extent = [
-                0,
-                self._scan_sampling[1] * self._intensities_shape[1],
-                self._scan_sampling[0] * self._intensities_shape[0],
-                0,
-            ]
-
-            fig = plt.figure(figsize=figsize)
-            grid = ImageGrid(fig, 111, nrows_ncols=(1, 2), axes_pad=(0.25, 0.5))
-
-            for ax, arr, title in zip(
-                grid,
-                [
-                    self.com_x,
-                    self.com_y,
-                ],[
-                "Corrected CoM_x", 
-                "Corrected CoM_y",
-                ],
-            ):
-                ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
-                ax.set_xlabel(f"x [{self._scan_units[0]}]")
-                ax.set_ylabel(f"y [{self._scan_units[1]}]")
-                ax.set_title(title)
-
-
-
 
     def _set_polar_parameters(self, parameters: dict):
         """
