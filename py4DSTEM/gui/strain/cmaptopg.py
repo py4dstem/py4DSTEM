@@ -64,7 +64,7 @@ def cmapToColormap(cmap, nTicks=16):
         # Case #2: a dictionary with 'red'/'green'/'blue' values as functions (e.g. 'gnuplot')
         elif ('red' in colordata) and isinstance(colordata['red'], collections.Callable):
             indices = np.linspace(0., 1., nTicks)
-            luts = [np.clip(np.array(colordata[rgb](indices), dtype=np.float), 0, 1) * 255 \
+            luts = [np.clip(np.array(colordata[rgb](indices), dtype=np.float64), 0, 1) * 255 \
                     for rgb in ('red', 'green', 'blue')]
             rgb_list = zip(indices, list(zip(*luts)))
 
