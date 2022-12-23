@@ -23,7 +23,6 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
-
 class PhaseReconstruction(metaclass=ABCMeta):
     """
     Base phase reconstruction class.
@@ -268,7 +267,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Normalized horizontal center of mass gradient
         self._com_normalized_y: (Rx,Ry) xp.ndarray
             Normalized vertical center of mass gradient
-
         """
 
         xp = self._xp
@@ -843,8 +841,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
-
-        elif plot_center_of_mass == "default":
+        
+        elif plot_center_of_mass == 'default':
 
             figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "RdBu_r")
