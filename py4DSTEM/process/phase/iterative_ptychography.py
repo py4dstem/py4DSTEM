@@ -214,13 +214,15 @@ class PtychographicReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = "default",
+        plot_center_of_mass: str = 'default',
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
+        bandlimit_nyquist: float = None,
+        bandlimit_power: float = 2,
         **kwargs,
     ):
         """
