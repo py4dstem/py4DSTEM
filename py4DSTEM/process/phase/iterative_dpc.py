@@ -381,10 +381,6 @@ class DPCReconstruction(PhaseReconstruction):
         ):
 
             if self._step_size < stopping_criterion:
-                warnings.warn(
-                    f"Step-size has decreased below stopping criterion {stopping_criterion}.",
-                    UserWarning,
-                )
                 break
 
             # forward operator
@@ -409,6 +405,12 @@ class DPCReconstruction(PhaseReconstruction):
                     )
                 )
                 self.error_iterations.append(self.error.item())
+
+        if self._step_size < stopping_criterion:
+            warnings.warn(
+                f"Step-size has decreased below stopping criterion {stopping_criterion}.",
+                UserWarning,
+            )
 
         # crop result
         self._object_phase = self._padded_phase_object[
