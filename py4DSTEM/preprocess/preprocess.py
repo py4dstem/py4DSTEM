@@ -7,6 +7,7 @@
 # will be identical to
 #       datacube.preprocess_function(*args)
 
+import warnings
 import numpy as np
 from py4DSTEM.process.utils import bin2D, get_shifted_ar
 from py4DSTEM import tqdmnd
@@ -282,3 +283,101 @@ def datacube_diffraction_shift(
 
     return datacube
 
+def resample_data_diffraction(datacube, resampling_factor=None, output_size=None, method='bilinear'):
+    """
+    Performs diffraction space resampling of data by resampling_factor or to match output_size.
+    """
+    if method=='fourier':
+        from py4DSTEM.process.utils import fourier_resample
+        
+        if np.size(resampling_factor) != 1:
+            warnings.warn(
+                ("Fourier resampling currently only accepts a scalar resampling_factor. "
+                 f"'resampling_factor' set to {resampling_factor[0]}."),UserWarning)
+            resampling_factor = resampling_factor[0]
+            
+        datacube.data = fourier_resample(datacube.data,scale=resampling_factor,output_size=output_size)
+        
+    elif method=='bilinear':
+        from scipy.ndimage import zoom
+        
+        if resampling_factor is not None:
+
+            if output_size is not None:
+                raise ValueError("Only one of 'resampling_factor' or 'output_size' can be specified.")
+
+            resampling_factor = np.array(resampling_factor)
+            if resampling_factor.shape == ():
+                resampling_factor = np.tile(resampling_factor, 2)
+
+        else:
+            
+            if output_size is None:
+                raise ValueError("At-least one of 'pad_factor' or 'output_size' must be specified.")
+            
+
+            if len(output_size) != 2:
+                raise ValueError(f"'output_size' must have length 2, not {len(output_size)}")
+
+            resampling_factor = np.array(output_size)/np.array(datacube.shape[-2:])
+            
+        resampling_factor = np.concatenate(((1,1),resampling_factor))
+        datacube.data = zoom(datacube.data,resampling_factor,order=1)
+    else:
+        raise ValueError(f"'method' needs to be one of 'bilinear' or 'fourier', not {method}.")
+        
+    return datacube
+
+
+def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
+    """
+    Performs diffraction space padding of data by pad_factor or to match output_size.
+    """
+    Qx, Qy = datacube.shape[-2:]
+    
+    if pad_factor is not None:
+        
+        if output_size is not None:
+            raise ValueError("Only one of 'pad_factor' or 'output_size' can be specified.")
+            
+        pad_factor = np.array(pad_factor)
+        if pad_factor.shape == ():
+            pad_factor = np.tile(pad_factor, 2)
+            
+        if np.any(pad_factor < 1):
+            raise ValueError("'pad_factor' needs to be larger than 1.")
+            
+        pad_kx = np.round(Qx*(pad_factor[0] - 1)/2).astype('int')
+        pad_kx = (pad_kx,pad_kx)
+        pad_ky = np.round(Qy*(pad_factor[1] - 1)/2).astype('int')
+        pad_ky = (pad_ky,pad_ky)
+        
+    else:
+        
+        if output_size is None:
+            raise ValueError("At-least one of 'pad_factor' or 'output_size' must be specified.")
+        
+        if len(output_size) != 2:
+            raise ValueError(f"'output_size' must have length 2, not {len(output_size)}")
+            
+        Sx, Sy = output_size
+        
+        if Sx < Qx or Sy < Qy:
+            raise ValueError(f"'output_size' must be at-least as large as {(Qx,Qy)}.")
+            
+        pad_kx = Sx - Qx
+        pad_kx = (pad_kx//2, pad_kx//2 + pad_kx %2)
+
+        pad_ky = Sy - Qy
+        pad_ky = (pad_ky//2, pad_ky//2 + pad_ky %2)
+     
+    pad_width = (
+        (0,0),
+        (0,0),
+        pad_kx,
+        pad_ky,
+    )
+    
+    datacube.data = np.pad(datacube.data,pad_width=pad_width,mode='constant')
+    
+    return datacube
