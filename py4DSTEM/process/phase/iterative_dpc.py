@@ -76,7 +76,6 @@ class DPCReconstruction(PhaseReconstruction):
         self._energy = energy
         self._datacube = datacube
         self._verbose = verbose
-        self._region_of_interest_shape = None
         self._preprocessed = False
         self._dp_mask = dp_mask
 
