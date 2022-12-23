@@ -24,7 +24,7 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
 )
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar, fourier_resample
+from py4DSTEM.process.utils import fourier_resample, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
@@ -98,7 +98,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         datacube: DataCube,
         energy: float,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        resampling_method: str = 'fourier',
+        resampling_method: str = "fourier",
         probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
         initial_object_guess: np.ndarray = None,
@@ -154,58 +154,67 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._object_padding_px = object_padding_px
         self._preprocessed = False
-        
+
     def _preprocess_datacube_and_vacuum_probe(
         self,
-        datacube, 
+        datacube,
         diffraction_intensities_shape=None,
-        resampling_method = 'fourier',
-        probe_roi_shape = None,
+        resampling_method="fourier",
+        probe_roi_shape=None,
         vacuum_probe_intensity=None,
     ):
-        """
-        """
+        """ """
 
         if diffraction_intensities_shape is not None:
-            
-            Qx,Qy = datacube.shape[-2:]
-            Sx,Sy = diffraction_intensities_shape
 
-            resampling_factor_x = Sx/Qx
-            resampling_factor_y = Sy/Qy
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = diffraction_intensities_shape
+
+            resampling_factor_x = Sx / Qx
+            resampling_factor_y = Sy / Qy
 
             if resampling_factor_x != resampling_factor_y:
-                raise ValueError("Datacube calibration can only handle uniform Q-sampling.")
+                raise ValueError(
+                    "Datacube calibration can only handle uniform Q-sampling."
+                )
 
             Q_pixel_size = datacube.calibration.get_Q_pixel_size()
-            datacube = datacube.resample_Q(N=resampling_factor_x, method=resampling_method)
-            datacube.calibration.set_Q_pixel_size(Q_pixel_size/resampling_factor_x)
+            datacube = datacube.resample_Q(
+                N=resampling_factor_x, method=resampling_method
+            )
+            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
 
             if vacuum_probe_intensity is not None:
-                vacuum_probe_intensity = fourier_resample(vacuum_probe_intensity, output_size = diffraction_intensities_shape, force_nonnegative=True)
+                vacuum_probe_intensity = fourier_resample(
+                    vacuum_probe_intensity,
+                    output_size=diffraction_intensities_shape,
+                    force_nonnegative=True,
+                )
 
         if probe_roi_shape is not None:
-            
-            Qx,Qy = datacube.shape[-2:]
-            Sx,Sy = probe_roi_shape
+
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = probe_roi_shape
             datacube = datacube.pad_Q(output_size=probe_roi_shape)
-            
+
             if vacuum_probe_intensity is not None:
-                
+
                 pad_kx = Sx - Qx
-                pad_kx = (pad_kx//2, pad_kx//2 + pad_kx %2)
+                pad_kx = (pad_kx // 2, pad_kx // 2 + pad_kx % 2)
 
                 pad_ky = Sy - Qy
-                pad_ky = (pad_ky//2, pad_ky//2 + pad_ky %2)
+                pad_ky = (pad_ky // 2, pad_ky // 2 + pad_ky % 2)
 
-                vacuum_probe_intensity = np.pad(vacuum_probe_intensity,pad_width=(pad_kx,pad_ky),mode='constant')
-     
+                vacuum_probe_intensity = np.pad(
+                    vacuum_probe_intensity, pad_width=(pad_kx, pad_ky), mode="constant"
+                )
+
         return datacube, vacuum_probe_intensity
 
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -259,13 +268,16 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
-        
-        self._datacube, self._vacuum_probe_intensity = self._preprocess_datacube_and_vacuum_probe(
-            self._datacube, 
+
+        (
+            self._datacube,
+            self._vacuum_probe_intensity,
+        ) = self._preprocess_datacube_and_vacuum_probe(
+            self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
-            resampling_method = self._resampling_method,
-            probe_roi_shape = self._probe_roi_shape,
-            vacuum_probe_intensity = self._vacuum_probe_intensity,
+            resampling_method=self._resampling_method,
+            probe_roi_shape=self._probe_roi_shape,
+            vacuum_probe_intensity=self._vacuum_probe_intensity,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
