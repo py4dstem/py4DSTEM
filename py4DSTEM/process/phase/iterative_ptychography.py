@@ -163,7 +163,48 @@ class PtychographicReconstruction(PhaseReconstruction):
         probe_roi_shape=None,
         vacuum_probe_intensity=None,
     ):
-        """ """
+        """
+        Datacube preprocssing step, to set the reciprocal- and real-space sampling.
+        Let the measured diffraction intensities have size (Rx,Ry,Qx,Qy), with reciprocal-space
+        samping (dkx,dky). This sets a real-space sampling which is inversely proportional to
+        the maximum scattering wavevector (Qx*dkx,Qy*dky).
+
+        Often, it is beneficial to resample the measured diffraction intensities using a different
+        reciprocal-space sampling (dkx',dky'), e.g. downsampling to save memory. This is achieved
+        by specifying a diffraction_intensities_shape (Sx,Sy) which is different than (Qx,Qy).
+        Note this does not affect the maximum scattering wavevector (Qx*dkx,Qy*dky) = (Sx*dkx',Sy*dky'),
+        and thus the real-space sampling stays fixed.
+
+
+        The real space sampling, (dx, dy), combined with the resampled diffraction_intensities_shape,
+        sets the real-space probe region of interest (ROI) extent (dx*Sx, dy*Sy).
+        Occasionally, one may also want to specify a larger probe ROI extent, e.g when the probe
+        does not comfortably fit without self-ovelap artifacts, or when the scan step sizes are much
+        smaller than the real-space sampling (dx,dy). This can be achieved by specifying a
+        probe_roi_shape, which is larger than diffraction_intensities_shape, which will result in
+        zero-padding of the diffraction intensities.
+
+        Parameters
+        ----------
+        datacube: Datacube
+            Input 4D diffraction pattern intensities
+        diffraction_intensities_shape: (int,int), optional
+            Resampled diffraction intensities shape.
+            If None, no resamping is performed
+        resampling method: str, optional
+            Resampling method to use, one of 'bilinear' or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        vacuum_probe_intensity, np.ndarray, optional
+            If not None, the vacuum probe intensity is also resampled and padded
+
+
+        Returns
+        --------
+        datacube: Datacube
+            Resampled and Padded datacube
+        """
 
         if diffraction_intensities_shape is not None:
 
@@ -214,15 +255,13 @@ class PtychographicReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
-        bandlimit_nyquist: float = None,
-        bandlimit_power: float = 2,
         **kwargs,
     ):
         """
