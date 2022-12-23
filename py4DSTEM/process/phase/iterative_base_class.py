@@ -19,11 +19,7 @@ except ImportError:
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.phase.utils import polar_aliases
-from py4DSTEM.process.utils import (
-    electron_wavelength_angstrom,
-    fourier_resample,
-    get_shifted_ar,
-)
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -257,6 +253,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         Assigns
         --------
+        self._region_of_interest_shape: Tuple[int,int]
+            Pixel dimensions (Sx,Sy) of the region of interest
+            Commonly set to diffraction intensity dimensions (Qx,Qy)
         self._com_measured_x: (Rx,Ry) xp.ndarray
             Measured horizontal center of mass gradient
         self._com_measured_y: (Rx,Ry) xp.ndarray
@@ -269,22 +268,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Normalized horizontal center of mass gradient
         self._com_normalized_y: (Rx,Ry) xp.ndarray
             Normalized vertical center of mass gradient
-
-        Mutates
-        -------
-        self._region_of_interest_shape: Tuple[int,int]
-            Pixel dimensions (Sx,Sy) of the region of interest
-            Commonly set to diffraction intensity dimensions (Qx,Qy)
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
         # Intensities shape
-        if self._region_of_interest_shape is None:
-            self._region_of_interest_shape = self._intensities_shape[-2:]
-        else:
-            self._region_of_interest_shape = np.array(self._region_of_interest_shape)
+        self._region_of_interest_shape = self._intensities_shape[-2:]
 
         # Coordinates
         kx = xp.arange(self._intensities_shape[-2], dtype=xp.float32)
@@ -320,7 +310,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         maximize_divergence: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
@@ -812,7 +802,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self.com_y = asnumpy(self._com_y)
 
         # Optionally, plot CoM
-        if plot_center_of_mass == 'all':
+        if plot_center_of_mass == "all":
 
             figsize = kwargs.get("figsize", (8, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
@@ -852,8 +842,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
-        
-        elif plot_center_of_mass == 'default':
+
+        elif plot_center_of_mass == "default":
 
             figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "RdBu_r")
@@ -919,9 +909,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         diffraction_intensities,
         com_fitted_x,
         com_fitted_y,
-        region_of_interest_shape,
-        bandlimit_nyquist=None,
-        bandlimit_power=2,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -934,8 +921,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Best fit horizontal center of mass gradient
         com_fitted_y: (Rx,Ry) xp.ndarray
             Best fit vertical center of mass gradient
-        region_of_interest_shape: Tuple[Int,Int]
-            Pixel dimensions (Sx,Sy) of the region of interest (ROI)
 
         Returns
         -------
@@ -953,30 +938,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
         com_y = asnumpy(com_fitted_y)
 
         mean_intensity = 0
-        angular_sampling = self._angular_sampling
 
-        amplitudes = xp.zeros(
-            np.hstack((self._intensities_shape[:2], region_of_interest_shape)),
-            dtype=xp.float32,
-        )
-        need_to_resample = (
-            self._intensities_shape[-2] != region_of_interest_shape[0]
-            or self._intensities_shape[-1] != region_of_interest_shape[1]
-        )
+        amplitudes = xp.zeros_like(dps)
 
         for rx in range(self._intensities_shape[0]):
             for ry in range(self._intensities_shape[1]):
                 intensities = get_shifted_ar(
                     dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
                 )
-
-                if need_to_resample:
-                    intensities = fourier_resample(
-                        intensities,
-                        output_size=region_of_interest_shape,
-                        bandlimit_nyquist=bandlimit_nyquist,
-                        bandlimit_power=bandlimit_power,
-                    )
 
                 intensities = xp.asarray(intensities)
                 mean_intensity += xp.sum(intensities)
@@ -988,14 +957,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         )
         mean_intensity /= amplitudes.shape[0]
 
-        if need_to_resample:
-            angular_sampling = tuple(
-                np.array(angular_sampling)
-                * self._intensities_shape[-2:]
-                / region_of_interest_shape
-            )
-
-        return amplitudes, mean_intensity, angular_sampling
+        return amplitudes, mean_intensity
 
     def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
         """

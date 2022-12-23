@@ -47,6 +47,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    diffraction_intensities_shape: Tuple[int,int], optional
+        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+        If None, no resampling of diffraction intenstities is performed
+    resampling_method: str, optional
+        Method to use for resampling, either 'bilinear' or 'fourier' (default)
     region_of_interest_shape: Tuple[int,int], optional
         Pixel dimensions (Sx,Sy) of the region of interest (ROI)
         If None, the ROI dimensions are taken as the intensity dimensions (Qx,Qy)
@@ -92,7 +97,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         self,
         datacube: DataCube,
         energy: float,
-        region_of_interest_shape: Tuple[int, int] = None,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        resampling_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
@@ -136,7 +143,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._region_of_interest_shape = region_of_interest_shape
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._resampling_method = resampling_method
+        self._probe_roi_shape = probe_roi_shape
         self._object = initial_object_guess
         self._probe = initial_probe_guess
         self._scan_positions = scan_positions
@@ -146,18 +155,113 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._object_padding_px = object_padding_px
         self._preprocessed = False
 
+    def _preprocess_datacube_and_vacuum_probe(
+        self,
+        datacube,
+        diffraction_intensities_shape=None,
+        resampling_method="fourier",
+        probe_roi_shape=None,
+        vacuum_probe_intensity=None,
+    ):
+        """
+        Datacube preprocssing step, to set the reciprocal- and real-space sampling.
+        Let the measured diffraction intensities have size (Rx,Ry,Qx,Qy), with reciprocal-space
+        samping (dkx,dky). This sets a real-space sampling which is inversely proportional to
+        the maximum scattering wavevector (Qx*dkx,Qy*dky).
+
+        Often, it is beneficial to resample the measured diffraction intensities using a different
+        reciprocal-space sampling (dkx',dky'), e.g. downsampling to save memory. This is achieved
+        by specifying a diffraction_intensities_shape (Sx,Sy) which is different than (Qx,Qy).
+        Note this does not affect the maximum scattering wavevector (Qx*dkx,Qy*dky) = (Sx*dkx',Sy*dky'),
+        and thus the real-space sampling stays fixed.
+
+
+        The real space sampling, (dx, dy), combined with the resampled diffraction_intensities_shape,
+        sets the real-space probe region of interest (ROI) extent (dx*Sx, dy*Sy).
+        Occasionally, one may also want to specify a larger probe ROI extent, e.g when the probe
+        does not comfortably fit without self-ovelap artifacts, or when the scan step sizes are much
+        smaller than the real-space sampling (dx,dy). This can be achieved by specifying a
+        probe_roi_shape, which is larger than diffraction_intensities_shape, which will result in
+        zero-padding of the diffraction intensities.
+
+        Parameters
+        ----------
+        datacube: Datacube
+            Input 4D diffraction pattern intensities
+        diffraction_intensities_shape: (int,int), optional
+            Resampled diffraction intensities shape.
+            If None, no resamping is performed
+        resampling method: str, optional
+            Resampling method to use, one of 'bilinear' or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        vacuum_probe_intensity, np.ndarray, optional
+            If not None, the vacuum probe intensity is also resampled and padded
+
+
+        Returns
+        --------
+        datacube: Datacube
+            Resampled and Padded datacube
+        """
+
+        if diffraction_intensities_shape is not None:
+
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = diffraction_intensities_shape
+
+            resampling_factor_x = Sx / Qx
+            resampling_factor_y = Sy / Qy
+
+            if resampling_factor_x != resampling_factor_y:
+                raise ValueError(
+                    "Datacube calibration can only handle uniform Q-sampling."
+                )
+
+            Q_pixel_size = datacube.calibration.get_Q_pixel_size()
+            datacube = datacube.resample_Q(
+                N=resampling_factor_x, method=resampling_method
+            )
+            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
+
+            if vacuum_probe_intensity is not None:
+                vacuum_probe_intensity = fourier_resample(
+                    vacuum_probe_intensity,
+                    output_size=diffraction_intensities_shape,
+                    force_nonnegative=True,
+                )
+
+        if probe_roi_shape is not None:
+
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = probe_roi_shape
+            datacube = datacube.pad_Q(output_size=probe_roi_shape)
+
+            if vacuum_probe_intensity is not None:
+
+                pad_kx = Sx - Qx
+                pad_kx = (pad_kx // 2, pad_kx // 2 + pad_kx % 2)
+
+                pad_ky = Sy - Qy
+                pad_ky = (pad_ky // 2, pad_ky // 2 + pad_ky % 2)
+
+                vacuum_probe_intensity = np.pad(
+                    vacuum_probe_intensity, pad_width=(pad_kx, pad_ky), mode="constant"
+                )
+
+        return datacube, vacuum_probe_intensity
+
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
-        bandlimit_nyquist: float = None,
-        bandlimit_power: float = 2,
         **kwargs,
     ):
         """
@@ -206,6 +310,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
+        (
+            self._datacube,
+            self._vacuum_probe_intensity,
+        ) = self._preprocess_datacube_and_vacuum_probe(
+            self._datacube,
+            diffraction_intensities_shape=self._diffraction_intensities_shape,
+            resampling_method=self._resampling_method,
+            probe_roi_shape=self._probe_roi_shape,
+            vacuum_probe_intensity=self._vacuum_probe_intensity,
+        )
+
         self._extract_intensities_and_calibrations_from_datacube(
             self._datacube, require_calibrations=True, dp_mask=self._dp_mask
         )
@@ -228,14 +343,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         (
             self._amplitudes,
             self._mean_diffraction_intensity,
-            self._angular_sampling,
         ) = self._normalize_diffraction_intensities(
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
-            self._region_of_interest_shape,
-            bandlimit_nyquist=bandlimit_nyquist,
-            bandlimit_power=bandlimit_power,
         )
 
         # explicitly delete namespace
@@ -282,16 +393,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
                 self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
-                if (
-                    self._intensities_shape[-2] != self._region_of_interest_shape[0]
-                    or self._intensities_shape[-1] != self._region_of_interest_shape[1]
-                ):
-                    self._vacuum_probe_intensity = fourier_resample(
-                        self._vacuum_probe_intensity,
-                        output_size=self._region_of_interest_shape,
-                        bandlimit_nyquist=bandlimit_nyquist,
-                        bandlimit_power=bandlimit_power,
-                    )
                 probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity)
                 shift_x = self._region_of_interest_shape[0] / 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] / 2 - probe_y0

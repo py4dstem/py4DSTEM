@@ -76,7 +76,6 @@ class DPCReconstruction(PhaseReconstruction):
         self._energy = energy
         self._datacube = datacube
         self._verbose = verbose
-        self._region_of_interest_shape = None
         self._preprocessed = False
         self._dp_mask = dp_mask
 
@@ -87,7 +86,7 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         **kwargs,
     ):
@@ -381,10 +380,6 @@ class DPCReconstruction(PhaseReconstruction):
         ):
 
             if self._step_size < stopping_criterion:
-                warnings.warn(
-                    f"Step-size has decreased below stopping criterion {stopping_criterion}.",
-                    UserWarning,
-                )
                 break
 
             # forward operator
@@ -409,6 +404,12 @@ class DPCReconstruction(PhaseReconstruction):
                     )
                 )
                 self.error_iterations.append(self.error.item())
+
+        if self._step_size < stopping_criterion:
+            warnings.warn(
+                f"Step-size has decreased below stopping criterion {stopping_criterion}.",
+                UserWarning,
+            )
 
         # crop result
         self._object_phase = self._padded_phase_object[

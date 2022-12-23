@@ -116,6 +116,41 @@ def bin_Q(
     d = bin_data_diffraction(self,N)
     return d
 
+def pad_Q(
+    self,
+    N = None,
+    output_size = None
+    ):
+    """
+    Pads the data in diffraction space by pad factor N, or to match output_size.
+
+    Accepts:
+        N (float, or Sequence[float]): the padding factor
+        output_size ((int,int)): the padded output size
+    """
+    from py4DSTEM.preprocess import pad_data_diffraction
+    d = pad_data_diffraction(self,pad_factor=N,output_size=output_size)
+    return d
+
+def resample_Q(
+    self,
+    N = None,
+    output_size = None,
+    method='bilinear'
+    ):
+    """
+    Resamples the data in diffraction space by resampling factor N, or to match output_size,
+    using either 'fourier' or 'bilinear' interpolation.
+
+    Accepts:
+        N (float, or Sequence[float]): the resampling factor
+        output_size ((int,int)): the resampled output size
+        method (str): 'fourier' or 'bilinear' (default)
+    """
+    from py4DSTEM.preprocess import resample_data_diffraction
+    d = resample_data_diffraction(self,resampling_factor=N,output_size=output_size,method=method)
+    return d
+
 def bin_Q_mmap(
     self,
     N,
