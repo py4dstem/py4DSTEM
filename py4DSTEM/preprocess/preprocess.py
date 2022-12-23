@@ -313,7 +313,7 @@ def resample_data_diffraction(datacube, resampling_factor=None, output_size=None
         else:
             
             if output_size is None:
-                raise ValueError("At-least one of 'pad_factor' or 'output_size' must be specified.")
+                raise ValueError("At-least one of 'resampling_factor' or 'output_size' must be specified.")
             
 
             if len(output_size) != 2:
