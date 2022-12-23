@@ -19,11 +19,7 @@ except ImportError:
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.phase.utils import polar_aliases
-from py4DSTEM.process.utils import (
-    electron_wavelength_angstrom,
-    fourier_resample,
-    get_shifted_ar,
-)
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -94,7 +90,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         Abstract method subclasses must define to postprocess and display results.
         """
         pass
-
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,
@@ -316,7 +311,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_rotation: bool = True,
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         maximize_divergence: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
@@ -808,7 +803,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self.com_y = asnumpy(self._com_y)
 
         # Optionally, plot CoM
-        if plot_center_of_mass == 'all':
+        if plot_center_of_mass == "all":
 
             figsize = kwargs.get("figsize", (8, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
@@ -848,8 +843,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_xlabel(f"x [{self._scan_units[0]}]")
                 ax.set_ylabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
-        
-        elif plot_center_of_mass == 'default':
+
+        elif plot_center_of_mass == "default":
 
             figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "RdBu_r")

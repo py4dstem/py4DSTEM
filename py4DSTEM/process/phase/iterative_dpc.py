@@ -86,7 +86,7 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
-        plot_center_of_mass: str = 'default',
+        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         **kwargs,
     ):
