@@ -182,7 +182,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             datacube.calibration.set_Q_pixel_size(Q_pixel_size/resampling_factor_x)
 
             if vacuum_probe_intensity is not None:
-                vacuum_probe_intensity = fourier_resample(vacuum_probe_intensity, output_size = diffraction_intensities_shape)
+                vacuum_probe_intensity = fourier_resample(vacuum_probe_intensity, output_size = diffraction_intensities_shape, force_nonnegative=True)
 
         if probe_roi_shape is not None:
             
