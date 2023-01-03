@@ -116,6 +116,41 @@ def bin_Q(
     d = bin_data_diffraction(self,N)
     return d
 
+def pad_Q(
+    self,
+    N = None,
+    output_size = None
+    ):
+    """
+    Pads the data in diffraction space by pad factor N, or to match output_size.
+
+    Accepts:
+        N (float, or Sequence[float]): the padding factor
+        output_size ((int,int)): the padded output size
+    """
+    from py4DSTEM.preprocess import pad_data_diffraction
+    d = pad_data_diffraction(self,pad_factor=N,output_size=output_size)
+    return d
+
+def resample_Q(
+    self,
+    N = None,
+    output_size = None,
+    method='bilinear'
+    ):
+    """
+    Resamples the data in diffraction space by resampling factor N, or to match output_size,
+    using either 'fourier' or 'bilinear' interpolation.
+
+    Accepts:
+        N (float, or Sequence[float]): the resampling factor
+        output_size ((int,int)): the resampled output size
+        method (str): 'fourier' or 'bilinear' (default)
+    """
+    from py4DSTEM.preprocess import resample_data_diffraction
+    d = resample_data_diffraction(self,resampling_factor=N,output_size=output_size,method=method)
+    return d
+
 def bin_Q_mmap(
     self,
     N,
@@ -817,7 +852,7 @@ def get_probe_size(
     from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
 
     if mode is None:
-        print('no mode speficied, using mean diffraciton pattern')
+        print('no mode specified, using mean diffraction pattern')
         assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
         DP = self.tree['dp_mean'].data
     elif type(mode) == str:
