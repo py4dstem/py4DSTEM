@@ -26,6 +26,8 @@ class DataCube(Array):
         bin_Q_mmap,
         bin_R,
         thin_R,
+        pad_Q,
+        resample_Q,
         filter_hot_pixels,
         get_virtual_diffraction,
         get_dp_max,
