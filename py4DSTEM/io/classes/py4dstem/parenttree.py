@@ -1,9 +1,9 @@
 # Defines the ParentTree class, which inherits from emd.Tree, and
 # adds the ability to track a parent datacube.
 
-from py4DSTEM.io.datastructure.emd.tree import Tree
-from py4DSTEM.io.datastructure.emd.array import Array
-from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
+from py4DSTEM.io.classes.emd.tree import Tree
+from py4DSTEM.io.classes.emd.array import Array
+from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 from numpy import ndarray
 
 

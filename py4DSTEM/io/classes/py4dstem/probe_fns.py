@@ -1,7 +1,7 @@
 # Functions to become Probe methods
 
 import numpy as np
-from py4DSTEM.io.datastructure.emd import Metadata
+from py4DSTEM.io.classes.emd import Metadata
 
 
 

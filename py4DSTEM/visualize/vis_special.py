@@ -8,7 +8,7 @@ from py4DSTEM.visualize.overlay import add_pointlabels,add_vector,add_bragg_inde
 from py4DSTEM.visualize.overlay import add_points
 from py4DSTEM.visualize.vis_grid import show_image_grid
 from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from py4DSTEM.io.datastructure import DataCube,Calibration,PointList
+from py4DSTEM.io.classes import DataCube,Calibration,PointList
 from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
 from py4DSTEM.process.calibration import double_sided_gaussian
 from py4DSTEM.process.latticevectors import get_selected_lattice_vectors

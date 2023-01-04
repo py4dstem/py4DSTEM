@@ -6,7 +6,7 @@ from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 # Add to tree
 
-from py4DSTEM.io.datastructure.emd import Array
+from py4DSTEM.io.classes.emd import Array
 def add(
     self,
     data,
@@ -234,7 +234,7 @@ def filter_hot_pixels(
 
 # Diffraction imaging
 
-from py4DSTEM.io.datastructure.py4dstem.virtualdiffraction import VirtualDiffraction
+from py4DSTEM.io.classes.py4dstem.virtualdiffraction import VirtualDiffraction
 def get_virtual_diffraction(
     self,
     method = 'max',
@@ -576,7 +576,7 @@ def get_dp_median(
 
 # Virtual imaging
 
-from py4DSTEM.io.datastructure.py4dstem.virtualimage import VirtualImage
+from py4DSTEM.io.classes.py4dstem.virtualimage import VirtualImage
 def get_virtual_image(
     self,
     mode,
@@ -773,7 +773,7 @@ def get_vacuum_probe(
 
     # perform computation
     from py4DSTEM.process.probe import get_vacuum_probe
-    from py4DSTEM.io.datastructure.py4dstem.probe import Probe
+    from py4DSTEM.io.classes.py4dstem.probe import Probe
     if ROI is None:
         x = get_vacuum_probe(
             self
@@ -849,7 +849,7 @@ def get_probe_size(
     """
     #perform computation        
     from py4DSTEM.process.calibration import get_probe_size
-    from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
+    from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 
     if mode is None:
         print('no mode specified, using mean diffraction pattern')

@@ -1,8 +1,8 @@
 # Defines the VirtualDiffraction class, which stores 2D, diffraction-shaped data
 # with metadata about how it was created
 
-from py4DSTEM.io.datastructure.py4dstem.diffractionslice import DiffractionSlice
-from py4DSTEM.io.datastructure.emd.metadata import Metadata
+from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
+from py4DSTEM.io.classes.emd.metadata import Metadata
 
 from typing import Optional,Union
 import numpy as np
@@ -84,7 +84,7 @@ class VirtualDiffraction(DiffractionSlice):
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.datastructure.py4dstem.io import VirtualDiffraction_from_h5
+        from py4DSTEM.io.classes.py4dstem.io import VirtualDiffraction_from_h5
         return VirtualDiffraction_from_h5(group)
 
 

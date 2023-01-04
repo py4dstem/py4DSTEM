@@ -7,7 +7,7 @@ Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 
 import numpy as np
 from time import time
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
+from py4DSTEM.io.classes.py4dstem import QPoints, BraggVectors
 
 try:
     import cupy as cp

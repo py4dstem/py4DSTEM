@@ -7,7 +7,7 @@
 
 import numpy as np
 from pathlib import Path
-from py4DSTEM.io.datastructure import DataCube
+from py4DSTEM.io.classes import DataCube
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.utils import bin2D
 

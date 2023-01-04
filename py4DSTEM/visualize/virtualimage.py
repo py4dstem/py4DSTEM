@@ -1,6 +1,6 @@
 import numpy as np
 from  py4DSTEM.visualize.show import show
-from py4DSTEM.io.datastructure.py4dstem import (
+from py4DSTEM.io.classes.py4dstem import (
     Calibration, DataCube, DiffractionSlice
 )
 

@@ -5,9 +5,9 @@ from typing import Optional,Union
 import numpy as np
 import h5py
 
-from py4DSTEM.io.datastructure.emd import PointListArray
-from py4DSTEM.io.datastructure.emd.tree import Tree
-from py4DSTEM.io.datastructure.emd.metadata import Metadata
+from py4DSTEM.io.classes.emd import PointListArray
+from py4DSTEM.io.classes.emd.tree import Tree
+from py4DSTEM.io.classes.emd.metadata import Metadata
 
 
 
@@ -32,7 +32,7 @@ class BraggVectors:
     retrieve the positiona and intensity of the scattering.
     """
 
-    from py4DSTEM.io.datastructure.py4dstem.braggvectors_fns import (
+    from py4DSTEM.io.classes.py4dstem.braggvectors_fns import (
         get_bvm,
         measure_origin,
         fit_origin,
@@ -130,13 +130,13 @@ class BraggVectors:
 
     # write
     def to_h5(self,group):
-        from py4DSTEM.io.datastructure.py4dstem.io import BraggVectors_to_h5
+        from py4DSTEM.io.classes.py4dstem.io import BraggVectors_to_h5
         BraggVectors_to_h5(self,group)
 
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.datastructure.py4dstem.io import BraggVectors_from_h5
+        from py4DSTEM.io.classes.py4dstem.io import BraggVectors_from_h5
         return BraggVectors_from_h5(group)
 
 
