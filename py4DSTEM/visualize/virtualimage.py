@@ -72,7 +72,6 @@ def position_detector(
             assert isinstance(image, np.ndarray)
             assert isinstance(cal, Calibration)
         elif len(data)==3:
-            assert(shift_center is True), "If `data` is a 3-tuple, `shift_center` must be True"
             data,rx,ry = data
             image = data[rx,ry,:,:]
             cal = data.calibration
