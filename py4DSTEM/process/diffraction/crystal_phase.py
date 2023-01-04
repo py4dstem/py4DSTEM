@@ -6,6 +6,7 @@ from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.io.datastructure.emd.pointlistarray import PointListArray
 from numpy.linalg import lstsq
 from scipy.optimize import nnls
+from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 
 class Crystal_Phase:
     """
@@ -46,10 +47,11 @@ class Crystal_Phase:
         orientation_maps
     ):
         """
-        _summary_
+        A method to set orientation maps based on the output of the .match_orientations method of
+        crystal instances.
 
         Args:
-            orientation_maps (list): _description_
+            orientation_maps (list): A list of orientation maps in the same order as the crystal instances
         """
         if isinstance(orientation_maps, list):
             if len(self.crystals) != len(orientation_maps):
@@ -70,8 +72,8 @@ class Crystal_Phase:
         Visualize phase maps of dataset.
 
         Args:
-            method (_type_, optional): _description_. Defaults to None.
-            map_scale_values (_type_, optional): _description_. Defaults to None.
+            method (str):               Where to get phase maps from          
+            map_scale_values (float):   Value to scale correlations by
         """
         
         if method == 'orientation_maps':
@@ -83,13 +85,14 @@ class Crystal_Phase:
                 phase_maps.append(self.orientation_maps[m].corr[:,:,index] / corr_sum)
             show_image_grid(lambda i:phase_maps[i], 1, len(phase_maps), cmap = 'inferno')
         else:
-            print('Method not yet implemented.')
+            raise ValueError('Method not yet implemented.')
         return
     
     def plot_phase_map(
         self,
         method,
         index = 0,
+        cmap = None
         
     ):
         if method == 'orientation_maps':
@@ -99,8 +102,9 @@ class Crystal_Phase:
                                 for p in range(len(self.orientation_maps))
                                 ]
 
-            cm = plt.get_cmap('rainbow')
-            cmap = [cm(1.*i/len(self.orientation_maps)) for i in range(len(self.orientation_maps))]
+            if cmap == None:
+                cm = plt.get_cmap('rainbow')
+                cmap = [cm(1.*i/len(self.orientation_maps)) for i in range(len(self.orientation_maps))]
             
             fig, (ax) = plt.subplots(figsize = (6,6))
             ax.matshow(np.zeros((self.orientation_maps[0].num_x, self.orientation_maps[0].num_y)), cmap = 'gray')
@@ -116,7 +120,7 @@ class Crystal_Phase:
                     cmap = cm)
             plt.show()
         else:
-            print('Method not yet implemented.')
+            raise ValueError('Method not yet implemented.')
         return
     
     # Potentially introduce a way to check best match out of all orientations in phase plan and plug into model
@@ -143,9 +147,10 @@ class Crystal_Phase:
         self,
         pointlistarray,
         tolerance_distance,
-        method = 'nnls',
+        method,
         use_phase_orientations = True,
-        set_phase_orientations = None,
+        set_orientation_matrix = None,
+        set_zone_axis = None,
         mask_peaks = None
     ):
         """
@@ -166,13 +171,14 @@ class Crystal_Phase:
                 ))
             phase_residuals = np.zeros(pointlistarray.shape)
             for Rx, Ry in tqdmnd(pointlistarray.shape[0], pointlistarray.shape[1]):
-                phase_weight, phase_residual = self.quantify_phase_pointlist(
+                _, phase_weight, phase_residual = self.quantify_phase_pointlist(
                     pointlistarray,
                     position = [Rx, Ry],
                     tolerance_distance=tolerance_distance,
                     method = method,
                     use_phase_orientations = use_phase_orientations,
-                    set_phase_orientations = set_phase_orientations,
+                    set_orientation_matrix = set_orientation_matrix,
+                    set_zone_axis = set_zone_axis,
                     mask_peaks = mask_peaks
                 )
                 phase_weights[Rx,Ry,:] = phase_weight
@@ -192,46 +198,67 @@ class Crystal_Phase:
         method = 'nnls', 
         ind_orientation = 0,
         use_phase_orientations = True,
-        set_phase_orientations = None,
+        set_orientation_matrix = None,
+        set_zone_axis = None,
         mask_peaks = None
     ):
         """
         
         Args:
-            pointlisarray (pointlistarray):             pointlistarray to quantify phase of
-            position (tuple/list?):                     position of pointlist in pointlistarray
+            pointlisarray (pointlistarray):             Pointlistarray to quantify phase of
+            position (tuple/list?):                     Position of pointlist in pointlistarray
+            tolerance_distance (float):                 Distance between 
             use_phase_orientations (bool, optional):    _description_. Defaults to True.
             set_phase_orientations (list, optional):    List of set phase orientations for each structure
             mask_peaks (list, optional):
 
         Returns:
-            _type_: _description_
+            pointlist_peak_intensity_matches
+            phase_weights
+            phase_residuals
         """
         pointlist = pointlistarray.get_pointlist(position[0], position[1])
         pl_intensities = pointlist['intensity']
         
         #Prepare Matches for modeling
-        if use_phase_orientations == True:
-            pointlist_peak_matches = []
-            for m in range(len(self.orientation_maps)):
-                phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
-                bragg_peaks_fit = self.crystals[m].generate_diffraction_pattern(
-                    self.orientation_maps[m].get_orientation(position[0], position[1]),
+        
+        pointlist_peak_matches = []
+        for c in range(len(self.crystals)):
+            phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
+            if use_phase_orientations == True:
+                bragg_peaks_fit = self.crystals[c].generate_diffraction_pattern(
+                    self.orientation_maps[c].get_orientation(position[0], position[1]),
                     ind_orientation = ind_orientation
                     )
-                for d in range(pointlist['qx'].shape[0]):
-                    distances = []
-                    for p in range(bragg_peaks_fit['qx'].shape[0]):
-                        distances.append(
-                            np.sqrt((pointlist['qx'][d] - bragg_peaks_fit['qx'][p])**2 + 
-                                    (pointlist['qy'][d]-bragg_peaks_fit['qy'][p])**2)
-                        )
-                    ind = np.where(distances == np.min(distances))[0][0]
-                    if distances[ind] <= tolerance_distance:
-                        phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
-                    else:
-                        continue   
-                pointlist_peak_matches.append(phase_peak_match_intensities)
+            elif set_orientation_matrix is not None:
+                if len(set_orientation_matrix) == len(self.crystals):
+                    bragg_peaks_fit = self.crystals[c].generate_diffraction_pattern(
+                    orientation_matrix = set_orientation_matrix[c],
+                    sigma_excitation_error=0.02
+                    )
+                else:
+                    return ValueError('set_zone_axis must be a list of orientation matrices with same number of entries as crystals')
+            elif set_zone_axis is not None:
+                if len(set_zone_axis) == len(self.crystals):
+                    bragg_peaks_fit = self.crystals[c].generate_diffraction_pattern(
+                    zone_axis_lattice = set_zone_axis[c],
+                    sigma_excitation_error=0.02
+                    )
+                else:
+                    return ValueError('set_zone_axis must be a list of zone axes with same number of entries as crystals')
+            for d in range(pointlist['qx'].shape[0]):
+                distances = []
+                for p in range(bragg_peaks_fit['qx'].shape[0]):
+                    distances.append(
+                        np.sqrt((pointlist['qx'][d] - bragg_peaks_fit['qx'][p])**2 + 
+                                (pointlist['qy'][d]-bragg_peaks_fit['qy'][p])**2)
+                    )
+                ind = np.where(distances == np.min(distances))[0][0]
+                if distances[ind] <= tolerance_distance:
+                    phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
+                else:
+                    continue   
+            pointlist_peak_matches.append(phase_peak_match_intensities)
             
             pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
             pointlist_peak_intensity_matches = pointlist_peak_intensity_matches.reshape(
@@ -247,10 +274,54 @@ class Crystal_Phase:
                     
                     for mask in range(len(inds_mask)):
                         pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
+
+
         
         if method == 'nnls':    
             phase_weights, phase_residuals = nnls(
                 pointlist_peak_intensity_matches,
                 pl_intensities
             )
-            return phase_weights, phase_residuals
+        
+        elif method == 'lstsq':
+            phase_weights, phase_residuals, rank, singluar_vals = lstsq(
+                pointlist_peak_intensity_matches,
+                pl_intensities,
+                rcond = -1
+            )
+            phase_residuals = np.sum(phase_residuals)
+        else:
+            raise ValueError(method + ' Not yet implemented. Try nnls or lstsq.')   
+        return pointlist_peak_intensity_matches, phase_weights, phase_residuals
+    
+    # def plot_peak_matches(
+    #     self,
+    #     pointlistarray,
+    #     position,
+    #     tolerance_distance, 
+    #     ind_orientation,
+    #     pointlist_peak_intensity_matches,
+    # ):
+    #     """
+    #     A method to view how the tolerance distance impacts the peak matches associated with
+    #     the quantify_phase_pointlist method.
+        
+    #     Args:
+    #         pointlistarray,
+    #         position,
+    #         tolerance_distance
+    #         pointlist_peak_intensity_matches
+    #     """
+    #     pointlist = pointlistarray.get_pointlist(position[0],position[1])
+        
+    #     for m in range(pointlist_peak_intensity_matches.shape[1]):
+    #         bragg_peaks_fit = self.crystals[m].generate_diffraction_pattern(
+    #                 self.orientation_maps[m].get_orientation(position[0], position[1]),
+    #                 ind_orientation = ind_orientation
+    #                 )
+    #         peak_inds = np.where(bragg_peaks_fit.data['intensity'] == pointlist_peak_intensity_matches[:,m])
+        
+    #         fig, (ax1, ax2) = plt.subplots(2,1,figsize = figsize)
+    #         ax1 = plot_diffraction_pattern(pointlist,)
+    #     return
+    
