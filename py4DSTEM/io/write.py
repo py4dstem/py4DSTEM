@@ -7,7 +7,7 @@ import numpy as np
 from collections import OrderedDict
 from os.path import exists, dirname
 from os import remove
-from py4DSTEM.io.native.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from py4DSTEM.io.read import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from py4DSTEM.io.datastructure import (
     Root,
     Tree,
