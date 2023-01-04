@@ -261,7 +261,7 @@ def calculate_thresholds(datacube, darkreference,
     binmax = min(int(np.ceil(np.amax(sample))),int(mean+thresh_xray*stddev))
     binmin = max(int(np.ceil(np.amin(sample))),int(mean-thresh_xray*stddev))
     step = max(1,(binmax-binmin)//1000)
-    bins = np.arange(binmin,binmax,step=step,dtype=np.int)
+    bins = np.arange(binmin,binmax,step=step,dtype=np.int16)
     n, bins = np.histogram(sample,bins=bins)
 
     # Define Guassian to fit to, with parameters p:
