@@ -3,8 +3,8 @@
 
 
 from py4DSTEM import _TESTPATH
-from os.path import join
-filepath = join(_TESTPATH,'..')
+#from os.path import join
+filepath = _TESTPATH
 
 
 if __name__ == '__main__':
@@ -16,5 +16,5 @@ if __name__ == '__main__':
         destination = filepath,
         overwrite = True
     )
-
+    #print(filepath)
 
