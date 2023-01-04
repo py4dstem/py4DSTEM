@@ -2,7 +2,7 @@
 # with metadata about how it was created
 
 from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
-from py4DSTEM.io.classes.emd.metadata import Metadata
+from py4DSTEM.io.classes.metadata import Metadata
 
 from typing import Optional,Union
 import numpy as np

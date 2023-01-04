@@ -4,10 +4,10 @@ import numpy as np
 import h5py
 from os.path import basename
 
-from py4DSTEM.io.classes.emd.io import Array_from_h5, Metadata_from_h5
-from py4DSTEM.io.classes.emd.io import PointList_from_h5
-from py4DSTEM.io.classes.emd.io import PointListArray_from_h5, PointListArray_to_h5
-from py4DSTEM.io.classes.emd.io import _write_metadata, _read_metadata
+from py4DSTEM.io.classes.io import Array_from_h5, Metadata_from_h5
+from py4DSTEM.io.classes.io import PointList_from_h5
+from py4DSTEM.io.classes.io import PointListArray_from_h5, PointListArray_to_h5
+from py4DSTEM.io.classes.io import _write_metadata, _read_metadata
 
 
 

@@ -1,6 +1,6 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-from py4DSTEM.io.classes.emd.array import Array
+from py4DSTEM.io.classes.array import Array
 from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 from py4DSTEM.io.classes.py4dstem.parenttree import ParentTree
 

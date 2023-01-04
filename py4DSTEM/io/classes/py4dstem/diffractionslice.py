@@ -1,7 +1,7 @@
 # Defines the DiffractionSlice class, which stores 2(+1)D,
 # diffraction-shaped data
 
-from py4DSTEM.io.classes.emd.array import Array
+from py4DSTEM.io.classes.array import Array
 
 from typing import Optional,Union
 import numpy as np
