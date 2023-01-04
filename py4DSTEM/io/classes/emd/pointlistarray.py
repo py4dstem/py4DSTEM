@@ -3,9 +3,9 @@ from copy import copy
 from typing import Optional
 import h5py
 
-from py4DSTEM.io.datastructure.emd.tree import Tree
-from py4DSTEM.io.datastructure.emd.metadata import Metadata
-from py4DSTEM.io.datastructure.emd.pointlist import PointList
+from py4DSTEM.io.classes.emd.tree import Tree
+from py4DSTEM.io.classes.emd.metadata import Metadata
+from py4DSTEM.io.classes.emd.pointlist import PointList
 
 class PointListArray:
     """
@@ -157,11 +157,11 @@ class PointListArray:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from py4DSTEM.io.datastructure.emd.io import PointListArray_to_h5
+        from py4DSTEM.io.classes.emd.io import PointListArray_to_h5
         PointListArray_to_h5(self,group)
 
     def from_h5(group):
-        from py4DSTEM.io.datastructure.emd.io import PointListArray_from_h5
+        from py4DSTEM.io.classes.emd.io import PointListArray_from_h5
         return PointListArray_from_h5(group)
 
 

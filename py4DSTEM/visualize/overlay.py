@@ -5,7 +5,7 @@ from matplotlib.colors import is_color_like
 from numbers import Number
 from math import log
 from fractions import Fraction
-from py4DSTEM.io.datastructure import PointList
+from py4DSTEM.io.classes import PointList
 
 def add_rectangles(ax,d):
     """

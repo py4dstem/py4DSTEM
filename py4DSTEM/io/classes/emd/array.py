@@ -6,8 +6,8 @@ import numpy as np
 import h5py
 from numbers import Number
 
-from py4DSTEM.io.datastructure.emd.tree import Tree
-from py4DSTEM.io.datastructure.emd.metadata import Metadata
+from py4DSTEM.io.classes.emd.tree import Tree
+from py4DSTEM.io.classes.emd.metadata import Metadata
 
 class Array:
     """
@@ -455,11 +455,11 @@ class Array:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from py4DSTEM.io.datastructure.emd.io import Array_to_h5
+        from py4DSTEM.io.classes.emd.io import Array_to_h5
         Array_to_h5(self,group)
 
     def from_h5(group):
-        from py4DSTEM.io.datastructure.emd.io import Array_from_h5
+        from py4DSTEM.io.classes.emd.io import Array_from_h5
         return Array_from_h5(group)
 
 

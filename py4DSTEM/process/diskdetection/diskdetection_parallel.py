@@ -160,9 +160,9 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # Make peaks PointList
     if peaks is None:
         coords = [('qx', float), ('qy', float), ('intensity', float)]
-        peaks = py4DSTEM.io.datastructure.PointList(coordinates=coords)
+        peaks = py4DSTEM.io.classes.PointList(coordinates=coords)
     else:
-        assert (isinstance(peaks, py4DSTEM.io.datastructure.PointList))
+        assert (isinstance(peaks, py4DSTEM.io.classes.PointList))
     peaks.add_tuple_of_nparrays((maxima_x, maxima_y, maxima_int))
 
     if return_cc:

@@ -16,7 +16,7 @@ from py4DSTEM.io.nonnative import (
 )
 
 # Classes for native reader
-from py4DSTEM.io.datastructure import (
+from py4DSTEM.io.classes import (
     Root,
     Tree,
     ParentTree,

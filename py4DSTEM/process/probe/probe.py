@@ -6,7 +6,7 @@ from scipy.ndimage import (
 
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
 from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.datastructure import DataCube, Probe
+from py4DSTEM.io.classes import DataCube, Probe
 
 
 
