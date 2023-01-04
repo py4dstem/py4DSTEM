@@ -114,7 +114,7 @@ def Root_from_h5(group:h5py.Group):
     Returns:
         A Root instance
     """
-    from py4DSTEM.io.classes.emd.root import Root
+    from py4DSTEM.io.classes.root import Root
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Metadata group"
@@ -273,7 +273,7 @@ def Metadata_from_h5(group:h5py.Group):
     Returns:
         A Metadata instance
     """
-    from py4DSTEM.io.classes.emd.metadata import Metadata
+    from py4DSTEM.io.classes.metadata import Metadata
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Metadata group"
@@ -470,7 +470,7 @@ def Array_from_h5(group:h5py.Group):
     Returns:
         An Array instance
     """
-    from py4DSTEM.io.classes.emd.array import Array
+    from py4DSTEM.io.classes.array import Array
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Array group"
@@ -583,7 +583,7 @@ def PointList_from_h5(group:h5py.Group):
     Returns:
         A PointList instance
     """
-    from py4DSTEM.io.classes.emd.pointlist import PointList
+    from py4DSTEM.io.classes.pointlist import PointList
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD PointList group"
@@ -673,7 +673,7 @@ def PointListArray_from_h5(group:h5py.Group):
     Returns:
         A PointListArray instance
     """
-    from py4DSTEM.io.classes.emd.pointlistarray import PointListArray
+    from py4DSTEM.io.classes.pointlistarray import PointListArray
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD PointListArray group"

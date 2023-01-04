@@ -1,7 +1,7 @@
 # Defines the Probe class, which stores vacuum probes
 # and cross-correlation kernels derived from them
 
-from py4DSTEM.io.classes.emd.array import Array, Metadata
+from py4DSTEM.io.classes.array import Array, Metadata
 from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
 
 from typing import Optional,Union

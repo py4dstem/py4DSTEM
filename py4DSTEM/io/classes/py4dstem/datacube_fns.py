@@ -6,7 +6,7 @@ from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 # Add to tree
 
-from py4DSTEM.io.classes.emd import Array
+from py4DSTEM.io.classes import Array
 def add(
     self,
     data,

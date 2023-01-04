@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional, Union
 from numbers import Number
 
-from py4DSTEM.io.classes.emd import PointListArray
+from py4DSTEM.io.classes import PointListArray
 from py4DSTEM.io.classes.py4dstem import Calibration
 
 
