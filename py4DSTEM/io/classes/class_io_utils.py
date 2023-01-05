@@ -70,14 +70,15 @@ def _get_class(grp):
     """
 
     import inspect
-    import py4DSTEM.io.classes as classes
+    from py4DSTEM.io import classes
 
+    # Build lookup table for classes
     lookup = {}
-
     for name, obj in inspect.getmembers(classes):
         if inspect.isclass(obj):
             lookup[name] = obj
 
+    # Get the class from the group tags and return
     try:
         classname = grp.attrs['py4dstem_class']
         __class__ = lookup[classname]
