@@ -9,7 +9,7 @@
 
 import warnings
 import numpy as np
-from py4DSTEM.process.utils import bin2D, get_shifted_ar
+from py4DSTEM.preprocess.utils import bin2D, get_shifted_ar
 from py4DSTEM import tqdmnd
 from scipy.ndimage import median_filter
 
