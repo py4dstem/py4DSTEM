@@ -2,15 +2,6 @@
 from py4DSTEM.io import classes
 from py4DSTEM.io.classes import *
 
-#(
-#    Tree,
-#    Root,
-#    Metadata,
-#    Array,
-#    PointList,
-#    PointListArray
-#)
-
 # read/write
 from py4DSTEM.io.read import (
     read,

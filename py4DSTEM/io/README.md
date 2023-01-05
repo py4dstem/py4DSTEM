@@ -1,6 +1,98 @@
 # `py4DSTEM.io`
 
+This module supports read/write functionality.  Below, we discuss
 
+1. Functions - for your basic read/write needs
+2. Classes - class objects for wrapping, reading, and writing different kinds of data
+3. Trees - nesting object instances, in-program and in your HDF5
+4. Metadata - three categories of metadata, and their handlings, are specified
+5. Calibrations - are very special Metadata!
+6. Customizing classes
+
+
+
+
+## I/O Functions
+
+The four top level I/O functions are briefly described here. For more details, see the function call signatures and docstrings.
+
+- `import_file`: reads non-native file formats, either loading to disc or creating a memory map.
+
+- `read`: loads data from a file written by this program. The native HDF5-based format consists of nested trees, with the possibility of data, metadata, and further child nodes (i.e. lower level HDF5 groups) at each node. `read` allows reading the data at a single node, the full tree underneath a node including the root node, and the full tree underneath a node while excluding the root node's data.  Object / HDF5 trees, and handling of metadata and calibration data, are discussed in the relevant sections below.
+
+- `save`: saves data from a running instance of py4DSTEM into an HDF5 file. Data can be saved to a new file or appended to an existing file.  A single object instance can be saved, or a whole object tree can be saved.
+
+- `print_h5_tree`: prints the group tree of a native HDF5 file to standard output
+
+
+
+
+## Classes
+
+This module includes a set of Python classes, each wrapping different kinds of data, each with its own metadata, each with `.to_h5` and `.from_h5` methods for moving between HDF5 groups and python instances.
+
+The basic data and metadata classes are:
+- `Metadata`: a wrapper for dictionary-like data (i.e. string keys are used to access small blocks of data)
+- `Array`: a wrapper for array-like data (e.g. a numpy array, memmap, h5py Dataset) 
+- `PointList`: a wrapper for numpy structured arrays (i.e. N points in an M-dimensional space, where the M dimensions are string named, indexable fields)
+- `PointListArray`: a 2D grid of PointLists
+
+Derivative classes are discussed in `Customizing classes`.
+The two classes (Root, Tree) which enable nesting data for ease of reading/writing whole sets of many data types at a time, and are discussed in the `Trees` section, below.
+
+
+
+
+## Trees
+
+HDF5 files have a tree-like structure, with some collection of nodes nested underneath other nodes.
+The class definitions here are designed such that an analogous graph relating data object instances can be created, often under-the-hood and with no user input, as new data is generated.
+For instance, if a dataset is loaded, and then some processing is performed on the dataset to generate an image, a tree graph representing the original dataset as the root node and the image as a child node can be created in the background.
+At the end of some processing pipeline, the tree can then be used to easily save all of the data created at once.
+Similarly, when reading a native HDF5 file, it is possible to read a single node, or an entire tree structure of data object instances.
+This is implemented in the Root and Tree classes.
+
+
+
+
+## Metadata
+
+TODO
+
+
+
+
+## Calibrations
+
+TODO
+
+
+
+
+## Customizing Classes
+
+TODO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# The old README:
 
 This module includes:
 
