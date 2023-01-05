@@ -5,7 +5,7 @@ from py4DSTEM.io.classes.metadata import Metadata
 from py4DSTEM.io.classes.array import Array
 from py4DSTEM.io.classes.pointlist import PointList
 from py4DSTEM.io.classes.pointlistarray import PointListArray
-#from py4DSTEM.io.classes.io import *
+from py4DSTEM.io.classes.class_io_utils import EMD_group_types
 
 # Child (package) class imports
 from py4DSTEM.io.classes.py4dstem import *
