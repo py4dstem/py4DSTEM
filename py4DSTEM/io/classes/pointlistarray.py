@@ -2,10 +2,12 @@ import numpy as np
 from copy import copy
 from typing import Optional
 import h5py
+from os.path import basename
 
 from py4DSTEM.io.classes.tree import Tree
 from py4DSTEM.io.classes.metadata import Metadata
 from py4DSTEM.io.classes.pointlist import PointList
+from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 class PointListArray:
     """
@@ -154,15 +156,79 @@ class PointListArray:
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
+    # write
     def to_h5(self,group):
-        from py4DSTEM.io.classes.io import PointListArray_to_h5
-        PointListArray_to_h5(self,group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        write or append mode. Writes a new group with this object's name
+        and saves this object's data in it.
 
+        Accepts:
+            group (HDF5 group)
+        """
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
+        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+
+        # Add metadata
+        dtype = h5py.special_dtype(vlen=self.dtype)
+        dset = grp.create_dataset(
+            "data",
+            self.shape,
+            dtype
+        )
+
+        # Add data
+        for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
+            dset[i,j] = self[i,j].data
+
+        # Add additional metadata
+        _write_metadata(self, grp)
+
+
+    # read
     def from_h5(group):
-        from py4DSTEM.io.classes.io import PointListArray_from_h5
-        return PointListArray_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in read mode,
+        Determines if a valid PointListArray object of this name exists
+        inside this group, and if it does, loads and returns it. If it doesn't,
+        raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A PointListArray instance
+        """
+        er = f"Group {group} is not a valid EMD PointListArray group"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['PointListArray']), er
+
+       # Get the DataSet
+        dset = group['data']
+        dtype = h5py.check_vlen_dtype( dset.dtype )
+        shape = dset.shape
+
+        # Initialize a PointListArray
+        pla = PointListArray(
+            dtype=dtype,
+            shape=shape,
+            name=basename(group.name)
+        )
+
+        # Add data
+        for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
+            try:
+                pla[i,j].add(dset[i,j])
+            except ValueError:
+                pass
+
+        # Add metadata
+        _read_metadata(pla, group)
+
+        return pla
 
 
 

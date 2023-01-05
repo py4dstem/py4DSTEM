@@ -5,9 +5,11 @@ from typing import Optional,Union
 import numpy as np
 import h5py
 from numbers import Number
+from os.path import basename
 
 from py4DSTEM.io.classes.tree import Tree
 from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 class Array:
     """
@@ -454,13 +456,131 @@ class Array:
 
     # HDF5 read/write
 
+    # write
     def to_h5(self,group):
-        from py4DSTEM.io.classes.io import Array_to_h5
-        Array_to_h5(self,group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        write or append mode. Writes a new group with this object's name
+        and saves the object's data in it.
 
+        Accepts:
+            group (HDF5 group)
+        """
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",1) # this tag indicates an Array
+        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+
+        # add the data
+        data = grp.create_dataset(
+            "data",
+            shape = self.data.shape,
+            data = self.data
+            #dtype = type(self.data)
+        )
+        data.attrs.create('units',self.units) # save 'units' but not 'name' - 'name' is the group name
+
+        # Add the normal dim vectors
+        for n in range(self.rank):
+
+            # unpack info
+            dim = self.dims[n]
+            name = self.dim_names[n]
+            units = self.dim_units[n]
+            is_linear = self._dim_is_linear(dim,self.shape[n])
+
+            # compress the dim vector if it's linear
+            if is_linear:
+                dim = dim[:2]
+
+            # write
+            dset = grp.create_dataset(
+                f"dim{n}",
+                data = dim
+            )
+            dset.attrs.create('name',name)
+            dset.attrs.create('units',units)
+
+        # Add stack dim vector, if present
+        if self.is_stack:
+            n = self.rank
+            name = '_labels_'
+            dim = [s.encode('utf-8') for s in self.slicelabels]
+
+            # write
+            dset = grp.create_dataset(
+                f"dim{n}",
+                data = dim
+            )
+            dset.attrs.create('name',name)
+
+        # Add metadata
+        _write_metadata(self, grp)
+
+
+    # read
     def from_h5(group):
-        from py4DSTEM.io.classes.io import Array_from_h5
-        return Array_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in read mode.
+        Determines if this group represents an Array object and if it does, loads
+        returns it. If it doesn't, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            An Array instance
+        """
+        er = f"Group {group} is not a valid EMD Array group"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['Array']), er
+
+        # get data
+        dset = group['data']
+        data = dset[:]
+        units = dset.attrs['units']
+        rank = len(data.shape)
+
+        # determine if this is a stack array
+        last_dim = group[f"dim{rank-1}"]
+        if last_dim.attrs['name'] == '_labels_':
+            is_stack = True
+            normal_dims = rank-1
+        else:
+            is_stack = False
+            normal_dims = rank
+
+        # get dim vectors
+        dims = []
+        dim_units = []
+        dim_names = []
+        for n in range(normal_dims):
+            dim_dset = group[f"dim{n}"]
+            dims.append(dim_dset[:])
+            dim_units.append(dim_dset.attrs['units'])
+            dim_names.append(dim_dset.attrs['name'])
+
+        # if it's a stack array, get the labels
+        if is_stack:
+            slicelabels = last_dim[:]
+            slicelabels = [s.decode('utf-8') for s in slicelabels]
+        else:
+            slicelabels = None
+
+        # make Array
+        ar = Array(
+            data = data,
+            name = basename(group.name),
+            units = units,
+            dims = dims,
+            dim_names = dim_names,
+            dim_units = dim_units,
+            slicelabels = slicelabels
+        )
+
+        # add metadata
+        _read_metadata(ar, group)
+
+        return ar
 
 
 

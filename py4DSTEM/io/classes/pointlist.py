@@ -6,9 +6,11 @@ import numpy as np
 import h5py
 from copy import copy
 from typing import Optional
+from os.path import basename
 
 from py4DSTEM.io.classes.tree import Tree
 from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 
 class PointList:
@@ -194,16 +196,82 @@ class PointList:
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
+    # write
     def to_h5(self,group):
-        from py4DSTEM.io.classes.io import PointList_to_h5
-        PointList_to_h5(self,group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        write or append mode. Writes a new group this object's name
+        and saves this object's data in it.
 
+        Accepts:
+            group (HDF5 group)
+        """
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
+        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+
+        # Add data
+        for f,t in zip(self.fields,self.types):
+            group_current_field = grp.create_dataset(
+                f,
+                data = self.data[f]
+            )
+            group_current_field.attrs.create("dtype", np.string_(t))
+            #group_current_field.create_dataset(
+            #    "data",
+            #    data = pointlist.data[f]
+            #)
+
+        # Add metadata
+        _write_metadata(self, grp)
+
+
+    # read
     def from_h5(group):
-        from py4DSTEM.io.classes.io import PointList_from_h5
-        return PointList_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in read mode.
+        Determines if a valid PointList object of this name exists inside
+        this group, and if it does, loads and returns it. If it doesn't, raises
+        an exception.
 
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A PointList instance
+        """
+        er = f"Group {group} is not a valid EMD PointList group"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['PointList']), er
+
+
+        # Get metadata
+        fields = list(group.keys())
+        if '_metadata' in fields:
+            fields.remove('_metadata')
+        dtype = []
+        for field in fields:
+            curr_dtype = group[field].attrs["dtype"].decode('utf-8')
+            dtype.append((field,curr_dtype))
+        length = len(group[fields[0]])
+
+        # Get data
+        data = np.zeros(length,dtype=dtype)
+        if length > 0:
+            for field in fields:
+                data[field] = np.array(group[field])
+
+        # Make the PointList
+        pl = PointList(
+            data=data,
+            name=basename(group.name))
+
+        # Add additional metadata
+        _read_metadata(pl, group)
+
+        return pl
 
 
 
