@@ -44,8 +44,32 @@ class DiffractionSlice(Array):
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import DiffractionSlice_from_h5
-        return DiffractionSlice_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        read mode. Determines if it's a valid Array, and if so loads and
+        returns it as a DiffractionSlice. Otherwise, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A DiffractionSlice instance
+        """
+        # Load from H5 as an Array
+        diffractionslice = Array.from_h5(group)
+
+        # Convert to a DiffractionSlice
+        assert(array.rank == 2), "Array must have 2 dimensions"
+        array.__class__ = DiffractionSlice
+        array.__init__(
+            data = array.data,
+            name = array.name,
+            slicelabels = array.slicelabels
+        )
+
+        # Return
+        return array
+
 
 
 

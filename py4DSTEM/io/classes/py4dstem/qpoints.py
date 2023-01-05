@@ -49,14 +49,35 @@ class QPoints(PointList):
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
     # write inherited from PointList
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import QPoints_from_h5
-        return QPoints_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        read mode. Determines if it's a valid QPoints instance, and if so
+        loads and returns it. Otherwise, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A QPoints instance
+        """
+        # Load from H5 as a PointList
+        qpoints = PointList.from_h5(group)
+
+        # Convert to QPoints
+        pointlist.__class__ = QPoints
+        pointlist.__init__(
+            data = pointlist.data,
+            name = pointlist.name,
+        )
+
+        # Return
+        return pointlist
 
 
 

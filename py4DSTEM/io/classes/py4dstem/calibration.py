@@ -423,14 +423,33 @@ class Calibration(Metadata):
             self._targets.remove(target)
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
-    # write inherited from Metadata
+    # write is inherited from Metadata
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import Calibration_from_h5
-        return Calibration_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        read mode. Determines if it's a valid Metadata representation, and
+        if so loads and returns it as a Calibration instance. Otherwise,
+        raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A Calibration instance
+        """
+        # load the group as a Metadata instance
+        cal = Metadata.from_h5(group)
+
+        # convert it to a Calibration instance
+        cal = Calibration(name = metadata.name)
+        cal._params.update(metadata._params)
+
+        # return
+        return cal
 
 
 
