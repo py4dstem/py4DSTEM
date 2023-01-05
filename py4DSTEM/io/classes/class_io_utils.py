@@ -63,6 +63,35 @@ def EMD_group_exists(group:h5py.Group, emd_group_type, name:str):
 
 
 
+
+def _get_class(grp):
+    """
+    Function returning Class signatures from corresponding strings
+    """
+
+    import inspect
+    import py4DSTEM.io.classes as classes
+
+    lookup = {}
+
+    for name, obj in inspect.getmembers(classes):
+        if inspect.isclass(obj):
+            lookup[name] = obj
+
+    try:
+        classname = grp.attrs['py4dstem_class']
+        __class__ = lookup[classname]
+        return __class__
+    except KeyError:
+        return None
+        #raise Exception(f"Unknown classname {classname}")
+
+
+
+
+
+
+
 # Metadata i/o helper functions
 
 def _write_metadata(obj,grp):

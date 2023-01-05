@@ -7,6 +7,14 @@ import warnings
 import h5py
 import numpy as np
 
+# Classes for native reader
+from py4DSTEM.io.classes import (
+    Root,
+    Tree,
+    ParentTree,
+    Calibration
+)
+
 # Readers for non-native filetypes
 from py4DSTEM.io.nonnative import (
     read_empad,
@@ -14,28 +22,6 @@ from py4DSTEM.io.nonnative import (
     read_gatan_K2_bin,
     load_mib
 )
-
-# Classes for native reader
-from py4DSTEM.io.classes import (
-    Root,
-    Tree,
-    ParentTree,
-    Metadata,
-    Array,
-    PointList,
-    PointListArray,
-    Calibration,
-    DataCube,
-    DiffractionSlice,
-    VirtualDiffraction,
-    RealSlice,
-    VirtualImage,
-    Probe,
-    QPoints,
-    BraggVectors
-)
-
-
 
 
 
@@ -258,32 +244,6 @@ def version_is_geq(current,minimum):
             return False
     else:
         return False
-
-def _get_class(grp):
-
-    lookup = {
-        'Metadata' : Metadata,
-        'Array' : Array,
-        'PointList' : PointList,
-        'PointListArray' : PointListArray,
-        'Calibration' : Calibration,
-        'DataCube' : DataCube,
-        'DiffractionSlice' : DiffractionSlice,
-        'VirtualDiffraction' : VirtualDiffraction,
-        'DiffractionImage' : VirtualDiffraction,
-        'RealSlice' : RealSlice,
-        'VirtualImage' : VirtualImage,
-        'Probe' : Probe,
-        'QPoints' : QPoints,
-        'BraggVectors' : BraggVectors
-    }
-    try:
-        classname = grp.attrs['py4dstem_class']
-        __class__ = lookup[classname]
-        return __class__
-    except KeyError:
-        return None
-        #raise Exception(f"Unknown classname {classname}")
 
 
 # Print the HDF5 filetree to screen
