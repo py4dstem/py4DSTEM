@@ -79,14 +79,51 @@ class Probe(DiffractionSlice):
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
     # write inherited from Array
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import Probe_from_h5
-        return Probe_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        read mode. Determines if it's a valid Array, and if so loads and
+        returns it as a Probe. Otherwise, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A Probe instance
+        """
+        # Load from H5 as an Array
+        probe = Array.from_h5(group)
+
+        # Convert to a Probe
+
+        assert(array.rank == 2), "Array must have 2 dimensions"
+
+        # get diffraction image metadata
+        try:
+            md = array.metadata['probe']
+            kwargs = {}
+            for k in md.keys:
+                v = md[k]
+                kwargs[k] = v
+        except KeyError:
+            er = "Probe metadata could not be found"
+            raise Exception(er)
+
+        # instantiate as a Probe
+        array.__class__ = Probe
+        array.__init__(
+            data = array.data,
+            name = array.name,
+            **kwargs
+        )
+
+        # Return
+        return array
 
 
 

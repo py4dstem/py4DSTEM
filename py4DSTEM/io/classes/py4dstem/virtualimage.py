@@ -83,15 +83,57 @@ class VirtualImage(RealSlice):
         self.metadata = md
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
     # write inherited from Array
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import VirtualImage_from_h5
-        return VirtualImage_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in
+        read mode. Determines if it's a valid Array, and if so loads and
+        returns it as a VirtualImage. Otherwise, raises an exception.
 
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A VirtualImage instance
+        """
+        # Load from H5 as an Array
+        image = Array.from_h5(group)
+
+        # Convert to VirtualImage
+
+        assert(array.rank == 2), "Array must have 2 dimensions"
+
+        # get diffraction image metadata
+        try:
+            md = array.metadata['virtualimage']
+            mode = md['mode']
+            geo = md['geometry']
+            centered = md._params.get('centered',None)
+            calibrated = md._params.get('calibrated',None)
+            shift_center = md._params.get('shift_center',None)
+            dask = md._params.get('dask',None)
+        except KeyError:
+            er = "VirtualImage metadata could not be found"
+            raise Exception(er)
+
+
+        # instantiate as a DiffractionImage
+        array.__class__ = VirtualImage
+        array.__init__(
+            data = array.data,
+            name = array.name,
+            mode = mode,
+            geometry = geo,
+            centered = centered,
+            calibrated = calibrated,
+            shift_center = shift_center,
+            dask = dask
+        )
+        return array
 
 
 

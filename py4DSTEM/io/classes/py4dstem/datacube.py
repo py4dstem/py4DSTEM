@@ -206,24 +206,47 @@ class DataCube(Array):
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
     # write is inherited from Array
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.classes.py4dstem.io import DataCube_from_h5
-        return DataCube_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in read
+        mode.  Determines if an Array object of this name exists inside this
+        group, and if it does, loads and returns it as a DataCube. If it doesn't
+        exist, or if it exists but does not have a rank of 4, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A DataCube instance
+        """
+        # Load from H5 as an Array
+        array = Array.from_h5(group)
+
+        # Convert to a DataCube
+        assert(array.rank == 4), "Array must have 4 dimensions"
+        array.__class__ = DataCube
+        array.__init__(
+            data = array.data,
+            name = array.name,
+            R_pixel_size = array.dims[0][1]-array.dims[0][0],
+            R_pixel_units = array.dim_units[0],
+            Q_pixel_size = array.dims[2][1]-array.dims[2][0],
+            Q_pixel_units = array.dim_units[2],
+            slicelabels = array.slicelabels
+        )
+
+        # Return
+        return array
+
 
 
 
 ############ END OF CLASS ###########
-
-    #from ...process.virtualimage import (
-    #    get_max_dp,
-    #    get_mean_dp,
-    #    get_median_dp
-    #)
 
 
 

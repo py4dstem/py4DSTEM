@@ -8,7 +8,6 @@ from py4DSTEM.io.classes.py4dstem.virtualimage import VirtualImage
 from py4DSTEM.io.classes.py4dstem.probe import Probe
 from py4DSTEM.io.classes.py4dstem.qpoints import QPoints
 from py4DSTEM.io.classes.py4dstem.braggvectors import BraggVectors
-from py4DSTEM.io.classes.py4dstem.io import *
 
 __all__ = [
     'ParentTree',
