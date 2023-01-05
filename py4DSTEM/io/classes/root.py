@@ -2,6 +2,7 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
+from os.path import basename
 
 from py4DSTEM.io.classes.tree import Tree
 
@@ -48,15 +49,44 @@ class Root:
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
+    # write
     def to_h5(self,group):
-        from py4DSTEM.io.classes.io import Root_to_h5
-        Root_to_h5(self,group)
+        """
+        Takes a valid group for an HDF5 file object which is open
+        in write or append mode. Writes a new group with this object's
+        name and saves this object's data in it.
 
+        Accepts:
+            group (HDF5 group)
+        """
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",EMD_group_types['Root'])
+        grp.attrs.create("py4dstem_class",self.metadata.__class__.__name__)
+
+    # read
     def from_h5(group):
-        from py4DSTEM.io.classes.io import Root_from_h5
-        return Root_from_h5(group)
+        """
+        Takes a valid HDF5 group for an HDF5 file object
+        which is open in read mode.  Determines if a valid
+        Root object of this name exists inside this group, and if it does,
+        loads and returns it. If it doesn't, raises an exception.
+
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A Root instance
+        """
+        er = f"Group {group} is not a valid EMD Root group"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
+
+        root = Root(basename(group.name))
+        return root
+
+
 
 
 

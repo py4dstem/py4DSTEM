@@ -2,6 +2,7 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 import h5py
+from os.path import basename
 
 from py4DSTEM.io.classes.tree import Tree
 
@@ -79,16 +80,251 @@ class Metadata:
 
 
 
-    # HDF5 read/write
+    # HDF5 i/o
 
+    # write
     def to_h5(self,group):
-        from py4DSTEM.io.classes.io import Metadata_to_h5
-        Metadata_to_h5(self,group)
+        """
+        Takes a valid group for an HDF5 file object which is open
+        in write or append mode. Writes a new group with this object's
+        name and and stores this object's data in it.
 
+        Accepts:
+            group (HDF5 group)
+        """
+        grp = group.create_group(self.name)
+        grp.attrs.create("emd_group_type",EMD_group_types['Metadata'])
+        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+
+        # Save data
+        for k,v in self._params.items():
+
+            # None
+            if v is None:
+                v = "_None"
+                v = np.string_(v)  # convert to byte string
+                dset = grp.create_dataset(k, data=v)
+                dset.attrs['type'] = np.string_('None')
+
+            # strings
+            elif isinstance(v, str):
+                v = np.string_(v)  # convert to byte string
+                dset = grp.create_dataset(k, data=v)
+                dset.attrs['type'] = np.string_('string')
+
+            # bools
+            elif isinstance(v, bool):
+                dset = grp.create_dataset(k, data=v, dtype=bool)
+                dset.attrs['type'] = np.string_('bool')
+
+            # numbers
+            elif isinstance(v, Number):
+                dset = grp.create_dataset(k, data=v, dtype=type(v))
+                dset.attrs['type'] = np.string_('number')
+
+            # arrays
+            elif isinstance(v, np.ndarray):
+                dset = grp.create_dataset(k, data=v, dtype=v.dtype)
+                dset.attrs['type'] = np.string_('array')
+
+            # tuples
+            elif isinstance(v, tuple):
+
+                # of numbers
+                if isinstance(v[0], Number):
+                    dset = grp.create_dataset(k, data=v)
+                    dset.attrs['type'] = np.string_('tuple')
+
+                # of tuples
+                elif any([isinstance(v[i], tuple) for i in range(len(v))]):
+                    dset_grp = grp.create_group(k)
+                    dset_grp.attrs['type'] = np.string_('tuple_of_tuples')
+                    dset_grp.attrs['length'] = len(v)
+                    for i,x in enumerate(v):
+                        dset_grp.create_dataset(
+                            str(i),
+                            data=x)
+
+                # of arrays
+                elif isinstance(v[0], np.ndarray):
+                    dset_grp = grp.create_group(k)
+                    dset_grp.attrs['type'] = np.string_('tuple_of_arrays')
+                    dset_grp.attrs['length'] = len(v)
+                    for i,ar in enumerate(v):
+                        dset_grp.create_dataset(
+                            str(i),
+                            data=ar,
+                            dtype=ar.dtype)
+
+                # of strings
+                elif isinstance(v[0], str):
+                    dset_grp = grp.create_group(k)
+                    dset_grp.attrs['type'] = np.string_('tuple_of_strings')
+                    dset_grp.attrs['length'] = len(v)
+                    for i,s in enumerate(v):
+                        dset_grp.create_dataset(
+                            str(i),
+                            data=np.string_(s))
+
+                else:
+                    er = f"Metadata only supports writing tuples with numeric and array-like arguments; found type {type(v[0])}"
+                    raise Exception(er)
+
+            # lists
+            elif isinstance(v, list):
+
+                # of numbers
+                if isinstance(v[0], Number):
+                    dset = grp.create_dataset(k, data=v)
+                    dset.attrs['type'] = np.string_('list')
+
+                # of arrays
+                elif isinstance(v[0], np.ndarray):
+                    dset_grp = grp.create_group(k)
+                    dset_grp.attrs['type'] = np.string_('list_of_arrays')
+                    dset_grp.attrs['length'] = len(v)
+                    for i,ar in enumerate(v):
+                        dset_grp.create_dataset(
+                            str(i),
+                            data=ar,
+                            dtype=ar.dtype)
+
+                # of strings
+                elif isinstance(v[0], str):
+                    dset_grp = grp.create_group(k)
+                    dset_grp.attrs['type'] = np.string_('list_of_strings')
+                    dset_grp.attrs['length'] = len(v)
+                    for i,s in enumerate(v):
+                        dset_grp.create_dataset(
+                            str(i),
+                            data=np.string_(s))
+
+                else:
+                    er = f"Metadata only supports writing lists with numeric and array-like arguments; found type {type(v[0])}"
+                    raise Exception(er)
+
+            else:
+                er = f"Metadata supports writing numbers, bools, strings, arrays, tuples of numbers or arrays, and lists of numbers or arrays. Found an unsupported type {type(v[0])}"
+                raise Exception(er)
+
+
+    # read
     def from_h5(group):
-        from py4DSTEM.io.classes.io import Metadata_from_h5
-        return Metadata_from_h5(group)
+        """
+        Takes a valid group for an HDF5 file object which is open in read
+        mode, Determines if a valid Metadata object of this name exists
+        inside this group, and if it does, loads and returns it. If it doesn't,
+        raises an exception.
 
+        Accepts:
+            group (HDF5 group)
+
+        Returns:
+            A Metadata instance
+        """
+        er = f"Group {group} is not a valid EMD Metadata group"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['Metadata']), er
+
+        # Get data
+        data = {}
+        for k,v in group.items():
+
+            # get type
+            try:
+                t = group[k].attrs['type'].decode('utf-8')
+            except KeyError:
+                raise Exception(f"unrecognized Metadata value type {type(v)}")
+
+            # None
+            if t == 'None':
+                v = None
+
+            # strings
+            elif t == 'string':
+                v = v[...].item()
+                v = v.decode('utf-8')
+                v = v if v != "_None" else None
+
+            # numbers
+            elif t == 'number':
+                v = v[...].item()
+
+            # bools
+            elif t == 'bool':
+                v = v[...].item()
+
+            # array
+            elif t == 'array':
+                v = np.array(v)
+
+            # tuples of numbers
+            elif t == 'tuple':
+                v = tuple(v[...])
+
+            # tuples of arrays
+            elif t == 'tuple_of_arrays':
+                L = group[k].attrs['length']
+                tup = []
+                for l in range(L):
+                    tup.append(np.array(v[str(l)]))
+                v = tuple(tup)
+
+            # tuples of tuples
+            elif t == 'tuple_of_tuples':
+                L = group[k].attrs['length']
+                tup = []
+                for l in range(L):
+                    x = v[str(l)][...]
+                    if x.ndim == 0:
+                        x = x.item()
+                    else:
+                        x = tuple(x)
+                    tup.append(x)
+                v = tuple(tup)
+
+            # tuples of strings
+            elif t == 'tuple_of_strings':
+                L = group[k].attrs['length']
+                tup = []
+                for l in range(L):
+                    s = v[str(l)][...].item().decode('utf-8')
+                    tup.append(s)
+                v = tuple(tup)
+
+            # lists of numbers
+            elif t == 'list':
+                v = list(v[...])
+
+            # lists of arrays
+            elif t == 'list_of_arrays':
+                L = group[k].attrs['length']
+                _list = []
+                for l in range(L):
+                    _list.append(np.array(v[str(l)]))
+                v = _list
+
+            # list of strings
+            elif t == 'list_of_strings':
+                L = group[k].attrs['length']
+                _list = []
+                for l in range(L):
+                    s = v[str(l)][...].item().decode('utf-8')
+                    _list.append(s)
+                v = _list
+
+            else:
+                raise Exception(f"unrecognized Metadata value type {t}")
+
+
+            # add data
+            data[k] = v
+
+
+        # make Metadata instance, add data, and return
+        md = Metadata(basename(group.name))
+        md._params.update(data)
+        return md
 
 
 

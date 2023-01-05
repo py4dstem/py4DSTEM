@@ -4,10 +4,13 @@ import numpy as np
 import h5py
 from os.path import basename
 
-from py4DSTEM.io.classes.io import Array_from_h5, Metadata_from_h5
-from py4DSTEM.io.classes.io import PointList_from_h5
-from py4DSTEM.io.classes.io import PointListArray_from_h5, PointListArray_to_h5
-from py4DSTEM.io.classes.io import _write_metadata, _read_metadata
+from py4DSTEM.io.classes import (
+    Metadata,
+    Array,
+    PointList,
+    PointListArray
+)
+from py4DSTEM.io.classes.class_io_utils import _write_metadata, _read_metadata
 
 
 
@@ -27,7 +30,7 @@ def Calibration_from_h5(group:h5py.Group):
     Returns:
         A Calibration instance
     """
-    cal = Metadata_from_h5(group)
+    cal = Metadata.from_h5(group)
     cal = Calibration_from_Metadata(cal)
     return cal
 
@@ -42,7 +45,7 @@ def Calibration_from_Metadata(metadata):
         (Calibration)
     """
     from py4DSTEM.io.classes.py4dstem.calibration import Calibration
-    
+
     cal = Calibration(name = metadata.name)
     cal._params.update(metadata._params)
 
@@ -70,7 +73,7 @@ def DataCube_from_h5(group:h5py.Group):
     Returns:
         A DataCube instance
     """
-    datacube = Array_from_h5(group)
+    datacube = Array.from_h5(group)
     datacube = DataCube_from_Array(datacube)
     return datacube
 
@@ -118,7 +121,7 @@ def DiffractionSlice_from_h5(group:h5py.Group):
     Returns:
         A DiffractionSlice instance
     """
-    diffractionslice = Array_from_h5(group)
+    diffractionslice = Array.from_h5(group)
     diffractionslice = DiffractionSlice_from_Array(diffractionslice)
     return diffractionslice
 
@@ -164,7 +167,7 @@ def VirtualDiffraction_from_h5(group:h5py.Group):
     Returns:
         A VirtualDiffraction instance
     """
-    virtualdiffraction = Array_from_h5(group)
+    virtualdiffraction = Array.from_h5(group)
     virtualdiffraction = VirtualDiffraction_from_Array(virtualdiffraction)
     return virtualdiffraction
 
@@ -228,7 +231,7 @@ def VirtualImage_from_h5(group:h5py.Group):
     Returns:
         A VirtualImage instance
     """
-    image = Array_from_h5(group)
+    image = Array.from_h5(group)
     image = VirtualImage_from_Array(image)
     return image
 
@@ -292,7 +295,7 @@ def Probe_from_h5(group:h5py.Group):
     Returns:
         A Probe instance
     """
-    probe = Array_from_h5(group)
+    probe = Array.from_h5(group)
     probe = Probe_from_Array(probe)
     return probe
 
@@ -349,7 +352,7 @@ def QPoints_from_h5(group:h5py.Group):
     Returns:
         A QPoints instance
     """
-    qpoints = PointList_from_h5(group)
+    qpoints = PointList.from_h5(group)
     qpoints = QPoints_from_PointList(qpoints)
     return qpoints
 
@@ -403,16 +406,10 @@ def BraggVectors_to_h5(
     braggvectors._v_uncal.name = "_v_uncal"
 
     # Add vectors
-    PointListArray_to_h5(
-        braggvectors._v_uncal,
-        grp
-    )
+    braggvectors._v_uncal._to_h5( grp )
     try:
         braggvectors._v_cal.name = "_v_cal"
-        PointListArray_to_h5(
-            braggvectors._v_cal,
-            grp
-        )
+        braggvectors._v_cal._to_h5( grp )
     except AttributeError:
         pass
 
@@ -443,12 +440,12 @@ def BraggVectors_from_h5(group:h5py.Group):
 
 
     # Get uncalibrated peak
-    v_uncal = PointListArray_from_h5(group['_v_uncal'])
+    v_uncal = PointListArray.from_h5(group['_v_uncal'])
 
     # Get Qshape metadata
     try:
         grp_metadata = group['_metadata']
-        Qshape = Metadata_from_h5(grp_metadata['braggvectors'])['Qshape']
+        Qshape = Metadata.from_h5(grp_metadata['braggvectors'])['Qshape']
     except KeyError:
         raise Exception("could not read Qshape")
 
@@ -462,7 +459,7 @@ def BraggVectors_from_h5(group:h5py.Group):
 
     # Add calibrated peaks, if they're there
     try:
-        v_cal = PointListArray_from_h5(group['_v_cal'])
+        v_cal = PointListArray.from_h5(group['_v_cal'])
         braggvectors._v_cal = v_cal
     except KeyError:
         pass
