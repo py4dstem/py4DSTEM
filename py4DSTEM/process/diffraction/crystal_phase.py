@@ -72,7 +72,7 @@ class Crystal_Phase:
         Visualize phase maps of dataset.
 
         Args:
-            method (str):               Where to get phase maps from          
+            method (str):               Where to get phase maps from- only accepts 'orientation_maps' right now          
             map_scale_values (float):   Value to scale correlations by
         """
         
@@ -146,9 +146,11 @@ class Crystal_Phase:
     def quantify_phase(
         self,
         pointlistarray,
-        tolerance_distance,
-        method,
+        tolerance_distance = 0.08,
+        method = 'nnls',
+        use_peak_intensities = True,
         use_phase_orientations = True,
+        ind_orientation = 0,
         set_orientation_matrix = None,
         set_zone_axis = None,
         mask_peaks = None
@@ -157,8 +159,14 @@ class Crystal_Phase:
         Quantification of the phase of a crystal based on the crystal instances and the pointlistarray.
 
         Args:
-            pointlistarray (PointListArray):    Pointlistarray
-            method (str)                        Computational method to compute phase with
+            pointlisarray (pointlistarray):                 Pointlistarray to quantify phase of
+            tolerance_distance (float):                     Distance allowed between a peak and match
+            method (str):                                   Numerical method used to quantify phase
+            use_peak_intensities (bool, optional):          Whether or not to use the intensities of the peaks in the decomposition
+            use_phase_orientations (bool, optional):        Whether or not to use phase orientations from orientation_maps
+            ind_orientation (int):                          index in orientation_maps to match to
+            set_phase_orientations (list, optional):        List of phase orientation matrices for each structure
+            mask_peaks (list, optional):                    A pointer of which positions to mask peaks from
         
         Details:
         """
@@ -176,6 +184,7 @@ class Crystal_Phase:
                     position = [Rx, Ry],
                     tolerance_distance=tolerance_distance,
                     method = method,
+                    use_peak_intensities = use_peak_intensities,
                     use_phase_orientations = use_phase_orientations,
                     set_orientation_matrix = set_orientation_matrix,
                     set_zone_axis = set_zone_axis,
@@ -194,34 +203,39 @@ class Crystal_Phase:
         self,
         pointlistarray,
         position,
-        tolerance_distance,
         method = 'nnls', 
-        ind_orientation = 0,
+        tolerance_distance = 0.08,
+        use_peak_intensities = True,
         use_phase_orientations = True,
+        ind_orientation = 0,
         set_orientation_matrix = None,
         set_zone_axis = None,
         mask_peaks = None
     ):
         """
-        
         Args:
-            pointlisarray (pointlistarray):             Pointlistarray to quantify phase of
-            position (tuple/list?):                     Position of pointlist in pointlistarray
-            tolerance_distance (float):                 Distance between 
-            use_phase_orientations (bool, optional):    _description_. Defaults to True.
-            set_phase_orientations (list, optional):    List of set phase orientations for each structure
-            mask_peaks (list, optional):
+            pointlisarray (pointlistarray):                 Pointlistarray to quantify phase of
+            position (tuple/list):                          Position of pointlist in pointlistarray
+            tolerance_distance (float):                     Distance allowed between a peak and match
+            method (str):                                   Numerical method used to quantify phase
+            use_peak_intensities (bool, optional):          Whether or not to use the intensities of the peaks in the decomposition
+            use_phase_orientations (bool, optional):        Whether or not to use phase orientations from orientation_maps
+            ind_orientation (int):                          index in orientation_maps to match to
+            set_phase_orientations (list, optional):        List of phase orientation matrices for each structure
+            mask_peaks (list, optional):                    A pointer of which positions to mask peaks from
 
         Returns:
-            pointlist_peak_intensity_matches
-            phase_weights
-            phase_residuals
+            pointlist_peak_intensity_matches (np.ndarray):  Peak matches in the rows of array and the crystals in the columns
+            phase_weights (np.ndarray):                     Weights of each phase
+            phase_residuals (np.ndarray):                   Residuals
         """
         pointlist = pointlistarray.get_pointlist(position[0], position[1])
-        pl_intensities = pointlist['intensity']
+        if use_peak_intensities:
+            pl_intensities = pointlist['intensity']
+        else:
+            pl_intensities = np.ones(pointlist['intensity'].shape)
         
         #Prepare Matches for modeling
-        
         pointlist_peak_matches = []
         for c in range(len(self.crystals)):
             phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
@@ -255,28 +269,27 @@ class Crystal_Phase:
                     )
                 ind = np.where(distances == np.min(distances))[0][0]
                 if distances[ind] <= tolerance_distance:
-                    phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
+                    if use_peak_intensities:
+                        phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
+                    else:
+                        phase_peak_match_intensities[d] = 1      
                 else:
                     continue   
             pointlist_peak_matches.append(phase_peak_match_intensities)
-            
             pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
             pointlist_peak_intensity_matches = pointlist_peak_intensity_matches.reshape(
                 pl_intensities.shape[0],
                 pointlist_peak_intensity_matches.shape[-1]
                 )
             
-            if mask_peaks is not None:
-                for i in range(len(mask_peaks)):
-                    if mask_peaks[i] == None:
-                        continue
-                    inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
-                    
-                    for mask in range(len(inds_mask)):
-                        pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
+        if mask_peaks is not None:
+            for i in range(len(mask_peaks)):
+                if mask_peaks[i] == None:
+                    continue
+                inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
+                for mask in range(len(inds_mask)):
+                    pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
 
-
-        
         if method == 'nnls':    
             phase_weights, phase_residuals = nnls(
                 pointlist_peak_intensity_matches,
