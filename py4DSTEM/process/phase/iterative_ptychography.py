@@ -52,9 +52,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         If None, no resampling of diffraction intenstities is performed
     resampling_method: str, optional
         Method to use for resampling, either 'bilinear' or 'fourier' (default)
-    region_of_interest_shape: Tuple[int,int], optional
-        Pixel dimensions (Sx,Sy) of the region of interest (ROI)
-        If None, the ROI dimensions are taken as the intensity dimensions (Qx,Qy)
+    probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions

@@ -39,6 +39,7 @@ polar_symbols = (
     "phi54",
     "C56",
     "phi56",
+    "rolloff"
 )
 
 #: Aliases for the most commonly used optical aberrations.
@@ -98,7 +99,6 @@ class ComplexProbe:
         semiangle_cutoff: float = np.inf,
         vacuum_probe_intensity: np.ndarray = None,
         device: str = "cpu",
-        rolloff: float = 2,
         focal_spread: float = 0.0,
         angular_spread: float = 0.0,
         gaussian_spread: float = 0.0,
@@ -124,7 +124,6 @@ class ComplexProbe:
 
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._semiangle_cutoff = semiangle_cutoff
-        self._rolloff = rolloff
         self._focal_spread = focal_spread
         self._angular_spread = angular_spread
         self._gaussian_spread = gaussian_spread
@@ -183,8 +182,9 @@ class ComplexProbe:
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
 
-        if self._rolloff > 0.0:
-            rolloff = self._rolloff / 1000.0  # * semiangle_cutoff
+
+        if self._parameters['rolloff']:
+            rolloff = self._parameters['rolloff'] / 1000.0  # * semiangle_cutoff
             array = 0.5 * (
                 1 + xp.cos(np.pi * (alpha - semiangle_cutoff + rolloff) / rolloff)
             )
