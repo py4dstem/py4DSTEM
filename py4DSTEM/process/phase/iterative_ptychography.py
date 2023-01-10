@@ -23,6 +23,7 @@ from py4DSTEM.process.phase.utils import (
     fft_shift,
     polar_aliases,
     polar_symbols,
+    generate_batches
 )
 from py4DSTEM.process.utils import fourier_resample, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
@@ -356,6 +357,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         del self._intensities
+        self._amplitudes_initial = self._amplitudes.copy()
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
@@ -659,13 +661,19 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
-        probe_normalization = 1 / xp.sqrt(
-            probe_normalization**2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
-        )
+        #probe_normalization = self._sum_overlapping_patches_bincounts(
+        #    xp.abs(shifted_probes) ** 2
+        #)
+        #probe_normalization = 1 / xp.sqrt(
+        #    probe_normalization**2
+        #    + (normalization_min * xp.max(probe_normalization)) ** 2
+        #)
+        
+        probe_normalization = 1/(
+                1e-9 + self._sum_overlapping_patches_bincounts(
+            normalization_min * xp.abs(shifted_probes)**2
+            + (1-normalization_min) * xp.max(xp.abs(shifted_probes))**2
+            ))
 
         current_object += step_size * (
             self._sum_overlapping_patches_bincounts(
@@ -675,14 +683,21 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         if not fix_probe:
-            object_normalization = xp.sum(
-                (xp.abs(object_patches) ** 2),
-                axis=0,
-            )
-            object_normalization = 1 / xp.sqrt(
-                object_normalization**2
-                + (normalization_min * xp.max(object_normalization)) ** 2
-            )
+
+            #object_normalization = xp.sum(
+            #    (xp.abs(object_patches) ** 2),
+            #    axis=0,
+            #)
+            #object_normalization = 1 / xp.sqrt(
+            #    object_normalization**2
+            #    + (normalization_min * xp.max(object_normalization)) ** 2
+            #)
+            
+            object_normalization = 1/(
+                    1e-9 + xp.sum(
+                normalization_min * xp.abs(object_patches)**2
+                + (1-normalization_min) * xp.max(xp.abs(object_patches))**2,
+                axis=0))
 
             current_probe += step_size * (
                 xp.sum(
@@ -1259,7 +1274,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         store_iterations: bool = False,
         reconstruction_method: str = 'gradient-descent',
         reconstruction_parameter: float = 1.0,
-        batch_size: int = None,
+        max_batch_size: int = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1313,7 +1328,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         
         # Reconstruction method
-        
         if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
             raise ValueError("reconstruction_parameter must be between 0-1.")
         
@@ -1342,16 +1356,30 @@ class PtychographicReconstruction(PhaseReconstruction):
                 f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
                 ))
 
-        
         if self._verbose:
-            print(f"Performing {max_iter} iterations using the {reconstruction_method} algorithm with α: {reconstruction_parameter}.")
+            if max_batch_size is not None:
+                print((
+                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                        f"in batches of max {max_batch_size} measurements."
+                        ))
+            else:
+                print((
+                    f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                    f"with α: {reconstruction_parameter}."
+                    ))
 
-        # Batch size
-        if use_projection_scheme and batch_size is not None:
-            raise ValueError((
-                "Stochastic probe updating is inconsistent with 'DM_AP' and 'RAAR'. Use reconstruction_method='GD' "
-                "or set batch_size = None."
-                ))
+        # Batching
+        shuffled_indices = np.arange(self._num_diffraction_patterns)
+        if max_batch_size is not None:
+            if use_projection_scheme:
+                raise ValueError((
+                    "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
+                    "Use reconstruction_method='GD' or set max_batch_size=None."
+                    ))
+
+        else:
+            max_batch_size = self._num_diffraction_patterns
+
 
         # initialization
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
@@ -1403,53 +1431,65 @@ class PtychographicReconstruction(PhaseReconstruction):
             disable=not progress_bar,
         ):
 
-            # forward operator
-            shifted_probes, object_patches, self._exit_waves, error = self._forward(
-                self._object, self._probe, self._amplitudes, self._exit_waves,
-                use_projection_scheme, projection_a, projection_b, projection_c,
-            )
+            # randomize
+            if max_batch_size < self._num_diffraction_patterns:
+                np.random.shuffle(shuffled_indices)
 
-            # adjoint operator
-            self._object, self._probe, self._positions_px = self._adjoint(
-                self._object,
-                self._probe,
-                object_patches,
-                shifted_probes,
-                self._positions_px,
-                self._exit_waves,
-                use_projection_scheme = use_projection_scheme,
-                step_size = step_size,
-                normalization_min=normalization_min,
-                fix_probe=a0 < fix_probe_iter,
-                fix_positions=a0 < fix_positions_iter,
-                alternative_position_correction=alternative_position_correction,
-            )
+            for start, end in generate_batches(self._num_diffraction_patterns, max_batch = max_batch_size):
 
-            # update
-            #self._object, self._probe, self._positions_px = self._update(
-            #    self._object,
-            #    object_update,
-            #    self._probe,
-            #    probe_update,
-            #    self._positions_px,
-            #    positions_update,
-            #    step_size=step_size,
-            #    positions_step_size=positions_step_size,
-            #)
+                # batch indices
+                self._positions_px = self._positions_px_initial.copy()[shuffled_indices][start:end]
+                self._positions_px_fractional = self._positions_px - xp.round(self._positions_px)
+                self._set_vectorized_patch_indices()
+                amplitudes = self._amplitudes[shuffled_indices][start:end]
 
-            # constraints
-            gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
+                # forward operator
+                shifted_probes, object_patches, self._exit_waves, error = self._forward(
+                    self._object, self._probe, amplitudes, self._exit_waves,
+                    use_projection_scheme, projection_a, projection_b, projection_c,
+                )
 
-            self._object, self._probe, self._positions_px = self._constraints(
-                self._object,
-                self._probe,
-                self._positions_px,
-                pure_phase_object=a0 < pure_phase_object_iter,
-                gaussian_blur_sigma=gaussian_sigma,
-                fix_com=fix_com and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
-                fix_positions=a0 < fix_positions_iter,
-            )
+                # adjoint operator
+                self._object, self._probe, self._positions_px = self._adjoint(
+                    self._object,
+                    self._probe,
+                    object_patches,
+                    shifted_probes,
+                    self._positions_px,
+                    self._exit_waves,
+                    use_projection_scheme = use_projection_scheme,
+                    step_size = step_size,
+                    normalization_min=normalization_min,
+                    fix_probe=a0 < fix_probe_iter,
+                    fix_positions=a0 < fix_positions_iter,
+                    alternative_position_correction=alternative_position_correction,
+                )
+
+                # update
+                #self._object, self._probe, self._positions_px = self._update(
+                #    self._object,
+                #    object_update,
+                #    self._probe,
+                #    probe_update,
+                #    self._positions_px,
+                #    positions_update,
+                #    step_size=step_size,
+                #    positions_step_size=positions_step_size,
+                #)
+
+                # constraints
+                gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
+
+                self._object, self._probe, self._positions_px = self._constraints(
+                    self._object,
+                    self._probe,
+                    self._positions_px,
+                    pure_phase_object=a0 < pure_phase_object_iter,
+                    gaussian_blur_sigma=gaussian_sigma,
+                    fix_com=fix_com and a0 >= fix_probe_iter,
+                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                    fix_positions=a0 < fix_positions_iter,
+                )
 
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))

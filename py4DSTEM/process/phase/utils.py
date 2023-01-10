@@ -886,3 +886,50 @@ def center_of_mass_relative_rotation(
     com_y = asnumpy(com_y)
 
     return com_x, com_y, rotation_best_deg, rotation_best_transpose
+
+def subdivide_into_batches(num_items: int, num_batches: int = None, max_batch: int = None):
+    """
+    Split an n integer into m (almost) equal integers, such that the sum of smaller integers equals n.
+
+    Parameters
+    ----------
+    n: int
+        The integer to split.
+    m: int
+        The number integers n will be split into.
+
+    Returns
+    -------
+    list of int
+    """
+    if (num_batches is not None) & (max_batch is not None):
+        raise RuntimeError()
+
+    if num_batches is None:
+        if max_batch is not None:
+            num_batches = (num_items + (-num_items % max_batch)) // max_batch
+        else:
+            raise RuntimeError()
+
+    if num_items < num_batches:
+        raise RuntimeError('num_batches may not be larger than num_items')
+
+    elif num_items % num_batches == 0:
+        return [num_items // num_batches] * num_batches
+    else:
+        v = []
+        zp = num_batches - (num_items % num_batches)
+        pp = num_items // num_batches
+        for i in range(num_batches):
+            if i >= zp:
+                v = [pp + 1] + v
+            else:
+                v = [pp] + v
+        return v
+
+def generate_batches(num_items: int, num_batches: int = None, max_batch: int = None, start=0):
+    for batch in subdivide_into_batches(num_items, num_batches, max_batch):
+        end = start + batch
+        yield start, end
+
+        start = end
