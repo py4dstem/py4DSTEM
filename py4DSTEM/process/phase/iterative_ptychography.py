@@ -48,6 +48,15 @@ class PtychographicReconstruction(PhaseReconstruction):
         Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    semiangle_cutoff: float, optional
+        Semiangle cutoff for the initial probe guess
+    rolloff: float, optional
+        Semiangle rolloff for the initial probe guess
+    vacuum_probe_intensity: np.ndarray, optional
+        Vacuum probe to use as intensity aperture for initial probe guess
+    polar_parameters: dict, optional
+        Mapping from aberration symbols to their corresponding values. All aberration
+        magnitudes should be given in Å and angles should be given in radians.
     diffraction_intensities_shape: Tuple[int,int], optional
         Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
         If None, no resampling of diffraction intenstities is performed
@@ -59,6 +68,8 @@ class PtychographicReconstruction(PhaseReconstruction):
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
+    dp_mask: ndarray, optional
+        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -68,50 +79,30 @@ class PtychographicReconstruction(PhaseReconstruction):
     scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
-    semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
-    rolloff: float, optional
-        Semiangle rolloff for the initial probe guess
-    vacuum_probe_intensity: np.ndarray, optional
-        Vacuum probe to use as intensity aperture for initial probe guess
-    polar_parameters: dict, optional
-        Mapping from aberration symbols to their corresponding values. All aberration
-        magnitudes should be given in Å and angles should be given in radians.
     kwargs:
         Provide the aberration coefficients as keyword arguments.
-
-    Assigns
-    --------
-    self._xp: Callable
-        Array computing module
-    self._intensities: (Rx,Ry,Qx,Qy) xp.ndarray
-        Raw intensities array stored on device, with dtype xp.float32
-    self._preprocessed: bool
-        Flag to signal object has not yet been preprocessed
     """
 
     def __init__(
         self,
         datacube: DataCube,
         energy: float,
+        semiangle_cutoff: float = None,
+        rolloff: float = 2.0,
+        vacuum_probe_intensity: np.ndarray = None,
+        polar_parameters: Mapping[str, float] = None,
         diffraction_intensities_shape: Tuple[int, int] = None,
         resampling_method: str = "fourier",
         probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         scan_positions: np.ndarray = None,
-        vacuum_probe_intensity: np.ndarray = None,
-        semiangle_cutoff: float = None,
-        rolloff: float = 2.0,
-        polar_parameters: Mapping[str, float] = None,
-        dp_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         **kwargs,
@@ -302,11 +293,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
 
-        Assigns
-        --------
-        self._preprocessed: bool
-            Flag to signal object has been preprocessed
-
         Returns
         --------
         self: PtychographicReconstruction
@@ -357,7 +343,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         del self._intensities
-        self._amplitudes_initial = self._amplitudes.copy()
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
@@ -517,8 +502,12 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        fourier_exit_waves:np.ndarray
-            object * probe overlaps in reciprocal space
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            shifted_probes * object_patches
         """
 
         xp = self._xp
@@ -535,21 +524,21 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return shifted_probes, object_patches, overlap
 
-    def _gradient_descent_fourier_projection(self, amplitudes, overlap, exit_waves):
+    def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
-        Ptychographic fourier projection method.
+        Ptychographic fourier projection method for GD method.
 
         Parameters
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        fourier_exit_waves: np.ndarray
-            object * probe overlaps in reciprocal space
+        overlap: np.ndarray
+            object * probe overlap
 
         Returns
         --------
-        difference_gradient_fourier:np.ndarray
-            Difference between measured and estimated exit waves in reciprocal space
+        exit_waves:np.ndarray
+            Difference between modified and estimated exit waves
         error: float
             Reconstruction error
         """
@@ -570,19 +559,28 @@ class PtychographicReconstruction(PhaseReconstruction):
     
     def _projection_sets_fourier_projection(self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c):
         """
-        Ptychographic fourier projection method.
+        Ptychographic fourier projection method for DM_AP and RAAR methods.
+        Generalized projection using three parameters: a,b,c
+            DM:   a = -1, b = 1, c = 1
+            AP:   a =  0, b = 1, c = 1
+            RAAR: a = 1-2\beta, b = \beta, c = 2 
 
         Parameters
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        fourier_exit_waves: np.ndarray
-            object * probe overlaps in reciprocal space
+        overlap: np.ndarray
+            object * probe overlap
+        exit_waves: np.ndarray
+            previously estimated exit waves
+        projection_a: float
+        projection_b: float
+        projection_c: float
 
         Returns
         --------
-        difference_gradient_fourier:np.ndarray
-            Difference between measured and estimated exit waves in reciprocal space
+        exit_waves:np.ndarray
+            Updated exit_waves
         error: float
             Reconstruction error
         """
@@ -612,7 +610,7 @@ class PtychographicReconstruction(PhaseReconstruction):
     def _forward(self, current_object, current_probe, amplitudes, exit_waves, use_projection_scheme, projection_a, projection_b, projection_c ):
         """
         Ptychographic forward operator.
-        Calls _overlap_projection() and _fourier_projection().
+        Calls _overlap_projection() and the appropriate _fourier_projection().
 
         Parameters
         --------
@@ -622,11 +620,24 @@ class PtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         amplitudes: np.ndarray
             Normalized measured amplitudes
+        overlap: np.ndarray
+            object * probe overlap
+        exit_waves: np.ndarray
+            previously estimated exit waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
+        projection_a: float
+        projection_b: float
+        projection_c: float
 
         Returns
         --------
-        difference_gradient_fourier:np.ndarray
-            Difference between measured and estimated exit waves in reciprocal space
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        object_patches: np.ndarray
+            Patched object view
+        exit_waves:np.ndarray
+            Updated exit_waves
         error: float
             Reconstruction error
         """
@@ -658,6 +669,34 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe,
         ):
         """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
         """
         xp = self._xp
 
@@ -720,6 +759,32 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe,
         ):
         """
+        Ptychographic adjoint operator for DM_AP and RAAR methods.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
         """
         xp = self._xp
 
@@ -775,7 +840,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         alternative_position_correction: bool,
     ):
         """
-        Ptychographic adjoint operator.
+        Ptychographic adjoint operator for GD method.
         Computes object and probe update steps.
 
         Parameters
@@ -784,23 +849,29 @@ class PtychographicReconstruction(PhaseReconstruction):
             Current object estimate
         current_probe: np.ndarray
             Current probe estimate
-        difference_gradient_fourier:np.ndarray
-            Difference between measured and estimated exit waves in reciprocal space
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
         fix_probe: bool, optional
             If True, probe will not be updated
         fix_positions: bool, optional
             If True, positions will not be updated
-        normalization_min: float, optional
-            Probe normalization minimum as a fraction of the maximum overlap intensity
 
         Returns
         --------
-        object_update: np.ndarray
-            Negative object gradient
-        probe_update: np.ndarray
-            Negative probe gradient. If fix_probe is True returns None
-        positions_update: np.ndarray
-            Negative positions gradient. If fix_positions is True returns None
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        updated_positions: np.ndarray
+            Updated positions estimate
         """
 
         xp = self._xp
@@ -977,52 +1048,11 @@ class PtychographicReconstruction(PhaseReconstruction):
 
     def _update(
         self,
-        current_object,
-        object_update,
-        current_probe,
-        probe_update,
-        current_positions,
-        positions_update,
-        step_size: float = 0.9,
-        positions_step_size: float = 0.9,
     ):
         """
-        Ptychographic update operator.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        object_update: np.ndarray
-            Negative object gradient
-        current_probe: np.ndarray
-            Current probe estimate
-        probe_update: np.ndarray
-            Negative probe gradient
-        current_positions: np.ndarray
-            Current positions estimate
-        positions_update: np.ndarray
-            Negative positions gradient
-        step_size: float, optional
-            Update step size
-        positions_step_size: float, optional
-            Positions update step size
-
-        Returns
-        --------
-        updated_object: np.ndarray
-            Updated object estimate
-        updated_probe: np.ndarray
-            Updated probe estimate
-        updated_positions: np.ndarray
-            Updated positions estimate
+        Dummy, absorbed into adjoint operator.
         """
-        current_object += step_size * object_update
-        if probe_update is not None:
-            current_probe += step_size * probe_update
-        if positions_update is not None:
-            current_positions += positions_step_size * positions_update
-        return current_object, current_probe, current_positions
+        pass
 
     def _object_threshold_constraint(self, current_object, pure_phase_object):
         """
@@ -1255,69 +1285,75 @@ class PtychographicReconstruction(PhaseReconstruction):
 
     def reconstruct(
         self,
-        reset: bool = None,
         max_iter: int = 64,
+        reconstruction_method: str = 'gradient-descent',
+        reconstruction_parameter: float = 1.0,
+        max_batch_size: int = None,
         step_size: float = 0.9,
-        positions_step_size: float = 0.9,
         normalization_min: float = 1e-2,
+        positions_step_size: float = 0.9,
+        pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        fix_probe_fourier_amplitude_iter: int = 0,
         fix_positions_iter: int = np.inf,
         alternative_position_correction: bool = False,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        pure_phase_object_iter: int = 0,
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
-        progress_bar: bool = True,
         store_iterations: bool = False,
-        reconstruction_method: str = 'gradient-descent',
-        reconstruction_parameter: float = 1.0,
-        max_batch_size: int = None,
+        progress_bar: bool = True,
+        reset: bool = None,
     ):
         """
         Ptychographic reconstruction main method.
 
         Parameters
         --------
-        reset: bool, optional
-            If True, previous reconstructions are ignored
         max_iter: int, optional
             Maximum number of iterations to run
-        step_size: float, optional
-            Update step size
-        positions_step_size: float, optional
-            Positions update step size
-        normalization_min: float, optional
-            Probe normalization minimum as a fraction of the maximum overlap intensity
-        fix_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_positions_iter: int, optional
-            Number of iterations to run with fixed positions before updating positions estimate
-        fix_com: bool, optional
-            If True, fixes center of mass of probe
-        gaussian_blur_sigma: float, optional
-            Standard deviation of gaussian kernel
-        gaussian_blur_iter: int, optional
-            Number of iterations to run before applying object smoothness constraint
-        probe_support_relative_radius: float, optional
-            Radius of probe supergaussian support in scaled pixel units, between (0,1]
-        probe_support_supergaussian_degree: float, optional
-            Degree supergaussian support is raised to, higher is sharper cutoff
-        fix_probe_amplitude: int, optional
-            Number of iterations to run with a fixed probe amplitude
-        pure_phase_object: bool, optional
-            If True, object amplitude is set to unity
-        progress_bar: bool, optional
-            If True, reconstruction progress is displayed
-        store_iterations: bool, optional
-            If True, reconstructed objects and probes are stored at each iteration
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
             "GD" (or "gradient_descent")
+        reconstruction_parameter: float, optional
+            Tuning parameter to interpolate b/w DM-AP and DM-RAAR
+        max_batch_size: int, optional
+            Max number of probes to update at once
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        positions_step_size: float, optional
+            Positions update step size
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+        fix_com: bool, optional
+            If True, fixes center of mass of probe
+        fix_probe_iter: int, optional
+            Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_amplitude: int, optional
+            Number of iterations to run with a fixed probe amplitude
+        fix_positions_iter: int, optional
+            Number of iterations to run with fixed positions before updating positions estimate
+        alternative_position_correction: bool, optional
+            If True, intensity-based position correction is used
+        probe_support_relative_radius: float, optional
+            Radius of probe supergaussian support in scaled pixel units, between (0,1]
+        probe_support_supergaussian_degree: float, optional
+            Degree supergaussian support is raised to, higher is sharper cutoff
+        gaussian_blur_sigma: float, optional
+            Standard deviation of gaussian kernel
+        gaussian_blur_iter: int, optional
+            Number of iterations to run before applying object smoothness constraint
+        store_iterations: bool, optional
+            If True, reconstructed objects and probes are stored at each iteration
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+        reset: bool, optional
+            If True, previous reconstructions are ignored
 
         Returns
         --------
@@ -1464,18 +1500,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                     fix_positions=a0 < fix_positions_iter,
                     alternative_position_correction=alternative_position_correction,
                 )
-
-                # update
-                #self._object, self._probe, self._positions_px = self._update(
-                #    self._object,
-                #    object_update,
-                #    self._probe,
-                #    probe_update,
-                #    self._positions_px,
-                #    positions_update,
-                #    step_size=step_size,
-                #    positions_step_size=positions_step_size,
-                #)
 
                 # constraints
                 gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
