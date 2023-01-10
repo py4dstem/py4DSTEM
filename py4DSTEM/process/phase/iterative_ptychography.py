@@ -21,9 +21,9 @@ from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
+    generate_batches,
     polar_aliases,
     polar_symbols,
-    generate_batches
 )
 from py4DSTEM.process.utils import fourier_resample, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
@@ -399,7 +399,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     sampling=self.sampling,
                     energy=self._energy,
                     semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff = self._rolloff,
+                    rolloff=self._rolloff,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
                     device="cpu" if xp is np else "gpu",
@@ -512,13 +512,11 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
 
-        shifted_probes = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
+        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         object_patches = current_object[
-                self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
-            ]
+            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        ]
 
         overlap = shifted_probes * object_patches
 
@@ -556,14 +554,16 @@ class PtychographicReconstruction(PhaseReconstruction):
         exit_waves = modified_overlap - overlap
 
         return exit_waves, error
-    
-    def _projection_sets_fourier_projection(self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c):
+
+    def _projection_sets_fourier_projection(
+        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
+    ):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
             DM:   a = -1, b = 1, c = 1
             AP:   a =  0, b = 1, c = 1
-            RAAR: a = 1-2\beta, b = \beta, c = 2 
+            RAAR: a = 1-2\beta, b = \beta, c = 2
 
         Parameters
         --------
@@ -588,7 +588,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         projection_x = 1 - projection_a - projection_b
         projection_y = 1 - projection_c
-        
+
         fourier_overlap = xp.fft.fft2(overlap)
         error = (
             xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
@@ -600,14 +600,30 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
-        fourier_projected_factor = amplitudes * xp.exp(1j * xp.angle(fourier_projected_factor))
+        fourier_projected_factor = amplitudes * xp.exp(
+            1j * xp.angle(fourier_projected_factor)
+        )
         projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
-        exit_waves = projection_x * exit_waves + projection_a * overlap + projection_b * projected_factor
+        exit_waves = (
+            projection_x * exit_waves
+            + projection_a * overlap
+            + projection_b * projected_factor
+        )
 
         return exit_waves, error
 
-    def _forward(self, current_object, current_probe, amplitudes, exit_waves, use_projection_scheme, projection_a, projection_b, projection_c ):
+    def _forward(
+        self,
+        current_object,
+        current_probe,
+        amplitudes,
+        exit_waves,
+        use_projection_scheme,
+        projection_a,
+        projection_b,
+        projection_c,
+    ):
         """
         Ptychographic forward operator.
         Calls _overlap_projection() and the appropriate _fourier_projection().
@@ -647,13 +663,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
         if use_projection_scheme:
             exit_waves, error = self._projection_sets_fourier_projection(
-            amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
-        )
+                amplitudes,
+                overlap,
+                exit_waves,
+                projection_a,
+                projection_b,
+                projection_c,
+            )
 
         else:
             exit_waves, error = self._gradient_descent_fourier_projection(
-            amplitudes, overlap, exit_waves
-        )
+                amplitudes, overlap, exit_waves
+            )
 
         return shifted_probes, object_patches, exit_waves, error
 
@@ -667,7 +688,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         step_size,
         normalization_min,
         fix_probe,
-        ):
+    ):
         """
         Ptychographic adjoint operator for GD method.
         Computes object and probe update steps.
@@ -700,19 +721,21 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        #probe_normalization = self._sum_overlapping_patches_bincounts(
+        # probe_normalization = self._sum_overlapping_patches_bincounts(
         #    xp.abs(shifted_probes) ** 2
-        #)
-        #probe_normalization = 1 / xp.sqrt(
+        # )
+        # probe_normalization = 1 / xp.sqrt(
         #    probe_normalization**2
         #    + (normalization_min * xp.max(probe_normalization)) ** 2
-        #)
-        
-        probe_normalization = 1/(
-                1e-9 + self._sum_overlapping_patches_bincounts(
-            normalization_min * xp.abs(shifted_probes)**2
-            + (1-normalization_min) * xp.max(xp.abs(shifted_probes))**2
-            ))
+        # )
+
+        probe_normalization = 1 / (
+            1e-9
+            + self._sum_overlapping_patches_bincounts(
+                normalization_min * xp.abs(shifted_probes) ** 2
+                + (1 - normalization_min) * xp.max(xp.abs(shifted_probes)) ** 2
+            )
+        )
 
         current_object += step_size * (
             self._sum_overlapping_patches_bincounts(
@@ -723,20 +746,23 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if not fix_probe:
 
-            #object_normalization = xp.sum(
+            # object_normalization = xp.sum(
             #    (xp.abs(object_patches) ** 2),
             #    axis=0,
-            #)
-            #object_normalization = 1 / xp.sqrt(
+            # )
+            # object_normalization = 1 / xp.sqrt(
             #    object_normalization**2
             #    + (normalization_min * xp.max(object_normalization)) ** 2
-            #)
-            
-            object_normalization = 1/(
-                    1e-9 + xp.sum(
-                normalization_min * xp.abs(object_patches)**2
-                + (1-normalization_min) * xp.max(xp.abs(object_patches))**2,
-                axis=0))
+            # )
+
+            object_normalization = 1 / (
+                1e-9
+                + xp.sum(
+                    normalization_min * xp.abs(object_patches) ** 2
+                    + (1 - normalization_min) * xp.max(xp.abs(object_patches)) ** 2,
+                    axis=0,
+                )
+            )
 
             current_probe += step_size * (
                 xp.sum(
@@ -757,7 +783,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         exit_waves,
         normalization_min,
         fix_probe,
-        ):
+    ):
         """
         Ptychographic adjoint operator for DM_AP and RAAR methods.
         Computes object and probe update steps.
@@ -822,7 +848,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
         return current_object, current_probe
-    
 
     def _adjoint(
         self,
@@ -874,8 +899,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             Updated positions estimate
         """
 
-        xp = self._xp
-
         if use_projection_scheme:
             current_object, current_probe = self._projection_sets_adjoint(
                 current_object,
@@ -885,7 +908,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 exit_waves,
                 normalization_min,
                 fix_probe,
-                )
+            )
         else:
             current_object, current_probe = self._gradient_descent_adjoint(
                 current_object,
@@ -896,18 +919,18 @@ class PtychographicReconstruction(PhaseReconstruction):
                 step_size,
                 normalization_min,
                 fix_probe,
-                )
+            )
 
-        #if fix_positions:
+        # if fix_positions:
         #    positions_update = None
-        #elif alternative_position_correction:
+        # elif alternative_position_correction:
         #    positions_update = self._position_correction_alternative(
         #        current_object,
         #        current_probe,
         #        self._amplitudes,
         #    )
         #
-        #else:
+        # else:
         #     = self._position_correction(
         #        current_object,
         #        current_probe,
@@ -1286,7 +1309,7 @@ class PtychographicReconstruction(PhaseReconstruction):
     def reconstruct(
         self,
         max_iter: int = 64,
-        reconstruction_method: str = 'gradient-descent',
+        reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
         step_size: float = 0.9,
@@ -1362,60 +1385,75 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         asnumpy = self._asnumpy
         xp = self._xp
-        
+
         # Reconstruction method
         if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
             raise ValueError("reconstruction_parameter must be between 0-1.")
-        
-        if reconstruction_method == "DM_AP" or reconstruction_method == "difference-map_alternating-projections":
+
+        if (
+            reconstruction_method == "DM_AP"
+            or reconstruction_method == "difference-map_alternating-projections"
+        ):
             use_projection_scheme = True
-            projection_a = -reconstruction_parameter 
+            projection_a = -reconstruction_parameter
             projection_b = 1
             projection_c = 1 + reconstruction_parameter
             step_size = None
-        elif reconstruction_method == "RAAR" or reconstruction_method == "relaxed-averaged-alternating-reflections":
+        elif (
+            reconstruction_method == "RAAR"
+            or reconstruction_method == "relaxed-averaged-alternating-reflections"
+        ):
             use_projection_scheme = True
-            projection_a = 1 - 2*reconstruction_parameter 
+            projection_a = 1 - 2 * reconstruction_parameter
             projection_b = reconstruction_parameter
             projection_c = 2
             step_size = None
-        elif reconstruction_method == "GD" or reconstruction_method == "gradient-descent":
+        elif (
+            reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
+        ):
             use_projection_scheme = False
             projection_a = None
             projection_b = None
             projection_c = None
             reconstruction_parameter = None
         else:
-            raise ValueError((
-                "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
-                "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
-                f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
-                ))
+            raise ValueError(
+                (
+                    "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
+                    f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
+                )
+            )
 
         if self._verbose:
             if max_batch_size is not None:
-                print((
+                print(
+                    (
                         f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
                         f"in batches of max {max_batch_size} measurements."
-                        ))
+                    )
+                )
             else:
-                print((
-                    f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                    f"with α: {reconstruction_parameter}."
-                    ))
+                print(
+                    (
+                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                        f"with α: {reconstruction_parameter}."
+                    )
+                )
 
         # Batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
         if max_batch_size is not None:
             if use_projection_scheme:
-                raise ValueError((
-                    "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
-                    "Use reconstruction_method='GD' or set max_batch_size=None."
-                    ))
+                raise ValueError(
+                    (
+                        "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
+                        "Use reconstruction_method='GD' or set max_batch_size=None."
+                    )
+                )
 
         else:
             max_batch_size = self._num_diffraction_patterns
-
 
         # initialization
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
@@ -1458,7 +1496,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
         )
 
-
         # main loop
         for a0 in tqdmnd(
             max_iter,
@@ -1471,18 +1508,30 @@ class PtychographicReconstruction(PhaseReconstruction):
             if max_batch_size < self._num_diffraction_patterns:
                 np.random.shuffle(shuffled_indices)
 
-            for start, end in generate_batches(self._num_diffraction_patterns, max_batch = max_batch_size):
+            for start, end in generate_batches(
+                self._num_diffraction_patterns, max_batch=max_batch_size
+            ):
 
                 # batch indices
-                self._positions_px = self._positions_px_initial.copy()[shuffled_indices][start:end]
-                self._positions_px_fractional = self._positions_px - xp.round(self._positions_px)
+                self._positions_px = self._positions_px_initial.copy()[
+                    shuffled_indices
+                ][start:end]
+                self._positions_px_fractional = self._positions_px - xp.round(
+                    self._positions_px
+                )
                 self._set_vectorized_patch_indices()
                 amplitudes = self._amplitudes[shuffled_indices][start:end]
 
                 # forward operator
                 shifted_probes, object_patches, self._exit_waves, error = self._forward(
-                    self._object, self._probe, amplitudes, self._exit_waves,
-                    use_projection_scheme, projection_a, projection_b, projection_c,
+                    self._object,
+                    self._probe,
+                    amplitudes,
+                    self._exit_waves,
+                    use_projection_scheme,
+                    projection_a,
+                    projection_b,
+                    projection_c,
                 )
 
                 # adjoint operator
@@ -1493,8 +1542,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                     shifted_probes,
                     self._positions_px,
                     self._exit_waves,
-                    use_projection_scheme = use_projection_scheme,
-                    step_size = step_size,
+                    use_projection_scheme=use_projection_scheme,
+                    step_size=step_size,
                     normalization_min=normalization_min,
                     fix_probe=a0 < fix_probe_iter,
                     fix_positions=a0 < fix_positions_iter,
@@ -1502,7 +1551,9 @@ class PtychographicReconstruction(PhaseReconstruction):
                 )
 
                 # constraints
-                gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
+                gaussian_sigma = (
+                    gaussian_blur_sigma if a0 < gaussian_blur_iter else None
+                )
 
                 self._object, self._probe, self._positions_px = self._constraints(
                     self._object,

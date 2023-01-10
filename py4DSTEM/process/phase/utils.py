@@ -96,7 +96,7 @@ class ComplexProbe:
         gpts: Tuple[int, int],
         sampling: Tuple[float, float],
         semiangle_cutoff: float = np.inf,
-        rolloff: float = 2.,
+        rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         device: str = "cpu",
         focal_spread: float = 0.0,
@@ -183,8 +183,7 @@ class ComplexProbe:
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
 
-
-        if self._rolloff > 0.0 :
+        if self._rolloff > 0.0:
             rolloff = self._rolloff / 1000.0  # * semiangle_cutoff
             array = 0.5 * (
                 1 + xp.cos(np.pi * (alpha - semiangle_cutoff + rolloff) / rolloff)
@@ -887,7 +886,10 @@ def center_of_mass_relative_rotation(
 
     return com_x, com_y, rotation_best_deg, rotation_best_transpose
 
-def subdivide_into_batches(num_items: int, num_batches: int = None, max_batch: int = None):
+
+def subdivide_into_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None
+):
     """
     Split an n integer into m (almost) equal integers, such that the sum of smaller integers equals n.
 
@@ -912,7 +914,7 @@ def subdivide_into_batches(num_items: int, num_batches: int = None, max_batch: i
             raise RuntimeError()
 
     if num_items < num_batches:
-        raise RuntimeError('num_batches may not be larger than num_items')
+        raise RuntimeError("num_batches may not be larger than num_items")
 
     elif num_items % num_batches == 0:
         return [num_items // num_batches] * num_batches
@@ -927,7 +929,10 @@ def subdivide_into_batches(num_items: int, num_batches: int = None, max_batch: i
                 v = [pp] + v
         return v
 
-def generate_batches(num_items: int, num_batches: int = None, max_batch: int = None, start=0):
+
+def generate_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None, start=0
+):
     for batch in subdivide_into_batches(num_items, num_batches, max_batch):
         end = start + batch
         yield start, end
