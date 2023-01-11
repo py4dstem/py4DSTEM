@@ -4,6 +4,7 @@
 import numpy as np
 import h5py
 from numbers import Number
+import inspect
 
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
@@ -68,8 +69,6 @@ def _get_class(grp):
     """
     Function returning Class signatures from corresponding strings
     """
-
-    import inspect
     from py4DSTEM.io import classes
 
     # Build lookup table for classes
