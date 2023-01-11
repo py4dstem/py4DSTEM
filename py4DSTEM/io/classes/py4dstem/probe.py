@@ -2,20 +2,17 @@
 # and cross-correlation kernels derived from them
 
 from py4DSTEM.io.classes.array import Array, Metadata
+from py4DSTEM.io.classes.py4dstem.probe_fns import ProbeMethods
 from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
 
 from typing import Optional,Union
 import numpy as np
 import h5py
 
-class Probe(DiffractionSlice):
+class Probe(DiffractionSlice,ProbeMethods):
     """
     Stores a vacuum probe.
     """
-
-    from py4DSTEM.io.classes.py4dstem.probe_fns import (
-        get_kernel
-    )
 
     def __init__(
         self,
@@ -38,6 +35,9 @@ class Probe(DiffractionSlice):
                 data,
                 np.zeros_like(data)
             ])
+
+        # initialize as a ProbeMethods instance
+        super(ProbeMethods).__init__()
 
         # initialize as a DiffractionSlice
         DiffractionSlice.__init__(
