@@ -53,6 +53,9 @@ polar_aliases = {
 }
 
 
+### Probe functions
+
+
 class ComplexProbe:
     """
     Complex Probe Class.
@@ -475,6 +478,9 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     )
 
 
+### FFT-shift functions
+
+
 def fourier_translation_operator(
     positions: np.ndarray, shape: tuple, xp=np
 ) -> np.ndarray:
@@ -538,6 +544,9 @@ def fft_shift(array, positions, xp=np):
         xp.fft.fft2(array)
         * fourier_translation_operator(positions, array.shape[-2:], xp)
     )
+
+
+### Standalone DPC functions
 
 
 def calculate_center_of_mass(
@@ -887,6 +896,9 @@ def center_of_mass_relative_rotation(
     return com_x, com_y, rotation_best_deg, rotation_best_transpose
 
 
+### Batching functions
+
+
 def subdivide_into_batches(
     num_items: int, num_batches: int = None, max_batch: int = None
 ):
@@ -938,3 +950,236 @@ def generate_batches(
         yield start, end
 
         start = end
+
+
+#### Affine transformation functions
+# Adapted from https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
+
+
+class AffineTransform:
+    """
+    Affine Transform Class.
+
+    Simplified version of AffineTransform from tike:
+    https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
+
+    AffineTransform() -> Identity
+
+    Parameters
+    ----------
+    scale0: float
+        x-scaling
+    scale1: float
+        y-scaling
+    shear1: float
+        \gamma shear
+    angle: float
+        \theta rotation angle
+    t0: float
+        x-translation
+    t1: float
+        y-translation
+    """
+
+    def __init__(
+        self,
+        scale0: float = 1.0,
+        scale1: float = 1.0,
+        shear1: float = 0.0,
+        angle: float = 0.0,
+        t0: float = 0.0,
+        t1: float = 0.0,
+    ):
+
+        self.scale0 = scale0
+        self.scale1 = scale1
+        self.shear1 = shear1
+        self.angle = angle
+        self.t0 = t0
+        self.t1 = t1
+
+    @classmethod
+    def fromarray(self, T: np.ndarray):
+        """Return an Affine Transfrom from a 2x2 matrix.
+        Use decomposition method from Graphics Gems 2 Section 7.1
+        """
+        R = T[:2, :2].copy()
+        scale0 = np.linalg.norm(R[0])
+        if scale0 <= 0:
+            return AffineTransform()
+        R[0] /= scale0
+        shear1 = R[0] @ R[1]
+        R[1] -= shear1 * R[0]
+        scale1 = np.linalg.norm(R[1])
+        if scale1 <= 0:
+            return AffineTransform()
+        R[1] /= scale1
+        shear1 /= scale1
+        angle = np.arccos(R[0, 0])
+
+        if T.shape[0] > 2:
+            t0, t1 = T[2]
+        else:
+            t0 = t1 = 0.0
+
+        return AffineTransform(
+            scale0=float(scale0),
+            scale1=float(scale1),
+            shear1=float(shear1),
+            angle=float(angle),
+            t0=t0,
+            t1=t1,
+        )
+
+    def asarray(self):
+        """Return an 2x2 matrix of scale, shear, rotation.
+        This matrix is scale @ shear @ rotate from left to right.
+        """
+        cosx = np.cos(self.angle)
+        sinx = np.sin(self.angle)
+        return (
+            np.array(
+                [
+                    [self.scale0, 0.0],
+                    [0.0, self.scale1],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [1.0, 0.0],
+                    [self.shear1, 1.0],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [+cosx, -sinx],
+                    [+sinx, +cosx],
+                ],
+                dtype="float32",
+            )
+        )
+
+    def asarray3(self):
+        """Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right. Expects a
+        homogenous (z) coordinate of 1.
+        """
+        T = np.empty((3, 2), dtype="float32")
+        T[2] = (self.t0, self.t1)
+        T[:2, :2] = self.asarray()
+        return T
+
+    def astuple(self):
+        """Return the constructor parameters in a tuple."""
+        return (
+            self.scale0,
+            self.scale1,
+            self.shear1,
+            self.angle,
+            self.t0,
+            self.t1,
+        )
+
+    def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
+        origin = xp.asarray(origin)
+        tf_matrix = self.asarray()
+        tf_matrix = xp.asarray(tf_matrix)
+        tf_translation = xp.array((self.t0, self.t1)) + origin
+        return ((x - origin) @ tf_matrix) + tf_translation
+
+    def __str__(self):
+        return (
+            "AffineTransform( \n"
+            f"  scale0 = {self.scale0:.4f}, scale1 = {self.scale1:.4f}, \n"
+            f"  shear1 = {self.shear1:.4f}, angle = {self.angle:.4f}, \n"
+            f"  t0 = {self.t0:.4f}, t1 = {self.t1:.4f}, \n"
+            ")"
+        )
+
+
+def estimate_global_transformation(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    xp=np,
+):
+    """Use least squares to estimate the global affine transformation."""
+
+    origin = xp.asarray(origin)
+
+    try:
+        if translation_allowed:
+            a = xp.pad(positions0 - origin, ((0, 0), (0, 1)), constant_values=1)
+        else:
+            a = positions0 - origin
+
+        b = positions1 - origin
+        aT = a.conj().swapaxes(-1, -2)
+        x = xp.linalg.inv(aT @ a) @ aT @ b
+
+        tf = AffineTransform.fromarray(x)
+
+    except xp.linalg.LinAlgError:
+        tf = AffineTransform()
+
+    error = xp.linalg.norm(tf(positions0, origin=origin, xp=xp) - positions1)
+
+    return tf, error
+
+
+def estimate_global_transformation_ransac(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    min_sample: int = 64,
+    max_error: float = 16,
+    min_consensus: float = 0.75,
+    max_iter: int = 20,
+    xp=np,
+):
+    """Use RANSAC to estimate the global affine transformation."""
+    best_fitness = np.inf  # small fitness is good
+    transform = AffineTransform()
+
+    # Choose a subset
+    for subset in np.random.choice(
+        a=len(positions0),
+        size=(max_iter, min_sample),
+        replace=True,
+    ):
+        # Fit to subset
+        subset = np.unique(subset)
+        candidate_model, _ = estimate_global_transformation(
+            positions0=positions0[subset],
+            positions1=positions1[subset],
+            origin=origin,
+            translation_allowed=translation_allowed,
+            xp=xp,
+        )
+
+        # Determine inliars and outliars
+        position_error = xp.linalg.norm(
+            candidate_model(positions0, origin=origin, xp=xp) - positions1,
+            axis=-1,
+        )
+        inliars = position_error <= max_error
+
+        # Check if consensus reached
+        if xp.sum(inliars) / len(inliars) >= min_consensus:
+            # Refit with consensus inliars
+            candidate_model, fitness = estimate_global_transformation(
+                positions0=positions0[inliars],
+                positions1=positions1[inliars],
+                origin=origin,
+                translation_allowed=translation_allowed,
+                xp=xp,
+            )
+            if fitness < best_fitness:
+                best_fitness = fitness
+                transform = candidate_model
+
+    return transform, best_fitness
