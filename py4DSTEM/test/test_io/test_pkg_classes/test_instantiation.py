@@ -18,6 +18,9 @@ def test_DataCube():
     datacube = DataCube( data )
     assert(isinstance(datacube,DataCube))
 
+    # test add method
+    datacube.get_dp_max
+
 def test_RealSlice():
 
     shape = (5,12)
