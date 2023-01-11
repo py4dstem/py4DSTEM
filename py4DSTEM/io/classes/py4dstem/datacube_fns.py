@@ -12,6 +12,9 @@ from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 
 
 class DataCubeMethods:
+    """
+    A container for DataCube object instance methods.
+    """
 
     def __init__(self):
         pass

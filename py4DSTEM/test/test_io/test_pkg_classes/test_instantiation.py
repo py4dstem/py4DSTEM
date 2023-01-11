@@ -55,6 +55,7 @@ def test_Probe():
     data = np.zeros(shape)
     probe = Probe( data )
     assert(isinstance(probe,Probe))
+    probe.get_kernel
 
 def test_QPoints():
 
