@@ -5,6 +5,9 @@ from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
 from py4DSTEM.io.classes import Array
 from py4DSTEM.io.classes.py4dstem.virtualdiffraction import VirtualDiffraction
+from py4DSTEM.io.classes.py4dstem.virtualimage import VirtualImage
+from py4DSTEM.io.classes.py4dstem.probe import Probe
+from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 
 
 
@@ -255,21 +258,25 @@ class DataCubeMethods:
         Args:
             datacube (Datacube) : datacube class object which stores 4D-dataset
                 needed for calculation
-            method (str) : defines method used for diffraction pattern, options are
-                'mean', 'median', and 'max'
-            mode (str) : defines mode for selecting area in real space to use for
-                virtual diffraction. The default is None, which means no
+            method (str) : defines method used for diffraction pattern, options
+                are 'mean', 'median', and 'max'
+            mode (str) : defines mode for selecting area in real space to use
+                for virtual diffraction. The default is None, which means no
                 geometry will be applied and the whole datacube will be used
                 for the calculation. Options:
                     - 'point' uses singular point as detector
-                    - 'circle' or 'circular' uses round detector, like bright field
-                    - 'annular' or 'annulus' uses annular detector, like dark field
-                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'circle' or 'circular' uses round detector, like bright
+                      field
+                    - 'annular' or 'annulus' uses annular detector, like dark
+                      field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular
+                      detector
                     - 'mask' flexible detector, any 2D array
-            geometry (variable) : valid entries are determined by the `mode`, values
-                in pixels argument, as follows. The default is None, which means no
-                geometry will be applied and the whole datacube will be used for the
-                calculation. If mode is None the geometry will not be applied.
+            geometry (variable) : valid entries are determined by the `mode`,
+                values in pixels argument, as follows. The default is None, which
+                means no geometry will be applied and the whole datacube will be
+                used for the calculation. If mode is None the geometry will not
+                be applied.
                     - 'point': 2-tuple, (rx,ry), ints
                     - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
                     - 'annular' or 'annulus': nested 2-tuple,
@@ -280,8 +287,8 @@ class DataCubeMethods:
                       array with the same shape as datacube.Rshape
             calibrated (bool): if True, geometry is specified in units of 'A'
                 instead of pixels. The datacube's calibrations must have its
-                `"R_pixel_units"` parameter set to "A". If mode is None the geometry
-                and calibration will not be applied.
+                `"R_pixel_units"` parameter set to "A". If mode is None the
+                geometry and calibration will not be applied.
             shift_center (bool): if True, the difraction patterns are shifted to
                 account for beam shift or the changing of the origin through the
                 scan. The datacube's calibration['origin'] parameter must be set.
@@ -334,8 +341,8 @@ class DataCubeMethods:
         returncalc = True,
         ):
         """
-        Function to calculate maximum virtual diffraction. Default captures pattern across
-        entire 4D-dataset.
+        Function to calculate maximum virtual diffraction. Default captures
+        pattern across entire 4D-dataset.
 
         Args:
             datacube (Datacube) : datacube class object which stores 4D-dataset
@@ -345,15 +352,18 @@ class DataCubeMethods:
                 geometry will be applied and the whole datacube will be used
                 for the calculation. Options:
                     - 'point' uses singular point as detector
-                    - 'circle' or 'circular' uses round detector, like bright field
-                    - 'annular' or 'annulus' uses annular detector, like dark field
-                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'circle' or 'circular' uses round detector, like bright
+                      field
+                    - 'annular' or 'annulus' uses annular detector, like dark
+                      field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular
+                      detector
                     - 'mask' flexible detector, any 2D array
             geometry (variable) : valid entries are determined by the `mode`,
                 values in pixels argument, as follows. The default is None, which
                 means no geometry will be applied and the whole datacube will be
-                used for the calculation. If mode is None the geometry will not be
-                applied.
+                used for the calculation. If mode is None the geometry will not
+                be applied.
                     - 'point': 2-tuple, (rx,ry),
                        rx and ry are each single float or int to define center
                     - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
@@ -365,8 +375,8 @@ class DataCubeMethods:
                       array with the same shape as datacube.Rshape
             calibrated (bool): if True, geometry is specified in units of 'A'
                 instead of pixels. The datacube's calibrations must have its
-                `"R_pixel_units"` parameter set to "A". If mode is None the geometry
-                and calibration will not be applied.
+                `"R_pixel_units"` parameter set to "A". If mode is None the
+                geometry and calibration will not be applied.
             shift_center (bool) : if True, the difraction patterns are shifted to
                 account for beam shift or the changing of the origin through the
                 scan. The datacube's calibration['origin'] parameter must be set.
@@ -430,14 +440,18 @@ class DataCubeMethods:
                 geometry will be applied and the whole datacube will be used
                 for the calculation. Options:
                     - 'point' uses singular point as detector
-                    - 'circle' or 'circular' uses round detector, like bright field
-                    - 'annular' or 'annulus' uses annular detector, like dark field
-                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'circle' or 'circular' uses round detector, like bright
+                      field
+                    - 'annular' or 'annulus' uses annular detector, like dark
+                      field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular
+                      detector
                     - 'mask' flexible detector, any 2D array
-            geometry (variable) : valid entries are determined by the `mode`, values
-                in pixels argument, as follows. The default is None, which means no
-                geometry will be applied and the whole datacube will be used for the
-                calculation. If mode is None the geometry will not be applied.
+            geometry (variable) : valid entries are determined by the `mode`,
+                values in pixels argument, as follows. The default is None,
+                which means no geometry will be applied and the whole datacube
+                will be used for the calculation. If mode is None the geometry
+                will not be applied.
                     - 'point': 2-tuple, (rx,ry),
                        qx and qy are each single float or int to define center
                     - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
@@ -450,8 +464,8 @@ class DataCubeMethods:
                       array with the same shape as datacube.Rshape
             calibrated (bool): if True, geometry is specified in units of 'A'
                 instead of pixels. The datacube's calibrations must have its
-                `"R_pixel_units"` parameter set to "A". If mode is None the geometry
-                and calibration will not be applied.
+                `"R_pixel_units"` parameter set to "A". If mode is None the
+                geometry and calibration will not be applied.
             shift_center (bool): if True, the diffraction patterns are shifted to
                 account for beam shift or the changing of the origin through the
                 scan. The datacube's calibration['origin'] parameter must be set.
@@ -504,8 +518,8 @@ class DataCubeMethods:
         returncalc = True,
         ):
         """
-        Function to calculate median virtual diffraction. Default captures pattern
-        across entire 4D-dataset.
+        Function to calculate median virtual diffraction. Default captures
+        pattern across entire 4D-dataset.
 
         Args:
             datacube (Datacube) : datacube class object which stores 4D-dataset
@@ -515,14 +529,18 @@ class DataCubeMethods:
                 geometry will be applied and the whole datacube will be used
                 for the calculation. Options:
                     - 'point' uses singular point as detector
-                    - 'circle' or 'circular' uses round detector, like bright field
-                    - 'annular' or 'annulus' uses annular detector, like dark field
-                    - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                    - 'circle' or 'circular' uses round detector, like bright
+                      field
+                    - 'annular' or 'annulus' uses annular detector, like dark
+                      field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular
+                      detector
                     - 'mask' flexible detector, any 2D array
-            geometry (variable) : valid entries are determined by the `mode`, values
-                in pixels argument, as follows. The default is None, which means no
-                geometry will be applied and the whole datacube will be used for the
-                calculation. If mode is None the geometry will not be applied.
+            geometry (variable) : valid entries are determined by the `mode`,
+                values in pixels argument, as follows. The default is None,
+                which means no geometry will be applied and the whole datacube
+                will be used for the calculation. If mode is None the geometry
+                will not be applied.
                     - 'point': 2-tuple, (rx,ry),
                     - 'circle' or 'circular': nested 2-tuple, ((rx,ry),radius),
                     - 'annular' or 'annulus': nested 2-tuple,
@@ -531,10 +549,10 @@ class DataCubeMethods:
                       (xmin,xmax,ymin,ymax)
                     - `mask`: flexible detector, any boolean or floating point 2D
                       array with the same shape as datacube.Rshape
-            calibrated (bool): if True, geometry is specified in units of 'A' instead
-                of pixels. The datacube's calibrations must have its `"R_pixel_units"`
-                parameter set to "A". If mode is None the geometry and calibration
-                will not be applied.
+            calibrated (bool): if True, geometry is specified in units of 'A'
+                instead of pixels. The datacube's calibrations must have its
+                `"R_pixel_units"` parameter set to "A". If mode is None the
+                geometry and calibration will not be applied.
             shift_center (bool) : if True, the diffraction patterns are shifted to
                 account for beam shift or the changing of the origin through the
                 scan. The datacube's calibration['origin'] parameter must be set.
@@ -579,7 +597,6 @@ class DataCubeMethods:
 
     # Virtual imaging
 
-    from py4DSTEM.io.classes.py4dstem.virtualimage import VirtualImage
     def get_virtual_image(
         self,
         mode,
@@ -599,21 +616,27 @@ class DataCubeMethods:
         The kind of virtual image is specified by the `mode` argument.
 
         Args:
-            mode (str): defines geometry mode for calculating virtual image options:
-                - 'point' uses singular point as detector
-                - 'circle' or 'circular' uses round detector, like bright field
-                - 'annular' or 'annulus' uses annular detector, like dark field
-                - 'rectangle', 'square', 'rectangular', uses rectangular detector
-                - 'mask' flexible detector, any 2D array
-            geometry (variable) : valid entries are determined by the `mode`, values in
+            mode (str): defines geometry mode for calculating virtual image
+                options:
+                    - 'point' uses singular point as detector
+                    - 'circle' or 'circular' uses round detector, like bright
+                      field
+                    - 'annular' or 'annulus' uses annular detector, like dark
+                      field
+                    - 'rectangle', 'square', 'rectangular', uses rectangular
+                      detector
+                    - 'mask' flexible detector, any 2D array
+            geometry (variable) : valid entries are determined by the `mode`,
+                values in
             pixels argument, as follows:
                 - 'point': 2-tuple, (qx,qy), ints
                 - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
                 - 'annular' or 'annulus': nested 2-tuple,
                   ((qx,qy),(radius_i,radius_o)),
-                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
-                - `mask`: any boolean or floating point 2D array with the same size
-                  as datacube.Qshape
+                - 'rectangle', 'square', 'rectangular': 4-tuple,
+                  (xmin,xmax,ymin,ymax)
+                - `mask`: any boolean or floating point 2D array with the same
+                  size as datacube.Qshape
             centered (bool): if False, the origin is in the upper left corner.
                  If True, the origin is set to the mean origin in the datacube
                  calibrations, so that a bright-field image could be specified
@@ -625,22 +648,23 @@ class DataCubeMethods:
                 `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
                 no effect. Default is False.
             shift_center (bool): if True, the mask is shifted at each real space
-                position to account for any shifting of the origin of the diffraction
-                images. The datacube's calibration['origin'] parameter must be set. 
-                The shift applied to each pattern is the difference between the local 
-                origin position and the mean origin position over all patterns, 
-                rounded to the nearest integer for speed. Default is False.
+                position to account for any shifting of the origin of the
+                diffraction images. The datacube's calibration['origin']
+                parameter must be set. The shift applied to each pattern is the
+                difference between the local origin position and the mean origin
+                position over all patterns, rounded to the nearest integer for
+                speed. Default is False.
             verbose (bool): if True, show progress bar
             dask (bool): if True, use dask arrays
-            return_mask (bool): if False (default) returns a virtual image as usual.
-                If True, does *not* generate or return a virtual image, instead
-                returning the mask that would be used in virtual image computation
-                for any call to this function where `shift_center = False`.
-                Otherwise, must be a 2-tuple of integers corresponding to a scan
-                position (rx,ry); in this case, returns the mask that would be used
-                for virtual image computation at this scan position with
-                `shift_center` set to `True`. Setting return_mask to True does not
-                add anything to the datacube's tree.
+            return_mask (bool): if False (default) returns a virtual image as
+                usual. If True, does *not* generate or return a virtual image,
+                instead returning the mask that would be used in virtual image
+                computation for any call to this function where
+                `shift_center = False`. Otherwise, must be a 2-tuple of integers
+                corresponding to a scan position (rx,ry); in this case, returns
+                the mask that would be used for virtual image computation at this
+                scan position with `shift_center` set to `True`. Setting
+                return_mask to True does not add anything to the datacube's tree
             name (str): the output object's name
             returncalc (bool): if True, returns the output
         Returns:
@@ -703,11 +727,12 @@ class DataCubeMethods:
         Args:
             mode: see py4DSTEM.process.get_virtual_image
             geometry: see py4DSTEM.process.get_virtual_image
-            scan_position: if None, positions the unshifted detector over the mean
-                or max diffraction pattern. Otherwise, must be a tuple (rx,ry) of
-                ints, and a detector is positioned over the diffraction pattern
-                at this position, including shifts if they would be applied for
-                this dataset (i.e. if it contains the appropriate calibrations)
+            scan_position: if None, positions the unshifted detector over the
+                mean or max diffraction pattern. Otherwise, must be a tuple
+                (rx,ry) of ints, and a detector is positioned over the
+                diffraction pattern at this position, including shifts if they
+                would be applied for this dataset (i.e. if it contains the
+                appropriate calibrations)
             centered (bool): if False, the origin is in the upper left corner.
                  If True, the origin is set to the mean origin in the datacube
                  calibrations, so that a bright-field image could be specified
@@ -717,15 +742,16 @@ class DataCubeMethods:
             calibrated (bool): if True, geometry is specified in units of 'A^-1'
                 instead of pixels. The datacube's calibrations must have its
                 `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-                no effect. 
+                no effect.
             shift_center (bool): if True, the mask is shifted at each real space
-                position to account for any shifting of the origin of the diffraction
-                images. The datacube's calibration['origin'] parameter must be set. 
-                The shift applied to each pattern is the difference between the local 
-                origin position and the mean origin position over all patterns, 
-                rounded to the nearest integer for speed.
+                position to account for any shifting of the origin of the
+                diffraction images. The datacube's calibration['origin']
+                parameter must be set. The shift applied to each pattern is the
+                difference between the local origin position and the mean origin
+                position over all patterns, rounded to the nearest integer for
+                speed.
         """
-      
+
         # parse inputs
         if scan_position is None:
             data = self
@@ -776,7 +802,6 @@ class DataCubeMethods:
 
         # perform computation
         from py4DSTEM.process.probe import get_vacuum_probe
-        from py4DSTEM.io.classes.py4dstem.probe import Probe
         if ROI is None:
             x = get_vacuum_probe(
                 self
@@ -801,9 +826,6 @@ class DataCubeMethods:
 
 
 
-
-
-
     def get_probe_size(
         self,
         thresh_lower=0.01,
@@ -818,24 +840,27 @@ class DataCubeMethods:
         Gets the center and radius of the probe in the diffraction plane.
 
         The algorithm is as follows:
-        First, create a series of N binary masks, by thresholding the diffraction pattern
-        DP with a linspace of N thresholds from thresh_lower to thresh_upper, measured
-        relative to the maximum intensity in DP.
-        Using the area of each binary mask, calculate the radius r of a circular probe.
-        Because the central disk is typically very intense relative to the rest of the DP, r
-        should change very little over a wide range of intermediate values of the threshold.
-        The range in which r is trustworthy is found by taking the derivative of r(thresh)
-        and finding identifying where it is small.  The radius is taken to be the mean of
-        these r values. Using the threshold corresponding to this r, a mask is created and
-        the CoM of the DP times this mask it taken.  This is taken to be the origin x0,y0.
+        First, create a series of N binary masks, by thresholding the diffraction
+        pattern DP with a linspace of N thresholds from thresh_lower to
+        thresh_upper, measured relative to the maximum intensity in DP.
+        Using the area of each binary mask, calculate the radius r of a circular
+        probe. Because the central disk is typically very intense relative to
+        the rest of the DP, r should change very little over a wide range of
+        intermediate values of the threshold. The range in which r is trustworthy
+        is found by taking the derivative of r(thresh) and finding identifying
+        where it is small.  The radius is taken to be the mean of these r values.
+        Using the threshold corresponding to this r, a mask is created and the
+        CoM of the DP times this mask it taken.  This is taken to be the origin
+        x0,y0.
 
         Args:
-            mode (str or array): specifies the diffraction pattern in which to find the 
-                central disk. A position averaged, or shift-corrected and averaged,
-                DP works best. If mode is None, the diffraction pattern stored in the
-                tree from 'get_dp_mean' is used. If mode is a string it specifies the name of
-                another virtual diffraction pattern in the tree. If mode is an array, the array
-                is used to calculate probe size.
+            mode (str or array): specifies the diffraction pattern in which to
+                find the central disk. A position averaged, or shift-corrected
+                and averaged, DP works best. If mode is None, the diffraction
+                pattern stored in the tree from 'get_dp_mean' is used. If mode
+                is a string it specifies the name of another virtual diffraction
+                pattern in the tree. If mode is an array, the array is used to
+                calculate probe size.
             thresh_lower (float, 0 to 1): the lower limit of threshold values
             thresh_upper (float, 0 to 1): the upper limit of threshold values
             N (int): the number of thresholds / masks to use
@@ -852,7 +877,6 @@ class DataCubeMethods:
         """
         #perform computation        
         from py4DSTEM.process.calibration import get_probe_size
-        from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 
         if mode is None:
             print('no mode specified, using mean diffraction pattern')
@@ -923,10 +947,10 @@ class DataCubeMethods:
         distributed = None,
 
         ML = False,
-        ml_model_path = None, 
-        ml_num_attempts = 1, 
+        ml_model_path = None,
+        ml_num_attempts = 1,
         ml_batch_size = 8,
-       
+
         _qt_progress_bar = None,
 
         name = 'braggvectors',
@@ -968,36 +992,39 @@ class DataCubeMethods:
             - a 2-tuple of arrays (rx,ry): run on these diffraction images,
                 and return a list of QPoints instances
             - an Rspace shapped 2D boolean array: run on the diffraction images
-                specified by the True counts and return a list of QPoints instances
+                specified by the True counts and return a list of QPoints
+                instances
 
 
         Args:
             template (2D array): the vacuum probe template, in real space. For
-                Probe instances, this is `probe.kernel`.  If None, does not perform
-                a cross correlation.
+                Probe instances, this is `probe.kernel`.  If None, does not
+                perform a cross correlation.
             data (variable): see above.
             filter_function (callable): filtering function to apply to each
                 diffraction pattern before peakfinding. Must be a function of only
                 one argument (the diffraction pattern) and return the filtered
                 diffraction pattern. The shape of the returned DP must match the
                 shape of the probe kernel (but does not need to match the shape of
-                the input diffraction pattern, e.g. the filter can be used to bin the
-                diffraction pattern). If using distributed disk detection, the
-                function must be able to be pickled with by dill.
+                the input diffraction pattern, e.g. the filter can be used to
+                bin the diffraction pattern). If using distributed disk
+                detection, the function must be able to be pickled with by dill.
             corrPower (float between 0 and 1, inclusive): the cross correlation
                 power. A value of 1 corresponds to a cross correaltion, 0
-                corresponds to a phase correlation, and intermediate values giving
-                hybrid correlations.
+                corresponds to a phase correlation, and intermediate values
+                giving hybrid correlations.
             sigma (float): if >0, a gaussian smoothing filter with this standard
                 deviation is applied to the cross correlation before maxima are
                 detected
-            subpixel (str): Whether to use subpixel fitting, and which algorithm to
-                use. Must be in ('none','poly','multicorr').
+            subpixel (str): Whether to use subpixel fitting, and which algorithm
+                to use. Must be in ('none','poly','multicorr').
                     * 'none': performs no subpixel fitting
-                    * 'poly': polynomial interpolation of correlogram peaks (default)
-                    * 'multicorr': uses the multicorr algorithm with DFT upsampling
-            upsample_factor (int): upsampling factor for subpixel fitting (only used
-                when subpixel='multicorr')
+                    * 'poly': polynomial interpolation of correlogram peaks
+                      (default)
+                    * 'multicorr': uses the multicorr algorithm with DFT
+                      upsampling
+            upsample_factor (int): upsampling factor for subpixel fitting (only
+                used when subpixel='multicorr')
             minAbsoluteIntensity (float): the minimum acceptable correlation peak
                 intensity, on an absolute scale
             minRelativeIntensity (float): the minimum acceptable correlation peak
@@ -1005,31 +1032,32 @@ class DataCubeMethods:
             relativeToPeak (int): specifies the peak against which the minimum
                 relative intensity is measured -- 0=brightest maximum. 1=next
                 brightest, etc.
-            minPeakSpacing (float): the minimum acceptable spacing between detected
-                peaks
-            edgeBoundary (int): minimum acceptable distance for detected peaks from
-                the diffraction image edge, in pixels.
+            minPeakSpacing (float): the minimum acceptable spacing between
+                detected peaks
+            edgeBoundary (int): minimum acceptable distance for detected peaks
+                from the diffraction image edge, in pixels.
             maxNumPeaks (int): the maximum number of peaks to return
-            CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform disk
-                detection
+            CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform
+                disk detection
             CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT
-                steps of disk detection are performed in batches to better utilize
-                GPU resources.
-            distributed (dict): contains information for parallel processing using an
-                IPyParallel or Dask distributed cluster.  Valid keys are:
+                steps of disk detection are performed in batches to better
+                utilize GPU resources.
+            distributed (dict): contains information for parallel processing
+                using an IPyParallel or Dask distributed cluster.  Valid keys
+                are:
                     * ipyparallel (dict):
-                    * client_file (str): path to client json for connecting to your
-                        existing IPyParallel cluster
-                    * dask (dict): client (object): a dask client that connects to
-                        your existing Dask cluster
+                    * client_file (str): path to client json for connecting to
+                      your existing IPyParallel cluster
+                    * dask (dict): client (object): a dask client that connects
+                      to your existing Dask cluster
                     * data_file (str): the absolute path to your original data
                         file containing the datacube
-                    * cluster_path (str): defaults to the working directory during
-                        processing
-                if distributed is None, which is the default, processing will be in
-                serial
-            _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
-                execution
+                    * cluster_path (str): defaults to the working directory
+                      during processing
+                if distributed is None, which is the default, processing will be
+                in serial
+            _qt_progress_bar (QProgressBar instance): used only by the GUI for
+                serial execution
             name (str): name for the output BraggVectors
             returncalc (bool): if True, returns the answer
 
@@ -1072,15 +1100,14 @@ class DataCubeMethods:
 
             CUDA = CUDA,
             CUDA_batched = CUDA_batched,
-            distributed = distributed,  
+            distributed = distributed,
             ML = ML,
-            ml_model_path = ml_model_path, 
-            ml_num_attempts = ml_num_attempts, 
+            ml_model_path = ml_model_path,
+            ml_num_attempts = ml_num_attempts,
             ml_batch_size = ml_batch_size,
 
             _qt_progress_bar = _qt_progress_bar,
         )
-
 
         # name
         try:
@@ -1109,16 +1136,18 @@ class DataCubeMethods:
         returncalc = True,
         ):
         """
-        This function uses the mean diffraction pattern plus a threshold to create a beamstop mask.
+        This function uses the mean diffraction pattern plus a threshold to
+        create a beamstop mask.
 
         Args:
-            threshold: (float)  Value from 0 to 1 defining initial threshold for beamstop mask,
-                taken from the sorted intensity values - 0 is the dimmest
-                pixel, while 1 uses the brighted pixels.
-            distance_edge: (float)  How many pixels to expand the mask.
-            include_edges: (bool)   If set to True, edge pixels will be included in the mask.
-            name: (string)          Name of the output array.
-            returncalc: (bool):     Set to true to return the result.
+            threshold (float):  Value from 0 to 1 defining initial threshold for
+                beamstop mask, taken from the sorted intensity values - 0 is the
+                dimmest pixel, while 1 uses the brighted pixels.
+            distance_edge (float): How many pixels to expand the mask.
+            include_edges (bool): If set to True, edge pixels will be included
+                in the mask.
+            name (string): Name of the output array.
+            returncalc (bool): Set to true to return the result.
 
         Returns:
             (Optional): if returncalc is True, returns the beamstop mask

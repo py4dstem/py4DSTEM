@@ -11,37 +11,8 @@ from py4DSTEM.io.classes.py4dstem.parenttree import ParentTree
 
 class DataCube(Array,DataCubeMethods):
     """
-    Stores 4D-STEM datasets.
+    Storage and processing methods for 4D-STEM datasets.
     """
-
-    # import class methods
-#    from py4DSTEM.io.classes.py4dstem.datacube_fns import (
-#        add,
-#        set_scan_shape,
-#        swap_RQ,
-#        swap_Rxy,
-#        swap_Qxy,
-#        crop_Q,
-#        crop_R,
-#        bin_Q,
-#        bin_Q_mmap,
-#        bin_R,
-#        thin_R,
-#        pad_Q,
-#        resample_Q,
-#        filter_hot_pixels,
-#        get_virtual_diffraction,
-#        get_dp_max,
-#        get_dp_mean,
-#        get_dp_median,
-#        get_virtual_image,
-#        position_detector,
-#        get_vacuum_probe,
-#        find_Bragg_disks,
-#        get_probe_size,
-#        get_beamstop_mask,
-#    )
-
 
     def __init__(
         self,
