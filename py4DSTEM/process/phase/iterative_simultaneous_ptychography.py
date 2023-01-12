@@ -4,7 +4,7 @@ namely DPC and ptychography.
 """
 
 import warnings
-from typing import Mapping, Tuple
+from typing import Mapping, Tuple, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,23 +32,26 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicReconstruction(PhaseReconstruction):
+class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     """
-    Iterative Ptychographic Reconstruction Class.
+    Iterative Simultaneous Ptychographic Reconstruction Class.
 
-    Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (Sx,Sy)
-    Reconstructed object dimensions     : (Px,Py)
+    Diffraction intensities dimensions         : (Rx,Ry,Qx,Qy) (for each measurement)
+    Reconstructed probe dimensions             : (Sx,Sy)
+    Reconstructed electrostatic dimensions     : (Px,Py)
+    Reconstructed magnetic dimensions          : (Px,Py)
 
     such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
     and (Px,Py) is the padded-object size we position our ROI around in.
 
     Parameters
     ----------
-    datacube: DataCube
-        Input 4D diffraction pattern intensities
+    datacube: Sequence[DataCube]
+        Set of input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    simultaneous_measurements_mode: str, optional
+        One of '-+', '-0+', '0+', where -/0/+ refer to the sign of the magnetic potential
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess
     rolloff: float, optional
@@ -67,7 +70,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             Padded diffraction intensities shape.
             If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
-        Pixel dimensions to pad object with
+        Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
     dp_mask: ndarray, optional
         Mask for datacube intensities (Qx,Qy)
@@ -90,8 +93,9 @@ class PtychographicReconstruction(PhaseReconstruction):
 
     def __init__(
         self,
-        datacube: DataCube,
+        datacube: Sequence[DataCube],
         energy: float,
+        simultaneous_measurements_mode: str = '-+',
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
@@ -151,6 +155,46 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._object_padding_px = object_padding_px
         self._preprocessed = False
+        
+        if simultaneous_measurements_mode == '-+':
+            self._sim_recon_mode = 0
+            self._num_sim_measurements = 2
+            if self._verbose:
+                print((
+                    "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                    "Magnetic vector potential sign in second meaurement assumed to be positive."
+                    ))
+            if len(self._datacube) != 2:
+                raise ValueError(f"datacube must be a set of two measurements, not length {len(self._datacube)}.")
+            if self._datacube[0].shape != self._datacube[1].shape:
+                raise ValueError(f"datacube intensities must be the same size.")
+        elif simultaneous_measurements_mode == '-0+':
+            self._sim_recon_mode = 1
+            self._num_sim_measurements = 3
+            if self._verbose:
+                print((
+                    "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                    "Magnetic vector potential assumed to be zero in second meaurement.\n"
+                    "Magnetic vector potential sign in third meaurement assumed to be positive."
+                    ))
+            if len(self._datacube) != 3:
+                raise ValueError(f"datacube must be a set of three measurements, not length {len(self._datacube)}.")
+            if self._datacube[0].shape != self._datacube[1].shape or self._datacube[0].shape != self._datacube[2].shape:
+                raise ValueError(f"datacube intensities must be the same size.")
+        elif simultaneous_measurements_mode == '0+':
+            self._sim_recon_mode = 2
+            self._num_sim_measurements = 2
+            if self._verbose:
+                print((
+                    "Magnetic vector potential assumed to be zero in first meaurement.\n"
+                    "Magnetic vector potential sign in second meaurement assumed to be positive."
+                    ))
+            if len(self._datacube) != 2:
+                raise ValueError(f"datacube must be a set of two measurements, not length {len(self._datacube)}.")
+            if self._datacube[0].shape != self._datacube[1].shape:
+                raise ValueError(f"datacube intensities must be the same size.")
+        else:
+            raise ValueError(f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {simultaneous_measurements_mode}")
 
     def preprocess(
         self,
@@ -205,19 +249,23 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
+        # Note: a lot of the methods below modify state. The only two property we mind this for are
+        # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
+
+        # 1st measurement sets rotation angle and transposition
         (
-            self._datacube,
+            measurement_0,
             self._vacuum_probe_intensity,
         ) = self._preprocess_datacube_and_vacuum_probe(
-            self._datacube,
+            self._datacube[0],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
             resampling_method=self._resampling_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
         )
-
+        
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=True, dp_mask=self._dp_mask
+            measurement_0, require_calibrations=True, dp_mask=self._dp_mask
         )
 
         self._calculate_intensities_center_of_mass(
@@ -236,16 +284,105 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         (
-            self._amplitudes,
-            self._mean_diffraction_intensity,
+            amplitudes_0,
+            mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
         )
+        
+        # 2nd measurement
+        (
+            measurement_1,
+            _,
+        ) = self._preprocess_datacube_and_vacuum_probe(
+            self._datacube[1],
+            diffraction_intensities_shape=self._diffraction_intensities_shape,
+            resampling_method=self._resampling_method,
+            probe_roi_shape=self._probe_roi_shape,
+            vacuum_probe_intensity=None,
+        )
+        
+        self._extract_intensities_and_calibrations_from_datacube(
+            measurement_1, require_calibrations=True, dp_mask=self._dp_mask
+        )
+
+        self._calculate_intensities_center_of_mass(
+            self._intensities,
+            fit_function=fit_function,
+        )
+
+        self._solve_for_center_of_mass_relative_rotation(
+            rotation_angles_deg=rotation_angles_deg,
+            plot_rotation=plot_rotation,
+            plot_center_of_mass=plot_center_of_mass,
+            maximize_divergence=maximize_divergence,
+            force_com_rotation= np.rad2deg(self._rotation_best_rad),
+            force_com_transpose=self._rotation_best_transpose,
+            **kwargs,
+        )
+
+        (
+            amplitudes_1,
+            mean_diffraction_intensity_1,
+        ) = self._normalize_diffraction_intensities(
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+        )
+        
+        # Optionally, 3rd measurement
+        if self._num_sim_measurements == 3:
+            (
+                measurement_2,
+                _,
+            ) = self._preprocess_datacube_and_vacuum_probe(
+                self._datacube[2],
+                diffraction_intensities_shape=self._diffraction_intensities_shape,
+                resampling_method=self._resampling_method,
+                probe_roi_shape=self._probe_roi_shape,
+                vacuum_probe_intensity=None,
+            )
+            
+            self._extract_intensities_and_calibrations_from_datacube(
+                measurement_2, require_calibrations=True, dp_mask=self._dp_mask
+            )
+
+            self._calculate_intensities_center_of_mass(
+                self._intensities,
+                fit_function=fit_function,
+            )
+
+            self._solve_for_center_of_mass_relative_rotation(
+                rotation_angles_deg=rotation_angles_deg,
+                plot_rotation=plot_rotation,
+                plot_center_of_mass=plot_center_of_mass,
+                maximize_divergence=maximize_divergence,
+                force_com_rotation= np.rad2deg(self._rotation_best_rad),
+                force_com_transpose=self._rotation_best_transpose,
+                **kwargs,
+            )
+
+            (
+                amplitudes_2,
+                mean_diffraction_intensity_2,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                self._com_fitted_x,
+                self._com_fitted_y,
+            )
+
+            self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
+            self._mean_diffraction_intensity = (mean_diffraction_intensity_0 + mean_diffraction_intensity_1 + mean_diffraction_intensity_2) / 3
+            del amplitudes_0, amplitudes_1, amplitudes_2
+        else:
+            self._amplitudes = (amplitudes_0, amplitudes_1)
+            self._mean_diffraction_intensity = (mean_diffraction_intensity_0 + mean_diffraction_intensity_1) / 2
+            del amplitudes_0, amplitudes_1
 
         # explicitly delete namespace
-        self._num_diffraction_patterns = self._amplitudes.shape[0]
+        self._num_diffraction_patterns = self._amplitudes[0].shape[0]
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
@@ -263,10 +400,11 @@ class PtychographicReconstruction(PhaseReconstruction):
                 int
             )
             self._object = xp.ones((p, q), dtype=xp.complex64)
+            self._object = (self._object,)*2
         else:
             self._object = xp.asarray(self._object, dtype=xp.complex64)
 
-        self._object_initial = self._object.copy()
+        self._object_initial = (self._object[0].copy(),self._object[1].copy())
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
@@ -280,7 +418,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._object_shape = self._object.shape
+        self._object_shape = self._object[0].shape
         self._set_vectorized_patch_indices()
 
         # Probe Initialization
@@ -393,6 +531,42 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return self
 
+    def _warmup_overlap_projection(self, current_object, current_probe):
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            shifted_probes * object_patches
+        """
+
+        xp = self._xp
+
+        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
+
+        electrostatic_obj, _ = current_object
+
+        electrostatic_obj_patches = electrostatic_obj[
+            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        ]
+        
+        object_patches = (electrostatic_obj_patches, None)
+        overlap = (shifted_probes * electrostatic_obj_patches, None)
+
+        return shifted_probes, object_patches, overlap
+
     def _overlap_projection(self, current_object, current_probe):
         """
         Ptychographic overlap projection method.
@@ -418,13 +592,66 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
-        object_patches = current_object[
+        electrostatic_obj, magnetic_obj = current_object
+
+        electrostatic_obj_patches = electrostatic_obj[
             self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
+        magnetic_obj_patches = magnetic_obj[
+            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        ]
+        
+        object_patches = (electrostatic_obj_patches, magnetic_obj_patches)
 
-        overlap = shifted_probes * object_patches
+        if self._sim_recon_mode == 0:
+            overlap_reverse = shifted_probes * electrostatic_obj_patches * xp.conj(magnetic_obj_patches)
+            overlap_forward = shifted_probes * electrostatic_obj_patches * magnetic_obj_patches
+            overlap = (overlap_reverse, overlap_forward)
+        elif self._sim_recon_mode == 1:
+            overlap_reverse = shifted_probes * electrostatic_obj_patches * xp.conj(magnetic_obj_patches)
+            overlap_neutral = shifted_probes * electrostatic_obj_patches
+            overlap_forward = shifted_probes * electrostatic_obj_patches * magnetic_obj_patches
+            overlap = (overlap_reverse, overlap_neutral, overlap_forward)
+        else:
+            overlap_neutral = shifted_probes * electrostatic_obj_patches
+            overlap_forward = shifted_probes * electrostatic_obj_patches * magnetic_obj_patches
+            overlap = (overlap_neutral, overlap_forward)
 
         return shifted_probes, object_patches, overlap
+
+    def _warmup_gradient_descent_fourier_projection(self, amplitudes, overlap):
+        """
+        Ptychographic fourier projection method for GD method.
+
+        Parameters
+        --------
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        overlap: np.ndarray
+            object * probe overlap
+
+        Returns
+        --------
+        exit_waves:np.ndarray
+            Difference between modified and estimated exit waves
+        error: float
+            Reconstruction error
+        """
+
+        xp = self._xp
+
+        fourier_overlap = xp.fft.fft2(overlap[0])
+        error = (
+            xp.mean(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
+            / self._mean_diffraction_intensity
+        )
+
+        fourier_modified_overlap = amplitudes[0] * xp.exp(1j * xp.angle(fourier_overlap))
+        modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
+
+        exit_waves = (modified_overlap - overlap[0],) + (None,)*(self._num_sim_measurements-1)
+
+        return exit_waves, error
 
     def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
@@ -446,16 +673,86 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
 
         xp = self._xp
-        fourier_overlap = xp.fft.fft2(overlap)
+
+        error = 0.0
+        exit_waves = []
+        for amp, overl in zip(amplitudes,overlap):
+            fourier_overl = xp.fft.fft2(overl)
+            error += (
+                xp.mean(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
+                / self._mean_diffraction_intensity
+            )
+
+            fourier_modified_overl = amp * xp.exp(1j * xp.angle(fourier_overl))
+            modified_overl = xp.fft.ifft2(fourier_modified_overl)
+
+            exit_waves.append(modified_overl - overl)
+
+        error /= len(exit_waves)
+        exit_waves = tuple(exit_waves)
+
+        return exit_waves, error
+    
+    def _warmup_projection_sets_fourier_projection(
+        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
+    ):
+        """
+        Ptychographic fourier projection method for DM_AP and RAAR methods.
+        Generalized projection using three parameters: a,b,c
+            DM:   a = -1, b = 1, c = 1
+            AP:   a =  0, b = 1, c = 1
+            RAAR: a = 1-2\beta, b = \beta, c = 2
+
+        Parameters
+        --------
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        overlap: np.ndarray
+            object * probe overlap
+        exit_waves: np.ndarray
+            previously estimated exit waves
+        projection_a: float
+        projection_b: float
+        projection_c: float
+
+        Returns
+        --------
+        exit_waves:np.ndarray
+            Updated exit_waves
+        error: float
+            Reconstruction error
+        """
+
+        xp = self._xp
+        projection_x = 1 - projection_a - projection_b
+        projection_y = 1 - projection_c
+
+        exit_wave = exit_waves[0]
+
+        if exit_wave is None:
+            exit_wave = overlap[0].copy()
+
+        fourier_overlap = xp.fft.fft2(overlap[0])
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            xp.mean(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
             / self._mean_diffraction_intensity
         )
 
-        fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
-        modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
+        factor_to_be_projected = projection_c * overlap[0] + projection_y * exit_wave
+        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        exit_waves = modified_overlap - overlap
+        fourier_projected_factor = amplitudes[0] * xp.exp(
+            1j * xp.angle(fourier_projected_factor)
+        )
+        projected_factor = xp.fft.ifft2(fourier_projected_factor)
+
+        exit_wave = (
+            projection_x * exit_wave
+            + projection_a * overlap[0]
+            + projection_b * projected_factor
+        )
+
+        exit_waves = (exit_wave,) + (None,)*(self._num_sim_measurements-1)
 
         return exit_waves, error
 
@@ -493,28 +790,34 @@ class PtychographicReconstruction(PhaseReconstruction):
         projection_x = 1 - projection_a - projection_b
         projection_y = 1 - projection_c
 
-        if exit_waves is None:
-            exit_waves = overlap.copy()
+        error = 0.0
+        _exit_waves = []
+        for amp, overl, exit_wave in zip(amplitudes,overlap, exit_waves):
+            if exit_wave is None:
+                exit_wave = overl.copy()
 
-        fourier_overlap = xp.fft.fft2(overlap)
-        error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
-            / self._mean_diffraction_intensity
-        )
+            fourier_overl = xp.fft.fft2(overl)
+            error += (
+                xp.mean(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
+                / self._mean_diffraction_intensity
+            )
 
-        factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
-        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
+            factor_to_be_projected = projection_c * overl + projection_y * exit_wave
+            fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        fourier_projected_factor = amplitudes * xp.exp(
-            1j * xp.angle(fourier_projected_factor)
-        )
-        projected_factor = xp.fft.ifft2(fourier_projected_factor)
+            fourier_projected_factor = amp * xp.exp(
+                1j * xp.angle(fourier_projected_factor)
+            )
+            projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
-        exit_waves = (
-            projection_x * exit_waves
-            + projection_a * overlap
-            + projection_b * projected_factor
-        )
+            _exit_waves.append(
+                projection_x * exit_wave
+                + projection_a * overl
+                + projection_b * projected_factor
+            )
+
+        error /= len(_exit_waves)
+        exit_waves = tuple(_exit_waves)
 
         return exit_waves, error
 
@@ -524,6 +827,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_probe,
         amplitudes,
         exit_waves,
+        warmup_iteration,
         use_projection_scheme,
         projection_a,
         projection_b,
@@ -562,26 +866,127 @@ class PtychographicReconstruction(PhaseReconstruction):
         error: float
             Reconstruction error
         """
-
-        shifted_probes, object_patches, overlap = self._overlap_projection(
-            current_object, current_probe
-        )
-        if use_projection_scheme:
-            exit_waves, error = self._projection_sets_fourier_projection(
-                amplitudes,
-                overlap,
-                exit_waves,
-                projection_a,
-                projection_b,
-                projection_c,
+        if warmup_iteration:
+            shifted_probes, object_patches, overlap = self._warmup_overlap_projection(
+                current_object, current_probe
             )
+            if use_projection_scheme:
+                exit_waves, error = self._warmup_projection_sets_fourier_projection(
+                    amplitudes,
+                    overlap,
+                    exit_waves,
+                    projection_a,
+                    projection_b,
+                    projection_c,
+                )
+
+            else:
+                exit_waves, error = self._warmup_gradient_descent_fourier_projection(
+                    amplitudes, overlap
+                )
 
         else:
-            exit_waves, error = self._gradient_descent_fourier_projection(
-                amplitudes, overlap
+            shifted_probes, object_patches, overlap = self._overlap_projection(
+                current_object, current_probe
             )
+            if use_projection_scheme:
+                exit_waves, error = self._projection_sets_fourier_projection(
+                    amplitudes,
+                    overlap,
+                    exit_waves,
+                    projection_a,
+                    projection_b,
+                    projection_c,
+                )
+
+            else:
+                exit_waves, error = self._gradient_descent_fourier_projection(
+                    amplitudes, overlap
+                )
 
         return shifted_probes, object_patches, overlap, exit_waves, error
+
+    def _warmup_gradient_descent_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        step_size,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        electrostatic_obj, _ = current_object
+        electrostatic_obj_patches, _ = object_patches
+        
+        probe_normalization = 1 / (
+            1e-9
+            + self._sum_overlapping_patches_bincounts(
+                normalization_min * xp.abs(shifted_probes) ** 2
+                + (1 - normalization_min) * xp.max(xp.abs(shifted_probes)) ** 2
+            )
+        )
+
+        electrostatic_obj += step_size * (
+            self._sum_overlapping_patches_bincounts(
+                xp.conj(shifted_probes) * exit_waves[0]
+            )
+            * probe_normalization
+        )
+        
+        if not fix_probe:
+
+            object_normalization = 1 / (
+                1e-9
+                + xp.sum(
+                    normalization_min * xp.abs(electrostatic_obj_patches) ** 2
+                    + (1 - normalization_min) * xp.max(xp.abs(electrostatic_obj_patches)) ** 2,
+                    axis=0,
+                )
+            )
+
+            current_probe += step_size * (
+                xp.sum(
+                    xp.conj(electrostatic_obj_patches) * exit_waves[0],
+                    axis=0,
+                )
+                * object_normalization
+            )
+
+        return (electrostatic_obj, None), current_probe
 
     def _gradient_descent_adjoint(
         self,
@@ -626,58 +1031,300 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        # probe_normalization = self._sum_overlapping_patches_bincounts(
-        #    xp.abs(shifted_probes) ** 2
-        # )
-        # probe_normalization = 1 / xp.sqrt(
-        #    probe_normalization**2
-        #    + (normalization_min * xp.max(probe_normalization)) ** 2
-        # )
+        electrostatic_obj, magnetic_obj = current_object
+        probe_conj = xp.conj(shifted_probes)
 
-        probe_normalization = 1 / (
+        electrostatic_obj_patches, magnetic_obj_patches = object_patches
+        electrostatic_conj = xp.conj(electrostatic_obj_patches)
+        magnetic_conj = xp.conj(magnetic_obj_patches)
+
+        probe_electrostatic_abs = xp.abs(shifted_probes * electrostatic_obj_patches)
+        probe_magnetic_abs = xp.abs(shifted_probes * magnetic_obj_patches)
+
+        probe_electrostatic_normalization = 1 / (
             1e-9
             + self._sum_overlapping_patches_bincounts(
-                normalization_min * xp.abs(shifted_probes) ** 2
-                + (1 - normalization_min) * xp.max(xp.abs(shifted_probes)) ** 2
+                normalization_min * probe_electrostatic_abs ** 2
+                + (1 - normalization_min) * xp.max(probe_electrostatic_abs) ** 2
             )
         )
 
-        current_object += step_size * (
+        probe_magnetic_normalization = 1 / (
+            1e-9
+            + self._sum_overlapping_patches_bincounts(
+                normalization_min * probe_magnetic_abs ** 2
+                + (1 - normalization_min) * xp.max(probe_magnetic_abs) ** 2
+            )
+        )
+
+        if self._sim_recon_mode > 0:
+            probe_abs = xp.abs(shifted_probes)
+            probe_normalization = 1 / (
+                1e-9
+                + self._sum_overlapping_patches_bincounts(
+                    normalization_min * probe_abs ** 2
+                    + (1 - normalization_min) * xp.max(probe_abs) ** 2
+                )
+            )
+
+        if self._sim_recon_mode == 0:
+            exit_waves_reverse, exit_waves_forward = exit_waves
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_obj_patches * exit_waves_reverse
+                )
+                * probe_magnetic_normalization / 2
+            )
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 2
+            )
+            
+            magnetic_obj -= step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_reverse
+
+                )
+                * probe_electrostatic_normalization / 2
+            )
+
+            magnetic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward
+                )
+                * probe_electrostatic_normalization / 2
+            )
+            
+        elif self._sim_recon_mode == 1:
+            exit_waves_reverse, exit_waves_neutral, exit_waves_forward = exit_waves
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_obj_patches * exit_waves_reverse
+                )
+                * probe_magnetic_normalization / 3
+            )
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * exit_waves_neutral
+                )
+                * probe_normalization / 3
+            )
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 3
+            )
+            
+            magnetic_obj -= step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_reverse
+                )
+                * probe_electrostatic_normalization / 2
+            )
+
+            magnetic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward
+                )
+                * probe_electrostatic_normalization / 2
+            )
+            
+        else:
+            exit_waves_neutral, exit_waves_forward = exit_waves
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * exit_waves_neutral
+                )
+                * probe_normalization / 2
+            )
+            
+            electrostatic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 2
+            )
+            
+            magnetic_obj += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward
+                )
+                * probe_electrostatic_normalization 
+            )
+
+
+        if not fix_probe:
+
+            electrostatic_magnetic_abs = xp.abs(electrostatic_obj_patches * magnetic_obj_patches)
+
+            electrostatic_magnetic_normalization = 1 / (
+                1e-9
+                + xp.sum(
+                    normalization_min * electrostatic_magnetic_abs ** 2
+                    + (1 - normalization_min) * xp.max(electrostatic_magnetic_abs) ** 2,
+                    axis=0,
+                )
+            )
+
+            if self._sim_recon_mode > 0:
+                electrostatic_abs = xp.abs(elecrostatic_obj_patches)
+                electrostatic_normalization = 1 / (
+                    1e-9
+                    + xp.sum(
+                        normalization_min * electrostatic_abs ** 2
+                        + (1 - normalization_min) * xp.max(electrostatic_abs) ** 2,
+                        axis=0,
+                    )
+                )
+        
+            if self._sim_recon_mode == 0:
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * magnetic_obj_patches * exit_waves_reverse,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 2
+                )
+                
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 2
+                )
+                
+            elif self._sim_recon_mode == 1:
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * magnetic_obj_patches * exit_waves_reverse,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 3
+                )
+                
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * exit_waves_neutral,
+                        axis=0,
+                    )
+                    * electrostatic_normalization / 3
+                )
+                
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 3
+                )
+            else:
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * exit_waves_neutral,
+                        axis=0,
+                    )
+                    * electrostatic_normalization / 2
+                )
+                
+                current_probe += step_size * (
+                    xp.sum(
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 2
+                )
+
+        current_object = (electrostatic_obj, magnetic_obj)
+
+        return current_object , current_probe
+
+    def _warmup_projection_sets_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for DM_AP and RAAR methods.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+        
+        electrostatic_obj, _ = current_object
+        electrostatic_obj_patches, _ = object_patches
+
+        probe_normalization = self._sum_overlapping_patches_bincounts(
+            xp.abs(shifted_probes) ** 2
+        )
+        probe_normalization = 1 / xp.sqrt(
+            probe_normalization**2
+            + (normalization_min * xp.max(probe_normalization)) ** 2
+        )
+
+        electrostatic_obj = (
             self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
+                xp.conj(shifted_probes) * exit_waves[0]
             )
             * probe_normalization
         )
 
         if not fix_probe:
-
-            # object_normalization = xp.sum(
-            #    (xp.abs(object_patches) ** 2),
-            #    axis=0,
-            # )
-            # object_normalization = 1 / xp.sqrt(
-            #    object_normalization**2
-            #    + (normalization_min * xp.max(object_normalization)) ** 2
-            # )
-
-            object_normalization = 1 / (
-                1e-9
-                + xp.sum(
-                    normalization_min * xp.abs(object_patches) ** 2
-                    + (1 - normalization_min) * xp.max(xp.abs(object_patches)) ** 2,
-                    axis=0,
-                )
+            object_normalization = xp.sum(
+                (xp.abs(electrostatic_obj_patches) ** 2),
+                axis=0,
+            )
+            object_normalization = 1 / xp.sqrt(
+                object_normalization**2
+                + (normalization_min * xp.max(object_normalization)) ** 2
             )
 
-            current_probe += step_size * (
+            current_probe = (
                 xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+                    xp.conj(electrostatic_obj_patches) * exit_waves[0],
                     axis=0,
                 )
                 * object_normalization
             )
 
-        return current_object, current_probe
+        return (electrostatic_obj, None), current_probe
 
     def _projection_sets_adjoint(
         self,
@@ -717,42 +1364,227 @@ class PtychographicReconstruction(PhaseReconstruction):
         updated_probe: np.ndarray
             Updated probe estimate
         """
+        
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
-        probe_normalization = 1 / xp.sqrt(
-            probe_normalization**2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
-        )
+        electrostatic_obj, magnetic_obj = current_object
+        probe_conj = xp.conj(shifted_probes)
 
-        current_object = (
-            self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
-            )
-            * probe_normalization
+        electrostatic_obj_patches, magnetic_obj_patches = object_patches
+        electrostatic_conj = xp.conj(electrostatic_obj_patches)
+        magnetic_conj = xp.conj(magnetic_obj_patches)
+
+        probe_electrostatic_abs = xp.abs(shifted_probes * electrostatic_obj_patches)
+        probe_magnetic_abs = xp.abs(shifted_probes * magnetic_obj_patches)
+        
+        probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
+            probe_electrostatic_abs ** 2
         )
+        probe_electrostatic_normalization = 1 / xp.sqrt(
+            probe_electrostatic_normalization**2
+            + (normalization_min * xp.max(probe_electrostatic_normalization)) ** 2
+        )
+        
+        probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+            probe_magnetic_abs ** 2
+        )
+        probe_magnetic_normalization = 1 / xp.sqrt(
+            probe_magnetic_normalization**2
+            + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+        )
+        
+        if self._sim_recon_mode > 0:
+            probe_abs = xp.abs(shifted_probes)
+            
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                probe_abs ** 2
+            )
+            probe_normalization = 1 / xp.sqrt(
+                probe_normalization**2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+        if self._sim_recon_mode == 0:
+            exit_waves_reverse, exit_waves_forward = exit_waves
+            
+            electrostatic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_obj_patches * exit_waves_reverse +
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 2
+            )
+            
+            #electrostatic_obj += (
+            #    self._sum_overlapping_patches_bincounts(
+            #        probe_conj * magnetic_conj * exit_waves_forward
+            #    )
+            #    * probe_magnetic_normalization / 2
+            #)
+            
+            magnetic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward -
+                    probe_conj * electrostatic_conj * exit_waves_reverse
+                )
+                * probe_electrostatic_normalization / 2
+            )
+            
+            #magnetic_obj -= (
+            #    self._sum_overlapping_patches_bincounts(
+            #        probe_conj * electrostatic_conj * exit_waves_reverse
+            #    )
+            #    * probe_electrostatic_normalization / 2
+            #)
+        
+        elif self._sim_recon_mode == 1:
+            exit_waves_reverse, exit_waves_neutral, exit_waves_forward = exit_waves
+            
+            electrostatic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_obj_patches * exit_waves_reverse
+                )
+                * probe_magnetic_normalization / 3
+            )
+            
+            electrostatic_obj += (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * exit_waves_neutral
+                )
+                * probe_normalization / 3
+            )
+            
+            electrostatic_obj += (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 3
+            )
+            
+            magnetic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_reverse
+                )
+                * probe_electrostatic_normalization / 2
+            )
+
+            magnetic_obj += (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward
+                )
+                * probe_electrostatic_normalization / 2
+            )
+            
+        else:
+            exit_waves_neutral, exit_waves_forward = exit_waves
+            
+            electrostatic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * exit_waves_neutral
+                )
+                * probe_normalization / 2
+            )
+            
+            electrostatic_obj += (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * magnetic_conj * exit_waves_forward
+                )
+                * probe_magnetic_normalization / 2
+            )
+            
+            magnetic_obj = (
+                self._sum_overlapping_patches_bincounts(
+                    probe_conj * electrostatic_conj * exit_waves_forward
+                )
+                * probe_electrostatic_normalization 
+            )
 
         if not fix_probe:
-            object_normalization = xp.sum(
-                (xp.abs(object_patches) ** 2),
+
+            electrostatic_magnetic_abs = xp.abs(electrostatic_obj_patches * magnetic_obj_patches)
+            
+            electrostatic_magnetic_normalization = xp.sum(
+                (electrostatic_magnetic_abs ** 2),
                 axis=0,
             )
-            object_normalization = 1 / xp.sqrt(
-                object_normalization**2
-                + (normalization_min * xp.max(object_normalization)) ** 2
+            electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                electrostatic_magnetic_normalization**2
+                + (normalization_min * xp.max(electrostatic_magnetic_normalization)) ** 2
             )
 
-            current_probe = (
-                xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+            if self._sim_recon_mode > 0:
+                electrostatic_abs = xp.abs(elecrostatic_obj_patches)
+                electrostatic_normalization = xp.sum(
+                    (electrostatic_abs ** 2),
                     axis=0,
                 )
-                * object_normalization
-            )
+                electrostatic_normalization = 1 / xp.sqrt(
+                    electrostatic_normalization**2
+                    + (normalization_min * xp.max(electrostatic_normalization)) ** 2
+                )
+            
+            if self._sim_recon_mode == 0:
+                current_probe = (
+                    xp.sum(
+                        electrostatic_conj * magnetic_obj_patches * exit_waves_reverse + 
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 2
+                )
+                
+                #current_probe += (
+                #    xp.sum(
+                #        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                #        axis=0,
+                #    )
+                #    * electrostatic_magnetic_normalization / 2
+                #)
+                
+            elif self._sim_recon_mode == 1:
+                current_probe = (
+                    xp.sum(
+                        electrostatic_conj * magnetic_obj_patches * exit_waves_reverse,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 3
+                )
+                
+                current_probe += (
+                    xp.sum(
+                        electrostatic_conj * exit_waves_neutral,
+                        axis=0,
+                    )
+                    * electrostatic_normalization / 3
+                )
+                
+                current_probe += (
+                    xp.sum(
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 3
+                )
+            else:
+                current_probe = (
+                    xp.sum(
+                        electrostatic_conj * exit_waves_neutral,
+                        axis=0,
+                    )
+                    * electrostatic_normalization / 2
+                )
+                
+                current_probe += (
+                    xp.sum(
+                        electrostatic_conj * magnetic_conj * exit_waves_forward,
+                        axis=0,
+                    )
+                    * electrostatic_magnetic_normalization / 2
+                )
+        
+        current_object = (electrostatic_obj, magnetic_obj)
 
-        return current_object, current_probe
+        return current_object , current_probe
 
     def _adjoint(
         self,
@@ -761,6 +1593,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_patches,
         shifted_probes,
         exit_waves,
+        warmup_iteration: bool,
         use_projection_scheme: bool,
         step_size: float,
         normalization_min: float,
@@ -797,27 +1630,51 @@ class PtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
 
-        if use_projection_scheme:
-            current_object, current_probe = self._projection_sets_adjoint(
-                current_object,
-                current_probe,
-                object_patches,
-                shifted_probes,
-                exit_waves,
-                normalization_min,
-                fix_probe,
-            )
+        if warmup_iteration:
+            if use_projection_scheme:
+                current_object, current_probe = self._warmup_projection_sets_adjoint(
+                    current_object,
+                    current_probe,
+                    object_patches,
+                    shifted_probes,
+                    exit_waves,
+                    normalization_min,
+                    fix_probe,
+                )
+            else:
+                current_object, current_probe = self._warmup_gradient_descent_adjoint(
+                    current_object,
+                    current_probe,
+                    object_patches,
+                    shifted_probes,
+                    exit_waves,
+                    step_size,
+                    normalization_min,
+                    fix_probe,
+                )
+
         else:
-            current_object, current_probe = self._gradient_descent_adjoint(
-                current_object,
-                current_probe,
-                object_patches,
-                shifted_probes,
-                exit_waves,
-                step_size,
-                normalization_min,
-                fix_probe,
-            )
+            if use_projection_scheme:
+                current_object, current_probe = self._projection_sets_adjoint(
+                    current_object,
+                    current_probe,
+                    object_patches,
+                    shifted_probes,
+                    exit_waves,
+                    normalization_min,
+                    fix_probe,
+                )
+            else:
+                current_object, current_probe = self._gradient_descent_adjoint(
+                    current_object,
+                    current_probe,
+                    object_patches,
+                    shifted_probes,
+                    exit_waves,
+                    step_size,
+                    normalization_min,
+                    fix_probe,
+                )
 
         return current_object, current_probe
 
@@ -855,17 +1712,19 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
 
         xp = self._xp
-
-        obj_rolled_x_patches = current_object[
+        
+        electrostatic_obj, _ = current_object
+        
+        obj_rolled_x_patches = electrostatic_obj[
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
         ]
-        obj_rolled_y_patches = current_object[
+        obj_rolled_y_patches = electrostatic_obj[
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        overlap_fft = xp.fft.fft2(overlap)
+        overlap_fft = xp.fft.fft2(overlap[0])
 
         exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
             obj_rolled_x_patches * shifted_probes
@@ -876,9 +1735,9 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         overlap_fft_conj = xp.conj(overlap_fft)
         estimated_intensity = xp.abs(overlap_fft) ** 2
-        measured_intensity = amplitudes**2
+        measured_intensity = amplitudes[0]**2
 
-        flat_shape = (overlap.shape[0], -1)
+        flat_shape = (overlap[0].shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
@@ -915,6 +1774,40 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         pass
 
+    def _warmup_object_threshold_constraint(self, current_object, pure_phase_object):
+        """
+        Ptychographic threshold constraint.
+        Used for avoiding the scaling ambiguity between probe and object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        pure_phase_object: bool
+            If True, object amplitude is set to unity
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+
+        electrostatic_obj, _ = current_object
+
+        phase_e = xp.exp(1.0j * xp.angle(electrostatic_obj))
+        
+        if pure_phase_object:
+            amplitude_e = 1.0
+        else:
+            amplitude_e = xp.minimum(xp.abs(electrostatic_obj), 1.0)
+        
+        electrostatic_obj = amplitude_e * phase_e
+
+        current_object = (electrostatic_obj, None)
+        
+        return current_object
+
     def _object_threshold_constraint(self, current_object, pure_phase_object):
         """
         Ptychographic threshold constraint.
@@ -933,12 +1826,62 @@ class PtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        phase = xp.exp(1.0j * xp.angle(current_object))
+
+        electrostatic_obj, magnetic_obj = current_object
+
+        phase_e = xp.exp(1.0j * xp.angle(electrostatic_obj))
+        phase_m = xp.exp(1.0j * xp.angle(magnetic_obj))
+        
         if pure_phase_object:
-            amplitude = 1.0
+            amplitude_e = 1.0
+            amplitude_m = 1.0
         else:
-            amplitude = xp.minimum(xp.abs(current_object), 1.0)
-        return amplitude * phase
+            amplitude_e = xp.minimum(xp.abs(electrostatic_obj), 1.0)
+            amplitude_m = xp.minimum(xp.abs(magnetic_obj), 1.0)
+        
+        electrostatic_obj = amplitude_e * phase_e
+        magnetic_obj = amplitude_m * phase_m
+
+        current_object = (electrostatic_obj, magnetic_obj)
+        
+        return current_object
+
+    def _warmup_object_smoothness_constraint(
+        self, current_object, gaussian_blur_sigma, pure_phase_object
+    ):
+        """
+        Ptychographic smoothness constraint.
+        Used for blurring object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_blur_sigma: float
+            Standard deviation of gaussian kernel
+        pure_phase_object: bool
+            If True, gaussian blur performed on phase only
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+        
+        electrostatic_obj, _ = current_object
+
+        if pure_phase_object:
+            phase_e = xp.angle(electrostatic_obj)
+            phase_e = gaussian_filter(phase_e, gaussian_blur_sigma)
+            electrostatic_obj = xp.exp(1.0j * phase_e)
+        else:
+            electrostatic_obj = gaussian_filter(electrostatic_obj, gaussian_blur_sigma)
+
+        current_object = (electrostatic_obj, None)
+        
+        return current_object
 
     def _object_smoothness_constraint(
         self, current_object, gaussian_blur_sigma, pure_phase_object
@@ -963,15 +1906,24 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
+        
+        electrostatic_obj, magnetic_obj = current_object
 
         if pure_phase_object:
-            amplitude = xp.abs(current_object)
-            phase = xp.angle(current_object)
-            phase = gaussian_filter(phase, gaussian_blur_sigma)
-            current_object = amplitude * xp.exp(1.0j * phase)
-        else:
-            current_object = gaussian_filter(current_object, gaussian_blur_sigma)
+            phase_e = xp.angle(electrostatic_obj)
+            phase_m = xp.angle(magnetic_obj)
 
+            phase_e = gaussian_filter(phase_e, gaussian_blur_sigma)
+            phase_m = gaussian_filter(phase_m, gaussian_blur_sigma)
+
+            electrostatic_obj = xp.exp(1.0j * phase_e)
+            magnetic_obj = xp.exp(1.0j * phase_m)
+        else:
+            electrostatic_obj = gaussian_filter(electrostatic_obj, gaussian_blur_sigma)
+            magnetic_obj = gaussian_filter(magnetic_obj, gaussian_blur_sigma)
+
+        current_object = (electrostatic_obj, magnetic_obj)
+        
         return current_object
 
     def _probe_center_of_mass_constraint(self, current_probe):
@@ -1121,6 +2073,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe_fourier_amplitude,
         fix_positions,
         global_affine_transformation,
+        warmup_iteration,
     ):
         """
         Ptychographic constraints operator.
@@ -1156,13 +2109,24 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
 
         if gaussian_blur_sigma is not None:
-            current_object = self._object_smoothness_constraint(
-                current_object, gaussian_blur_sigma, pure_phase_object
+            if warmup_iteration:
+                current_object = self._warmup_object_smoothness_constraint(
+                    current_object, gaussian_blur_sigma, pure_phase_object
+                )
+            else:
+                current_object = self._object_smoothness_constraint(
+                    current_object, gaussian_blur_sigma, pure_phase_object
+                )
+
+        if warmup_iteration:
+            current_object = self._warmup_object_threshold_constraint(
+                current_object, pure_phase_object
             )
 
-        current_object = self._object_threshold_constraint(
-            current_object, pure_phase_object
-        )
+        else:
+            current_object = self._object_threshold_constraint(
+                current_object, pure_phase_object
+            )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
@@ -1196,6 +2160,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        warmup_iter: int = 0,
         fix_probe_fourier_amplitude_iter: int = 0,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
@@ -1347,14 +2312,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             self.error_iterations = []
 
         if reset:
-            self._object = self._object_initial.copy()
+            self._object = (self._object_initial[0].copy(), self._object_initial[1].copy())
             self._probe = self._probe_initial.copy()
             self._positions_px = self._positions_px_initial.copy()
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
             self._set_vectorized_patch_indices()
-            self._exit_waves = None
+            self._exit_waves = (None,) * self._num_sim_measurements
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -1365,7 +2330,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     UserWarning,
                 )
             else:
-                self._exit_waves = None
+                self._exit_waves = (None,) * self._num_sim_measurements
 
         # Probe support mask initialization
         x = xp.linspace(-1, 1, self._region_of_interest_shape[0], endpoint=False)
@@ -1391,6 +2356,9 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             error = 0.0
 
+            if a0 == warmup_iter:
+                self._object = (self._object[0], self._object_initial[1].copy())
+
             # randomize
             np.random.shuffle(shuffled_indices)
             unshuffled_indices[shuffled_indices] = np.arange(
@@ -1408,7 +2376,11 @@ class PtychographicReconstruction(PhaseReconstruction):
                     self._positions_px
                 )
                 self._set_vectorized_patch_indices()
-                amplitudes = self._amplitudes[shuffled_indices][start:end]
+
+                amps = []
+                for amplitudes in self._amplitudes:
+                    amps.append(amplitudes[shuffled_indices][start:end])
+                amplitudes = tuple(amps)
 
                 # forward operator
                 (
@@ -1422,10 +2394,11 @@ class PtychographicReconstruction(PhaseReconstruction):
                     self._probe,
                     amplitudes,
                     self._exit_waves,
-                    use_projection_scheme,
-                    projection_a,
-                    projection_b,
-                    projection_c,
+                    warmup_iteration = a0 < warmup_iter,
+                    use_projection_scheme = use_projection_scheme,
+                    projection_a = projection_a,
+                    projection_b = projection_b,
+                    projection_c = projection_c,
                 )
 
                 # adjoint operator
@@ -1435,6 +2408,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                     object_patches,
                     shifted_probes,
                     self._exit_waves,
+                    warmup_iteration = a0 < warmup_iter,
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
                     normalization_min=normalization_min,
@@ -1468,15 +2442,22 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
+                warmup_iteration = a0 < warmup_iter,
             )
 
             if store_iterations:
-                self.object_iterations.append(asnumpy(self._object.copy()))
+                if a0 < warmup_iter:
+                    self.object_iterations.append((asnumpy(self._object[0].copy()),None))
+                else:
+                    self.object_iterations.append((asnumpy(self._object[0].copy()),asnumpy(self._object[1].copy())))
                 self.probe_iterations.append(asnumpy(self._probe.copy()))
                 self.error_iterations.append(error.item())
 
         # store result
-        self.object = asnumpy(self._object)
+        if a0 < warmup_iter:
+            self.object = (asnumpy(self._object[0]),None)
+        else:
+            self.object = (asnumpy(self._object[0]), asnumpy(self._object[1]))
         self.probe = asnumpy(self._probe)
         self.error = error.item()
 
@@ -1528,26 +2509,26 @@ class PtychographicReconstruction(PhaseReconstruction):
         if plot_convergence:
             if plot_probe:
                 spec = GridSpec(
-                    ncols=2,
+                    ncols=3,
                     nrows=2,
                     height_ratios=[4, 1],
                     hspace=0.15,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                    width_ratios=[1, 
                         1,
+                        (probe_extent[1] / probe_extent[2]) / (extent[1] / extent [2]),
                     ],
                     wspace=0.35,
                 )
             else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
+                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             if plot_probe:
                 spec = GridSpec(
-                    ncols=2,
+                    ncols=3,
                     nrows=1,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                    width_ratios=[1, 
                         1,
+                        (probe_extent[1] / probe_extent[2]) / (extent[1] / extent [2]),
                     ],
                     wspace=0.35,
                 )
@@ -1558,32 +2539,65 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if plot_probe:
 
-            # Object
+            # Electrostatic Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object),
+                    np.angle(self.object[0]),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object),
+                    np.abs(self.object[0]),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2,
+                    np.abs(self.object[0]) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            ax.set_title(f"Electrostatic object {object_mode}")
+            
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+            # Magnetic Object
+            ax = fig.add_subplot(spec[0, 1])
+            if object_mode == "phase":
+                im = ax.imshow(
+                    np.angle(self.object[1]),
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            elif object_mode == "amplitude":
+                im = ax.imshow(
+                    np.abs(self.object[1]),
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            else:
+                im = ax.imshow(
+                    np.abs(self.object[1]) ** 2,
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            ax.set_xlabel("x [A]")
+            ax.set_ylabel("y [A]")
+            ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1594,7 +2608,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             # Probe
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-            ax = fig.add_subplot(spec[0, 1])
+            ax = fig.add_subplot(spec[0, 2])
             im = ax.imshow(
                 np.abs(self.probe) ** 2,
                 extent=probe_extent,
@@ -1612,31 +2626,66 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fig.colorbar(im, cax=ax_cb)
 
         else:
-            ax = fig.add_subplot(spec[0])
+            # Electrostatic Object
+            ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object),
+                    np.angle(self.object[0]),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object),
+                    np.abs(self.object[0]),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2,
+                    np.abs(self.object[0]) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            ax.set_title(f"Electrostatic object {object_mode}")
+
+            if cbar:
+
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+            # Magnetic Object
+            ax = fig.add_subplot(spec[0, 1])
+            if object_mode == "phase":
+                im = ax.imshow(
+                    np.angle(self.object[1]),
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            elif object_mode == "amplitude":
+                im = ax.imshow(
+                    np.abs(self.object[1]),
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            else:
+                im = ax.imshow(
+                    np.abs(self.object[1]) ** 2,
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+            ax.set_xlabel("x [A]")
+            ax.set_ylabel("y [A]")
+            ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
 
@@ -1689,135 +2738,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             One of 'phase', 'amplitude', 'intensity'
 
         """
-        if iterations_grid == "auto":
-            iterations_grid = (2, 4)
-        else:
-            if plot_probe and iterations_grid[0] != 2:
-                raise ValueError()
-
-        figsize = kwargs.get("figsize", (12, 7))
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
-
-        errors = self.error_iterations
-        objects = self.object_iterations
-
-        if plot_probe:
-            total_grids = (np.prod(iterations_grid) / 2).astype("int")
-            probes = self.probe_iterations
-        else:
-            total_grids = np.prod(iterations_grid)
-        max_iter = len(objects) - 1
-        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
-
-        extent = [
-            0,
-            self.sampling[1] * self._object_shape[1],
-            self.sampling[0] * self._object_shape[0],
-            0,
-        ]
-
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
-
-        if plot_convergence:
-            if plot_probe:
-                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
-            else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
-        else:
-            if plot_probe:
-                spec = GridSpec(ncols=1, nrows=2)
-            else:
-                spec = GridSpec(ncols=1, nrows=1)
-
-        fig = plt.figure(figsize=figsize)
-
-        grid = ImageGrid(
-            fig,
-            spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
-            axes_pad=(0.75, 0.5) if cbar else 0.5,
-            cbar_mode="each" if cbar else None,
-            cbar_pad="2.5%" if cbar else None,
-        )
-
-        for n, ax in enumerate(grid):
-            if object_mode == "phase":
-                im = ax.imshow(
-                    np.angle(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Phase")
-            elif object_mode == "amplitude":
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Amplitude")
-            else:
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]) ** 2,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Intensity")
-
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
-            if cbar:
-                grid.cbar_axes[n].colorbar(im)
-
-        if plot_probe:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            grid = ImageGrid(
-                fig,
-                spec[1],
-                nrows_ncols=(1, iterations_grid[1]),
-                axes_pad=(0.75, 0.5) if cbar else 0.5,
-                cbar_mode="each" if cbar else None,
-                cbar_pad="2.5%" if cbar else None,
-            )
-
-            for n, ax in enumerate(grid):
-                im = ax.imshow(
-                    np.abs(probes[grid_range[n]]) ** 2,
-                    extent=probe_extent,
-                    cmap="Greys_r",
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Probe")
-
-                ax.set_xlabel("x [A]")
-                ax.set_ylabel("y [A]")
-
-                if cbar:
-                    grid.cbar_axes[n].colorbar(im)
-
-        if plot_convergence:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            if plot_probe:
-                ax2 = fig.add_subplot(spec[2])
-            else:
-                ax2 = fig.add_subplot(spec[1])
-            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
-            ax2.set_xlabel("Iteration Number")
-            ax2.set_ylabel("Log RMS error")
-            ax2.yaxis.tick_right()
-
-        spec.tight_layout(fig)
+        raise NotImplementedError()
 
     def visualize(
         self,
