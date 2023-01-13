@@ -94,7 +94,7 @@ class Metadata:
         """
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",EMD_group_types['Metadata'])
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+        grp.attrs.create("python_class",self.__class__.__name__)
 
         # Save data
         for k,v in self._params.items():

@@ -63,7 +63,7 @@ class Root:
         """
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",EMD_group_types['Root'])
-        grp.attrs.create("py4dstem_class",self.metadata.__class__.__name__)
+        grp.attrs.create("python_class",self.metadata.__class__.__name__)
 
     # read
     def from_h5(group):

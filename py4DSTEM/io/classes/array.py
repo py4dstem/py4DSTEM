@@ -468,7 +468,7 @@ class Array:
         """
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",1) # this tag indicates an Array
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+        grp.attrs.create("python_class",self.__class__.__name__)
 
         # add the data
         data = grp.create_dataset(

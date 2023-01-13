@@ -170,7 +170,7 @@ class PointListArray:
         """
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+        grp.attrs.create("python_class",self.__class__.__name__)
 
         # Add metadata
         dtype = h5py.special_dtype(vlen=self.dtype)
