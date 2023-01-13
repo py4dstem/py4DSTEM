@@ -210,7 +210,7 @@ class PointList:
         """
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
-        grp.attrs.create("py4dstem_class",self.__class__.__name__)
+        grp.attrs.create("python_class",self.__class__.__name__)
 
         # Add data
         for f,t in zip(self.fields,self.types):

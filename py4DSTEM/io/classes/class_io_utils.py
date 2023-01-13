@@ -79,7 +79,7 @@ def _get_class(grp):
 
     # Get the class from the group tags and return
     try:
-        classname = grp.attrs['py4dstem_class']
+        classname = grp.attrs['python_class']
         __class__ = lookup[classname]
         return __class__
     except KeyError:
