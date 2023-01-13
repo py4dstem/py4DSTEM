@@ -10,6 +10,7 @@ from typing import Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import ImageGrid
+from scipy.ndimage import rotate
 
 try:
     import cupy as cp
@@ -18,8 +19,12 @@ except ImportError:
 
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import polar_aliases
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar, fourier_resample
+from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
+from py4DSTEM.process.utils import (
+    electron_wavelength_angstrom,
+    fourier_resample,
+    get_shifted_ar,
+)
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -95,9 +100,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         datacube,
         diffraction_intensities_shape=None,
-        resampling_method="fourier",
+        reshaping_method="fourier",
         probe_roi_shape=None,
         vacuum_probe_intensity=None,
+        dp_mask=None,
     ):
         """
         Datacube preprocssing step, to set the reciprocal- and real-space sampling.
@@ -110,7 +116,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         by specifying a diffraction_intensities_shape (Sx,Sy) which is different than (Qx,Qy).
         Note this does not affect the maximum scattering wavevector (Qx*dkx,Qy*dky) = (Sx*dkx',Sy*dky'),
         and thus the real-space sampling stays fixed.
-
 
         The real space sampling, (dx, dy), combined with the resampled diffraction_intensities_shape,
         sets the real-space probe region of interest (ROI) extent (dx*Sx, dy*Sy).
@@ -127,14 +132,15 @@ class PhaseReconstruction(metaclass=ABCMeta):
         diffraction_intensities_shape: (int,int), optional
             Resampled diffraction intensities shape.
             If None, no resamping is performed
-        resampling method: str, optional
-            Resampling method to use, one of 'bilinear' or 'fourier' (default)
+        reshaping method: str, optional
+            Reshaping method to use, one of 'bin', 'bilinear' or 'fourier' (default)
         probe_roi_shape, (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
         vacuum_probe_intensity, np.ndarray, optional
             If not None, the vacuum probe intensity is also resampled and padded
-
+        dp_mask, np.ndarray, optional
+            If not None, dp_mask is also resampled and padded
 
         Returns
         --------
@@ -156,17 +162,39 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 )
 
             Q_pixel_size = datacube.calibration.get_Q_pixel_size()
-            datacube = datacube.resample_Q(
-                N=resampling_factor_x, method=resampling_method
-            )
-            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
 
-            if vacuum_probe_intensity is not None:
-                vacuum_probe_intensity = fourier_resample(
-                    vacuum_probe_intensity,
-                    output_size=diffraction_intensities_shape,
-                    force_nonnegative=True,
+            if reshaping_method == "bin":
+
+                bin_factor = int(1 / resampling_factor_x)
+                if bin_factor < 1:
+                    raise ValueError(
+                        f"Calculated binning factor {bin_factor} is less than 1."
+                    )
+
+                datacube = datacube.bin_Q(N=bin_factor)
+                if vacuum_probe_intensity is not None:
+                    vacuum_probe_intensity = vacuum_probe_intensity[
+                        ::bin_factor, ::bin_factor
+                    ]
+                if dp_mask is not None:
+                    dp_mask = dp_mask[::bin_factor, ::bin_factor]
+            else:
+                datacube = datacube.resample_Q(
+                    N=resampling_factor_x, method=reshaping_method
                 )
+                if vacuum_probe_intensity is not None:
+                    vacuum_probe_intensity = fourier_resample(
+                        vacuum_probe_intensity,
+                        output_size=diffraction_intensities_shape,
+                        force_nonnegative=True,
+                    )
+                if dp_mask is not None:
+                    dp_mask = fourier_resample(
+                        dp_mask,
+                        output_size=diffraction_intensities_shape,
+                        force_nonnegative=True,
+                    )
+            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
 
         if probe_roi_shape is not None:
 
@@ -174,7 +202,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Sx, Sy = probe_roi_shape
             datacube = datacube.pad_Q(output_size=probe_roi_shape)
 
-            if vacuum_probe_intensity is not None:
+            if vacuum_probe_intensity is not None or dp_mask is not None:
 
                 pad_kx = Sx - Qx
                 pad_kx = (pad_kx // 2, pad_kx // 2 + pad_kx % 2)
@@ -182,11 +210,17 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 pad_ky = Sy - Qy
                 pad_ky = (pad_ky // 2, pad_ky // 2 + pad_ky % 2)
 
+            if vacuum_probe_intensity is not None:
+
                 vacuum_probe_intensity = np.pad(
                     vacuum_probe_intensity, pad_width=(pad_kx, pad_ky), mode="constant"
                 )
 
-        return datacube, vacuum_probe_intensity
+            if dp_mask is not None:
+
+                dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
+
+        return datacube, vacuum_probe_intensity, dp_mask
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,
@@ -246,8 +280,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             if dp_mask.shape != self._intensities.shape[-2:]:
                 raise ValueError(
                     (
-                        f"Mask shape should be (Qx,Qy):{self.intensities.shape[-2:]}, "
-                        "not {dp_mask.shape}"
+                        f"Mask shape should be (Qx,Qy):{self._intensities.shape[-2:]}, "
+                        f"not {dp_mask.shape}"
                     )
                 )
             self._intensities *= xp.asarray(dp_mask, dtype=xp.float32)
@@ -1269,6 +1303,40 @@ class PhaseReconstruction(metaclass=ABCMeta):
             y0[:, None, None] + y_ind[None, None, :]
         ) % obj_shape[1]
 
+    def _crop_rotate_object_fov(
+        self,
+        array,
+        padding=0,
+    ):
+        """
+        Crops and rotated object to FOV bounded by current pixel positions.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
+        padding: int, optional
+            Optional padding outside pixel positions
+
+        Returns
+        cropped_rotated_array: np.ndarray
+            Cropped and rotated object array
+        """
+
+        asnumpy = self._asnumpy
+
+        tf = AffineTransform(angle=-self._rotation_best_rad)
+        rotated_points = tf(
+            asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
+        )
+        min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
+        max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
+
+        rotated_array = rotate(
+            asnumpy(array), np.rad2deg(self._rotation_best_rad), reshape=False
+        )
+        return rotated_array[min_x:max_x, min_y:max_y]
+
     @property
     def angular_sampling(self):
         """Angular sampling [mrad]"""
@@ -1285,7 +1353,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             electron_wavelength_angstrom(self._energy) * 1e3 / dk / n
             for dk, n in zip(self.angular_sampling, self._region_of_interest_shape)
         )
-    
+
     @property
     def positions(self):
         """Probe positions [A]"""

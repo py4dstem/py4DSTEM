@@ -64,8 +64,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     diffraction_intensities_shape: Tuple[int,int], optional
         Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
         If None, no resampling of diffraction intenstities is performed
-    resampling_method: str, optional
-        Method to use for resampling, either 'bilinear' or 'fourier' (default)
+    reshaping_method: str, optional
+        Method to use for reshaping, either 'bin', 'bilinear', or 'fourier' (default)
     probe_roi_shape, (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
@@ -101,7 +101,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        resampling_method: str = "fourier",
+        reshaping_method: str = "fourier",
         probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -145,7 +145,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._rolloff = rolloff
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._resampling_method = resampling_method
+        self._reshaping_method = reshaping_method
         self._probe_roi_shape = probe_roi_shape
         self._object = initial_object_guess
         self._probe = initial_probe_guess
@@ -273,12 +273,14 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         (
             measurement_0,
             self._vacuum_probe_intensity,
+            self._dp_mask,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube[0],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
-            resampling_method=self._resampling_method,
+            reshaping_method=self._reshaping_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
+            dp_mask=self._dp_mask,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -310,12 +312,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         )
 
         # 2nd measurement
-        (measurement_1, _,) = self._preprocess_datacube_and_vacuum_probe(
+        (measurement_1, _, _,) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube[1],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
-            resampling_method=self._resampling_method,
+            reshaping_method=self._reshaping_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=None,
+            dp_mask=None,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -348,12 +351,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
-            (measurement_2, _,) = self._preprocess_datacube_and_vacuum_probe(
+            (measurement_2, _, _,) = self._preprocess_datacube_and_vacuum_probe(
                 self._datacube[2],
                 diffraction_intensities_shape=self._diffraction_intensities_shape,
-                resampling_method=self._resampling_method,
+                reshaping_method=self._reshaping_method,
                 probe_roi_shape=self._probe_roi_shape,
                 vacuum_probe_intensity=None,
+                dp_mask=None,
             )
 
             self._extract_intensities_and_calibrations_from_datacube(
@@ -422,8 +426,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = (self._object[0].copy(), self._object[1].copy())
+        self._object_shape = self._object[0].shape
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
+        self._positions_px_com = xp.mean(self._positions_px, axis=0)
+        self._positions_px -= self._positions_px_com - xp.array(self._object_shape) / 2
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
         self._positions_px_fractional = self._positions_px - xp.round(
             self._positions_px
@@ -435,7 +442,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._object_shape = self._object[0].shape
         self._set_vectorized_patch_indices()
 
         # Probe Initialization
@@ -2561,6 +2567,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         object_mode: str,
+        padding: int,
         **kwargs,
     ):
         """
@@ -2597,6 +2604,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self.sampling[0] * self._region_of_interest_shape[0],
             0,
         ]
+
+        rotated_electrostatic = self._crop_rotate_object_fov(
+            self.object[0], padding=padding
+        )
+        rotated_magnetic = self._crop_rotate_object_fov(self.object[1], padding=padding)
 
         if plot_convergence:
             if plot_probe:
@@ -2637,21 +2649,21 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object[0]),
+                    np.angle(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object[0]),
+                    np.abs(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object[0]) ** 2,
+                    np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -2670,21 +2682,21 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 1])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object[1]),
+                    np.angle(rotated_magnetic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object[1]),
+                    np.abs(rotated_magnetic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object[1]) ** 2,
+                    np.abs(rotated_magnetic) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -2724,21 +2736,21 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object[0]),
+                    np.angle(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object[0]),
+                    np.abs(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object[0]) ** 2,
+                    np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -2758,21 +2770,21 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 1])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object[1]),
+                    np.angle(rotated_magnetic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object[1]),
+                    np.abs(rotated_magnetic),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object[1]) ** 2,
+                    np.abs(rotated_magnetic) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -2812,6 +2824,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         iterations_grid: Tuple[int, int],
         object_mode: str,
+        padding: int,
         **kwargs,
     ):
         """
@@ -2841,6 +2854,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool = True,
         object_mode: str = "phase",
         cbar: bool = False,
+        padding: int = 0,
         **kwargs,
     ):
         """
@@ -2884,6 +2898,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 plot_probe=plot_probe,
                 object_mode=object_mode,
                 cbar=cbar,
+                padding=padding,
                 **kwargs,
             )
         else:
@@ -2893,6 +2908,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 plot_probe=plot_probe,
                 object_mode=object_mode,
                 cbar=cbar,
+                padding=padding,
                 **kwargs,
             )
 
