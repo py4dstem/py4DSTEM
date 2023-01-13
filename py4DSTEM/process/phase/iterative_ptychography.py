@@ -625,24 +625,24 @@ class PtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-        
+
         probe_normalization = self._sum_overlapping_patches_bincounts(
             xp.abs(shifted_probes) ** 2
         )
         probe_normalization = 1 / xp.sqrt(
             1e-16
-            + ((1-normalization_min) * probe_normalization)**2
-            + (normalization_min * xp.max(probe_normalization))**2
+            + ((1 - normalization_min) * probe_normalization) ** 2
+            + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        #probe_abs = xp.abs(shifted_probes)
-        #probe_normalization = 1 / (
+        # probe_abs = xp.abs(shifted_probes)
+        # probe_normalization = 1 / (
         #    1e-9
         #    + self._sum_overlapping_patches_bincounts(
         #        (1-normalization_min) * probe_abs ** 2
         #        + normalization_min * xp.max(probe_abs) ** 2
         #    )
-        #)
+        # )
 
         current_object += step_size * (
             self._sum_overlapping_patches_bincounts(
@@ -659,19 +659,19 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             object_normalization = 1 / xp.sqrt(
                 1e-16
-                + ((1-normalization_min) * object_normalization)**2
-                + (normalization_min * xp.max(object_normalization))**2
+                + ((1 - normalization_min) * object_normalization) ** 2
+                + (normalization_min * xp.max(object_normalization)) ** 2
             )
-            
-            #object_abs = xp.abs(object_patches)
-            #object_normalization = 1 / (
+
+            # object_abs = xp.abs(object_patches)
+            # object_normalization = 1 / (
             #    1e-9
             #    + xp.sum(
             #        (1-normalization_min) * object_abs ** 2
             #        + normalization_min * xp.max(object_abs) ** 2,
             #        axis=0,
             #    )
-            #)
+            # )
 
             current_probe += step_size * (
                 xp.sum(
@@ -728,18 +728,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
         probe_normalization = 1 / xp.sqrt(
             1e-16
-            + ((1-normalization_min) * probe_normalization)**2
-            + (normalization_min * xp.max(probe_normalization))**2
+            + ((1 - normalization_min) * probe_normalization) ** 2
+            + (normalization_min * xp.max(probe_normalization)) ** 2
         )
-        
-        #probe_abs = xp.abs(shifted_probes)
-        #probe_normalization = 1 / (
+
+        # probe_abs = xp.abs(shifted_probes)
+        # probe_normalization = 1 / (
         #    1e-9
         #    + self._sum_overlapping_patches_bincounts(
         #        (1-normalization_min) * probe_abs ** 2
         #        + normalization_min * xp.max(probe_abs) ** 2
         #    )
-        #)
+        # )
 
         current_object = (
             self._sum_overlapping_patches_bincounts(
@@ -755,19 +755,19 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             object_normalization = 1 / xp.sqrt(
                 1e-16
-                + ((1-normalization_min) * object_normalization)**2
-                + (normalization_min * xp.max(object_normalization))**2
+                + ((1 - normalization_min) * object_normalization) ** 2
+                + (normalization_min * xp.max(object_normalization)) ** 2
             )
-            
-            #object_abs = xp.abs(object_patches)
-            #object_normalization = 1 / (
+
+            # object_abs = xp.abs(object_patches)
+            # object_normalization = 1 / (
             #    1e-9
             #    + xp.sum(
             #        (1-normalization_min) * object_abs ** 2
             #        + normalization_min * xp.max(object_abs) ** 2,
             #        axis=0,
             #    )
-            #)
+            # )
 
             current_probe = (
                 xp.sum(
