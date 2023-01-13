@@ -625,22 +625,24 @@ class PtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-
-        # probe_normalization = self._sum_overlapping_patches_bincounts(
-        #    xp.abs(shifted_probes) ** 2
-        # )
-        # probe_normalization = 1 / xp.sqrt(
-        #    probe_normalization**2
-        #    + (normalization_min * xp.max(probe_normalization)) ** 2
-        # )
-
-        probe_normalization = 1 / (
-            1e-9
-            + self._sum_overlapping_patches_bincounts(
-                normalization_min * xp.abs(shifted_probes) ** 2
-                + (1 - normalization_min) * xp.max(xp.abs(shifted_probes)) ** 2
-            )
+        
+        probe_normalization = self._sum_overlapping_patches_bincounts(
+            xp.abs(shifted_probes) ** 2
         )
+        probe_normalization = 1 / xp.sqrt(
+            1e-16
+            + ((1-normalization_min) * probe_normalization)**2
+            + (normalization_min * xp.max(probe_normalization))**2
+        )
+
+        #probe_abs = xp.abs(shifted_probes)
+        #probe_normalization = 1 / (
+        #    1e-9
+        #    + self._sum_overlapping_patches_bincounts(
+        #        (1-normalization_min) * probe_abs ** 2
+        #        + normalization_min * xp.max(probe_abs) ** 2
+        #    )
+        #)
 
         current_object += step_size * (
             self._sum_overlapping_patches_bincounts(
@@ -651,23 +653,25 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if not fix_probe:
 
-            # object_normalization = xp.sum(
-            #    (xp.abs(object_patches) ** 2),
-            #    axis=0,
-            # )
-            # object_normalization = 1 / xp.sqrt(
-            #    object_normalization**2
-            #    + (normalization_min * xp.max(object_normalization)) ** 2
-            # )
-
-            object_normalization = 1 / (
-                1e-9
-                + xp.sum(
-                    normalization_min * xp.abs(object_patches) ** 2
-                    + (1 - normalization_min) * xp.max(xp.abs(object_patches)) ** 2,
-                    axis=0,
-                )
+            object_normalization = xp.sum(
+                (xp.abs(object_patches) ** 2),
+                axis=0,
             )
+            object_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1-normalization_min) * object_normalization)**2
+                + (normalization_min * xp.max(object_normalization))**2
+            )
+            
+            #object_abs = xp.abs(object_patches)
+            #object_normalization = 1 / (
+            #    1e-9
+            #    + xp.sum(
+            #        (1-normalization_min) * object_abs ** 2
+            #        + normalization_min * xp.max(object_abs) ** 2,
+            #        axis=0,
+            #    )
+            #)
 
             current_probe += step_size * (
                 xp.sum(
@@ -723,9 +727,19 @@ class PtychographicReconstruction(PhaseReconstruction):
             xp.abs(shifted_probes) ** 2
         )
         probe_normalization = 1 / xp.sqrt(
-            probe_normalization**2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
+            1e-16
+            + ((1-normalization_min) * probe_normalization)**2
+            + (normalization_min * xp.max(probe_normalization))**2
         )
+        
+        #probe_abs = xp.abs(shifted_probes)
+        #probe_normalization = 1 / (
+        #    1e-9
+        #    + self._sum_overlapping_patches_bincounts(
+        #        (1-normalization_min) * probe_abs ** 2
+        #        + normalization_min * xp.max(probe_abs) ** 2
+        #    )
+        #)
 
         current_object = (
             self._sum_overlapping_patches_bincounts(
@@ -740,9 +754,20 @@ class PtychographicReconstruction(PhaseReconstruction):
                 axis=0,
             )
             object_normalization = 1 / xp.sqrt(
-                object_normalization**2
-                + (normalization_min * xp.max(object_normalization)) ** 2
+                1e-16
+                + ((1-normalization_min) * object_normalization)**2
+                + (normalization_min * xp.max(object_normalization))**2
             )
+            
+            #object_abs = xp.abs(object_patches)
+            #object_normalization = 1 / (
+            #    1e-9
+            #    + xp.sum(
+            #        (1-normalization_min) * object_abs ** 2
+            #        + normalization_min * xp.max(object_abs) ** 2,
+            #        axis=0,
+            #    )
+            #)
 
             current_probe = (
                 xp.sum(
@@ -1190,8 +1215,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
+        seed_random: int = None,
         step_size: float = 0.9,
-        normalization_min: float = 1e-2,
+        normalization_min: float = 1e-3,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
@@ -1223,6 +1249,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Tuning parameter to interpolate b/w DM-AP and DM-RAAR
         max_batch_size: int, optional
             Max number of probes to update at once
+        seed_random: int, optional
+            Seeds the random number generator, only applicable when max_batch_size is not None
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1329,6 +1357,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         unshuffled_indices = np.zeros_like(shuffled_indices)
 
         if max_batch_size is not None:
+            xp.random.seed(seed_random)
             if use_projection_scheme:
                 raise ValueError(
                     (
@@ -1392,7 +1421,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             error = 0.0
 
             # randomize
-            np.random.shuffle(shuffled_indices)
+            if not use_projection_scheme:
+                np.random.shuffle(shuffled_indices)
             unshuffled_indices[shuffled_indices] = np.arange(
                 self._num_diffraction_patterns
             )
