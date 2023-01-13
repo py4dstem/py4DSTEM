@@ -61,8 +61,8 @@ class PtychographicReconstruction(PhaseReconstruction):
     diffraction_intensities_shape: Tuple[int,int], optional
         Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
         If None, no resampling of diffraction intenstities is performed
-    resampling_method: str, optional
-        Method to use for resampling, either 'bilinear' or 'fourier' (default)
+    reshaping_method: str, optional
+        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
     probe_roi_shape, (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
@@ -97,7 +97,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        resampling_method: str = "fourier",
+        reshaping_method: str = "fourier",
         probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -141,7 +141,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._rolloff = rolloff
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._resampling_method = resampling_method
+        self._reshaping_method = reshaping_method
         self._probe_roi_shape = probe_roi_shape
         self._object = initial_object_guess
         self._probe = initial_probe_guess
@@ -208,12 +208,14 @@ class PtychographicReconstruction(PhaseReconstruction):
         (
             self._datacube,
             self._vacuum_probe_intensity,
+            self._dp_mask,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
-            resampling_method=self._resampling_method,
+            reshaping_method=self._reshaping_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
+            dp_mask=self._dp_mask,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -267,8 +269,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = self._object.copy()
+        self._object_shape = self._object.shape
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
+        self._positions_px_com = xp.mean(self._positions_px, axis=0)
+        self._positions_px -= self._positions_px_com - xp.array(self._object_shape) / 2
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
         self._positions_px_fractional = self._positions_px - xp.round(
             self._positions_px
@@ -280,7 +285,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._object_shape = self._object.shape
         self._set_vectorized_patch_indices()
 
         # Probe Initialization
@@ -1518,6 +1522,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         object_mode: str,
+        padding: int,
         **kwargs,
     ):
         """
@@ -1554,6 +1559,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             self.sampling[0] * self._region_of_interest_shape[0],
             0,
         ]
+
+        rotated_object = self._crop_rotate_object_fov(self.object, padding=padding)
 
         if plot_convergence:
             if plot_probe:
@@ -1592,21 +1599,21 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object),
+                    np.angle(rotated_object),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object),
+                    np.abs(rotated_object),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2,
+                    np.abs(rotated_object) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -1645,21 +1652,21 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
                 im = ax.imshow(
-                    np.angle(self.object),
+                    np.angle(rotated_object),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
-                    np.abs(self.object),
+                    np.abs(rotated_object),
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
-                    np.abs(self.object) ** 2,
+                    np.abs(rotated_object) ** 2,
                     extent=extent,
                     cmap=cmap,
                     **kwargs,
@@ -1699,6 +1706,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         iterations_grid: Tuple[int, int],
         object_mode: str,
+        padding: int,
         **kwargs,
     ):
         """
@@ -1731,7 +1739,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("cmap", None)
 
         errors = self.error_iterations
-        objects = self.object_iterations
+        objects = [
+            self._crop_rotate_object_fov(obj, padding=padding)
+            for obj in self.object_iterations
+        ]
 
         if plot_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
@@ -1856,6 +1867,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool = True,
         object_mode: str = "phase",
         cbar: bool = False,
+        padding: int = 0,
         **kwargs,
     ):
         """
@@ -1899,6 +1911,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 plot_probe=plot_probe,
                 object_mode=object_mode,
                 cbar=cbar,
+                padding=padding,
                 **kwargs,
             )
         else:
@@ -1908,6 +1921,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 plot_probe=plot_probe,
                 object_mode=object_mode,
                 cbar=cbar,
+                padding=padding,
                 **kwargs,
             )
 
