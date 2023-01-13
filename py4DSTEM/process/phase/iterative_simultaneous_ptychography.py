@@ -987,12 +987,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         electrostatic_obj, _ = current_object
         electrostatic_obj_patches, _ = object_patches
 
-        probe_normalization = 1 / (
-            1e-9
-            + self._sum_overlapping_patches_bincounts(
-                normalization_min * xp.abs(shifted_probes) ** 2
-                + (1 - normalization_min) * xp.max(xp.abs(shifted_probes)) ** 2
-            )
+        probe_normalization = self._sum_overlapping_patches_bincounts(
+            xp.abs(shifted_probes) ** 2
+        )
+        probe_normalization = 1 / xp.sqrt(
+            1e-16
+            + ((1-normalization_min) * probe_normalization)**2
+            + (normalization_min * xp.max(probe_normalization))**2
         )
 
         electrostatic_obj += step_size * (
@@ -1004,14 +1005,14 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         if not fix_probe:
 
-            object_normalization = 1 / (
-                1e-9
-                + xp.sum(
-                    normalization_min * xp.abs(electrostatic_obj_patches) ** 2
-                    + (1 - normalization_min)
-                    * xp.max(xp.abs(electrostatic_obj_patches)) ** 2,
-                    axis=0,
-                )
+            object_normalization = xp.sum(
+                (xp.abs(electrostatic_obj_patches) ** 2),
+                axis=0,
+            )
+            object_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1-normalization_min) * object_normalization)**2
+                + (normalization_min * xp.max(object_normalization))**2
             )
 
             current_probe += step_size * (
@@ -1077,30 +1078,33 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         probe_electrostatic_abs = xp.abs(shifted_probes * electrostatic_obj_patches)
         probe_magnetic_abs = xp.abs(shifted_probes * magnetic_obj_patches)
 
-        probe_electrostatic_normalization = 1 / (
-            1e-9
-            + self._sum_overlapping_patches_bincounts(
-                normalization_min * probe_electrostatic_abs**2
-                + (1 - normalization_min) * xp.max(probe_electrostatic_abs) ** 2
-            )
+        probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
+                probe_electrostatic_abs**2
+                )
+        probe_electrostatic_normalization = 1 / xp.sqrt(
+            1e-16
+            + ((1-normalization_min) * probe_electrostatic_normalization)**2
+            + (normalization_min * xp.max(probe_electrostatic_normalization))**2
         )
-
-        probe_magnetic_normalization = 1 / (
-            1e-9
-            + self._sum_overlapping_patches_bincounts(
-                normalization_min * probe_magnetic_abs**2
-                + (1 - normalization_min) * xp.max(probe_magnetic_abs) ** 2
-            )
+        
+        probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                probe_magnetic_abs**2
+                )
+        probe_magnetic_normalization = 1 / xp.sqrt(
+            1e-16
+            + ((1-normalization_min) * probe_magnetic_normalization)**2
+            + (normalization_min * xp.max(probe_magnetic_normalization))**2
         )
 
         if self._sim_recon_mode > 0:
             probe_abs = xp.abs(shifted_probes)
-            probe_normalization = 1 / (
-                1e-9
-                + self._sum_overlapping_patches_bincounts(
-                    normalization_min * probe_abs**2
-                    + (1 - normalization_min) * xp.max(probe_abs) ** 2
-                )
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                probe_abs ** 2
+            )
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1-normalization_min) * probe_normalization)**2
+                + (normalization_min * xp.max(probe_normalization))**2
             )
 
         if self._sim_recon_mode == 0:
@@ -1208,25 +1212,26 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             electrostatic_magnetic_abs = xp.abs(
                 electrostatic_obj_patches * magnetic_obj_patches
             )
-
-            electrostatic_magnetic_normalization = 1 / (
-                1e-9
-                + xp.sum(
-                    normalization_min * electrostatic_magnetic_abs**2
-                    + (1 - normalization_min) * xp.max(electrostatic_magnetic_abs) ** 2,
-                    axis=0,
-                )
+            electrostatic_magnetic_normalization = xp.sum(
+                electrostatic_magnetic_abs ** 2,
+                axis=0,
+            )
+            electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1-normalization_min) * electrostatic_magnetic_normalization)**2
+                + (normalization_min * xp.max(electrostatic_magnetic_normalization))**2
             )
 
             if self._sim_recon_mode > 0:
                 electrostatic_abs = xp.abs(electrostatic_obj_patches)
-                electrostatic_normalization = 1 / (
-                    1e-9
-                    + xp.sum(
-                        normalization_min * electrostatic_abs**2
-                        + (1 - normalization_min) * xp.max(electrostatic_abs) ** 2,
-                        axis=0,
-                    )
+                electrostatic_normalization = xp.sum(
+                    electrostatic_abs ** 2,
+                    axis=0,
+                )
+                electrostatic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1-normalization_min) * electrostatic_normalization)**2
+                    + (normalization_min * xp.max(electrostatic_normalization))**2
                 )
 
             if self._sim_recon_mode == 0:
@@ -1345,8 +1350,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             xp.abs(shifted_probes) ** 2
         )
         probe_normalization = 1 / xp.sqrt(
-            probe_normalization**2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
+            1e-16
+            + ((1-normalization_min) * probe_normalization)**2
+            + (normalization_min * xp.max(probe_normalization))**2
         )
 
         electrostatic_obj = (
@@ -1362,8 +1368,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 axis=0,
             )
             object_normalization = 1 / xp.sqrt(
-                object_normalization**2
-                + (normalization_min * xp.max(object_normalization)) ** 2
+                1e-16
+                + ((1-normalization_min) * object_normalization)**2
+                + (normalization_min * xp.max(object_normalization))**2
             )
 
             current_probe = (
@@ -1431,16 +1438,18 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             probe_electrostatic_abs**2
         )
         probe_electrostatic_normalization = 1 / xp.sqrt(
-            probe_electrostatic_normalization**2
-            + (normalization_min * xp.max(probe_electrostatic_normalization)) ** 2
+            1e-16
+            + ((1-normalization_min) * probe_electrostatic_normalization)**2
+            + (normalization_min * xp.max(probe_electrostatic_normalization))**2
         )
 
         probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
             probe_magnetic_abs**2
         )
         probe_magnetic_normalization = 1 / xp.sqrt(
-            probe_magnetic_normalization**2
-            + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+            1e-16
+            + ((1-normalization_min) * probe_magnetic_normalization)**2
+            + (normalization_min * xp.max(probe_magnetic_normalization))**2
         )
 
         if self._sim_recon_mode > 0:
@@ -1450,8 +1459,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 probe_abs**2
             )
             probe_normalization = 1 / xp.sqrt(
-                probe_normalization**2
-                + (normalization_min * xp.max(probe_normalization)) ** 2
+                1e-16
+                + ((1-normalization_min) * probe_normalization)**2
+                + (normalization_min * xp.max(probe_normalization))**2
             )
 
         if self._sim_recon_mode == 0:
@@ -1565,9 +1575,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 axis=0,
             )
             electrostatic_magnetic_normalization = 1 / xp.sqrt(
-                electrostatic_magnetic_normalization**2
-                + (normalization_min * xp.max(electrostatic_magnetic_normalization))
-                ** 2
+                1e-16
+                + ((1-normalization_min) * electrostatic_magnetic_normalization)**2
+                + (normalization_min * xp.max(electrostatic_magnetic_normalization))**2
             )
 
             if self._sim_recon_mode > 0:
@@ -1577,8 +1587,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     axis=0,
                 )
                 electrostatic_normalization = 1 / xp.sqrt(
-                    electrostatic_normalization**2
-                    + (normalization_min * xp.max(electrostatic_normalization)) ** 2
+                    1e-16
+                    + ((1-normalization_min) * electrostatic_normalization)**2
+                    + (normalization_min * xp.max(electrostatic_normalization))**2
                 )
 
             if self._sim_recon_mode == 0:
@@ -2218,6 +2229,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
+        seed_random: int = None,
         step_size: float = 0.9,
         normalization_min: float = 1e-2,
         positions_step_size: float = 0.9,
@@ -2252,6 +2264,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Tuning parameter to interpolate b/w DM-AP and DM-RAAR
         max_batch_size: int, optional
             Max number of probes to update at once
+        seed_random: int, optional
+            Seeds the random number generator, only applicable when max_batch_size is not None
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -2358,6 +2372,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         unshuffled_indices = np.zeros_like(shuffled_indices)
 
         if max_batch_size is not None:
+            xp.random.seed(seed_random)
             if use_projection_scheme:
                 raise ValueError(
                     (
@@ -2427,7 +2442,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 self._object = (self._object[0], self._object_initial[1].copy())
 
             # randomize
-            np.random.shuffle(shuffled_indices)
+            if not use_projection_scheme:
+                np.random.shuffle(shuffled_indices)
             unshuffled_indices[shuffled_indices] = np.arange(
                 self._num_diffraction_patterns
             )
