@@ -1546,10 +1546,13 @@ class PtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
+        rotated_object = self._crop_rotate_object_fov(self.object, padding=padding)
+        rotated_shape = rotated_object.shape
+
         extent = [
             0,
-            self.sampling[1] * self._object_shape[1],
-            self.sampling[0] * self._object_shape[0],
+            self.sampling[1] * rotated_shape[1],
+            self.sampling[0] * rotated_shape[0],
             0,
         ]
 
@@ -1559,8 +1562,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             self.sampling[0] * self._region_of_interest_shape[0],
             0,
         ]
-
-        rotated_object = self._crop_rotate_object_fov(self.object, padding=padding)
 
         if plot_convergence:
             if plot_probe:
@@ -1754,8 +1755,8 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         extent = [
             0,
-            self.sampling[1] * self._object_shape[1],
-            self.sampling[0] * self._object_shape[0],
+            self.sampling[1] * objects[0].shape[1],
+            self.sampling[0] * objects[0].shape[0],
             0,
         ]
 

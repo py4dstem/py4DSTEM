@@ -2591,10 +2591,16 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
+        rotated_electrostatic = self._crop_rotate_object_fov(
+            self.object[0], padding=padding
+        )
+        rotated_magnetic = self._crop_rotate_object_fov(self.object[1], padding=padding)
+        rotated_shape = rotated_electrostatic.shape
+
         extent = [
             0,
-            self.sampling[1] * self._object_shape[1],
-            self.sampling[0] * self._object_shape[0],
+            self.sampling[1] * rotated_shape[1],
+            self.sampling[0] * rotated_shape[0],
             0,
         ]
 
@@ -2604,11 +2610,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self.sampling[0] * self._region_of_interest_shape[0],
             0,
         ]
-
-        rotated_electrostatic = self._crop_rotate_object_fov(
-            self.object[0], padding=padding
-        )
-        rotated_magnetic = self._crop_rotate_object_fov(self.object[1], padding=padding)
 
         if plot_convergence:
             if plot_probe:
