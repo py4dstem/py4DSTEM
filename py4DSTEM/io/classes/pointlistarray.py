@@ -4,12 +4,11 @@ from typing import Optional
 import h5py
 from os.path import basename
 
-from py4DSTEM.io.classes.tree import Tree
-from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.pointlist import PointList
 from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
-class PointListArray:
+class PointListArray(Node):
     """
     An 2D array of PointLists which share common coordinates.
     """
@@ -33,6 +32,8 @@ class PointListArray:
         """
         assert len(shape) == 2, "Shape must have length 2."
 
+        super().__init__()
+
         self.name = name
         self.shape = shape
 
@@ -40,9 +41,6 @@ class PointListArray:
         self.fields = self.dtype.names
         self.types = tuple([self.dtype.fields[f][0] for f in self.fields])
 
-        self.tree = Tree()
-        if not hasattr(self, "_metadata"):
-            self._metadata = {}
 
         # Populate with empty PointLists
         self._pointlists = [[PointList(data=np.zeros(0,dtype=self.dtype), name=f"{i},{j}")
@@ -129,15 +127,6 @@ class PointListArray:
         return new_pla
 
 
-    # set up metadata property
-
-    @property
-    def metadata(self):
-        return self._metadata
-    @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
-        self._metadata[x.name] = x
 
 
     ## Representation to standard output

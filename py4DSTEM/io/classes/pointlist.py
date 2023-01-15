@@ -8,12 +8,11 @@ from copy import copy
 from typing import Optional
 from os.path import basename
 
-from py4DSTEM.io.classes.tree import Tree
-from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 
-class PointList:
+class PointList(Node):
     """
     A wrapper around structured numpy arrays, with read/write functionality in/out of
     py4DSTEM formatted HDF5 files.
@@ -35,16 +34,15 @@ class PointList:
         Returns:
             a PointList instance
         """
+        super().__init__()
+
+        # populate data and metadata
         self.data = data
         self.name = name
-
         self._dtype = self.data.dtype
         self._fields = self.data.dtype.names
         self._types = tuple([self.data.dtype.fields[f][0] for f in self.fields])
 
-        self.tree = Tree()
-        if not hasattr(self, "_metadata"):
-            self._metadata = {}
 
 
     # properties
@@ -162,16 +160,6 @@ class PointList:
 
         self.data = np.append(self.data,newdata)
 
-
-    # set up metadata property
-
-    @property
-    def metadata(self):
-        return self._metadata
-    @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
-        self._metadata[x.name] = x
 
 
 

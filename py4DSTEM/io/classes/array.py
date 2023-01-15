@@ -7,11 +7,11 @@ import h5py
 from numbers import Number
 from os.path import basename
 
-from py4DSTEM.io.classes.tree import Tree
+from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.metadata import Metadata
 from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
-class Array:
+class Array(Node):
     """
     A class which stores any N-dimensional array-like data, plus basic metadata:
     a name and units, as well as calibrations for each axis of the array, and names
@@ -172,6 +172,9 @@ class Array:
         Returns:
             A new Array instance
         """
+        super().__init__()
+
+        # populate data and metadata
         self.data = data
         self.name = name
         self.units = units
@@ -179,16 +182,10 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        self.tree = Tree()
-        if not hasattr(self, "_metadata"):
-            self._metadata = {}
-
 
         ## Handle array stacks
-
         if slicelabels is None:
             self.is_stack = False
-
         else:
             self.is_stack = True
 
@@ -201,12 +198,10 @@ class Array:
             else:
                 slicelabels = slicelabels[:self.depth]
             slicelabels = Labels(slicelabels)
-
         self.slicelabels = slicelabels
 
 
         ## Set dim vectors
-
         dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
         # if none were passed
         if self.dims is None:
@@ -407,16 +402,6 @@ class Array:
         return np.array_equal(dim,dim_expanded)
 
 
-
-    # set up metadata property
-
-    @property
-    def metadata(self):
-        return self._metadata
-    @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
-        self._metadata[x.name] = x
 
 
 
