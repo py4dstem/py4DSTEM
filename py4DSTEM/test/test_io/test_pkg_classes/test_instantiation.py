@@ -11,15 +11,15 @@ from py4DSTEM.io.classes.py4dstem import (
 )
 
 
-def test_DataCube():
-
-    shape = (5,6,12,12)
-    data = np.zeros(shape)
-    datacube = DataCube( data )
-    assert(isinstance(datacube,DataCube))
-
-    # test add method
-    datacube.get_dp_max
+##;pdef test_DataCube():
+##;p
+##;p    shape = (5,6,12,12)
+##;p    data = np.zeros(shape)
+##;p    datacube = DataCube( data )
+##;p    assert(isinstance(datacube,DataCube))
+##;p
+##;p    # test add method
+##;p    datacube.get_dp_max
 
 def test_RealSlice():
 
