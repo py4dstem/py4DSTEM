@@ -38,7 +38,7 @@ The basic data and metadata classes are:
 - `PointListArray`: a 2D grid of PointLists
 
 Derivative classes are discussed in `Customizing classes`.
-The two classes (Root, Tree) which enable nesting data for ease of reading/writing whole sets of many data types at a time, and are discussed in the `Trees` section, below.
+The two classes (Node, Tree) which enable nesting data for ease of reading/writing whole sets of many data types at a time, and are discussed in the `Trees` section, below.
 
 
 
@@ -50,7 +50,7 @@ The class definitions here are designed such that an analogous graph relating da
 For instance, if a dataset is loaded, and then some processing is performed on the dataset to generate an image, a tree graph representing the original dataset as the root node and the image as a child node can be created in the background.
 At the end of some processing pipeline, the tree can then be used to easily save all of the data created at once.
 Similarly, when reading a native HDF5 file, it is possible to read a single node, or an entire tree structure of data object instances.
-This is implemented in the Root and Tree classes.
+This is implemented in the Node and Tree classes.
 
 
 
@@ -140,7 +140,7 @@ optional dimension allows stacking an arbitrary number of these N-D arrays
 which all share common dim-vectors, and can be sliced into with string labels.
 
 In addition to the four primary EMD classes noted above, there are two special
-classes - Tree and Root - which exist to facilitate building nexted trees of
+classes - Tree and Node - which exist to facilitate building nexted trees of
 objects, which can be written to and loaded from files as a single unit. More
 on this below.
 

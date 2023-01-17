@@ -9,9 +9,8 @@ import numpy as np
 
 # Classes for native reader
 from py4DSTEM.io.classes import (
-    Root,
+    Node,
     Tree,
-##;p    ParentTree,
     Calibration
 )
 
@@ -422,7 +421,7 @@ def _read_without_tree(grp):
 
     # handle empty datasets
     if grp.attrs['emd_group_type'] == 'root':
-        data = Root(
+        data = Node(
             name = basename(grp.name),
         )
         cal = _add_calibration(
@@ -458,7 +457,7 @@ def _read_with_tree(grp):
 
 
 def _read_without_root(grp):
-    root = Root()
+    root = Node()
     cal = _add_calibration(
         root,
         grp

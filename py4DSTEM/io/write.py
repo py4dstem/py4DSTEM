@@ -1,11 +1,9 @@
-# Write py4DSTEM formatted .h5 files.
-# 
-# See filestructure.txt for a description of the file structure.
+# Write EMD 1.0 formatted HDF5 files.
+
 
 import h5py
 import numpy as np
-from collections import OrderedDict
-from os.path import exists, dirname
+from os.path import exists
 from os import remove
 from py4DSTEM.io.read import is_py4DSTEM_file, get_py4DSTEM_topgroups
 from py4DSTEM.io.classes import (

@@ -13,7 +13,7 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 # Define the EMD group types
 
 EMD_group_types = {
-    'Root' : 'root',
+    'Node' : 'root',
     'Metadata' : 0,
     'Array' : 1,
     'PointList' : 2,
