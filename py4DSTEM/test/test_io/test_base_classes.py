@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.io.classes import (
-    Root,
+    Node,
     Tree,
     Metadata,
     Array,
@@ -9,15 +9,15 @@ from py4DSTEM.io.classes import (
 )
 
 
-def test_Root():
+def test_Node():
 
     # Root class instances should:
     # - have a name
     # - have a Tree
     # - know how to read/write to/from h5
 
-    root = Root()
-    assert(isinstance(root,Root))
+    root = Node()
+    assert(isinstance(root,Node))
     ##;passert(root.name == 'root')
     ##;passert(isinstance(root.tree, Tree))
 

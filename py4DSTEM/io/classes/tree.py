@@ -1,7 +1,5 @@
 import numpy as np
-from numbers import Number
 from typing import Optional
-import h5py
 from os.path import basename
 
 from py4DSTEM.io.classes import Metadata
@@ -9,85 +7,148 @@ from py4DSTEM.io.classes import Metadata
 
 class Node:
     """
-    Adds the following functionality:
+    Nodes contain attributes and methods paralleling
+    the EMD 1.0 file specification in Python runtime objects.
 
-        # tree fn'ality
-        self.show_tree(all=False)  # whole tree or downstream
-        self.add_to_tree(Node(name='node'))
-        self.get_from_tree('node1/node2')
-        self.get_from_tree('/rootnode/node1/node2')
+    EMD 1.0 is a singly-rooted file format.  That is to say:
+    An EMD data object can and must exist in one and only one
+    EMD tree. An EMD file can contain any number of EMD trees, each
+    containing data and metadata which is, within the limits of
+    the EMD group specifications, of some arbitrary complexity.
+    An EMD 1.0 file thus represents, stores, and enables
+    access to some arbitrary data in long term storage on a file
+    system in the form of an HDF5 file.  The Node class provides
+    machinery for building trees of data and metadata which mirror
+    the EMD tree format but which exist in a live Python instance,
+    rather than on the file system. This facilitates ease of
+    transfer between Python and the file system.
 
-        # all the above syntax in one place:
-        self.tree(
-            # no args = show downstream
-            all = False,  # True -> whole tree
-            add = Node(name='node'), # add to tree
-            get = 'node1/node2'  # leading '/' gets from root
-        )
+    Nodes are intended to be used a base class on which other, more
+    complex classes can be biult. Nodes themselves contain the
+    machinery for managing a tree heirarchy of other Nodes and
+    Metadata instances, and for reading and writing those trees.
+    They do not contain any particular data. Classes storing data
+    and analysis methods which inherit from Node will inherit its
+    tree management and EMD i/o functionality.
 
-        # metadata fn'ality
-        self.metadata = Metadata(name='x')
-        md = self.metadata['x']
+    Below, the 4 elements of the node class are each described in turn:
+    roots, trees, metadata, and i/o.
 
 
-    Does not add read/write methods.
+    ROOTS
+
+    EMD data objects can and must exist in one and only one EMD tree,
+    each of which must have a single, named root node. To parallel this in
+    our runtime objects, each Node has a root property, which can be found
+    by calling `self.root`.
+
+    By default new nodes have their root set to None. If a node
+    with `.root == None` is saved to file, it is placed inside a
+    new root with the same name as the object itself, and this
+    is then saved to the file as a new (minimal) EMD tree.
+
+    A new root node can be instantiated by calling
+
+        >>> rootnode = Root(name=some_name).
+
+    Objects added to an existing rooted tree (including a new root node)
+    automatically have their root assigned to the root of that tree.
+    Adding objects to trees is discussed below.
+
+
+    TREES
+
+    The tree associated with a node can be manipulated with the .tree
+    method. If we have some rooted node `node1` and some unrooted node
+    `node2`, the unrooted node can be added to the existing tree as a
+    child of the rooted node with
+
+        >>> node1.tree(node2)
+
+    If we have a rooted node `node1` and another rooted node `node2`,
+    we can't simply add node2 with the code above, as this would
+    create a conflict between the two roots.  In this case, we can
+    move node2 from its current tree to the new tree using
+
+        >>> node1.tree(graft=node2)
+
+    The .tree method has various additional functionalities, including
+    printing the tree, retrieving objects from the tree, and cutting
+    branches from the tree.  These are summarized below:
+
+        >>> .tree()             # show tree from current node
+        >>> .tree(show=True)    # show from root
+        >>> .tree(show=False)   # show from current node
+        >>> .tree(add=node)     # add a child node
+        >>> .tree(get='path')   # return a '/' delimited child node
+        >>> .tree(get='/path')  # as above, starting at root
+        >>> .tree(cut=True)     # remove/return a branch, keep root metadata
+        >>> .tree(cut=False)    # remove/return a branch, discard root md
+        >>> .tree(cut='copy')   # remove/return a branch, copy root metadata
+        >>> .tree(graft=node)   # remove/graft a branch, keep root metadata
+        >>> .tree(graft=(node,True))    # as above
+        >>> .tree(graft=(node,False))   # as above, discard root metadata
+        >>> .tree(graft=(node,'copy'))  # as above, copy root metadata
+
+    The show, add, and get methods can be accessed directly with
+
+        >>> .tree(arg)
+
+    for an arg of the appropriate type (bool, Node, and string).
+
+
+    METADATA
+
+    Nodes can contain any number of Metadata instances, each of which
+    wraps a Python dictionary of some arbitrary complexity (to within
+    the limits of the Metadata group EMD specification, which limits
+    permissible values somewhat).
+
+    The code:
+
+        >>> md1 = Metadata(name='md1')
+        >>> md2 = Metadata(name='md2')
+        >>> <<<  some code populating md1 + md2 >>>
+        >>> node.metadata = md1
+        >>> node.metadata = md2
+
+    will create two Metadata objects, populate them with data, then
+    add them to the node.  Note that Node.metadata is *not* a Python
+    attribute, it is specially defined property, such that the last
+    line of code does not overwrite the line before it - rather,
+    assigning to the .metadata property adds the new metadata object
+    to a running dictionary of arbitrarily many metadata objects.
+    Both of these two metadata instances can therefore still be
+    retrieved, using:
+
+        >>> x = node.metadata['md1']
+        >>> y = node.metadata['md2']
+
+    Note, however, that if the second metadata instance has an identical
+    name to the first instance, then in *will* overwrite the old instance.
+
+
+    I/O
+
+    # TODO
+
     """
     def __init__(
         self,
         name: Optional[str] = 'node'
         ):
         self.name = name
-        self._tree = Tree()
+        self._tree = Tree()     # enables accessing child groups
+        self._treepath = None   # enables accessing parent groups
+        self._root = None
         self._metadata = {}
 
-    # tree methods
-    def show_tree(self,root=False):
-        assert(isinstance(root,bool))
-        if not root:
-            self._tree.print()
-        else:
-            self.root._tree.print()
 
-    def add_to_tree(self,node):
-        assert(isinstance(node,Node))
-        assert(hasattr(self,"_root")), "This node has no root node, so can't add new nodes."
-        node._root = self._root
-        self._tree[node.name] = node
-
-    def get_from_tree(self,name):
-        if name[0] != '/':
-            return self._tree[name]
-        else:
-            return self.root._tree[name]
-
-    def tree(
-        self,
-        arg=False,
-        ):
-        if isinstance(arg,bool):
-            self.show_tree(root=arg)
-        elif isinstance(arg,Node):
-            self.add_to_tree(arg)
-        elif isinstance(arg,str):
-            return self.get_from_tree(arg)
-        else:
-            raise Exception(f'invalid argument type passed to .tree() {type(arg)}')
-
-    # setting a root node
     @property
     def root(self):
         return self._root
-    @root.setter
-    def root(self,x):
-        assert(isinstance(x,Root))
-        self._root = x
 
 
-
-
-    # supports storage/retreival of any number of Metadata instances
-    # store: `node.metadata = x` for some Metadata instance `x`
-    # retrieve: `node.metadata[x.name]` for some string `x.name`
     @property
     def metadata(self):
         return self._metadata
@@ -99,7 +160,6 @@ class Node:
 
     # displays top level contents of the node
     def __repr__(self):
-
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( A Node called '{self.name}', containing the following top-level objects in its tree:"
         string += "\n"
@@ -107,6 +167,234 @@ class Node:
             string += "\n"+space+f"    {k} \t\t ({v.__class__.__name__})"
         string += "\n)"
         return string
+
+
+
+    # tree methods
+
+    def show_tree(self,root=False):
+        """
+        Display the object tree. If `root` is False, displays the branch
+        of the tree downstream from this node.  If `root` is True, displays
+        the full tree from the root node.
+        """
+        assert(isinstance(root,bool))
+        if not root:
+            self._tree.print()
+        else:
+            assert(self.root is not None), "Can't display an unrooted node from its root!"
+            self.root._tree.print()
+
+    def add_to_tree(self,node):
+        """
+        Add an unrooted node as a child of the current, rooted node.
+        To move an already rooted node/branch, use `.graft()`.
+        To create a rooted node, use `Root()`.
+        """
+        assert(isinstance(node,Node))
+        assert(self.root is not None), "Can't add objects to an unrooted node. See the Node docstring for more info."
+        assert(node.root is None), "Can't add a rooted node to a different tree.  Use `.tree(graft=node)` instead."
+        node._root = self._root
+        self._tree[node.name] = node
+        node._treepath = self._treepath+'/'+node.name
+
+    def get_from_tree(self,name):
+        """
+        Finds and returns an object from an EMD tree using the string
+        key `name`, with '/' delimiters between 'parent/child' nodes.
+        Search from the root node by adding a leading '/'; otherwise,
+        searches from the current node.
+        """
+        if name[0] != '/':
+            return self._tree[name]
+        else:
+            return self.root._tree[name]
+
+    def graft(self,node,merge_metadata=True):
+        """
+        Moves a branch from one tree, starting at this node,
+        onto another tree at target `node`.
+
+        Accepts:
+            node (Node):
+            merge_metadata (True, False, or 'copy'): if True adds the old root's
+                metadata to the new root; if False adds no metadata to the new
+                root; if 'copy' adds copies of all metadata from the old root to
+                the new root.
+
+        Returns:
+            (Node) the new tree's root node
+        """
+        assert(self.root is not None), "Can't graft an unrooted node; try using .tree(add=node) instead."
+        assert(node.root is not None), "Can't graft onto an unrooted node"
+
+        # find upstream and root nodes
+        old_root = self.root
+        node_list = self._treepath.split('/')
+        this_node = node_list.pop()
+        treepath = '/'.join(node_list)
+        upstream_node = self.get_from_tree(treepath)
+
+        # remove connection from upstream to this node
+        del(upstream_node._tree[this_node])
+
+        # add to a new tree
+        self._root = None
+        node.add_to_tree(self)
+
+        # add old root metadata to this node
+        assert(merge_metadata in [True,False,'copy'])
+        if merge_metadata is False:
+            # add no root metadata
+            pass
+        elif merge_metadata is True:
+            # add old root metadata to new root
+            for key in old_root.metadata.keys():
+                node.root.metadata = old_root.metadata[key]
+        else:
+            # add copies of old root metadata to new root
+            for key in old_root.metadata.keys():
+                node.root.metadata = old_root.metadata[key].copy()
+        # return
+        return node.root
+
+    def cut_from_tree(self,root_metadata=True):
+        """
+        Removes a branch from an object tree at this node.
+
+        A new root node is created under this object
+        with this object's name.  Metadata from
+        the current root is transferred/not transferred
+        to the new root according to the value of `root_metadata`.
+
+        Accepts:
+            root_metadata (True, False, or 'copy'): if True adds the old root's
+                metadata to the new root; if False adds no metadata to the new
+                root; if 'copy' adds copies of all metadata from the old root to
+                the new root.
+
+        Returns:
+            (Node) the new root node
+        """
+        new_root = Root(name=self.name)
+        return self.graft(new_root,merge_metadata=root_metadata)
+
+
+    def tree(
+        self,
+        arg = None,
+        **kwargs,
+        ):
+        """
+        Usages -
+
+            >>> .tree()             # show tree from current node
+            >>> .tree(show=True)    # show from root
+            >>> .tree(show=False)   # show from current node
+            >>> .tree(add=node)     # add a child node
+            >>> .tree(get='path')   # return a '/' delimited child node
+            >>> .tree(get='/path')  # as above, starting at root
+            >>> .tree(cut=True)     # remove/return a branch, keep root metadata
+            >>> .tree(cut=False)    # remove/return a branch, discard root md
+            >>> .tree(cut='copy')   # remove/return a branch, copy root metadata
+            >>> .tree(graft=node)   # remove/graft a branch, keep root metadata
+            >>> .tree(graft=(node,True))    # as above
+            >>> .tree(graft=(node,False))   # as above, discard root metadata
+            >>> .tree(graft=(node,'copy'))  # as above, copy root metadata
+
+        The show, add, and get methods can be accessed directly with
+
+            >>> .tree(arg)
+
+        for an arg of the appropriate type (bool, Node, and string).
+        """
+        # if `arg` is passed, choose behavior from its type
+        if isinstance(arg,bool):
+            self.show_tree(root=arg)
+            return
+        elif isinstance(arg,Node):
+            self.add_to_tree(arg)
+            return
+        elif isinstance(arg,str):
+            return self.get_from_tree(arg)
+        else:
+            assert(arg is None), f'invalid `arg` type passed to .tree() {type(arg)}'
+
+        # if `arg` is not passed, choose behavior from **kwargs
+        if len(kwargs)==0:
+            self.show_tree(root=False)
+            return
+        else:
+            assert(len(kwargs)==1), f"kwargs accepts at most 1 argument; recieved {len(kwargs)}"
+            k,v = kwargs.popitem()
+            assert(k in ['show','add','get','cut','graft']), f"invalid keyword passed to .tree(), {k}"
+            if k == 'show':
+                assert(isinstance(v,bool)), f".tree(show=value) requires type(value)==bool, not {type(v)}"
+                self.show_tree(root=v)
+            elif k == 'add':
+                assert(isinstance(v,Node)), f".tree(add=value) requires `value` to be a Node, received {type(value)}"
+                self.add_to_tree(v)
+            elif k == 'get':
+                assert(isinstance(v,str)), f".tree(get=value) requires type(value)==str, not {type(v)}"
+                return self.get_from_tree(v)
+            elif k == 'cut':
+                return self.cut_from_tree(root_metadata=v)
+            elif k == 'graft':
+                if isinstance(v,Node):
+                    n,m = v,True
+                else:
+                    assert(len(v)==2), ".tree(graft=x) requires `x=Node` or `x=(node,metadata)` for some node and `metadata` in (True,False,'copy')"
+                    n,m = v
+                return self.graft(node=n,merge_metadata=m)
+            else:
+                raise Exception(f'Invalid arg {k}; must be in (show,add,get,cut,graft)')
+
+
+    ## write
+    #def to_h5(self,group):
+    #    """
+    #    Takes a valid group for an HDF5 file object which is open
+    #    in write or append mode. Writes a new group with this object's
+    #    name and saves this object's data in it.
+
+    #    Accepts:
+    #        group (HDF5 group)
+    #    """
+    #    grp = group.create_group(self.name)
+    #    grp.attrs.create("emd_group_type",EMD_group_types['Root'])
+    #    grp.attrs.create("python_class",self.metadata.__class__.__name__)
+
+    ## read
+    #def from_h5(group):
+    #    """
+    #    Takes a valid HDF5 group for an HDF5 file object
+    #    which is open in read mode.  Determines if a valid
+    #    Root object of this name exists inside this group, and if it does,
+    #    loads and returns it. If it doesn't, raises an exception.
+
+    #    Accepts:
+    #        group (HDF5 group)
+
+    #    Returns:
+    #        A Root instance
+    #    """
+    #    er = f"Group {group} is not a valid EMD Root group"
+    #    assert("emd_group_type" in group.attrs.keys()), er
+    #    assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
+
+    #    root = Root(basename(group.name))
+    #    return root
+
+
+
+class Root(Node):
+    """
+    A Node instance with its .root property set to itself.
+    """
+    def __init__(self,name='root'):
+        Node.__init__(self,name=name)
+        self._treepath = ''
+        self._root = self
 
 
 
@@ -153,6 +441,9 @@ class Tree:
             return tree._getitem_from_list(x)
 
 
+    def __delitem__(self,x):
+        del(self._dict[x])
+
 
     # return the top level keys and items
     def keys(self):
@@ -163,6 +454,7 @@ class Tree:
 
 
     # print the full tree contents to screen
+    # TODO - this seems to have a bug when I run obj.tree()...
     def print(self):
         """
         Prints the tree contents to screen.
@@ -206,7 +498,7 @@ class Tree:
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( An object tree containing the following top-level object instances:"
         string += "\n"
-        for k,v in self._tree.items():
+        for k,v in self._dict.items():
             string += "\n"+space+f"    {k} \t\t ({v.__class__.__name__})"
         string += "\n)"
         return string
@@ -216,67 +508,11 @@ class Tree:
 
 
 
-class Root(Node):
-    """
-    A tree node which can read/write to H5 and which has
-    a ParentTree rather than a Tree
-    """
-    def __init__(
-        self,
-        name: Optional[str] ='root'
-        ):
-        """
-         Args:
-            name (Optional, string):
-        """
-        super().__init__()
-        self.name = name
-        self._tree = Tree()
-        self._root = self
-
-    @property
-    def root(self):
-        return self._root
 
 
-    # HDF5 i/o
 
-    # write
-    def to_h5(self,group):
-        """
-        Takes a valid group for an HDF5 file object which is open
-        in write or append mode. Writes a new group with this object's
-        name and saves this object's data in it.
-
-        Accepts:
-            group (HDF5 group)
-        """
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",EMD_group_types['Root'])
-        grp.attrs.create("python_class",self.metadata.__class__.__name__)
-
-    # read
-    def from_h5(group):
-        """
-        Takes a valid HDF5 group for an HDF5 file object
-        which is open in read mode.  Determines if a valid
-        Root object of this name exists inside this group, and if it does,
-        loads and returns it. If it doesn't, raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A Root instance
-        """
-        er = f"Group {group} is not a valid EMD Root group"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
-
-        root = Root(basename(group.name))
-        return root
-
-
+#    # HDF5 i/o
+#
 
 
 # TODO
@@ -315,11 +551,6 @@ class Root(Node):
     #    self._tree[key] = value
     #    value._parent = self._parent
     #    value.calibration = self._parent.calibration
-
-
-
-
-
 
 
 
