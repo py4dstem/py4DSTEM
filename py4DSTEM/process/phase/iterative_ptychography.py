@@ -1927,11 +1927,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
         return self
-    
+
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
-        if not hasattr(self,"_probe"):
+        if not hasattr(self, "_probe"):
             return None
 
         xp = self._xp
