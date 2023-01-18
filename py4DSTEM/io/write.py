@@ -1,11 +1,10 @@
 # Write EMD 1.0 formatted HDF5 files.
 
-
 import h5py
 import numpy as np
 from os.path import exists
 from os import remove
-from py4DSTEM.io.read import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from py4DSTEM.io.read import _is_EMD_file, _get_EMD_rootgroups
 from py4DSTEM.io.classes import (
     Metadata,
     Array,

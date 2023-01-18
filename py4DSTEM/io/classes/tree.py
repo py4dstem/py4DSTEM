@@ -142,6 +142,7 @@ class Node:
         self._treepath = None   # enables accessing parent groups
         self._root = None
         self._metadata = {}
+        self._emd_group_type = 'root'
 
 
     @property
@@ -325,17 +326,22 @@ class Node:
             self.show_tree(root=False)
             return
         else:
-            assert(len(kwargs)==1), f"kwargs accepts at most 1 argument; recieved {len(kwargs)}"
+            assert(len(kwargs)==1),\
+                f"kwargs accepts at most 1 argument; recieved {len(kwargs)}"
             k,v = kwargs.popitem()
-            assert(k in ['show','add','get','cut','graft']), f"invalid keyword passed to .tree(), {k}"
+            assert(k in ['show','add','get','cut','graft']),\
+                f"invalid keyword passed to .tree(), {k}"
             if k == 'show':
-                assert(isinstance(v,bool)), f".tree(show=value) requires type(value)==bool, not {type(v)}"
+                assert(isinstance(v,bool)),\
+                    f".tree(show=value) requires type(value)==bool, not {type(v)}"
                 self.show_tree(root=v)
             elif k == 'add':
-                assert(isinstance(v,Node)), f".tree(add=value) requires `value` to be a Node, received {type(value)}"
+                assert(isinstance(v,Node)),\
+                    f".tree(add=value) requires `value` to be a Node, received {type(value)}"
                 self.add_to_tree(v)
             elif k == 'get':
-                assert(isinstance(v,str)), f".tree(get=value) requires type(value)==str, not {type(v)}"
+                assert(isinstance(v,str)),\
+                    f".tree(get=value) requires type(value)==str, not {type(v)}"
                 return self.get_from_tree(v)
             elif k == 'cut':
                 return self.cut_from_tree(root_metadata=v)
@@ -349,41 +355,76 @@ class Node:
             else:
                 raise Exception(f'Invalid arg {k}; must be in (show,add,get,cut,graft)')
 
+    # write
+    def to_h5(self,group):
+        """
+        Takes an h5py Group instance and creates a subgroup containing
+        this node, tags indicating the groups EMD type and python class,
+        and any metadata in this node.
 
-    ## write
-    #def to_h5(self,group):
-    #    """
-    #    Takes a valid group for an HDF5 file object which is open
-    #    in write or append mode. Writes a new group with this object's
-    #    name and saves this object's data in it.
+        Accepts:
+            group (h5py group)
+        """
+        # TODO: validate that we have a self._emd_group_type
+        # TODO: how should this attribute work?
+        # make group
+        grp = group.create_group(self.name)
+        # add tags
+        grp.attrs.create("emd_group_type",self._emd_group_type)
+        grp.attrs.create("python_class",self.__class__.__name__)
+        # add metadata
+        items = self._metadata.items()
+        if len(items)>0:
+            # create container group for metadata dictionaries
+            grp_metadata = grp.create_group('_metadata')
+            grp_metadata.attrs.create("emd_group_type",EMD_group_types['Metadata'])
+            for k,v in items:
+                # add each Metadata instance
+                self._metadata[k].name = k
+                self._metadata[k].to_h5(grp_metadata)
 
-    #    Accepts:
-    #        group (HDF5 group)
-    #    """
-    #    grp = group.create_group(self.name)
-    #    grp.attrs.create("emd_group_type",EMD_group_types['Root'])
-    #    grp.attrs.create("python_class",self.metadata.__class__.__name__)
 
-    ## read
-    #def from_h5(group):
-    #    """
-    #    Takes a valid HDF5 group for an HDF5 file object
-    #    which is open in read mode.  Determines if a valid
-    #    Root object of this name exists inside this group, and if it does,
-    #    loads and returns it. If it doesn't, raises an exception.
+    # read
+    @classmethod
+    def from_h5(cls,group):
+        """
+        Takes an h5py Group which is open in read mode. Confirms that a
+        a Node of this name exists in this group, and loads and returns it
+        with it's metadata.
 
-    #    Accepts:
-    #        group (HDF5 group)
+        Accepts:
+            group (h5py Group)
 
-    #    Returns:
-    #        A Root instance
-    #    """
-    #    er = f"Group {group} is not a valid EMD Root group"
-    #    assert("emd_group_type" in group.attrs.keys()), er
-    #    assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
+        Returns:
+            (Node)
+        """
+        # Validate
+        er = f"Group {group} is not a valid EMD node"
+        assert("emd_group_type" in group.attrs.keys()), er
+        #assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
+        # Make a new Node
+        #node = Node(basename(group.name))
+        node = cls(basename(group.name))
+        # Read any metadata into the node
+        try:
+            grp_metadata = group['_metadata']
+            for key in grp_metadata.keys():
+                node.metadata = Metadata.from_h5(key)
+        except KeyError:
+            pass
+        # return
+        return node
 
-    #    root = Root(basename(group.name))
-    #    return root
+
+
+            # TODO
+            # this is where we call some Class.from_h5
+            # let's next go through this logic...
+            # I think i should be doing two things:
+            # (1) adding @classmethod decorators
+            # (2) adding logic to allow chaining of
+            #   of Parent/Child .to_h5 fns
+
 
 
 
