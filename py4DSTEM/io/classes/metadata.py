@@ -81,15 +81,14 @@ class Metadata:
     # write
     def to_h5(self,group):
         """
-        Takes a valid group for an HDF5 file object which is open
-        in write or append mode. Writes a new group with this object's
-        name and and stores this object's data in it.
+        Accepts an h5py Group which is open in write or append mode. Writes
+        a new group with this object's name and saves its metadata in it.
 
         Accepts:
-            group (HDF5 group)
+            group (h5py Group)
         """
         grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",EMD_group_types['Metadata'])
+        grp.attrs.create("emd_group_type",EMD_group_types['MetadataDict'])
         grp.attrs.create("python_class",self.__class__.__name__)
 
         # Save data
@@ -205,22 +204,22 @@ class Metadata:
 
 
     # read
+    @classmethod
     def from_h5(group):
         """
-        Takes a valid group for an HDF5 file object which is open in read
-        mode, Determines if a valid Metadata object of this name exists
-        inside this group, and if it does, loads and returns it. If it doesn't,
-        raises an exception.
+        Accepts an h5py Group which is open in read mode, confirms that
+        it represents an EMD MetadataDict group, then loads and returns it
+        as a Metadata instance.
 
         Accepts:
             group (HDF5 group)
 
         Returns:
-            A Metadata instance
+            (Metadata)
         """
         er = f"Group {group} is not a valid EMD Metadata group"
         assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['Metadata']), er
+        assert(group.attrs["emd_group_type"] == EMD_group_types['MetadataDict']), er
 
         # Get data
         data = {}
@@ -318,7 +317,12 @@ class Metadata:
 
 
         # make Metadata instance, add data, and return
-        md = Metadata(basename(group.name))
+        # TODO: what's the difference between the two lines below?
+        # the latter requires @classmethod
+        # the former seemed to work with just (group) as an arg? which
+        # is strange?
+        #md = Metadata(basename(group.name))
+        md = cls(basename(group.name))
         md._params.update(data)
         return md
 
