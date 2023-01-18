@@ -1330,6 +1330,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
         )
         min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
+        min_x = min_x if min_x > 0 else 0
+        min_y = min_y if min_y > 0 else 0
         max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
 
         rotated_array = rotate(
