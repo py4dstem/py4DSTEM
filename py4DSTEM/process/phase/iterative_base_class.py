@@ -1325,7 +1325,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         asnumpy = self._asnumpy
 
-        tf = AffineTransform(angle=-self._rotation_best_rad)
+        if self._rotation_best_transpose == True: 
+            angle = self._rotation_best_rad
+        else: 
+            angle = -self._rotation_best_rad
+
+        tf = AffineTransform(angle=angle)
         rotated_points = tf(
             asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
         )
@@ -1335,9 +1340,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
         max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
 
         rotated_array = rotate(
-            asnumpy(array), np.rad2deg(self._rotation_best_rad), reshape=False
-        )
-        return rotated_array[min_x:max_x, min_y:max_y]
+            asnumpy(array), np.rad2deg(-angle), reshape=False
+        )[min_x:max_x, min_y:max_y]
+        
+        if self._rotation_best_transpose == True: 
+            rotated_array = rotated_array.T
+
+        return rotated_array
 
     @property
     def angular_sampling(self):
