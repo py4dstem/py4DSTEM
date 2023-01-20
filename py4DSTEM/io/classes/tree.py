@@ -3,6 +3,7 @@ from typing import Optional
 from os.path import basename
 
 from py4DSTEM.io.classes import Metadata
+from py4DSTEM.io.classes.class_io_utils import EMD_group_types
 
 
 class Node:
@@ -133,6 +134,8 @@ class Node:
     # TODO
 
     """
+    _emd_group_type = 'node'
+
     def __init__(
         self,
         name: Optional[str] = 'node'
@@ -142,7 +145,6 @@ class Node:
         self._treepath = None   # enables accessing parent groups
         self._root = None
         self._metadata = {}
-        self._emd_group_type = 'root'
 
 
     @property
@@ -355,36 +357,59 @@ class Node:
             else:
                 raise Exception(f'Invalid arg {k}; must be in (show,add,get,cut,graft)')
 
+
+
     # write
     def to_h5(self,group):
         """
         Takes an h5py Group instance and creates a subgroup containing
-        this node, tags indicating the groups EMD type and python class,
+        this node, tags indicating the groups EMD type and Python class,
         and any metadata in this node.
 
         Accepts:
-            group (h5py group)
+            group (h5py Group)
+
+        Returns:
+            (h5py Group) the new node's Group
         """
-        # TODO: validate that we have a self._emd_group_type
-        # TODO: how should this attribute work?
-        # make group
+        # Validate group type
+        assert(self.__class__._emd_group_type in EMD_group_types)
+        # Make group, add tags
         grp = group.create_group(self.name)
-        # add tags
-        grp.attrs.create("emd_group_type",self._emd_group_type)
+        grp.attrs.create("emd_group_type",self.__class__._emd_group_type)
         grp.attrs.create("python_class",self.__class__.__name__)
         # add metadata
         items = self._metadata.items()
         if len(items)>0:
             # create container group for metadata dictionaries
             grp_metadata = grp.create_group('_metadata')
-            grp_metadata.attrs.create("emd_group_type",EMD_group_types['Metadata'])
+            grp_metadata.attrs.create("emd_group_type","metadatabundle")
             for k,v in items:
                 # add each Metadata instance
                 self._metadata[k].name = k
                 self._metadata[k].to_h5(grp_metadata)
-
+        # return
+        return grp
 
     # read
+
+    # this machinery is designed to work with and be extendible
+    # in the context of child classes.
+
+    # to add a new child class, only a new _get_constructor_args()
+    # classmethod should be necessary. The .from_h5 function should
+    # not need any modification.
+
+    @classmethod
+    def _get_constructor_args(cls,group):
+        """
+        Takes a group, and returns a dictionary of args/values
+        to pass to the class constructor
+        """
+        # Nodes contain only metadata
+        return {}
+
+
     @classmethod
     def from_h5(cls,group):
         """
@@ -398,32 +423,37 @@ class Node:
         Returns:
             (Node)
         """
-        # Validate
+        # Validate inputs
         er = f"Group {group} is not a valid EMD node"
         assert("emd_group_type" in group.attrs.keys()), er
-        #assert(group.attrs["emd_group_type"] == EMD_group_types['Root']), er
-        # Make a new Node
-        #node = Node(basename(group.name))
-        node = cls(basename(group.name))
-        # Read any metadata into the node
+        assert(group.attrs["emd_group_type"] in EMD_group_types)
+
+        # Make dict of args to build a new generic class instance
+        # then make the new class instance
+        args = cls._get_constructor_args(group)
+        node = cls(basename(group.name), **args)
+
+        # some classes needed to be first instantiated, then populated with data
+        if hasattr(cls,'_populate_instance'):
+            node = cls._populate_instance(node,group)
+
+        # Read any metadata
         try:
             grp_metadata = group['_metadata']
             for key in grp_metadata.keys():
                 node.metadata = Metadata.from_h5(key)
         except KeyError:
             pass
-        # return
+
+        # Return
         return node
 
 
 
-            # TODO
-            # this is where we call some Class.from_h5
-            # let's next go through this logic...
-            # I think i should be doing two things:
-            # (1) adding @classmethod decorators
-            # (2) adding logic to allow chaining of
-            #   of Parent/Child .to_h5 fns
+
+
+
+
 
 
 
@@ -436,6 +466,7 @@ class Root(Node):
         Node.__init__(self,name=name)
         self._treepath = ''
         self._root = self
+        self._emd_group_type = 'root'
 
 
 

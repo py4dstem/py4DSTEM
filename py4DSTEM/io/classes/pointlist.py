@@ -9,7 +9,6 @@ from typing import Optional
 from os.path import basename
 
 from py4DSTEM.io.classes.tree import Node
-from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 
 class PointList(Node):
@@ -189,16 +188,18 @@ class PointList(Node):
     # write
     def to_h5(self,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        write or append mode. Writes a new group this object's name
-        and saves this object's data in it.
+        Takes an h5py Group instance and creates a subgroup containing
+        this PointList, tags indicating its EMD type and Python class,
+        and the pointlist's data and metadata.
 
         Accepts:
-            group (HDF5 group)
+            group (h5py Group)
+
+        Returns:
+            (h5py Group) the new pointlist's group
         """
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",2) # this tag indicates a PointList
-        grp.attrs.create("python_class",self.__class__.__name__)
+        # Construct group and add metadata
+        grp = Node.to_h5(self,group)
 
         # Add data
         for f,t in zip(self.fields,self.types):
@@ -207,38 +208,22 @@ class PointList(Node):
                 data = self.data[f]
             )
             group_current_field.attrs.create("dtype", np.string_(t))
-            #group_current_field.create_dataset(
-            #    "data",
-            #    data = pointlist.data[f]
-            #)
 
-        # Add metadata
-        _write_metadata(self, grp)
+        # Return
+        return grp
+
+
 
 
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in read mode.
-        Determines if a valid PointList object of this name exists inside
-        this group, and if it does, loads and returns it. If it doesn't, raises
-        an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A PointList instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        er = f"Group {group} is not a valid EMD PointList group"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['PointList']), er
-
-
-        # Get metadata
+        # Get PointList metadata
         fields = list(group.keys())
-        if '_metadata' in fields:
-            fields.remove('_metadata')
+        fields = [f for f in fields if isinstance(f,h5py.Dataset)]
         dtype = []
         for field in fields:
             curr_dtype = group[field].attrs["dtype"].decode('utf-8')
@@ -251,15 +236,11 @@ class PointList(Node):
             for field in fields:
                 data[field] = np.array(group[field])
 
-        # Make the PointList
-        pl = PointList(
-            data=data,
-            name=basename(group.name))
-
-        # Add additional metadata
-        _read_metadata(pl, group)
-
-        return pl
+        # make args dictionary and return
+        return {
+            'data' : data,
+            'name' : basename(group.name)
+        }
 
 
 

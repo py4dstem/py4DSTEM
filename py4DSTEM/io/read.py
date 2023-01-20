@@ -239,7 +239,7 @@ def read(
         # Read...
 
         # ...if the whole tree was requested
-        if nodegroup is rootgroup and tree is in (True,'noroot'):
+        if nodegroup is rootgroup and tree in (True,'noroot'):
             # build the tree
             _populate_tree(root,rootgroup)
 
@@ -286,8 +286,8 @@ def _populate_tree(node,group):
     to the runtime tree underneath this node
     """
     keys = [k for k in group.keys() if isinstance(group[k],h5py.Group)]
-    keys = [k for k in keys if 'emd_group_type' is in group[k].attrs.keys()]
-    keys = [k for k in keys if group[k].attrs['emd_group_type'] is in \
+    keys = [k for k in keys if 'emd_group_type' in group[k].attrs.keys()]
+    keys = [k for k in keys if group[k].attrs['emd_group_type'] in \
         EMD_data_group_types]
 
     for key in keys:

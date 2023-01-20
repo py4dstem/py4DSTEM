@@ -78,6 +78,7 @@ class Metadata:
 
     # HDF5 i/o
 
+    # TODO (?): make this work on python dictionaries
     # write
     def to_h5(self,group):
         """
@@ -87,8 +88,9 @@ class Metadata:
         Accepts:
             group (h5py Group)
         """
+        # Make a new group
         grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",EMD_group_types['MetadataDict'])
+        grp.attrs.create("emd_group_type","metadata")
         grp.attrs.create("python_class",self.__class__.__name__)
 
         # Save data
@@ -205,7 +207,7 @@ class Metadata:
 
     # read
     @classmethod
-    def from_h5(group):
+    def from_h5(cls,group):
         """
         Accepts an h5py Group which is open in read mode, confirms that
         it represents an EMD MetadataDict group, then loads and returns it
@@ -217,9 +219,10 @@ class Metadata:
         Returns:
             (Metadata)
         """
+        # Validate inputs
         er = f"Group {group} is not a valid EMD Metadata group"
         assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['MetadataDict']), er
+        assert(group.attrs["emd_group_type"] == "metadata"), er
 
         # Get data
         data = {}
@@ -317,11 +320,6 @@ class Metadata:
 
 
         # make Metadata instance, add data, and return
-        # TODO: what's the difference between the two lines below?
-        # the latter requires @classmethod
-        # the former seemed to work with just (group) as an arg? which
-        # is strange?
-        #md = Metadata(basename(group.name))
         md = cls(basename(group.name))
         md._params.update(data)
         return md

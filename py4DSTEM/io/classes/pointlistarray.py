@@ -6,7 +6,6 @@ from os.path import basename
 
 from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.pointlist import PointList
-from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 class PointListArray(Node):
     """
@@ -150,16 +149,18 @@ class PointListArray(Node):
     # write
     def to_h5(self,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with this object's name
-        and saves this object's data in it.
+        Takes an h5py Group instance and creates a subgroup containing
+        this PointListArray, tags indicating its EMD type and Python class,
+        and the pointlistarray's data and metadata.
 
         Accepts:
-            group (HDF5 group)
+            group (h5py Group)
+
+        Returns:
+            (h5py Group) the new pointlistarray's group
         """
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",3) # this tag indicates a PointListArray
-        grp.attrs.create("python_class",self.__class__.__name__)
+        # Construct group and add metadata
+        grp = Node.to_h5(self,group)
 
         # Add metadata
         dtype = h5py.special_dtype(vlen=self.dtype)
@@ -173,51 +174,49 @@ class PointListArray(Node):
         for (i,j) in tqdmnd(dset.shape[0],dset.shape[1]):
             dset[i,j] = self[i,j].data
 
-        # Add additional metadata
-        _write_metadata(self, grp)
+        # Return
+        return grp
 
 
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in read mode,
-        Determines if a valid PointListArray object of this name exists
-        inside this group, and if it does, loads and returns it. If it doesn't,
-        raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A PointListArray instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        er = f"Group {group} is not a valid EMD PointListArray group"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['PointListArray']), er
-
-       # Get the DataSet
+        # Get the DataSet
         dset = group['data']
         dtype = h5py.check_vlen_dtype( dset.dtype )
         shape = dset.shape
 
-        # Initialize a PointListArray
-        pla = PointListArray(
-            dtype=dtype,
-            shape=shape,
-            name=basename(group.name)
-        )
+        # make args dictionary and return
+        return {
+            'dtype' : dtype,
+            'shape' : shape,
+            'name' : basename(group.name)
+        }
 
-        # Add data
-        for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
-            try:
-                pla[i,j].add(dset[i,j])
-            except ValueError:
-                pass
+
 
         # Add metadata
         _read_metadata(pla, group)
 
         return pla
+
+    #staticmethod
+    def _populate_instance(instance,group):
+        """
+        Accepts an already extant class instance, and populates it with the data from h5py Group `group`
+        """
+        # Find the data and shape
+        dset = group['data']
+        shape = instance.shape
+        # Add data
+        for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
+            try:
+                instance[i,j].add(dset[i,j])
+            except ValueError:
+                pass
 
 
 
