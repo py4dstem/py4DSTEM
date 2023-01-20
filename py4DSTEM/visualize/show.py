@@ -26,9 +26,12 @@ def show(
     max=None,
     power=None,
     power_offset=True,
+    combine_images = False,
     ticks=True,
     bordercolor=None,
     borderwidth=5,
+    show_image=True,
+    return_ar_scaled=False,
     return_intensity_range=False,
     returncax=False,
     returnfig=False,
@@ -38,6 +41,7 @@ def show(
     mask=None,
     mask_color='k',
     mask_alpha=0.,
+    masked_intensity_range=False,
     rectangle=None,
     circle=None,
     annulus=None,
@@ -108,9 +112,9 @@ def show(
         (soon deprecated) alias ``clipvals``, in combination with ``vmin``,
         and ``vmax``.  The method by which the upper and lower clip values
         are determined is controlled by ``intensity_range``, and must be a string in
-        ('ordered','absolute','manual','minmax','std','centered'). See the argument
+        ('None','ordered','minmax','absolute','std','centered'). See the argument
         description for ``intensity_range`` for a description of the behavior for each.
-        The clip values can be returned with the ``return_intensity_range`` parameter. 
+        The clip values can be returned with the ``return_intensity_range`` parameter.
 
     Masking:
         If a numpy masked array is passed to show, the function will automatically
@@ -233,7 +237,7 @@ def show(
                 * 'full': fill entire color range with sorted intensity values
                 * 'power': power law scaling
                 * 'log': values where ar<=0 are set to 0
-        intensity_range (str): method for setting clipvalues (min and max intensities).  
+        intensity_range (str): method for setting clipvalues (min and max intensities).
                         The original name "clipvals" is now deprecated.
                         Default is 'ordered'. Accepted values:
                 * 'ordered': vmin/vmax are set to fractions of the
@@ -276,6 +280,10 @@ def show(
             multiple calls to show
         mask_color (color): see 'mask'
         mask_alpha (float): see 'mask'
+        masked_intensity_range (bool): controls if masked pixel values are included when
+            determining the display value range; False indicates that all pixel values
+            will be used to determine the intensity range, True indicates only unmasked
+            pixels will be used
         scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
             with calibrations is passed, adds a scalebar.  If None and anything else is
             passed or if False, does not add a scalebar.  If a dict is passed, it is
@@ -287,7 +295,6 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-
     # Alias dep
     if min is not None: vmin=min
     if max is not None: vmax=max
@@ -298,8 +305,7 @@ def show(
         if intensity_range is None:
             intensity_range = clipvals
 
-
-    # plot a grid if `ar` is a list
+    # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
@@ -310,12 +316,59 @@ def show(
                 rm.append(k)
         for k in rm:
             del args[k]
-        from py4DSTEM.visualize.show_extention import _show_grid
-        if returnfig:
-            return _show_grid(**args,**kwargs)
+
+        if combine_images is False:
+            # use show_grid to plot grid of images
+            from py4DSTEM.visualize.show_extention import _show_grid
+            if returnfig:
+                return _show_grid(**args,**kwargs)
+            else:
+                _show_grid(**args,**kwargs)
+                return
         else:
-            _show_grid(**args,**kwargs)
-            return
+            # generate a multichannel combined RGB image
+            del args['ar']
+            del args['combine_images']
+            del args['return_ar_scaled']
+            del args['show_image']
+
+            # init
+            num_images = len(ar)
+            hue_angles = np.linspace(0.0,2.0*np.pi,num_images,endpoint=False)
+            cos_total = np.zeros(ar[0].shape)
+            sin_total = np.zeros(ar[0].shape)
+            val_total = np.zeros(ar[0].shape)
+
+            # loop over images
+            from py4DSTEM.visualize import show
+            for a0 in range(num_images):
+                im = show(
+                        ar[a0],
+                        **args,
+                        return_ar_scaled = True,
+                        show_image=False,
+                        **kwargs,
+                    )
+                cos_total += np.cos(hue_angles[a0]) * im
+                sin_total += np.sin(hue_angles[a0]) * im
+                # val_max = np.maximum(val_max, im)
+                val_total += im
+
+            # Assemble final image
+            sat_change = np.maximum(val_total - 1.0, 0.0)
+            ar_rgb = np.zeros((ar[0].shape[0],ar[0].shape[1],3))
+            ar_rgb[:,:,0] = np.arctan2(sin_total,cos_total) / (2*np.pi)
+            ar_rgb[:,:,1] = 1 - sat_change
+            ar_rgb[:,:,2] = val_total# np.sqrt(cos_total**2 + sin_total**2)
+            ar_rgb = np.clip(ar_rgb,0.0,1.0)
+
+            # Convert to RGB
+            from matplotlib.colors import hsv_to_rgb
+            ar_rgb = hsv_to_rgb(ar_rgb)
+
+            # Output image for plotting
+            ar = ar_rgb
+
     # support for native data types
     elif not isinstance(ar,np.ndarray):
         # support for calibration/auto-scalebars
@@ -353,7 +406,7 @@ def show(
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
 
     # Otherwise, plot one image
-    
+
     # get image from a masked array
     if mask is not None:
         assert mask.shape == ar.shape
@@ -361,7 +414,7 @@ def show(
         if isinstance(ar,np.ma.masked_array):
             ar = np.ma.array(data=ar.data,mask=np.logical_or(ar.mask,~mask))
         else:
-            ar = np.ma.array(data=ar,mask=~mask)    
+            ar = np.ma.array(data=ar,mask=np.logical_not(mask))
     elif isinstance(ar,np.ma.masked_array):
         pass
     else:
@@ -370,9 +423,9 @@ def show(
 
     # New intensity scaling logic
     assert scaling in ('none','full','log','power','hist')
-    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')  
+    assert intensity_range in ('ordered','absolute','manual','minmax','std','centered')
     if power is not None:
-        scaling = 'power'            
+        scaling = 'power'
     if scaling == 'none':
         _ar = ar.copy()
         _mask = np.ones_like(_ar.data,dtype=bool)
@@ -400,7 +453,7 @@ def show(
             if ar_min < 0:
                 _ar = np.power(ar.copy() - np.min(ar), power)
             else:
-                _ar = np.power(ar.copy(), power)            
+                _ar = np.power(ar.copy(), power)
             _mask = np.ones_like(_ar.data,dtype=bool)
             if intensity_range == 'absolute':
                 if vmin != None: vmin = np.power(vmin,power)
@@ -412,6 +465,12 @@ def show(
     # vmin and vmax are determined so the mask affects those)
     _ar = np.ma.array(data=_ar.data,mask=np.logical_or(~_mask, ar.mask))
 
+    #set scaling for boolean arrays 
+    if _ar.dtype == 'bool':
+        intensity_range = 'absolute'
+        vmin = 0
+        vmax = 1
+
     # Set the clipvalues
     if intensity_range == 'manual':
         warnings.warn("Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
@@ -419,9 +478,14 @@ def show(
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
         if vmax is None: vmax = 0.98
-        vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
+        if masked_intensity_range:
+            vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask==False)])
+        else:
+            vals = np.sort(_ar.data[~np.isnan(_ar)])
         ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
         ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
+        ind_vmin = np.max([0,ind_vmin])
+        ind_vmax = np.min([len(vals)-1,ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
     elif intensity_range == 'minmax':
@@ -448,186 +512,190 @@ def show(
     else:
         raise Exception
 
-    # Create or attach to the appropriate Figure and Axis
-    if figax is None:
-        fig,ax = plt.subplots(1,1,figsize=figsize)
-    else:
-        fig,ax = figax
-        assert(isinstance(fig,Figure))
-        assert(isinstance(ax,Axes))
+    if show_image:
+        # Create or attach to the appropriate Figure and Axis
+        if figax is None:
+            fig,ax = plt.subplots(1,1,figsize=figsize)
+        else:
+            fig,ax = figax
+            assert(isinstance(fig,Figure))
+            assert(isinstance(ax,Axes))
 
 
-    # Create colormap with mask_color for bad values
-    cm = copy(plt.cm.get_cmap(cmap))
-    if mask_color=='empty':
-        cm.set_bad(alpha=0)
-    else:
-        cm.set_bad(color=mask_color)
+        # Create colormap with mask_color for bad values
+        cm = copy(plt.cm.get_cmap(cmap))
+        if mask_color=='empty':
+            cm.set_bad(alpha=0)
+        else:
+            cm.set_bad(color=mask_color)
 
-    # Plot the image
-    if not hist:
-        cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cm,**kwargs)
-        if np.any(_ar.mask):
-            mask_display = np.ma.array(data=_ar.data,mask=~_ar.mask)
-            ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha,vmin=vmin,vmax=vmax)
-    # ...or, plot its histogram
-    else:
-        hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
-                                                np.max(_ar),num=n_bins))
-        w = bin_edges[1]-bin_edges[0]
-        x = bin_edges[:-1]+w/2.
-        ax.bar(x,hist,width=w)
-        ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
+        # Plot the image
+        if not hist:
+                cax = ax.matshow(_ar,vmin=vmin,vmax=vmax,cmap=cm,**kwargs)
+                if np.any(_ar.mask):
+                    mask_display = np.ma.array(data=_ar.data,mask=~_ar.mask)
+                    ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha,vmin=vmin,vmax=vmax)
+        # ...or, plot its histogram
+        else:
+            hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
+                                                    np.max(_ar),num=n_bins))
+            w = bin_edges[1]-bin_edges[0]
+            x = bin_edges[:-1]+w/2.
+            ax.bar(x,hist,width=w)
+            ax.vlines((vmin,vmax),0,ax.get_ylim()[1],color='k',ls='--')
 
-    # add a title
-    if title is not None:
-        ax.set_title(title)
+        # add a title
+        if title is not None:
+            ax.set_title(title)
 
-    # Add a border
-    if bordercolor is not None:
-        for s in ['bottom','top','left','right']:
-            ax.spines[s].set_color(bordercolor)
-            ax.spines[s].set_linewidth(borderwidth)
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # Add a border
+        if bordercolor is not None:
+            for s in ['bottom','top','left','right']:
+                ax.spines[s].set_color(bordercolor)
+                ax.spines[s].set_linewidth(borderwidth)
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-    # Add shape/point overlays
-    if rectangle is not None:
-        add_rectangles(ax,rectangle)
-    if circle is not None:
-        add_circles(ax,circle)
-    if annulus is not None:
-        add_annuli(ax,annulus)
-    if ellipse is not None:
-        add_ellipses(ax,ellipse)
-    if points is not None:
-        add_points(ax,points)
-    if grid_overlay is not None:
-        add_grid_overlay(ax,grid_overlay)
+        # Add shape/point overlays
+        if rectangle is not None:
+            add_rectangles(ax,rectangle)
+        if circle is not None:
+            add_circles(ax,circle)
+        if annulus is not None:
+            add_annuli(ax,annulus)
+        if ellipse is not None:
+            add_ellipses(ax,ellipse)
+        if points is not None:
+            add_points(ax,points)
+        if grid_overlay is not None:
+            add_grid_overlay(ax,grid_overlay)
 
 
-    # Parse arguments for scale/coordinate overlays
-    if calibration is not None:
-        assert isinstance(calibration,Calibration)
-    assert space in ('Q','R')
-    # pixel size/units
-    if pixelsize is None and calibration is None:
-        pixelsize = 1
-    if pixelsize is not None:
-        pass
-    else:
+        # Parse arguments for scale/coordinate overlays
+        if calibration is not None:
+            assert isinstance(calibration,Calibration)
+        assert space in ('Q','R')
+        # pixel size/units
+        if pixelsize is None and calibration is None:
+            pixelsize = 1
+        if pixelsize is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelsize = calibration.get_Q_pixel_size()
+            else:
+                pixelsize = calibration.get_R_pixel_size()
+        if pixelunits is None and calibration is None:
+            pixelunits = 'pixels'
+        if pixelunits is not None:
+            pass
+        else:
+            if space == 'Q':
+                pixelunits = calibration.get_Q_pixel_units()
+            else:
+                pixelunits = calibration.get_R_pixel_units()
+        # origin
         if space == 'Q':
-            pixelsize = calibration.get_Q_pixel_size()
+            if x0 is not None:
+                pass
+            elif calibration is not None:
+                try:
+                    x0 = calibration.get_origin(rx,ry)[0]
+                except AttributeError:
+                    raise Exception('The Calibration instance passed does not contain a value for qx0')
+            else:
+                x0 = 0
+            if y0 is not None:
+                pass
+            elif calibration is not None:
+                try:
+                    y0 = calibration.get_origin(rx,ry)[1]
+                except AttributeError:
+                    raise Exception('The Calibration instance passed does not contain a value for qy0')
+            else:
+                y0 = 0
         else:
-            pixelsize = calibration.get_R_pixel_size()
-    if pixelunits is None and calibration is None:
-        pixelunits = 'pixels'
-    if pixelunits is not None:
-        pass
-    else:
+            x0 = x0 if x0 is not None else 0
+            y0 = y0 if y0 is not None else 0
+        # ellipticity
         if space == 'Q':
-            pixelunits = calibration.get_Q_pixel_units()
+            if a is not None:
+                pass
+            elif calibration is not None:
+                try:
+                    a = calibration.get_a(rx,ry)
+                except AttributeError:
+                    raise Exception('The Calibration instance passed does not contain a value for a')
+            else:
+                a = 1
+            if theta is not None:
+                pass
+            elif calibration is not None:
+                try:
+                    theta = calibration.get_theta(rx,ry)
+                except AttributeError:
+                    raise Exception('The Calibration instance passed does not contain a value for theta')
+            else:
+                theta = 0
         else:
-            pixelunits = calibration.get_R_pixel_units()
-    # origin
-    if space == 'Q':
-        if x0 is not None:
-            pass
-        elif calibration is not None:
-            try:
-                x0 = calibration.get_origin(rx,ry)[0]
-            except AttributeError:
-                raise Exception('The Calibration instance passed does not contain a value for qx0')
-        else:
-            x0 = 0
-        if y0 is not None:
-            pass
-        elif calibration is not None:
-            try:
-                y0 = calibration.get_origin(rx,ry)[1]
-            except AttributeError:
-                raise Exception('The Calibration instance passed does not contain a value for qy0')
-        else:
-            y0 = 0
-    else:
-        x0 = x0 if x0 is not None else 0
-        y0 = y0 if y0 is not None else 0
-    # ellipticity
-    if space == 'Q':
-        if a is not None:
-            pass
-        elif calibration is not None:
-            try:
-                a = calibration.get_a(rx,ry)
-            except AttributeError:
-                raise Exception('The Calibration instance passed does not contain a value for a')
-        else:
-            a = 1
-        if theta is not None:
-            pass
-        elif calibration is not None:
-            try:
-                theta = calibration.get_theta(rx,ry)
-            except AttributeError:
-                raise Exception('The Calibration instance passed does not contain a value for theta')
-        else:
-            theta = 0
-    else:
-        a = a if a is not None else 1
-        theta = theta if theta is not None else 0
+            a = a if a is not None else 1
+            theta = theta if theta is not None else 0
 
 
-    # Add a scalebar
-    if scalebar is not None and scalebar is not False:
-        # Add the grid
-        scalebar['Nx'],scalebar['Ny']=ar.shape
-        scalebar['pixelsize'] = pixelsize
-        scalebar['pixelunits'] = pixelunits
-        scalebar['space'] = space
-        add_scalebar(ax,scalebar)
+        # Add a scalebar
+        if scalebar is not None and scalebar is not False:
+            # Add the grid
+            scalebar['Nx'],scalebar['Ny']=ar.shape
+            scalebar['pixelsize'] = pixelsize
+            scalebar['pixelunits'] = pixelunits
+            scalebar['space'] = space
+            add_scalebar(ax,scalebar)
 
 
-    # Add cartesian grid
-    if cartesian_grid is not None:
-        Nx,Ny = ar.shape
-        assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        cartesian_grid['x0'],cartesian_grid['y0']=x0,y0
-        cartesian_grid['Nx'],cartesian_grid['Ny']=Nx,Ny
-        cartesian_grid['pixelsize'] = pixelsize
-        cartesian_grid['pixelunits'] = pixelunits
-        cartesian_grid['space'] = space
-        add_cartesian_grid(ax,cartesian_grid)
+        # Add cartesian grid
+        if cartesian_grid is not None:
+            Nx,Ny = ar.shape
+            assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            cartesian_grid['x0'],cartesian_grid['y0']=x0,y0
+            cartesian_grid['Nx'],cartesian_grid['Ny']=Nx,Ny
+            cartesian_grid['pixelsize'] = pixelsize
+            cartesian_grid['pixelunits'] = pixelunits
+            cartesian_grid['space'] = space
+            add_cartesian_grid(ax,cartesian_grid)
 
 
-    # Add polarelliptical grid
-    if polarelliptical_grid is not None:
-        Nx,Ny = ar.shape
-        assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
-        polarelliptical_grid['x0'],polarelliptical_grid['y0']=x0,y0
-        polarelliptical_grid['e'],polarelliptical_grid['theta']=e,theta
-        polarelliptical_grid['Nx'],polarelliptical_grid['Ny']=Nx,Ny
-        polarelliptical_grid['pixelsize'] = pixelsize
-        polarelliptical_grid['pixelunits'] = pixelunits
-        polarelliptical_grid['space'] = space
-        add_polarelliptical_grid(ax,polarelliptical_grid)
+        # Add polarelliptical grid
+        if polarelliptical_grid is not None:
+            Nx,Ny = ar.shape
+            assert isinstance(x0,Number), "Error: x0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            assert isinstance(y0,Number), "Error: y0 must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            assert isinstance(e,Number), "Error: e must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            assert isinstance(theta,Number), "Error: theta must be a number. If a Coordinate system was passed, try passing a position (rx,ry)."
+            polarelliptical_grid['x0'],polarelliptical_grid['y0']=x0,y0
+            polarelliptical_grid['e'],polarelliptical_grid['theta']=e,theta
+            polarelliptical_grid['Nx'],polarelliptical_grid['Ny']=Nx,Ny
+            polarelliptical_grid['pixelsize'] = pixelsize
+            polarelliptical_grid['pixelunits'] = pixelunits
+            polarelliptical_grid['space'] = space
+            add_polarelliptical_grid(ax,polarelliptical_grid)
 
 
-    # Add r-theta grid
-    if rtheta_grid is not None:
-        add_rtheta_grid(ax,rtheta_grid)
+        # Add r-theta grid
+        if rtheta_grid is not None:
+            add_rtheta_grid(ax,rtheta_grid)
 
-    # tick marks
-    if ticks is False:
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # tick marks
+        if ticks is False:
+            ax.set_xticks([])
+            ax.set_yticks([])
 
     # Show or return
     returnval = []
     if returnfig: returnval.append((fig,ax))
+    if return_ar_scaled:
+        ar_scaled = np.clip((ar - vmin)/(vmax - vmin),0.0,1.0)
+        returnval.append(ar_scaled)        
     if return_intensity_range:
         if scaling == 'log':
             vmin,vmax = np.power(np.e,vmin),np.power(np.e,vmax)
@@ -923,12 +991,20 @@ def show_rectangles(ar,lims=(0,1,0,1),color='r',fill=True,alpha=0.25,linewidth=2
     add_rectangles(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
 
-def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig=False,**kwargs):
+def show_circles(
+    ar,
+    center,
+    R,
+    color='r',
+    fill=True,
+    alpha=0.3,
+    linewidth=2,
+    returnfig=False,
+    **kwargs):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
     To overlay one circle, center must be a single 2-tuple.  To overlay N circles,
@@ -939,24 +1015,30 @@ def show_circles(ar,center,R,color='r',fill=True,alpha=0.3,linewidth=2,returnfig
     parameters not listed below.
 
     Accepts:
-        center      (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
-        R           (number of list of N numbers) the circles radius
-        color       (valid matplotlib color, or list of N colors)
-        fill        (bool or list of N bools) filled in or empty rectangles
-        alpha       (number, 0 to 1) transparency
-        linewidth   (number)
+        ar              (2D array) the data
+        center          (2-tuple, or list of N 2-tuples) the center of the circle (x0,y0)
+        R               (number of list of N numbers) the circles radius
+        color           (valid matplotlib color, or list of N colors)
+        fill            (bool or list of N bools) filled in or empty rectangles
+        alpha           (number, 0 to 1) transparency
+        linewidth       (number)
 
     Returns:
         If returnfig==False (default), the figure is plotted and nothing is returned.
         If returnfig==False, the figure and its one axis are returned, and can be
         further edited.
     """
-    fig,ax = show(ar,returnfig=True,**kwargs)
+
+    fig,ax = show(
+        ar,
+        returnfig=True,
+        **kwargs
+    )
+
     d = {'center':center,'R':R,'color':color,'fill':fill,'alpha':alpha,'linewidth':linewidth}
     add_circles(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -995,7 +1077,6 @@ def show_ellipses(ar,center,a,b,theta,color='r',fill=True,alpha=0.3,linewidth=2,
     add_ellipses(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -1030,7 +1111,6 @@ def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,return
     add_annuli(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
@@ -1063,7 +1143,6 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
     add_points(ax,d)
 
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,ax
