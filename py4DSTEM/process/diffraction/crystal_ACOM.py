@@ -1785,13 +1785,10 @@ def orientation_map_to_orix_CrystalMap(
 
     # Get orientation matrices
     orientation_matrices = orientation_map.matrix[:,:,ind_orientation].copy()
-    print(orientation_matrices.shape)
     if transpose_xy:
         orientation_matrices = np.transpose(orientation_matrices, (1,0,2,3))
-    print(orientation_matrices.shape)
-
-        # print(orientation_matrices.shape)
-
+    if flip_x:
+        orientation_matrices = np.flip(orientation_matrices, axis=0)
 
     # Convert the orientation matrices into Euler angles
     # suppress Gimbal lock warnings
