@@ -1783,30 +1783,35 @@ def orientation_map_to_orix_CrystalMap(
 
     import warnings
 
+    # Get orientation matrices
+    orientation_matrices = orientation_map.matrix[:,:,ind_orientation].copy()
+    print(orientation_matrices.shape)
+    if transpose_xy:
+        orientation_matrices = np.transpose(orientation_matrices, (1,0,2,3))
+    print(orientation_matrices.shape)
+
+        # print(orientation_matrices.shape)
+
+
     # Convert the orientation matrices into Euler angles
-    warnings.filterwarnings("ignore", category=FutureWarning)  # suppress Gimbal lock warnings
-    angles = np.vstack(
-        [
-        R.from_matrix(matrix.T).as_euler('zxz')
-        for matrix in orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
-        ]
-    )
-    warnings.filterwarnings("default", category=FutureWarning)  # re-enable warnings
-
-    # print(orientation_map.matrix[:,:,ind_orientation].shape)
-    # print(orientation_map.matrix.shape)
-    # angles = np.zeros((orientation_map.num_x * orientation_map.num_y, 3))
-    # for rx in range(1):#orientation_map.num_x):
-    #     for ry in range(1):#orientation_map.num_y):
-
-    #         m = orientation_map.matrix[rx,ry,ind_orientation].reshape(-1,3,3)
-    #         print(m)
+    # suppress Gimbal lock warnings
+    def fxn():
+        warnings.warn("deprecated", DeprecationWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        angles = np.vstack(
+            [
+            R.from_matrix(matrix.T).as_euler('zxz')
+            for matrix in orientation_matrices.reshape(-1,3,3)
+            ]
+        )
 
     # generate a list of Rotation objects from the Euler angles
     rotations = Rotation.from_euler(angles, direction='crystal2lab')
 
     # Generate x,y coordinates since orix uses flat data internally
-    coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
+    # coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
+    coords, _ = create_coordinate_arrays((orientation_matrices.shape[0],orientation_matrices.shape[1]),(pixel_size,)*2)
 
     # Generate an orix structure from the Crystal
     atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
