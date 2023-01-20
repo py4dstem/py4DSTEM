@@ -14,11 +14,6 @@ try:
 except:
     cp = None
 
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
 
 def orientation_plan(
     self,
@@ -115,29 +110,17 @@ def orientation_plan(
         self.orientation_refine = False
 
     if self.pymatgen_available:
+        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        from pymatgen.core.structure import Structure
         structure = Structure(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
         self.pointgroup = SpacegroupAnalyzer(structure)
 
 
-
-
     # Handle the "auto" case first, since it works by overriding zone_axis_range,
     #   fiber_axis, and fiber_angles then using the regular parser:
     if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
-        # from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        # from pymatgen.core.structure import Structure
-
-        # initialize structure
-        # structure = Structure(
-        #     self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
-        # )
-
-        # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
-        # self.pointgroup = pointgroup
-        # self.pointgroup = SpacegroupAnalyzer(structure)
-
         assert (
             self.pointgroup.get_point_group_symbol() in orientation_ranges
         ), "Unrecognized pointgroup returned by pymatgen!"
@@ -154,9 +137,6 @@ def orientation_plan(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()},\n"
             f" using arguments: zone_axis_range = \n{zone_axis_range}, \n fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
-
-        # Set a flag so we know pymatgen is available
-        # self.pymatgen_available = True
 
 
     if isinstance(zone_axis_range, str):
@@ -303,7 +283,7 @@ def orientation_plan(
     )
     self.orientation_zone_axis_steps = (np.round(
         step / self.orientation_refine_ratio
-        ) * self.orientation_refine_ratio).astype(np.int)
+        ) * self.orientation_refine_ratio).astype(np.integer)
 
     if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
         self.orientation_num_zones = int(1)
@@ -338,7 +318,7 @@ def orientation_plan(
             (self.orientation_zone_axis_steps + 1)
             * (self.orientation_zone_axis_steps + 2)
             / 2
-        ).astype(np.int)
+        ).astype(np.integer)
         self.orientation_vecs = np.zeros((self.orientation_num_zones, 3))
         self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
         self.orientation_inds = np.zeros((self.orientation_num_zones, 3), dtype="int")
@@ -347,7 +327,7 @@ def orientation_plan(
         # or circular arc SLERP for fiber texture
         for a0 in np.arange(1, self.orientation_zone_axis_steps + 1):
             inds = np.arange(a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1).astype(
-                np.int
+                np.integer
             )
 
             p0 = pv[a0, :]
@@ -585,7 +565,7 @@ def orientation_plan(
     )
 
     # Solve for number of angular steps along in-plane rotation direction
-    self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(np.int)
+    self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(np.integer)
 
     # Calculate -z angles (Euler angle 3)
     self.orientation_gamma = np.linspace(
@@ -1673,6 +1653,9 @@ def calculate_strain(
     k_max: Optional[float] = None,
     min_num_peaks = 5,
     rotation_range = None,
+    mask_from_corr = True,
+    corr_range = (0, 2),
+    corr_normalize = True,
     progress_bar = True,
     ):
     '''
@@ -1694,6 +1677,10 @@ def calculate_strain(
         k_max (float):                   Maximum scattering vector
         min_num_peaks (int):             Minimum number of peaks required.
         rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
+        progress_bar (bool):             Show progress bar
+        mask_from_corr (bool):           Use ACOM correlation signal for mask
+        corr_range (np.ndarray):         Range of correlation signals for mask
+        corr_normalize (bool):           Normalize correlation signal before masking
 
     Returns:
         strain_map (RealSlice):  strain tensor
@@ -1708,7 +1695,17 @@ def calculate_strain(
             5)),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
-    strain_map.get_slice('mask').data[:] = 1.0
+    if mask_from_corr:
+        corr_range = np.array(corr_range)
+        corr_mask = orientation_map.corr[:,:,0]
+        if corr_normalize:
+            corr_mask /= np.mean(corr_mask)
+        corr_mask = np.clip((corr_mask - corr_range[0]) \
+            / (corr_range[1]-corr_range[0]),0,1)
+        strain_map.get_slice('mask').data[:] = corr_mask
+
+    else:
+        strain_map.get_slice('mask').data[:] = 1.0
 
     # init values
     if corr_kernel_size is None:

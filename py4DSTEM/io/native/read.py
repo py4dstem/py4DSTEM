@@ -18,7 +18,7 @@ from py4DSTEM.io.datastructure import (
     Calibration,
     DataCube,
     DiffractionSlice,
-    DiffractionImage,
+    VirtualDiffraction,
     RealSlice,
     VirtualImage,
     Probe,
@@ -111,6 +111,8 @@ def read_py4DSTEM(
                     return [join(l1keys[0],k) for k in l2keys]
                 else:
                     root = join(l1keys[0],l2keys[0])
+                    #this is a windows fix
+                    root = root.replace("\\","/")
 
     # Open h5 file
     with h5py.File(filepath,'r') as f:
@@ -123,6 +125,7 @@ def read_py4DSTEM(
             if tree is True:
                 return _read_with_tree(group_data)
 
+            elif tree is False:
                 return _read_without_tree(group_data)
 
             elif tree == 'noroot':
@@ -282,7 +285,8 @@ def _get_class(grp):
         'Calibration' : Calibration,
         'DataCube' : DataCube,
         'DiffractionSlice' : DiffractionSlice,
-        'DiffractionImage' : DiffractionImage,
+        'VirtualDiffraction' : VirtualDiffraction,
+        'DiffractionImage' : VirtualDiffraction,
         'RealSlice' : RealSlice,
         'VirtualImage' : VirtualImage,
         'Probe' : Probe,
