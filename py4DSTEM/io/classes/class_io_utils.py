@@ -12,22 +12,20 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 
 # Define the EMD group types
 
-EMD_group_types = {
-    'Root' : 'root',
-    'Metadata' : 'metadata',
-    'MetadataDict' : 'metadatadict',
-    'Custom': 0,
-    'Array' : 1,
-    'PointList' : 2,
-    'PointListArray': 3,
-}
+EMD_data_group_types = (
+    "node",
+    "array",
+    "pointlist",
+    "pointlistarray",
+    "custom",
+)
+EMD_basic_group_types = (
+    "root",
+    "metadatabundle",
+    "metadata",
+)
+EMD_group_types = EMD_basic_group_types + EMD_data_group_types
 
-EMD_data_group_types = [
-    'Custom',
-    'Array',
-    'PointList',
-    'PointListArray',
-]
 
 
 
@@ -99,23 +97,5 @@ def _get_class(grp):
 
 
 
-
-# Metadata i/o helper functions
-
-def _write_metadata(obj,grp):
-    items = obj._metadata.items()
-    if len(items)>0:
-        grp_metadata = grp.create_group('_metadata')
-        for name,md in items:
-            obj._metadata[name].name = name
-            obj._metadata[name].to_h5(grp_metadata)
-
-def _read_metadata(obj, grp):
-    try:
-        grp_metadata = grp['_metadata']
-        for key in grp_metadata.keys():
-            obj.metadata = Metadata_from_h5(grp_metadata[key])
-    except KeyError:
-        pass
 
 

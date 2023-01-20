@@ -9,7 +9,6 @@ from os.path import basename
 
 from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.metadata import Metadata
-from py4DSTEM.io.classes.class_io_utils import _read_metadata, _write_metadata
 
 class Array(Node):
     """
@@ -444,16 +443,18 @@ class Array(Node):
     # write
     def to_h5(self,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with this object's name
-        and saves the object's data in it.
+        Takes an h5py Group instance and creates a subgroup containing
+        this Array, tags indicating its EMD type and Python class,
+        and the array's data and metadata.
 
         Accepts:
-            group (HDF5 group)
+            group (h5py Group)
+
+        Returns:
+            (h5py Group) the new array's Group
         """
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type",1) # this tag indicates an Array
-        grp.attrs.create("python_class",self.__class__.__name__)
+        # Construct group and add metadata
+        grp = Node.to_h5(self,group)
 
         # add the data
         data = grp.create_dataset(
@@ -498,27 +499,18 @@ class Array(Node):
             )
             dset.attrs.create('name',name)
 
-        # Add metadata
-        _write_metadata(self, grp)
+        # Return
+        return grp
+
+
 
 
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in read mode.
-        Determines if this group represents an Array object and if it does, loads
-        returns it. If it doesn't, raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            An Array instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        er = f"Group {group} is not a valid EMD Array group"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == EMD_group_types['Array']), er
-
         # get data
         dset = group['data']
         data = dset[:]
@@ -551,21 +543,16 @@ class Array(Node):
         else:
             slicelabels = None
 
-        # make Array
-        ar = Array(
-            data = data,
-            name = basename(group.name),
-            units = units,
-            dims = dims,
-            dim_names = dim_names,
-            dim_units = dim_units,
-            slicelabels = slicelabels
-        )
-
-        # add metadata
-        _read_metadata(ar, group)
-
-        return ar
+        # make args dictionary and return
+        return {
+            'data' : data,
+            'name' : basename(group.name),
+            'units' : units,
+            'dims' : dims,
+            'dim_names' : dim_names,
+            'dim_units' : dim_units,
+            'slicelabels' : slicelabels
+        }
 
 
 
