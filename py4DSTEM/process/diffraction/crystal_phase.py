@@ -149,6 +149,7 @@ class Crystal_Phase:
         tolerance_distance = 0.08,
         method = 'nnls',
         use_peak_intensities = True,
+        intensity_power = 0.25,
         use_phase_orientations = True,
         ind_orientation = 0,
         set_orientation_matrix = None,
@@ -185,6 +186,7 @@ class Crystal_Phase:
                     tolerance_distance=tolerance_distance,
                     method = method,
                     use_peak_intensities = use_peak_intensities,
+                    intensity_power = intensity_power,
                     use_phase_orientations = use_phase_orientations,
                     set_orientation_matrix = set_orientation_matrix,
                     set_zone_axis = set_zone_axis,
@@ -206,6 +208,7 @@ class Crystal_Phase:
         method = 'nnls', 
         tolerance_distance = 0.08,
         use_peak_intensities = True,
+        intensity_power = 0.25,
         use_phase_orientations = True,
         ind_orientation = 0,
         set_orientation_matrix = None,
@@ -219,7 +222,9 @@ class Crystal_Phase:
             tolerance_distance (float):                     Distance allowed between a peak and match
             method (str):                                   Numerical method used to quantify phase
             use_peak_intensities (bool, optional):          Whether or not to use the intensities of the peaks in the decomposition
+            intensity_power (float):                        ...
             use_phase_orientations (bool, optional):        Whether or not to use phase orientations from orientation_maps
+            distance_weight (bool):                         ...
             ind_orientation (int):                          index in orientation_maps to match to
             set_phase_orientations (list, optional):        List of phase orientation matrices for each structure
             mask_peaks (list, optional):                    A pointer of which positions to mask peaks from
@@ -229,9 +234,15 @@ class Crystal_Phase:
             phase_weights (np.ndarray):                     Weights of each phase
             phase_residuals (np.ndarray):                   Residuals
         """
+        # Things to add:
+        #     1. Remove center peak from pointlists
+        #     2. Better cost for distance from peaks in pointlists
+        #     3. How to handle multiple matches per crystal
+        #     4. 
+        
         pointlist = pointlistarray.get_pointlist(position[0], position[1])
         if use_peak_intensities:
-            pl_intensities = pointlist['intensity']
+            pl_intensities = pointlist['intensity']**intensity_power
         else:
             pl_intensities = np.ones(pointlist['intensity'].shape)
         
@@ -270,9 +281,9 @@ class Crystal_Phase:
                 ind = np.where(distances == np.min(distances))[0][0]
                 if distances[ind] <= tolerance_distance:
                     if use_peak_intensities:
-                        phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]
+                        phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]*((tolerance_distance-distances[ind])/tolerance_distance)
                     else:
-                        phase_peak_match_intensities[d] = 1      
+                        phase_peak_match_intensities[d] = 1*((tolerance_distance-distances[ind])/tolerance_distance)
                 else:
                     continue   
             pointlist_peak_matches.append(phase_peak_match_intensities)
