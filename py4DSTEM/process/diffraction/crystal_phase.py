@@ -115,7 +115,7 @@ class Crystal_Phase:
                 cm = mpl.colors.LinearSegmentedColormap.from_list('cmap', [c0,c1], N = 10)
                 ax.matshow(
                     np.ma.array(
-                        self.orientation_maps[m].corr, 
+                        self.orientation_maps[m].corr[:,:,index], 
                         mask = best_match_phase[m]), 
                     cmap = cm)
             plt.show()
