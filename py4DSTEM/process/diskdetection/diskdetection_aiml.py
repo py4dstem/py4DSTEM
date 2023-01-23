@@ -8,9 +8,9 @@ import glob
 import json
 import shutil
 import numpy as np
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
+from py4DSTEM.io.classes.py4dstem import QPoints, BraggVectors
 
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from time import time
 from numbers import Number
 
