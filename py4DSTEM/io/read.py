@@ -333,7 +333,7 @@ def _print_h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
         linelevels.append(tablevel)
     keys = [k for k in f.keys() if isinstance(f[k],h5py.Group)]
     if not show_metadata:
-        keys = [k for k in keys if k != '_metadata']
+        keys = [k for k in keys if k != 'metadatabundle']
     N = len(keys)
     for i,k in enumerate(keys):
         string = ''
