@@ -7,16 +7,15 @@ from os.path import exists, splitext, basename, dirname, join
 from typing import Union, Optional
 import warnings
 
-# Classes for native reader
+# Classes
 from py4DSTEM.io.classes import (
     Root,
     Node,
     Tree,
-    Calibration
 )
 from py4DSTEM.io.classes.class_io_utils import _get_class, EMD_data_group_types
 
-# Readers for non-native filetypes
+# non-native file readers
 from py4DSTEM.io.nonnative import (
     read_empad,
     read_dm,
@@ -29,7 +28,7 @@ from py4DSTEM.io.nonnative import (
 # File parser utility
 
 def _parse_filetype(fp):
-    """ Accepts a path to a 4D-STEM dataset, and returns the file type.
+    """ Accepts a path to a data file, and returns the file type as a string.
     """
     _, fext = splitext(fp)
     fext = fext.lower()
@@ -61,7 +60,6 @@ def _parse_filetype(fp):
 
 
 
-
 # EMD utilities
 
 def _get_EMD_rootgroups(filepath):
@@ -84,18 +82,17 @@ def _is_EMD_file(filepath):
     with h5py.File(filepath,'r') as f:
         try:
             assert('emd_group_type' in f.attrs.keys())
-            assert(f.attrs['emd_group_type'] == 'file')
             assert('version_major' in f.attrs.keys())
             assert('version_minor' in f.attrs.keys())
+            assert(f.attrs['emd_group_type'] == 'file')
+            assert(f.attrs['version_major'] == 1)
+            assert(f.attrs['version_minor'] == 0)
         except AssertionError:
             return False
-    try:
-        rootgroups = _get_EMD_rootgroups(filepath)
-        if len(rootgroups)>0:
-            return True
-        else:
-            return False
-    except OSError: #TODO: do we want this here?
+    rootgroups = _get_EMD_rootgroups(filepath)
+    if len(rootgroups)>0:
+        return True
+    else:
         return False
 
 def _get_EMD_version(filepath, rootgroup=None):
@@ -147,8 +144,8 @@ def _version_is_geq(current,minimum):
 # TODO: tree = 'noroot' is confusing.  Better name?
 def read(
     filepath,
-    emdpath: Optional[str] = None,
     tree: Optional[Union[bool,str]] = True,
+    emdpath: Optional[str] = None,
     **legacy_options,
     ):
     """
@@ -158,8 +155,10 @@ def read(
     Args:
         filepath (str or Path): the file path
         emdpath (str): path to the node in an EMD object tree to read
-            from. May be a root node or some downstream node using '/'
-            delimiters between node names. emdpath is None...(TODO)
+            from. May be a root node or some downstream node. Use '/'
+            delimiters between node names. If emdpath is None, checks to
+            see how many root nodes are present. If there is one, loads
+            this tree. If there are several, returns a list of the root names.
         tree (True or False or 'noroot'): indicates what data should be loaded,
             relative to the node specified by `emdpath`. If set to `False`,
             only data/metadata in the specified node is loaded, plus any
@@ -177,8 +176,8 @@ def read(
     """
     # parse filepath
     er1 = f"filepath must be a string or Path, not {type(filepath)}"
-    er2 = f"specified filepath '{filepath}' does not exist"
-    er3 = f"Error: {filepath} isn't a valid EMD 1.0+ file."
+    er2 = f"specified filepath '{filepath}' was not found on the filesystem"
+    er3 = f"{filepath} isn't a valid EMD 1.0 file."
     assert(isinstance(filepath, (str,pathlib.Path) )), er1
     assert(exists(filepath)), er2
     assert(_is_EMD_file(filepath)), er3
@@ -191,6 +190,8 @@ def read(
     v = _get_EMD_version(filepath)
 
     # Support for legacy readers...
+    # TODO: we'll need a catch for older py4DSTEM files...
+    # needs to be in py4dstem.io, not emdfile
     if v[0] < 1:
         #from <somewhere> import legacy_reader
         #return legacy_reader(filepath,**legacy_options)
@@ -204,13 +205,13 @@ def read(
         elif len(rootgroups) == 1:
             emdpath = rootgroups[0]
         else:
-            # TODO: what do we want here?
-            raise Exception("i have to build this code which means deciding on the logic here :'''''''[[[[[[[")
+            print("Multiple root groups detected - returning root names. Please specify the `emdpath` argument")
+            return rootgroups
 
     # parse the root and tree paths
     p = emdpath.split('/')
-    if p[0]=='': p=p[1:]
-    if p[-1]=='': p=p[:-1]
+    if '' in p:
+        p.remove('')
     rootpath = p[0]
     treepath = '/'.join(p[1:])
 
@@ -224,9 +225,12 @@ def read(
         # Find the node of interest
         group_names = treepath.split('/')
         nodegroup = rootgroup
-        for name in group_names:
-            assert(name in nodegroup.keys()), f"Error: group {name} not ground in group {nodegroup.name}"
-            nodegroup = nodegroup[name]
+        if len(group_names)==1 and group_names[0]=='':
+            pass
+        else:
+            for name in group_names:
+                assert(name in nodegroup.keys()), f"Error: group {name} not found in group {nodegroup.name}"
+                nodegroup = nodegroup[name]
 
         # Read the root
         root = Root.from_h5(rootgroup)
@@ -234,7 +238,6 @@ def read(
         # if this is all that was requested, return
         if nodegroup is rootgroup and tree is False:
                 return root
-
 
         # Read...
 
@@ -244,7 +247,7 @@ def read(
             _populate_tree(root,rootgroup)
 
         # ...if a single node was requested
-        if tree is False:
+        elif tree is False:
             # read the node
             node = _read_single_node(nodegroup)
             # build the tree and return
@@ -252,18 +255,20 @@ def read(
             return root
 
         # ...if a branch was requested
-        if tree is True:
+        elif tree is True:
             # read source node and add to tree
             node = _read_single_node(nodegroup)
             root.add_to_tree(node)
             # build the tree
             _populate_tree(node,nodegroup)
 
-        # ...if a rootless branch was requsted
-        if tree == 'noroot':
+        # ...if `tree == 'noroot'`
+        else:
             # build the tree
             _populate_tree(root,nodegroup)
 
+    # Return
+    return root
 
 
 
@@ -283,7 +288,8 @@ def _populate_tree(node,group):
     """
     `node` is a Node and `group` is its parallel h5py Group.
     Reads the tree underneath this nodegroup in the h5 file and adds it
-    to the runtime tree underneath this node
+    to the runtime tree underneath this node. Does *not* read `group`
+    itself - this function grafts everything underneath `group` onto node
     """
     keys = [k for k in group.keys() if isinstance(group[k],h5py.Group)]
     keys = [k for k in keys if 'emd_group_type' in group[k].attrs.keys()]
@@ -291,6 +297,7 @@ def _populate_tree(node,group):
         EMD_data_group_types]
 
     for key in keys:
+        print(f"Reading group {group[key].name}")
         new_node = _read_single_node(group[key])
         node.add_to_tree(new_node)
         _populate_tree(
@@ -306,6 +313,8 @@ def _populate_tree(node,group):
 
 
 # Print the HDF5 filetree to screen
+
+# TODO: I think these weren't working...
 
 def print_h5_tree(filepath, show_metadata=False):
     """
@@ -343,10 +352,6 @@ def _print_h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
             show_metadata=show_metadata)
 
     pass
-
-
-
-
 
 
 
@@ -430,82 +435,5 @@ def import_file(
         raise Exception("Bad filetype!")
 
     return data
-
-
-
-
-
-
-
-
-
-
-
-#def _read_without_tree(grp):
-#
-#    # handle empty datasets
-#    if grp.attrs['emd_group_type'] == 'root':
-#        data = Node(
-#            name = basename(grp.name),
-#        )
-#        cal = _add_calibration(
-#            data.tree,
-#            grp
-#        )
-#        if cal is not None:
-#            data.tree = ParentTree(data, cal)
-#            data.calibration = cal
-#        return data
-#
-#    # read all other data
-#    __class__ = _get_class(grp)
-#    data = __class__.from_h5(grp)
-#    if not isinstance(data, Calibration):
-#        cal = _add_calibration(
-#            data.tree,
-#            grp
-#        )
-#        if cal is not None:
-#            data.tree = ParentTree(data, cal)
-#            data.calibration = cal
-#    return data
-#
-#
-#
-#def _read_without_root(grp):
-#    root = Node()
-#    cal = _add_calibration(
-#        root,
-#        grp
-#    )
-#    if cal is not None:
-#        root.tree = ParentTree(root,cal)
-#        root.calibration = cal
-#    _populate_tree(
-#        root.tree,
-#        grp
-#    )
-#    return root
-#
-#
-## TODO: case of multiple Calibration instances
-#def _add_calibration(tree,grp):
-#    keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
-#    keys = [k for k in keys if (_get_class(grp[k]) == Calibration)]
-#    if len(keys)>0:
-#        k = keys[0]
-#        tree[k] = _read_without_tree(grp[k])
-#        return tree[k]
-#    else:
-#        name = dirname(grp.name)
-#        if name != '/':
-#            grp_upstream = grp.file[dirname(grp.name)]
-#            return _add_calibration(tree, grp_upstream)
-#        else:
-#            return None
-
-
-
-
 
 

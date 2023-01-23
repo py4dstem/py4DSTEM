@@ -3,7 +3,6 @@
 
 
 from py4DSTEM import _TESTPATH
-#from os.path import join
 filepath = _TESTPATH
 
 
