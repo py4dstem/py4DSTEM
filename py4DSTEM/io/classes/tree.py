@@ -407,7 +407,9 @@ class Node:
         to pass to the class constructor
         """
         # Nodes contain only metadata
-        return {}
+        return {
+            'name' : basename(group.name)
+        }
 
 
     @classmethod
@@ -431,7 +433,7 @@ class Node:
         # Make dict of args to build a new generic class instance
         # then make the new class instance
         args = cls._get_constructor_args(group)
-        node = cls(basename(group.name), **args)
+        node = cls(**args)
 
         # some classes needed to be first instantiated, then populated with data
         if hasattr(cls,'_populate_instance'):
@@ -440,8 +442,8 @@ class Node:
         # Read any metadata
         try:
             grp_metadata = group['_metadata']
-            for key in grp_metadata.keys():
-                node.metadata = Metadata.from_h5(key)
+            for md in grp_metadata.values():
+                node.metadata = Metadata.from_h5(md)
         except KeyError:
             pass
 
@@ -480,8 +482,6 @@ class Tree:
 
 
     # Enables adding items to the Tree's dictionary
-    # TODO: add value validation - must be an EMD object
-    # TODO: validate the key by excluding '/' chars
     def __setitem__(self, key, value):
         assert(isinstance(value,Node)), f"only Node instances can be added to tree. not type {type(value)}"
         self._dict[key] = value
@@ -533,15 +533,15 @@ class Tree:
         """
         print('/')
         self._print_tree_to_screen(self)
-        print('\n')
+        pass
 
-    def _print_tree_to_screen(self, tree, tablevel=0, linelevels=[]):
+    @staticmethod
+    def _print_tree_to_screen(tree, tablevel=0, linelevels=[]):
         """
         """
         if tablevel not in linelevels:
             linelevels.append(tablevel)
         keys = [k for k in tree.keys()]
-        #keys = [k for k in keys if k != 'metadata']
         N = len(keys)
         for i,k in enumerate(keys):
             string = ''
@@ -554,8 +554,8 @@ class Tree:
             if i == N-1:
                 linelevels.remove(tablevel)
             try:
-                self._print_tree_to_screen(
-                    tree[k].tree,
+                tree._print_tree_to_screen(
+                    tree[k]._tree,
                     tablevel=tablevel+1,
                     linelevels=linelevels)
             except AttributeError:

@@ -223,7 +223,7 @@ class PointList(Node):
         """
         # Get PointList metadata
         fields = list(group.keys())
-        fields = [f for f in fields if isinstance(f,h5py.Dataset)]
+        fields = [f for f in fields if isinstance(group[f],h5py.Dataset)]
         dtype = []
         for field in fields:
             curr_dtype = group[field].attrs["dtype"].decode('utf-8')

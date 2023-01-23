@@ -78,7 +78,6 @@ class Metadata:
 
     # HDF5 i/o
 
-    # TODO (?): make this work on python dictionaries
     # write
     def to_h5(self,group):
         """

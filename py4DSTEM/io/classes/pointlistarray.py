@@ -4,6 +4,7 @@ from typing import Optional
 import h5py
 from os.path import basename
 
+from py4DSTEM.io.tqdmnd import tqdmnd
 from py4DSTEM.io.classes.tree import Node
 from py4DSTEM.io.classes.pointlist import PointList
 
@@ -217,7 +218,7 @@ class PointListArray(Node):
                 instance[i,j].add(dset[i,j])
             except ValueError:
                 pass
-
+        return instance
 
 
 

@@ -12,6 +12,11 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 
 # Define the EMD group types
 
+EMD_base_group_types = (
+    "root",
+    "metadatabundle",
+    "metadata",
+)
 EMD_data_group_types = (
     "node",
     "array",
@@ -19,12 +24,7 @@ EMD_data_group_types = (
     "pointlistarray",
     "custom",
 )
-EMD_basic_group_types = (
-    "root",
-    "metadatabundle",
-    "metadata",
-)
-EMD_group_types = EMD_basic_group_types + EMD_data_group_types
+EMD_group_types = EMD_base_group_types + EMD_data_group_types
 
 
 
@@ -70,10 +70,9 @@ def EMD_group_exists(group:h5py.Group, emd_group_type, name:str):
 
 
 
-# TODO: 'signatures' is not the right work. Constructors?
 def _get_class(grp):
     """
-    Function returning Class signatures from corresponding strings
+    Function returning Class constructors from corresponding strings
     """
     from py4DSTEM.io import classes
 
