@@ -1561,85 +1561,6 @@ def match_single_pattern(
         return orientation
 
 
-def orientation_map_to_orix_CrystalMap(
-    self,
-    orientation_map,
-    ind_orientation=0,
-    pixel_size=1.0,
-    pixel_units='px',
-    return_color_key=False
-    ):
-    try:
-        from orix.quaternion import Rotation, Orientation
-        from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
-        from orix.plot import IPFColorKeyTSL
-    except ImportError:
-        raise Exception("orix failed to import; try pip installing separately")
-
-    from diffpy.structure import Atom, Lattice, Structure
-
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure as pgStructure
-
-    from scipy.spatial.transform import Rotation as R
-
-    from py4DSTEM.process.diffraction.utils import element_symbols
-
-    # Convert the orientation matrices into Euler angles
-    angles = np.vstack(
-        [
-        R.from_matrix(matrix.T).as_euler('zxz')
-        for matrix in  orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
-        ]
-    )
-
-    # generate a list of Rotation objects from the Euler angles
-    rotations = Rotation.from_euler(angles, direction='crystal2lab')
-
-    # Generate x,y coordinates since orix uses flat data internally
-    coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
-
-    # Generate an orix structure from the Crystal
-    atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
-
-    structure = Structure(
-        atoms=atoms,
-        lattice=Lattice(*self.cell),
-    )
-    
-    # Use pymatgen to get the symmetry
-    pg_structure = pgStructure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
-    pointgroup = SpacegroupAnalyzer(pg_structure).get_point_group_symbol()
-    
-    # If the structure has only one element, name the phase based on the element
-    if np.unique(self.numbers).size == 1:
-        name = element_symbols[self.numbers[0]-1]
-    else:
-        name = pg_structure.formula    
-    
-    # Generate an orix Phase to store symmetry
-    phase = Phase(
-        name=name,
-        point_group=pointgroup,
-        structure=structure,
-    )
-
-    xmap = CrystalMap(
-        rotations=rotations,
-        x=coords["x"],
-        y=coords["y"],
-        phase_list=PhaseList(phase),
-        prop={
-            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
-            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
-        },
-        scan_unit=pixel_units,
-    )
-
-    ckey = IPFColorKeyTSL(phase.point_group)
-
-    return (xmap, ckey) if return_color_key else xmap
-
 
 
 def calculate_strain(
@@ -1797,6 +1718,8 @@ def save_ang_file(
     ind_orientation=0,
     pixel_size=1.0,
     pixel_units="px",
+    transpose_xy = True,
+    flip_x = False,
 ):
     """
     This function outputs an ascii text file in the .ang format, containing
@@ -1809,6 +1732,8 @@ def save_ang_file(
         ind_orientation (int):              Which orientation match to plot if num_matches > 1
         pixel_size (float):                 Pixel size, if known.
         pixel_units (str):                  Units of the pixel size
+        transpose_xy (bool):                Transpose x and y pixel coordinates.
+        flip_x (bool):                      Swap x direction pixels (after transpose).
 
     Returns:
         nothing
@@ -1823,9 +1748,108 @@ def save_ang_file(
         pixel_size=pixel_size,
         pixel_units=pixel_units,
         return_color_key=False,
+        transpose_xy = transpose_xy,
+        flip_x = flip_x,
     )
 
     file_writer(file_name, xmap)
+
+
+def orientation_map_to_orix_CrystalMap(
+    self,
+    orientation_map,
+    ind_orientation=0,
+    pixel_size=1.0,
+    pixel_units='px',
+    transpose_xy = True,
+    flip_x = False,
+    return_color_key=False
+    ):
+    try:
+        from orix.quaternion import Rotation, Orientation
+        from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
+        from orix.plot import IPFColorKeyTSL
+    except ImportError:
+        raise Exception("orix failed to import; try pip installing separately")
+
+    from diffpy.structure import Atom, Lattice, Structure
+
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure as pgStructure
+
+    from scipy.spatial.transform import Rotation as R
+
+    from py4DSTEM.process.diffraction.utils import element_symbols
+
+    import warnings
+
+    # Get orientation matrices
+    orientation_matrices = orientation_map.matrix[:,:,ind_orientation].copy()
+    if transpose_xy:
+        orientation_matrices = np.transpose(orientation_matrices, (1,0,2,3))
+    if flip_x:
+        orientation_matrices = np.flip(orientation_matrices, axis=0)
+
+    # Convert the orientation matrices into Euler angles
+    # suppress Gimbal lock warnings
+    def fxn():
+        warnings.warn("deprecated", DeprecationWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        angles = np.vstack(
+            [
+            R.from_matrix(matrix.T).as_euler('zxz')
+            for matrix in orientation_matrices.reshape(-1,3,3)
+            ]
+        )
+
+    # generate a list of Rotation objects from the Euler angles
+    rotations = Rotation.from_euler(angles, direction='crystal2lab')
+
+    # Generate x,y coordinates since orix uses flat data internally
+    # coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
+    coords, _ = create_coordinate_arrays((orientation_matrices.shape[0],orientation_matrices.shape[1]),(pixel_size,)*2)
+
+    # Generate an orix structure from the Crystal
+    atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
+
+    structure = Structure(
+        atoms=atoms,
+        lattice=Lattice(*self.cell),
+    )
+    
+    # Use pymatgen to get the symmetry
+    pg_structure = pgStructure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
+    pointgroup = SpacegroupAnalyzer(pg_structure).get_point_group_symbol()
+    
+    # If the structure has only one element, name the phase based on the element
+    if np.unique(self.numbers).size == 1:
+        name = element_symbols[self.numbers[0]-1]
+    else:
+        name = pg_structure.formula    
+    
+    # Generate an orix Phase to store symmetry
+    phase = Phase(
+        name=name,
+        point_group=pointgroup,
+        structure=structure,
+    )
+
+    xmap = CrystalMap(
+        rotations=rotations,
+        x=coords["x"],
+        y=coords["y"],
+        phase_list=PhaseList(phase),
+        prop={
+            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
+            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
+        },
+        scan_unit=pixel_units,
+    )
+
+    ckey = IPFColorKeyTSL(phase.point_group)
+
+    return (xmap, ckey) if return_color_key else xmap
 
 
 def symmetry_reduce_directions(
