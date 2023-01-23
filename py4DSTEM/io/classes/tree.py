@@ -382,7 +382,7 @@ class Node:
         items = self._metadata.items()
         if len(items)>0:
             # create container group for metadata dictionaries
-            grp_metadata = grp.create_group('_metadata')
+            grp_metadata = grp.create_group('metadatabundle')
             grp_metadata.attrs.create("emd_group_type","metadatabundle")
             for k,v in items:
                 # add each Metadata instance
@@ -441,7 +441,7 @@ class Node:
 
         # Read any metadata
         try:
-            grp_metadata = group['_metadata']
+            grp_metadata = group['metadatabundle']
             for md in grp_metadata.values():
                 node.metadata = Metadata.from_h5(md)
         except KeyError:

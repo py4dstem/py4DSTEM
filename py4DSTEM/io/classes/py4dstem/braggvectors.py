@@ -183,7 +183,7 @@ class BraggVectors:
 
         # Get Qshape metadata
         try:
-            grp_metadata = group['_metadata']
+            grp_metadata = group['metadatabundle']
             Qshape = Metadata.from_h5(grp_metadata['braggvectors'])['Qshape']
         except KeyError:
             raise Exception("could not read Qshape")
