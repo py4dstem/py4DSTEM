@@ -44,14 +44,14 @@ def read_dm(
         thumbanil_count = 1 if dmFile.thumbnail else 0
         dataset_index = 0
         for i in range(dmFile.numObjects - thumbanil_count):
-            temp_data = dmFile.getMemmap(dataset_index)
+            temp_data = dmFile.getMemmap(i)
             if len(np.squeeze(temp_data).shape) > 2:
                 dataset_index = i
                 break
 
         # We will only try to read pixel sizes for 4D data for now
         pixel_size_found = False
-        if dmFile.dataShape[dataset_index] > 2:
+        if dmFile.dataShape[dataset_index + thumbanil_count] > 2:
             # The pixel sizes of all datasets are chained together, so
             # we have to figure out the right offset
             try:
