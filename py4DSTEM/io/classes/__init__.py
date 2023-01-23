@@ -1,6 +1,6 @@
 # Base (emd) class imports
 from py4DSTEM.io.classes.metadata import Metadata
-from py4DSTEM.io.classes.tree import Node,Root,Tree
+from py4DSTEM.io.classes.tree import Node,Root,Branch
 from py4DSTEM.io.classes.array import Array
 from py4DSTEM.io.classes.pointlist import PointList
 from py4DSTEM.io.classes.pointlistarray import PointListArray

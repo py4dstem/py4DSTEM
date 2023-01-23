@@ -7,8 +7,8 @@ import h5py
 from py4DSTEM.io.classes.array import Array
 from py4DSTEM.io.classes.py4dstem.datacube_fns import DataCubeMethods
 from py4DSTEM.io.classes.py4dstem.calibration import Calibration
-from py4DSTEM.io.classes import Tree
-##;pfrom py4DSTEM.io.classes.tree import ParentTree
+from py4DSTEM.io.classes import Branch
+##;pfrom py4DSTEM.io.classes.tree import ParentBranch
 
 class DataCube(Array,DataCubeMethods):
     """
@@ -79,11 +79,11 @@ class DataCube(Array,DataCubeMethods):
 
 
         # make a tree
-        # we're overwriting the emd Tree with the py4DSTEM Tree
+        # we're overwriting the emd Branch with the py4DSTEM Branch
         # which knows how to track the parent datacube
         # also adds calibration to the tree
-        self.tree = Tree()
-        ##;pself.tree = ParentTree(self, Calibration())
+        self.tree = Branch()
+        ##;pself.tree = ParentBranch(self, Calibration())
 
         # set size/units
         self.tree['calibration'].set_R_pixel_size( R_pixel_size )

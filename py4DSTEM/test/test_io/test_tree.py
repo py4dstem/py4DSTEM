@@ -218,13 +218,13 @@ class TestTree(TreeBuilder):
         assert(not(isinstance(self.md_root,Node)))
 
         # confirm objects have inherited Node attrs
-        assert(hasattr(self.ar,"_tree"))
+        assert(hasattr(self.ar,"_branch"))
         assert(hasattr(self.ar,"_metadata"))
-        assert(hasattr(self.pl,"_tree"))
+        assert(hasattr(self.pl,"_branch"))
         assert(hasattr(self.pl,"_metadata"))
-        assert(hasattr(self.pla,"_tree"))
+        assert(hasattr(self.pla,"_branch"))
         assert(hasattr(self.pla,"_metadata"))
-        assert(not(hasattr(self.md,"_tree")))
+        assert(not(hasattr(self.md,"_branch")))
         assert(not(hasattr(self.md,"_metadata")))
 
 
@@ -688,8 +688,8 @@ class TestTreeIO(TreeBuilder):
         lpl5 = loaded_data.tree('array/pointlist5')
 
         # Ensure the data that shouldn't be here, isn't
-        assert('pointlist3' not in loaded_data._tree.keys())
-        assert('array' in loaded_data._tree.keys())
+        assert('pointlist3' not in loaded_data._branch.keys())
+        assert('array' in loaded_data._branch.keys())
 
         # Check types
         assert(isinstance(lmd_root,Metadata))
@@ -743,8 +743,8 @@ class TestTreeIO(TreeBuilder):
         lpl5 = loaded_data.tree('array/pointlist5')
 
         # Ensure the data that shouldn't be here, isn't
-        assert('pointlist3' not in loaded_data._tree.keys())
-        assert('array' in loaded_data._tree.keys())
+        assert('pointlist3' not in loaded_data._branch.keys())
+        assert('array' in loaded_data._branch.keys())
 
         # Check types
         assert(isinstance(lmd_root,Metadata))
