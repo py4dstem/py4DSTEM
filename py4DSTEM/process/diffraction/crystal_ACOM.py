@@ -757,6 +757,7 @@ def match_orientations(
     inversion_symmetry = True,
     multiple_corr_reset = True,
     progress_bar: bool = True,
+    return_orientation: bool = True,
 ):
     '''
     This function computes the orientation of any number of PointLists stored in a PointListArray, and returns an OrienationMap.
@@ -785,8 +786,12 @@ def match_orientations(
             )
 
         orientation_map.set_orientation(orientation,rx,ry)
-
-    return orientation_map
+    self.orientation_map = orientation_map
+    
+    if return_orientation:
+        return orientation_map
+    else:
+        return
 
 def match_single_pattern(
     self,
