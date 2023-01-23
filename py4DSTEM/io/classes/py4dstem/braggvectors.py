@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 
 from py4DSTEM.io.classes import PointListArray
-from py4DSTEM.io.classes.tree import Tree
+from py4DSTEM.io.classes.tree import Branch
 from py4DSTEM.io.classes.metadata import Metadata
 
 
@@ -59,7 +59,7 @@ class BraggVectors:
         self.shape = self.Rshape
         self.Qshape = Qshape
 
-        self.tree = Tree()
+        self.tree = Branch()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
         if 'braggvectors' not in self._metadata.keys():

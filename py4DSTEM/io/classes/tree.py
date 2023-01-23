@@ -141,7 +141,7 @@ class Node:
         name: Optional[str] = 'node'
         ):
         self.name = name
-        self._tree = Tree()     # enables accessing child groups
+        self._branch = Branch()     # enables accessing child groups
         self._treepath = None   # enables accessing parent groups
         self._root = None
         self._metadata = {}
@@ -166,7 +166,7 @@ class Node:
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( A Node called '{self.name}', containing the following top-level objects in its tree:"
         string += "\n"
-        for k,v in self._tree.items():
+        for k,v in self._branch.items():
             string += "\n"+space+f"    {k} \t\t ({v.__class__.__name__})"
         string += "\n)"
         return string
@@ -183,10 +183,10 @@ class Node:
         """
         assert(isinstance(root,bool))
         if not root:
-            self._tree.print()
+            self._branch.print()
         else:
             assert(self.root is not None), "Can't display an unrooted node from its root!"
-            self.root._tree.print()
+            self.root._branch.print()
 
     def add_to_tree(self,node):
         """
@@ -198,7 +198,7 @@ class Node:
         assert(self.root is not None), "Can't add objects to an unrooted node. See the Node docstring for more info."
         assert(node.root is None), "Can't add a rooted node to a different tree.  Use `.tree(graft=node)` instead."
         node._root = self._root
-        self._tree[node.name] = node
+        self._branch[node.name] = node
         node._treepath = self._treepath+'/'+node.name
 
     def get_from_tree(self,name):
@@ -209,9 +209,9 @@ class Node:
         searches from the current node.
         """
         if name[0] != '/':
-            return self._tree[name]
+            return self._branch[name]
         else:
-            return self.root._tree[name]
+            return self.root._branch[name]
 
     def graft(self,node,merge_metadata=True):
         """
@@ -239,7 +239,7 @@ class Node:
         upstream_node = self.get_from_tree(treepath)
 
         # remove connection from upstream to this node
-        del(upstream_node._tree[this_node])
+        del(upstream_node._branch[this_node])
 
         # add to a new tree
         self._root = None
@@ -474,14 +474,14 @@ class Root(Node):
 
 
 
-class Tree:
+class Branch:
 
     def __init__(self):
         self._dict = {}
 
 
 
-    # Enables adding items to the Tree's dictionary
+    # Enables adding items to the Branch's dictionary
     def __setitem__(self, key, value):
         assert(isinstance(value,Node)), f"only Node instances can be added to tree. not type {type(value)}"
         self._dict[key] = value
@@ -509,7 +509,7 @@ class Tree:
         if len(x) == 0:
             return self._dict[k]
         else:
-            tree = self._dict[k]._tree
+            tree = self._dict[k]._branch
             return tree._getitem_from_list(x)
 
 
@@ -555,7 +555,7 @@ class Tree:
                 linelevels.remove(tablevel)
             try:
                 tree._print_tree_to_screen(
-                    tree[k]._tree,
+                    tree[k]._branch,
                     tablevel=tablevel+1,
                     linelevels=linelevels)
             except AttributeError:
@@ -565,7 +565,7 @@ class Tree:
 
 
 
-    # Displays the top level objects in the Tree
+    # Displays the top level objects in the Branch
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( An object tree containing the following top-level object instances:"
@@ -575,54 +575,6 @@ class Tree:
         string += "\n)"
         return string
 
-
-
-
-
-
-
-
-
-#    # HDF5 i/o
-#
-
-
-# TODO
-
-# Defines the ParentTree class, which inherits from emd.Tree, and
-# adds the ability to track a parent datacube.
-
-#from py4DSTEM.io.classes.array import Array
-#from py4DSTEM.io.classes.py4dstem.calibration import Calibration
-#from numpy import ndarray
-
-
-##;pclass ParentTree(Tree):
-##;p
-##;p    def __init__(self, parent, calibration):
-##;p        """
-##;p        Creates a tree which is aware of and can point objects
-##;p        added to it to it's parent and associated calibration.
-##;p        `parent` is typically a DataCube, but need not be.
-##;p        `calibration` should be a Calibration instance.
-##;p        """
-##;p        #assert(isinstance(calibration, Calibration))
-##;p
-##;p        Tree.__init__(self)
-##;p        self._dict['calibration'] = calibration
-##;p        self._parent = parent
-
-
-
-    #def __setitem__(self, key, value):
-    #    if isinstance(value, ndarray):
-    #        value = Array(
-    #            data = value,
-    #            name = key
-    #        )
-    #    self._tree[key] = value
-    #    value._parent = self._parent
-    #    value.calibration = self._parent.calibration
 
 
 

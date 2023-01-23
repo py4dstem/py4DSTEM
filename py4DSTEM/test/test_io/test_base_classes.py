@@ -1,7 +1,6 @@
 import numpy as np
 from py4DSTEM.io.classes import (
     Node,
-    Tree,
     Metadata,
     Array,
     PointList,
@@ -22,16 +21,6 @@ def test_Node():
     ##;passert(isinstance(root.tree, Tree))
 
     # h5io
-
-
-def test_Tree():
-
-    # Tree class instances should:
-    # - hold key/value pairs
-    # - TODO
-
-    tree = Tree()
-    assert(isinstance(tree,Tree))
 
 
 def test_Metadata():

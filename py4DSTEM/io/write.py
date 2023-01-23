@@ -364,14 +364,14 @@ def _write_tree(
     ):
     """ Writes the data tree underneath `data`; does not write `data`
     """
-    for k in data._tree.keys():
+    for k in data._branch.keys():
         grp = _write_single_node(
             group = group,
-            data = data._tree[k]
+            data = data._branch[k]
         )
         _write_tree(
             grp,
-            data._tree[k]
+            data._branch[k]
         )
 
 
@@ -486,8 +486,8 @@ def _append_branch(
     ):
     groupkeys = [k for k in group.keys() if "emd_group_type" in group[k].attrs.keys()]
     # for each node under `data`...
-    for key in data._tree.keys():
-        d = data._tree[key]
+    for key in data._branch.keys():
+        d = data._branch[key]
         # ...if this node doesn't exist in the H5, do a simple write
         if d.name not in groupkeys:
             _write_single_node(
