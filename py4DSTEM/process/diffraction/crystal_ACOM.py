@@ -1720,6 +1720,7 @@ def save_ang_file(
     pixel_units="px",
     transpose_xy = True,
     flip_x = False,
+    flip_y = False,
 ):
     """
     This function outputs an ascii text file in the .ang format, containing
@@ -1752,6 +1753,7 @@ def save_ang_file(
         return_color_key=False,
         transpose_xy = transpose_xy,
         flip_x = flip_x,
+        flip_y = flip_y,
     )
 
     file_writer(file_name, xmap)
@@ -1765,6 +1767,7 @@ def orientation_map_to_orix_CrystalMap(
     pixel_units='px',
     transpose_xy = True,
     flip_x = False,
+    flip_y = False,
     return_color_key=False
     ):
     try:
@@ -1785,12 +1788,20 @@ def orientation_map_to_orix_CrystalMap(
 
     import warnings
 
-    # Get orientation matrices
+    # Get orientation matrices and correlation signal (will be used as iq and ci)
     orientation_matrices = orientation_map.matrix[:,:,ind_orientation].copy()
+    corr_values = orientation_map.corr[:, :, ind_orientation].copy()
+
+    # Check for transpose
     if transpose_xy:
         orientation_matrices = np.transpose(orientation_matrices, (1,0,2,3))
+        corr_values = np.transpose(corr_values, (1,0))
     if flip_x:
         orientation_matrices = np.flip(orientation_matrices, axis=0)
+        corr_values = np.flip(corr_values, axis=0)
+    if flip_y:
+        orientation_matrices = np.flip(orientation_matrices, axis=1)
+        corr_values = np.flip(corr_values, axis=1)
 
     # Convert the orientation matrices into Euler angles
     # suppress Gimbal lock warnings
@@ -1810,7 +1821,9 @@ def orientation_map_to_orix_CrystalMap(
 
     # Generate x,y coordinates since orix uses flat data internally
     # coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
-    coords, _ = create_coordinate_arrays((orientation_matrices.shape[0],orientation_matrices.shape[1]),(pixel_size,)*2)
+    coords, _ = create_coordinate_arrays((
+        orientation_matrices.shape[0],
+        orientation_matrices.shape[1]),(pixel_size,)*2)
 
     # Generate an orix structure from the Crystal
     atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
@@ -1843,8 +1856,8 @@ def orientation_map_to_orix_CrystalMap(
         y=coords["y"],
         phase_list=PhaseList(phase),
         prop={
-            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
-            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
+            "iq": corr_values.ravel(),
+            "ci": corr_values.ravel(),
         },
         scan_unit=pixel_units,
     )
