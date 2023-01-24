@@ -189,29 +189,30 @@ class Crystal_Phase:
                                                                 second match within that crystal.
         """
         # Things to add:
-        #     1. Remove center peak from pointlists probably finding np.where qx ==0, qy ==0 and delete method
-        #     2. Better cost for distance from peaks in pointlists
-        #     3. Iterate through multiple tolerance_distance values to find best value. Cost function residuals, or something else?
+        #     1. Better cost for distance from peaks in pointlists
+        #     2. Iterate through multiple tolerance_distance values to find best value. Cost function residuals, or something else?
         
         pointlist = pointlistarray.get_pointlist(position[0], position[1]) 
-        # Need to delete incident beam here by finding where qx == 0, qy == 0
+        pl_mask = np.where((pointlist['qx'] == 0) & (pointlist['qy'] == 0), 1, 0)
+        pointlist.remove(pl_mask)
         # False Negatives (exp peak with no match in crystal instances) will appear here, already coded in
+    
         if intensity_power == 0:
             pl_intensities = np.ones(pointlist['intensity'].shape)
         else:
             pl_intensities = pointlist['intensity']**intensity_power
-        
         #Prepare matches for modeling
         pointlist_peak_matches = []
         crystal_identity = []
+        
         for c in range(len(self.crystals)):
             for m in range(self.orientation_maps[c].num_matches):
+                crystal_identity.append([c,m])
                 phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
                 bragg_peaks_fit = self.crystals[c].generate_diffraction_pattern(
                     self.orientation_maps[c].get_orientation(position[0], position[1]),
                     ind_orientation = m
                 )
-
                 #Find the best match peak within tolerance_distance and add value in the right position
                 for d in range(pointlist['qx'].shape[0]):
                     distances = []
@@ -225,45 +226,48 @@ class Crystal_Phase:
                     #Potentially for-loop over multiple values for 'tolerance_distance' to find best tolerance_distance value
                     if distances[ind] <= tolerance_distance:
                         ## Somewhere in this if statement is probably where better distances from the peak should be coded in
-                        if intensity_power == 0:
-                            phase_peak_match_intensities[d] = 1*((tolerance_distance-distances[ind])/tolerance_distance)  
+                        if intensity_power == 0: #This could potentially be a different intensity_power arg
+                            phase_peak_match_intensities[d] = 1**((tolerance_distance-distances[ind])/tolerance_distance)  
                         else:
-                            phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]*((tolerance_distance-distances[ind])/tolerance_distance)
+                            phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]**((tolerance_distance-distances[ind])/tolerance_distance)
                     else:
                         ## This is probably where the false positives (peaks in crystal but not in experiment) should be handled
                         continue   
                 
                 pointlist_peak_matches.append(phase_peak_match_intensities)
-                crystal_identity.append([c,m])
                 pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
                 pointlist_peak_intensity_matches = pointlist_peak_intensity_matches.reshape(
                     pl_intensities.shape[0],
                     pointlist_peak_intensity_matches.shape[-1]
                     )
-            
-        if mask_peaks is not None:
-            for i in range(len(mask_peaks)):
-                if mask_peaks[i] == None:
-                    continue
-                inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
-                for mask in range(len(inds_mask)):
-                    pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
-
-        if method == 'nnls':    
-            phase_weights, phase_residuals = nnls(
-                pointlist_peak_intensity_matches,
-                pl_intensities
-            )
         
-        elif method == 'lstsq':
-            phase_weights, phase_residuals, rank, singluar_vals = lstsq(
-                pointlist_peak_intensity_matches,
-                pl_intensities,
-                rcond = -1
-            )
-            phase_residuals = np.sum(phase_residuals)
+        if len(pointlist['qx']) > 0:    
+            if mask_peaks is not None:
+                for i in range(len(mask_peaks)):
+                    if mask_peaks[i] == None:
+                        continue
+                    inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
+                    for mask in range(len(inds_mask)):
+                        pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
+
+            if method == 'nnls':    
+                phase_weights, phase_residuals = nnls(
+                    pointlist_peak_intensity_matches,
+                    pl_intensities
+                )
+            
+            elif method == 'lstsq':
+                phase_weights, phase_residuals, rank, singluar_vals = lstsq(
+                    pointlist_peak_intensity_matches,
+                    pl_intensities,
+                    rcond = -1
+                )
+                phase_residuals = np.sum(phase_residuals)
+            else:
+                raise ValueError(method + ' Not yet implemented. Try nnls or lstsq.')   
         else:
-            raise ValueError(method + ' Not yet implemented. Try nnls or lstsq.')   
+            phase_weights = np.zeros((pointlist_peak_intensity_matches.shape[1],))
+            phase_residuals = np.NaN
         return pointlist_peak_intensity_matches, phase_weights, phase_residuals, crystal_identity
     
     # def plot_peak_matches(
