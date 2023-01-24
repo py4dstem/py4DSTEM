@@ -26,7 +26,7 @@ jobs:
       - name: Running if py4DSTEM/version.py file is not changed
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
-          echo "Version file not changed, run script to change the version file."
+          echo "Version file not changed, running script to change the version file."
           python scripts/update_version.py
   deploy:
     needs: check_version
