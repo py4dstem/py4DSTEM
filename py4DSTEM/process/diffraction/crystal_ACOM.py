@@ -2211,8 +2211,10 @@ def save_ang_file(
         nothing
 
     """
-
-    from orix.io.plugins.ang import file_writer
+    try:
+        from orix.io.plugins.ang import file_writer
+    except ImportError:
+        raise Exception("orix failed to import; try pip installing separately")
 
     xmap = self.orientation_map_to_orix_CrystalMap(
         orientation_map,
