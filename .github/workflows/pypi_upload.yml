@@ -45,7 +45,7 @@ jobs:
           git push origin dev
           
   deploy:
-    needs: check_version
+    needs: update_version
     runs-on: ubuntu-latest
     name: Deploy to PyPI
     steps:
