@@ -924,8 +924,6 @@ def find_Bragg_disks(
     ml_num_attempts = 1, 
     ml_batch_size = 8,
    
-    _qt_progress_bar = None,
-
     name = 'braggvectors',
     returncalc = True,
     ):
@@ -1025,8 +1023,6 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
-        _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
-            execution
         name (str): name for the output BraggVectors
         returncalc (bool): if True, returns the answer
 
@@ -1074,8 +1070,6 @@ def find_Bragg_disks(
         ml_model_path = ml_model_path, 
         ml_num_attempts = ml_num_attempts, 
         ml_batch_size = ml_batch_size,
-
-        _qt_progress_bar = _qt_progress_bar,
     )
 
 
