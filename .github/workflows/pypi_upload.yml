@@ -1,0 +1,51 @@
+# Action to check the version of the package and upload it to PyPI
+# if the version is higher than the one on PyPI
+# Author: @quantumstud
+name: PyPI Upload
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  update_version:
+    runs-on: ubuntu-latest
+    name: Check if version.py is changed and update if the version.py is not changed
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get changed files
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v32
+        with:
+          files: |
+            py4DSTEM/version.py
+      - name: Running if py4DSTEM/version.py file is not changed
+        if: steps.changed-files-specific.outputs.any_changed == 'false'
+        run: |
+          echo "Version file not changed, run script to change the version file."
+          python scripts/update_version.py
+  deploy:
+    needs: check_version
+    runs-on: ubuntu-latest
+    name: Deploy to PyPI
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+      - name: Build package
+        run: python -m build
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
