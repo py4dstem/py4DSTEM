@@ -55,7 +55,9 @@ def read_dm(
             # The pixel sizes of all datasets are chained together, so
             # we have to figure out the right offset
             try:
-                scale_offset = sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
+                scale_offset = (
+                    sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
+                )
                 pixelsize = dmFile.scale[scale_offset:]
                 pixelunits = dmFile.scaleUnit[scale_offset:]
 
@@ -76,12 +78,19 @@ def read_dm(
 
                 # Convert mrad to Å^-1 if possible
                 if Q_pixel_units == "mrad":
-                    voltage = [v for t,v in dmFile.allTags.items() if "Microscope Info.Voltage" in t]
-                    if len(voltage) == 1:
+                    voltage = [
+                        v
+                        for t, v in dmFile.allTags.items()
+                        if "Microscope Info.Voltage" in t
+                    ]
+                    if len(voltage) >= 1:
                         from py4DSTEM.process.utils import electron_wavelength_angstrom
+
                         lamda = electron_wavelength_angstrom(voltage[0])
                         Q_pixel_units = "A^-1"
-                        Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
+                        Q_pixel_size = (
+                            Q_pixel_size / lamda / 1000.0
+                        )  # convert mrad to 1/Å
                 pixel_size_found = True
             except Exception as err:
                 pass
@@ -131,7 +140,9 @@ def read_dm(
                     data.calibration.set_R_pixel_size(R_pixel_size)
                     data.calibration.set_R_pixel_units(R_pixel_units)
                 except Exception as err:
-                    print(f"Setting pixel sizes of the datacube failed with error {err}")
+                    print(
+                        f"Setting pixel sizes of the datacube failed with error {err}"
+                    )
         else:
             data = Array(_data, name=name)
 
@@ -147,7 +158,7 @@ def _process_NCEM_TitanX_Tags(dmFile, dc=None):
     """
     scanx = [v for k, v in dmFile.allTags.items() if "4D STEM Tags.Scan shape X" in k]
     scany = [v for k, v in dmFile.allTags.items() if "4D STEM Tags.Scan shape Y" in k]
-    if len(scanx) == 1 and len(scany) == 1:
+    if len(scanx) >= 1 and len(scany) >= 1:
         # TitanX tags found!
         R_Nx = int(scany[0])  # need to flip x/y
         R_Ny = int(scanx[0])
