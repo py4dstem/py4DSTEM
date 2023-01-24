@@ -77,24 +77,34 @@ class DataCube(Array,DataCubeMethods):
         )
 
 
+        # TODO: calibration
+        # get the calibration...
 
-        # make a tree
-        # we're overwriting the emd Branch with the py4DSTEM Branch
-        # which knows how to track the parent datacube
-        # also adds calibration to the tree
-        self.tree = Branch()
-        ##;pself.tree = ParentBranch(self, Calibration())
-
+        # set the units/sizes...
         # set size/units
-        self.tree['calibration'].set_R_pixel_size( R_pixel_size )
-        self.tree['calibration'].set_R_pixel_units( R_pixel_units )
-        self.tree['calibration'].set_Q_pixel_size( Q_pixel_size )
-        self.tree['calibration'].set_Q_pixel_units( Q_pixel_units )
+        #self.tree['calibration'].set_R_pixel_size( R_pixel_size )
+        #self.tree['calibration'].set_R_pixel_units( R_pixel_units )
+        #self.tree['calibration'].set_Q_pixel_size( Q_pixel_size )
+        #self.tree['calibration'].set_Q_pixel_units( Q_pixel_units )
+
+    # TODO: calibration property
+    # calibration
+    @property
+    def calibration(self):
+        return self.tree['calibration']
+    @calibration.setter
+    def calibration(self, x):
+        assert( isinstance( x, Calibration))
+        self.tree['calibration'] = x
 
 
 
 
-    ## properties
+
+
+
+
+    ## shape properties
 
     # FOV
     @property
@@ -165,22 +175,6 @@ class DataCube(Array,DataCubeMethods):
         self.calibration.set_Q_pixel_units(x)
 
 
-    # calibration
-    @property
-    def calibration(self):
-        return self.tree['calibration']
-    @calibration.setter
-    def calibration(self, x):
-        assert( isinstance( x, Calibration))
-        self.tree['calibration'] = x
-
-
-
-    # for parent datacube tracking
-    def track_parent(self, x):
-        x._parent = self
-        x.calibration = self.calibration
-
 
 
     # HDF5 i/o
@@ -221,6 +215,25 @@ class DataCube(Array,DataCubeMethods):
         return array
 
 
+
+    # TODO
+    # add _get_constructor_args                 (2)
+    # add _the_other_one
+
+
+    # TODO:
+    # write unit tests for datacube             (1)
+
+
+
+# rough plan: do 1/2 above without calibration attached.
+# then go to Calibration, write unit tests, execute
+# then return here, add calibration to datacube
+
+# TODO: we need a class, Py4dstemData, which all these hooplas inherit from
+# which adds...
+# - calibration
+# - microscope
 
 
 ############ END OF CLASS ###########

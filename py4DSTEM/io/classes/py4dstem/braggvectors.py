@@ -11,7 +11,7 @@ from py4DSTEM.io.classes.metadata import Metadata
 
 
 
-class BraggVectors:
+class BraggVectors(Node):
     """
     Stores bragg scattering information for a 4D datacube.
 

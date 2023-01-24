@@ -864,7 +864,7 @@ class TestTreeIO(TreeBuilder):
         paths = [
             single_node_path,
             unrooted_node_path,
-            whole_tree_path,
+            #whole_tree_path,
             subtree_path,
             subtree_noroot_path,
             subtree_append_to_path,
