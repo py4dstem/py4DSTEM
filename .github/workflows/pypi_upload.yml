@@ -27,7 +27,7 @@ jobs:
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
           echo "Version file not changed, running script to change the version file."
-          python scripts/update_version.py
+          python .github/scripts/update_version.py
           git config --global user.email "ben.savitzky@gmail.com"
           git config --global user.name "bsavitzky"
           git commit -a -m "Update version number"
