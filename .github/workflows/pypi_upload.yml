@@ -28,12 +28,12 @@ jobs:
         run: |
           echo "Version file not changed, running script to change the version file."
           python .github/scripts/update_version.py
-          git config --global user.email "ben.savitzky@gmail.com"
-          git config --global user.name "bsavitzky"
+          #git config --global user.email "ben.savitzky@gmail.com"
+          #git config --global user.name "bsavitzky"
           git commit -a -m "Update version number"
           git push origin main
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
   sync_with_dev:
     runs-on: ubuntu-latest
     name: Sync main with dev
@@ -45,8 +45,10 @@ jobs:
           git checkout dev
           git merge main
           git push origin dev
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        #with:
+        #  repo-token: ${{ secrets.GITHUB_TOKEN }}
           
   deploy:
     needs: update_version
