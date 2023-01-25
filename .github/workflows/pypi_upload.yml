@@ -47,7 +47,7 @@ jobs:
           git merge main
           git push origin dev
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          token: ${{ github.token }}
         #with:
         #  repo-token: ${{ secrets.GITHUB_TOKEN }}
           
