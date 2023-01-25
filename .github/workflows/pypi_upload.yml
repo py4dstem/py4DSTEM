@@ -34,7 +34,7 @@ jobs:
           git commit -a -m "Update version number"
           git push origin main
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          token: ${{ github.token }}
   sync_with_dev:
     runs-on: ubuntu-latest
     name: Sync main with dev
