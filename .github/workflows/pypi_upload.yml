@@ -32,6 +32,8 @@ jobs:
           git config --global user.name "bsavitzky"
           git commit -a -m "Update version number"
           git push origin main
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
   sync_with_dev:
     runs-on: ubuntu-latest
     name: Sync main with dev
@@ -43,6 +45,8 @@ jobs:
           git checkout dev
           git merge main
           git push origin dev
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
           
   deploy:
     needs: update_version
