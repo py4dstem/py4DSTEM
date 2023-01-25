@@ -28,8 +28,8 @@ jobs:
         run: |
           echo "Version file not changed, running script to change the version file."
           python .github/scripts/update_version.py
-          #git config --global user.email "ben.savitzky@gmail.com"
-          #git config --global user.name "bsavitzky"
+          git config --global user.email "ben.savitzky@gmail.com"
+          git config --global user.name "bsavitzky"
           git commit -a -m "Update version number"
           git push origin main
         env:
