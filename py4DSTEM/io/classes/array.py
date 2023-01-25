@@ -113,6 +113,8 @@ class Array(Node):
     for stack-like arrays.
 
     """
+    _emd_group_type = 'array'
+
     def __init__(
         self,
         data: np.ndarray,

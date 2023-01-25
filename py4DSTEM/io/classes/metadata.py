@@ -20,6 +20,8 @@ class Metadata:
 
     If the parameter has not been set, the getter methods return None.
     """
+    _emd_group_type = 'metadata'
+
     def __init__(
         self,
         name: Optional[str] ='metadata'

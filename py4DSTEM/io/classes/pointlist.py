@@ -17,6 +17,8 @@ class PointList(Node):
     py4DSTEM formatted HDF5 files.
 
     """
+    _emd_group_type = 'pointlist'
+
     def __init__(
         self,
         data: np.ndarray,
