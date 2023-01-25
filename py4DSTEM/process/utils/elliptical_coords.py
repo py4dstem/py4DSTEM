@@ -230,6 +230,34 @@ def cartesian_to_polarelliptical_transform(
 
 ### Cartesian elliptical transform
 
+def elliptical_resample_datacube(
+    datacube,
+    p_ellipse,
+    mask=None,
+    maskThresh=0.99,
+):
+    """
+    Perform elliptic resamplig on each diffraction pattern in a DataCube
+    Detailed description of the args is found in ``elliptical_resample``.
+
+    NOTE: Only use this function if you need to resample the raw data.
+    If you only need for Bragg disk positions to be corrected, use the 
+    BraggVector calibration routines, as it is much faster to perform 
+    this on the peak positions than the entire datacube.
+    """
+
+    from py4DSTEM import tqdmnd
+
+    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
+        datacube.data[rx,ry] = elliptical_resample(
+            datacube.data[rx,ry],
+            p_ellipse,
+            mask,
+            maskThresh
+        )
+
+    return datacube
+
 def elliptical_resample(
     data,
     p_ellipse,
