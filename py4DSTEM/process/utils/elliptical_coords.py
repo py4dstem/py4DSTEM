@@ -228,6 +228,106 @@ def cartesian_to_polarelliptical_transform(
     return polarEllipticalData, rr, pp
 
 
+### Cartesian elliptical transform
+
+def elliptical_resample(
+    data,
+    p_ellipse,
+    mask=None,
+    maskThresh=0.99,
+):
+    """
+    Resamples data with elliptic distortion to correct distortion of the 
+    input pattern. 
+
+    Discussion of the elliptical parametrization used can be found in the docstring
+    for the process.utils.elliptical_coords module.
+
+    Args:
+        data (2D float array): the data in cartesian coordinates
+        p_ellipse (5-tuple): specifies (qx0,qy0,a,b,theta), the parameters for the
+            transformation. These are the same 5 parameters which are outputs
+            of the elliptical fitting functions in the process.calibration
+            module, e.g. fit_ellipse_amorphous_ring and fit_ellipse_1D. For
+            more details, see the process.utils.elliptical_coords module docstring
+        dr (float): sampling of the (r,phi) coords: the width of the bins in r
+        dphi (float): sampling of the (r,phi) coords: the width of the bins in phi,
+            in radians
+        r_range (number or length 2 list/tuple or None): specifies the sampling of the
+            (r,theta) coords.  Precise behavior which depends on the parameter type:
+                * if None, autoselects max r value
+                * if r_range is a number, specifies the maximum r value
+                * if r_range is a length 2 list/tuple, specifies the min/max r values
+        mask (2d array of bools): shape must match cartesianData; where mask==False,
+            ignore these datapoints in making the polarElliptical data array
+        maskThresh (float): the final data mask is calculated by converting mask (above)
+            from cartesian to polar elliptical coords.  Due to interpolation, this
+            results in some non-boolean values - this is converted back to a boolean
+            array by taking polarEllipticalMask = polarTrans(mask) < maskThresh. Cells
+            where polarTrans is less than 1 (i.e. has at least one masked NN) should
+            generally be masked, hence the default value of 0.99.
+
+    Returns:
+        (3-tuple): A 3-tuple, containing:
+
+            * **resampled_data**: *(2D masked array)* a masked array containing
+              the data and the data mask, in polarElliptical coordinates
+    """
+    if mask is None:
+        mask = np.ones_like(data, dtype=bool)
+    assert (
+        data.shape == mask.shape
+    ), "Mask and data array shapes must match."
+    assert len(p_ellipse) == 5, "p_ellipse must have length 5"
+
+    # Expand params
+    qx0, qy0, a, b, theta = p_ellipse
+    Nx, Ny = data.shape
+
+    # Get (qx,qy) corresponding to the coordinates distorted by the ellipse
+    xr, yr = np.mgrid[0:Nx,0:Ny]
+    xr0 = xr.astype(np.float_) - qx0
+    yr0 = yr.astype(np.float_) - qy0
+    xr = xr0 * np.cos(-theta) - yr0 * np.sin(-theta)
+    yr = xr0 * np.sin(-theta) + yr0 * np.cos(-theta)
+    qx = qx0 + xr * np.cos(theta) - yr * (b/a) * np.sin(theta)
+    qy = qy0 + xr * np.sin(theta) + yr * (b/a) * np.cos(theta)
+
+    # qx,qy are now shape (Nx,Ny) arrays, such that (qx[x,y],qy[x,y]) is the point
+    # in the distorted space corresponding to x,y.  We now get the values for the final
+    # resampled_data array by interpolating values at these coords from the original
+    # data array.
+
+    transform_mask = (qx > 0) * (qy > 0) * (qx < Nx - 1) * (qy < Ny - 1)
+
+    # Bilinear interpolation
+    xF = np.floor(qx[transform_mask])
+    yF = np.floor(qy[transform_mask])
+    dx = qx[transform_mask] - xF
+    dy = qy[transform_mask] - yF
+    x_inds = np.vstack((xF, xF + 1, xF, xF + 1)).astype(int)
+    y_inds = np.vstack((yF, yF, yF + 1, yF + 1)).astype(int)
+    weights = np.vstack(
+        ((1 - dx) * (1 - dy), (dx) * (1 - dy), (1 - dx) * (dy), (dx) * (dy))
+    )
+    transform_mask = transform_mask.ravel()
+    resampled_data = np.zeros(Nx * Ny)
+    resampled_data[transform_mask] = np.sum(
+        data[x_inds, y_inds] * weights, axis=0
+    )
+    resampled_data = np.reshape(resampled_data, (Nx,Ny))
+
+    # Transform mask
+    data_mask = np.zeros(Nx * Ny)
+    data_mask[transform_mask] = np.sum(mask[x_inds, y_inds] * weights, axis=0)
+    data_mask = np.reshape(data_mask, (Nx, Ny))
+
+    resampled_data = np.ma.array(
+        data=resampled_data, mask=data_mask < maskThresh
+    )
+    return resampled_data
+
+
 ### Radial integration
 
 def radial_elliptical_integral(
