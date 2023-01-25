@@ -41,7 +41,8 @@ import numpy as np
 
 ### Convert between representations
 
-def convert_ellipse_params(A,B,C):
+
+def convert_ellipse_params(A, B, C):
     """
     Converts ellipse parameters from canonical form (A,B,C) into semi-axis lengths and
     tilt (a,b,theta).
@@ -59,23 +60,24 @@ def convert_ellipse_params(A,B,C):
         * **theta**: (float) the tilt of the ellipse semimajor axis with respect to
           the x-axis, in radians
     """
-    val = np.sqrt((A-C)**2+B**2)
-    b4a = B**2 - 4*A*C
+    val = np.sqrt((A - C) ** 2 + B**2)
+    b4a = B**2 - 4 * A * C
     # Get theta
     if B == 0:
-        if A<C:
+        if A < C:
             theta = 0
         else:
-            theta = np.pi/2.
+            theta = np.pi / 2.0
     else:
-        theta = np.arctan2((C-A-val),B)
+        theta = np.arctan2((C - A - val), B)
     # Get a,b
-    a = - np.sqrt( -2*b4a*(A+C+val) ) / b4a
-    b = - np.sqrt( -2*b4a*(A+C-val) ) / b4a
-    a,b = max(a,b),min(a,b)
-    return a,b,theta
+    a = -np.sqrt(-2 * b4a * (A + C + val)) / b4a
+    b = -np.sqrt(-2 * b4a * (A + C - val)) / b4a
+    a, b = max(a, b), min(a, b)
+    return a, b, theta
 
-def convert_ellipse_params_r(a,b,theta):
+
+def convert_ellipse_params_r(a, b, theta):
     """
     Converts from ellipse parameters (a,b,theta) to (A,B,C).
     See module docstring for more info.
@@ -89,15 +91,16 @@ def convert_ellipse_params_r(a,b,theta):
         (3-tuple): A 3-tuple consisting of (A,B,C), the ellipse parameters in
             canonical form.
     """
-    sin2,cos2 = np.sin(theta)**2,np.cos(theta)**2
-    a2,b2 = a**2,b**2
-    A = sin2/b2 + cos2/a2
-    C = cos2/b2 + sin2/a2
-    B = 2*(b2-a2)*np.sin(theta)*np.cos(theta)/(a2*b2)
-    return A,B,C
+    sin2, cos2 = np.sin(theta) ** 2, np.cos(theta) ** 2
+    a2, b2 = a**2, b**2
+    A = sin2 / b2 + cos2 / a2
+    C = cos2 / b2 + sin2 / a2
+    B = 2 * (b2 - a2) * np.sin(theta) * np.cos(theta) / (a2 * b2)
+    return A, B, C
 
 
 ### Polar elliptical transformation
+
 
 def cartesian_to_polarelliptical_transform(
     cartesianData,
@@ -158,23 +161,29 @@ def cartesian_to_polarelliptical_transform(
     qx0, qy0, a, b, theta = p_ellipse
     Nx, Ny = cartesianData.shape
 
-    # Define r_range: 
+    # Define r_range:
     if r_range is None:
-        #find corners of image
-        corners = np.array([
-                            [0,0],
-                            [0,cartesianData.shape[0]],
-                            [0,cartesianData.shape[1]],
-                            [cartesianData.shape[0], cartesianData.shape[1]]
-                            ])
-        #find maximum corner distance
-        r_min, r_max =0, np.ceil(
-                            np.max(
-                                np.sqrt(
-                                    np.sum((corners -np.broadcast_to(np.array((qx0,qy0)), corners.shape))**2, axis = 1)
-                                       )
-                                   )
-                                ).astype(int)
+        # find corners of image
+        corners = np.array(
+            [
+                [0, 0],
+                [0, cartesianData.shape[0]],
+                [0, cartesianData.shape[1]],
+                [cartesianData.shape[0], cartesianData.shape[1]],
+            ]
+        )
+        # find maximum corner distance
+        r_min, r_max = 0, np.ceil(
+            np.max(
+                np.sqrt(
+                    np.sum(
+                        (corners - np.broadcast_to(np.array((qx0, qy0)), corners.shape))
+                        ** 2,
+                        axis=1,
+                    )
+                )
+            )
+        ).astype(int)
     else:
         try:
             r_min, r_max = r_range[0], r_range[1]
@@ -190,8 +199,8 @@ def cartesian_to_polarelliptical_transform(
     # Get (qx,qy) corresponding to each (r,phi) in the newly defined coords
     xr = rr * np.cos(pp)
     yr = rr * np.sin(pp)
-    qx = qx0 + xr * np.cos(theta) - yr * (b/a) * np.sin(theta)
-    qy = qy0 + xr * np.sin(theta) + yr * (b/a) * np.cos(theta)
+    qx = qx0 + xr * np.cos(theta) - yr * (b / a) * np.sin(theta)
+    qy = qy0 + xr * np.sin(theta) + yr * (b / a) * np.cos(theta)
 
     # qx,qy are now shape (Nr,Np) arrays, such that (qx[r,phi],qy[r,phi]) is the point
     # in cartesian space corresponding to r,phi.  We now get the values for the final
@@ -230,6 +239,7 @@ def cartesian_to_polarelliptical_transform(
 
 ### Cartesian elliptical transform
 
+
 def elliptical_resample_datacube(
     datacube,
     p_ellipse,
@@ -241,22 +251,20 @@ def elliptical_resample_datacube(
     Detailed description of the args is found in ``elliptical_resample``.
 
     NOTE: Only use this function if you need to resample the raw data.
-    If you only need for Bragg disk positions to be corrected, use the 
-    BraggVector calibration routines, as it is much faster to perform 
+    If you only need for Bragg disk positions to be corrected, use the
+    BraggVector calibration routines, as it is much faster to perform
     this on the peak positions than the entire datacube.
     """
 
     from py4DSTEM import tqdmnd
 
-    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
-        datacube.data[rx,ry] = elliptical_resample(
-            datacube.data[rx,ry],
-            p_ellipse,
-            mask,
-            maskThresh
+    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
+        datacube.data[rx, ry] = elliptical_resample(
+            datacube.data[rx, ry], p_ellipse, mask, maskThresh
         )
 
     return datacube
+
 
 def elliptical_resample(
     data,
@@ -265,8 +273,8 @@ def elliptical_resample(
     maskThresh=0.99,
 ):
     """
-    Resamples data with elliptic distortion to correct distortion of the 
-    input pattern. 
+    Resamples data with elliptic distortion to correct distortion of the
+    input pattern.
 
     Discussion of the elliptical parametrization used can be found in the docstring
     for the process.utils.elliptical_coords module.
@@ -303,9 +311,7 @@ def elliptical_resample(
     """
     if mask is None:
         mask = np.ones_like(data, dtype=bool)
-    assert (
-        data.shape == mask.shape
-    ), "Mask and data array shapes must match."
+    assert data.shape == mask.shape, "Mask and data array shapes must match."
     assert len(p_ellipse) == 5, "p_ellipse must have length 5"
 
     # Expand params
@@ -313,13 +319,13 @@ def elliptical_resample(
     Nx, Ny = data.shape
 
     # Get (qx,qy) corresponding to the coordinates distorted by the ellipse
-    xr, yr = np.mgrid[0:Nx,0:Ny]
+    xr, yr = np.mgrid[0:Nx, 0:Ny]
     xr0 = xr.astype(np.float_) - qx0
     yr0 = yr.astype(np.float_) - qy0
     xr = xr0 * np.cos(-theta) - yr0 * np.sin(-theta)
     yr = xr0 * np.sin(-theta) + yr0 * np.cos(-theta)
-    qx = qx0 + xr * np.cos(theta) - yr * (b/a) * np.sin(theta)
-    qy = qy0 + xr * np.sin(theta) + yr * (b/a) * np.cos(theta)
+    qx = qx0 + xr * np.cos(theta) - yr * (b / a) * np.sin(theta)
+    qy = qy0 + xr * np.sin(theta) + yr * (b / a) * np.cos(theta)
 
     # qx,qy are now shape (Nx,Ny) arrays, such that (qx[x,y],qy[x,y]) is the point
     # in the distorted space corresponding to x,y.  We now get the values for the final
@@ -340,30 +346,27 @@ def elliptical_resample(
     )
     transform_mask = transform_mask.ravel()
     resampled_data = np.zeros(Nx * Ny)
-    resampled_data[transform_mask] = np.sum(
-        data[x_inds, y_inds] * weights, axis=0
-    )
-    resampled_data = np.reshape(resampled_data, (Nx,Ny))
+    resampled_data[transform_mask] = np.sum(data[x_inds, y_inds] * weights, axis=0)
+    resampled_data = np.reshape(resampled_data, (Nx, Ny))
 
     # Transform mask
     data_mask = np.zeros(Nx * Ny)
     data_mask[transform_mask] = np.sum(mask[x_inds, y_inds] * weights, axis=0)
     data_mask = np.reshape(data_mask, (Nx, Ny))
 
-    resampled_data = np.ma.array(
-        data=resampled_data, mask=data_mask < maskThresh
-    )
+    resampled_data = np.ma.array(data=resampled_data, mask=data_mask < maskThresh)
     return resampled_data
 
 
 ### Radial integration
 
+
 def radial_elliptical_integral(
-    ar, 
-    dr, 
+    ar,
+    dr,
     p_ellipse,
-    rmax = None,
-    ):
+    rmax=None,
+):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of
     dr.
@@ -399,16 +402,10 @@ def radial_elliptical_integral(
     )
     radial_integral = np.sum(polarAr, axis=0)
     rbin_centers = rr[0, :]
-    return rbin_centers,radial_integral
+    return rbin_centers, radial_integral
 
 
-def radial_integral(
-    ar, 
-    x0=None, 
-    y0=None, 
-    dr=0.1, 
-    rmax=None
-    ):
+def radial_integral(ar, x0=None, y0=None, dr=0.1, rmax=None):
     """
     Computes the radial integral of array ar from center (x0,y0) with a step size in r of dr.
 
@@ -427,12 +424,11 @@ def radial_integral(
 
     # Default values
     if x0 is None:
-        x0 = ar.shape[0]/2
+        x0 = ar.shape[0] / 2
     if y0 is None:
-        y0 = ar.shape[1]/2
+        y0 = ar.shape[1] / 2
 
     if rmax is None:
-        return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0))
+        return radial_elliptical_integral(ar, dr, (x0, y0, 1, 1, 0))
     else:
-        return radial_elliptical_integral(ar, dr, (x0,y0,1,1,0), rmax=rmax)
-
+        return radial_elliptical_integral(ar, dr, (x0, y0, 1, 1, 0), rmax=rmax)
