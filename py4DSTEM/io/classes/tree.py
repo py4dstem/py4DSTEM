@@ -464,11 +464,12 @@ class Root(Node):
     """
     A Node instance with its .root property set to itself.
     """
+    _emd_group_type = 'root'
+
     def __init__(self,name='root'):
         Node.__init__(self,name=name)
         self._treepath = ''
         self._root = self
-        self._emd_group_type = 'root'
 
 
 
