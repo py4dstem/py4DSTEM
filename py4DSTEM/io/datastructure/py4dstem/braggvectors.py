@@ -68,9 +68,9 @@ class BraggVectors:
 
         self._v_uncal = PointListArray(
             dtype = [
-                ('qx',np.float),
-                ('qy',np.float),
-                ('intensity',np.float)
+                ('qx',np.float64),
+                ('qy',np.float64),
+                ('intensity',np.float64)
             ],
             shape = Rshape,
             name = '_v_uncal'
