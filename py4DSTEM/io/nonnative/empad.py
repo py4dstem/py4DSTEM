@@ -22,6 +22,9 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
 
     Accepts:
         filename    (str) path to the EMPAD file
+        EMPAD_shape (kwarg, tuple) Manually specify the shape of the data for files that do not
+                    contain metadata in the .raw file. This will typically be:
+                        (# scan pixels x, # scan pixels y, 130, 128)
 
     Returns:
         data        (DataCube) the 4D datacube, excluding the metadata rows.
@@ -36,18 +39,21 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     col = 128
     fPath = Path(filename)
 
-    # Parse the EMPAD metadata for first and last images
-    empadDTYPE = np.dtype([("data", "16384float32"), ("metadata", "256float32")])
-    with open(fPath, "rb") as fid:
-        imFirst = np.fromfile(fid, dtype=empadDTYPE, count=1)
-        fid.seek(-128 * 130 * 4, 2)
-        imLast = np.fromfile(fid, dtype=empadDTYPE, count=1)
+    if "EMPAD_shape" in kwargs.keys():
+        data_shape = kwargs["EMPAD_shape"]
+    else:
+        # Parse the EMPAD metadata for first and last images
+        empadDTYPE = np.dtype([("data", "16384float32"), ("metadata", "256float32")])
+        with open(fPath, "rb") as fid:
+            imFirst = np.fromfile(fid, dtype=empadDTYPE, count=1)
+            fid.seek(-128 * 130 * 4, 2)
+            imLast = np.fromfile(fid, dtype=empadDTYPE, count=1)
 
-    # Get the scan shape
-    shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
-    shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
-    rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
-    data_shape = (int(rShape[0]), int(rShape[1]), row, col)
+        # Get the scan shape
+        shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
+        shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
+        rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
+        data_shape = (int(rShape[0]), int(rShape[1]), row, col)
 
     # Load the data
     if (mem, binfactor) == ("RAM", 1):
