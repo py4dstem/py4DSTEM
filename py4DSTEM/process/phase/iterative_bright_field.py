@@ -121,22 +121,16 @@ class BFreconstruction():
                 disable=not progress_bar,
                 ):
                 ind = inds_order[a0]
-
                 G = np.fft.fft2(self.stack_BF[ind])
                 
-                cc = G_ref * np.conj(G)
-                maxima = get_maxima_2D(
-                    np.real(np.fft.ifft2(cc)),
-                    subpixel = subpixel,
-                    upsample_factor = upsample_factor,
-                    maxNumPeaks = 1,
-                    _ar_FT = cc,
-                )[0]
-
                 # Get subpixel shifts
-                dx = np.mod(maxima[0] + self.stack_BF.shape[1]/2,
+                xy_shift = align_images(
+                    G_ref, 
+                    G,
+                    upsample_factor = upsample_factor)
+                dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
                     self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
-                dy = np.mod(maxima[1] + self.stack_BF.shape[2]/2,
+                dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
                     self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
 
                 # apply shifts
@@ -200,10 +194,8 @@ class BFreconstruction():
             G_ref = np.fft.fft2(self.recon_BF)
 
             # align images
-            for a1 in range(20,21):#self.num_images):
+            for a1 in range(self.num_images):
                 G = np.fft.fft2(self.stack_BF[a1])
-
-
 
                 # Get subpixel shifts
                 xy_shift = align_images(
@@ -326,8 +318,10 @@ def align_images(
     x0, y0 = np.unravel_index(cc_real.argmax(), cc.shape)
 
     # half pixel shifts
-    vx = cc_real[x0-1:x0+2,y0]
-    vy = cc_real[x0,y0-1:y0+2]
+    x_inds = np.mod(x0 + np.arange(-1,2), cc.shape[0]).astype('int')
+    y_inds = np.mod(y0 + np.arange(-1,2), cc.shape[0]).astype('int')
+    vx = cc_real[x_inds,y0]
+    vy = cc_real[x0,y_inds]
     dx = (vx[2]-vx[0])/(4*vx[1]-2*vx[2]-2*vx[0])
     dy = (vy[2]-vy[0])/(4*vy[1]-2*vy[2]-2*vy[0])
     x0 = np.round((x0 + dx)*2.0)/2.0
