@@ -11,6 +11,7 @@ from py4DSTEM.io.datastructure import DataCube
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.utils import bin2D
 
+
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     """
     Reads the EMPAD file at filename, returning a DataCube.
@@ -29,11 +30,16 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     Returns:
         data        (DataCube) the 4D datacube, excluding the metadata rows.
     """
-    assert(isinstance(filename, (str, Path))), "Error: filepath fp must be a string or pathlib.Path"
-    assert(mem in ['RAM', 'MEMMAP']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert(isinstance(binfactor, int)), "Error: argument binfactor must be an integer"
-    assert(binfactor >= 1), "Error: binfactor must be >= 1"
-    assert(metadata is False), "Error: EMPAD Reader does not support metadata."
+    assert isinstance(
+        filename, (str, Path)
+    ), "Error: filepath fp must be a string or pathlib.Path"
+    assert mem in [
+        "RAM",
+        "MEMMAP",
+    ], 'Error: argument mem must be either "RAM" or "MEMMAP"'
+    assert isinstance(binfactor, int), "Error: argument binfactor must be an integer"
+    assert binfactor >= 1, "Error: binfactor must be >= 1"
+    assert metadata is False, "Error: EMPAD Reader does not support metadata."
 
     row = 130
     col = 128
@@ -42,18 +48,31 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
     if "EMPAD_shape" in kwargs.keys():
         data_shape = kwargs["EMPAD_shape"]
     else:
-        # Parse the EMPAD metadata for first and last images
-        empadDTYPE = np.dtype([("data", "16384float32"), ("metadata", "256float32")])
-        with open(fPath, "rb") as fid:
-            imFirst = np.fromfile(fid, dtype=empadDTYPE, count=1)
-            fid.seek(-128 * 130 * 4, 2)
-            imLast = np.fromfile(fid, dtype=empadDTYPE, count=1)
+        import os
+        filesize = os.path.getsize(fPath)
+        pattern_size = row * col * 4  # 4 bytes per pixel
+        N_patterns = filesize / pattern_size
+        Nxy = np.sqrt(N_patterns)
 
-        # Get the scan shape
-        shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
-        shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
-        rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
-        data_shape = (int(rShape[0]), int(rShape[1]), row, col)
+        # Check that it's reasonably square
+        assert (
+            np.abs(Nxy - np.round(Nxy)) <= 1e-10
+        ), "Automatically detected shape seems wrong... Try specifying it manually with the EMPAD_shape keyword argument"
+
+        data_shape = (int(Nxy), int(Nxy), row, col)
+
+        # # Parse the EMPAD metadata for first and last images
+        # empadDTYPE = np.dtype([("data", "16384float32"), ("metadata", "256float32")])
+        # with open(fPath, "rb") as fid:
+        #     imFirst = np.fromfile(fid, dtype=empadDTYPE, count=1)
+        #     fid.seek(-128 * 130 * 4, 2)
+        #     imLast = np.fromfile(fid, dtype=empadDTYPE, count=1)
+
+        # # Get the scan shape
+        # shape0 = imFirst["metadata"][0][128 + 12 : 128 + 16]
+        # shape1 = imLast["metadata"][0][128 + 12 : 128 + 16]
+        # rShape = 1 + shape1[0:2] - shape0[0:2]  # scan shape
+        # data_shape = (int(rShape[0]), int(rShape[1]), row, col)
 
     # Load the data
     if (mem, binfactor) == ("RAM", 1):
