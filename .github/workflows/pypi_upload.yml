@@ -21,14 +21,14 @@ jobs:
         id: changed-files-specific
         uses: tj-actions/changed-files@v32
         with:
-#          token: ${{ github.token }}
+          token: ${{ github.token }}
           files: |
             py4DSTEM/version.py
       - name: Running if py4DSTEM/version.py file is not changed
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
           echo "Version file not changed, running script to change the version file."
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          #git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           python .github/scripts/update_version.py
           git config --global user.email "ben.savitzky@gmail.com"
           git config --global user.name "bsavitzky"
