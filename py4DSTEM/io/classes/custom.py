@@ -12,6 +12,7 @@ from os.path import basename
 
 from py4DSTEM.io.classes.tree import Node,Root
 from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes.class_io_utils import _get_class
 
 class Custom(Node):
     """
@@ -74,10 +75,10 @@ class Custom(Node):
         """
         groups = [g for g in group.keys() if isinstance(group[g],h5py.Group)]
         groups = [g for g in groups if 'emd_group_type' in group[g].attrs.keys()]
-        groups = [g for g in groups if groups[g].attrs['emd_group_type']=='custom_']
+        groups = [g for g in groups if group[g].attrs['emd_group_type'][:7]=='custom_']
         dic = {}
         for g in groups:
-            name,grp = g,groups[g]
+            name,grp = g,group[g]
             __class__ = _get_class(grp)
             data = __class__.from_h5(grp)
             dic[name] = data

@@ -12,8 +12,12 @@ from py4DSTEM.io.classes import (
     Metadata
 )
 
+from py4DSTEM.io.classes.py4dstem.braggvectors_methods import BraggVectorMethods
 
-class BraggVectors(Custom):
+
+
+
+class BraggVectors(Custom,BraggVectorMethods):
     """
     Stores bragg scattering information for a 4D datacube.
 
@@ -21,33 +25,23 @@ class BraggVectors(Custom):
 
     initializes an instance of the appropriate shape for a DataCube `datacube`.
 
+        >>> braggvectors.vectors[rx,ry]
+        >>> braggvectors.vectors_uncal[rx,ry]
+
+    or their aliases
+
         >>> braggvectors.v[rx,ry]
         >>> braggvectors.v_uncal[rx,ry]
 
-    retrieve, respectively, the calibrated and uncalibrated bragg vectors at
+    retrieve the calibrated and uncalibrated bragg vectors at
     scan position [rx,ry], and
 
         >>> braggvectors.v[rx,ry]['qx']
         >>> braggvectors.v[rx,ry]['qy']
         >>> braggvectors.v[rx,ry]['intensity']
 
-    retrieve the positiona and intensity of the scattering.
+    retrieve the position and intensity of the scattering.
     """
-
-    from py4DSTEM.io.classes.py4dstem.braggvectors_fns import (
-        get_bvm,
-        measure_origin,
-        fit_origin,
-        calibrate,
-        choose_lattice_vectors,
-        index_bragg_directions,
-        add_indices_to_braggpeaks,
-        fit_lattice_vectors_all_DPs,
-        get_strain_from_reference_region,
-        get_rotated_strain_map,
-        get_strain_from_reference_g1g2,
-        get_masked_peaks,
-    )
 
     def __init__(
         self,
@@ -71,6 +65,7 @@ class BraggVectors(Custom):
             name = '_v_uncal'
         )
 
+    # vector properties
 
     @property
     def vectors(self):
@@ -79,25 +74,19 @@ class BraggVectors(Custom):
         except AttributeError:
             er = "No calibrated bragg vectors found. Try running .calibrate()!"
             raise Exception(er)
-
     @property
     def vectors_uncal(self):
         return self._v_uncal
 
+    # aliases
+    v = vectors
+    v_uncal = vectors_uncal
 
 
 
-    ## Representation to standard output
 
-    def __repr__(self):
+    # methods
 
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( "
-        string += f"A {self.shape}-shaped array of lists of bragg vectors )"
-        return string
-
-
-    # copy
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
@@ -117,6 +106,7 @@ class BraggVectors(Custom):
 
 
     # write
+
     def to_h5(self,group):
         """ Constructs the group, adds the bragg vector pointlists,
         and adds metadata describing the shape
@@ -124,12 +114,14 @@ class BraggVectors(Custom):
         md = Metadata( name = '_braggvectors_shape' )
         md['Rshape'] = self.Rshape
         md['Qshape'] = self.Qshape
+        self.metadata = md
         grp = Custom.to_h5(self,group)
 
 
 
 
     # read
+
     @classmethod
     def _get_constructor_args(cls,group):
         """
@@ -142,8 +134,8 @@ class BraggVectors(Custom):
         # Populate args and return
         kwargs = {
             'name' : basename(group.name),
-            'Rshape' : Rshape,
-            'Qshape' : Qshape
+            'Rshape' : md['Rshape'],
+            'Qshape' : md['Qshape']
         }
         return kwargs
 
@@ -158,6 +150,13 @@ class BraggVectors(Custom):
 
 
 
+    # standard output display
 
+    def __repr__(self):
+
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += f"A {self.shape}-shaped array of lists of bragg vectors )"
+        return string
 
 

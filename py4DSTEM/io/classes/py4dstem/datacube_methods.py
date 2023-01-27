@@ -16,9 +16,6 @@ class DataCubeMethods:
     A container for DataCube object instance methods.
     """
 
-    def __init__(self):
-        pass
-
     def add(
         self,
         data,
