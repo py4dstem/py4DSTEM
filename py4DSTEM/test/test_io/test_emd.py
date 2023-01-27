@@ -341,7 +341,7 @@ class TestTreeIO(TreeBuilder):
 
     @classmethod
     def teardown_class(cls):
-        cls._clean_files(cls)
+        cls._clear_files(cls)
 
     def setup_method(self, method):
         self._build_tree()
@@ -857,7 +857,7 @@ class TestTreeIO(TreeBuilder):
         )
         pass
 
-    def _clean_files(self):
+    def _clear_files(self):
         """
         Delete h5 files which this test suite wrote
         """

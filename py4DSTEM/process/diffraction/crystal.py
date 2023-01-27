@@ -57,7 +57,7 @@ class Crystal:
         calibrate_pixel_size,
         calibrate_unit_cell
     )
-    
+
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
     from py4DSTEM.process.diffraction.crystal_bloch import (
         generate_dynamical_diffraction_pattern,

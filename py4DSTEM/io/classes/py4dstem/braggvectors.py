@@ -4,14 +4,16 @@
 from typing import Optional,Union
 import numpy as np
 import h5py
+from os.path import basename
 
-from py4DSTEM.io.classes import PointListArray
-from py4DSTEM.io.classes.tree import Branch
-from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes import (
+    Custom,
+    PointListArray,
+    Metadata
+)
 
 
-
-class BraggVectors:
+class BraggVectors(Custom):
     """
     Stores bragg scattering information for a 4D datacube.
 
@@ -53,18 +55,11 @@ class BraggVectors:
         Qshape,
         name = 'braggvectors'
         ):
+        Custom.__init__(self,name=name)
 
-        self.name = name
         self.Rshape = Rshape
         self.shape = self.Rshape
         self.Qshape = Qshape
-
-        self.tree = Branch()
-        if not hasattr(self, "_metadata"):
-            self._metadata = {}
-        if 'braggvectors' not in self._metadata.keys():
-            self.metadata = Metadata( name='braggvectors' )
-        self.metadata['braggvectors']['Qshape'] = self.Qshape
 
         self._v_uncal = PointListArray(
             dtype = [
@@ -89,13 +84,6 @@ class BraggVectors:
     def vectors_uncal(self):
         return self._v_uncal
 
-    @property
-    def metadata(self):
-        return self._metadata
-    @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
-        self._metadata[x.name] = x
 
 
 
@@ -126,100 +114,47 @@ class BraggVectors:
         return braggvector_copy
 
 
-    # HDF5 i/o
+
 
     # write
     def to_h5(self,group):
+        """ Constructs the group, adds the bragg vector pointlists,
+        and adds metadata describing the shape
         """
-        Takes a valid group for an HDF5 file object which is open in
-        write or append mode. Writes a new group with a name given by this
-        BraggVectors .name field nested inside the passed group, and saves
-        the data there.
+        md = Metadata( name = '_braggvectors_shape' )
+        md['Rshape'] = self.Rshape
+        md['Qshape'] = self.Qshape
+        grp = Custom.to_h5(self,group)
 
-        Accepts:
-            group (HDF5 group)
-        """
-        ## Write the group
-        grp = group.create_group(self.name)
-        grp.attrs.create("emd_group_type", 4) # this tag indicates a Custom type
-        grp.attrs.create("py4dstem_class", self.__class__.__name__)
 
-        # Add uncalibrated vectors
-        self._v_uncal.name = "_v_uncal"
-        self._v_uncal._to_h5( grp )
-
-        # Add calibrated vectors, if present
-        try:
-            self._v_cal.name = "_v_cal"
-            self._v_cal._to_h5( grp )
-        except AttributeError:
-            pass
-
-        # Add metadata
-        _write_metadata(self, grp)
 
 
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in read mode,
-        Determines if a valid BraggVectors object of this name exists inside
-        this group, and if it does, loads and returns it. If it doesn't, raises
-        an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A BraggVectors instance
         """
-        # Confirm correct group type
-        er = f"Group {group} is not a valid BraggVectors group"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] == 4), er
+        # Get shape metadata from the metadatabundle group
+        assert('metadatabundle' in group.keys()), "No metadata found, can't get Rshape and Qshape"
+        grp_metadata = group['metadatabundle']
+        assert('_braggvectors_shape' in grp_metadata.keys()), "No _braggvectors_shape metadata found"
+        md = Metadata.from_h5(grp_metadata['_braggvectors_shape'])
+        # Populate args and return
+        kwargs = {
+            'name' : basename(group.name),
+            'Rshape' : Rshape,
+            'Qshape' : Qshape
+        }
+        return kwargs
 
-        # Get uncalibrated peaks
-        v_uncal = PointListArray.from_h5(group['_v_uncal'])
-
-        # Get Qshape metadata
-        try:
-            grp_metadata = group['metadatabundle']
-            Qshape = Metadata.from_h5(grp_metadata['braggvectors'])['Qshape']
-        except KeyError:
-            raise Exception("could not read Qshape")
-
-        # Set up BraggVectors
-        braggvectors = BraggVectors(
-            v_uncal.shape,
-            Qshape = Qshape,
-            name = basename(group.name)
-        )
-        braggvectors._v_uncal = v_uncal
-
-        # Add calibrated peaks, if they're there
-        try:
-            v_cal = PointListArray.from_h5(group['_v_cal'])
-            braggvectors._v_cal = v_cal
-        except KeyError:
-            pass
-
-        # Add remaining metadata
-        _read_metadata(braggvectors, group)
-
-        # Return
-        return braggvectors
-
-
-
-
-
-
-############ END OF CLASS ###########
-
-
-
-
-
+    def _populate_instance(self,group):
+        """
+        """
+        dic = self._get_emd_attr_data(group)
+        assert('_v_uncal' in dic.keys()), "Uncalibrated bragg vectors not found!"
+        self._v_uncal = dic['_v_uncal']
+        if '_v_cal' in dic.keys():
+            self._v_cal = dic['_v_cal']
 
 
 

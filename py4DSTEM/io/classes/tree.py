@@ -374,10 +374,12 @@ class Node:
         """
         # Validate group type
         assert(self.__class__._emd_group_type in EMD_group_types)
+
         # Make group, add tags
         grp = group.create_group(self.name)
         grp.attrs.create("emd_group_type",self.__class__._emd_group_type)
         grp.attrs.create("python_class",self.__class__.__name__)
+
         # add metadata
         items = self._metadata.items()
         if len(items)>0:
@@ -388,6 +390,7 @@ class Node:
                 # add each Metadata instance
                 self._metadata[k].name = k
                 self._metadata[k].to_h5(grp_metadata)
+
         # return
         return grp
 
@@ -436,8 +439,8 @@ class Node:
         node = cls(**args)
 
         # some classes needed to be first instantiated, then populated with data
-        if hasattr(cls,'_populate_instance'):
-            node = cls._populate_instance(node,group)
+        if hasattr(node,'_populate_instance'):
+            node._populate_instance(group)
 
         # Read any metadata
         try:
