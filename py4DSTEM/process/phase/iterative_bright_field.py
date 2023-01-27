@@ -188,8 +188,8 @@ class BFreconstruction():
         num_iter = 1,
         subpixel = 'multicorr',
         upsample_factor = 8,
-        # max_shift = 4,
-        # step_size = 0.9,
+        regularize_shifts = True,
+        regularize_size = (1,1),
         plot_stats = True,
         plot_recon = True,
         progress_bar = True,
@@ -210,28 +210,32 @@ class BFreconstruction():
             G_ref = np.fft.fft2(self.recon_BF)
 
             # align images
-            for a1 in range(self.num_images):
-                G = np.fft.fft2(self.stack_BF[a1])
+            if regularize_shifts:
+                1+1
 
-                # Get subpixel shifts
-                xy_shift = align_images(
-                    G_ref, 
-                    G,
-                    upsample_factor = upsample_factor)
-                dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
-                    self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
-                dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
-                    self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+            else:
+                for a1 in range(self.num_images):
+                    G = np.fft.fft2(self.stack_BF[a1])
 
-                # apply shifts
-                self.xy_shifts[a1,0] += dx
-                self.xy_shifts[a1,1] += dy
+                    # Get subpixel shifts
+                    xy_shift = align_images(
+                        G_ref, 
+                        G,
+                        upsample_factor = upsample_factor)
+                    dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
+                        self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
+                    dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
+                        self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
 
-                # shift image
-                shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
-                self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
-                self.stack_mask[a1] = np.real(np.fft.ifft2(
-                    np.fft.fft2(self.stack_mask[a1]) * shift_op))
+                    # apply shifts
+                    self.xy_shifts[a1,0] += dx
+                    self.xy_shifts[a1,1] += dy
+
+                    # shift image
+                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
+                    self.stack_mask[a1] = np.real(np.fft.ifft2(
+                        np.fft.fft2(self.stack_mask[a1]) * shift_op))
 
             # Center the shifts
             xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
