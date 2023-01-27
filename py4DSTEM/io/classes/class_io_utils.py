@@ -24,7 +24,10 @@ EMD_data_group_types = (
     "pointlistarray",
     "custom",
 )
-EMD_group_types = EMD_base_group_types + EMD_data_group_types
+EMD_custom_group_types = tuple(
+    ["custom_"+s for s in EMD_data_group_types]
+)
+EMD_group_types = EMD_base_group_types + EMD_data_group_types + EMD_custom_group_types
 
 
 

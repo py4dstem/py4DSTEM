@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 
 from py4DSTEM.io.classes.array import Array
-from py4DSTEM.io.classes.py4dstem.datacube_fns import DataCubeMethods
+from py4DSTEM.io.classes.py4dstem.datacube_methods import DataCubeMethods
 from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 from py4DSTEM.io.classes import Branch
 ##;pfrom py4DSTEM.io.classes.tree import ParentBranch

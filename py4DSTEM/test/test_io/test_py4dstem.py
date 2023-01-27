@@ -27,6 +27,7 @@ path_h5 = join(dirpath,"test.h5")
 
 
 
+
 class TestPy4dstem:
 
     ## Setup and teardown
@@ -51,6 +52,13 @@ class TestPy4dstem:
             - a datacube
             - a braggvectors instance with only v_uncal
             - a braggvectors instance with both PLAs
+            - a diffractionslice
+            - a realslice
+            - a probe, with no kernel
+            - a probe, with a kernel
+            - a qpoints instance
+            - a virtualdiffraction instance
+            - a virtualimage instance
         """
         # datacube
         self.datacube = DataCube(
@@ -72,13 +80,13 @@ class TestPy4dstem:
             Rshape = (5,6),
             Qshape = (7,8)
         )
-        for x in range(self.braggvectors.Rshape[0]):
-            for y in range(self.braggvectors.Rshape[1]):
+        for x in range(self.braggvectors2.Rshape[0]):
+            for y in range(self.braggvectors2.Rshape[1]):
                 L = int(4 * (np.sin(x*y)+1))
-                self.braggvectors.vectors_uncal[x,y].add(
-                    np.ones(L,dtype=self.braggvectors.vectors_uncal.dtype)
+                self.braggvectors2.vectors_uncal[x,y].add(
+                    np.ones(L,dtype=self.braggvectors2.vectors_uncal.dtype)
                 )
-        self.braggvectors._v_cal = self.braggvectors._v_uncal.copy(name='_v_uncal')
+        self.braggvectors2._v_cal = self.braggvectors2._v_uncal.copy(name='_v_uncal')
 
     def _clear_files(self):
         """
@@ -98,25 +106,62 @@ class TestPy4dstem:
     ## Tests
 
     def test_datacube(self):
+        """ Save then read a datacube, and compare its contents before/after
+        """
         assert(isinstance(self.datacube,DataCube))
-
+        # save and read
         save(path_h5,self.datacube)
         root = read(path_h5)
         new_datacube = root.tree('datacube')
-
+        # check it's the same
         assert(isinstance(new_datacube,DataCube))
         assert(array_equal(self.datacube.data,new_datacube.data))
 
 
     def test_braggvectors(self):
+        """ Save then read a BraggVectors instance, and compare contents before/after
+        """
         assert(isinstance(self.braggvectors,BraggVectors))
+        # save then read
+        save(path_h5,self.braggvectors)
+        root = read(path_h5)
+        new_braggvectors = root.tree('braggvectors')
+        # check it's the same
+        assert(isinstance(new_braggvectors,BraggVectors))
+        assert(new_braggvectors is not self.braggvectors)
+        for x in range(new_braggvectors.shape[0]):
+            for y in range(new_braggvectors.shape[1]):
+                assert(array_equal(
+                    new_braggvectors.v_uncal[x,y].data,
+                    self.braggvectors.v_uncal[x,y].data))
+        # check that _v_cal isn't there
+        assert(not(hasattr(new_braggvectors,'_v_cal')))
 
-        #save(path_h5,self.braggvectors)
-        #root = read(path_h5)
-        #new_braggvectors = root.tree('braggvectors')
 
-        #assert(isinstance(new_datacube,DataCube))
-        #assert(array_equal(self.datacube.data,new_datacube.data))
+    def test_braggvectors2(self):
+        """ Save then read a BraggVectors instance, and compare contents before/after
+        """
+        assert(isinstance(self.braggvectors2,BraggVectors))
+        # save then read
+        save(path_h5,self.braggvectors2)
+        root = read(path_h5)
+        new_braggvectors = root.tree('braggvectors')
+        # check it's the same
+        assert(isinstance(new_braggvectors,BraggVectors))
+        assert(new_braggvectors is not self.braggvectors2)
+        for x in range(new_braggvectors.shape[0]):
+            for y in range(new_braggvectors.shape[1]):
+                assert(array_equal(
+                    new_braggvectors.v_uncal[x,y].data,
+                    self.braggvectors2.v_uncal[x,y].data))
+        # check cal vectors are there
+        assert(hasattr(new_braggvectors,'_v_cal'))
+        # check it's the same
+        for x in range(new_braggvectors.shape[0]):
+            for y in range(new_braggvectors.shape[1]):
+                assert(array_equal(
+                    new_braggvectors.v[x,y].data,
+                    self.braggvectors2.v[x,y].data))
 
 
 
