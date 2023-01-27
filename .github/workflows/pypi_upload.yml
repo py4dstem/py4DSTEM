@@ -21,6 +21,7 @@ jobs:
         id: changed-files-specific
         uses: tj-actions/changed-files@v32
         with:
+#          token: ${{ github.token }}
           files: |
             py4DSTEM/version.py
       - name: Running if py4DSTEM/version.py file is not changed
@@ -33,8 +34,6 @@ jobs:
           git config --global user.name "bsavitzky"
           git commit -a -m "Update version number"
           git push origin main
-        env:
-          token: ${{ github.token }}
   sync_with_dev:
     runs-on: ubuntu-latest
     name: Sync main with dev
