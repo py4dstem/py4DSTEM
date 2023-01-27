@@ -206,21 +206,20 @@ class PointListArray(Node):
 
         return pla
 
-    #staticmethod
-    def _populate_instance(instance,group):
+    def _populate_instance(self,group):
         """
-        Accepts an already extant class instance, and populates it with the data from h5py Group `group`
+        Accepts an already extant class self, and populates it with the data from h5py Group `group`
         """
         # Find the data and shape
         dset = group['data']
-        shape = instance.shape
+        shape = self.shape
         # Add data
         for (i,j) in tqdmnd(shape[0],shape[1],desc="Reading PointListArray",unit="PointList"):
             try:
-                instance[i,j].add(dset[i,j])
+                self[i,j].add(dset[i,j])
             except ValueError:
                 pass
-        return instance
+        return self
 
 
 
