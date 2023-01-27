@@ -23,6 +23,7 @@ jobs:
         id: changed-files-specific
         uses: tj-actions/changed-files@v32
         with:
+          fetch-depth: 0
           files: |
             py4DSTEM/version.py
       - name: Running if py4DSTEM/version.py file is not changed
