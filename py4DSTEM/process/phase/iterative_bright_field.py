@@ -4,11 +4,11 @@ Module for reconstructing virtual bright field images by aligning each virtual B
 
 import matplotlib.pyplot as plt
 import numpy as np
-from py4DSTEM import show
+from scipy.special import comb
+
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
-# from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 
@@ -198,6 +198,27 @@ class BFreconstruction():
         Iterative alignment of the BF images.
         """
 
+        # construct regularization basis if needed
+        if regularize_shifts:
+            if regularize_size[0] == 1 and regularize_size[1] == 1:
+                basis = self.kxy
+            else:
+                kr_max = np.max(self.kr)
+                u = self.kxy[:,0] * 0.5 / kr_max + 0.5
+                v = self.kxy[:,1] * 0.5 / kr_max + 0.5
+                u[0] = 0
+                v[0] = 1
+
+                basis = np.zeros((self.num_images,(regularize_size[0]+1)*(regularize_size[1]+1)))
+                for ii in np.arange(regularize_size[0]+1):
+                    Bi = comb(regularize_size[0],ii) * (u**ii) * ((1-u)**(regularize_size[0]-ii))
+
+                    for jj in np.arange(regularize_size[1]+1):
+                        Bj = comb(regularize_size[1],jj) * (v**jj) * ((1-v)**(regularize_size[1]-jj))
+
+                        ind = ii*(regularize_size[1]+1) + jj
+                        basis[:,ind] = Bi * Bj
+
         # Loop over iterations
         for a0 in tqdmnd(
             num_iter,
@@ -211,7 +232,45 @@ class BFreconstruction():
 
             # align images
             if regularize_shifts:
-                1+1
+                shifts_update = np.zeros((self.num_images,2))
+
+                for a1 in range(self.num_images):
+                    G = np.fft.fft2(self.stack_BF[a1])
+
+                    # Get subpixel shifts
+                    xy_shift = align_images(
+                        G_ref, 
+                        G,
+                        upsample_factor = upsample_factor)
+                    dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
+                        self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
+                    dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
+                        self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+
+                    # apply shifts
+                    shifts_update[a1,0] = dx
+                    shifts_update[a1,1] = dy
+
+                # Calculate regularized shifts
+                xy_shifts_new = self.xy_shifts + shifts_update
+                coefs = np.linalg.lstsq(basis, xy_shifts_new, rcond=None)[0]
+                xy_shifts_fit = basis @ coefs
+                shifts_update = xy_shifts_fit - self.xy_shifts
+
+                # Apply shifts
+                for a1 in range(self.num_images):
+                    G = np.fft.fft2(self.stack_BF[a1])
+
+                    dx = shifts_update[a1,0]
+                    dy = shifts_update[a1,1]
+                    self.xy_shifts[a1,0] += dx
+                    self.xy_shifts[a1,1] += dy
+
+                    # shift image
+                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
+                    self.stack_mask[a1] = np.real(np.fft.ifft2(
+                        np.fft.fft2(self.stack_mask[a1]) * shift_op))
 
             else:
                 for a1 in range(self.num_images):
@@ -237,11 +296,11 @@ class BFreconstruction():
                     self.stack_mask[a1] = np.real(np.fft.ifft2(
                         np.fft.fft2(self.stack_mask[a1]) * shift_op))
 
-            # Center the shifts
-            xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
-            self.xy_shifts -= xy_shifts_median[None,:]
-            self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
-            self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
+            # # Center the shifts
+            # xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
+            # self.xy_shifts -= xy_shifts_median[None,:]
+            # self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
+            # self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
 
             # update reconstruction and error
             # self.recon_BF = np.median(self.stack_BF, axis=0)
