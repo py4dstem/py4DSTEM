@@ -168,7 +168,6 @@ def show_image_grid(
         fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
     else:
         fig,axs = figax
-
     if H==1:
         axs = axs[np.newaxis,:]
     elif W==1:
@@ -177,17 +176,17 @@ def show_image_grid(
         for j in range(W):
             ax = axs[i,j]
             N = i*W+j
-            
+            #make titles
             if type(title) == list: 
                 print_title = title[N]
             else:
                 print_title = None
-
             if title_index: 
                 if print_title is not None: 
                     print_title = f"{N}. " + print_title
                 else:
                     print_title = f"{N}." 
+            #make figures
             try:
                 ar = get_ar(N)
                 if _get_bordercolor and _get_points:
@@ -244,8 +243,8 @@ def show_image_grid(
     if suptitle:
         fig.suptitle(suptitle)
     plt.tight_layout()
+    
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,axs

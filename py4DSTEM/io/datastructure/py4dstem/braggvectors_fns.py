@@ -357,7 +357,6 @@ def index_bragg_directions(
             braggdirections['h'],
             braggdirections['k'],
             ))
-
         self.braggdirections_calibrated = braggdirections_calibrated
 
     if plot:
@@ -408,7 +407,6 @@ def add_indices_to_braggpeaks(
             qx_shift = self.Qshape[0]/2* self.calibration.get_Q_pixel_size(),
             qy_shift = self.Qshape[1]/2* self.calibration.get_Q_pixel_size(),
         )
-
     else:
         bragg_peaks_indexed = add_indices_to_braggpeaks(
             self.vectors,
