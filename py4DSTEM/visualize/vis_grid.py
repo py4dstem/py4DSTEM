@@ -133,8 +133,8 @@ def show_image_grid(
                     (Figure,Axes), with ar then plotted in the specified Axes instance.
         title       if title is sting, then prints title as suptitle. If a suptitle is also provided, 
                     the suptitle is printed insead.
-                    if title is a list of strings (ex: ['title 1','title 2']), each ar has corresponding 
-                    title in list.
+                    if title is a list of strings (ex: ['title 1','title 2']), each array has 
+                    corresponding title in list.
         title_index if True, prints the index i passed to get_ar over each image 
         suptitle    string, suptitle on plot
         get_bordercolor

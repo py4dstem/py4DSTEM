@@ -320,7 +320,8 @@ def index_bragg_directions(
     """
     From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
     lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
-    reciprocal lattice directions.
+    reciprocal lattice directions. In units of pixels. If calibrated in A^-1, also stores
+    `self.braggdirections_calibrated.` 
 
     Args:
         x0 (float): x-coord of origin
