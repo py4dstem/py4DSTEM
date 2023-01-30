@@ -345,6 +345,20 @@ def index_bragg_directions(
 
     self.braggdirections = braggdirections
 
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        from py4DSTEM.io.datastructure import PointList
+        coords = [('qx',float),('qy',float),('h',int),('k',int)]
+        temp_array = np.empty([], dtype = coords)
+        braggdirections_calibrated = PointList(data = temp_array)
+        braggdirections_calibrated.add_data_by_field((
+            braggdirections['qx']*self.calibration.get_Q_pixel_size(),
+            braggdirections['qy']*self.calibration.get_Q_pixel_size(),
+            braggdirections['h'],
+            braggdirections['k'],
+            ))
+
+        self.braggdirections_calibrated = braggdirections_calibrated
+
     if plot:
         from py4DSTEM.visualize import show_bragg_indexing
         show_bragg_indexing(
@@ -385,13 +399,23 @@ def add_indices_to_braggpeaks(
     """
     from py4DSTEM.process.latticevectors import add_indices_to_braggpeaks
 
-    bragg_peaks_indexed = add_indices_to_braggpeaks(
-        self.vectors,
-        self.braggdirections,
-        maxPeakSpacing = maxPeakSpacing,
-        qx_shift = self.Qshape[0]/2,
-        qy_shift = self.Qshape[1]/2,
-    )
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections_calibrated,
+            maxPeakSpacing = maxPeakSpacing * self.calibration.get_Q_pixel_size(),
+            qx_shift = self.Qshape[0]/2* self.calibration.get_Q_pixel_size(),
+            qy_shift = self.Qshape[1]/2* self.calibration.get_Q_pixel_size(),
+        )
+
+    else:
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections,
+            maxPeakSpacing = maxPeakSpacing,
+            qx_shift = self.Qshape[0]/2,
+            qy_shift = self.Qshape[1]/2,
+        )
 
     self.bragg_peaks_indexed = bragg_peaks_indexed
 
