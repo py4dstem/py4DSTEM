@@ -49,6 +49,8 @@ jobs:
       - run: |
           # set strategy to default merge
           git config pull.rebase false
+          git config --global user.email "ben.savitzky@gmail.com"
+          git config --global user.name "bsavitzky"
           git pull origin main --commit --no-edit
           git push origin dev
   deploy:
