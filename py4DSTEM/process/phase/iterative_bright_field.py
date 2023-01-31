@@ -13,6 +13,7 @@ from py4DSTEM.process.utils import get_shifted_ar, get_shift
 from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from py4DSTEM.visualize import show
 
 
 class BFreconstruction():
@@ -24,6 +25,7 @@ class BFreconstruction():
     def __init__(
         self,
         dataset,
+        accelerating_voltage_kV = 300e3,
         threshold_intensity = 0.8,
         normalize_images = True,
         padding = (64,64),
@@ -31,6 +33,7 @@ class BFreconstruction():
         initial_align = True,
         subpixel = 'multicorr',
         upsample_factor = 8,
+        plot_recon = True,
         progress_bar = True,
         ):
 
@@ -40,19 +43,39 @@ class BFreconstruction():
         self.edge_blend = edge_blend
         self.calibration = dataset.calibration
 
-        # Get mean diffraction pattern
+        # get mean diffraction pattern
         if 'dp_mean' not in dataset.tree.keys():
             self.dp_mean = dataset.get_dp_mean().data
         else:
             self.dp_mean = dataset.tree['dp_mean'].data
 
-        # Select virtual detector pixels
+        # make sure mean diffraction pattern is shaped correctly
+        if (self.dp_mean.shape[0] != dataset.shape[2]) \
+            or (self.dp_mean.shape[1] != dataset.shape[2]):
+            self.dp_mean = dataset.get_dp_mean().data
+
+        # select virtual detector pixels
         self.dp_mask = self.dp_mean >= (np.max(self.dp_mean) * threshold_intensity)
         self.num_images = np.count_nonzero(self.dp_mask)
 
-        # coordinates
+        # wavelength
+        self.accelerating_voltage_kV = accelerating_voltage_kV
+        self.wavelength = electron_wavelength_angstrom(self.accelerating_voltage_kV)
+
+        # diffraction space coordinates
         self.xy_inds = np.argwhere(self.dp_mask)
-        self.kxy = (self.xy_inds - np.mean(self.xy_inds,axis=0)[None,:]) * dataset.calibration.get_Q_pixel_size()
+        if self.calibration.get_Q_pixel_units() == 'A^-1':
+            self.kxy = (self.xy_inds - np.mean(
+                self.xy_inds,axis=0)[None,:]) * dataset.calibration.get_Q_pixel_size()
+            self.probe_angles = self.kxy * self.wavelength
+
+        elif self.calibration.get_Q_pixel_units() == 'mrad':
+            self.probe_angles = (self.xy_inds - np.mean(
+                self.xy_inds,axis=0)[None,:]) * dataset.calibration.get_Q_pixel_size() / 1000
+            self.kxy = self.probe_angles / self.wavelength
+        else:
+            raise Exception('diffraction space pixel size must be A^-1 or mrad')
+
         self.kr = np.sqrt(np.sum(self.kxy**2,axis=1))
 
         # Window function
@@ -78,7 +101,7 @@ class BFreconstruction():
             self.num_images,
             dataset.data.shape[0] + padding[0],
             dataset.data.shape[1] + padding[1],
-        ))
+        ), dtype='float')
         self.stack_mask = np.tile(self.window_pad[None,:,:],(self.num_images,1,1))
 
         # populate image array
@@ -88,7 +111,7 @@ class BFreconstruction():
             unit=" images",
             disable=not progress_bar,
             ):
-            im = dataset.data[:,:,self.xy_inds[a0,0],self.xy_inds[a0,1]].copy()
+            im = dataset.data[:,:,self.xy_inds[a0,0],self.xy_inds[a0,1]].copy().astype('float')
 
             if normalize_images:
                 im /= np.mean(im)
@@ -327,6 +350,28 @@ class BFreconstruction():
             ax.set_xlabel('Iteration')
             ax.set_ylabel('Error')
 
+    def plot_recon(
+        self,
+        bound = None,
+        figsize=(8,8),
+        ):
+
+        # Image boundaries
+        if bound == 0:
+            im = self.recon_BF
+        else:
+            if bound is None:
+                bound = (self.padding[0]//2, self.padding[1]//2)
+            else:
+                if np.array(bound).ndim == 0:
+                    bound = (bound, bound)
+                bound = np.array(bound)
+            im = self.recon_BF[bound[0]:-bound[0],bound[1]:-bound[1]]
+        
+        show(
+            im,
+            figsize=figsize,
+        )
 
     def plot_shifts(
         self,
@@ -351,11 +396,8 @@ class BFreconstruction():
         ax.set_xlim([-1.2*kr_max, 1.2*kr_max])
         ax.set_ylim([-1.2*kr_max, 1.2*kr_max])
 
-
-
     def aberration_fit(
         self,
-        accelerating_voltage_kV = 300e3,
         print_result = True,
         plot_CTF_compare = False,
         plot_dk = 0.001,
@@ -368,21 +410,16 @@ class BFreconstruction():
         # Convert real space shifts to Angstroms
         self.xy_shifts_Ang = self.xy_shifts * self.calibration.get_R_pixel_size()
 
-        # Convert diffraction space coordinates to angles
-        self.accelerating_voltage_kV = accelerating_voltage_kV
-        self.wavelength = electron_wavelength_angstrom(self.accelerating_voltage_kV)
-        self.probe_angles = self.kxy * self.wavelength
-
         # Solve affine transformation
         m = np.linalg.lstsq(self.probe_angles, self.xy_shifts_Ang, rcond=None)[0]        
         m_rotation, m_aberration = sp.linalg.polar(m, side='right')
         # m_test = m_rotation @ m_aberration
 
         # Convert into rotation and aberration coefficients
-        self.rotation_Q_to_R_rads = np.arctan2(m_rotation[1,0],m_rotation[0,0])
-        self.aberration_C1  = (m_aberration[0,0] + m_aberration[1,1]) / 4.0 
-        self.aberration_A1x = (m_aberration[0,0] - m_aberration[1,1]) / 4.0 # factor /2 for A1 astigmatism? /4?
-        self.aberration_A1y = (m_aberration[1,0] + m_aberration[0,1]) / 4.0
+        self.rotation_Q_to_R_rads = -1*np.arctan2(m_rotation[1,0],m_rotation[0,0])
+        self.aberration_C1  = (m_aberration[0,0] + m_aberration[1,1]) / 2.0 
+        self.aberration_A1x = (m_aberration[0,0] - m_aberration[1,1]) / 2.0 # factor /2 for A1 astigmatism? /4?
+        self.aberration_A1y = (m_aberration[1,0] + m_aberration[0,1]) / 2.0
 
         # Print results
         if print_result:
@@ -478,11 +515,12 @@ class BFreconstruction():
 
 
 
-    def aberration_correct_simple(
+    def aberration_correct(
         self,
         k_info_limit = None,
         k_info_power = 2.0,
         plot_result = True,
+        figsize = (8,8),
         plot_range = (-2,2),
         returnval = False,
         ):
@@ -519,14 +557,16 @@ class BFreconstruction():
             im_plot -= np.mean(im_plot)
             im_plot /= np.sqrt(np.mean(im_plot**2))
 
-
-            fig,ax = plt.subplots(figsize = (10,10))
+            fig,ax = plt.subplots(figsize = figsize)
             ax.imshow(
-                im_plot[200:400,200:400],
+                im_plot[ \
+                    self.padding[0]//2:self.recon_BF.shape[0]-self.padding[0]//2,
+                    self.padding[1]//2:self.recon_BF.shape[1]-self.padding[1]//2],
                 vmin=plot_range[0],
                 vmax=plot_range[1],
                 cmap = 'gray',
                 )
+
 
 
 
