@@ -313,6 +313,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         elif real_space_units == "A":
             self._scan_sampling = (calibration.get_R_pixel_size(),) * 2
             self._scan_units = ("A",) * 2
+        elif real_space_units == "nm":
+            self._scan_sampling = (calibration.get_R_pixel_size()*10,) * 2
+            self._scan_units = ("A",) * 2
         else:
             raise ValueError(
                 f"Real-space calibrations must be given in 'A', not {real_space_units}"
