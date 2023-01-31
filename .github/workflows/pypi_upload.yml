@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
       - run: |
-          git pull --rebase origin main
+          git pull origin main
           git push origin dev
   deploy:
     needs: update_version
