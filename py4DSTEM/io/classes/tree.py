@@ -1,9 +1,10 @@
 import numpy as np
 from typing import Optional
 from os.path import basename
+import h5py
 
 from py4DSTEM.io.classes import Metadata
-from py4DSTEM.io.classes.class_io_utils import EMD_group_types
+from py4DSTEM.io.classes.class_io_utils import EMD_group_types, _get_class
 
 
 class Node:
@@ -208,7 +209,9 @@ class Node:
         Search from the root node by adding a leading '/'; otherwise,
         searches from the current node.
         """
-        if name[0] != '/':
+        if name == '':
+            return self.root
+        elif name[0] != '/':
             return self._branch[name]
         else:
             return self.root._branch[name]
@@ -357,6 +360,138 @@ class Node:
             else:
                 raise Exception(f'Invalid arg {k}; must be in (show,add,get,cut,graft)')
 
+    ## end tree
+
+
+
+    # decorator for storing params which generated new data nodes
+
+    @staticmethod
+    def log_new_node(method):
+        """ Node subclass methods which generate and return a new node may
+        be decorated with @log_new_node. This method creates a new Metadata
+        dict stored inside `new_node.metadata` called `_fn_call_*`, where *
+        is the name of the decorated method, which stores the args/kwargs/params
+        passed to the generating method.
+        """
+
+        @functools.wraps(method)
+        def wrapper(*args, **kwargs):
+
+            # Get the called method name
+            method_name = method.__name__
+
+            # Get the generating class instance and other args
+            self,args = args[0],args[1:]
+
+            # Pair args with names
+            method_args = inspect.getfullargspec(method)[0]
+            d = dict()
+            for i in range(len(args)):
+                d[method_args[i]] = args[i]
+
+            # Add the generating class type and name
+            d['generating_class'] = self.__class__
+            d['generating_name'] = self.name
+            d['method'] = method_name
+
+            # Combine with kwargs
+            kwargs.update(d)
+
+            # Run the method and get the returned node
+            new_node = method(*args,**kwargs)
+
+            # Make and add the metadata
+            md = Metadata( name = "_fn_call_" + method_name )
+            md._params.update( kwargs )
+            new_node.metadata = md
+
+            # Return
+            return new_node
+
+        return wrapper
+
+
+
+
+    # read
+
+    # this machinery is designed to work with and be extendible
+    # in the context of child classes.
+
+    # to add a new child class, only a new _get_constructor_args()
+    # classmethod should be necessary. The .from_h5 function should
+    # not need any modification.
+
+    @classmethod
+    def _get_constructor_args(cls,group):
+        """
+        Takes a group, and returns a dictionary of args/values
+        to pass to the class constructor
+        """
+        # Nodes contain only metadata
+        return {
+            'name' : basename(group.name)
+        }
+
+
+    def _populate_instance(self,group):
+        """ Nothing to add for Nodes
+        """
+        pass
+
+
+
+    @classmethod
+    def from_h5(cls,group):
+        """
+        Takes an h5py Group which is open in read mode. Confirms that a
+        a Node of this name exists in this group, and loads and returns it
+        with it's metadata.
+
+        Accepts:
+            group (h5py Group)
+
+        Returns:
+            (Node)
+        """
+        # Validate inputs
+        er = f"Group {group} is not a valid EMD node"
+        assert("emd_group_type" in group.attrs.keys()), er
+        assert(group.attrs["emd_group_type"] in EMD_group_types)
+
+        # Make dict of args to build a new generic class instance
+        # then make the new class instance
+        args = cls._get_constructor_args(group)
+        node = cls(**args)
+
+        # some classes needed to be first instantiated, then populated with data
+        node._populate_instance(group)
+
+        # Read any metadata
+        try:
+            grp_metadata = group['metadatabundle']
+            for md in grp_metadata.values():
+                node.metadata = Metadata.from_h5(md)
+                # check for inherited classes
+                if md.attrs['python_class'] != 'Metadata':
+                    # and attempt promotion
+                    try:
+                        cls = _get_class(md)
+                        inst = cls( name=basename(md.name) )
+                        inst._params.update(node.metadata[basename(md.name)]._params)
+                        node.metadata = inst
+                    except KeyError:
+                        print(f"Warning: unable to promote class from Metadata to {md.attrs['python_class']}")
+                        pass
+        except KeyError:
+            pass
+
+        # Return
+        return node
+
+
+
 
 
     # write
@@ -394,67 +529,6 @@ class Node:
         # return
         return grp
 
-    # read
-
-    # this machinery is designed to work with and be extendible
-    # in the context of child classes.
-
-    # to add a new child class, only a new _get_constructor_args()
-    # classmethod should be necessary. The .from_h5 function should
-    # not need any modification.
-
-    @classmethod
-    def _get_constructor_args(cls,group):
-        """
-        Takes a group, and returns a dictionary of args/values
-        to pass to the class constructor
-        """
-        # Nodes contain only metadata
-        return {
-            'name' : basename(group.name)
-        }
-
-
-    @classmethod
-    def from_h5(cls,group):
-        """
-        Takes an h5py Group which is open in read mode. Confirms that a
-        a Node of this name exists in this group, and loads and returns it
-        with it's metadata.
-
-        Accepts:
-            group (h5py Group)
-
-        Returns:
-            (Node)
-        """
-        # Validate inputs
-        er = f"Group {group} is not a valid EMD node"
-        assert("emd_group_type" in group.attrs.keys()), er
-        assert(group.attrs["emd_group_type"] in EMD_group_types)
-
-        # Make dict of args to build a new generic class instance
-        # then make the new class instance
-        args = cls._get_constructor_args(group)
-        node = cls(**args)
-
-        # some classes needed to be first instantiated, then populated with data
-        if hasattr(node,'_populate_instance'):
-            node._populate_instance(group)
-
-        # Read any metadata
-        try:
-            grp_metadata = group['metadatabundle']
-            for md in grp_metadata.values():
-                node.metadata = Metadata.from_h5(md)
-        except KeyError:
-            pass
-
-        # Return
-        return node
-
-
-
 
 
 
@@ -473,6 +547,36 @@ class Root(Node):
         Node.__init__(self,name=name)
         self._treepath = ''
         self._root = self
+
+
+
+
+
+class RootedNode:
+
+    """
+    RootedNodes are nodes that are required to have a root. When __init__
+    is run, if a root doesn't already exist, it creates one with its own
+    name and attaches to it.
+    """
+
+    def __init__(self):
+        assert(hasattr(self,'root')), "RootedNode must already be initialized as a Node"
+        if self.root is None:
+            root = Root( name = self.name )
+            root.add_to_tree( self )
+
+
+    def _add_root_links(self,node):
+        """
+        This method is run while reading from a file, after a new instance has
+        been created and grafted from it's own root onto the tree from its H5
+        file of origin. This is useful for linking to other data/metadata
+        in the tree, which are not available earlier in the read process (and
+        which may need to be overwritted because they're obligate attrs which
+        were generated in initialization)
+        """
+        pass
 
 
 
@@ -531,6 +635,7 @@ class Branch:
 
     # print the full tree contents to screen
     # TODO - this seems to have a bug when I run obj.tree()...
+    # TODO: unclear if this bug still exists - need to check
     def print(self):
         """
         Prints the tree contents to screen.

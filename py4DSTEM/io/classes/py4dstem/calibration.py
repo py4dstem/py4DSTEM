@@ -5,7 +5,7 @@ from numbers import Number
 from typing import Optional
 import h5py
 
-from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io.classes import Metadata
 from py4DSTEM.io.classes.py4dstem.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
@@ -41,7 +41,8 @@ class Calibration(Metadata):
     """
     def __init__(
         self,
-        name: Optional[str] ='calibration',
+        name: Optional[str] = 'calibration',
+        datacube = None
         ):
         """
         Args:
@@ -55,6 +56,9 @@ class Calibration(Metadata):
         # certain properties are changed
         self._targets = []
 
+        # set datacube
+        self._datacube = datacube
+
         # set initial pixel values
         self.set_Q_pixel_size(1)
         self.set_R_pixel_size(1)
@@ -62,103 +66,95 @@ class Calibration(Metadata):
         self.set_R_pixel_units('pixels')
 
 
+
+    # datacube
+
+    @property
+    def datacube(self):
+        return self._datacube
+
+
+
+
     ### getter/setter methods
 
-    # datacube shape
-    def set_R_Nx(self,x):
-        self._params['R_Nx'] = x
-    def get_R_Nx(self):
-        return self._get_value('R_Nx')
-    def set_R_Ny(self,x):
-        self._params['R_Ny'] = x
-    def get_R_Ny(self):
-        return self._get_value('R_Ny')
-    def set_Q_Nx(self,x):
-        self._params['Q_Nx'] = x
-    def get_Q_Nx(self):
-        return self._get_value('Q_Nx')
-    def set_Q_Ny(self,x):
-        self._params['Q_Ny'] = x
-    def get_Q_Ny(self):
-        return self._get_value('Q_Ny')
-    def set_datacube_shape(self,x):
-        """
-        Args:
-            x (4-tuple): (R_Nx,R_Ny,Q_Nx,Q_Ny)
-        """
-        R_Nx,R_Ny,Q_Nx,Q_Ny = x
-        self._params['R_Nx'] = R_Nx
-        self._params['R_Ny'] = R_Ny
-        self._params['Q_Nx'] = Q_Nx
-        self._params['Q_Ny'] = Q_Ny
-    def get_datacube_shape(self):
-        """ (R_Nx,R_Ny,Q_Nx,Q_Ny)
-        """
-        R_Nx = self.get_R_Nx()
-        R_Ny = self.get_R_Ny()
-        Q_Nx = self.get_Q_Nx()
-        Q_Ny = self.get_Q_Ny()
-        shape = (R_Nx,R_Ny,Q_Nx,Q_Ny)
-        if any([x is None for x in shape]):
-            shape = None
-        return shape
-    def set_Qshape(self,x):
-        """
-        Args:
-            x (2-tuple): (Q_Nx,Q_Ny)
-        """
-        Q_Nx,Q_Ny = x
-        self._params['Q_Nx'] = Q_Nx
-        self._params['Q_Ny'] = Q_Ny
-    def get_Qshape(self,x):
-        Q_Nx = self._params['Q_Nx']
-        Q_Ny = self._params['Q_Ny']
-        shape = (Q_Nx,Q_Ny)
-        if any([x is None for x in shape]):
-            shape = None
-        return shape
-    def set_Rshape(self,x):
-        """
-        Args:
-            x (2-tuple): (R_Nx,R_Ny)
-        """
-        R_Nx,R_Ny = x
-        self._params['R_Nx'] = R_Nx
-        self._params['R_Ny'] = R_Ny
-    def get_Rshape(self,x):
-        R_Nx = self._params['R_Nx']
-        R_Ny = self._params['R_Ny']
-        shape = (R_Nx,R_Ny)
-        if any([x is None for x in shape]):
-            shape = None
-        return shape
 
-    # pixel sizes
+
+    # pixel size/units
+
     @propagating_calibration
     def set_Q_pixel_size(self,x):
+        if self._has_datacube():
+            self.datacube.set_dim(2,[0,x])
+            self.datacube.set_dim(3,[0,x])
         self._params['Q_pixel_size'] = x
     def get_Q_pixel_size(self):
         return self._get_value('Q_pixel_size')
 
     @propagating_calibration
     def set_R_pixel_size(self,x):
+        if self._has_datacube():
+            self.datacube.set_dim(0,[0,x])
+            self.datacube.set_dim(1,[0,x])
         self._params['R_pixel_size'] = x
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
 
     @propagating_calibration
     def set_Q_pixel_units(self,x):
-        pix = ('pixels','A^-1','mrad')
-        assert(x in pix), f"{x} must be in {pix}"
+        assert(x in ('pixels','A^-1','mrad')), f"Q pixel units must be 'A^-1', 'mrad' or 'pixels'."
+        if self._has_datacube():
+            self.datacube.dim_units[2] = x
+            self.datacube.dim_units[3] = x
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
 
     @propagating_calibration
     def set_R_pixel_units(self,x):
+        if self._has_datacube():
+            self.datacube.dim_units[0] = x
+            self.datacube.dim_units[1] = x
         self._params['R_pixel_units'] = x
     def get_R_pixel_units(self):
         return self._get_value('R_pixel_units')
+
+
+
+    # datacube shape
+
+    def get_R_Nx(self):
+        self._validate_datacube()
+        return self.datacube.R_Nx
+    def get_R_Ny(self):
+        self._validate_datacube()
+        return self.datacube.R_Ny
+    def get_Q_Nx(self):
+        self._validate_datacube()
+        return self.datacube.Q_Nx
+    def get_Q_Ny(self):
+        self._validate_datacube()
+        return self.datacube.Q_Ny
+    def get_datacube_shape(self):
+        self._validate_datacube()
+        """ (R_Nx,R_Ny,Q_Nx,Q_Ny)
+        """
+        return self.datacube.data.dshape
+    def get_Qshape(self,x):
+        self._validate_datacube()
+        return self.data.Qshape
+    def get_Rshape(self,x):
+        self._validate_datacube()
+        return self.data.Rshape
+
+    # is there a datacube?
+    def _validate_datacube(self):
+        assert(self.datacube is not None), "Can't find shape attr because Calibration doesn't point to a DataCube"
+    def _has_datacube(self):
+        return(self.datacube is not None)
+
+
+
 
     # origin
     def set_qx0(self,x):
