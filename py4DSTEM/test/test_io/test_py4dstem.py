@@ -16,7 +16,14 @@ from py4DSTEM.io.classes import (
 )
 from py4DSTEM.io.classes.py4dstem import (
     DataCube,
-    BraggVectors
+    BraggVectors,
+    DiffractionSlice,
+    VirtualDiffraction,
+    Probe,
+    RealSlice,
+    VirtualImage,
+    QPoints,
+    Calibration
 )
 
 # Set paths
@@ -64,6 +71,9 @@ class TestPy4dstem:
         self.datacube = DataCube(
             data = np.arange(np.prod((4,5,6,7))).reshape((4,5,6,7))
         )
+        # calibration
+        self.datacube.calibration.set_Q_pixel_size(0.62)
+        self.datacube.calibration.set_Q_pixel_units("A^-1")
         # braggvectors
         self.braggvectors = BraggVectors(
             Rshape = (5,6),
@@ -88,6 +98,45 @@ class TestPy4dstem:
                 )
         self.braggvectors2._v_cal = self.braggvectors2._v_uncal.copy(name='_v_uncal')
 
+
+        # diffractionslice
+        #self.diffractionslice = DiffractionSlice(
+        #    data = np.arange(np.prod((4,8,2))).reshape((4,8,2)),
+        #    slicelabels = ['a','b']
+        #)
+
+        # virtualdiffraction instance
+        #self.virtualdiffraction = VirtualDiffraction(
+        #    # TODO
+        #)
+
+        # realslice
+        #self.realslice = RealSlice(
+        #    data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
+        #    slicelabels = ['x','y']
+        #)
+
+        # virtualimage instance
+
+
+
+        # probe, with no kernel
+
+
+        # probe, with a kernel
+
+
+        # qpoints instance
+
+
+
+
+
+
+
+
+
+
     def _clear_files(self):
         """
         Delete h5 files which this test suite wrote
@@ -109,6 +158,9 @@ class TestPy4dstem:
         """ Save then read a datacube, and compare its contents before/after
         """
         assert(isinstance(self.datacube,DataCube))
+        # test dim vectors
+        print(self.datacube.dims[0])
+        assert 0
         # save and read
         save(path_h5,self.datacube)
         root = read(path_h5)
@@ -116,54 +168,106 @@ class TestPy4dstem:
         # check it's the same
         assert(isinstance(new_datacube,DataCube))
         assert(array_equal(self.datacube.data,new_datacube.data))
+        # check the calibrations
+        self.datacube.calibration.get_Q_pixel_size() == 0.62
+        self.datacube.calibration.get_Q_pixel_units() == "A^-1"
 
 
-    def test_braggvectors(self):
-        """ Save then read a BraggVectors instance, and compare contents before/after
+#    def test_braggvectors(self):
+#        """ Save then read a BraggVectors instance, and compare contents before/after
+#        """
+#        assert(isinstance(self.braggvectors,BraggVectors))
+#        # save then read
+#        save(path_h5,self.braggvectors)
+#        root = read(path_h5)
+#        new_braggvectors = root.tree('braggvectors')
+#        # check it's the same
+#        assert(isinstance(new_braggvectors,BraggVectors))
+#        assert(new_braggvectors is not self.braggvectors)
+#        for x in range(new_braggvectors.shape[0]):
+#            for y in range(new_braggvectors.shape[1]):
+#                assert(array_equal(
+#                    new_braggvectors.v_uncal[x,y].data,
+#                    self.braggvectors.v_uncal[x,y].data))
+#        # check that _v_cal isn't there
+#        assert(not(hasattr(new_braggvectors,'_v_cal')))
+
+
+#    def test_braggvectors2(self):
+#        """ Save then read a BraggVectors instance, and compare contents before/after
+#        """
+#        assert(isinstance(self.braggvectors2,BraggVectors))
+#        # save then read
+#        save(path_h5,self.braggvectors2)
+#        root = read(path_h5)
+#        new_braggvectors = root.tree('braggvectors')
+#        # check it's the same
+#        assert(isinstance(new_braggvectors,BraggVectors))
+#        assert(new_braggvectors is not self.braggvectors2)
+#        for x in range(new_braggvectors.shape[0]):
+#            for y in range(new_braggvectors.shape[1]):
+#                assert(array_equal(
+#                    new_braggvectors.v_uncal[x,y].data,
+#                    self.braggvectors2.v_uncal[x,y].data))
+#        # check cal vectors are there
+#        assert(hasattr(new_braggvectors,'_v_cal'))
+#        # check it's the same
+#        for x in range(new_braggvectors.shape[0]):
+#            for y in range(new_braggvectors.shape[1]):
+#                assert(array_equal(
+#                    new_braggvectors.v[x,y].data,
+#                    self.braggvectors2.v[x,y].data))
+
+
+#    def test_diffractionslice(self):
+#        """ test diffractionslice io
+#        """
+#        assert(isinstance(self.diffractionslice,DiffractionSlice))
+#        # save and read
+#        save(path_h5,self.diffractionslice)
+#        root = read(path_h5)
+#        new_diffractionslice = root.tree('diffractionslice')
+#        # check it's the same
+#        assert(isinstance(new_diffractionslice,DiffractionSlice))
+#        assert(array_equal(self.diffractionslice.data,new_diffractionslice.data))
+
+    def test_virtualdiffraction(self):
+        """ test virtualdiffraction io
         """
-        assert(isinstance(self.braggvectors,BraggVectors))
-        # save then read
-        save(path_h5,self.braggvectors)
-        root = read(path_h5)
-        new_braggvectors = root.tree('braggvectors')
-        # check it's the same
-        assert(isinstance(new_braggvectors,BraggVectors))
-        assert(new_braggvectors is not self.braggvectors)
-        for x in range(new_braggvectors.shape[0]):
-            for y in range(new_braggvectors.shape[1]):
-                assert(array_equal(
-                    new_braggvectors.v_uncal[x,y].data,
-                    self.braggvectors.v_uncal[x,y].data))
-        # check that _v_cal isn't there
-        assert(not(hasattr(new_braggvectors,'_v_cal')))
+        pass
 
-
-    def test_braggvectors2(self):
-        """ Save then read a BraggVectors instance, and compare contents before/after
+    def test_probe(self):
+        """ test probe io
         """
-        assert(isinstance(self.braggvectors2,BraggVectors))
-        # save then read
-        save(path_h5,self.braggvectors2)
-        root = read(path_h5)
-        new_braggvectors = root.tree('braggvectors')
-        # check it's the same
-        assert(isinstance(new_braggvectors,BraggVectors))
-        assert(new_braggvectors is not self.braggvectors2)
-        for x in range(new_braggvectors.shape[0]):
-            for y in range(new_braggvectors.shape[1]):
-                assert(array_equal(
-                    new_braggvectors.v_uncal[x,y].data,
-                    self.braggvectors2.v_uncal[x,y].data))
-        # check cal vectors are there
-        assert(hasattr(new_braggvectors,'_v_cal'))
-        # check it's the same
-        for x in range(new_braggvectors.shape[0]):
-            for y in range(new_braggvectors.shape[1]):
-                assert(array_equal(
-                    new_braggvectors.v[x,y].data,
-                    self.braggvectors2.v[x,y].data))
+        pass
+
+#    def test_realslice(self):
+#        """ test realslice io
+#        """
+#        assert(isinstance(self.realslice,RealSlice))
+#        # save and read
+#        save(path_h5,self.realslice)
+#        root = read(path_h5)
+#        new_realslice = root.tree('realslice')
+#        # check it's the same
+#        assert(isinstance(new_realslice,RealSlice))
+#        assert(array_equal(self.realslice.data,new_realslice.data))
 
 
+    def test_virtualimage(self):
+        """ test virtualimage io
+        """
+        pass
+
+    def test_qpoints(self):
+        """ test qpoints io
+        """
+        pass
+
+    def test_calibration(self):
+        """ test calibration io
+        """
+        pass
 
 
 

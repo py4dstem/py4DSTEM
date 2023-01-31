@@ -23,31 +23,6 @@ class Custom(Node):
         Node.__init__(self,name=name)
 
 
-    # write
-    def to_h5(self,group):
-        """
-        Constructs an h5 group, adds metadata, and adds all attributes
-        which point to EMD nodes.
-
-        Accepts:
-            group (h5py Group)
-
-        Returns:
-            (h5py Group) the new node's Group
-        """
-        # Construct the group and add metadata
-        grp = Node.to_h5(self,group)
-
-        # Add any attributes which are themselves emd nodes
-        for k,v in vars(self).items():
-            if isinstance(v,Node):
-                if not isinstance(v,Root):
-                    v.name = k
-                    attr_grp = v.to_h5(grp)
-                    attr_grp.attrs['emd_group_type'] = 'custom_' + \
-                        attr_grp.attrs['emd_group_type']
-
-
 
     # read
 
@@ -84,6 +59,31 @@ class Custom(Node):
             dic[name] = data
         return dic
 
+
+
+    # write
+    def to_h5(self,group):
+        """
+        Constructs an h5 group, adds metadata, and adds all attributes
+        which point to EMD nodes.
+
+        Accepts:
+            group (h5py Group)
+
+        Returns:
+            (h5py Group) the new node's Group
+        """
+        # Construct the group and add metadata
+        grp = Node.to_h5(self,group)
+
+        # Add any attributes which are themselves emd nodes
+        for k,v in vars(self).items():
+            if isinstance(v,Node):
+                if not isinstance(v,Root):
+                    v.name = k
+                    attr_grp = v.to_h5(grp)
+                    attr_grp.attrs['emd_group_type'] = 'custom_' + \
+                        attr_grp.attrs['emd_group_type']
 
 
 

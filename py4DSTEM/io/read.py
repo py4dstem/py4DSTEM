@@ -11,6 +11,7 @@ import warnings
 from py4DSTEM.io.classes import (
     Root,
     Node,
+    RootedNode
 )
 from py4DSTEM.io.classes.class_io_utils import _get_class, EMD_data_group_types
 
@@ -140,7 +141,6 @@ def _version_is_geq(current,minimum):
 
 ########## EMD 1.0+ reader ##########
 
-# TODO: tree = 'noroot' is confusing.  Better name?
 def read(
     filepath,
     tree: Optional[Union[bool,str]] = True,
@@ -158,14 +158,14 @@ def read(
             delimiters between node names. If emdpath is None, checks to
             see how many root nodes are present. If there is one, loads
             this tree. If there are several, returns a list of the root names.
-        tree (True or False or 'noroot'): indicates what data should be loaded,
+        tree (True or False or 'branch'): indicates what data should be loaded,
             relative to the node specified by `emdpath`. If set to `False`,
             only data/metadata in the specified node is loaded, plus any
             root metadata. If set to `True`, loads that node plus the
             subtree of data objects it contains (and their metadata, and
-            the root metadata). If set to `'noroot'`, loads the branch
+            the root metadata). If set to `'branch'`, loads the branch
             under this node as above, but does not load the node itself.
-            If `emdpath` points to a root node, setting `tree` to `'noroot`'
+            If `emdpath` points to a root node, setting `tree` to `'branch`'
             or `True` are equivalent - both return the whole data tree.
 
     Returns:
@@ -241,7 +241,7 @@ def read(
         # Read...
 
         # ...if the whole tree was requested
-        if nodegroup is rootgroup and tree in (True,'noroot'):
+        if nodegroup is rootgroup and tree in (True,'branch'):
             # build the tree
             _populate_tree(root,rootgroup)
 
@@ -261,7 +261,7 @@ def read(
             # build the tree
             _populate_tree(node,nodegroup)
 
-        # ...if `tree == 'noroot'`
+        # ...if `tree == 'branch'`
         else:
             # build the tree
             _populate_tree(root,nodegroup)
@@ -298,7 +298,12 @@ def _populate_tree(node,group):
     for key in keys:
         print(f"Reading group {group[key].name}")
         new_node = _read_single_node(group[key])
-        node.add_to_tree(new_node)
+        # Handle RootedNodes, which need to be grafted rather than added
+        if isinstance(new_node,RootedNode):
+            new_node.graft(node)
+            new_node._add_root_links(node)
+        else:
+            node.add_to_tree(new_node)
         _populate_tree(
             new_node,
             group[key]

@@ -7,6 +7,10 @@ from typing import Optional,Union
 import numpy as np
 import h5py
 
+# TODO: sync dim vectors with calibration
+# TODO: add calibration class which these can all inherit from (class Data ?)
+
+
 class DiffractionSlice(Array):
     """
     Stores a diffraction-space shaped 2D data array.
@@ -15,12 +19,14 @@ class DiffractionSlice(Array):
         self,
         data: np.ndarray,
         name: Optional[str] = 'diffractionslice',
+        units: Optional[str] = 'intensity',
         slicelabels: Optional[Union[bool,list]] = None
         ):
         """
         Accepts:
             data (np.ndarray): the data
             name (str): the name of the diffslice
+            units (str): units of the pixel values
             slicelabels(None or list): names for slices if this is a 3D stack
 
         Returns:
@@ -32,53 +38,25 @@ class DiffractionSlice(Array):
             self,
             data = data,
             name = name,
-            units = 'intensity',
+            units = units,
             slicelabels = slicelabels
         )
 
 
-
-    # HDF5 read/write
-
-    # write inherited from Array
-
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        read mode. Determines if it's a valid Array, and if so loads and
-        returns it as a DiffractionSlice. Otherwise, raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A DiffractionSlice instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        # Load from H5 as an Array
-        diffractionslice = Array.from_h5(group)
-
-        # Convert to a DiffractionSlice
-        assert(array.rank == 2), "Array must have 2 dimensions"
-        array.__class__ = DiffractionSlice
-        array.__init__(
-            data = array.data,
-            name = array.name,
-            slicelabels = array.slicelabels
-        )
-
-        # Return
-        return array
-
-
-
-
-
-
-
-############ END OF CLASS ###########
-
-
+        ar_constr_args = Array._get_constructor_args(group)
+        args = {
+            'data' : ar_constr_args['data'],
+            'name' : ar_constr_args['name'],
+            'units' : ar_constr_args['units'],
+            'slicelabels' : ar_constr_args['slicelabels']
+        }
+        return args
 
 
 
