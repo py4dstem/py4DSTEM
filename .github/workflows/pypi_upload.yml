@@ -47,7 +47,9 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
       - run: |
-          git pull origin main
+          # set strategy to default merge
+          git config pull.rebase false
+          git pull origin main --commit --no-edit
           git push origin dev
   deploy:
     needs: update_version
