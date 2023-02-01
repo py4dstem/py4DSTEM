@@ -9,7 +9,7 @@ from py4DSTEM.io.classes.py4dstem.datacube_methods import DataCubeMethods
 from py4DSTEM.io.classes.py4dstem.data import Data
 from py4DSTEM.io.classes.py4dstem.calibration import Calibration
 
-class DataCube(Array,RootedNode,DataCubeMethods,Data):
+class DataCube(Array,RootedNode,Data,DataCubeMethods):
     """
     Storage and processing methods for 4D-STEM datasets.
     """
@@ -105,10 +105,10 @@ class DataCube(Array,RootedNode,DataCubeMethods,Data):
         return self.calibration.get_R_pixel_units()
 
     # aliases
-    qpix_size = Q_pixel_size
-    qpix_unit = Q_pixel_units
-    rpix_size = R_pixel_size
-    rpix_unit = R_pixel_units
+    qpixsize = Q_pixel_size
+    qpixunit = Q_pixel_units
+    rpixsize = R_pixel_size
+    rpixunit = R_pixel_units
 
 
     ## shape
@@ -162,7 +162,8 @@ class DataCube(Array,RootedNode,DataCubeMethods,Data):
         """
         # We only need some of the Array constructors;
         # dim vector/units are passed through when Calibration
-        # is loaded, and the runtim dim vectors are then set below
+        # is loaded, and the runtim dim vectors are then set
+        # in _add_root_links
         ar_args = Array._get_constructor_args(group)
 
         args = {
@@ -176,8 +177,8 @@ class DataCube(Array,RootedNode,DataCubeMethods,Data):
 
 
     def _add_root_links(self,group):
-        """ Add calibration metadata from file, and use it to populate
-        the datacube dim vectors
+        """ When reading from file, link to calibration metadata,
+        then use it to populate the datacube dim vectors
         """
         # Link to the datacube
         self.calibration._datacube = self

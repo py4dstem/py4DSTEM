@@ -1,9 +1,7 @@
-from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
-from py4DSTEM.io.classes.metadata import Metadata
 
-from typing import Optional,Union
+from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
+from typing import Optional
 import numpy as np
-import h5py
 
 class VirtualDiffraction(DiffractionSlice):
     """
@@ -13,7 +11,7 @@ class VirtualDiffraction(DiffractionSlice):
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'diffractionimage',
+        name: Optional[str] = 'virtualdiffraction',
         ):
         """
         Args:
@@ -30,16 +28,20 @@ class VirtualDiffraction(DiffractionSlice):
             name = name,
         )
 
-        # Set metadata
-        #md = Metadata(name='virtualdiffraction')
-        #md['method'] = method
-        #md['mode'] = mode
-        #md['geometry'] = geometry
-        #md['shift_center'] = shift_center
-        #self.metadata = md
 
+    # read
+    @classmethod
+    def _get_constructor_args(cls,group):
+        """
+        Returns a dictionary of args/values to pass to the class constructor
+        """
+        ar_constr_args = DiffractionSlice._get_constructor_args(group)
+        args = {
+            'data' : ar_constr_args['data'],
+            'name' : ar_constr_args['name'],
+        }
+        return args
 
-        
 
 
 

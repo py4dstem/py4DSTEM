@@ -1,7 +1,5 @@
 # Base class for all py4DSTEM data
-# Adds pointer to 'calibration' metadata
-
-
+# which adds a pointer to 'calibration' metadata
 
 import functools
 import inspect

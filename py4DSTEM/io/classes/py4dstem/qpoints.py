@@ -2,9 +2,8 @@
 
 from py4DSTEM.io.classes.pointlist import PointList
 
-from typing import Optional,Union
+from typing import Optional
 import numpy as np
-import h5py
 
 class QPoints(PointList):
     """
@@ -37,6 +36,8 @@ class QPoints(PointList):
         self.fields = 'qx','qy','intensity'
 
 
+    # properties
+
     @property
     def qx(self):
         return self.data['qx']
@@ -47,44 +48,25 @@ class QPoints(PointList):
     def intensity(self):
         return self.data['intensity']
 
+    # aliases
+    I = intensity
 
 
-    # HDF5 i/o
-
-    # write inherited from PointList
 
     # read
-    def from_h5(group):
+    # this method is not necessary but is kept for consistency of structure!
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        read mode. Determines if it's a valid QPoints instance, and if so
-        loads and returns it. Otherwise, raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A QPoints instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        # Load from H5 as a PointList
-        qpoints = PointList.from_h5(group)
+        pl_constr_args = PointList._get_constructor_args(group)
+        args = {
+            'data' : pl_constr_args['data'],
+            'name' : pl_constr_args['name'],
+        }
+        return args
 
-        # Convert to QPoints
-        pointlist.__class__ = QPoints
-        pointlist.__init__(
-            data = pointlist.data,
-            name = pointlist.name,
-        )
-
-        # Return
-        return pointlist
-
-
-
-
-
-
-############ END OF CLASS ###########
 
 
 

@@ -1,13 +1,9 @@
-# Defines the Probe class, which stores vacuum probes
-# and cross-correlation kernels derived from them
 
-from py4DSTEM.io.classes.array import Array, Metadata
-from py4DSTEM.io.classes.py4dstem.probe_fns import ProbeMethods
 from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
+from py4DSTEM.io.classes.py4dstem.probe_fns import ProbeMethods
 
-from typing import Optional,Union
+from typing import Optional
 import numpy as np
-import h5py
 
 class Probe(DiffractionSlice,ProbeMethods):
     """
@@ -17,8 +13,7 @@ class Probe(DiffractionSlice,ProbeMethods):
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'probe',
-        **kwargs
+        name: Optional[str] = 'probe'
         ):
         """
         Accepts:
@@ -50,13 +45,6 @@ class Probe(DiffractionSlice,ProbeMethods):
             ]
         )
 
-        # Set metadata
-        md = Metadata(name='probe')
-        for k,v in kwargs.items():
-            md[k] = v
-        self.metadata = md
-
-
 
     ## properties
 
@@ -78,65 +66,18 @@ class Probe(DiffractionSlice,ProbeMethods):
 
 
 
-
-    # HDF5 i/o
-
-    # write inherited from Array
-
     # read
-    def from_h5(group):
+    @classmethod
+    def _get_constructor_args(cls,group):
         """
-        Takes a valid group for an HDF5 file object which is open in
-        read mode. Determines if it's a valid Array, and if so loads and
-        returns it as a Probe. Otherwise, raises an exception.
-
-        Accepts:
-            group (HDF5 group)
-
-        Returns:
-            A Probe instance
+        Returns a dictionary of args/values to pass to the class constructor
         """
-        # Load from H5 as an Array
-        probe = Array.from_h5(group)
-
-        # Convert to a Probe
-
-        assert(array.rank == 2), "Array must have 2 dimensions"
-
-        # get diffraction image metadata
-        try:
-            md = array.metadata['probe']
-            kwargs = {}
-            for k in md.keys:
-                v = md[k]
-                kwargs[k] = v
-        except KeyError:
-            er = "Probe metadata could not be found"
-            raise Exception(er)
-
-        # instantiate as a Probe
-        array.__class__ = Probe
-        array.__init__(
-            data = array.data,
-            name = array.name,
-            **kwargs
-        )
-
-        # Return
-        return array
-
-
-
-
-
-
-############ END OF CLASS ###########
-
-
-
-
-
-
+        ar_constr_args = DiffractionSlice._get_constructor_args(group)
+        args = {
+            'data' : ar_constr_args['data'],
+            'name' : ar_constr_args['name'],
+        }
+        return args
 
 
 

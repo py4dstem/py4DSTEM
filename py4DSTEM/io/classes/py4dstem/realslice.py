@@ -1,17 +1,15 @@
 # Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
 from py4DSTEM.io.classes.array import Array
+from py4DSTEM.io.classes.py4dstem.data import Data
 
 from typing import Optional,Union
 import numpy as np
 import h5py
 
 
-# TODO: sync dim vectors with calibration
-# TODO: add calibration class which these can all inherit from (class Data ?)
 
-
-class RealSlice(Array):
+class RealSlice(Array,Data):
     """
     Stores a real-space shaped 2D data array.
     """
@@ -38,18 +36,6 @@ class RealSlice(Array):
             data = data,
             name = name,
             units = 'intensity',
-            #dims = [
-            #    pixel_size[0],
-            #    pixel_size[1],
-            #],
-            #dim_units = [
-            #    pixel_units[0],
-            #    pixel_units[1],
-            #],
-            #dim_names = [
-            #    'Rx',
-            #    'Ry'
-            #],
             slicelabels = slicelabels
         )
 

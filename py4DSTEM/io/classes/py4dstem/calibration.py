@@ -85,8 +85,8 @@ class Calibration(Metadata):
     @propagating_calibration
     def set_Q_pixel_size(self,x):
         if self._has_datacube():
-            self.datacube.set_dim(2,[0,x])
-            self.datacube.set_dim(3,[0,x])
+            self.datacube.set_dim(2,x)
+            self.datacube.set_dim(3,x)
         self._params['Q_pixel_size'] = x
     def get_Q_pixel_size(self):
         return self._get_value('Q_pixel_size')
@@ -94,8 +94,8 @@ class Calibration(Metadata):
     @propagating_calibration
     def set_R_pixel_size(self,x):
         if self._has_datacube():
-            self.datacube.set_dim(0,[0,x])
-            self.datacube.set_dim(1,[0,x])
+            self.datacube.set_dim(0,x)
+            self.datacube.set_dim(1,x)
         self._params['R_pixel_size'] = x
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
@@ -104,8 +104,8 @@ class Calibration(Metadata):
     def set_Q_pixel_units(self,x):
         assert(x in ('pixels','A^-1','mrad')), f"Q pixel units must be 'A^-1', 'mrad' or 'pixels'."
         if self._has_datacube():
-            self.datacube.dim_units[2] = x
-            self.datacube.dim_units[3] = x
+            self.datacube.set_dim_units(2,x)
+            self.datacube.set_dim_units(3,x)
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
@@ -113,8 +113,8 @@ class Calibration(Metadata):
     @propagating_calibration
     def set_R_pixel_units(self,x):
         if self._has_datacube():
-            self.datacube.dim_units[0] = x
-            self.datacube.dim_units[1] = x
+            self.datacube.set_dim_units(0,x)
+            self.datacube.set_dim_units(1,x)
         self._params['R_pixel_units'] = x
     def get_R_pixel_units(self):
         return self._get_value('R_pixel_units')
