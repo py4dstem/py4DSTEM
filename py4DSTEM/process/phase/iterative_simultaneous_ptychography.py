@@ -2356,23 +2356,35 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         if self._verbose:
             if max_batch_size is not None:
-                print(
-                    (
-                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                        f"in batches of max {max_batch_size} measurements."
+                if use_projection_scheme:
+                    raise ValueError(
+                        (
+                            "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
+                            "Use reconstruction_method='GD' or set max_batch_size=None."
+                        )
                     )
-                )
+                else:
+                    print(
+                        (
+                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            f"with normalization_min: {normalization_min} and step _size: {step_size}, "
+                            f"in batches of max {max_batch_size} measurements."
+                        )
+                    )
             else:
                 if reconstruction_parameter is not None:
                     print(
                         (
                             f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                            f"with α: {reconstruction_parameter}."
+                            f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
                         )
                     )
                 else:
                     print(
-                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm."
+                        (
+                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                        )
                     )
 
         # Batching
@@ -2381,14 +2393,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         if max_batch_size is not None:
             xp.random.seed(seed_random)
-            if use_projection_scheme:
-                raise ValueError(
-                    (
-                        "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
-                        "Use reconstruction_method='GD' or set max_batch_size=None."
-                    )
-                )
-
         else:
             max_batch_size = self._num_diffraction_patterns
 

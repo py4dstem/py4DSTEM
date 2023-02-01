@@ -1324,11 +1324,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
 
         asnumpy = self._asnumpy
-
-        if self._rotation_best_transpose == True: 
-            angle = self._rotation_best_rad
-        else: 
-            angle = -self._rotation_best_rad
+        angle = self._rotation_best_rad if self._rotation_best_transpose else -self._rotation_best_rad
 
         tf = AffineTransform(angle=angle)
         rotated_points = tf(
@@ -1343,7 +1339,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             asnumpy(array), np.rad2deg(-angle), reshape=False
         )[min_x:max_x, min_y:max_y]
         
-        if self._rotation_best_transpose == True: 
+        if self._rotation_best_transpose: 
             rotated_array = rotated_array.T
 
         return rotated_array
