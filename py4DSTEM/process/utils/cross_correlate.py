@@ -42,7 +42,10 @@ def get_cross_correlation_FT(
     """
     assert(_returnval in ('real','fourier'))
     m = np.fft.fft2(ar) * template_FT
-    cc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
+    if corrPower != 1:
+        cc = np.abs(m)**(corrPower) * np.exp(1j*np.angle(m))
+    else:
+        cc = m
     if _returnval == 'real':
         cc = np.maximum(np.real(np.fft.ifft2(cc)),0)
     return cc
