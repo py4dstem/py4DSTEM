@@ -4,7 +4,7 @@ namely DPC and ptychography.
 """
 
 import warnings
-from typing import Mapping, Tuple, Union, Sequence
+from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,11 +23,11 @@ from py4DSTEM.process.phase.utils import (
     estimate_global_transformation_ransac,
     fft_shift,
     generate_batches,
-    spatial_frequencies,
     polar_aliases,
     polar_symbols,
+    spatial_frequencies,
 )
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar, electron_wavelength_angstrom
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
@@ -99,7 +99,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         datacube: DataCube,
         energy: float,
         num_slices: int,
-        slice_thicknesses: Union[float,Sequence[float]],
+        slice_thicknesses: Union[float, Sequence[float]],
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
@@ -149,9 +149,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             slice_thicknesses = np.tile(slice_thicknesses, num_slices)
         elif slice_thicknesses.shape[0] != num_slices:
             raise ValueError(
-                    (f"slice_thicknesses must have length {num_slices}, "
-                     f"not {slice_thicknesses.shape[0]}.")
-                    )
+                (
+                    f"slice_thicknesses must have length {num_slices}, "
+                    f"not {slice_thicknesses.shape[0]}."
+                )
+            )
 
         self._energy = energy
         self._num_slices = num_slices
@@ -170,13 +172,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._object_padding_px = object_padding_px
         self._preprocessed = False
-    
+
     def _precompute_propagator_arrays(
         self,
-        gpts: Tuple[int,int],
-        sampling: Tuple[float,float],
+        gpts: Tuple[int, int],
+        sampling: Tuple[float, float],
         energy: float,
-        slice_thicknesses: Sequence[float]):
+        slice_thicknesses: Sequence[float],
+    ):
         """
         Precomputes propagator arrays complex wave-function will be convolved by,
         for all slice thicknesses.
@@ -191,7 +194,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             The electron energy of the wave functions in eV
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
-            
+
         Returns
         -------
         propagator_arrays: np.ndarray
@@ -205,26 +208,29 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         ky = xp.asarray(ky)
 
         # Antialias masks
-        k = xp.sqrt(kx[:,None]**2 + ky[None]**2)
-        kcut = 1/max(sampling) / 2 * 2/3. # 2/3 cutoff
-        antialias_mask = .5 * (1 + xp.cos(np.pi * (k - kcut + 0.1) / 0.1)) # 0.1 rolloff
-        antialias_mask[k>kcut] = 0.
+        k = xp.sqrt(kx[:, None] ** 2 + ky[None] ** 2)
+        kcut = 1 / max(sampling) / 2 * 2 / 3.0  # 2/3 cutoff
+        antialias_mask = 0.5 * (
+            1 + xp.cos(np.pi * (k - kcut + 0.1) / 0.1)
+        )  # 0.1 rolloff
+        antialias_mask[k > kcut] = 0.0
         antialias_mask = xp.where(k > kcut - 0.1, antialias_mask, xp.ones_like(k))
 
         # Propagators
-        wavelength = electron_wavelength_angstrom(energy) 
+        wavelength = electron_wavelength_angstrom(energy)
         num_slices = slice_thicknesses.shape[0]
-        propagators = xp.empty((num_slices,)+k.shape,dtype=xp.complex64)
+        propagators = xp.empty((num_slices,) + k.shape, dtype=xp.complex64)
         for i, dz in enumerate(slice_thicknesses):
-            propagators[i] = xp.exp(1.j * (-(kx**2)[:,None] * np.pi * wavelength * dz))
-            propagators[i] *= xp.exp(1.j * (-(ky**2)[None] * np.pi * wavelength * dz))
+            propagators[i] = xp.exp(
+                1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
 
         return propagators * antialias_mask
 
-    def _propagate_array(
-        self,
-        array: np.ndarray,
-        propagator_array: np.ndarray):
+    def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
         """
         Propagates array by Fourier convolving array with propagator_array.
 
@@ -356,7 +362,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 int
             )
-            self._object = xp.ones((self._num_slices,p, q), dtype=xp.complex64)
+            self._object = xp.ones((self._num_slices, p, q), dtype=xp.complex64)
         else:
             self._object = xp.asarray(self._object, dtype=xp.complex64)
 
@@ -427,14 +433,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
-        
+
         # Precomputed propagator arrays
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,
             self.sampling,
             self._energy,
             self._slice_thicknesses,
-            )
+        )
 
         if plot_probe_overlaps:
 
@@ -523,9 +529,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         object_patches = current_object[
-                :, 
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col
+            :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
         propagated_probes = xp.empty_like(object_patches)
@@ -537,10 +541,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             overlap[s] = object_patches[s] * propagated_probes[s]
 
             if s + 1 < self._num_slices:
-                propagated_probes[s+1] = self._propagate_array(
-                        overlap[s],
-                        self._propagator_arrays[s]
-                        )
+                propagated_probes[s + 1] = self._propagate_array(
+                    overlap[s], self._propagator_arrays[s]
+                )
 
         return propagated_probes, object_patches, overlap
 
@@ -572,8 +575,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             / self._mean_diffraction_intensity
         )
 
-        modified_exit_wave = xp.fft.ifft2(amplitudes * xp.exp(1j * xp.angle(fourier_overlap)))
-        
+        modified_exit_wave = xp.fft.ifft2(
+            amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
+        )
+
         exit_waves = -overlap.copy()
         exit_waves[-1] += modified_exit_wave
 
@@ -622,7 +627,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             / self._mean_diffraction_intensity
         )
 
-        factor_to_be_projected = projection_c * overlap[-1] + projection_y * exit_waves[-1]
+        factor_to_be_projected = (
+            projection_c * overlap[-1] + projection_y * exit_waves[-1]
+        )
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
         fourier_projected_factor = amplitudes * xp.exp(
@@ -760,32 +767,32 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-
             current_object[s] += step_size * (
-                self._sum_overlapping_patches_bincounts(
-                    xp.conj(probe) * exit_wave
-                )
+                self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
                 * probe_normalization
             )
 
             if not fix_probe:
-                
+
                 if s > 0:
-                    
-                    object_normalization = (xp.abs(obj) ** 2)
+
+                    object_normalization = xp.abs(obj) ** 2
                     object_normalization = 1 / xp.sqrt(
                         1e-16
                         + ((1 - normalization_min) * object_normalization) ** 2
-                        + (normalization_min * xp.max(object_normalization,axis=(-1,-2))[:,None,None]) ** 2
+                        + (
+                            normalization_min
+                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
+                        )
+                        ** 2
                     )
-                    
+
                     probe += step_size * xp.conj(obj) * exit_wave * object_normalization
-                    exit_waves[s-1] += self._propagate_array(
-                            probe,
-                            xp.conj(self._propagator_arrays[s-1])
-                            )
+                    exit_waves[s - 1] += self._propagate_array(
+                        probe, xp.conj(self._propagator_arrays[s - 1])
+                    )
                 else:
-                
+
                     object_normalization = xp.sum(
                         (xp.abs(obj) ** 2),
                         axis=0,
@@ -796,10 +803,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                         + (normalization_min * xp.max(object_normalization)) ** 2
                     )
 
-                    current_probe += step_size*xp.sum(
-                        xp.conj(obj)*exit_wave,
-                        axis=0,
-                    ) * object_normalization
+                    current_probe += (
+                        step_size
+                        * xp.sum(
+                            xp.conj(obj) * exit_wave,
+                            axis=0,
+                        )
+                        * object_normalization
+                    )
 
         return current_object, current_probe
 
@@ -858,30 +869,31 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             current_object[s] = (
-                self._sum_overlapping_patches_bincounts(
-                    xp.conj(probe) * exit_wave
-                )
+                self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
                 * probe_normalization
             )
 
             if not fix_probe:
-                
+
                 if s > 0:
-                    
-                    object_normalization = (xp.abs(obj) ** 2)
+
+                    object_normalization = xp.abs(obj) ** 2
                     object_normalization = 1 / xp.sqrt(
                         1e-16
                         + ((1 - normalization_min) * object_normalization) ** 2
-                        + (normalization_min * xp.max(object_normalization,axis=(-1,-2))[:,None,None]) ** 2
+                        + (
+                            normalization_min
+                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
+                        )
+                        ** 2
                     )
-                    
+
                     probe = xp.conj(obj) * exit_wave * object_normalization
-                    exit_waves[s-1] = self._propagate_array(
-                            probe,
-                            xp.conj(self._propagator_arrays[s-1])
-                            )
+                    exit_waves[s - 1] = self._propagate_array(
+                        probe, xp.conj(self._propagator_arrays[s - 1])
+                    )
                 else:
-                
+
                     object_normalization = xp.sum(
                         (xp.abs(obj) ** 2),
                         axis=0,
@@ -892,10 +904,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                         + (normalization_min * xp.max(object_normalization)) ** 2
                     )
 
-                    current_probe = xp.sum(
-                        xp.conj(obj)*exit_wave,
-                        axis=0,
-                    ) * object_normalization
+                    current_probe = (
+                        xp.sum(
+                            xp.conj(obj) * exit_wave,
+                            axis=0,
+                        )
+                        * object_normalization
+                    )
 
         return current_object, current_probe
 
@@ -1666,8 +1681,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
-        summed_object_angle = np.sum(np.angle(self.object),axis=0)
-        rotated_object = self._crop_rotate_object_fov(summed_object_angle, padding=padding)
+        summed_object_angle = np.sum(np.angle(self.object), axis=0)
+        rotated_object = self._crop_rotate_object_fov(
+            summed_object_angle, padding=padding
+        )
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1839,7 +1856,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         errors = self.error_iterations
         objects = [
-            self._crop_rotate_object_fov(np.sum(np.angle(obj),axis=0), padding=padding)
+            self._crop_rotate_object_fov(np.sum(np.angle(obj), axis=0), padding=padding)
             for obj in self.object_iterations
         ]
 
