@@ -31,6 +31,7 @@ class BFreconstruction():
         padding = (64,64),
         edge_blend = 16,
         initial_align = True,
+        initial_align_bin = 4,
         subpixel = 'multicorr',
         upsample_factor = 8,
         plot_recon = True,
@@ -154,68 +155,250 @@ class BFreconstruction():
 
         # initial image alignment
         if initial_align:
-            inds_order = np.argsort(self.kr)
-            G_ref = np.fft.fft2(self.stack_BF[inds_order[0]])
+            # xy_inds = np.round(
+            #     (self.xy_inds - np.median(self.xy_inds,axis=0)).astype('float') \
+            #     / initial_align_bin + 0.5).astype('int')
+            # xy_vals = np.unique(xy_inds, axis=0)
 
-            # Loop over all images
-            for a0 in tqdmnd(
-                range(1,self.num_images),
-                desc="Initial alignment",
-                unit=" images",
-                disable=not progress_bar,
-                ):
-                ind = inds_order[a0]
-                G = np.fft.fft2(self.stack_BF[ind])
-                
-                # Get subpixel shifts
-                xy_shift = align_images(
-                    G_ref, 
-                    G,
-                    upsample_factor = upsample_factor)
-                dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
-                    self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
-                dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
-                    self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+            # # Generate mean image for reference image
+            # sub = np.logical_and(
+            #     xy_inds[:,0] == xy_vals[0,0],
+            #     xy_inds[:,1] == xy_vals[0,1])
+            # inds_im = np.where(sub)[0]
+            # G_ref = np.fft.fft2(np.mean(self.stack_BF[sub], axis=0))
+
+            # # for a0 in range(xy_vals.shape[0]):
+            # for a1 in tqdmnd(
+            #     range(1,xy_vals.shape[0]),
+            #     desc="Alignment at bin " + str(initial_align_bin),
+            #     unit=" image subsets",
+            #     disable=not progress_bar,
+            #     ):
+            #     # Generate mean image for alignment
+            #     sub = np.logical_and(
+            #         xy_inds[:,0] == xy_vals[a1,0],
+            #         xy_inds[:,1] == xy_vals[a1,1])
+            #     inds_im = np.where(sub)[0]
+            #     G = np.fft.fft2(np.mean(self.stack_BF[sub], axis=0))
+            #     print(np.sum(sub))
+
+            #     # Get best fit alignment
+            #     xy_shift = align_images(
+            #         G_ref, 
+            #         G,
+            #         upsample_factor = upsample_factor)
+            #     dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
+            #         self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
+            #     dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
+            #         self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+
+            #     # apply shifts
+            #     self.xy_shifts[sub,0] += dx
+            #     self.xy_shifts[sub,1] += dy
+
+            #     # shift images and masks
+            #     shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+            #     for a2 in range(inds_im.shape[0]):
+            #         ind_shift = inds_im[a2]
+            #         self.stack_BF[ind_shift] = np.real(np.fft.ifft2(
+            #             np.fft.fft2(self.stack_BF[ind_shift]) * shift_op))
+            #         self.stack_mask[ind_shift] = np.real(np.fft.ifft2(
+            #             np.fft.fft2(self.stack_mask[ind_shift]) * shift_op))
+
+            #     # update running estimate of reference image
+            #     G_ref = G_ref * (a1-1)/a1 + (G * shift_op)/a1
+
+            # # Center the shifts
+            # xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
+            # self.xy_shifts -= xy_shifts_median[None,:]
+            # self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
+            # self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
+
+            # # Generate new estimate
+            # self.recon_mask = np.sum(self.stack_mask, axis=0)
+            # mask_inv = 1 - np.clip(self.recon_mask,0,1)
+            # self.recon_BF = (self.stack_mean * mask_inv \
+            #     + np.sum(self.stack_BF * self.stack_mask, axis=0)) \
+            #     / (self.recon_mask + mask_inv)
+
+            # basis function for regularization
+            kr_max = np.max(self.kr)
+            u = self.kxy[:,0] * 0.5 / kr_max + 0.5
+            v = self.kxy[:,1] * 0.5 / kr_max + 0.5
+            basis = np.ones((self.num_images,3))
+            basis[:,1] = 2*u-1
+            basis[:,2] = 2*v-1
+
+            # Iterative binning for more robust alignment
+            diameter_pixels = np.max((
+                np.max(self.xy_inds[:,0])-np.min(self.xy_inds[:,0]),
+                np.max(self.xy_inds[:,1])-np.min(self.xy_inds[:,1]),
+                )) + 1
+            bin_min = np.ceil(np.log(initial_align_bin) / np.log(2))
+            bin_max = np.ceil(np.log(diameter_pixels) / np.log(2))
+            bin_vals = 2**np.arange(bin_min,bin_max)[::-1]
+
+            # Loop over all binning values
+            xy_center = (self.xy_inds - np.median(self.xy_inds,axis=0)).astype('float')
+            # for a0 in range(4):
+            for a0 in range(bin_vals.shape[0]):
+                G_ref = np.fft.fft2(self.recon_BF)
+
+                # Segment the virtual images with current binning values
+                xy_inds = np.round(xy_center / bin_vals[a0] + 0.5).astype('int')
+                xy_vals = np.unique(xy_inds, axis=0)
+                # Sort by radial order, from center to outer edge
+                inds_order = np.argsort(np.sum(xy_vals**2,axis=1))
+
+                # for a1 in range(xy_vals.shape[0]):
+                shifts_update = np.zeros((self.num_images,2))
+                for a1 in tqdmnd(
+                    xy_vals.shape[0],
+                    desc="Alignment at bin " + str(bin_vals[a0].astype('int')),
+                    unit=" image subsets",
+                    disable=not progress_bar,
+                    ):
+                    ind_align = inds_order[a1]
+
+                    # Generate mean image for alignment
+                    sub = np.logical_and(
+                        xy_inds[:,0] == xy_vals[ind_align,0],
+                        xy_inds[:,1] == xy_vals[ind_align,1])
+                    inds_im = np.where(sub)[0]
+                    G = np.fft.fft2(np.mean(self.stack_BF[sub], axis=0))
+
+                    # Get best fit alignment
+                    xy_shift = align_images(
+                        G_ref, 
+                        G,
+                        upsample_factor = upsample_factor)
+                    dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
+                        self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
+                    dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
+                        self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+
+                    # output shifts
+                    shifts_update[sub,0] = dx
+                    shifts_update[sub,1] = dy
+
+                    # # apply shifts
+                    # self.xy_shifts[sub,0] += dx
+                    # self.xy_shifts[sub,1] += dy
+
+                    # # shift images and masks
+                    # shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                    # for a2 in range(inds_im.shape[0]):
+                    #     ind_shift = inds_im[a2]
+                    #     self.stack_BF[ind_shift] = np.real(np.fft.ifft2(
+                    #         np.fft.fft2(self.stack_BF[ind_shift]) * shift_op))
+                    #     self.stack_mask[ind_shift] = np.real(np.fft.ifft2(
+                    #         np.fft.fft2(self.stack_mask[ind_shift]) * shift_op))
+
+                    # update running estimate of reference image
+                    # if a1 == 0:
+                    #     G_ref = G * shift_op
+                    # else:
+                    #     G_ref = G_ref * (a1-1)/a1 + (G * shift_op)/a1
+                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                    G_ref = G_ref * a1/(a1+1) + (G * shift_op)/(a1+1)
+
+                # regularize the shifts
+                xy_shifts_new = self.xy_shifts + shifts_update
+                coefs = np.linalg.lstsq(basis, xy_shifts_new, rcond=None)[0]
+                xy_shifts_fit = basis @ coefs
+                shifts_update = xy_shifts_fit - self.xy_shifts
 
                 # apply shifts
-                self.xy_shifts[ind,0] += dx
-                self.xy_shifts[ind,1] += dy
+                for a1 in range(self.num_images):
+                    G = np.fft.fft2(self.stack_BF[a1])
 
-                # shift image
-                shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
-                G_shift = G * shift_op
-                self.stack_BF[ind] = np.real(np.fft.ifft2(G_shift))
-                self.stack_mask[ind] = np.real(np.fft.ifft2(
-                    np.fft.fft2(self.stack_mask[ind]) * shift_op))
+                    dx = shifts_update[a1,0]
+                    dy = shifts_update[a1,1]
+                    self.xy_shifts[a1,0] += dx
+                    self.xy_shifts[a1,1] += dy
 
-                # running average for reference image
-                G_ref = G_ref * (a0-1)/a0 + G_shift
+                    # shift image and mask
+                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
+                    self.stack_mask[a1] = np.real(np.fft.ifft2(
+                        np.fft.fft2(self.stack_mask[a1]) * shift_op))
 
-            # Center the shifts
-            xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
-            self.xy_shifts -= xy_shifts_median[None,:]
-            self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
-            self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
+                # Center the shifts
+                xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
+                self.xy_shifts -= xy_shifts_median[None,:]
+                self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
+                self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
 
-            # if alignment was performed, update error
-            # self.recon_BF = np.mean(self.stack_BF, axis=0)
-            # self.recon_error = np.append(self.recon_error,
-            #     np.atleast_1d(np.mean(np.abs(self.stack_BF - self.recon_BF[None,:,:]))))
-            self.recon_mask = np.sum(self.stack_mask, axis=0)
-            mask_inv = 1 - np.clip(self.recon_mask,0,1)
-            self.recon_BF = (self.stack_mean * mask_inv \
-                + np.sum(self.stack_BF * self.stack_mask, axis=0)) \
-                / (self.recon_mask + mask_inv)
-            self.recon_error = np.append(self.recon_error,
-                np.sum(np.abs(self.stack_BF - self.recon_BF[None,:,:]) * self.stack_mask) / self.mask_sum)
+                # Generate new estimate
+                self.recon_mask = np.sum(self.stack_mask, axis=0)
+                mask_inv = 1 - np.clip(self.recon_mask,0,1)
+                self.recon_BF = (self.stack_mean * mask_inv \
+                    + np.sum(self.stack_BF * self.stack_mask, axis=0)) \
+                    / (self.recon_mask + mask_inv)
     
-    def align_image(
+            # inds_order = np.argsort(self.kr)
+            # G_ref = np.fft.fft2(self.stack_BF[inds_order[0]])
+
+            # # Loop over all images
+            # for a0 in tqdmnd(
+            #     range(1,self.num_images),
+            #     desc="Initial alignment",
+            #     unit=" images",
+            #     disable=not progress_bar,
+            #     ):
+            #     ind = inds_order[a0]
+            #     G = np.fft.fft2(self.stack_BF[ind])
+                
+            #     # Get subpixel shifts
+            #     xy_shift = align_images(
+            #         G_ref, 
+            #         G,
+            #         upsample_factor = upsample_factor)
+            #     dx = np.mod(xy_shift[0] + self.stack_BF.shape[1]/2,
+            #         self.stack_BF.shape[1]) - self.stack_BF.shape[1]/2
+            #     dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
+            #         self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
+
+            #     # apply shifts
+            #     self.xy_shifts[ind,0] += dx
+            #     self.xy_shifts[ind,1] += dy
+
+            #     # shift image
+            #     shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+            #     G_shift = G * shift_op
+            #     self.stack_BF[ind] = np.real(np.fft.ifft2(G_shift))
+            #     self.stack_mask[ind] = np.real(np.fft.ifft2(
+            #         np.fft.fft2(self.stack_mask[ind]) * shift_op))
+
+            #     # running average for reference image
+            #     G_ref = G_ref * a0/(a0+1) + G_shift/(a0+1)
+
+            # # Center the shifts
+            # xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
+            # self.xy_shifts -= xy_shifts_median[None,:]
+            # self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
+            # self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
+
+            # # Update reconstruction if alignment was performed
+            # self.recon_mask = np.sum(self.stack_mask, axis=0)
+            # mask_inv = 1 - np.clip(self.recon_mask,0,1)
+            # self.recon_BF = (self.stack_mean * mask_inv \
+            #     + np.sum(self.stack_BF * self.stack_mask, axis=0)) \
+            #     / (self.recon_mask + mask_inv)
+            # self.recon_error = np.append(self.recon_error,
+            #     np.sum(np.abs(self.stack_BF - self.recon_BF[None,:,:]) * self.stack_mask) / self.mask_sum)
+    
+        if plot_recon:
+            self.plot_recon()
+
+    def align_images(
         self,
         num_iter = 1,
         subpixel = 'multicorr',
         upsample_factor = 8,
         regularize_shifts = True,
         regularize_size = (1,1),
+        max_shift = 1.0,
         plot_stats = True,
         plot_recon = True,
         progress_bar = True,
@@ -232,8 +415,6 @@ class BFreconstruction():
                 kr_max = np.max(self.kr)
                 u = self.kxy[:,0] * 0.5 / kr_max + 0.5
                 v = self.kxy[:,1] * 0.5 / kr_max + 0.5
-                u[0] = 0
-                v[0] = 1
 
                 basis = np.zeros((self.num_images,(regularize_size[0]+1)*(regularize_size[1]+1)))
                 for ii in np.arange(regularize_size[0]+1):
@@ -273,9 +454,10 @@ class BFreconstruction():
                     dy = np.mod(xy_shift[1] + self.stack_BF.shape[2]/2,
                         self.stack_BF.shape[2]) - self.stack_BF.shape[2]/2
 
-                    # apply shifts
-                    shifts_update[a1,0] = dx
-                    shifts_update[a1,1] = dy
+                    # record shifts
+                    if dx**2 + dy**2 < max_shift**2:
+                        shifts_update[a1,0] = dx
+                        shifts_update[a1,1] = dy
 
                 # Calculate regularized shifts
                 xy_shifts_new = self.xy_shifts + shifts_update
@@ -417,6 +599,10 @@ class BFreconstruction():
 
         # Convert into rotation and aberration coefficients
         self.rotation_Q_to_R_rads = -1*np.arctan2(m_rotation[1,0],m_rotation[0,0])
+        if np.abs(np.mod(self.rotation_Q_to_R_rads + np.pi, 2.0*np.pi) - np.pi) > (np.pi*0.5):
+            self.rotation_Q_to_R_rads = np.mod(
+                self.rotation_Q_to_R_rads, 2.0*np.pi) - np.pi
+            m_aberration = -1.0*m_aberration
         self.aberration_C1  = (m_aberration[0,0] + m_aberration[1,1]) / 2.0 
         self.aberration_A1x = (m_aberration[0,0] - m_aberration[1,1]) / 2.0 # factor /2 for A1 astigmatism? /4?
         self.aberration_A1y = (m_aberration[1,0] + m_aberration[0,1]) / 2.0
@@ -532,7 +718,7 @@ class BFreconstruction():
         kx = np.fft.fftfreq(self.recon_BF.shape[0], self.calibration.get_R_pixel_size())
         ky = np.fft.fftfreq(self.recon_BF.shape[1], self.calibration.get_R_pixel_size())
         kra2 = kx[:,None]**2 + ky[None,:]**2
-        CTF = np.sin((-np.pi*self.wavelength*self.aberration_C1) * kra2)
+        CTF = np.sin((np.pi*self.wavelength*self.aberration_C1) * kra2)
         CTF_corr = np.sign(CTF)
 
         # if needed, make low pass filter
