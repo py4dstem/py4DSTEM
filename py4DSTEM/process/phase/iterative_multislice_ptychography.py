@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely DPC and ptychography.
+namely multislice ptychography.
 """
 
 import warnings
@@ -272,7 +272,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         _normalize_diffraction_intensities()
         _calculate_scan_positions_in_px()
 
-        Additionally, it initializes an (Px,Py) array of 1.0j
+        Additionally, it initializes an (T,Px,Py) array of 1.0j
         and a complex probe using the specified polar parameters.
 
         Parameters
@@ -562,7 +562,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         exit_waves:np.ndarray
             Updated exit wave difference
-            Note: this function only affects the last slice
+            Note: this function only increments the last slice
         error: float
             Reconstruction error
         """
@@ -599,7 +599,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         amplitudes: np.ndarray
             Normalized measured amplitudes
         overlap: np.ndarray
-            object * probe overlap
+            object_patches^n * propagated_probes^n
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -609,7 +609,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Returns
         --------
         exit_waves:np.ndarray
-            Updated exit_waves
+            Updated exit wave difference
+            Note: this function only affects the last slice
         error: float
             Reconstruction error
         """
@@ -678,12 +679,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
         object_patches: np.ndarray
             Patched object view
         overlap: np.ndarray
-            object * probe overlap
+            object_patches^n * propagated_probes^n
         exit_waves:np.ndarray
             Updated exit_waves
         error: float
@@ -733,8 +734,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -837,7 +838,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_patches: np.ndarray
             Patched object view
         propagated_probes:np.ndarray
-            fractionally-shifted probes
+            Prop[object^n*probe^n]
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -938,7 +939,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        shifted_probes:np.ndarray
+        propagated_probes:np.ndarray
             fractionally-shifted probes
         exit_waves:np.ndarray
             Updated exit_waves
@@ -984,7 +985,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
     def _position_correction(
         self,
         current_object,
-        shifted_probes,
+        propagated_probes,
         overlap,
         amplitudes,
         current_positions,
@@ -997,8 +998,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
         overlap: np.ndarray
             object * probe overlap
         amplitudes: np.ndarray
@@ -1017,28 +1018,30 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         obj_rolled_x_patches = current_object[
+            -1,
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
         ]
         obj_rolled_y_patches = current_object[
+            -1,
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        overlap_fft = xp.fft.fft2(overlap)
+        overlap_fft = xp.fft.fft2(overlap[-1])
 
         exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_x_patches * shifted_probes
+            obj_rolled_x_patches * propagated_probes[-1]
         )
         exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_y_patches * shifted_probes
+            obj_rolled_y_patches * propagated_probes[-1]
         )
 
         overlap_fft_conj = xp.conj(overlap_fft)
         estimated_intensity = xp.abs(overlap_fft) ** 2
         measured_intensity = amplitudes**2
 
-        flat_shape = (overlap.shape[0], -1)
+        flat_shape = (overlap_fft.shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
@@ -1421,7 +1424,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        self: PtychographicReconstruction
+        self: MultislicePtychographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -1614,7 +1617,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
                         self._object,
-                        shifted_probes,
+                        propagated_probes,
                         overlap,
                         amplitudes,
                         self._positions_px,
