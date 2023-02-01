@@ -8,9 +8,9 @@ from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
-from py4DSTEM.io.classes import PointList, PointListArray
+from py4DSTEM import tqdmnd
+from py4DSTEM.emd import PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern

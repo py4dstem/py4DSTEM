@@ -10,8 +10,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
+from py4DSTEM import tqdmnd
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 try:
     from IPython.display import clear_output

@@ -24,7 +24,7 @@ from py4DSTEM.utils.configuration_checker import check_config
 
 # classes
 
-from py4DSTEM.classes import Datacube
+from py4DSTEM.classes import DataCube
 
 
 
@@ -36,5 +36,7 @@ _TESTPATH = join(dirname(__file__), "test/unit_test_data")
 
 
 
+# hook for emd _get_class
+_emd_hook = True
 
 

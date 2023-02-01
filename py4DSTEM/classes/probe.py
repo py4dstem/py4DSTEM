@@ -1,6 +1,6 @@
 
-from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
-from py4DSTEM.io.classes.py4dstem.probe_fns import ProbeMethods
+from py4DSTEM.classes import DiffractionSlice
+from py4DSTEM.classes.methods import ProbeMethods
 
 from typing import Optional
 import numpy as np

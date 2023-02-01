@@ -1,8 +1,8 @@
 import numpy as np
-from  py4DSTEM.visualize.show import show
-from py4DSTEM.io.classes.py4dstem import (
-    Calibration, DataCube, DiffractionSlice
-)
+
+from py4DSTEM.classes import Calibration, DataCube, DiffractionSlice
+from py4DSTEM.visualize.show import show
+
 
 def position_detector(
     data,

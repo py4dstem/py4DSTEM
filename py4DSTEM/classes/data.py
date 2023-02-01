@@ -1,12 +1,10 @@
 # Base class for all py4DSTEM data
 # which adds a pointer to 'calibration' metadata
 
-import functools
-import inspect
 import warnings
 
-from py4DSTEM.io.classes import Node
-from py4DSTEM.io.classes.py4dstem.calibration import Calibration
+from py4DSTEM.emd import Node
+from py4DSTEM.classes import Calibration
 
 
 class Data:

@@ -10,9 +10,9 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
+from py4DSTEM import tqdmnd
+from py4DSTEM.emd import PointList, PointListArray
 from py4DSTEM.process.diffraction.utils import calc_1D_profile
-from py4DSTEM.io.classes import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def plot_structure(

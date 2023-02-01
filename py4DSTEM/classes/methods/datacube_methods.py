@@ -3,11 +3,7 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
-from py4DSTEM.io.classes import Array
-from py4DSTEM.io.classes.py4dstem.virtualdiffraction import VirtualDiffraction
-from py4DSTEM.io.classes.py4dstem.virtualimage import VirtualImage
-from py4DSTEM.io.classes.py4dstem.probe import Probe
-from py4DSTEM.io.classes.py4dstem.calibration import Calibration
+from py4DSTEM.emd import Array
 
 
 
@@ -300,6 +296,7 @@ class DataCubeMethods:
         """
 
         # perform computation
+        from py4DSTEM.classes.virtualdiffraction import VirtualDiffraction
         from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
         dp = get_virtual_diffraction(
             self,
@@ -388,6 +385,7 @@ class DataCubeMethods:
         """
 
         # perform computation
+        from py4DSTEM.classes.virtualdiffraction import VirtualDiffraction
         from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
         dp = get_virtual_diffraction(
             self,
@@ -477,6 +475,7 @@ class DataCubeMethods:
         """
 
         # perform computation
+        from py4DSTEM.classes.virtualdiffraction import VirtualDiffraction
         from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
         dp = get_virtual_diffraction(
             self,
@@ -564,6 +563,7 @@ class DataCubeMethods:
         """
 
         # perform computation
+        from py4DSTEM.classes.virtualdiffraction import VirtualDiffraction
         from py4DSTEM.process.virtualdiffraction import get_virtual_diffraction
         dp = get_virtual_diffraction(
             self,
@@ -671,6 +671,7 @@ class DataCubeMethods:
             (Optional): if returncalc is True, returns the VirtualImage
         """
         # perform computation
+        from py4DSTEM.classes.virtualimage import VirtualImage
         from py4DSTEM.process.virtualimage import get_virtual_image
         im = get_virtual_image(
             self,
@@ -801,6 +802,7 @@ class DataCubeMethods:
         """
 
         # perform computation
+        from py4DSTEM.classes.probe import Probe
         from py4DSTEM.process.probe import get_vacuum_probe
         if ROI is None:
             x = get_vacuum_probe(

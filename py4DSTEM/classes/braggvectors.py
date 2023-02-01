@@ -3,7 +3,6 @@
 
 from typing import Optional,Union
 import numpy as np
-import h5py
 from os.path import basename
 
 from py4DSTEM.emd import (

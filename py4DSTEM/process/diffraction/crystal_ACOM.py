@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
+from py4DSTEM import tqdmnd
+from py4DSTEM.emd import PointList, PointListArray
+from py4DSTEM.classes import RealSlice
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
 from py4DSTEM.process.utils import electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.classes import PointList, PointListArray, RealSlice
 
 from numpy.linalg import lstsq
 try:

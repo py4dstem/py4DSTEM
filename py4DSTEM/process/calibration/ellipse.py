@@ -19,7 +19,6 @@ import numpy as np
 from scipy.optimize import leastsq
 from scipy.ndimage import gaussian_filter
 
-from py4DSTEM.classes import PointListArray
 from py4DSTEM.process.utils import convert_ellipse_params, convert_ellipse_params_r
 from py4DSTEM.process.utils import get_CoM, radial_integral
 
