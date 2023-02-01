@@ -65,13 +65,6 @@ class ProbeMethods:
         # add to the Probe
         self.kernel = kern
 
-        # Set metadata
-        md = Metadata(name='kernel')
-        md['mode'] = mode
-        for k,v in kwargs.items():
-            md[k] = v
-        self.metadata = md
-
         # return
         if returncalc:
             return kern

@@ -55,13 +55,21 @@ class TreeBuilder():
             data = np.array([[1,2],[3,4]])
         )
         ar2 = Array(
-            data = np.array([[10,20],[30,40]]),
+            data = np.array([[10,20,30],[40,50,60]]),
             name = 'array'
         )
         ar_unrooted = Array(
             data = np.array([[5,6],[7,8]]),
             name = 'unrooted_array'
         )
+        ar_unrooted.set_dim(
+            0,
+            dim = 0.25,
+            units = 'ponies',
+            name = 'pony_axis'
+        )
+        ar_unrooted.set_dim( 1, dim = [0,1.5] )
+        ar_unrooted.set_dim_units(1,'cows')
         pl = PointList(
             data = np.zeros(
                 5,
@@ -418,6 +426,7 @@ class TestTreeIO(TreeBuilder):
         pass
 
 
+
     def test_single_node_io_emdpath(self):
         """ Should contain a single array 'array' inside a single root 'root',
         and 'array' should match self.ar
@@ -480,7 +489,14 @@ class TestTreeIO(TreeBuilder):
             assert(array_equal(lar.dims[i],self.ar_unrooted.dims[i]))
             assert(lar.dim_names[i] == self.ar_unrooted.dim_names[i])
             assert(lar.dim_units[i] == self.ar_unrooted.dim_units[i])
-        pass
+
+        # Did the dim names/units pass through correctly?
+        assert(lar.get_dim_name(0) == 'pony_axis')
+        assert(lar.get_dim_units(0) == 'ponies')
+        assert(lar.get_dim_name(1) == 'dim1')
+        assert(lar.get_dim_units(1) == 'cows')
+
+
 
     def test_whole_tree_io(self):
         """ Should contain the full data tree:

@@ -2,16 +2,15 @@
 # diffraction-shaped data
 
 from py4DSTEM.io.classes.array import Array
+from py4DSTEM.io.classes.py4dstem.data import Data
 
 from typing import Optional,Union
 import numpy as np
 import h5py
 
-# TODO: sync dim vectors with calibration
-# TODO: add calibration class which these can all inherit from (class Data ?)
 
 
-class DiffractionSlice(Array):
+class DiffractionSlice(Array,Data):
     """
     Stores a diffraction-space shaped 2D data array.
     """

@@ -179,9 +179,9 @@ class Array(Node):
         self.data = data
         self.name = name
         self.units = units
-        self.dims = dims
-        self.dim_names = dim_names
-        self.dim_units = dim_units
+        self._dims = dims
+        self._dim_names = dim_names
+        self._dim_units = dim_units
 
 
         ## Handle array stacks
@@ -205,75 +205,239 @@ class Array(Node):
         ## Set dim vectors
         dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
         # if none were passed
-        if self.dims is None:
-            self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
+        if self._dims is None:
+            self._dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
             dim_in_pixels[:] = True
 
         # if some but not all were passed
-        elif len(self.dims)<self.rank:
-            _dims = self.dims
+        elif len(self._dims)<self.rank:
+            _dims = self._dims
             N = len(_dims)
-            self.dims = []
+            self._dims = []
             for n in range(N):
                 dim = self._unpack_dim(_dims[n],self.shape[n])
-                self.dims.append(dim)
+                self._dims.append(dim)
             for n in range(N,self.rank):
-                self.dims.append(self._unpack_dim(1,self.shape[n]))
+                self._dims.append(self._unpack_dim(1,self.shape[n]))
                 dim_in_pixels[n] = True
 
         # if all were passed
-        elif len(self.dims)==self.rank:
-            _dims = self.dims
-            self.dims = []
+        elif len(self._dims)==self.rank:
+            _dims = self._dims
+            self._dims = []
             for n in range(self.rank):
                 dim = self._unpack_dim(_dims[n],self.shape[n])
-                self.dims.append(dim)
+                self._dims.append(dim)
 
         # otherwise
         else:
-            raise Exception(f"too many dim vectors were passed - expected {self.rank}, received {len(self.dims)}")
+            raise Exception(f"too many dim vectors were passed - expected {self.rank}, received {len(self._dims)}")
 
 
         ## set dim vector names
 
         # if none were passed
-        if self.dim_names is None:
-            self.dim_names = [f"dim{n}" for n in range(self.rank)]
+        if self._dim_names is None:
+            self._dim_names = [f"dim{n}" for n in range(self.rank)]
 
         # if some but not all were passed
-        elif len(self.dim_names)<self.rank:
-            N = len(self.dim_names)
-            self.dim_names = [name for name in self.dim_names] + \
+        elif len(self._dim_names)<self.rank:
+            N = len(self._dim_names)
+            self._dim_names = [name for name in self._dim_names] + \
                              [f"dim{n}" for n in range(N,self.rank)]
 
         # if all were passed
-        elif len(self.dim_names)==self.rank:
+        elif len(self._dim_names)==self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim names were passed - expected {self.rank}, received {len(self.dim_names)}")
+            raise Exception(f"too many dim names were passed - expected {self.rank}, received {len(self._dim_names)}")
 
 
         ## set dim vector units
 
         # if none were passed
-        if self.dim_units is None:
-            self.dim_units = [['unknown','pixels'][int(i)] for i in dim_in_pixels]
+        if self._dim_units is None:
+            self._dim_units = [['unknown','pixels'][int(i)] for i in dim_in_pixels]
 
         # if some but not all were passed
-        elif len(self.dim_units)<self.rank:
-            N = len(self.dim_units)
-            self.dim_units = [units for units in self.dim_units] + \
+        elif len(self._dim_units)<self.rank:
+            N = len(self._dim_units)
+            self._dim_units = [units for units in self._dim_units] + \
                              [['unknown','pixels'][int(dim_in_pixels[i])] for i in range(N,self.rank)]
 
         # if all were passed
-        elif len(self.dim_units)==self.rank:
+        elif len(self._dim_units)==self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
+            raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self._dim_units)}")
+
+        # make dim vector params immutable
+        self._dims = tuple(self._dims)
+        self._dim_units = tuple(self._dim_units)
+        self._dim_names = tuple(self._dim_names)
+
+
+
+
+    # dim vector properties and methods
+
+    @property
+    def dims(self):
+        return self._dims
+
+    def get_dim(self,n):
+        """ Return the n'th dim vector
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't retrieve the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't retrieve the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        return self._dims[n]
+
+    def set_dim(
+        self,
+        n:int,
+        dim:Union[list,np.ndarray],
+        units:Optional[str]=None,
+        name:Optional[str]=None
+        ):
+        """
+        Sets the n'th dim vector, using `dim` as described in the Array
+        documentation. If `units` and/or `name` are passed, sets these
+        values for the n'th dim vector.
+
+        Accepts:
+            n (int): specifies which dim vector
+            dim (list or array): length must be either 2, or equal to the
+                length of the n'th axis of the data array
+            units (Optional, str):
+            name: (Optional, str):
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't set the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't set the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        length = self.shape[n]
+        new_dim = self._unpack_dim(dim,length)
+        self._dims = list(self._dims)
+        self._dims[n] = new_dim
+        self._dims = tuple(self._dims)
+        if units is not None:
+            self.set_dim_units(n,units)
+        if name is not None:
+            self.set_dim_name(n,name)
+
+    @property
+    def dim_units(self):
+        return self._dim_units
+
+    def get_dim_units(self,n):
+        """ Return the n'th dim vector units
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't retrieve the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't retrieve the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        return self._dim_units[n]
+
+    def set_dim_units(
+        self,
+        n:int,
+        units:str,
+        ):
+        """
+        Sets the n'th dim vector units to `units`.
+
+        Accepts:
+            n (int): specifies which dim vector
+            units (str): new units
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't set the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't set the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        self._dim_units = list(self._dim_units)
+        self._dim_units[n] = units
+        self._dim_units = tuple(self._dim_units)
+
+    @property
+    def dim_names(self):
+        return self._dim_names
+
+    def get_dim_name(self,n):
+        """ Get the n'th dim vector name
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't retrieve the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't retrieve the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        return self._dim_names[n]
+
+    def set_dim_name(
+        self,
+        n:int,
+        name:str,
+        ):
+        """
+        Sets the n'th dim vector name to `name`.
+
+        Accepts:
+            n (int): specifies which dim vector
+            name (str): new name
+        """
+        assert(isinstance(n,(int,np.integer))), f"Can't set the {n}th dim vector - {n} must be an integer, not type {type(n)}."
+        assert(n < len(self._dims)), f"Can't set the {n}th dim vector - {n} must be <= {len(self._dims)-1}"
+        self._dim_names = list(self._dim_names)
+        self._dim_names[n] = name
+        self._dim_names = tuple(self._dim_names)
+
+
+    @staticmethod
+    def _unpack_dim(dim,length):
+        """
+        Given a dim vector as passed at instantiation and the expected length
+        of this dimension of the array, this function checks the passed dim
+        vector length, and checks the dim vector type.  For number-like dim-
+        vectors:
+            -if it is a number, turns it into the list [0,number] and proceeds
+                as below
+            -if it has length 2, linearly extends the vector to its full length
+            -if it has length `length`, returns the vector as is
+            -if it has any other length, raises an Exception.
+
+        For string-like dim vectors, the length must match the array dimension
+        length.
+
+        Accepts:
+            dim (list or array)
+            length (int)
+
+        Returns
+            the unpacked dim vector
+        """
+        # Expand single numbers
+        if isinstance(dim,Number):
+            dim = [0,dim]
+
+        N = len(dim)
+
+        # for string dimensions:
+        if not isinstance(dim[0],Number):
+            assert(N == length), f"For non-numerical dims, the dim vector length must match the array dimension length. Recieved a dim vector of length {N} for an array dimension length of {length}."
+
+        # For number-like dimensions:
+        if N == length:
+            return dim
+        elif N == 2:
+            start,step = dim[0],dim[1]-dim[0]
+            stop = start + step*length
+            return np.arange(start,stop,step)
+        else:
+            raise Exception(f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}")
+
+    def _dim_is_linear(self,dim,length):
+        """
+        Returns True if a dim is linear, else returns False
+        """
+        dim_expanded = self._unpack_dim(dim[:2],length)
+        return np.array_equal(dim,dim_expanded)
+
+
+
 
 
     # Shape properties
@@ -320,87 +484,6 @@ class Array(Node):
             return self.get_slice(x[0])[x[1:]]
         else:
             return self.data[x]
-
-
-    ## Dim vectors
-
-    def set_dim(
-        self,
-        n:int,
-        dim:Union[list,np.ndarray],
-        units:Optional[str]=None,
-        name:Optional[str]=None
-        ):
-        """
-        Sets the n'th dim vector, using `dim` as described in the Array
-        documentation. If `units` and/or `name` are passed, sets these
-        values for the n'th dim vector.
-
-        Accepts:
-            n (int): specifies which dim vector
-            dim (list or array): length must be either 2, or equal to the
-                length of the n'th axis of the data array
-            units (Optional, str):
-            name: (Optional, str):
-        """
-        length = self.shape[n]
-        _dim = self._unpack_dim(dim,length)
-        self.dims[n] = _dim
-        if units is not None: self.dim_units[n] = units
-        if name is not None: self.dim_names[n] = name
-
-
-
-    @staticmethod
-    def _unpack_dim(dim,length):
-        """
-        Given a dim vector as passed at instantiation and the expected length
-        of this dimension of the array, this function checks the passed dim
-        vector length, and checks the dim vector type.  For number-like dim-
-        vectors:
-            -if it is a number, turns it into the list [0,number] and proceeds
-                as below
-            -if it has length 2, linearly extends the vector to its full length
-            -if it has length `length`, returns the vector as is
-            -if it has any other length, raises an Exception.
-
-        For string-like dim vectors, the length must match the array dimension
-        length.
-
-        Accepts:
-            dim (list or array)
-            length (int)
-
-        Returns
-            the unpacked dim vector
-        """
-        # Expand single numbers
-        if isinstance(dim,Number):
-            dim = [0,dim]
-
-        N = len(dim)
-
-        # for string dimensions:
-        if not isinstance(dim[0],Number):
-            assert(N == length), f"For non-numerical dims, the dim vector length must match the array dimension length. Recieved a dim vector of length {N} for an array dimension length of {length}."
-
-        # For number-like dimensions:
-        if N == length:
-            return dim
-        elif N == 2:
-            start,step = dim[0],dim[1]-dim[0]
-            stop = start + step*length
-            return np.arange(start,stop,step)
-        else:
-            raise Exception(f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}")
-
-
-    def _dim_is_linear(self,dim,length):
-        """
-        Returns True if a dim is linear, else returns False
-        """
-        dim_expanded = self._unpack_dim(dim[:2],length)
-        return np.array_equal(dim,dim_expanded)
 
 
 
