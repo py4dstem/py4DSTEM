@@ -1,6 +1,5 @@
 """
-Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely DPC and ptychography.
+Module for reconstructing phase objects from 4DSTEM datasets using iterative methods.
 """
 
 import warnings
