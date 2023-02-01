@@ -4,11 +4,10 @@
 
 import numpy as np
 import h5py
-from copy import copy
 from typing import Optional
 from os.path import basename
 
-from py4DSTEM.io.classes.tree import Node
+from py4DSTEM.io_emd.classes.tree import Node
 
 
 class PointList(Node):

@@ -7,8 +7,8 @@ import h5py
 from numbers import Number
 from os.path import basename
 
-from py4DSTEM.io.classes.tree import Node
-from py4DSTEM.io.classes.metadata import Metadata
+from py4DSTEM.io_emd.classes.tree import Node
+from py4DSTEM.io_emd.classes.metadata import Metadata
 
 class Array(Node):
     """
