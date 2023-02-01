@@ -3,13 +3,13 @@
 import h5py
 import numpy as np
 from os.path import splitext, exists
-from py4DSTEM.io.native.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
-from py4DSTEM.io.native.legacy.read_utils import get_py4DSTEM_version, version_is_geq
-from py4DSTEM.io.native.legacy.read_v0_12 import read_v0_12
-from py4DSTEM.io.native.legacy.read_v0_9 import read_v0_9
-from py4DSTEM.io.native.legacy.read_v0_7 import read_v0_7
-from py4DSTEM.io.native.legacy.read_v0_6 import read_v0_6
-from py4DSTEM.io.native.legacy.read_v0_5 import read_v0_5
+from py4DSTEM.io.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups
+from py4DSTEM.io.legacy.read_utils import get_py4DSTEM_version, version_is_geq
+from py4DSTEM.io.legacy.read_v0_12 import read_v0_12
+from py4DSTEM.io.legacy.read_v0_9 import read_v0_9
+from py4DSTEM.io.legacy.read_v0_7 import read_v0_7
+from py4DSTEM.io.legacy.read_v0_6 import read_v0_6
+from py4DSTEM.io.legacy.read_v0_5 import read_v0_5
 
 def read_py4DSTEM_legacy(filepath, metadata=False, **kwargs):
     """

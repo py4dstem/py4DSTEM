@@ -1,9 +1,10 @@
 # Functions for calculating and making use of the Bragg vector map
 
 import numpy as np
+
+from py4DSTEM import tqdmnd
+from py4DSTEM.classes import PointListArray
 from py4DSTEM.process.utils import add_to_2D_array_from_floats
-from py4DSTEM.io.classes import PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 

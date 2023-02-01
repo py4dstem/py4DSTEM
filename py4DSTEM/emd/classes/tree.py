@@ -2,8 +2,8 @@ from typing import Optional
 from os.path import basename
 import h5py
 
-from py4DSTEM.io_emd.classes import Metadata
-from py4DSTEM.io_emd.classes.class_io_utils import EMD_group_types, _get_class
+from py4DSTEM.emd.classes import Metadata
+from py4DSTEM.emd.classes.utils import EMD_group_types, _get_class
 
 
 class Node:

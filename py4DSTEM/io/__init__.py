@@ -1,14 +1,11 @@
-# classes
-from py4DSTEM.io import classes
-from py4DSTEM.io.classes import *
 
-# read/write
-from py4DSTEM.io.read import (
-    read,
-    import_file,
-    print_h5_tree
-)
-from py4DSTEM.io.write import save
+# read / write
+from py4DSTEM.io.import_file import import_file
+
+# TODO
+# - read fn - triage new/old EMD files
+# - save fn - call EMD write fn with any special defaults
+#   (mod root __init__ emd.write import)
 
 # google downloader
 from py4DSTEM.io.google_drive_downloader import (

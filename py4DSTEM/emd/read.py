@@ -11,13 +11,15 @@ import warnings
 
 
 # Classes
-from py4DSTEM.io_emd.classes import (
+from py4DSTEM.emd.classes import (
     Root,
     Node,
     RootedNode
 )
-from py4DSTEM.io_emd.classes.class_io_utils import _get_class, EMD_data_group_types
-
+from py4DSTEM.emd.classes.utils import (
+    _get_class,
+    EMD_data_group_types
+)
 
 
 

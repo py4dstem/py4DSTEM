@@ -5,8 +5,8 @@ from numbers import Number
 from typing import Optional
 import h5py
 
-from py4DSTEM.io.classes import Metadata
-from py4DSTEM.io.classes.py4dstem.propagating_calibration import propagating_calibration
+from py4DSTEM.emd import Metadata
+from py4DSTEM.classes.py4dstem.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
     """

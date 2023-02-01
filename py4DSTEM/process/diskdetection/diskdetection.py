@@ -4,10 +4,10 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from py4DSTEM.io.classes.py4dstem import DataCube, QPoints, BraggVectors
+from py4DSTEM import tqdmnd
+from py4DSTEM.classes import DataCube, QPoints, BraggVectors
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
-from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
@@ -35,12 +35,12 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-    
+
     ML = False,
-    ml_model_path = None, 
-    ml_num_attempts = 1, 
-    ml_batch_size = 8, 
-    
+    ml_model_path = None,
+    ml_num_attempts = 1,
+    ml_batch_size = 8,
+
     _qt_progress_bar = None,
     ):
     """
@@ -197,7 +197,7 @@ def find_Bragg_disks(
 
     if ML:
         mode = 'dc_ml'
-    
+
     elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
@@ -236,7 +236,7 @@ def find_Bragg_disks(
     if ML == True:
         kws['CUDA'] = CUDA
         kws['model_path'] = ml_model_path
-        kws['num_attempts'] = ml_num_attempts 
+        kws['num_attempts'] = ml_num_attempts
         kws['batch_size'] = ml_batch_size
 
     # run and return
