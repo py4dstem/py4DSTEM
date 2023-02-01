@@ -4,9 +4,9 @@ import h5py
 import numpy as np
 from os.path import exists
 from os import remove
-from py4DSTEM.io.read import _is_EMD_file, _get_EMD_rootgroups
-from py4DSTEM.io.classes.class_io_utils import EMD_data_group_types
-from py4DSTEM.io.classes import (
+from py4DSTEM.io_emd.read import _is_EMD_file, _get_EMD_rootgroups
+from py4DSTEM.io_emd.classes.class_io_utils import EMD_data_group_types
+from py4DSTEM.io_emd.classes import (
     Node,
     Root
 )

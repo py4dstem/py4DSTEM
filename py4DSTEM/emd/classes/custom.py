@@ -4,15 +4,10 @@
 # themselves EMD base classes and can therefore be nested in other custom
 # classes themselves.
 
-from typing import Optional,Union
-import numpy as np
 import h5py
-from numbers import Number
-from os.path import basename
 
-from py4DSTEM.io.classes.tree import Node,Root
-from py4DSTEM.io.classes.metadata import Metadata
-from py4DSTEM.io.classes.class_io_utils import _get_class
+from py4DSTEM.io_emd.classes.tree import Node,Root
+from py4DSTEM.io_emd.classes.class_io_utils import _get_class
 
 class Custom(Node):
     """

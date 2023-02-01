@@ -8,15 +8,15 @@ from typing import Union, Optional
 import warnings
 
 # Classes
-from py4DSTEM.io.classes import (
+from py4DSTEM.io_emd.classes import (
     Root,
     Node,
     RootedNode
 )
-from py4DSTEM.io.classes.class_io_utils import _get_class, EMD_data_group_types
+from py4DSTEM.io_emd.classes.class_io_utils import _get_class, EMD_data_group_types
 
 # non-native file readers
-from py4DSTEM.io.nonnative import (
+from py4DSTEM.io_emd.nonnative import (
     read_empad,
     read_dm,
     read_gatan_K2_bin,

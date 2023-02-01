@@ -1,7 +1,6 @@
 import numpy as np
 from numbers import Number
 from typing import Optional
-import h5py
 from os.path import basename
 
 

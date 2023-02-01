@@ -5,7 +5,7 @@ from pathlib import Path
 from ncempy.io import dm
 
 from py4DSTEM import tqdmnd
-from py4DSTEM.io.classes import DataCube, Array, Metadata
+from py4DSTEM.io_py4dstem.classes import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
 
@@ -144,7 +144,7 @@ def read_dm(
                         f"Setting pixel sizes of the datacube failed with error {err}"
                     )
         else:
-            data = Array(_data, name=name)
+            data = DataCube(_data, name=name)
 
     return data
 

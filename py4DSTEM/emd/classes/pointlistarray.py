@@ -1,12 +1,11 @@
 import numpy as np
-from copy import copy
 from typing import Optional
 import h5py
 from os.path import basename
 
-from py4DSTEM.io.tqdmnd import tqdmnd
-from py4DSTEM.io.classes.tree import Node
-from py4DSTEM.io.classes.pointlist import PointList
+from py4DSTEM.io_emd.tqdmnd import tqdmnd
+from py4DSTEM.io_emd.classes.tree import Node
+from py4DSTEM.io_emd.classes.pointlist import PointList
 
 class PointListArray(Node):
     """

@@ -1,12 +1,6 @@
-# I/O utility functions for reading/writing the base EMD types
-# between HDF5 groups and python classes
 
-import numpy as np
-import h5py
-from numbers import Number
 import inspect
-
-from py4DSTEM.utils.tqdmnd import tqdmnd
+import h5py
 
 
 
@@ -28,6 +22,33 @@ EMD_custom_group_types = tuple(
     ["custom_"+s for s in EMD_data_group_types]
 )
 EMD_group_types = EMD_base_group_types + EMD_data_group_types + EMD_custom_group_types
+
+
+
+
+def _get_class(grp):
+    """
+    Function returning Class constructors from corresponding strings
+    """
+    from py4DSTEM.io_emd import classes
+    # TODO - stitch py4dstem classes back in here
+    #from py4DSTEM.io_py4dstem import classes as classes_py4dstem
+
+    # Build lookup table for classes
+    lookup = {}
+    for name, obj in inspect.getmembers(classes):
+        if inspect.isclass(obj):
+            lookup[name] = obj
+
+    # Get the class from the group tags and return
+    try:
+        classname = grp.attrs['python_class']
+        __class__ = lookup[classname]
+        return __class__
+    except KeyError:
+        return None
+        #raise Exception(f"Unknown classname {classname}")
+
 
 
 
@@ -70,31 +91,6 @@ def EMD_group_exists(group:h5py.Group, emd_group_type, name:str):
             return False
         return False
     return False
-
-
-
-def _get_class(grp):
-    """
-    Function returning Class constructors from corresponding strings
-    """
-    from py4DSTEM.io import classes
-
-    # Build lookup table for classes
-    lookup = {}
-    for name, obj in inspect.getmembers(classes):
-        if inspect.isclass(obj):
-            lookup[name] = obj
-
-    # Get the class from the group tags and return
-    try:
-        classname = grp.attrs['python_class']
-        __class__ = lookup[classname]
-        return __class__
-    except KeyError:
-        return None
-        #raise Exception(f"Unknown classname {classname}")
-
-
 
 
 
