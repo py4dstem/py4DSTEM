@@ -4,9 +4,9 @@ from os import remove
 from numpy import array_equal
 
 import py4DSTEM
-from py4DSTEM.io import save,read
-from py4DSTEM.io.read import _is_EMD_file,_get_EMD_rootgroups
-from py4DSTEM.io.classes import (
+from py4DSTEM.emd import save,read
+from py4DSTEM.emd.read import _is_EMD_file,_get_EMD_rootgroups
+from py4DSTEM.emd.classes import (
     Node,
     Root,
     Metadata,
@@ -14,7 +14,7 @@ from py4DSTEM.io.classes import (
     PointList,
     PointListArray
 )
-from py4DSTEM.io.classes.py4dstem import (
+from py4DSTEM.classes import (
     DataCube,
     BraggVectors,
     DiffractionSlice,

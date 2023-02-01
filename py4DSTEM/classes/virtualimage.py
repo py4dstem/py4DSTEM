@@ -1,7 +1,10 @@
 
-from py4DSTEM.io.classes.py4dstem.realslice import RealSlice
 from typing import Optional
 import numpy as np
+
+from py4DSTEM.classes import RealSlice
+
+
 
 class VirtualImage(RealSlice):
     """

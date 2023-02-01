@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from py4DSTEM.io.classes import RealSlice
+from py4DSTEM.classes import RealSlice
 
 def get_reference_g1g2(g1g2_map, mask):
     """

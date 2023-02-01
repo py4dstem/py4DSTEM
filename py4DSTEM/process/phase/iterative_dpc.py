@@ -16,9 +16,9 @@ try:
 except ImportError:
     cp = None
 
-from py4DSTEM.io import DataCube
+from py4DSTEM import tqdmnd
+from py4DSTEM.classes import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 

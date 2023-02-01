@@ -16,7 +16,7 @@ try:
 except ImportError:
     cp = None
 
-from py4DSTEM.io import DataCube
+from py4DSTEM.classes import DataCube
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.phase.utils import polar_aliases
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar

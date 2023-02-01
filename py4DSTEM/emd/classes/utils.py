@@ -1,6 +1,7 @@
 
 import inspect
-
+import types
+import sys
 
 
 # Define the EMD group types
@@ -27,10 +28,9 @@ EMD_group_types = EMD_base_group_types + EMD_data_group_types + EMD_custom_group
 
 def _get_class(grp):
     """
-    Function returning Class constructors from corresponding strings
+    Returns a dictionary of Class constructors from corresponding strings
     """
-    from py4DSTEM.io_emd import classes
-    # TODO - build hook for dependent package classes
+    from py4DSTEM.emd import classes
 
     # Build lookup table for classes
     lookup = {}
@@ -38,16 +38,35 @@ def _get_class(grp):
         if inspect.isclass(obj):
             lookup[name] = obj
 
+    # hook for dependent package classes
+    for module in _get_dependent_packages():
+        lookup_tmp = {}
+        for name, obj in inspect.getmembers(module.classes):
+            if inspect.isclass(obj):
+                lookup_tmp[name] = obj
+        lookup.update(lookup_tmp)
+
     # Get the class from the group tags and return
     try:
         classname = grp.attrs['python_class']
         __class__ = lookup[classname]
         return __class__
     except KeyError:
-        return None
-        #raise Exception(f"Unknown classname {classname}")
+        raise Exception(f"Unknown classname {classname}")
 
 
+
+
+def _get_dependent_packages():
+    """
+    Searches packages with the top level attribute "_emd_hook" = True.
+    Returns a generator of all such packages
+    """
+    for module in sys.modules.values():
+        if isinstance(module, types.ModuleType):
+            if hasattr(module, "_emd_hook"):
+                if module._emd_hook is True:
+                    yield module
 
 
 

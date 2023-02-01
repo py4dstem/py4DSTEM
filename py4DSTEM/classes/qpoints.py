@@ -1,6 +1,6 @@
 # Defines the QPoints class, which stores PointLists with fields 'qx','qy','intensity'
 
-from py4DSTEM.io.classes.pointlist import PointList
+from py4DSTEM.emd import PointList
 
 from typing import Optional
 import numpy as np

@@ -5,7 +5,6 @@ from scipy.optimize import leastsq
 from typing import Union, Optional
 
 from py4DSTEM import tqdmnd
-from py4DSTEM.classes import Calibration, PointListArray
 from py4DSTEM.process.utils import get_CoM
 
 

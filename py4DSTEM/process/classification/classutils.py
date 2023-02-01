@@ -3,7 +3,8 @@
 import numpy as np
 
 from py4DSTEM import tqdmnd
-from py4DSTEM.classes import DataCube, PointListArray
+from py4DSTEM.emd import PointListArray
+from py4DSTEM.classes import DataCube
 from py4DSTEM.process.utils import get_shifted_ar
 
 def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,

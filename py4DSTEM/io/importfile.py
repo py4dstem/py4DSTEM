@@ -4,7 +4,7 @@ import pathlib
 from os.path import exists, splitext
 from typing import Union, Optional
 
-from py4DSTEM.io.nonnative import (
+from py4DSTEM.io.filereaders import (
     read_empad,
     read_dm,
     read_gatan_K2_bin,

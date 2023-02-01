@@ -3,8 +3,10 @@
 import numpy as np
 from dataclasses import dataclass
 import copy
-from py4DSTEM.utils.tqdmnd import tqdmnd
 from scipy.ndimage import gaussian_filter
+
+from py4DSTEM import tqdmnd
+
 
 
 @dataclass

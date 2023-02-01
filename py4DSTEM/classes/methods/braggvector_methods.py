@@ -1,7 +1,6 @@
 # BraggVectors methods
 
 import numpy as np
-from py4DSTEM.io.classes import Metadata
 
 
 

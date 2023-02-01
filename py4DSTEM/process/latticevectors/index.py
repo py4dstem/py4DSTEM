@@ -3,8 +3,8 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from py4DSTEM.io.classes import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM import tqdmnd
+from py4DSTEM.emd import PointList, PointListArray
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     """

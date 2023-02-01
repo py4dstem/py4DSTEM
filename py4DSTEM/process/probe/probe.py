@@ -4,9 +4,9 @@ import numpy as np
 from scipy.ndimage import (
     binary_opening, binary_dilation, distance_transform_edt)
 
+from py4DSTEM import tqdmnd
+from py4DSTEM.classes import DataCube, Probe
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.classes import DataCube, Probe
 
 
 

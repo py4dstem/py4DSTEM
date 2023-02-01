@@ -9,7 +9,7 @@ from scipy.ndimage import binary_opening, binary_closing, binary_dilation, binar
 from skimage.measure import label
 from sklearn.decomposition import NMF
 
-from py4DSTEM.classes import PointListArray
+from py4DSTEM.emd import PointListArray
 
 
 class BraggVectorClassification(object):

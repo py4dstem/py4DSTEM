@@ -1,6 +1,6 @@
 
 # read / write
-from py4DSTEM.io.import_file import import_file
+from py4DSTEM.io.importfile import import_file
 
 # TODO
 # - read fn - triage new/old EMD files

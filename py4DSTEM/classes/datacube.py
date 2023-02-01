@@ -2,12 +2,10 @@
 
 from typing import Optional,Union
 import numpy as np
-import h5py
 
-from py4DSTEM.io.classes import Array,Root,RootedNode
-from py4DSTEM.io.classes.py4dstem.datacube_methods import DataCubeMethods
-from py4DSTEM.io.classes.py4dstem.data import Data
-from py4DSTEM.io.classes.py4dstem.calibration import Calibration
+from py4DSTEM.emd import Array,RootedNode
+from py4DSTEM.classes import Data, Calibration
+from py4DSTEM.classes.methods import DataCubeMethods
 
 class DataCube(Array,RootedNode,Data,DataCubeMethods):
     """

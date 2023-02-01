@@ -2,12 +2,16 @@
 import numpy as np
 from typing import Union, Optional
 from scipy.optimize import curve_fit
+
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
+
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure
 except ImportError:
     pass
+
+
 
 def calibrate_pixel_size(
         self,
@@ -26,7 +30,7 @@ def calibrate_pixel_size(
         returnfig = False,
 ):
     """
-    Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
+    Use the calculated structure factor scattering lengths to compute 1D diffraction patterns,
     and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
 
     Args:

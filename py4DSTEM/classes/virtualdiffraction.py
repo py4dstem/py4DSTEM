@@ -1,7 +1,10 @@
 
-from py4DSTEM.io.classes.py4dstem.diffractionslice import DiffractionSlice
 from typing import Optional
 import numpy as np
+
+from py4DSTEM.classes import DiffractionSlice
+
+
 
 class VirtualDiffraction(DiffractionSlice):
     """
