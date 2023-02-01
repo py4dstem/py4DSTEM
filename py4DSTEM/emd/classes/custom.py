@@ -6,8 +6,8 @@
 
 import h5py
 
-from py4DSTEM.io_emd.classes.tree import Node,Root
-from py4DSTEM.io_emd.classes.class_io_utils import _get_class
+from py4DSTEM.emd.classes.tree import Node,Root
+from py4DSTEM.emd.classes.utils import _get_class
 
 class Custom(Node):
     """

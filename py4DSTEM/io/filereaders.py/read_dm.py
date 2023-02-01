@@ -5,7 +5,7 @@ from pathlib import Path
 from ncempy.io import dm
 
 from py4DSTEM import tqdmnd
-from py4DSTEM.io_py4dstem.classes import DataCube
+from py4DSTEM.classes import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
 

@@ -6,13 +6,13 @@ import numpy as np
 import h5py
 from os.path import basename
 
-from py4DSTEM.io.classes import (
+from py4DSTEM.emd import (
     Custom,
     PointListArray,
     Metadata
 )
 
-from py4DSTEM.io.classes.py4dstem.braggvectors_methods import BraggVectorMethods
+from py4DSTEM.classes.methods import BraggVectorMethods
 
 
 

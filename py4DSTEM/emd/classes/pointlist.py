@@ -7,7 +7,7 @@ import h5py
 from typing import Optional
 from os.path import basename
 
-from py4DSTEM.io_emd.classes.tree import Node
+from py4DSTEM.emd.classes.tree import Node
 
 
 class PointList(Node):

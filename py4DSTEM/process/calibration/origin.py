@@ -4,11 +4,11 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
+from py4DSTEM import tqdmnd
+from py4DSTEM.classes import PointListArray, DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
 from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.classes import PointListArray, DataCube
 
 
 def measure_origin(
