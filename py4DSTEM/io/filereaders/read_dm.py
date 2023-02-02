@@ -5,6 +5,7 @@ from pathlib import Path
 from ncempy.io import dm
 
 from py4DSTEM import tqdmnd
+from py4DSTEM.emd import Array
 from py4DSTEM.classes import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
@@ -33,10 +34,12 @@ def read_dm(
                 defaults to np.float32
 
     Returns:
-       DataCube, if a 4D dataset is found, else Array if a 2D dataset is found
+       DataCube if a 4D dataset is found, else an ND Array
     """
 
+    # open the file
     with dm.fileDM(filepath, on_memory=False) as dmFile:
+
         # loop through datasets looking for one with more than 2D
         # This is needed because:
         #   NCEM TitanX files store 4D data in a 3D array
@@ -144,7 +147,7 @@ def read_dm(
                         f"Setting pixel sizes of the datacube failed with error {err}"
                     )
         else:
-            data = DataCube(_data, name=name)
+            data = Array(_data, name=name)
 
     return data
 
