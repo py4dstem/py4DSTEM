@@ -40,8 +40,6 @@ def find_Bragg_disks(
     ml_model_path = None,
     ml_num_attempts = 1,
     ml_batch_size = 8,
-
-    _qt_progress_bar = None,
     ):
     """
     Finds the Bragg disks in the diffraction patterns represented by `data` by
@@ -147,8 +145,6 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
-        _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
-            execution
 
     Returns:
         (variable): the Bragg peak positions and correlation intensities. If
@@ -225,8 +221,6 @@ def find_Bragg_disks(
 
     # prepare kwargs
     kws = {}
-    if _qt_progress_bar is not None:
-        kws['_qt_progress_bar'] = _qt_progress_bar
     # distributed kwargs
     if distributed is not None:
         kws['connect'] = connect
@@ -446,12 +440,7 @@ def _find_Bragg_disks_CPU(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
-
-    if _qt_progress_bar is not None:
-        from PyQt5.QtWidgets import QApplication
-
 
     # Make the BraggVectors instance
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
@@ -470,9 +459,6 @@ def _find_Bragg_disks_CPU(
         unit='DP',
         unit_scale=True
         ):
-        if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(rx*datacube.R_Ny+ry+1)
-            QApplication.processEvents()
 
         # Get a diffraction pattern
         dp = datacube.data[rx,ry,:,:]
@@ -524,7 +510,6 @@ def _find_Bragg_disks_CUDA_unbatched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -543,7 +528,6 @@ def _find_Bragg_disks_CUDA_unbatched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=False)
 
     # Populate a BraggVectors instance and return
@@ -571,7 +555,6 @@ def _find_Bragg_disks_CUDA_batched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -590,7 +573,6 @@ def _find_Bragg_disks_CUDA_batched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=True)
 
     # Populate a BraggVectors instance and return
@@ -622,7 +604,6 @@ def _find_Bragg_disks_ipp(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -674,7 +655,6 @@ def _find_Bragg_disks_dask(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute

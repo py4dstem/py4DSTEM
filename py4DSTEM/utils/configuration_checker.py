@@ -8,7 +8,6 @@ from operator import mod
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
 modules = [
-        'PyQt5',
         'crystal4D',
         'cupy',
         'dask',
@@ -25,7 +24,6 @@ modules = [
         'numba',
         'numpy',
         'pymatgen',
-        'pyqtgraph',
         'qtconsole',
         'skimage',
         'sklearn',
@@ -46,8 +44,6 @@ module_depenencies = {
         'matplotlib',
         'skimage',
         'sklearn',
-        'PyQt5',
-        'pyqtgraph',
         'qtconsole',
         'ipywidgets',
         'tqdm',
