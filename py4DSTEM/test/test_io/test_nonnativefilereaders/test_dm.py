@@ -8,7 +8,7 @@ filepath_dm = join(py4DSTEM._TESTPATH, "small_dm3.dm3")
 
 def test_dmfile_3Darray():
     data = py4DSTEM.import_file( filepath_dm )
-    assert isinstance(data, py4DSTEM.io.Array)
+    assert isinstance(data, py4DSTEM.emd.Array)
 
 
 # TODO

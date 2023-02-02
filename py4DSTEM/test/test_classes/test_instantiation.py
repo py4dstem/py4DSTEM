@@ -1,5 +1,5 @@
 import numpy as np
-from py4DSTEM.io.classes.py4dstem import (
+from py4DSTEM.classes import (
     DataCube,
     RealSlice,
     DiffractionSlice,
