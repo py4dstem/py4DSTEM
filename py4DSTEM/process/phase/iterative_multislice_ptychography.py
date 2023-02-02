@@ -590,9 +590,17 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
-            DM:   a = -1, b = 1, c = 1
-            AP:   a =  0, b = 1, c = 1
-            RAAR: a = 1-2\beta, b = \beta, c = 2
+
+            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+              DM: DM_AP(1.0), AP: DM_AP(0.0)
+
+            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+              DM : RAAR(1.0)
+
+            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+              DM: RRR(1.0)
+
+            SUPERFLIP       :   a = 0, b = 1, c = 2
 
         Parameters
         --------
@@ -1380,9 +1388,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
+            "generalized-projection",
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
+            "RRR" (or "relax-reflect-reflect"),
+            "SUPERFLIP" (or "charge-flipping"), or
             "GD" (or "gradient_descent")
+        reconstruction_parameter: float, optional
+            Reconstruction parameter for various reconstruction methods above.
         reconstruction_parameter: float, optional
             Tuning parameter to interpolate b/w DM-AP and DM-RAAR
         max_batch_size: int, optional
@@ -1431,13 +1444,26 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         # Reconstruction method
-        if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-            raise ValueError("reconstruction_parameter must be between 0-1.")
+        
+        if reconstruction_method == "generalized-projection":
+            if np.array(reconstruction_parameter).shape != (3,):
+                raise ValueError(
+                    (
+                        "reconstruction_parameter must be a list of three numbers "
+                        "when using `reconstriction_method`=generalized-projection."
+                    )
+                )
 
-        if (
+            use_projection_scheme = True
+            projection_a, projection_b, projection_c = reconstruction_parameter
+            step_size = None
+        elif (
             reconstruction_method == "DM_AP"
             or reconstruction_method == "difference-map_alternating-projections"
         ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
             use_projection_scheme = True
             projection_a = -reconstruction_parameter
             projection_b = 1
@@ -1447,10 +1473,35 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             reconstruction_method == "RAAR"
             or reconstruction_method == "relaxed-averaged-alternating-reflections"
         ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
             use_projection_scheme = True
             projection_a = 1 - 2 * reconstruction_parameter
             projection_b = reconstruction_parameter
             projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "RRR"
+            or reconstruction_method == "relax-reflect-reflect"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
+                raise ValueError("reconstruction_parameter must be between 0-2.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "SUPERFLIP"
+            or reconstruction_method == "charge-flipping"
+        ):
+            use_projection_scheme = True
+            projection_a = 0
+            projection_b = 1
+            projection_c = 2
+            reconstruction_parameter = None
             step_size = None
         elif (
             reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
@@ -1465,6 +1516,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 (
                     "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
                     "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
+                    "'RRR' (or 'relax-reflect-reflect'), "
+                    "'SUPERFLIP' (or 'charge-flipping'), "
                     f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
                 )
             )
@@ -1474,7 +1527,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 if use_projection_scheme:
                     raise ValueError(
                         (
-                            "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
+                            "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
                             "Use reconstruction_method='GD' or set max_batch_size=None."
                         )
                     )
@@ -1488,19 +1541,35 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     )
             else:
                 if reconstruction_parameter is not None:
-                    print(
-                        (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                            f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
+                    if np.array(reconstruction_parameter).shape == (3,):
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
+                            )
                         )
-                    )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
+                            )
+                        )
                 else:
-                    print(
-                        (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                            f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                    if step_size is not None:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min}."
+                            )
                         )
-                    )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                            )
+                        )
 
         # Batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
