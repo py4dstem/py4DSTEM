@@ -135,7 +135,7 @@ def universal_threshold(
 
             # Remove peaks below minRelativeIntensity threshold
             deletemask = pointlist.data['intensity'] < _thresh
-            pointlist.remove_points(deletemask)
+            pointlist.remove(deletemask)
 
             # Remove peaks that are too close together
             if maxNumPeaks is not False:
