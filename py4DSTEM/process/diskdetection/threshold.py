@@ -1,9 +1,9 @@
-# Bragg peaks hresholding fns
+# Bragg peaks thresholding fns
 
 import numpy as np
 
 from py4DSTEM import tqdmnd
-from py4DSTEM.classes import PointListArray
+from py4DSTEM.emd import PointListArray
 
 
 
