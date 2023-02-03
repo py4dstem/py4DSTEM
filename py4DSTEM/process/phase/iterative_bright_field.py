@@ -5,23 +5,18 @@ Module for reconstructing virtual bright field images by aligning each virtual B
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-
-from scipy.optimize import curve_fit
-from py4DSTEM.process.utils import get_shifted_ar, get_shift
-from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
-
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.visualize import show
 from scipy.ndimage import gaussian_filter
+from scipy.optimize import curve_fit
 from scipy.special import comb
 
 
 class BFreconstruction:
     """
     A class for reconstructing aligned virtual bright field images.
-
     """
 
     def __init__(
@@ -667,42 +662,44 @@ class BFreconstruction:
 
     def aberration_correct(
         self,
-        k_info_limit = None,
-        k_info_power = 2.0,
-        LASSO_filter = False,
-        LASSO_scale = 1.0,
-        plot_result = True,
-        figsize = (8,8),
-        plot_range = (-2,2),
-        returnval = False,
-        progress_bar = True,
-        ):
-        '''
+        k_info_limit=None,
+        k_info_power=2.0,
+        LASSO_filter=False,
+        LASSO_scale=1.0,
+        plot_result=True,
+        figsize=(8, 8),
+        plot_range=(-2, 2),
+        return_val=False,
+        progress_bar=True,
+    ):
+        """
         CTF correction of the BF image using the measured defocus aberration.
-        '''
-        
+        """
+
         # Fourier coordinates
         kx = np.fft.fftfreq(self.recon_BF.shape[0], self.calibration.get_R_pixel_size())
         ky = np.fft.fftfreq(self.recon_BF.shape[1], self.calibration.get_R_pixel_size())
-        kra2 = (kx[:,None])**2 \
-            +  (ky[None,:])**2
-        sin_chi = np.sin((np.pi*self.wavelength*self.aberration_C1) * kra2)
-        
+        kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
+        sin_chi = np.sin((np.pi * self.wavelength * self.aberration_C1) * kra2)
+
         # CTF without tilt correction (beyond the parallax operator)
         CTF_corr = np.sign(sin_chi)
-        CTF_corr[0,0] = 0
+        CTF_corr[0, 0] = 0
 
-        # apply correction to mean reconstructed BF image 
-        im_fft_corr  = np.fft.fft2(self.recon_BF) * CTF_corr
+        # apply correction to mean reconstructed BF image
+        im_fft_corr = np.fft.fft2(self.recon_BF) * CTF_corr
 
         # if needed, Fourier filter output image
         if LASSO_filter:
+
             def CTF_fit(kra2_CTFmag, I0, I1, I2, I3, sigma1, sigma2, sigma3):
                 kra2, CTF_mag = kra2_CTFmag
-                int_fit = I0 \
-                    + I1 * np.exp(kra2/(-2*sigma1**2)) \
-                    + I2 * np.exp(kra2/(-2*sigma2**2)) \
-                    + I3 * np.exp(kra2/(-2*sigma3**2)) * CTF_mag
+                int_fit = (
+                    I0
+                    + I1 * np.exp(kra2 / (-2 * sigma1**2))
+                    + I2 * np.exp(kra2 / (-2 * sigma2**2))
+                    + I3 * np.exp(kra2 / (-2 * sigma3**2)) * CTF_mag
+                )
                 return int_fit.ravel()
 
             CTF_mag = np.abs(sin_chi)
@@ -716,45 +713,47 @@ class BFreconstruction:
                 sig_max,
                 sig_mean,
                 sig_mean,
-                k_max/16.0,
-                k_max/4.0,
-                k_max/1.0,
-                )
+                k_max / 16.0,
+                k_max / 4.0,
+                k_max / 1.0,
+            )
             lb = (
                 0.0,
                 0.0,
                 0.0,
                 0.0,
-                k_max/100.0,
-                k_max/10.0,
-                k_max/10.0,
-                )
-            ub = (np.inf,np.inf,np.inf,np.inf,np.inf,np.inf,np.inf)
+                k_max / 100.0,
+                k_max / 10.0,
+                k_max / 10.0,
+            )
+            ub = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
 
             # curve_fit the background image
             coefs, pcov = curve_fit(
-                CTF_fit, 
-                (kra2, CTF_mag), 
-                sig.ravel(), 
-                p0 = coefs,
-                bounds = (lb,ub),
-                maxfev = 1000)
+                CTF_fit,
+                (kra2, CTF_mag),
+                sig.ravel(),
+                p0=coefs,
+                bounds=(lb, ub),
+                maxfev=1000,
+            )
             coefs_bg = coefs.copy()
             coefs_bg[3] = 0
-            sig_bg = np.reshape(CTF_fit((kra2, CTF_mag), *coefs_bg),sig.shape)
+            sig_bg = np.reshape(CTF_fit((kra2, CTF_mag), *coefs_bg), sig.shape)
 
             # apply LASSO filter
             im_fft_corr = np.clip(
-                np.abs(im_fft_corr) - sig_bg * LASSO_scale,0,np.inf) * \
-                np.exp(1j*np.angle(im_fft_corr))
+                np.abs(im_fft_corr) - sig_bg * LASSO_scale, 0, np.inf
+            ) * np.exp(1j * np.angle(im_fft_corr))
 
         # if needed, add low pass filter output image
         if k_info_limit is not None:
-            im_fft_corr /= (1 + (kra2**k_info_power)/((k_info_limit)**(2*k_info_power)))
+            im_fft_corr /= 1 + (kra2**k_info_power) / (
+                (k_info_limit) ** (2 * k_info_power)
+            )
 
         # Output image
         self.recon_BF_corr = np.real(np.fft.ifft2(im_fft_corr))
-
 
         # plotting
         if plot_result:
@@ -772,11 +771,12 @@ class BFreconstruction:
                 ],
                 vmin=plot_range[0],
                 vmax=plot_range[1],
-                cmap = 'gray',
-                )
+                cmap="gray",
+            )
 
         if return_val:
             return self.recon_BF_corr
+
 
 def align_images(
     G1,
@@ -785,7 +785,6 @@ def align_images(
 ):
     """
     Alignment of two images using DFT upsampling of cross correlation.
-
     Returns: xy_shift [pixels]
     """
 
