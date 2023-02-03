@@ -179,9 +179,6 @@ See a list [here](docs/papers.md).
 * numba
 * scikit-image
 * scikit-learn
-* PyQt5
-* pyqtgraph
-* qtconsole
 * ipywidgets
 * tqdm
 * gdown

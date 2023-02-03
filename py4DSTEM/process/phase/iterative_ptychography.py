@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely DPC and ptychography.
+namely (single-slice) ptychography.
 """
 
 import warnings
@@ -469,9 +469,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
-            DM:   a = -1, b = 1, c = 1
-            AP:   a =  0, b = 1, c = 1
-            RAAR: a = 1-2\beta, b = \beta, c = 2
+
+            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+              DM: DM_AP(1.0), AP: DM_AP(0.0)
+
+            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+              DM : RAAR(1.0)
+
+            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+              DM: RRR(1.0)
+
+            SUPERFLIP       :   a = 0, b = 1, c = 2
 
         Parameters
         --------
@@ -639,15 +647,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        # probe_abs = xp.abs(shifted_probes)
-        # probe_normalization = 1 / (
-        #    1e-9
-        #    + self._sum_overlapping_patches_bincounts(
-        #        (1-normalization_min) * probe_abs ** 2
-        #        + normalization_min * xp.max(probe_abs) ** 2
-        #    )
-        # )
-
         current_object += step_size * (
             self._sum_overlapping_patches_bincounts(
                 xp.conj(shifted_probes) * exit_waves
@@ -666,16 +665,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 + ((1 - normalization_min) * object_normalization) ** 2
                 + (normalization_min * xp.max(object_normalization)) ** 2
             )
-
-            # object_abs = xp.abs(object_patches)
-            # object_normalization = 1 / (
-            #    1e-9
-            #    + xp.sum(
-            #        (1-normalization_min) * object_abs ** 2
-            #        + normalization_min * xp.max(object_abs) ** 2,
-            #        axis=0,
-            #    )
-            # )
 
             current_probe += step_size * (
                 xp.sum(
@@ -736,15 +725,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        # probe_abs = xp.abs(shifted_probes)
-        # probe_normalization = 1 / (
-        #    1e-9
-        #    + self._sum_overlapping_patches_bincounts(
-        #        (1-normalization_min) * probe_abs ** 2
-        #        + normalization_min * xp.max(probe_abs) ** 2
-        #    )
-        # )
-
         current_object = (
             self._sum_overlapping_patches_bincounts(
                 xp.conj(shifted_probes) * exit_waves
@@ -762,16 +742,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 + ((1 - normalization_min) * object_normalization) ** 2
                 + (normalization_min * xp.max(object_normalization)) ** 2
             )
-
-            # object_abs = xp.abs(object_patches)
-            # object_normalization = 1 / (
-            #    1e-9
-            #    + xp.sum(
-            #        (1-normalization_min) * object_abs ** 2
-            #        + normalization_min * xp.max(object_abs) ** 2,
-            #        axis=0,
-            #    )
-            # )
 
             current_probe = (
                 xp.sum(
@@ -1246,11 +1216,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
+            "generalized-projection",
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
+            "RRR" (or "relax-reflect-reflect"),
+            "SUPERFLIP" (or "charge-flipping"), or
             "GD" (or "gradient_descent")
         reconstruction_parameter: float, optional
-            Tuning parameter to interpolate b/w DM-AP and DM-RAAR
+            Reconstruction parameter for various reconstruction methods above.
         max_batch_size: int, optional
             Max number of probes to update at once
         seed_random: int, optional
@@ -1297,13 +1270,26 @@ class PtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         # Reconstruction method
-        if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-            raise ValueError("reconstruction_parameter must be between 0-1.")
 
-        if (
+        if reconstruction_method == "generalized-projection":
+            if np.array(reconstruction_parameter).shape != (3,):
+                raise ValueError(
+                    (
+                        "reconstruction_parameter must be a list of three numbers "
+                        "when using `reconstriction_method`=generalized-projection."
+                    )
+                )
+
+            use_projection_scheme = True
+            projection_a, projection_b, projection_c = reconstruction_parameter
+            step_size = None
+        elif (
             reconstruction_method == "DM_AP"
             or reconstruction_method == "difference-map_alternating-projections"
         ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
             use_projection_scheme = True
             projection_a = -reconstruction_parameter
             projection_b = 1
@@ -1313,10 +1299,35 @@ class PtychographicReconstruction(PhaseReconstruction):
             reconstruction_method == "RAAR"
             or reconstruction_method == "relaxed-averaged-alternating-reflections"
         ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
             use_projection_scheme = True
             projection_a = 1 - 2 * reconstruction_parameter
             projection_b = reconstruction_parameter
             projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "RRR"
+            or reconstruction_method == "relax-reflect-reflect"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
+                raise ValueError("reconstruction_parameter must be between 0-2.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "SUPERFLIP"
+            or reconstruction_method == "charge-flipping"
+        ):
+            use_projection_scheme = True
+            projection_a = 0
+            projection_b = 1
+            projection_c = 2
+            reconstruction_parameter = None
             step_size = None
         elif (
             reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
@@ -1331,30 +1342,60 @@ class PtychographicReconstruction(PhaseReconstruction):
                 (
                     "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
                     "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
+                    "'RRR' (or 'relax-reflect-reflect'), "
+                    "'SUPERFLIP' (or 'charge-flipping'), "
                     f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
                 )
             )
 
         if self._verbose:
             if max_batch_size is not None:
-                print(
-                    (
-                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                        f"in batches of max {max_batch_size} measurements."
-                    )
-                )
-            else:
-                if reconstruction_parameter is not None:
-                    print(
+                if use_projection_scheme:
+                    raise ValueError(
                         (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                            f"with α: {reconstruction_parameter}."
+                            "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
+                            "Use reconstruction_method='GD' or set max_batch_size=None."
                         )
                     )
                 else:
                     print(
-                        f"Performing {max_iter} iterations using the {reconstruction_method} algorithm."
+                        (
+                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            f"with normalization_min: {normalization_min} and step _size: {step_size}, "
+                            f"in batches of max {max_batch_size} measurements."
+                        )
                     )
+            else:
+                if reconstruction_parameter is not None:
+                    if np.array(reconstruction_parameter).shape == (3,):
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
+                            )
+                        )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
+                            )
+                        )
+                else:
+                    if step_size is not None:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min}."
+                            )
+                        )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                            )
+                        )
 
         # Batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
@@ -1362,14 +1403,6 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if max_batch_size is not None:
             xp.random.seed(seed_random)
-            if use_projection_scheme:
-                raise ValueError(
-                    (
-                        "Stochastic object/probe updating is inconsistent with 'DM_AP' and 'RAAR'. "
-                        "Use reconstruction_method='GD' or set max_batch_size=None."
-                    )
-                )
-
         else:
             max_batch_size = self._num_diffraction_patterns
 
