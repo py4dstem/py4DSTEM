@@ -1,6 +1,5 @@
 """
-Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely DPC and ptychography.
+Module for reconstructing phase objects from 4DSTEM datasets using iterative methods.
 """
 
 import warnings
@@ -312,6 +311,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         elif real_space_units == "A":
             self._scan_sampling = (calibration.get_R_pixel_size(),) * 2
+            self._scan_units = ("A",) * 2
+        elif real_space_units == "nm":
+            self._scan_sampling = (calibration.get_R_pixel_size() * 10,) * 2
             self._scan_units = ("A",) * 2
         else:
             raise ValueError(
@@ -1324,11 +1326,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
 
         asnumpy = self._asnumpy
-
-        if self._rotation_best_transpose == True: 
-            angle = self._rotation_best_rad
-        else: 
-            angle = -self._rotation_best_rad
+        angle = (
+            self._rotation_best_rad
+            if self._rotation_best_transpose
+            else -self._rotation_best_rad
+        )
 
         tf = AffineTransform(angle=angle)
         rotated_points = tf(
@@ -1339,11 +1341,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
         min_y = min_y if min_y > 0 else 0
         max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
 
-        rotated_array = rotate(
-            asnumpy(array), np.rad2deg(-angle), reshape=False
-        )[min_x:max_x, min_y:max_y]
-        
-        if self._rotation_best_transpose == True: 
+        rotated_array = rotate(asnumpy(array), np.rad2deg(-angle), reshape=False)[
+            min_x:max_x, min_y:max_y
+        ]
+
+        if self._rotation_best_transpose:
             rotated_array = rotated_array.T
 
         return rotated_array
