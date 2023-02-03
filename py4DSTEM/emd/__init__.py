@@ -5,7 +5,6 @@ from py4DSTEM.emd.classes import (
     Metadata,
     Node,
     Root,
-    Branch,
     RootedNode,
     Array,
     PointList,
