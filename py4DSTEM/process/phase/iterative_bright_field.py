@@ -703,39 +703,117 @@ class BFreconstruction():
 
     def aberration_correct(
         self,
+        tilt_correction = True,
         k_info_limit = None,
         k_info_power = 2.0,
         plot_result = True,
         figsize = (8,8),
         plot_range = (-2,2),
         returnval = False,
+        progress_bar = True,
         ):
         '''
         CTF correction of the BF image using the measured defocus aberration.
         '''
-
-        # Fourier coordinates, aberration surface
+        
+        # Fourier coordinates
         kx = np.fft.fftfreq(self.recon_BF.shape[0], self.calibration.get_R_pixel_size())
         ky = np.fft.fftfreq(self.recon_BF.shape[1], self.calibration.get_R_pixel_size())
-        kra2 = kx[:,None]**2 + ky[None,:]**2
-        CTF = np.sin((np.pi*self.wavelength*self.aberration_C1) * kra2)
-        CTF_corr = np.sign(CTF)
+        kra2 = (kx[:,None])**2 \
+            +  (ky[None,:])**2
+        sin_chi = np.sin(np.pi*self.wavelength*self.aberration_C1 * kra2)
+        
+        # CTF correction
+        if tilt_correction:
 
-        # if needed, make low pass filter
-        if k_info_limit is not None:
-            k_filt = 1/(1 + (kra2**k_info_power)/((k_info_limit)**(2*k_info_power)))
+            self.recon_BF_corr = np.zeros(self.recon_BF.shape)
+            for a0 in tqdmnd(
+                self.num_images,
+                desc="Applying CTF correction",
+                unit=" images",
+                disable=not progress_bar,
+                ):
+                CTF = sin_chi * np.exp(-2j*np.pi*self.wavelength*self.aberration_C1*(
+                    kx[:,None]*self.kxy[a0,0] + ky[None,:]*self.kxy[a0,1]
+                    ))
+                self.recon_BF_corr += np.real(np.fft.ifft2(np.fft.fft2(self.stack_BF[a0]) * \
+                    np.exp(-1j*np.angle(CTF))))
+            self.recon_BF_corr /= self.num_images
 
-        # apply correction to reconstructed BF image
-        if k_info_limit is not None:
-            self.recon_BF_corr = np.real(np.fft.ifft2(np.fft.fft2(self.recon_BF) * CTF_corr * k_filt))
+
+                # # chi_shift = np.pi*self.wavelength*self.aberration_C1 * (
+                # #     (kx[:,None] + kxy_beam[0])**2 + \
+                # #     (ky[None,:] + kxy_beam[1])**2
+                # #     )
+                # d_gamma = 2*np.pi*(kra2 - self.aberration_C1)*(
+                #     kx[:,None]*kxy_beam[0] + ky[None,:]*kxy_beam[1]
+                #     )
+
+                # CTF_corr = np.sin(chi)*np.exp(-1j*d_gamma)
+                # # CTF_corr = np.sin(chi)*np.cos(chi_shift - chi)
+                # # print(CTF_corr[0,0]
+
+                # fig,ax = plt.subplots(1,2,figsize = (8,4))
+                # ax[0].imshow(
+                #     np.fft.fftshift(np.angle(CTF)),
+                #     vmin=-np.pi,
+                #     vmax=np.pi,
+                #     )
+                # ax[1].imshow(
+                #     np.fft.fftshift(np.angle(np.exp(1j*chi))),
+                #     )
+        #         CTF1 = (np.pi*self.wavelength*self.aberration_C1) * \
+        #             ((kx[:,None] + kxy_beam[0])**2 + (ky[None,:] + kxy_beam[1])**2) - \
+        #             (np.pi*self.wavelength*self.aberration_C1)*(np.sum(kxy_beam**2))
+        #         CTF2 = (np.pi*self.wavelength*self.aberration_C1) * \
+        #             ((-kx[:,None] + kxy_beam[0])**2 + (-ky[None,:] + kxy_beam[1])**2) - \
+        #             (np.pi*self.wavelength*self.aberration_C1)*(np.sum(kxy_beam**2))
+
+        #         CTF_corr = np.imag(np.exp(1j*CTF1) - np.conj(np.exp(1j*CTF2)))
+
+
+        #         # CTF_corr = np.sin(
+        #         #     (np.pi*self.wavelength*self.aberration_C1) * \
+        #         #     ((kx[:,None] - kxy_beam[0])**2 + (ky[None,:] + kxy_beam[1])**2) -
+        #         #     (np.pi*self.wavelength*self.aberration_C1)*(np.sum(kxy_beam**2))
+        #         #     )
+        #         print(CTF_corr[0,0])
+
+        #         # CTF_corr = np.imag(
+        #         #     np.exp((1j*np.pi*self.wavelength*self.aberration_C1)*(
+        #         #     (kx[:,None] - kxy_beam[0])**2 + (ky[None,:] - kxy_beam[1])**2)) - \
+        #         #     np.exp((1j*np.pi*self.wavelength*self.aberration_C1)*(
+        #         #     (-kx[:,None] - kxy_beam[0])**2 + (-ky[None,:] - kxy_beam[1])**2)))
+
+
+
+        #         # alpha = self.probe_angles[a0,:]
+        #         # alpha = np.array((20,0)) / 1000
+
+
+
+        #         # cos_alpha = np.cos(np.sqrt(np.sum(alpha**2)))
+        #         # tan_alpha = np.tan(np.sqrt(np.sum(alpha**2)))
+        #         # theta = np.arctan2(alpha[1],alpha[0])
+        #         # kra2_scale = \
+        #         #     (cos_alpha*np.cos(theta)**2 + np.sin(theta)**2)*kx[:,None]**2 - \
+        #         #     (2*tan_alpha*np.sin(theta)*np.cos(theta))*kx[:,None]*ky[None,:] + \
+        #         #     (cos_alpha*np.sin(theta)**2 + np.cos(theta)**2)*ky[None,:]**2
+        #         # CTF_corr = np.sign(np.sin((np.pi*self.wavelength*self.aberration_C1)*kra2_scale))
+
+        #         # # print(np.round(np.rad2deg(alpha),decimals=2), cos_alpha_inv2)
+
+
         else:
+            # CTF without tilt correction
+            CTF_corr = np.sign(sin_chi)
+
+            # if needed, add low pass filter
+            if k_info_limit is not None:
+                CTF_corr /= (1 + (kra2**k_info_power)/((k_info_limit)**(2*k_info_power)))
+
+            # apply correction to mean reconstructed BF image 
             self.recon_BF_corr = np.real(np.fft.ifft2(np.fft.fft2(self.recon_BF) * CTF_corr))
-
-        # sub = self.kxy[:,0] < -0.0
-
-
-        # im_test = np.mean(self.stack_BF[sub,:,:],axis=0)
-
 
         # plotting
         if plot_result:
@@ -752,16 +830,6 @@ class BFreconstruction():
                 vmax=plot_range[1],
                 cmap = 'gray',
                 )
-
-
-
-
-        # np.abs(np.fft.fftshift(CTF)),
-
-
-        # print(np.mean(sub))
-
-
 
 
 def align_images(
