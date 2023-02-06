@@ -2311,13 +2311,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 )
 
         if butterworth_filter: 
-                current_object = self._warmup_object_butterworth_constraint(
-                    current_object, q_highpass, pure_phase_object
-                )
-            else:
-                current_object = self._object_butterworth_constraint(
-                    current_object, q_highpass, pure_phase_object
-                )
+            current_object = self._warmup_object_butterworth_constraint(
+                current_object, q_highpass, pure_phase_object
+            )
+        else:
+            current_object = self._object_butterworth_constraint(
+                current_object, q_highpass, pure_phase_object
+            )
         if warmup_iteration:
             current_object = self._warmup_object_threshold_constraint(
                 current_object, pure_phase_object
