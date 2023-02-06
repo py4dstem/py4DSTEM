@@ -972,7 +972,46 @@ class PtychographicReconstruction(PhaseReconstruction):
             current_object = gaussian_filter(current_object, gaussian_blur_sigma)
 
         return current_object
+    
+    def _object_butterworth_constraint(self, current_object, q_highpass, pure_phase_object
+    ):
+        """
+        High pass butterworth filter
+        
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        q_highpass: float
+            Cut-off frequency
+        pure_phase_object: bool
+            If True, filtering on phase only
 
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[0])
+        qy = xp.fft.fftfreq(current_object.shape[1])
+        qya,qxa=xp.meshgrid(qy,qx)
+        qra = xp.sqrt(qxa**2+qya**2)    
+
+        q_highpass = q_highpass
+
+        env_highpass = 1/(1+(qra/q_highpass)**4)
+        
+        if pure_phase_object: 
+            amplitude = xp.abs(current_object)
+            phase = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object))*env_highpass)))
+        else:
+            amplitude = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.abs(current_object))*env_highpass)))
+            phase = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object))*env_highpass)))
+        current_object = amplitude * xp.exp(1.0j * phase)
+        
+        return current_object
+    
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic threshold constraint.
@@ -1120,6 +1159,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe_fourier_amplitude,
         fix_positions,
         global_affine_transformation,
+        butterworth_filter,
+        q_highpass,
     ):
         """
         Ptychographic constraints operator.
@@ -1143,6 +1184,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             If True, probe fourier amplitude is set to initial probe
         fix_positions: bool
             If True, positions are not updated
+        butterworth_filter: bool 
+            If True, applies high-pass butteworth filter
+        q_highpass: float
+            Cut-off frequency for filter
 
         Returns
         --------
@@ -1162,6 +1207,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_object = self._object_threshold_constraint(
             current_object, pure_phase_object
         )
+
+        if butterworth_filter: 
+            current_object = self._object_butterworth_constraint(
+                current_object, q_highpass, pure_phase_object
+            )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
@@ -1203,6 +1253,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         probe_support_supergaussian_degree: float = 10.0,
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
+        butterworth_filter_iter: int = np.inf,
+        q_highpass: float = 0.02, 
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1254,6 +1306,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             Standard deviation of gaussian kernel
         gaussian_blur_iter: int, optional
             Number of iterations to run before applying object smoothness constraint
+        butterworth_filter_iter: int, optional 
+            Number of iterations to run before applying high-pass butteworth filter
+        q_highpass: float
+            Cut-off frequency for high-pass filter
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1535,6 +1591,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
+                butterworth_filter = a0 > butterworth_filter_iter, 
+                q_highpass = q_highpass,
             )
 
             if store_iterations:
