@@ -8,7 +8,9 @@ from py4DSTEM.emd.read import _is_EMD_file, _get_EMD_rootgroups
 from py4DSTEM.emd.classes.utils import EMD_data_group_types
 from py4DSTEM.emd.classes import (
     Node,
-    Root
+    Root,
+    Array,
+    Metadata
 )
 
 
@@ -36,6 +38,13 @@ def write(
     If `data` is an unrooted node (i.e. a freestanding node not connected to
     a tree), this code creates a new root node with no metadata and this node's
     name, and places this node inside that root in a new file.
+
+    If `data` is a numpy array or Python dictionary, wraps data in either an
+    emd.Array or emd.Metadata instance, assigns the name 'np.array' or
+    'dictionary', places the object in a root of this name and saves. If
+    `data` is a list of objects which are all numpy arrays, Python dictionaries,
+    or emd.Node instances, places all these objects into a single root, assigns
+    the roots name according to the first object in the list, and saves.
 
     To write a single node from a tree,  set `tree` to False. To write the
     tree underneath a node but exclude the node itself set `tree` to 'noroot'.
@@ -124,6 +133,37 @@ def write(
         'appendover'
     ]
     allmodes = writemode + overwritemode + appendmode + appendovermode
+
+    # handle non-Node `data` inputs
+    if isinstance(data, np.ndarray):
+        root = Root(name='np.array')
+        data = Array(name='np.array',data=data)
+        root.add_to_tree(data)
+    elif isinstance(data, dict):
+        root = Root(name='dictionary')
+        md = Metadata(name='dictionary',data=data)
+        root.metadata = md
+        data = root
+    elif isinstance(data, (list,tuple)):
+        assert(all( [isinstance(x,(np.ndarray,dict,Node)) for x in data] )), \
+            "can only save np.array, dictionary, or emd.Node objects"
+        if isinstance(data[0],Node): name=data[0].name
+        elif isinstance(data[0],np.ndarray): name='np.array'
+        else: name='dictionary'
+        root = Root(name=name)
+        ar_ind,md_ind = 0,0
+        for d in data:
+            if isinstance(d,np.ndarray):
+                d = Array(name=f'np.array_{ar_ind}',data=d)
+                ar_ind += 1
+                root.add_to_tree(d)
+            elif isinstance(d,dict):
+                d = Metadata(name=f'dictionary_{md_ind}',data=d)
+                md_ind += 1
+                root.metadata = d
+            else:
+                root.add_to_tree(d)
+        data = root
 
     # validate inputs
     er = f"unrecognized mode {mode}; mode must be in {allmodes}"
@@ -506,7 +546,7 @@ def _append_branch(
                     d
                 )
             else:
-                next_node = group[k]
+                next_node = group[key]
             _append_branch(
                 next_node,
                 d,
