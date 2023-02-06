@@ -59,8 +59,8 @@ class Crystal_Phase:
             phase_maps.append(self.orientation_maps[m].corr[:,:,index] / corr_sum)
         show_image_grid(lambda i:phase_maps[i], 1, len(phase_maps), cmap = 'inferno')
         return
-    
-    def plot_phase_map(
+    # Plot the correlation maps. Plots the maps with the best correlation scores. 
+    def plot_correlation_map(
         self,
         index = 0,
         cmap = None
@@ -159,6 +159,62 @@ class Crystal_Phase:
             return TypeError('pointlistarray must be of type pointlistarray.')
         return
     
+    def compare_intensitylists(
+        self,
+        masterpointlist,
+        masterintensitylist,
+        bragg_peaks_fit,
+        tolerance_distance,
+        intensity_power
+    ):
+        """
+        Function to compare the exisiting point list enteries with the array. 
+        """
+        # Add a column of zeros in the master intensity list to make way for the new fitted intensity list
+        zeros = np.zeros((masterintensitylist.shape[0], 1))
+        masterintensitylist = np.concatenate((masterintensitylist,zeros),axis=1)
+
+        # Compare with the exisiting bragg_peaks_fit with the masterpointlist.
+        # Make a temporary intensity list to store the intensities of the the bragg_peaks_fit. 
+        
+        if intensity_power == 0:
+            temporary_pl_intensities = np.ones(bragg_peaks_fit['intensity'].shape)
+        else:
+            temporary_pl_intensities = bragg_peaks_fit['intensity']**intensity_power
+        
+    
+        # Go through the bragg_peaks_fit to find if the master list has an entry or not. 
+        for d in range(bragg_peaks_fit['qx'].shape[0]):
+            distances = []
+            # Making a numpy array of the fitted bragg peak
+            bragg_peak_point=np.array([bragg_peaks_fit['qx'][d],bragg_peaks_fit['qy'][d]])
+            for p in range(masterpointlist.shape[0]):
+                        distances.append(np.linalg.norm(bragg_peak_point-masterpointlist[p])
+                        )
+            ind = np.where(distances == np.min(distances))[0][0]
+            # Potentially loop over to find the best tolerance distance.
+            if distances[ind] <= tolerance_distance:
+                columns_masterintensitylist = len(masterintensitylist[0])
+                masterintensitylist[ind][columns_masterintensitylist-1]=temporary_pl_intensities[d]
+
+            else:
+                continue
+                ## The point list is not in the mega list of point list so the point list last row of masterpointlist
+                masterpointlist = np.vstack((masterpointlist,bragg_peak_point))
+                ## Add a row to the intensity list such that all the remaining intensity lists should be 0 but only the new bragg intensity list is non zero but intensity power
+                new_intensity_list_row = np.zeros((1, masterintensitylist.shape[1]-1))
+                new_intensity_list_row = np.append(new_intensity_list_row, [temporary_pl_intensities[d]])
+                new_intensity_list_row = new_intensity_list_row.reshape((1,-1))
+                masterintensitylist = np.concatenate((masterintensitylist,new_intensity_list_row),axis=0)
+
+
+
+        
+        return masterpointlist,masterintensitylist
+        
+
+
+
     def quantify_phase_pointlist(
         self,
         pointlistarray,
@@ -191,8 +247,10 @@ class Crystal_Phase:
         # Things to add:
         #     1. Better cost for distance from peaks in pointlists
         #     2. Iterate through multiple tolerance_distance values to find best value. Cost function residuals, or something else?
+        #     3. Make a flag variable for the experimental dataset which turns 1 if it is encountered in the simulated dataset.
         
         pointlist = pointlistarray.get_pointlist(position[0], position[1]) 
+        ## Remove the central beam
         pl_mask = np.where((pointlist['qx'] == 0) & (pointlist['qy'] == 0), 1, 0)
         pointlist.remove(pl_mask)
         # False Negatives (exp peak with no match in crystal instances) will appear here, already coded in
@@ -201,74 +259,76 @@ class Crystal_Phase:
             pl_intensities = np.ones(pointlist['intensity'].shape)
         else:
             pl_intensities = pointlist['intensity']**intensity_power
+        
         #Prepare matches for modeling
         pointlist_peak_matches = []
         crystal_identity = []
-        
+        ## Initialize the megapointlist and master intensity list with the experimental intensity
+        masterpointlist = np.column_stack((pointlist['qx'],pointlist['qy']))
+        masterintensitylist = pl_intensities
+        ## Convert masterintensitylist to a 2D array
+        masterintensitylist = np.array(masterintensitylist, ndmin=2).T
+        ## Loop over the number of crystals.
         for c in range(len(self.crystals)):
+            ## Loop over the number of num matches which is the number of orientation candidates. 
+            # This value of num matches was supplied when the orientation map was created. 
             for m in range(self.orientation_maps[c].num_matches):
+                # Set crystal identity
                 crystal_identity.append([c,m])
-                phase_peak_match_intensities = np.zeros((pointlist['intensity'].shape))
+                # For a given crystal class generate a diffraction pattern given a orientation crystal and given num match
                 bragg_peaks_fit = self.crystals[c].generate_diffraction_pattern(
                     self.orientation_maps[c].get_orientation(position[0], position[1]),
                     ind_orientation = m
                 )
-                #Find the best match peak within tolerance_distance and add value in the right position
-                for d in range(pointlist['qx'].shape[0]):
-                    distances = []
-                    for p in range(bragg_peaks_fit['qx'].shape[0]):
-                        distances.append(
-                            np.sqrt((pointlist['qx'][d] - bragg_peaks_fit['qx'][p])**2 + 
-                                    (pointlist['qy'][d]-bragg_peaks_fit['qy'][p])**2)
-                        )
-                    ind = np.where(distances == np.min(distances))[0][0]
-                    
-                    #Potentially for-loop over multiple values for 'tolerance_distance' to find best tolerance_distance value
-                    if distances[ind] <= tolerance_distance:
-                        ## Somewhere in this if statement is probably where better distances from the peak should be coded in
-                        if intensity_power == 0: #This could potentially be a different intensity_power arg
-                            phase_peak_match_intensities[d] = 1**((tolerance_distance-distances[ind])/tolerance_distance)  
-                        else:
-                            phase_peak_match_intensities[d] = bragg_peaks_fit['intensity'][ind]**((tolerance_distance-distances[ind])/tolerance_distance)
-                    else:
-                        ## This is probably where the false positives (peaks in crystal but not in experiment) should be handled
-                        continue   
-                
-                pointlist_peak_matches.append(phase_peak_match_intensities)
-                pointlist_peak_intensity_matches = np.dstack(pointlist_peak_matches)
-                pointlist_peak_intensity_matches = pointlist_peak_intensity_matches.reshape(
-                    pl_intensities.shape[0],
-                    pointlist_peak_intensity_matches.shape[-1]
-                    )
-        
-        if len(pointlist['qx']) > 0:    
+                # Check if there are any experimental intensity observed at all.
+                if len(masterpointlist !=0):
+                # Send this bragg_peaks_fit to the compare function to be compared with mega point list and master intensity list. 
+                    masterpointlist,masterintensitylist=self.compare_intensitylists(masterpointlist,masterintensitylist,bragg_peaks_fit,tolerance_distance,intensity_power)
+                else:
+                    continue
+
+
+        ### The intensity and point lists are accumulated in the masterintensitylist and masterpointlist.
+        # The first column of the intensity lists are the observed experimental intensities.
+        observed_intensities = masterintensitylist[:,0]
+        expected_intensities = masterintensitylist[:,1:]
+
+        if len(observed_intensities) > 0:   
             if mask_peaks is not None:
                 for i in range(len(mask_peaks)):
                     if mask_peaks[i] == None:
                         continue
-                    inds_mask = np.where(pointlist_peak_intensity_matches[:,mask_peaks[i]] != 0)[0]
+                    inds_mask = np.where(expected_intensities[:,mask_peaks[i]] != 0)[0]
                     for mask in range(len(inds_mask)):
-                        pointlist_peak_intensity_matches[inds_mask[mask],i] = 0
-
+                        expected_intensities[inds_mask[mask],i] = 0
             if method == 'nnls':    
                 phase_weights, phase_residuals = nnls(
-                    pointlist_peak_intensity_matches,
-                    pl_intensities
+                    expected_intensities,
+                    observed_intensities
                 )
             
             elif method == 'lstsq':
                 phase_weights, phase_residuals, rank, singluar_vals = lstsq(
-                    pointlist_peak_intensity_matches,
-                    pl_intensities,
+                    expected_intensities,
+                    observed_intensities,
                     rcond = -1
                 )
                 phase_residuals = np.sum(phase_residuals)
             else:
                 raise ValueError(method + ' Not yet implemented. Try nnls or lstsq.')   
         else:
-            phase_weights = np.zeros((pointlist_peak_intensity_matches.shape[1],))
+            # Find the number of expected phases
+            number_expected_phases=0
+            for c in range(len(self.crystals)):
+                for m in range(self.orientation_maps[c].num_matches):
+                    number_expected_phases+=1
+
+            # If there are no diffraction patterns 
+            phase_weights = np.zeros(number_expected_phases)
             phase_residuals = np.NaN
-        return pointlist_peak_intensity_matches, phase_weights, phase_residuals, crystal_identity
+        
+        return expected_intensities, phase_weights, phase_residuals, crystal_identity
+
     
     # def plot_peak_matches(
     #     self,
