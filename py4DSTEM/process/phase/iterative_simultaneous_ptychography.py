@@ -2051,8 +2051,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya,qxa=xp.meshgrid(qy,qx)
         qra = xp.sqrt(qxa**2+qya**2)    
 
-        q_highpass = q_highpass
-
         env_highpass = 1/(1+(qra/q_highpass)**4)
 
         electrostatic_obj, _ = current_object
@@ -2091,7 +2089,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        gaussian_filter = self._gaussian_filter
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[0])
+        qy = xp.fft.fftfreq(current_object.shape[1])
+        qya,qxa=xp.meshgrid(qy,qx)
+        qra = xp.sqrt(qxa**2+qya**2)    
+
+        env_highpass = 1/(1+(qra/q_highpass)**4)
 
         electrostatic_obj, magnetic_obj = current_object
 

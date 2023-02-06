@@ -1170,8 +1170,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         qya,qxa=xp.meshgrid(qy,qx)
         qra = xp.sqrt(qxa**2+qya**2)    
 
-        q_highpass = q_highpass
-
         env_highpass = 1/(1+(qra/q_highpass)**4)
         
         if pure_phase_object: 
