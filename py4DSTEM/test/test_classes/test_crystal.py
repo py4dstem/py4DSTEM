@@ -15,6 +15,11 @@ filepath_cif3 = join(_TESTPATH, "crystal/LiMn2O4.cif")
 class TestCrystal:
 
     def setup_cls(self):
+        self.braggpeaks = read(
+            filepath_braggpeaks,
+            data_id='braggpeaks_cal_raw'
+        )
+        self.crystal = Crystal.from_CIF(filepath_cif1)
         pass
 
     def teardown_cls(self):
@@ -33,15 +38,16 @@ class TestCrystal:
         crystal = Crystal.from_CIF(filepath_cif1)
         assert(isinstance(crystal,Crystal))
 
-        pass
+
+    def test_generate_diffraction_pattern(self):
+
+        self.crystal.generate_diffraction_pattern(
+            zone_axis_lattice = [1,1,2],
+            sigma_excitation_error = 0.2
+        )
 
 
-    def test_Crystal2(self):
 
-        #crystal = Crystal( **args )
-        #assert(isinstance(crystal,Crystal))
-
-        pass
 
 
 
