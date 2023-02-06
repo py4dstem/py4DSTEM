@@ -87,7 +87,7 @@ class PointList(Node):
         inds = mask.nonzero()[0]
         self.data = np.delete(self.data, inds)
 
-    def sort(self, field, order='descending'):
+    def sort(self, field, order='ascending'):
         """
         Sorts the point list according to field,
         which must be a field in self.dtype.

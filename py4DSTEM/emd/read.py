@@ -166,7 +166,7 @@ def read(
         elif len(rootgroups) == 1:
             emdpath = rootgroups[0]
         else:
-            print("Multiple root groups detected - returning root names. Please specify the `emdpath` argument")
+            print("Multiple root groups detected - returning root names. Please specify the `emdpath` argument. Returning the list of rootgroups.")
             return rootgroups
 
 
@@ -265,7 +265,7 @@ def _populate_tree(node,group):
         EMD_data_group_types]
 
     for key in keys:
-        print(f"Reading group {group[key].name}")
+        #print(f"Reading group {group[key].name}")
         new_node = _read_single_node(group[key])
         # Handle RootedNodes, which need to be grafted rather than added
         if isinstance(new_node,RootedNode):
@@ -318,7 +318,7 @@ def _print_h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
         print(string+'--'+k)
         if i == N-1:
             linelevels.remove(tablevel)
-        print_h5pyFile_tree(
+        _print_h5pyFile_tree(
             f[k],
             tablevel=tablevel+1,
             linelevels=linelevels,

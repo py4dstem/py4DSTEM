@@ -23,7 +23,8 @@ class Metadata:
 
     def __init__(
         self,
-        name: Optional[str] ='metadata'
+        name: Optional[str] = 'metadata',
+        data: Optional[dict] = None
         ):
         """
          Args:
@@ -32,6 +33,9 @@ class Metadata:
         self.name = name
         self._params = {}
 
+        if data is not None:
+            assert(isinstance(data,dict)), f"`data` must be a dict, not type {type(data)}"
+            self._params.update(data)
 
 
     ### __get/setitem__
