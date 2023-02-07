@@ -2127,4 +2127,4 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        return asnumpy(xp.fft.fftshift(xp.fft.fft2(self._probe)))
+        return asnumpy(xp.fft.fftshift(xp.fft.fft2(self._probe), axes=(-2, -1)))
