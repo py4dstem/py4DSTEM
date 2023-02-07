@@ -479,6 +479,20 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     )
 
 
+def projection(u: np.ndarray, v: np.ndarray, xp):
+    """Projection of vector u onto vector v."""
+    return u * xp.vdot(u, v) / xp.vdot(u, u)
+
+
+def orthogonalize(V: np.ndarray, xp):
+    """Non-normalized QR decomposition using repeated projections."""
+    U = V.copy()
+    for i in range(1, V.shape[0]):
+        for j in range(i):
+            U[i, :] -= projection(U[j, :], V[i, :], xp)
+    return U
+
+
 ### FFT-shift functions
 
 
@@ -541,10 +555,15 @@ def fft_shift(array, positions, xp=np):
     -------
         Fourier-shifted array
     """
-    return xp.fft.ifft2(
-        xp.fft.fft2(array)
-        * fourier_translation_operator(positions, array.shape[-2:], xp)
-    )
+    translation_operator = fourier_translation_operator(positions, array.shape[-2:], xp)
+    fourier_array = xp.fft.fft2(array)
+
+    if len(translation_operator.shape) == 3 and len(fourier_array.shape) == 3:
+        shifted_fourier_array = fourier_array[None] * translation_operator[:, None]
+    else:
+        shifted_fourier_array = fourier_array * translation_operator
+
+    return xp.fft.ifft2(shifted_fourier_array)
 
 
 ### Standalone DPC functions
