@@ -11,6 +11,7 @@ except ImportError:
 
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from scipy.ndimage import gaussian_filter
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
@@ -1183,3 +1184,128 @@ def estimate_global_transformation_ransac(
                 transform = candidate_model
 
     return transform, best_fitness
+
+
+def fourier_ring_correlation(
+    image_1,
+    image_2,
+    pixel_size=(1, 1),
+    sigma=None,
+    bin_size=None,
+):
+    """
+    Computes fourier ring correlation (FRC) of 2 arrays.
+    Arrays must bet the same size.
+
+    Parameters
+     ----------
+    image1: ndarray
+        First image for FRC
+    image2: ndarray
+        Second image for FRC
+    pixel_size: tuple
+        Size of pixels (x,y)
+    bin_size: float, optional
+        Size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+
+    Returns
+    --------
+    q_frc: ndarray
+        spatial frequencies of FRC
+    frc: ndarray
+        fourier ring correlation
+    half_bin: ndarray
+        half-bit criteria
+    """
+    fft_image_1 = np.fft.fft2(image_1)
+    fft_image_2 = np.fft.fft2(image_2)
+
+    cc_mixed = np.real(fft_image_1 * np.conj(fft_image_2))
+    cc_image_1 = np.abs(fft_image_1) ** 2
+    cc_image_2 = np.abs(fft_image_2) ** 2
+
+    # take 1D profile
+    q_frc, cc_mixed_1D, n = return_1D_profile(
+        cc_mixed, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+    )
+    _, cc_image_1_1D, _ = return_1D_profile(
+        cc_image_1, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+    )
+    _, cc_image_2_1D, _ = return_1D_profile(
+        cc_image_2, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+    )
+
+    frc = cc_mixed_1D / ((cc_image_1_1D * cc_image_2_1D) ** 0.5)
+    half_bit = 2 / np.sqrt(n / 2)
+
+    ind_max = np.argmax(n)
+    q_frc = q_frc[0:ind_max]
+    frc = frc[0:ind_max]
+    half_bit = half_bit[0:ind_max]
+
+    return q_frc, frc, half_bit
+
+
+def return_1D_profile(
+    intensity,
+    pixel_size=(1, 1),
+    bin_size=None,
+    sigma=None,
+):
+    """
+    Return 1D radial profile from corner centered array
+
+    Parameters
+     ----------
+    intensity: ndarray
+        Array for computing 1D profile
+    pixel_size: tuple
+        Size of pixels (x,y)
+    bin_size: float, optional
+        Size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+
+    Returns
+    --------
+    q_bins: ndarray
+        spatial frequencies of bins
+    I_bins: ndarray
+        Intensity of bins
+    n: ndarray
+        Number of pixels in each bin
+    """
+    x = np.fft.fftfreq(intensity.shape[0], pixel_size[0])
+    y = np.fft.fftfreq(intensity.shape[1], pixel_size[1])
+    q = np.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
+    q = q.ravel()
+
+    intensity = intensity.ravel()
+
+    if bin_size is None:
+        bin_size = q[1] - q[0]
+
+    q_bins = np.arange(0, q.max() + bin_size, bin_size)
+
+    inds = q / bin_size
+    inds_f = np.floor(inds).astype("int")
+    d_ind = inds - inds_f
+
+    nf = np.bincount(inds_f, weights=(1 - d_ind), minlength=q_bins.shape[0])
+    nc = np.bincount(inds_f + 1, weights=(d_ind), minlength=q_bins.shape[0])
+    n = nf + nc
+
+    I_bins0 = np.bincount(
+        inds_f, weights=intensity * (1 - d_ind), minlength=q_bins.shape[0]
+    )
+    I_bins1 = np.bincount(
+        inds_f + 1, weights=intensity * (d_ind), minlength=q_bins.shape[0]
+    )
+
+    I_bins = (I_bins0 + I_bins1) / n
+    if sigma is not None:
+        I_bins = gaussian_filter(I_bins, sigma)
+
+    return q_bins, I_bins, n
