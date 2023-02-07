@@ -1,5 +1,5 @@
 from py4DSTEM.process.diffraction import Crystal
-from py4DSTEM.process.diffraction import Crystal_Phase as CrystalPhase
+from py4DSTEM.process.diffraction import CrystalPhase
 from py4DSTEM import _TESTPATH,read
 from os.path import join
 
@@ -170,12 +170,7 @@ class TestPhaseMapping:
             crystals = [
                 self.crystal1,
                 self.crystal2
-            ],
-            orientation_maps = [
-                self.orientation_map1,
-                self.orientation_map2
             ]
-
         )
 
         # quantify the phases

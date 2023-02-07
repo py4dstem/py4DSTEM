@@ -955,7 +955,6 @@ def plot_diffraction_pattern(
 
 def plot_orientation_maps(
     self,
-    orientation_map,
     orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
@@ -975,7 +974,6 @@ def plot_orientation_maps(
     Plot the orientation maps.
 
     Args:
-        orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
@@ -1001,6 +999,8 @@ def plot_orientation_maps(
         are going to be correct only for [001][011][111] orientation triangle.
 
     """
+
+    assert(hasattr(self,'orientation_map')), "No orientation map found - try running .match_orientations"
 
     # Inputs
     # Legend size
@@ -1051,17 +1051,17 @@ def plot_orientation_maps(
     dir_in_plane = np.deg2rad(dir_in_plane_degrees)
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
-    basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    rgb_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    rgb_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    basis_x = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3))
+    basis_y = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3))
+    basis_z = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3))
+    rgb_x = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3))
+    rgb_z = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3))
 
     # Basis for fitting orientation projections
     A = np.linalg.inv(self.orientation_zone_axis_range).T
 
     # Correlation masking
-    corr = orientation_map.corr[:, :, orientation_ind]
+    corr = self.orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
@@ -1069,21 +1069,21 @@ def plot_orientation_maps(
 
     # Generate images
     for rx, ry in tqdmnd(
-        orientation_map.num_x,
-        orientation_map.num_y,
+        self.orientation_map.num_x,
+        self.orientation_map.num_y,
         desc="Generating orientation maps",
         unit=" PointList",
         disable=not progress_bar,
         ):
 
         if self.pymatgen_available:
-            basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,0]
-            basis_y[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,1]
+            basis_x[rx,ry,:] = A @ self.orientation_map.family[rx,ry,orientation_ind,:,0]
+            basis_y[rx,ry,:] = A @ self.orientation_map.family[rx,ry,orientation_ind,:,1]
             basis_x[rx,ry,:] = basis_x[rx,ry,:]*ct + basis_y[rx,ry,:]*st
 
-            basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,2]
+            basis_z[rx,ry,:] = A @ self.orientation_map.family[rx,ry,orientation_ind,:,2]
         else:
-            basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,orientation_ind,:,2]
+            basis_z[rx,ry,:] = A @ self.orientation_map.matrix[rx,ry,orientation_ind,:,2]
     basis_x = np.clip(basis_x,0,1)
     basis_z = np.clip(basis_z,0,1)
 
@@ -1390,8 +1390,8 @@ def plot_orientation_maps(
     plt.show()
 
     images_orientation = np.zeros((
-        orientation_map.num_x,
-        orientation_map.num_y,
+        self.orientation_map.num_x,
+        self.orientation_map.num_y,
         3,2))
     if self.pymatgen_available:
         images_orientation[:,:,:,0] = rgb_x
@@ -1407,7 +1407,6 @@ def plot_orientation_maps(
 
 def plot_fiber_orientation_maps(
     self,
-    orientation_map,
     orientation_ind: int = 0,
     symmetry_order: int = None,
     symmetry_mirror: bool = False,
@@ -1426,7 +1425,6 @@ def plot_fiber_orientation_maps(
     Generate and plot the orientation maps from fiber texture plots.
 
     Args:
-        orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       Reference in-plane angle (degrees).  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
@@ -1459,7 +1457,7 @@ def plot_fiber_orientation_maps(
     )
 
     # Correlation masking
-    corr = orientation_map.corr[:, :, orientation_ind]
+    corr = self.orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     if medfilt_size is not None:
@@ -1474,7 +1472,7 @@ def plot_fiber_orientation_maps(
         symmetry_order = 2 * symmetry_order
 
     # Generate out-of-plane orientation signal
-    ang_op = orientation_map.angles[:, :, orientation_ind, 1]
+    ang_op = self.orientation_map.angles[:, :, orientation_ind, 1]
     if self.orientation_fiber_angles[0] > 0:
         sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
     else:
@@ -1484,8 +1482,8 @@ def plot_fiber_orientation_maps(
 
     # Generate in-plane orientation signal
     ang_ip = (
-        orientation_map.angles[:, :, orientation_ind, 0]
-        + orientation_map.angles[:, :, orientation_ind, 2]
+        self.orientation_map.angles[:, :, orientation_ind, 0]
+        + self.orientation_map.angles[:, :, orientation_ind, 2]
     )
     sig_ip = np.mod((symmetry_order / (2 * np.pi)) * ang_ip, 1.0)
     if symmetry_mirror:
@@ -1609,7 +1607,7 @@ def plot_fiber_orientation_maps(
     else:
         ax_op_l.axis("off")
 
-    images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
+    images_orientation = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y, 3, 2))
     images_orientation[:, :, :, 0] = im_ip
     images_orientation[:, :, :, 1] = im_op
 
