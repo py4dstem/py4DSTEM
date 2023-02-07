@@ -1145,11 +1145,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_highpass, pure_phase_object
+    def _object_butterworth_constraint(
+        self, current_object, q_highpass, pure_phase_object
     ):
         """
         High pass butterworth filter
-        
+
         Parameters
         --------
         current_object: np.ndarray
@@ -1167,21 +1168,27 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         qx = xp.fft.fftfreq(current_object.shape[0])
         qy = xp.fft.fftfreq(current_object.shape[1])
-        qya,qxa=xp.meshgrid(qy,qx)
-        qra = xp.sqrt(qxa**2+qya**2)    
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2)
 
-        env_highpass = 1/(1+(qra/q_highpass)**4)
-        
-        if pure_phase_object: 
+        env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
+
+        if pure_phase_object:
             amplitude = xp.abs(current_object)
-            phase = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object))*env_highpass)))
+            phase = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            )
         else:
-            amplitude = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.abs(current_object))*env_highpass)))
-            phase = xp.real(xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object))*env_highpass)))
+            amplitude = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.abs(current_object)) * env_highpass))
+            )
+            phase = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            )
         current_object = amplitude * xp.exp(1.0j * phase)
-        
+
         return current_object
-    
+
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic threshold constraint.
@@ -1354,7 +1361,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             If True, probe fourier amplitude is set to initial probe
         fix_positions: bool
             If True, positions are not updated
-        butterworth_filter: bool 
+        butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_highpass: float
             Cut-off frequency for filter
@@ -1378,7 +1385,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object, pure_phase_object
         )
 
-        if butterworth_filter: 
+        if butterworth_filter:
             current_object = self._object_butterworth_constraint(
                 current_object, q_highpass, pure_phase_object
             )
@@ -1424,7 +1431,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
-        q_highpass: float = 0.02, 
+        q_highpass: float = 0.02,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1478,7 +1485,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Standard deviation of gaussian kernel
         gaussian_blur_iter: int, optional
             Number of iterations to run before applying object smoothness constraint
-        butterworth_filter_iter: int, optional 
+        butterworth_filter_iter: int, optional
             Number of iterations to run before applying high-pass butteworth filter
         q_highpass: float
             Cut-off frequency for high-pass filter
@@ -1498,7 +1505,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         # Reconstruction method
-        
+
         if reconstruction_method == "generalized-projection":
             if np.array(reconstruction_parameter).shape != (3,):
                 raise ValueError(
@@ -1763,8 +1770,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
-                utterworth_filter = a0 > butterworth_filter_iter, 
-                q_highpass = q_highpass,
+                utterworth_filter=a0 > butterworth_filter_iter,
+                q_highpass=q_highpass,
             )
 
             if store_iterations:
