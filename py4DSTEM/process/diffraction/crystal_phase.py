@@ -8,7 +8,7 @@ from numpy.linalg import lstsq
 from scipy.optimize import nnls
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 
-class Crystal_Phase:
+class CrystalPhase:
     """
     A class storing multiple crystal structures, and associated diffraction data.
     Must be initialized after matching orientations to a pointlistarray???
@@ -17,29 +17,24 @@ class Crystal_Phase:
     def __init__(
         self,
         crystals,
-        orientation_maps,
         name,
     ):
         """
         Args:
             crystals (list):            List of crystal instances
-            orientation_maps (list):    List of orientation maps
             name (str):                 Name of Crystal_Phase instance
         """
-        if isinstance(crystals, list):
-            self.crystals = crystals
-            self.num_crystals = len(crystals)
-        else:
-            raise TypeError('crystals must be a list of crystal instances.')
-        if isinstance(orientation_maps, list):
-            if len(self.crystals) != len(orientation_maps):
-                raise ValueError('Orientation maps must have the same number of entries as crystals.')
-            self.orientation_maps = orientation_maps
-        else:
-            raise TypeError('orientation_maps must be a list of orientation maps.')    
-        self.name = name
-        return
-    
+        # validate inputs
+        assert(isinstance(crystals,list)), '`crystals` must be a list of crystal instances'
+        for xtal in crystals:
+            assert(hasattr(xtal,'orientation_map')), '`crystals` elements must be Crystal instances with a .orientation_map - try running .match_orientations'
+
+        # assign variables
+        self.num_crystals = len(crystals)
+        self.crystals = crystals
+        self.orientation_maps = [xtal.orientation_map for xtal in crystals]
+
+
     def plot_all_phase_maps(
         self,
         map_scale_values = None,
@@ -48,7 +43,7 @@ class Crystal_Phase:
         """
         Visualize phase maps of dataset.
 
-        Args:          
+        Args:
             map_scale_values (float):   Value to scale correlations by
         """
         phase_maps = []
@@ -59,8 +54,8 @@ class Crystal_Phase:
             phase_maps.append(self.orientation_maps[m].corr[:,:,index] / corr_sum)
         show_image_grid(lambda i:phase_maps[i], 1, len(phase_maps), cmap = 'inferno')
         return
-    # Plot the correlation maps. Plots the maps with the best correlation scores. 
-    def plot_correlation_map(
+
+    def plot_phase_map(
         self,
         index = 0,
         cmap = None

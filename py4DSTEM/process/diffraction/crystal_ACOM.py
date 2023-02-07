@@ -763,11 +763,13 @@ def match_orientations(
     This function computes the orientation of any number of PointLists stored in a PointListArray, and returns an OrienationMap.
 
     '''
+    # instantiate object
     orientation_map = OrientationMap(
         num_x=bragg_peaks_array.shape[0],
         num_y=bragg_peaks_array.shape[1],
         num_matches=num_matches_return)
 
+    # loop
     for rx, ry in tqdmnd(
         *bragg_peaks_array.shape,
         desc="Matching Orientations",
@@ -775,6 +777,7 @@ def match_orientations(
         disable=not progress_bar,
     ):
 
+        # get orientation matches
         orientation = self.match_single_pattern(
             bragg_peaks_array.get_pointlist(rx, ry),
             num_matches_return=num_matches_return,
@@ -786,8 +789,10 @@ def match_orientations(
             )
 
         orientation_map.set_orientation(orientation,rx,ry)
+
+    # assign and return
     self.orientation_map = orientation_map
-    
+
     if return_orientation:
         return orientation_map
     else:
