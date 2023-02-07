@@ -1156,7 +1156,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         current_object: np.ndarray
             Current object estimate
         q_highpass: float
-            Cut-off frequency
+            Cut-off frequency in A^-1 for butterworth filter
         pure_phase_object: bool
             If True, filtering on phase only
 
@@ -1166,26 +1166,26 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0])
-        qy = xp.fft.fftfreq(current_object.shape[1])
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
         env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
 
         if pure_phase_object:
-            amplitude = xp.abs(current_object)
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            real = xp.real(current_object)
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
             )
         else:
-            amplitude = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.abs(current_object)) * env_highpass))
+            real = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.real(current_object)) * env_highpass))
             )
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
             )
-        current_object = amplitude * xp.exp(1.0j * phase)
+        current_object = real + 1j * imag
 
         return current_object
 
@@ -1362,7 +1362,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         fix_positions: bool
             If True, positions are not updated
         butterworth_filter: bool
-            If True, applies high-pass butteworth filter
+            Cut-off frequency in A^-1 for butterworth filter
         q_highpass: float
             Cut-off frequency for filter
 
@@ -1488,7 +1488,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int, optional
             Number of iterations to run before applying high-pass butteworth filter
         q_highpass: float
-            Cut-off frequency for high-pass filter
+            Cut-off frequency in A^-1 for butterworth filter
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1770,7 +1770,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
-                utterworth_filter=a0 > butterworth_filter_iter,
+                butterworth_filter=a0 > butterworth_filter_iter,
                 q_highpass=q_highpass,
             )
 

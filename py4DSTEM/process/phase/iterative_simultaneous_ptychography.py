@@ -2036,7 +2036,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         current_object: np.ndarray
             Current object estimate
         q_highpass: float
-            Cut-off frequency
+            Cut-off frequency in A^-1 for butterworth filter
         pure_phase_object: bool
             If True, filtering on phase only
 
@@ -2046,8 +2046,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0])
-        qy = xp.fft.fftfreq(current_object.shape[1])
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
@@ -2056,19 +2056,19 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         electrostatic_obj, _ = current_object
 
         if pure_phase_object:
-            amplitude = xp.abs(electrostatic_obj)
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(electrostatic_obj)) * env_highpass))
+            real = xp.real(electrostatic_obj)
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
             )
         else:
-            amplitude = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.abs(electrostatic_obj)) * env_highpass))
+            real = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.real(electrostatic_obj)) * env_highpass))
             )
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(electrostatic_obj)) * env_highpass))
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
             )
 
-        electrostatic_obj = amplitude * xp.exp(1.0j * phase)
+        electrostatic_obj = real + 1j * imag
         current_object = (electrostatic_obj, None)
 
         return current_object
@@ -2077,17 +2077,16 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self, current_object, q_highpass, pure_phase_object
     ):
         """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
+        High pass butterworth filter
 
         Parameters
         --------
         current_object: np.ndarray
             Current object estimate
-        gaussian_blur_sigma: float
-            Standard deviation of gaussian kernel
+        q_highpass: float
+            Cut-off frequency in A^-1 for butterworth filter
         pure_phase_object: bool
-            If True, gaussian blur performed on phase only
+            If True, filtering on phase only
 
         Returns
         --------
@@ -2096,8 +2095,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0])
-        qy = xp.fft.fftfreq(current_object.shape[1])
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
@@ -2106,30 +2105,30 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         electrostatic_obj, magnetic_obj = current_object
 
         if pure_phase_object:
-            amplitude_e = xp.abs(electrostatic_obj)
-            phase_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(electrostatic_obj)) * env_highpass))
+            real_e = xp.real(electrostatic_obj)
+            imag_e = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
             )
-            amplitude_m = xp.abs(magnetic_obj)
-            phase_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(magnetic_obj)) * env_highpass))
+            real_m = xp.real(magnetic_obj)
+            imag_m = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(magnetic_obj)) * env_highpass))
             )
         else:
-            amplitude_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.abs(electrostatic_obj)) * env_highpass))
+            real_e = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.real(electrostatic_obj)) * env_highpass))
             )
-            phase_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(electrostatic_obj)) * env_highpass))
+            imag_e = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
             )
-            amplitude_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.abs(magnetic_obj)) * env_highpass))
+            real_m = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.real(magnetic_obj)) * env_highpass))
             )
-            phase_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(magnetic_obj)) * env_highpass))
+            imag_m = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(magnetic_obj)) * env_highpass))
             )
 
-        electrostatic_obj = amplitude_e * xp.exp(1.0j * phase_e)
-        magnetic_obj = amplitude_m * xp.exp(1.0j * phase_m)
+        electrostatic_obj = real_e + 1j * imag_e
+        magnetic_obj = real_m + 1j * imag_m
         current_object = (electrostatic_obj, magnetic_obj)
 
         return current_object

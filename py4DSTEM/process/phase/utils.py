@@ -1204,7 +1204,7 @@ def fourier_ring_correlation(
     image2: ndarray
         Second image for FRC
     pixel_size: tuple
-        Size of pixels (x,y)
+        Size of pixels in A (x,y) 
     bin_size: float, optional
         Size of bins for ring profile
     sigma: float, optional
@@ -1262,7 +1262,7 @@ def return_1D_profile(
     intensity: ndarray
         Array for computing 1D profile
     pixel_size: tuple
-        Size of pixels (x,y)
+        Size of pixels in A (x,y)
     bin_size: float, optional
         Size of bins for ring profile
     sigma: float, optional
