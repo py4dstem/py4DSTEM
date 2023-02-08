@@ -1050,7 +1050,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         current_object: np.ndarray
             Current object estimate
         q_highpass: float
-            Cut-off frequency
+            Cut-off frequency in A^-1 for butterworth filter
         pure_phase_object: bool
             If True, filtering on phase only
 
@@ -1068,18 +1068,18 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
 
         if pure_phase_object:
-            amplitude = xp.abs(current_object)
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            real = xp.real(current_object)
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
             )
         else:
-            amplitude = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.abs(current_object)) * env_highpass))
+            real = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.real(current_object)) * env_highpass))
             )
-            phase = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.angle(current_object)) * env_highpass))
+            imag = xp.real(
+                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
             )
-        current_object = amplitude * xp.exp(1.0j * phase)
+        current_object = real + 1j * imag
 
         return current_object
 

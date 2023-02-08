@@ -1208,9 +1208,15 @@ def estimate_global_transformation_ransac(
 def fourier_ring_correlation(
     image_1,
     image_2,
-    pixel_size=(1, 1),
-    sigma=None,
+    pixel_size=None,
     bin_size=None,
+    sigma=None,
+    align_images=False,
+    upsample_factor=8,
+    device="cpu",
+    plot_frc=True,
+    frc_color="red",
+    half_bit_color="blue",
 ):
     """
     Computes fourier ring correlation (FRC) of 2 arrays.
@@ -1219,15 +1225,27 @@ def fourier_ring_correlation(
     Parameters
      ----------
     image1: ndarray
-        First image for FRC
+        first image for FRC
     image2: ndarray
-        Second image for FRC
+        second image for FRC
     pixel_size: tuple
-        Size of pixels in A (x,y) 
+        size of pixels in A (x,y)
     bin_size: float, optional
-        Size of bins for ring profile
+        size of bins for ring profile
     sigma: float, optional
         standard deviation for Gaussian kernel
+    align_images: bool
+        if True, aligns images using DFT upsampling of cross correlation.
+    upsample factor: int
+        if align_images, upsampling for correlation. Must be greater than 2.
+    device: str, optional
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    plot_frc: bool, optional
+        if True, plots frc
+    frc_color: str, optional
+        color of FRC line in plot
+    half_bit_color: str, optional
+        color of half-bit line
 
     Returns
     --------
@@ -1235,43 +1253,84 @@ def fourier_ring_correlation(
         spatial frequencies of FRC
     frc: ndarray
         fourier ring correlation
-    half_bin: ndarray
+    half_bit: ndarray
         half-bit criteria
     """
-    fft_image_1 = np.fft.fft2(image_1)
-    fft_image_2 = np.fft.fft2(image_2)
 
-    cc_mixed = np.real(fft_image_1 * np.conj(fft_image_2))
-    cc_image_1 = np.abs(fft_image_1) ** 2
-    cc_image_2 = np.abs(fft_image_2) ** 2
+    if align_images:
+        from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
+
+        image_2 = align_and_shift_images(
+            image_1,
+            image_2,
+            upsample_factor=upsample_factor,
+            device=device,
+        )
+
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    fft_image_1 = xp.fft.fft2(image_1)
+    fft_image_2 = xp.fft.fft2(image_2)
+
+    cc_mixed = xp.real(fft_image_1 * xp.conj(fft_image_2))
+    cc_image_1 = xp.abs(fft_image_1) ** 2
+    cc_image_2 = xp.abs(fft_image_2) ** 2
 
     # take 1D profile
     q_frc, cc_mixed_1D, n = return_1D_profile(
-        cc_mixed, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+        cc_mixed,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
     )
     _, cc_image_1_1D, _ = return_1D_profile(
-        cc_image_1, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+        cc_image_1, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size, device=device
     )
     _, cc_image_2_1D, _ = return_1D_profile(
-        cc_image_2, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size
+        cc_image_2,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
     )
 
     frc = cc_mixed_1D / ((cc_image_1_1D * cc_image_2_1D) ** 0.5)
-    half_bit = 2 / np.sqrt(n / 2)
+    half_bit = 2 / xp.sqrt(n / 2)
 
-    ind_max = np.argmax(n)
-    q_frc = q_frc[0:ind_max]
-    frc = frc[0:ind_max]
-    half_bit = half_bit[0:ind_max]
+    ind_max = xp.argmax(n)
+    q_frc = q_frc[1:ind_max]
+    frc = frc[1:ind_max]
+    half_bit = half_bit[1:ind_max]
+
+    if plot_frc:
+        fig, ax = plt.subplots()
+        if device == "gpu":
+            ax.plot(q_frc.get(), frc.get(), label="FRC", color=frc_color)
+            ax.plot(q_frc.get(), half_bit.get(), label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.get().max()])
+        else:
+            ax.plot(q_frc, frc, label="FRC", color=frc_color)
+            ax.plot(q_frc, half_bit, label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.max()])
+        ax.legend()
+        ax.set_ylim([0, 1])
+
+        if pixel_size is None:
+            ax.set_xlabel(r"Spatial frequency (pixels)")
+        else:
+            ax.set_xlabel(r"Spatial frequency ($\AA$)")
+        ax.set_ylabel("FRC")
 
     return q_frc, frc, half_bit
 
 
 def return_1D_profile(
-    intensity,
-    pixel_size=(1, 1),
-    bin_size=None,
-    sigma=None,
+    intensity, pixel_size=None, bin_size=None, sigma=None, device="cpu"
 ):
     """
     Return 1D radial profile from corner centered array
@@ -1286,6 +1345,8 @@ def return_1D_profile(
         Size of bins for ring profile
     sigma: float, optional
         standard deviation for Gaussian kernel
+    device: str, optional
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
 
     Returns
     --------
@@ -1296,9 +1357,18 @@ def return_1D_profile(
     n: ndarray
         Number of pixels in each bin
     """
-    x = np.fft.fftfreq(intensity.shape[0], pixel_size[0])
-    y = np.fft.fftfreq(intensity.shape[1], pixel_size[1])
-    q = np.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
+    if pixel_size is None:
+        pixel_size = (1, 1)
+
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
+    y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
+    q = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
     q = q.ravel()
 
     intensity = intensity.ravel()
@@ -1306,20 +1376,20 @@ def return_1D_profile(
     if bin_size is None:
         bin_size = q[1] - q[0]
 
-    q_bins = np.arange(0, q.max() + bin_size, bin_size)
+    q_bins = xp.arange(0, q.max() + bin_size, bin_size)
 
     inds = q / bin_size
-    inds_f = np.floor(inds).astype("int")
+    inds_f = xp.floor(inds).astype("int")
     d_ind = inds - inds_f
 
-    nf = np.bincount(inds_f, weights=(1 - d_ind), minlength=q_bins.shape[0])
-    nc = np.bincount(inds_f + 1, weights=(d_ind), minlength=q_bins.shape[0])
+    nf = xp.bincount(inds_f, weights=(1 - d_ind), minlength=q_bins.shape[0])
+    nc = xp.bincount(inds_f + 1, weights=(d_ind), minlength=q_bins.shape[0])
     n = nf + nc
 
-    I_bins0 = np.bincount(
+    I_bins0 = xp.bincount(
         inds_f, weights=intensity * (1 - d_ind), minlength=q_bins.shape[0]
     )
-    I_bins1 = np.bincount(
+    I_bins1 = xp.bincount(
         inds_f + 1, weights=intensity * (d_ind), minlength=q_bins.shape[0]
     )
 

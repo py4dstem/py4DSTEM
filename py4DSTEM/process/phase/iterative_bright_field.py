@@ -5,7 +5,7 @@ Module for reconstructing virtual bright field images by aligning each virtual B
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-from py4DSTEM.process.utils.multicorr import upsampled_correlation
+from py4DSTEM.process.utils.cross_correlate import align_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.visualize import show
@@ -776,36 +776,3 @@ class BFreconstruction:
 
         if return_val:
             return self.recon_BF_corr
-
-
-def align_images(
-    G1,
-    G2,
-    upsample_factor,
-):
-    """
-    Alignment of two images using DFT upsampling of cross correlation.
-    Returns: xy_shift [pixels]
-    """
-
-    # cross correlation
-    cc = G1 * np.conj(G2)
-    cc_real = np.real(np.fft.ifft2(cc))
-
-    # local max
-    x0, y0 = np.unravel_index(cc_real.argmax(), cc.shape)
-
-    # half pixel shifts
-    x_inds = np.mod(x0 + np.arange(-1, 2), cc.shape[0]).astype("int")
-    y_inds = np.mod(y0 + np.arange(-1, 2), cc.shape[0]).astype("int")
-    vx = cc_real[x_inds, y0]
-    vy = cc_real[x0, y_inds]
-    dx = (vx[2] - vx[0]) / (4 * vx[1] - 2 * vx[2] - 2 * vx[0])
-    dy = (vy[2] - vy[0]) / (4 * vy[1] - 2 * vy[2] - 2 * vy[0])
-    x0 = np.round((x0 + dx) * 2.0) / 2.0
-    y0 = np.round((y0 + dy) * 2.0) / 2.0
-
-    # subpixel shifts
-    xy_shift = upsampled_correlation(cc, upsample_factor, np.array((x0, y0)))
-
-    return xy_shift
