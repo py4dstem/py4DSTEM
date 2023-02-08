@@ -198,7 +198,6 @@ class Crystal_Phase:
                 masterintensitylist[ind][columns_masterintensitylist-1]=temporary_pl_intensities[d]
 
             else:
-                continue
                 ## The point list is not in the mega list of point list so the point list last row of masterpointlist
                 masterpointlist = np.vstack((masterpointlist,bragg_peak_point))
                 ## Add a row to the intensity list such that all the remaining intensity lists should be 0 but only the new bragg intensity list is non zero but intensity power
