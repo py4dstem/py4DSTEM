@@ -19,6 +19,12 @@ except ImportError:
     def clear_output(wait=True):
         pass
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 def radial_reduction(
     ar,
     x0,
