@@ -225,7 +225,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         datacube: DataCube,
         require_calibrations: bool = False,
-        dp_mask: np.ndarray = None,
+        
     ):
         """
         Common method to extract intensities and calibrations from datacube.
@@ -236,9 +236,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
-        dp_mask: ndarray
-            If not None, apply mask to datacube amplitude
-
+       
         Assigns
         --------
         self._intensities: (Rx,Ry,Qx,Qy) xp.ndarray
@@ -274,16 +272,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         # Copies intensities to device casting to float32
         xp = self._xp
         self._intensities = xp.asarray(datacube.data, dtype=xp.float32)
-
-        if dp_mask is not None:
-            if dp_mask.shape != self._intensities.shape[-2:]:
-                raise ValueError(
-                    (
-                        f"Mask shape should be (Qx,Qy):{self._intensities.shape[-2:]}, "
-                        f"not {dp_mask.shape}"
-                    )
-                )
-            self._intensities *= xp.asarray(dp_mask, dtype=xp.float32)
 
         self._intensities_shape = np.array(self._intensities.shape)
         self._intensities_sum = xp.sum(self._intensities, axis=(-2, -1))
@@ -372,6 +360,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     def _calculate_intensities_center_of_mass(
         self,
         intensities: np.ndarray,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
     ):
         """
@@ -381,6 +370,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ----------
         intensities: (Rx,Ry,Qx,Qy) xp.ndarray
             Raw intensities array stored on device, with dtype xp.float32
+        dp_mask: ndarray
+            If not None, apply mask to datacube amplitude
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
 
@@ -413,13 +404,26 @@ class PhaseReconstruction(metaclass=ABCMeta):
         kx = xp.arange(self._intensities_shape[-2], dtype=xp.float32)
         ky = xp.arange(self._intensities_shape[-1], dtype=xp.float32)
         kya, kxa = xp.meshgrid(ky, kx)
-
-        # calculate CoM
+        
+        # calculate CoM 
+        if dp_mask is not None:
+            if dp_mask.shape != self._intensities.shape[-2:]:
+                raise ValueError(
+                    (
+                        f"Mask shape should be (Qx,Qy):{self._intensities.shape[-2:]}, "
+                        f"not {dp_mask.shape}"
+                    )
+                )
+            intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
+        else: 
+            intensities_mask = intensities
+        
+        intensities_sum = xp.sum(intensities_mask, axis = (-2,-1))
         self._com_measured_x = (
-            xp.sum(intensities * kxa[None, None], axis=(-2, -1)) / self._intensities_sum
+            xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1)) / intensities_sum
         )
         self._com_measured_y = (
-            xp.sum(intensities * kya[None, None], axis=(-2, -1)) / self._intensities_sum
+            xp.sum(intensities_mask * kya[None, None], axis=(-2, -1)) / intensities_sum
         )
 
         # Fit function to center of mass
@@ -428,8 +432,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
             (asnumpy(self._com_measured_x), asnumpy(self._com_measured_y)),
             fitfunction=fit_function,
         )
-        self._com_fitted_x = xp.asarray(or_fits[0])
-        self._com_fitted_y = xp.asarray(or_fits[1])
+        
+        self._com_fitted_x = xp.asarray(xp.mean(or_fits[0])*xp.ones_like(or_fits[0]))
+        self._com_fitted_y = xp.asarray(xp.mean(or_fits[1])*xp.ones_like(or_fits[1]))
 
         # fix CoM units
         self._com_normalized_x = (

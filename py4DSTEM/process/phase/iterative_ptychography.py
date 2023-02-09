@@ -219,11 +219,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=True, dp_mask=self._dp_mask
+            self._datacube, require_calibrations=True,
         )
 
         self._calculate_intensities_center_of_mass(
             self._intensities,
+            dp_mask = self._dp_mask,
             fit_function=fit_function,
         )
 
@@ -300,7 +301,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                         self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True
                     )
                 )
-
+                
             self._probe = (
                 ComplexProbe(
                     gpts=self._region_of_interest_shape,
