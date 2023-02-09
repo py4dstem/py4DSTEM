@@ -178,7 +178,7 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
             yshift (float): shift along axis 1 (y) in pixels
             periodic (bool): flag for periodic boundary conditions
             bilinear (bool): flag for bilinear image shifts
-            calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+            device(str): calculation device will be perfomed on. Must be 'cpu' or 'gpu'
         Returns:
             (array) the shifted array
     """

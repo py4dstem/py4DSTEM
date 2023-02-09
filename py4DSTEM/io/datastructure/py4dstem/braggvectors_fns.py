@@ -118,6 +118,7 @@ def fit_origin(
     Args:
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+            or 'constant'
         robust (bool, optional): If set to True, fit will be repeated with outliers
             removed.
         robust_steps (int, optional): Optional parameter. Number of robust iterations
@@ -147,11 +148,13 @@ def fit_origin(
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
             tuple(q_meas),
             mask = mask,
+            fitfunction = fitfunction,
             )
     else:
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
-            tuple(q_meas))
-
+            tuple(q_meas),
+            fitfunction = fitfunction,
+        )
     # try to add to calibration
     try:
         self.calibration.set_origin([qx0_fit,qy0_fit])

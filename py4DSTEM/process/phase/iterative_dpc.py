@@ -128,11 +128,12 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=False, dp_mask=self._dp_mask
+            self._datacube, require_calibrations=False, 
         )
 
         self._calculate_intensities_center_of_mass(
             self._intensities,
+            dp_mask=self._dp_mask,
             fit_function=fit_function,
         )
 
