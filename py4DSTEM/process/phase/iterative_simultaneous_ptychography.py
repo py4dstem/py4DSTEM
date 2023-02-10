@@ -47,7 +47,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     Parameters
     ----------
     datacube: Sequence[DataCube]
-        Set of input 4D diffraction pattern intensities
+        Tuple of input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
     simultaneous_measurements_mode: str, optional
@@ -284,7 +284,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
-            measurement_0, require_calibrations=True, dp_mask=self._dp_mask
+            measurement_0, require_calibrations=True,
         )
 
         self._calculate_intensities_center_of_mass(
