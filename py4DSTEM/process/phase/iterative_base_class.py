@@ -1392,10 +1392,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         angle_guess=None,
         defocus_guess=None,
         transpose=None,
-        angle_percent_change=5,
-        defocus_percent_change=5,
-        num_angle_steps=5,
-        num_defocus_steps=5,
+        angle_step_size=1,
+        defocus_step_size=20,
+        num_angle_values=5,
+        num_defocus_values=5,
         max_iter=5,
         plot_reconstructions=True,
         plot_convergence=True,
@@ -1409,24 +1409,27 @@ class PhaseReconstruction(metaclass=ABCMeta):
         Parameters
         ----------
         angle_guess: float (degrees), optional
-            initial starting guess for rotation angle between real and reciprocal space.
-            if None, uses current initialized values.
-        defocus_guess: float (degrees), optional
-            initial starting guess for defocus.
-            if None, uses current initialized values.
-        angle_percent_change: float, optional
-            percent to change rotation angle between real and reciprocal space for
-            each step.
-        defocus_percent_change: float, optional
-            percent to change defocus for each step.
-        num_angle_steps: int, optional
-            number of steps to take for changing angle
-        num_defocus_steps: int,optional
-            number of steps to take for changing the defocus
+            initial starting guess for rotation angle between real and reciprocal space
+            if None, uses current initialized values
+        defocus_guess: float (A), optional
+            initial starting guess for defocus
+            if None, uses current initialized values
+        angle_step_size: float (degrees), optional
+            size of change of rotation angle between real and reciprocal space for
+            each step in parameter space
+        defocus_step_size: float (A), optional
+            size of change of defocus for each step in parameter space
+        num_angle_values: int, optional
+            number of values of angle to test, must be >= 1.
+        num_defocus_values: int,optional
+            number of values of defocus to test, must be >= 1
         max_iter: int, optional
-            number of iterations to run in ptychographic reconstruction.
+            number of iterations to run in ptychographic reconstruction
         plot_reconstructions: bool, optional
             if True, plot phase of reconstructed objects
+            if MultislicePtychographicReconstruction plots sum of slices
+            if SimultaneousPtychographicReconstruction plot electrostatic
+            and magnetic separately
         plot_convergence: bool, optional
             if True, plots error for each iteration for each reconstruction.
         return_values: bool, optional
@@ -1434,8 +1437,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         Returns
         -------
-        objects: np.ndarray
-            reconstructed objects in parameter space
+        objects: list
+            reconstructed objects
         convergence: np.ndarray
             array of convergence values from reconstructions
         titles: np.ndarray
@@ -1449,20 +1452,22 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if transpose is None:
             transpose = self._rotation_best_transpose
 
+        if num_angle_values == 1:
+            angle_step_size = 0
+
+        if num_defocus_values == 1:
+            defocus_step_size = 0
+
         angles = np.linspace(
-            angle_guess
-            - angle_guess * angle_percent_change / 100 * num_angle_steps / 2,
-            angle_guess
-            + angle_guess * angle_percent_change / 100 * num_angle_steps / 2,
-            num_angle_steps,
+            angle_guess - angle_step_size,
+            angle_guess + angle_step_size,
+            num_angle_values,
         )
 
         defocus_values = np.linspace(
-            defocus_guess
-            - defocus_guess * defocus_percent_change / 100 * num_defocus_steps / 2,
-            defocus_guess
-            + defocus_guess * defocus_percent_change / 100 * num_defocus_steps / 2,
-            num_defocus_steps,
+            defocus_guess - defocus_step_size,
+            defocus_guess + defocus_step_size,
+            num_defocus_values,
         )
 
         convergence = []
@@ -1475,6 +1480,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         for angle, defocus in tqdmnd(angles, defocus_values):
             self._polar_parameters["C10"] = -defocus
             self._probe = None
+            self._object = None
             self._verbose = False
             self.preprocess(
                 force_com_rotation=angle,
@@ -1494,7 +1500,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 f" angle = {angle:.1f} \n defocus = {defocus:.1f} \n error = {self.error:.3e}"
             )
 
-        objects = np.asarray(objects)
         convergence = np.asarray(convergence)
         self._verbose = verbose
 
@@ -1502,18 +1507,59 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if plot_reconstructions:
             from py4DSTEM.visualize import show_image_grid
 
-            show_image_grid(
-                get_ar=lambda i: np.angle(
-                    self._crop_rotate_object_fov(objects[i], padding=0)
-                ),
-                H=num_angle_steps,
-                W=num_defocus_steps,
-                title=titles,
-                cmap="magma",
-            )
+            if hasattr(self, "_num_slices"):
+                show_image_grid(
+                    get_ar=lambda i: np.angle(
+                        self._crop_rotate_object_fov(
+                            np.sum(np.asarray(objects[i]), axis=0), padding=0
+                        )
+                    ),
+                    H=num_angle_values,
+                    W=num_defocus_values,
+                    title=titles,
+                    cmap="magma",
+                )
+            elif hasattr(self, "_sim_recon_mode"):
+                show_image_grid(
+                    get_ar=lambda i: np.angle(
+                        self._crop_rotate_object_fov(
+                            np.asarray(objects[i][0]), padding=0
+                        )
+                    ),
+                    H=num_angle_values,
+                    W=num_defocus_values,
+                    title=titles,
+                    suptitle="electrostatic",
+                    cmap="magma",
+                )
+
+                if objects[0][1] is not None:
+                    show_image_grid(
+                        get_ar=lambda i: np.angle(
+                            self._crop_rotate_object_fov(
+                                np.asarray(objects[i][1]), padding=0
+                            )
+                        ),
+                        H=num_angle_values,
+                        W=num_defocus_values,
+                        title=titles,
+                        suptitle="magnetic",
+                        cmap="magma",
+                    )
+
+            else:
+                show_image_grid(
+                    get_ar=lambda i: np.angle(
+                        self._crop_rotate_object_fov(np.asarray(objects[i]), padding=0)
+                    ),
+                    H=num_angle_values,
+                    W=num_defocus_values,
+                    title=titles,
+                    cmap="magma",
+                )
 
         if plot_convergence:
-            fig, ax = plt.subplots(num_angle_steps, num_defocus_steps)
+            fig, ax = plt.subplots(num_angle_values, num_defocus_values)
             for a0, axs in enumerate(ax.flat):
                 axs.plot(convergence[a0])
                 axs.semilogy(
