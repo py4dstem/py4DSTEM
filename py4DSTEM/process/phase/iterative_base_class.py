@@ -433,8 +433,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             fitfunction=fit_function,
         )
 
-        self._com_fitted_x = xp.asarray(xp.mean(or_fits[0]) * xp.ones_like(or_fits[0]))
-        self._com_fitted_y = xp.asarray(xp.mean(or_fits[1]) * xp.ones_like(or_fits[1]))
+        self._com_fitted_x = xp.asarray(or_fits[0])
+        self._com_fitted_y = xp.asarray(or_fits[1])
 
         # fix CoM units
         self._com_normalized_x = (
