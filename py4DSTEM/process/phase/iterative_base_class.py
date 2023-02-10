@@ -24,6 +24,7 @@ from py4DSTEM.process.utils import (
     fourier_resample,
     get_shifted_ar,
 )
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -225,7 +226,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         self,
         datacube: DataCube,
         require_calibrations: bool = False,
-        
     ):
         """
         Common method to extract intensities and calibrations from datacube.
@@ -236,7 +236,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
-       
+
         Assigns
         --------
         self._intensities: (Rx,Ry,Qx,Qy) xp.ndarray
@@ -404,8 +404,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         kx = xp.arange(self._intensities_shape[-2], dtype=xp.float32)
         ky = xp.arange(self._intensities_shape[-1], dtype=xp.float32)
         kya, kxa = xp.meshgrid(ky, kx)
-        
-        # calculate CoM 
+
+        # calculate CoM
         if dp_mask is not None:
             if dp_mask.shape != self._intensities.shape[-2:]:
                 raise ValueError(
@@ -415,10 +415,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     )
                 )
             intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
-        else: 
+        else:
             intensities_mask = intensities
-        
-        intensities_sum = xp.sum(intensities_mask, axis = (-2,-1))
+
+        intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
         self._com_measured_x = (
             xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1)) / intensities_sum
         )
@@ -432,9 +432,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
             (asnumpy(self._com_measured_x), asnumpy(self._com_measured_y)),
             fitfunction=fit_function,
         )
-        
-        self._com_fitted_x = xp.asarray(xp.mean(or_fits[0])*xp.ones_like(or_fits[0]))
-        self._com_fitted_y = xp.asarray(xp.mean(or_fits[1])*xp.ones_like(or_fits[1]))
+
+        self._com_fitted_x = xp.asarray(xp.mean(or_fits[0]) * xp.ones_like(or_fits[0]))
+        self._com_fitted_y = xp.asarray(xp.mean(or_fits[1]) * xp.ones_like(or_fits[1]))
 
         # fix CoM units
         self._com_normalized_x = (
@@ -1386,3 +1386,144 @@ class PhaseReconstruction(metaclass=ABCMeta):
         positions[:, 1] *= self.sampling[1]
 
         return asnumpy(positions)
+
+    def tune_angle_and_defocus(
+        self,
+        angle_guess=None,
+        defocus_guess=None,
+        transpose=None,
+        angle_percent_change=5,
+        defocus_percent_change=5,
+        num_angle_steps=5,
+        num_defocus_steps=5,
+        max_iter=5,
+        plot_reconstructions=True,
+        plot_convergence=True,
+        return_values=False,
+        **kwargs,
+    ):
+        """
+        Run reconstructions over a parameters space of angles and
+        defocus values.
+
+        Parameters
+        ----------
+        angle_guess: float (degrees), optional
+            initial starting guess for rotation angle between real and reciprocal space.
+            if None, uses current initialized values.
+        defocus_guess: float (degrees), optional
+            initial starting guess for defocus.
+            if None, uses current initialized values.
+        angle_percent_change: float, optional
+            percent to change rotation angle between real and reciprocal space for
+            each step.
+        defocus_percent_change: float, optional
+            percent to change defocus for each step.
+        num_angle_steps: int, optional
+            number of steps to take for changing angle
+        num_defocus_steps: int,optional
+            number of steps to take for changing the defocus
+        max_iter: int, optional
+            number of iterations to run in ptychographic reconstruction.
+        plot_reconstructions: bool, optional
+            if True, plot phase of reconstructed objects
+        plot_convergence: bool, optional
+            if True, plots error for each iteration for each reconstruction.
+        return_values: bool, optional
+            if True, returns objects, convergence, titles
+
+        Returns
+        -------
+        objects: np.ndarray
+            reconstructed objects in parameter space
+        convergence: np.ndarray
+            array of convergence values from reconstructions
+        titles: np.ndarray
+            array of labels for reconstructions
+        """
+        # calculate angles and defocus values to test
+        if angle_guess is None:
+            angle_guess = self._rotation_best_rad * 180 / np.pi
+        if defocus_guess is None:
+            defocus_guess = -self._polar_parameters["C10"]
+        if transpose is None:
+            transpose = self._rotation_best_transpose
+
+        angles = np.linspace(
+            angle_guess
+            - angle_guess * angle_percent_change / 100 * num_angle_steps / 2,
+            angle_guess
+            + angle_guess * angle_percent_change / 100 * num_angle_steps / 2,
+            num_angle_steps,
+        )
+
+        defocus_values = np.linspace(
+            defocus_guess
+            - defocus_guess * defocus_percent_change / 100 * num_defocus_steps / 2,
+            defocus_guess
+            + defocus_guess * defocus_percent_change / 100 * num_defocus_steps / 2,
+            num_defocus_steps,
+        )
+
+        convergence = []
+        objects = []
+        titles = []
+
+        verbose = self._verbose
+
+        # run loop
+        for angle, defocus in tqdmnd(angles, defocus_values):
+            self._polar_parameters["C10"] = -defocus
+            self._probe = None
+            self._verbose = False
+            self.preprocess(
+                force_com_rotation=angle,
+                force_com_transpose=transpose,
+                plot_center_of_mass=False,
+                plot_rotation=False,
+                plot_probe_overlaps=False,
+            )
+
+            self.reconstruct(
+                reset=True, store_iterations=True, max_iter=max_iter, **kwargs
+            )
+
+            objects.append(self.object)
+            convergence.append(self.error_iterations)
+            titles.append(
+                f" angle = {angle:.1f} \n defocus = {defocus:.1f} \n error = {self.error:.3e}"
+            )
+
+        objects = np.asarray(objects)
+        convergence = np.asarray(convergence)
+        self._verbose = verbose
+
+        # plotting
+        if plot_reconstructions:
+            from py4DSTEM.visualize import show_image_grid
+
+            show_image_grid(
+                get_ar=lambda i: np.angle(
+                    self._crop_rotate_object_fov(objects[i], padding=0)
+                ),
+                H=num_angle_steps,
+                W=num_defocus_steps,
+                title=titles,
+                cmap="magma",
+            )
+
+        if plot_convergence:
+            fig, ax = plt.subplots(num_angle_steps, num_defocus_steps)
+            for a0, axs in enumerate(ax.flat):
+                axs.plot(convergence[a0])
+                axs.semilogy(
+                    np.arange(len(convergence[a0])), convergence[a0], color="blue"
+                )
+                axs.set_xlabel("Iteration Number")
+                axs.set_ylabel("Log RMS error")
+                axs.yaxis.tick_right()
+                axs.set_title(titles[a0], fontsize=10)
+            plt.tight_layout()
+
+        if return_values:
+            return objects, convergence, titles
