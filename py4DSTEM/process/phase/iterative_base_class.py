@@ -1459,14 +1459,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
             defocus_step_size = 0
 
         angles = np.linspace(
-            angle_guess - angle_step_size,
-            angle_guess + angle_step_size,
+            angle_guess - angle_step_size * (num_angle_values - 1) / 2,
+            angle_guess + angle_step_size * (num_angle_values - 1) / 2,
             num_angle_values,
         )
 
         defocus_values = np.linspace(
-            defocus_guess - defocus_step_size,
-            defocus_guess + defocus_step_size,
+            defocus_guess - defocus_step_size * (num_defocus_values - 1) / 2,
+            defocus_guess + defocus_step_size * (num_defocus_values - 1) / 2,
             num_defocus_values,
         )
 
