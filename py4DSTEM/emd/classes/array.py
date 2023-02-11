@@ -470,10 +470,10 @@ class Array(Node):
         return Array(
             data = self.data[..., idx],
             name = name if name is not None else self.name+'_'+label,
-            units = self.units[:-1],
-            dims = self.dims[:-1],
-            dim_units = self.dim_units[:-1],
-            dim_names = self.dim_names[:-1]
+            units = self.units,
+            dims = self.dims,
+            dim_units = self.dim_units,
+            dim_names = self.dim_names
         )
 
     def __getitem__(self,x):
