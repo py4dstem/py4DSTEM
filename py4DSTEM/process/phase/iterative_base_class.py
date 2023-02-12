@@ -8,6 +8,7 @@ from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
 from scipy.ndimage import rotate
 
@@ -1427,13 +1428,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
             number of iterations to run in ptychographic reconstruction
         plot_reconstructions: bool, optional
             if True, plot phase of reconstructed objects
-            if MultislicePtychographicReconstruction plots sum of slices
-            if SimultaneousPtychographicReconstruction plot electrostatic
-            and magnetic separately
         plot_convergence: bool, optional
             if True, plots error for each iteration for each reconstruction.
         return_values: bool, optional
-            if True, returns objects, convergence, titles
+            if True, returns objects, convergence
 
         Returns
         -------
@@ -1441,8 +1439,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
             reconstructed objects
         convergence: np.ndarray
             array of convergence values from reconstructions
-        titles: np.ndarray
-            array of labels for reconstructions
         """
         # calculate angles and defocus values to test
         if angle_guess is None:
@@ -1470,18 +1466,50 @@ class PhaseReconstruction(metaclass=ABCMeta):
             num_defocus_values,
         )
 
-        convergence = []
-        objects = []
-        titles = []
+        if return_values:
+            convergence = []
+            objects = []
 
-        verbose = self._verbose
+        # current initialized values
+        current_verbose = self._verbose
+        current_defocus = -self._polar_parameters["C10"]
+        current_rotation_deg = self._rotation_best_rad * 180 / np.pi
+        current_transpose = self._rotation_best_transpose
 
-        # run loop
-        for angle, defocus in tqdmnd(angles, defocus_values):
+        # Gridspec to plot on
+        if plot_reconstructions:
+            if plot_convergence:
+                spec = GridSpec(
+                    ncols=num_defocus_values,
+                    nrows=num_angle_values * 2,
+                    height_ratios=[1, 1 / 4] * num_angle_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_defocus_values, 5 * num_angle_values)
+                )
+            else:
+                spec = GridSpec(
+                    ncols=num_defocus_values,
+                    nrows=num_angle_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_defocus_values, 4 * num_angle_values)
+                )
+
+            fig = plt.figure(figsize=figsize)
+
+        # run loop and plot along the way
+        self._verbose = False
+        for flat_index, (angle, defocus) in enumerate(
+            tqdmnd(angles, defocus_values, desc="Tuning angle and defocus")
+        ):
             self._polar_parameters["C10"] = -defocus
             self._probe = None
             self._object = None
-            self._verbose = False
             self.preprocess(
                 force_com_rotation=angle,
                 force_com_transpose=transpose,
@@ -1494,82 +1522,55 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 reset=True, store_iterations=True, max_iter=max_iter, **kwargs
             )
 
-            objects.append(self.object)
-            convergence.append(self.error_iterations)
-            titles.append(
-                f" angle = {angle:.1f} \n defocus = {defocus:.1f} \n error = {self.error:.3e}"
-            )
-
-        convergence = np.asarray(convergence)
-        self._verbose = verbose
-
-        # plotting
-        if plot_reconstructions:
-            from py4DSTEM.visualize import show_image_grid
-
-            if hasattr(self, "_num_slices"):
-                show_image_grid(
-                    get_ar=lambda i: np.angle(
-                        self._crop_rotate_object_fov(
-                            np.sum(np.asarray(objects[i]), axis=0), padding=0
-                        )
-                    ),
-                    H=num_angle_values,
-                    W=num_defocus_values,
-                    title=titles,
-                    cmap="magma",
-                )
-            elif hasattr(self, "_sim_recon_mode"):
-                show_image_grid(
-                    get_ar=lambda i: np.angle(
-                        self._crop_rotate_object_fov(
-                            np.asarray(objects[i][0]), padding=0
-                        )
-                    ),
-                    H=num_angle_values,
-                    W=num_defocus_values,
-                    title=titles,
-                    suptitle="electrostatic",
-                    cmap="magma",
+            if plot_reconstructions:
+                row_index, col_index = np.unravel_index(
+                    flat_index, (num_angle_values, num_defocus_values)
                 )
 
-                if objects[0][1] is not None:
-                    show_image_grid(
-                        get_ar=lambda i: np.angle(
-                            self._crop_rotate_object_fov(
-                                np.asarray(objects[i][1]), padding=0
-                            )
-                        ),
-                        H=num_angle_values,
-                        W=num_defocus_values,
-                        title=titles,
-                        suptitle="magnetic",
-                        cmap="magma",
+                if plot_convergence:
+                    object_ax = fig.add_subplot(spec[row_index * 2, col_index])
+                    convergence_ax = fig.add_subplot(spec[row_index * 2 + 1, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=convergence_ax,
+                        cbar=True,
+                    )
+                    convergence_ax.yaxis.tick_right()
+                else:
+                    object_ax = fig.add_subplot(spec[row_index, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=None,
+                        cbar=True,
                     )
 
-            else:
-                show_image_grid(
-                    get_ar=lambda i: np.angle(
-                        self._crop_rotate_object_fov(np.asarray(objects[i]), padding=0)
-                    ),
-                    H=num_angle_values,
-                    W=num_defocus_values,
-                    title=titles,
-                    cmap="magma",
+                object_ax.set_title(
+                    f" angle = {angle:.1f} °, defocus = {defocus:.1f} A \n error = {self.error:.3e}"
                 )
+                object_ax.set_xticks([])
+                object_ax.set_yticks([])
 
-        if plot_convergence:
-            fig, ax = plt.subplots(num_angle_values, num_defocus_values)
-            for a0, axs in enumerate(ax.flat):
-                axs.plot(convergence[a0])
-                axs.semilogy(
-                    np.arange(len(convergence[a0])), convergence[a0], color="blue"
-                )
-                axs.set_xlabel("Iteration Number")
-                axs.set_ylabel("Log RMS error")
-                axs.yaxis.tick_right()
-                axs.set_title(titles[a0], fontsize=10)
-            plt.tight_layout()
+            if return_values:
+                objects.append(self.object)
+                convergence.append(self.error_iterations.copy())
+
+        # initialize back to pre-tuning values
+        self._polar_parameters["C10"] = -current_defocus
+        self._probe = None
+        self._object = None
+        self.preprocess(
+            force_com_rotation=current_rotation_deg,
+            force_com_transpose=current_transpose,
+            plot_center_of_mass=False,
+            plot_rotation=False,
+            plot_probe_overlaps=False,
+        )
+        self._verbose = current_verbose
+
+        if plot_reconstructions:
+            spec.tight_layout(fig)
 
         if return_values:
-            return objects, convergence, titles
+            return objects, convergence
