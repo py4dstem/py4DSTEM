@@ -180,7 +180,9 @@ def write(
         mode = 'w'
 
     # handle rootless data
+    added_a_root = False
     if data._root is None:
+        added_a_root = True
         root = Root(name=data.name)
         root.add_to_tree(data)
     else:
@@ -321,6 +323,9 @@ def write(
                                     data
                                 )
 
+    # if a root was added, remove it
+    if added_a_root:
+        data._root = None
 
 
 
