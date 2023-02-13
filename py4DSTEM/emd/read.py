@@ -1,8 +1,6 @@
 # Reader functions
 # for native and non-native file types
 
-# TODO: verify if print_h5 fn is working
-
 import h5py
 import pathlib
 from os.path import exists, splitext, basename, dirname, join
@@ -286,8 +284,6 @@ def _populate_tree(node,group):
 
 
 # Print the HDF5 filetree to screen
-
-# TODO: check if these are working...
 
 def print_h5_tree(filepath, show_metadata=False):
     """
