@@ -192,7 +192,8 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
     if bilinear is False:
         nx, ny = xp.shape(ar)
         qx, qy = make_Fourier_coords2D(nx, ny, 1)
-        nx, ny = float(nx), float(ny)
+        qx = xp.asarray(qx)
+        qy = xp.asarray(qy)
 
         w = xp.exp(-(2j * xp.pi) * ((yshift * qy) + (xshift * qx)))
         shifted_ar = xp.real(xp.fft.ifft2((xp.fft.fft2(ar)) * w))

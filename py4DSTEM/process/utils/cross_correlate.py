@@ -66,7 +66,7 @@ def get_shift(ar1, ar2, corrPower=1):
     return xshift, yshift
 
 
-def align_images(
+def align_images_fourier(
     G1,
     G2,
     upsample_factor,
@@ -92,9 +92,11 @@ def align_images(
 
     if device == "cpu":
         xp = np
-
     elif device == "gpu":
         xp = cp
+
+    G1 = xp.asarray(G1)
+    G2 = xp.asarray(G2)
 
     # cross correlation
     cc = G1 * xp.conj(G2)
@@ -105,19 +107,20 @@ def align_images(
 
     # half pixel shifts
     x_inds = xp.mod(x0 + xp.arange(-1, 2), cc.shape[0]).astype("int")
-    y_inds = xp.mod(y0 + xp.arange(-1, 2), cc.shape[0]).astype("int")
+    y_inds = xp.mod(y0 + xp.arange(-1, 2), cc.shape[1]).astype("int")
+
     vx = cc_real[x_inds, y0]
     vy = cc_real[x0, y_inds]
     dx = (vx[2] - vx[0]) / (4 * vx[1] - 2 * vx[2] - 2 * vx[0])
     dy = (vy[2] - vy[0]) / (4 * vy[1] - 2 * vy[2] - 2 * vy[0])
+
     x0 = xp.round((x0 + dx) * 2.0) / 2.0
     y0 = xp.round((y0 + dy) * 2.0) / 2.0
 
     # subpixel shifts
-    xy_shift = upsampled_correlation(cc, upsample_factor, xp.array((x0, y0)))
+    xy_shift = upsampled_correlation(cc, upsample_factor, xp.array([x0, y0]), device = device)
 
     return xy_shift
-
 
 def align_and_shift_images(
     image_1,
@@ -148,22 +151,25 @@ def align_and_shift_images(
 
     elif device == "gpu":
         xp = cp
+    
+    image_1 = xp.asarray(image_1)
+    image_2 = xp.asarray(image_2)
 
-    xy_shift = align_images(
+    xy_shift = align_images_fourier(
         xp.fft.fft2(image_1),
         xp.fft.fft2(image_2),
         upsample_factor=upsample_factor,
         device=device,
     )
     dx = (
-        np.mod(xy_shift[0] + image_1.shape[0] / 2, image_1.shape[0])
+        xp.mod(xy_shift[0] + image_1.shape[0] / 2, image_1.shape[0])
         - image_1.shape[0] / 2
     )
     dy = (
-        np.mod(xy_shift[1] + image_1.shape[1] / 2, image_1.shape[1])
+        xp.mod(xy_shift[1] + image_1.shape[1] / 2, image_1.shape[1])
         - image_1.shape[1] / 2
     )
 
-    image_2_shifted = get_shifted_ar(image_2, dx, dy)
+    image_2_shifted = get_shifted_ar(image_2, dx, dy, device= device)
 
     return image_2_shifted
