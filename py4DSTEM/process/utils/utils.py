@@ -228,19 +228,24 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
     return shifted_ar
 
 
-def get_CoM(ar):
+def get_CoM(ar, device = "cpu"):
     """
     Finds and returns the center of mass of array ar.
     """
-    nx, ny = np.shape(ar)
-    ry, rx = np.meshgrid(np.arange(ny), np.arange(nx))
-    tot_intens = np.sum(ar)
-    xCoM = np.sum(rx * ar) / tot_intens
-    yCoM = np.sum(ry * ar) / tot_intens
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    ar = xp.asarray(ar)
+    
+    nx, ny = ar.shape
+    ry, rx = xp.meshgrid(xp.arange(ny), xp.arange(nx))
+    tot_intens = xp.sum(ar)
+    xCoM = xp.sum(rx * ar) / tot_intens
+    yCoM = xp.sum(ry * ar) / tot_intens
     return xCoM, yCoM
-
-
-
 
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """
