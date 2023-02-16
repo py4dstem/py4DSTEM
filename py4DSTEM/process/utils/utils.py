@@ -188,6 +188,8 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
     elif device == "gpu":
         xp = cp
 
+    ar = xp.asarray(ar)
+    
     # Apply image shift
     if bilinear is False:
         nx, ny = xp.shape(ar)
@@ -199,8 +201,8 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
         shifted_ar = xp.real(xp.fft.ifft2((xp.fft.fft2(ar)) * w))
 
     else:
-        xF = (xp.floor(xshift)).astype(int)
-        yF = (xp.floor(yshift)).astype(int)
+        xF = xp.floor(xshift).astype(int).item()
+        yF = xp.floor(yshift).astype(int).item()
         wx = xshift - xF
         wy = yshift - yF
 
