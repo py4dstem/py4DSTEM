@@ -2,552 +2,548 @@
 Module for reconstructing virtual bright field images by aligning each virtual BF image.
 """
 
+import warnings
+from typing import Mapping, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
-from py4DSTEM.process.utils.cross_correlate import align_images
+from matplotlib.gridspec import GridSpec
+from py4DSTEM.io import DataCube
+from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.visualize import show
-from scipy.ndimage import gaussian_filter
+from scipy.linalg import polar
 from scipy.optimize import curve_fit
 from scipy.special import comb
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
-class BFreconstruction:
+warnings.simplefilter(action="always", category=UserWarning)
+
+
+class BFReconstruction(PhaseReconstruction):
     """
-    A class for reconstructing aligned virtual bright field images.
+    Iterative BrightField Reconstruction Class.
+
+    Parameters
+    ----------
+    datacube: DataCube
+        Input 4D diffraction pattern intensities
+    energy: float
+        The electron energy of the wave functions in eV
+    object_padding_px: Tuple[int,int], optional
+        Pixel dimensions to pad object with
+        If None, the padding is set to half the probe ROI dimensions
+    dp_mean: ndarray, optional
+        Mean diffraction pattern
+        If None, get_dp_mean() is used
+    verbose: bool, optional
+        If True, class methods will inherit this and print additional information
+    device: str, optional
+        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     """
 
     def __init__(
         self,
-        dataset,
-        accelerating_voltage_kV=300e3,
-        threshold_intensity=0.8,
-        normalize_images=True,
-        padding=(64, 64),
-        edge_blend=16,
-        initial_align=True,
-        initial_align_bin=4,
-        subpixel="multicorr",
-        upsample_factor=8,
-        plot_recon=True,
-        progress_bar=True,
+        datacube: DataCube,
+        energy: float,
+        dp_mean: np.ndarray = None,
+        device: str = "cpu",
+        verbose: bool = False,
     ):
 
-        # store parameters
-        self.threshold_intensity = threshold_intensity
-        self.padding = padding
-        self.edge_blend = edge_blend
-        self.calibration = dataset.calibration
+        if device == "cpu":
+            self._xp = np
+            self._asnumpy = np.asarray
+            from scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
+        elif device == "gpu":
+            self._xp = cp
+            self._asnumpy = cp.asnumpy
+            from cupyx.scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+
+        self._energy = energy
+        self._datacube = datacube
+        self._dp_mean = dp_mean
+        self._verbose = verbose
+        self._preprocessed = False
+
+    def preprocess(
+        self,
+        edge_blend=16,
+        object_padding_px=(32, 32),
+        normalize_images=True,
+        threshold_intensity=0.8,
+        plot_average_bf=True,
+        defocus_guess=None,
+        **kwargs,
+    ):
+
+        xp = self._xp
+        self._object_padding_px = object_padding_px
 
         # get mean diffraction pattern
-        if "dp_mean" not in dataset.tree.keys():
-            self.dp_mean = dataset.get_dp_mean().data
+        if self._dp_mean is not None:
+            self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
+        if "dp_mean" in self._datacube.tree.keys():
+            self._dp_mean = xp.asarray(
+                self._datacube.tree["dp_mean"].data, dtype=xp.float32
+            )
         else:
-            self.dp_mean = dataset.tree["dp_mean"].data
+            self._dp_mean = xp.asarray(
+                self._datacube.get_dp_mean().data, dtype=xp.float32
+            )
+
+        # extract calibrations
+        self._extract_intensities_and_calibrations_from_datacube(
+            self._datacube,
+            require_calibrations=True,
+        )
 
         # make sure mean diffraction pattern is shaped correctly
-        if (self.dp_mean.shape[0] != dataset.shape[2]) or (
-            self.dp_mean.shape[1] != dataset.shape[2]
+        if (self._dp_mean.shape[0] != self._intensities_shape[2]) or (
+            self._dp_mean.shape[1] != self._intensities_shape[3]
         ):
-            self.dp_mean = dataset.get_dp_mean().data
+            raise ValueError(
+                "dp_mean must match the datacube shape. Try setting dp_mean = None."
+            )
 
         # select virtual detector pixels
-        self.dp_mask = self.dp_mean >= (np.max(self.dp_mean) * threshold_intensity)
-        self.num_images = np.count_nonzero(self.dp_mask)
-
-        # wavelength
-        self.accelerating_voltage_kV = accelerating_voltage_kV
-        self.wavelength = electron_wavelength_angstrom(self.accelerating_voltage_kV)
+        self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
+        self._num_bf_images = int(xp.count_nonzero(self._dp_mask))
+        self._wavelength = electron_wavelength_angstrom(self._energy)
 
         # diffraction space coordinates
-        self.xy_inds = np.argwhere(self.dp_mask)
-        if self.calibration.get_Q_pixel_units() == "A^-1":
-            self.kxy = (
-                self.xy_inds - np.mean(self.xy_inds, axis=0)[None, :]
-            ) * dataset.calibration.get_Q_pixel_size()
-            self.probe_angles = self.kxy * self.wavelength
-
-        elif self.calibration.get_Q_pixel_units() == "mrad":
-            self.probe_angles = (
-                (self.xy_inds - np.mean(self.xy_inds, axis=0)[None, :])
-                * dataset.calibration.get_Q_pixel_size()
-                / 1000
-            )
-            self.kxy = self.probe_angles / self.wavelength
-        else:
-            raise Exception("diffraction space pixel size must be A^-1 or mrad")
-
-        self.kr = np.sqrt(np.sum(self.kxy**2, axis=1))
+        self._xy_inds = np.argwhere(self._dp_mask)
+        self._kxy = (self._xy_inds - xp.mean(self._xy_inds, axis=0)[None]) * xp.array(
+            self._reciprocal_sampling
+        )[None]
+        self._probe_angles = self._kxy * self._wavelength
+        self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
         # Window function
-        x = np.linspace(-1, 1, dataset.data.shape[0] + 1)
-        x = x[1:]
+        x = xp.linspace(-1, 1, self._intensities_shape[0] + 1)[1:]
         x -= (x[1] - x[0]) / 2
         wx = (
-            np.sin(
-                np.clip((1 - np.abs(x)) * dataset.data.shape[0] / edge_blend / 2, 0, 1)
-                * (np.pi / 2)
+            xp.sin(
+                xp.clip(
+                    (1 - xp.abs(x)) * self._intensities_shape[0] / edge_blend / 2, 0, 1
+                )
+                * (xp.pi / 2)
             )
             ** 2
         )
-        y = np.linspace(-1, 1, dataset.data.shape[1] + 1)
-        y = y[1:]
+
+        y = xp.linspace(-1, 1, self._intensities_shape[1] + 1)[1:]
         y -= (y[1] - y[0]) / 2
         wy = (
-            np.sin(
-                np.clip((1 - np.abs(y)) * dataset.data.shape[1] / edge_blend / 2, 0, 1)
-                * (np.pi / 2)
+            xp.sin(
+                xp.clip(
+                    (1 - xp.abs(y)) * self._intensities_shape[1] / edge_blend / 2, 0, 1
+                )
+                * (xp.pi / 2)
             )
             ** 2
         )
-        self.window_edge = wx[:, None] * wy[None, :]
-        self.window_inv = 1 - self.window_edge
-        self.window_pad = np.zeros(
-            (dataset.data.shape[0] + padding[0], dataset.data.shape[1] + padding[1])
-        )
-        self.window_pad[
-            padding[0] // 2 : dataset.data.shape[0] + padding[0] // 2,
-            padding[1] // 2 : dataset.data.shape[1] + padding[1] // 2,
-        ] = self.window_edge
 
-        # init virtual image array and mask
-        self.stack_BF = np.zeros(
+        self._window_edge = wx[:, None] * wy[None, :]
+        self._window_inv = 1 - self._window_edge
+        self._window_pad = xp.zeros(
             (
-                self.num_images,
-                dataset.data.shape[0] + padding[0],
-                dataset.data.shape[1] + padding[1],
-            ),
-            dtype="float",
+                self._intensities_shape[0] + object_padding_px[0],
+                self._intensities_shape[1] + object_padding_px[1],
+            )
         )
-        self.stack_mask = np.tile(self.window_pad[None, :, :], (self.num_images, 1, 1))
+        self._window_pad[
+            object_padding_px[0] // 2 : self._intensities_shape[0]
+            + object_padding_px[0] // 2,
+            object_padding_px[1] // 2 : self._intensities_shape[1]
+            + object_padding_px[1] // 2,
+        ] = self._window_edge
 
-        # populate image array
-        for a0 in tqdmnd(
-            self.num_images,
-            desc="Getting BF images",
-            unit=" images",
-            disable=not progress_bar,
-        ):
-            im = (
-                dataset.data[:, :, self.xy_inds[a0, 0], self.xy_inds[a0, 1]]
-                .copy()
-                .astype("float")
-            )
+        # Collect BF images
+        all_bfs = self._intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]]
+        if normalize_images:
+            all_bfs /= xp.mean(all_bfs, axis=(0, 1))
+            all_means = xp.ones(self._num_bf_images)
+        else:
+            all_means = xp.mean(all_bfs, axis=(0, 1))
 
-            if normalize_images:
-                im /= np.mean(im)
-                int_mean = 1.0
-            else:
-                int_mean = np.mean(im)
-
-            self.stack_BF[a0, : padding[0] // 2, :] = int_mean
-            self.stack_BF[a0, padding[0] // 2 :, : padding[1] // 2] = int_mean
-            self.stack_BF[
-                a0, padding[0] // 2 :, dataset.data.shape[1] + padding[1] // 2 :
-            ] = int_mean
-            self.stack_BF[
-                a0,
-                dataset.data.shape[0] + padding[0] // 2 :,
-                padding[1] // 2 : dataset.data.shape[1] + padding[1] // 2,
-            ] = int_mean
-            self.stack_BF[
-                a0,
-                padding[0] // 2 : dataset.data.shape[0] + padding[0] // 2,
-                padding[1] // 2 : dataset.data.shape[1] + padding[1] // 2,
-            ] = (
-                self.window_inv * int_mean + self.window_edge * im
-            )
-
-        # initial image shifts, mean BF image, and error
-        self.xy_shifts = np.zeros((self.num_images, 2))
-        self.stack_mean = np.mean(self.stack_BF)
-        self.mask_sum = np.sum(self.window_edge) * self.num_images
-        # self.recon_BF = np.mean(self.stack_BF, axis=0)
-        # self.recon_error = np.atleast_1d(np.mean(np.abs(self.stack_BF - self.recon_BF[None,:,:])))
-        self.recon_mask = np.sum(self.stack_mask, axis=0)
-        mask_inv = 1 - np.clip(self.recon_mask, 0, 1)
-        self.recon_BF = (
-            self.stack_mean * mask_inv + np.sum(self.stack_BF * self.stack_mask, axis=0)
-        ) / (self.recon_mask + mask_inv)
-        self.recon_error = (
-            np.atleast_1d(
-                np.sum(
-                    np.abs(self.stack_BF - self.recon_BF[None, :, :]) * self.stack_mask
-                )
-            )
-            / self.mask_sum
+        stack_shape = (
+            self._intensities_shape[0] + object_padding_px[0],
+            self._intensities_shape[1] + object_padding_px[1],
+            self._num_bf_images,
         )
+
+        self._stack_BF = xp.full(stack_shape, all_means[None, None])
+
+        self._stack_BF[
+            object_padding_px[0] // 2 : self._intensities_shape[0]
+            + object_padding_px[0] // 2,
+            object_padding_px[1] // 2 : self._intensities_shape[1]
+            + object_padding_px[1] // 2,
+        ] = (
+            self._window_inv[:, :, None] * all_means[None, None]
+            + self._window_edge[:, :, None] * all_bfs
+        )
+        self._stack_BF = xp.moveaxis(self._stack_BF, [0, 1, 2], [1, 2, 0])
 
         # Fourier space operators for image shifts
-        qx = np.fft.fftfreq(self.stack_BF.shape[1], d=1)
-        qy = np.fft.fftfreq(self.stack_BF.shape[2], d=1)
-        qxa, qya = np.meshgrid(qx, qy, indexing="ij")
-        self.qx_shift = -2j * np.pi * qxa
-        self.qy_shift = -2j * np.pi * qya
+        qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
+        qy = xp.fft.fftfreq(self._stack_BF.shape[2], d=1)
+        qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+        self._qx_shift = -2j * xp.pi * qxa
+        self._qy_shift = -2j * xp.pi * qya
 
-        # initial image alignment
-        if initial_align:
+        # Initialization utilities
+        self._stack_mask = xp.tile(self._window_pad[None], (self._num_bf_images, 1, 1))
+        if defocus_guess is not None:
+            Gs = xp.fft.fft2(self._stack_BF)
 
-            # basis function for regularization
-            kr_max = np.max(self.kr)
-            u = self.kxy[:, 0] * 0.5 / kr_max + 0.5
-            v = self.kxy[:, 1] * 0.5 / kr_max + 0.5
-            basis = np.ones((self.num_images, 3))
-            basis[:, 1] = 2 * u - 1
-            basis[:, 2] = 2 * v - 1
-
-            # Iterative binning for more robust alignment
-            diameter_pixels = (
-                np.max(
-                    (
-                        np.max(self.xy_inds[:, 0]) - np.min(self.xy_inds[:, 0]),
-                        np.max(self.xy_inds[:, 1]) - np.min(self.xy_inds[:, 1]),
-                    )
-                )
-                + 1
+            self._xy_shifts = (
+                self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
             )
-            bin_min = np.ceil(np.log(initial_align_bin) / np.log(2))
-            bin_max = np.ceil(np.log(diameter_pixels) / np.log(2))
-            bin_vals = 2 ** np.arange(bin_min, bin_max)[::-1]
+            dx = self._xy_shifts[:, 0]
+            dy = self._xy_shifts[:, 1]
 
-            # Loop over all binning values
-            xy_center = (self.xy_inds - np.median(self.xy_inds, axis=0)).astype("float")
-            # for a0 in range(4):
-            for a0 in range(bin_vals.shape[0]):
-                G_ref = np.fft.fft2(self.recon_BF)
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            self._stack_BF = xp.real(xp.fft.ifft2(Gs * shift_op))
+            self._stack_mask = xp.real(
+                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
+            )
 
-                # Segment the virtual images with current binning values
-                xy_inds = np.round(xy_center / bin_vals[a0] + 0.5).astype("int")
-                xy_vals = np.unique(xy_inds, axis=0)
-                # Sort by radial order, from center to outer edge
-                inds_order = np.argsort(np.sum(xy_vals**2, axis=1))
+            del Gs
+        else:
+            self._xy_shifts = xp.zeros((self._num_bf_images, 2))
 
-                # for a1 in range(xy_vals.shape[0]):
-                shifts_update = np.zeros((self.num_images, 2))
-                for a1 in tqdmnd(
-                    xy_vals.shape[0],
-                    desc="Alignment at bin " + str(bin_vals[a0].astype("int")),
-                    unit=" image subsets",
-                    disable=not progress_bar,
-                ):
-                    ind_align = inds_order[a1]
+        self._stack_mean = xp.mean(self._stack_BF)
+        self._mask_sum = xp.sum(self._window_edge) * self._num_bf_images
+        self._recon_mask = xp.sum(self._stack_mask, axis=0)
 
-                    # Generate mean image for alignment
-                    sub = np.logical_and(
-                        xy_inds[:, 0] == xy_vals[ind_align, 0],
-                        xy_inds[:, 1] == xy_vals[ind_align, 1],
+        mask_inv = 1 - xp.clip(self._recon_mask, 0, 1)
+
+        self._recon_BF = (
+            self._stack_mean * mask_inv
+            + xp.sum(self._stack_BF * self._stack_mask, axis=0)
+        ) / (self._recon_mask + mask_inv)
+
+        self._recon_error = (
+            xp.atleast_1d(
+                xp.sum(xp.abs(self._stack_BF - self._recon_BF[None]) * self._stack_mask)
+            )
+            / self._mask_sum
+        )
+
+        self._recon_BF_initial = self._recon_BF.copy()
+        self._stack_BF_initial = self._stack_BF.copy()
+        self._stack_mask_initial = self._stack_mask.copy()
+        self._recon_mask_initial = self._recon_mask.copy()
+        self._xy_shifts_initial = self._xy_shifts.copy()
+
+        if plot_average_bf:
+            figsize = kwargs.get("figsize", (6, 6))
+            kwargs.pop("figsize", None)
+
+            fig, ax = plt.subplots(figsize=figsize)
+
+            self._visualize_figax(fig, ax, **kwargs)
+
+            ax.set_xlabel("x [A]")
+            ax.set_ylabel("y [A]")
+            ax.set_title("Average Bright Field Image")
+
+        self._preprocessed = True
+        return self
+
+    def reconstruct(
+        self,
+        max_alignment_bin=None,
+        min_alignment_bin=1,
+        max_iter_at_min_bin=2,
+        upsample_factor=8,
+        regularizer_matrix_size=(1, 1),
+        regularize_shifts=True,
+        running_average=True,
+        progress_bar=True,
+        plot_aligned_bf=True,
+        plot_convergence=True,
+        reset=None,
+        **kwargs,
+    ):
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if reset:
+            self._recon_BF = self._recon_BF_initial.copy()
+            self._stack_BF = self._stack_BF_initial.copy()
+            self._stack_mask = self._stack_mask_initial.copy()
+            self._recon_mask = self._recon_mask_initial.copy()
+            self._xy_shifts = self._xy_shifts_initial.copy()
+        elif reset is None:
+            if hasattr(self, "_basis"):
+                warnings.warn(
+                    (
+                        "Continuing reconstruction from previous result. "
+                        "Use reset=True for a fresh start."
+                    ),
+                    UserWarning,
+                )
+
+        if not regularize_shifts:
+            self._basis = self._kxy
+        else:
+            kr_max = xp.max(self._kr)
+            u = self._kxy[:, 0] * 0.5 / kr_max + 0.5
+            v = self._kxy[:, 1] * 0.5 / kr_max + 0.5
+
+            self._basis = xp.zeros(
+                (
+                    self._num_bf_images,
+                    (regularizer_matrix_size[0] + 1) * (regularizer_matrix_size[1] + 1),
+                )
+            )
+            for ii in np.arange(regularizer_matrix_size[0] + 1):
+                Bi = (
+                    comb(regularizer_matrix_size[0], ii)
+                    * (u**ii)
+                    * ((1 - u) ** (regularizer_matrix_size[0] - ii))
+                )
+
+                for jj in np.arange(regularizer_matrix_size[1] + 1):
+                    Bj = (
+                        comb(regularizer_matrix_size[1], jj)
+                        * (v**jj)
+                        * ((1 - v) ** (regularizer_matrix_size[1] - jj))
                     )
-                    # inds_im = np.where(sub)[0]
-                    G = np.fft.fft2(np.mean(self.stack_BF[sub], axis=0))
 
-                    # Get best fit alignment
-                    xy_shift = align_images(G_ref, G, upsample_factor=upsample_factor)
-                    dx = (
-                        np.mod(
-                            xy_shift[0] + self.stack_BF.shape[1] / 2,
-                            self.stack_BF.shape[1],
-                        )
-                        - self.stack_BF.shape[1] / 2
+                    ind = ii * (regularizer_matrix_size[1] + 1) + jj
+                    self._basis[:, ind] = Bi * Bj
+
+        # Iterative binning for more robust alignment
+        diameter_pixels = int(
+            xp.maximum(
+                xp.max(self._xy_inds[:, 0]) - xp.min(self._xy_inds[:, 0]),
+                xp.max(self._xy_inds[:, 1]) - xp.min(self._xy_inds[:, 1]),
+            )
+            + 1
+        )
+
+        if max_alignment_bin is not None:
+            max_alignment_bin = np.minimum(diameter_pixels, max_alignment_bin)
+        else:
+            max_alignment_bin = diameter_pixels
+
+        bin_min = np.ceil(np.log(min_alignment_bin) / np.log(2))
+        bin_max = np.ceil(np.log(max_alignment_bin) / np.log(2))
+        bin_vals = 2 ** np.arange(bin_min, bin_max)[::-1]
+
+        if max_iter_at_min_bin > 1:
+            bin_vals = np.hstack(
+                (bin_vals, np.repeat(bin_vals[-1], max_iter_at_min_bin - 1))
+            )
+
+        if plot_aligned_bf:
+            num_plots = bin_vals.shape[0]
+            nrows = int(np.sqrt(num_plots))
+            ncols = int(np.ceil(num_plots / nrows))
+
+            if plot_convergence:
+                errors = []
+                spec = GridSpec(
+                    ncols=ncols,
+                    nrows=nrows + 1,
+                    hspace=0.15,
+                    wspace=0.15,
+                    height_ratios=[1] * nrows + [1 / 4],
+                )
+
+                figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows + 1))
+            else:
+                spec = GridSpec(
+                    ncols=ncols,
+                    nrows=nrows,
+                    hspace=0.15,
+                    wspace=0.15,
+                )
+
+                figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows))
+
+            kwargs.pop("figsize", None)
+            fig = plt.figure(figsize=figsize)
+
+        xy_center = (self._xy_inds - xp.median(self._xy_inds, axis=0)).astype("float")
+
+        # Loop over all binning values
+        for a0 in range(bin_vals.shape[0]):
+
+            G_ref = xp.fft.fft2(self._recon_BF)
+
+            # Segment the virtual images with current binning values
+            xy_inds = xp.round(xy_center / bin_vals[a0] + 0.5).astype("int")
+            xy_vals = np.unique(
+                asnumpy(xy_inds), axis=0
+            )  # axis is not yet supported in cupy
+            # Sort by radial order, from center to outer edge
+            inds_order = xp.argsort(xp.sum(xy_vals**2, axis=1))
+
+            shifts_update = xp.zeros((self._num_bf_images, 2))
+
+            for a1 in tqdmnd(
+                xy_vals.shape[0],
+                desc="Alignment at bin " + str(bin_vals[a0].astype("int")),
+                unit=" image subsets",
+                disable=not progress_bar,
+            ):
+
+                ind_align = inds_order[a1]
+
+                # Generate mean image for alignment
+                sub = xp.logical_and(
+                    xy_inds[:, 0] == xy_vals[ind_align, 0],
+                    xy_inds[:, 1] == xy_vals[ind_align, 1],
+                )
+
+                G = xp.fft.fft2(xp.mean(self._stack_BF[sub], axis=0))
+
+                # Get best fit alignment
+                xy_shift = align_images_fourier(
+                    G_ref,
+                    G,
+                    upsample_factor=upsample_factor,
+                    device="cpu" if xp is np else "gpu",
+                )
+
+                dx = (
+                    xp.mod(
+                        xy_shift[0] + self._stack_BF.shape[1] / 2,
+                        self._stack_BF.shape[1],
                     )
-                    dy = (
-                        np.mod(
-                            xy_shift[1] + self.stack_BF.shape[2] / 2,
-                            self.stack_BF.shape[2],
-                        )
-                        - self.stack_BF.shape[2] / 2
+                    - self._stack_BF.shape[1] / 2
+                )
+                dy = (
+                    xp.mod(
+                        xy_shift[1] + self._stack_BF.shape[2] / 2,
+                        self._stack_BF.shape[2],
                     )
+                    - self._stack_BF.shape[2] / 2
+                )
 
-                    # output shifts
-                    shifts_update[sub, 0] = dx
-                    shifts_update[sub, 1] = dy
+                # output shifts
+                shifts_update[sub, 0] = dx
+                shifts_update[sub, 1] = dy
 
-                    # update running estimate of reference image
-                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
+                # update running estimate of reference image
+                shift_op = xp.exp(self._qx_shift * dx + self._qy_shift * dy)
+
+                if running_average:
                     G_ref = G_ref * a1 / (a1 + 1) + (G * shift_op) / (a1 + 1)
 
-                # regularize the shifts
-                xy_shifts_new = self.xy_shifts + shifts_update
-                coefs = np.linalg.lstsq(basis, xy_shifts_new, rcond=None)[0]
-                xy_shifts_fit = basis @ coefs
-                shifts_update = xy_shifts_fit - self.xy_shifts
+            # regularize the shifts
+            xy_shifts_new = self._xy_shifts + shifts_update
+            coefs = xp.linalg.lstsq(self._basis, xy_shifts_new, rcond=None)[0]
+            xy_shifts_fit = self._basis @ coefs
+            shifts_update = xy_shifts_fit - self._xy_shifts
 
-                # apply shifts
-                for a1 in range(self.num_images):
-                    G = np.fft.fft2(self.stack_BF[a1])
+            # apply shifts
+            Gs = xp.fft.fft2(self._stack_BF)
 
-                    dx = shifts_update[a1, 0]
-                    dy = shifts_update[a1, 1]
-                    self.xy_shifts[a1, 0] += dx
-                    self.xy_shifts[a1, 1] += dy
+            dx = shifts_update[:, 0]
+            dy = shifts_update[:, 1]
+            self._xy_shifts[:, 0] += dx
+            self._xy_shifts[:, 1] += dy
 
-                    # shift image and mask
-                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
-                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
-                    self.stack_mask[a1] = np.real(
-                        np.fft.ifft2(np.fft.fft2(self.stack_mask[a1]) * shift_op)
-                    )
-
-                # Center the shifts
-                xy_shifts_median = np.round(np.median(self.xy_shifts, axis=0)).astype(
-                    int
-                )
-                self.xy_shifts -= xy_shifts_median[None, :]
-                self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1, 2))
-                self.stack_mask = np.roll(
-                    self.stack_mask, -xy_shifts_median, axis=(1, 2)
-                )
-
-                # Generate new estimate
-                self.recon_mask = np.sum(self.stack_mask, axis=0)
-
-                mask_inv = 1 - np.clip(self.recon_mask, 0, 1)
-                self.recon_BF = (
-                    self.stack_mean * mask_inv
-                    + np.sum(self.stack_BF * self.stack_mask, axis=0)
-                ) / (self.recon_mask + mask_inv)
-
-        if plot_recon:
-            self.plot_recon()
-
-    def align_images(
-        self,
-        num_iter=1,
-        subpixel="multicorr",
-        upsample_factor=8,
-        regularize_shifts=True,
-        regularize_size=(1, 1),
-        max_shift=1.0,
-        plot_stats=True,
-        plot_recon=True,
-        progress_bar=True,
-    ):
-        """
-        Iterative alignment of the BF images.
-        """
-
-        # construct regularization basis if needed
-        if regularize_shifts:
-            if regularize_size[0] == 1 and regularize_size[1] == 1:
-                basis = self.kxy
-            else:
-                kr_max = np.max(self.kr)
-                u = self.kxy[:, 0] * 0.5 / kr_max + 0.5
-                v = self.kxy[:, 1] * 0.5 / kr_max + 0.5
-
-                basis = np.zeros(
-                    (
-                        self.num_images,
-                        (regularize_size[0] + 1) * (regularize_size[1] + 1),
-                    )
-                )
-                for ii in np.arange(regularize_size[0] + 1):
-                    Bi = (
-                        comb(regularize_size[0], ii)
-                        * (u**ii)
-                        * ((1 - u) ** (regularize_size[0] - ii))
-                    )
-
-                    for jj in np.arange(regularize_size[1] + 1):
-                        Bj = (
-                            comb(regularize_size[1], jj)
-                            * (v**jj)
-                            * ((1 - v) ** (regularize_size[1] - jj))
-                        )
-
-                        ind = ii * (regularize_size[1] + 1) + jj
-                        basis[:, ind] = Bi * Bj
-
-        # Loop over iterations
-        for a0 in tqdmnd(
-            num_iter,
-            desc="Aligning BF images",
-            unit=" iterations",
-            disable=not progress_bar,
-        ):
-
-            # Reference image
-            G_ref = np.fft.fft2(self.recon_BF)
-
-            # align images
-            if regularize_shifts:
-                shifts_update = np.zeros((self.num_images, 2))
-
-                for a1 in range(self.num_images):
-                    G = np.fft.fft2(self.stack_BF[a1])
-
-                    # Get subpixel shifts
-                    xy_shift = align_images(G_ref, G, upsample_factor=upsample_factor)
-                    dx = (
-                        np.mod(
-                            xy_shift[0] + self.stack_BF.shape[1] / 2,
-                            self.stack_BF.shape[1],
-                        )
-                        - self.stack_BF.shape[1] / 2
-                    )
-                    dy = (
-                        np.mod(
-                            xy_shift[1] + self.stack_BF.shape[2] / 2,
-                            self.stack_BF.shape[2],
-                        )
-                        - self.stack_BF.shape[2] / 2
-                    )
-
-                    # record shifts
-                    if dx**2 + dy**2 < max_shift**2:
-                        shifts_update[a1, 0] = dx
-                        shifts_update[a1, 1] = dy
-
-                # Calculate regularized shifts
-                xy_shifts_new = self.xy_shifts + shifts_update
-                coefs = np.linalg.lstsq(basis, xy_shifts_new, rcond=None)[0]
-                xy_shifts_fit = basis @ coefs
-                shifts_update = xy_shifts_fit - self.xy_shifts
-
-                # Apply shifts
-                for a1 in range(self.num_images):
-                    G = np.fft.fft2(self.stack_BF[a1])
-
-                    dx = shifts_update[a1, 0]
-                    dy = shifts_update[a1, 1]
-                    self.xy_shifts[a1, 0] += dx
-                    self.xy_shifts[a1, 1] += dy
-
-                    # shift image
-                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
-                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
-                    self.stack_mask[a1] = np.real(
-                        np.fft.ifft2(np.fft.fft2(self.stack_mask[a1]) * shift_op)
-                    )
-
-            else:
-                for a1 in range(self.num_images):
-                    G = np.fft.fft2(self.stack_BF[a1])
-
-                    # Get subpixel shifts
-                    xy_shift = align_images(G_ref, G, upsample_factor=upsample_factor)
-                    dx = (
-                        np.mod(
-                            xy_shift[0] + self.stack_BF.shape[1] / 2,
-                            self.stack_BF.shape[1],
-                        )
-                        - self.stack_BF.shape[1] / 2
-                    )
-                    dy = (
-                        np.mod(
-                            xy_shift[1] + self.stack_BF.shape[2] / 2,
-                            self.stack_BF.shape[2],
-                        )
-                        - self.stack_BF.shape[2] / 2
-                    )
-
-                    # apply shifts
-                    self.xy_shifts[a1, 0] += dx
-                    self.xy_shifts[a1, 1] += dy
-
-                    # shift image
-                    shift_op = np.exp(self.qx_shift * dx + self.qy_shift * dy)
-                    self.stack_BF[a1] = np.real(np.fft.ifft2(G * shift_op))
-                    self.stack_mask[a1] = np.real(
-                        np.fft.ifft2(np.fft.fft2(self.stack_mask[a1]) * shift_op)
-                    )
-
-            # # Center the shifts - probably not necessary for iterative part?
-            # xy_shifts_median = np.round(np.median(self.xy_shifts, axis = 0)).astype(int)
-            # self.xy_shifts -= xy_shifts_median[None,:]
-            # self.stack_BF = np.roll(self.stack_BF, -xy_shifts_median, axis=(1,2))
-            # self.stack_mask = np.roll(self.stack_mask, -xy_shifts_median, axis=(1,2))
-
-            # update reconstruction and error
-            self.recon_mask = np.sum(self.stack_mask, axis=0)
-            mask_inv = 1 - np.clip(self.recon_mask, 0, 1)
-            self.recon_BF = (
-                self.stack_mean * mask_inv
-                + np.sum(self.stack_BF * self.stack_mask, axis=0)
-            ) / (self.recon_mask + mask_inv)
-            self.recon_error = np.append(
-                self.recon_error,
-                np.sum(
-                    np.abs(self.stack_BF - self.recon_BF[None, :, :]) * self.stack_mask
-                )
-                / self.mask_sum,
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            self._stack_BF = xp.real(xp.fft.ifft2(Gs * shift_op))
+            self._stack_mask = xp.real(
+                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
             )
 
-        # plot convergence
-        if plot_stats:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            ax.plot(
-                np.arange(self.recon_error.size),
-                self.recon_error,
+            del Gs
+
+            # Center the shifts
+            xy_shifts_median = xp.round(xp.median(self._xy_shifts, axis=0)).astype(int)
+            self._xy_shifts -= xy_shifts_median[None, :]
+            self._stack_BF = xp.roll(self._stack_BF, -xy_shifts_median, axis=(1, 2))
+            self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
+
+            # Generate new estimate
+            self._recon_mask = xp.sum(self._stack_mask, axis=0)
+
+            mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
+            self._recon_BF = (
+                self._stack_mean * mask_inv
+                + xp.sum(self._stack_BF * self._stack_mask, axis=0)
+            ) / (self._recon_mask + mask_inv)
+
+            self._recon_error = (
+                xp.atleast_1d(
+                    xp.sum(
+                        xp.abs(self._stack_BF - self._recon_BF[None]) * self._stack_mask
+                    )
+                )
+                / self._mask_sum
             )
-            ax.set_xlabel("Iteration")
-            ax.set_ylabel("Error")
 
-    def plot_recon(
-        self,
-        bound=None,
-        figsize=(8, 8),
-    ):
+            if plot_aligned_bf:
+                row_index, col_index = np.unravel_index(a0, (nrows, ncols))
 
-        # Image boundaries
-        if bound == 0:
-            im = self.recon_BF
-        else:
-            if bound is None:
-                bound = (self.padding[0] // 2, self.padding[1] // 2)
-            else:
-                if np.array(bound).ndim == 0:
-                    bound = (bound, bound)
-                bound = np.array(bound)
-            im = self.recon_BF[bound[0] : -bound[0], bound[1] : -bound[1]]
+                ax = fig.add_subplot(spec[row_index, col_index])
+                self._visualize_figax(fig, ax, **kwargs)
 
-        show(
-            im,
-            figsize=figsize,
-        )
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title(f"Aligned BF at bin {int(bin_vals[a0])}")
 
-    def plot_shifts(
-        self,
-        scale_arrows=0.002,
-        figsize=(8, 8),
-    ):
+                if plot_convergence:
+                    errors.append(float(self._recon_error))
 
-        fig, ax = plt.subplots(figsize=figsize)
+        if plot_aligned_bf:
+            if plot_convergence:
+                ax = fig.add_subplot(spec[-1, :])
+                ax.plot(np.arange(num_plots), errors)
+                ax.set_xticks(np.arange(num_plots))
+                ax.set_ylabel("Error")
+            spec.tight_layout(fig)
 
-        ax.quiver(
-            self.kxy[:, 1],
-            self.kxy[:, 0],
-            self.xy_shifts[:, 1] * scale_arrows,
-            self.xy_shifts[:, 0] * scale_arrows,
-            color=(1, 0, 0, 1),
-            angles="xy",
-            scale_units="xy",
-            scale=1,
-        )
-
-        kr_max = np.max(self.kr)
-        ax.set_xlim([-1.2 * kr_max, 1.2 * kr_max])
-        ax.set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+        return self
 
     def aberration_fit(
         self,
-        print_result=True,
         plot_CTF_compare=False,
-        plot_dk=0.001,
-        plot_k_sigma=0.002,
+        plot_dk=0.005,
+        plot_k_sigma=0.02,
     ):
         """
         Fit aberrations to the measured image shifts.
         """
+        xp = self._xp
+        asnumpy = self._asnumpy
+        gaussian_filter = self._gaussian_filter
 
         # Convert real space shifts to Angstroms
-        self.xy_shifts_Ang = self.xy_shifts * self.calibration.get_R_pixel_size()
+        self._xy_shifts_Ang = self._xy_shifts * xp.array(self._scan_sampling)
 
         # Solve affine transformation
-        m = np.linalg.lstsq(self.probe_angles, self.xy_shifts_Ang, rcond=None)[0]
-        m_rotation, m_aberration = sp.linalg.polar(m, side="right")
-        # m_test = m_rotation @ m_aberration
+        m = asnumpy(
+            xp.linalg.lstsq(self._probe_angles, self._xy_shifts_Ang, rcond=None)[0]
+        )
+        m_rotation, m_aberration = polar(m, side="right")
 
         # Convert into rotation and aberration coefficients
         self.rotation_Q_to_R_rads = -1 * np.arctan2(m_rotation[1, 0], m_rotation[0, 0])
@@ -565,58 +561,53 @@ class BFreconstruction:
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
 
         # Print results
-        if print_result:
+        if self._verbose:
             print(
-                "Rotation of Q w.r.t. R = "
-                + str(np.round(np.rad2deg(self.rotation_Q_to_R_rads), decimals=3))
-                + " deg"
+                (
+                    "Rotation of Q w.r.t. R = "
+                    f"{np.rad2deg(self.rotation_Q_to_R_rads):.3f} deg"
+                )
             )
             print(
-                "Astigmatism (A1x,A1y)  = ("
-                + str(np.round(self.aberration_A1x, decimals=0))
-                + ","
-                + str(np.round(self.aberration_A1y, decimals=0))
-                + ") Ang"
+                (
+                    "Astigmatism (A1x,A1y)  = ("
+                    f"{self.aberration_A1x:.0f},"
+                    f"{self.aberration_A1y:.0f}) Ang"
+                )
             )
-            print(
-                "Defocus C1             = "
-                + str(np.round(self.aberration_C1, decimals=0))
-                + " Ang"
-            )
+            print(f"Defocus C1             = {self.aberration_C1:.0f} Ang")
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
+
             # Get polar mean from FFT of BF reconstruction
-            im_fft = np.abs(np.fft.fft2(self.recon_BF))
+            im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
 
             # coordinates
-            kx = np.fft.fftfreq(
-                self.recon_BF.shape[0], self.calibration.get_R_pixel_size()
-            )
-            ky = np.fft.fftfreq(
-                self.recon_BF.shape[1], self.calibration.get_R_pixel_size()
-            )
-            kra = np.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2)
-            k_max = np.max(kra) / np.sqrt(2.0)
-            k_num_bins = np.ceil(k_max / plot_dk).astype("int")
-            k_bins = np.arange(k_num_bins + 1) * plot_dk
+            kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
+            ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+            kra = xp.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2)
+            k_max = xp.max(kra) / np.sqrt(2.0)
+            k_num_bins = int(xp.ceil(k_max / plot_dk))
+            k_bins = xp.arange(k_num_bins + 1) * plot_dk
 
             # histogram
             k_ind = kra / plot_dk
             kf = np.floor(k_ind).astype("int")
             dk = k_ind - kf
             sub = kf <= k_num_bins
-            hist_exp = np.bincount(
+            hist_exp = xp.bincount(
                 kf[sub], weights=im_fft[sub] * (1 - dk[sub]), minlength=k_num_bins
             )
-            hist_norm = np.bincount(
+            hist_norm = xp.bincount(
                 kf[sub], weights=(1 - dk[sub]), minlength=k_num_bins
             )
             sub = kf <= k_num_bins - 1
-            hist_exp += np.bincount(
+
+            hist_exp += xp.bincount(
                 kf[sub] + 1, weights=im_fft[sub] * (dk[sub]), minlength=k_num_bins
             )
-            hist_norm += np.bincount(
+            hist_norm += xp.bincount(
                 kf[sub] + 1, weights=(dk[sub]), minlength=k_num_bins
             )
 
@@ -628,15 +619,18 @@ class BFreconstruction:
             hist_exp /= hist_norm
 
             # CTF comparison
-            CTF_fit = np.sin(
-                (-np.pi * self.wavelength * self.aberration_C1) * k_bins**2
+            CTF_fit = xp.sin(
+                (-np.pi * self._wavelength * self.aberration_C1) * k_bins**2
             )
 
             # plotting input - log scale
-            # hist_plot = hist_exp * k_bins
-            hist_plot = np.log(hist_exp)
-            hist_plot -= np.min(hist_plot)
-            hist_plot /= np.max(hist_plot)
+            hist_plot = xp.log(hist_exp)
+            hist_plot -= xp.min(hist_plot)
+            hist_plot /= xp.max(hist_plot)
+
+            hist_plot = asnumpy(hist_plot)
+            k_bins = asnumpy(k_bins)
+            CTF_fit = asnumpy(CTF_fit)
 
             fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -645,6 +639,7 @@ class BFreconstruction:
                 hist_plot,
                 color=(0.7, 0.7, 0.7, 1),
             )
+
             ax.plot(
                 k_bins,
                 np.clip(CTF_fit, 0.0, np.inf),
@@ -666,28 +661,28 @@ class BFreconstruction:
         k_info_power=2.0,
         LASSO_filter=False,
         LASSO_scale=1.0,
-        plot_result=True,
-        figsize=(8, 8),
-        plot_range=(-2, 2),
-        return_val=False,
-        progress_bar=True,
+        plot_corrected_bf=True,
+        **kwargs,
     ):
         """
         CTF correction of the BF image using the measured defocus aberration.
         """
 
+        xp = self._xp
+        asnumpy = self._asnumpy
+
         # Fourier coordinates
-        kx = np.fft.fftfreq(self.recon_BF.shape[0], self.calibration.get_R_pixel_size())
-        ky = np.fft.fftfreq(self.recon_BF.shape[1], self.calibration.get_R_pixel_size())
+        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
+        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
-        sin_chi = np.sin((np.pi * self.wavelength * self.aberration_C1) * kra2)
+        sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
 
         # CTF without tilt correction (beyond the parallax operator)
-        CTF_corr = np.sign(sin_chi)
+        CTF_corr = xp.sign(sin_chi)
         CTF_corr[0, 0] = 0
 
         # apply correction to mean reconstructed BF image
-        im_fft_corr = np.fft.fft2(self.recon_BF) * CTF_corr
+        im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
         # if needed, Fourier filter output image
         if LASSO_filter:
@@ -702,12 +697,15 @@ class BFreconstruction:
                 )
                 return int_fit.ravel()
 
+            sin_chi = asnumpy(sin_chi)
+            im_fft_corr = asnumpy(im_fft_corr)
+
             CTF_mag = np.abs(sin_chi)
             sig = np.abs(im_fft_corr)
             sig_mean = np.mean(sig)
             sig_min = np.min(sig)
             sig_max = np.max(sig)
-            k_max = np.max(kx)
+            k_max = np.max(asnumpy(kx))
             coefs = (
                 sig_min,
                 sig_max,
@@ -746,6 +744,8 @@ class BFreconstruction:
                 np.abs(im_fft_corr) - sig_bg * LASSO_scale, 0, np.inf
             ) * np.exp(1j * np.angle(im_fft_corr))
 
+            im_fft_corr = xp.asarray(im_fft_corr)
+
         # if needed, add low pass filter output image
         if k_info_limit is not None:
             im_fft_corr /= 1 + (kra2**k_info_power) / (
@@ -753,26 +753,119 @@ class BFreconstruction:
             )
 
         # Output image
-        self.recon_BF_corr = np.real(np.fft.ifft2(im_fft_corr))
+        self._recon_BF_corr = xp.real(xp.fft.ifft2(im_fft_corr))
 
         # plotting
-        if plot_result:
-            im_plot = self.recon_BF_corr.copy()
-            im_plot -= np.mean(im_plot)
-            im_plot /= np.sqrt(np.mean(im_plot**2))
+        if plot_corrected_bf:
+
+            figsize = kwargs.get("figsize", (6, 6))
+            cmap = kwargs.get("cmap", "magma")
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
 
             fig, ax = plt.subplots(figsize=figsize)
+
+            extent = [
+                0,
+                self._scan_sampling[1] * self._recon_BF_corr.shape[1],
+                self._scan_sampling[0] * self._recon_BF_corr.shape[0],
+                0,
+            ]
+
             ax.imshow(
-                im_plot[
-                    self.padding[0] // 2 : self.recon_BF.shape[0]
-                    - self.padding[0] // 2,
-                    self.padding[1] // 2 : self.recon_BF.shape[1]
-                    - self.padding[1] // 2,
-                ],
-                vmin=plot_range[0],
-                vmax=plot_range[1],
-                cmap="gray",
+                self._crop_padded_object(self._recon_BF_corr),
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
             )
 
-        if return_val:
-            return self.recon_BF_corr
+            ax.set_xlabel("x [A]")
+            ax.set_ylabel("y [A]")
+            ax.set_title("Corrected Bright Field Image")
+
+    def _crop_padded_object(
+        self,
+        padded_object,
+        remaining_padding=0,
+    ):
+
+        asnumpy = self._asnumpy
+
+        pad_x = self._object_padding_px[0] // 2 - remaining_padding
+        pad_y = self._object_padding_px[1] // 2 - remaining_padding
+
+        return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
+
+    def _visualize_figax(
+        self,
+        fig,
+        ax,
+        remaining_padding=0,
+        **kwargs,
+    ):
+
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("cmap", None)
+
+        extent = [
+            0,
+            self._scan_sampling[1] * self._stack_BF.shape[2],
+            self._scan_sampling[0] * self._stack_BF.shape[1],
+            0,
+        ]
+
+        ax.imshow(
+            self._crop_padded_object(self._recon_BF, remaining_padding),
+            extent=extent,
+            cmap=cmap,
+            **kwargs,
+        )
+
+    def _visualize_shifts(
+        self,
+        scale_arrows=0.002,
+        **kwargs,
+    ):
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        figsize = kwargs.get("figsize", (6, 6))
+        color = kwargs.get("color", (1, 0, 0, 1))
+        kwargs.pop("figsize", None)
+        kwargs.pop("color", None)
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        ax.quiver(
+            asnumpy(self._kxy[:, 1]),
+            asnumpy(self._kxy[:, 0]),
+            asnumpy(self._xy_shifts[:, 1] * scale_arrows),
+            asnumpy(self._xy_shifts[:, 0] * scale_arrows),
+            color=color,
+            angles="xy",
+            scale_units="xy",
+            scale=1,
+        )
+
+        kr_max = xp.max(self._kr)
+        ax.set_xlim([-1.2 * kr_max, 1.2 * kr_max])
+        ax.set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+
+    def visualize(
+        self,
+        **kwargs,
+    ):
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        self._visualize_figax(fig, ax, **kwargs)
+
+        ax.set_xlabel("x [A]")
+        ax.set_ylabel("y [A]")
+        ax.set_title("Reconstructed Bright Field Image")
+
+        return self
