@@ -3,7 +3,7 @@ Module for reconstructing virtual bright field images by aligning each virtual B
 """
 
 import warnings
-from typing import Mapping, Tuple
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,9 +35,6 @@ class BFReconstruction(PhaseReconstruction):
         Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
-    object_padding_px: Tuple[int,int], optional
-        Pixel dimensions to pad object with
-        If None, the padding is set to half the probe ROI dimensions
     dp_mean: ndarray, optional
         Mean diffraction pattern
         If None, get_dp_mean() is used
@@ -52,8 +49,8 @@ class BFReconstruction(PhaseReconstruction):
         datacube: DataCube,
         energy: float,
         dp_mean: np.ndarray = None,
-        device: str = "cpu",
         verbose: bool = False,
+        device: str = "cpu",
     ):
 
         if device == "cpu":
@@ -79,16 +76,42 @@ class BFReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
-        edge_blend=16,
-        object_padding_px=(32, 32),
-        normalize_images=True,
-        threshold_intensity=0.8,
-        plot_average_bf=True,
-        defocus_guess=None,
+        object_padding_px: Tuple[int, int] = (32, 32),
+        edge_blend: int = 16,
+        threshold_intensity: float = 0.8,
+        normalize_images: bool = True,
+        defocus_guess: float = None,
+        plot_average_bf: bool = True,
         **kwargs,
     ):
+        """
+        Iterative BrightField Reconstruction preprocessing method.
+
+        Parameters
+        ----------
+        object_padding_px: Tuple[int,int], optional
+            Pixel dimensions to pad object with
+            If None, the padding is set to half the probe ROI dimensions
+        edge_blend: int, optional
+            Pixels to blend image at the border
+        threshold: float, optional
+            Fraction of max of dp_mean for bright-field pixels
+        normalize_images: bool, optional
+            If True, bright images normalized to have a mean of 1
+        defocus_guess: float, optional
+            Initial guess of defocus value
+            If None, first iteration is assumed to be in-focus
+        plot_average_bf: bool, optional
+            If True, plots the average bright field image, using defocus_guess
+
+        Returns
+        --------
+        self: BFReconstruction
+            Self to accommodate chaining
+        """
 
         xp = self._xp
+        asnumpy = self._asnumpy
         self._object_padding_px = object_padding_px
 
         # get mean diffraction pattern
@@ -252,6 +275,8 @@ class BFReconstruction(PhaseReconstruction):
         self._recon_mask_initial = self._recon_mask.copy()
         self._xy_shifts_initial = self._xy_shifts.copy()
 
+        self.recon_BF = asnumpy(self._recon_BF)
+
         if plot_average_bf:
             figsize = kwargs.get("figsize", (6, 6))
             kwargs.pop("figsize", None)
@@ -269,19 +294,53 @@ class BFReconstruction(PhaseReconstruction):
 
     def reconstruct(
         self,
-        max_alignment_bin=None,
-        min_alignment_bin=1,
-        max_iter_at_min_bin=2,
-        upsample_factor=8,
-        regularizer_matrix_size=(1, 1),
-        regularize_shifts=True,
-        running_average=True,
-        progress_bar=True,
-        plot_aligned_bf=True,
-        plot_convergence=True,
-        reset=None,
+        max_alignment_bin: int = None,
+        min_alignment_bin: int = 1,
+        max_iter_at_min_bin: int = 2,
+        upsample_factor: int = 8,
+        regularizer_matrix_size: Tuple[int, int] = (1, 1),
+        regularize_shifts: bool = True,
+        running_average: bool = True,
+        progress_bar: bool = True,
+        plot_aligned_bf: bool = True,
+        plot_convergence: bool = True,
+        reset: bool = None,
         **kwargs,
     ):
+        """
+        Iterative BrightField Reconstruction main reconstruction method.
+
+        Parameters
+        ----------
+        max_alignment_bin: int, optional
+            Maximum bin size for bright field alignment
+            If None, the bright field disk radius is used
+        min_alignment_bin: int, optional
+            Minimum bin size for bright field alignment
+        max_iter_at_min_bin: int, optional
+            Number of iterations to run at the smallest bin size
+        upsample_factor: int, optional
+            DFT upsample factor for subpixel alignment
+        regularizer_matrix_size: Tuple[int,int], optional
+            Bernstein basis degree used for regularizing shifts
+        regularize_shifts: bool, optional
+            If True, the cross-correlated shifts are constrained to a spline interpolation
+        running_average: bool, optional
+            If True, the bright field reference image is updated in a spiral from the origin
+        progress_bar: bool, optional
+            If True, progress bar is displayed
+        plot_aligned_bf: bool, optional
+            If True, the aligned bright field image is plotted at each bin level
+        plot_convergence: bool, optional
+            If True, the convergence error is also plotted
+        reset: bool, optional
+            If True, the reconstruction is reset
+
+        Returns
+        --------
+        self: BFReconstruction
+            Self to accommodate chaining
+        """
 
         xp = self._xp
         asnumpy = self._asnumpy
@@ -521,16 +580,28 @@ class BFReconstruction(PhaseReconstruction):
                 ax.set_ylabel("Error")
             spec.tight_layout(fig)
 
+        self.recon_BF = asnumpy(self._recon_BF)
+
         return self
 
     def aberration_fit(
         self,
-        plot_CTF_compare=False,
-        plot_dk=0.005,
-        plot_k_sigma=0.02,
+        plot_CTF_compare: bool = False,
+        plot_dk: float = 0.005,
+        plot_k_sigma: float = 0.02,
     ):
         """
         Fit aberrations to the measured image shifts.
+
+        Parameters
+        ----------
+        plot_CTF_compare: bool, optional
+            If True, the fitted CTF is plotted against the reconstructed frequencies
+        plot_dk: float, optional
+            Reciprocal bin-size for polar-averaged FFT
+        plot_k_sigma: float, optional
+            sigma to gaussian blur polar-averaged FFT by
+
         """
         xp = self._xp
         asnumpy = self._asnumpy
@@ -657,15 +728,28 @@ class BFReconstruction(PhaseReconstruction):
 
     def aberration_correct(
         self,
-        k_info_limit=None,
-        k_info_power=2.0,
-        LASSO_filter=False,
-        LASSO_scale=1.0,
-        plot_corrected_bf=True,
+        plot_corrected_bf: bool = True,
+        k_info_limit: float = None,
+        k_info_power: float = 2.0,
+        LASSO_filter: bool = False,
+        LASSO_scale: float = 1.0,
         **kwargs,
     ):
         """
         CTF correction of the BF image using the measured defocus aberration.
+
+        Parameters
+        ----------
+        plot_corrected_bf: bool, optional
+            If True, the CTF-corrected bright field average image is plotted
+        k_info_limit: float, optional
+            maximum allowed frequency in butterworth filter
+        k_info_power: float, optional
+            power of butterworth filter
+        LASSO_filter: bool, optional
+            If True, the measured CTF is fitted to a LASSO-type curve_fit
+        LASSO_scale: float, optional
+            scale of LASSO filter
         """
 
         xp = self._xp
@@ -753,7 +837,8 @@ class BFReconstruction(PhaseReconstruction):
             )
 
         # Output image
-        self._recon_BF_corr = xp.real(xp.fft.ifft2(im_fft_corr))
+        self._recon_BF_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
+        self.recon_BF_corrected = asnumpy(self._recon_BF_corrected)
 
         # plotting
         if plot_corrected_bf:
@@ -765,15 +850,17 @@ class BFReconstruction(PhaseReconstruction):
 
             fig, ax = plt.subplots(figsize=figsize)
 
+            cropped_object = self._crop_padded_object(self._recon_BF_corrected)
+
             extent = [
                 0,
-                self._scan_sampling[1] * self._recon_BF_corr.shape[1],
-                self._scan_sampling[0] * self._recon_BF_corr.shape[0],
+                self._scan_sampling[1] * cropped_object.shape[1],
+                self._scan_sampling[0] * cropped_object.shape[0],
                 0,
             ]
 
             ax.imshow(
-                self._crop_padded_object(self._recon_BF_corr),
+                cropped_object,
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
@@ -785,9 +872,25 @@ class BFReconstruction(PhaseReconstruction):
 
     def _crop_padded_object(
         self,
-        padded_object,
-        remaining_padding=0,
+        padded_object: np.ndarray,
+        remaining_padding: int = 0,
     ):
+        """
+        Utility function to crop padded object
+
+        Parameters
+        ----------
+        padded_object: np.ndarray
+            Padded object to be cropped
+        remaining_padding: int, optional
+            Padding to leave uncropped
+
+        Returns
+        -------
+        cropped_object: np.ndarray
+            Cropped object
+
+        """
 
         asnumpy = self._asnumpy
 
@@ -800,22 +903,37 @@ class BFReconstruction(PhaseReconstruction):
         self,
         fig,
         ax,
-        remaining_padding=0,
+        remaining_padding: int = 0,
         **kwargs,
     ):
+        """
+        Utility function to visualize bright field average on given fig/ax
+
+        Parameters
+        ----------
+        fig: Figure
+            Matplotlib figure ax lives in
+        ax: Axes
+            Matplotlib axes to plot bright field average in
+        remaining_padding: int, optional
+            Padding to leave uncropped
+
+        """
 
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
 
+        cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
+
         extent = [
             0,
-            self._scan_sampling[1] * self._stack_BF.shape[2],
-            self._scan_sampling[0] * self._stack_BF.shape[1],
+            self._scan_sampling[1] * cropped_object.shape[1],
+            self._scan_sampling[0] * cropped_object.shape[0],
             0,
         ]
 
         ax.imshow(
-            self._crop_padded_object(self._recon_BF, remaining_padding),
+            cropped_object,
             extent=extent,
             cmap=cmap,
             **kwargs,
@@ -826,6 +944,15 @@ class BFReconstruction(PhaseReconstruction):
         scale_arrows=0.002,
         **kwargs,
     ):
+        """
+        Utility function to visualize bright field disk pixel shifts
+
+        Parameters
+        ----------
+        scale_arrows: float, optional
+            Scale to multiply shifts by
+
+        """
 
         xp = self._xp
         asnumpy = self._asnumpy
@@ -856,6 +983,14 @@ class BFReconstruction(PhaseReconstruction):
         self,
         **kwargs,
     ):
+        """
+        Visualization function for bright field average
+
+        Returns
+        --------
+        self: BFReconstruction
+            Self to accommodate chaining
+        """
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
