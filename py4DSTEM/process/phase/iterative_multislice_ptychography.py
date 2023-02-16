@@ -391,15 +391,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity)
+                #self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
+                probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu")
                 shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
-                self._vacuum_probe_intensity = xp.asarray(
-                    get_shifted_ar(
-                        self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True
+                self._vacuum_probe_intensity = get_shifted_ar(
+                        self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True,
+                        device = "cpu" if xp is np else "gpu"
                     )
-                )
 
             self._probe = (
                 ComplexProbe(
@@ -1079,14 +1079,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         current_positions -= positions_step_size * positions_update[..., 0]
 
         return current_positions
-
-    def _update(
-        self,
-    ):
-        """
-        Dummy, absorbed into adjoint operator.
-        """
-        pass
 
     def _object_threshold_constraint(self, current_object, pure_phase_object):
         """

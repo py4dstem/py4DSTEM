@@ -55,34 +55,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _forward(self):
-        """
-        Abstract method subclasses must define to perform forward projection.
-
-        For DPC, this consists of differentiating the current object estimate.
-        For Ptychography, this consists of overlap and Fourier projections.
-        """
-        pass
-
-    @abstractmethod
-    def _adjoint(self):
-        """
-        Abstract method subclasses must define to perform forward projection.
-
-        For DPC, this consists of Fourier-integrating the CoM gradient.
-        For Ptychography, this consists of inverting the modified Fourier amplitude,
-        followed by 'stitching' the probe/object update patches.
-        """
-        pass
-
-    @abstractmethod
-    def _update(self):
-        """
-        Abstract method subclasses must define to update current object estimates.
-        """
-        pass
-
-    @abstractmethod
     def reconstruct(self):
         """
         Abstract method subclasses must define which performs the reconstruction
@@ -1072,21 +1044,22 @@ class PhaseReconstruction(metaclass=ABCMeta):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        dps = asnumpy(diffraction_intensities)
-        com_x = asnumpy(com_fitted_x)
-        com_y = asnumpy(com_fitted_y)
+        #dps = asnumpy(diffraction_intensities)
+        #com_x = asnumpy(com_fitted_x)
+        #com_y = asnumpy(com_fitted_y)
 
         mean_intensity = 0
 
-        amplitudes = xp.zeros_like(dps)
+        amplitudes = xp.zeros_like(diffraction_intensities)
 
         for rx in range(self._intensities_shape[0]):
             for ry in range(self._intensities_shape[1]):
                 intensities = get_shifted_ar(
-                    dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
+                    diffraction_intensities[rx, ry], -com_fitted_x[rx, ry], -com_fitted_y[rx, ry], bilinear=True,
+                    device="cpu" if xp is np else "gpu"
                 )
 
-                intensities = xp.asarray(intensities)
+                #intensities = xp.asarray(intensities)
                 mean_intensity += xp.sum(intensities)
 
                 amplitudes[rx, ry] = xp.sqrt(xp.maximum(intensities, 0))
