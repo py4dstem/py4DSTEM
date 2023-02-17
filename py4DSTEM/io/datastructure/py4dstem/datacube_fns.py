@@ -1070,11 +1070,6 @@ def find_Bragg_disks(
         ml_model_path = ml_model_path, 
         ml_num_attempts = ml_num_attempts, 
         ml_batch_size = ml_batch_size,
-<<<<<<< HEAD
-
-      #  _qt_progress_bar = _qt_progress_bar,
-=======
->>>>>>> 8a78ac5ad29e0a99ee82a48032397a9cfe004922
     )
 
 
