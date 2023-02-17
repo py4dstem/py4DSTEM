@@ -9,7 +9,7 @@ from typing import Mapping, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 try:
     import cupy as cp
@@ -453,15 +453,20 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                #self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
                 self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu")
+                probe_x0, probe_y0 = get_CoM(
+                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                )
                 shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
-                        self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True,
-                        device = "cpu" if xp is np else "gpu"
-                    )
+                    self._vacuum_probe_intensity,
+                    shift_x,
+                    shift_y,
+                    bilinear=True,
+                    device="cpu" if xp is np else "gpu",
+                )
 
             self._probe = (
                 ComplexProbe(
@@ -2023,7 +2028,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         return current_object
 
     def _warmup_object_butterworth_constraint(
-        self, current_object, q_highpass, pure_phase_object
+        self,
+        current_object,
+        q_lowpass,
+        q_highpass,
     ):
         """
         High pass butterworth filter
@@ -2032,10 +2040,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
-        pure_phase_object: bool
-            If True, filtering on phase only
+            Cut-off frequency in A^-1 for high-pass butterworth filter
 
         Returns
         --------
@@ -2048,30 +2056,24 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
+        env = np.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
         electrostatic_obj, _ = current_object
 
-        if pure_phase_object:
-            real = xp.real(electrostatic_obj)
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
-            )
-        else:
-            real = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.real(electrostatic_obj)) * env_highpass))
-            )
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
-            )
-
-        electrostatic_obj = real + 1j * imag
+        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
         current_object = (electrostatic_obj, None)
 
         return current_object
 
     def _object_butterworth_constraint(
-        self, current_object, q_highpass, pure_phase_object
+        self,
+        current_object,
+        q_lowpass,
+        q_highpass,
     ):
         """
         High pass butterworth filter
@@ -2080,10 +2082,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
-        pure_phase_object: bool
-            If True, filtering on phase only
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
 
         Returns
         --------
@@ -2097,35 +2100,17 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
+        env = np.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
         electrostatic_obj, magnetic_obj = current_object
 
-        if pure_phase_object:
-            real_e = xp.real(electrostatic_obj)
-            imag_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
-            )
-            real_m = xp.real(magnetic_obj)
-            imag_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(magnetic_obj)) * env_highpass))
-            )
-        else:
-            real_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.real(electrostatic_obj)) * env_highpass))
-            )
-            imag_e = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(electrostatic_obj)) * env_highpass))
-            )
-            real_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.real(magnetic_obj)) * env_highpass))
-            )
-            imag_m = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(magnetic_obj)) * env_highpass))
-            )
+        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
+        magnetic_obj = xp.fft.ifft2(xp.fft.fft2(magnetic_obj) * env)
 
-        electrostatic_obj = real_e + 1j * imag_e
-        magnetic_obj = real_m + 1j * imag_m
         current_object = (electrostatic_obj, magnetic_obj)
 
         return current_object
@@ -2278,6 +2263,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         fix_positions,
         global_affine_transformation,
         butterworth_filter,
+        q_lowpass,
         q_highpass,
         warmup_iteration,
     ):
@@ -2305,8 +2291,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             If True, positions are not updated
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency for filter
+            Cut-off frequency in A^-1 for high-pass butterworth filter
 
         Returns
         --------
@@ -2331,11 +2319,15 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if butterworth_filter:
             if warmup_iteration:
                 current_object = self._warmup_object_butterworth_constraint(
-                    current_object, q_highpass, pure_phase_object
+                    current_object,
+                    q_lowpass,
+                    q_highpass,
                 )
             else:
                 current_object = self._object_butterworth_constraint(
-                    current_object, q_highpass, pure_phase_object
+                    current_object,
+                    q_lowpass,
+                    q_highpass,
                 )
 
         if warmup_iteration:
@@ -2390,7 +2382,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
-        q_highpass: float = 0.02,
+        q_lowpass: float = None,
+        q_highpass: float = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -2741,6 +2734,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 global_affine_transformation=global_affine_transformation,
                 warmup_iteration=a0 < warmup_iter,
                 butterworth_filter=a0 > butterworth_filter_iter,
+                q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
             )
 
@@ -3188,4 +3182,4 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        return asnumpy(xp.fft.fftshift(xp.fft.fft2(self._probe)))
+        return asnumpy(xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe))))

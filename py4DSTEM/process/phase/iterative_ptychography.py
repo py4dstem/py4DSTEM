@@ -162,6 +162,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
+        force_com_shifts: float = None,
         **kwargs,
     ):
         """
@@ -196,7 +197,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
-
+        force_com_shifts: tuple of ndarrays (CoMx, CoMy)
+            Amplitudes come from diffraction patterns shifted with
+            the CoM in the upper left corner for each probe unless
+            shift is overwritten.
         Returns
         --------
         self: PtychographicReconstruction
@@ -239,14 +243,29 @@ class PtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        (
-            self._amplitudes,
-            self._mean_diffraction_intensity,
-        ) = self._normalize_diffraction_intensities(
-            self._intensities,
-            self._com_fitted_x,
-            self._com_fitted_y,
-        )
+        if force_com_shifts is None:
+            (
+                self._amplitudes,
+                self._mean_diffraction_intensity,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                self._com_fitted_x,
+                self._com_fitted_y,
+            )
+        else:
+            force_com_shifts = (
+                xp.asarray(force_com_shifts[0] * self._resampling_factor_x),
+                xp.asarray(force_com_shifts[1] * self._resampling_factor_x),
+            )
+
+            (
+                self._amplitudes,
+                self._mean_diffraction_intensity,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                force_com_shifts[0],
+                force_com_shifts[1],
+            )
 
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
@@ -293,15 +312,20 @@ class PtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                #self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
                 self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu")
+                probe_x0, probe_y0 = get_CoM(
+                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                )
                 shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
-                        self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True,
-                        device = "cpu" if xp is np else "gpu"
-                    )
+                    self._vacuum_probe_intensity,
+                    shift_x,
+                    shift_y,
+                    bilinear=True,
+                    device="cpu" if xp is np else "gpu",
+                )
 
             self._probe = (
                 ComplexProbe(
@@ -967,20 +991,18 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _object_butterworth_constraint(
-        self, current_object, q_highpass, pure_phase_object
-    ):
+    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
-        High pass butterworth filter
+        Butterworth filter
 
         Parameters
         --------
         current_object: np.ndarray
             Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
-        pure_phase_object: bool
-            If True, filtering on phase only
+            Cut-off frequency in A^-1 for high-pass butterworth filter
 
         Returns
         --------
@@ -993,22 +1015,13 @@ class PtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
+        env = np.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
-        if pure_phase_object:
-            real = xp.real(current_object)
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
-            )
-        else:
-            real = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.real(current_object)) * env_highpass))
-            )
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
-            )
-        current_object = real + 1j * imag
-
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
         return current_object
 
     def _probe_center_of_mass_constraint(self, current_probe):
@@ -1159,6 +1172,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_positions,
         global_affine_transformation,
         butterworth_filter,
+        q_lowpass,
         q_highpass,
     ):
         """
@@ -1185,8 +1199,11 @@ class PtychographicReconstruction(PhaseReconstruction):
             If True, positions are not updated
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
 
         Returns
         --------
@@ -1209,7 +1226,9 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         if butterworth_filter:
             current_object = self._object_butterworth_constraint(
-                current_object, q_highpass, pure_phase_object
+                current_object,
+                q_lowpass,
+                q_highpass,
             )
 
         if fix_probe_fourier_amplitude:
@@ -1253,7 +1272,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
-        q_highpass: float = 0.02,
+        q_lowpass: float = None,
+        q_highpass: float = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1307,8 +1327,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             Number of iterations to run before applying object smoothness constraint
         butterworth_filter_iter: int, optional
             Number of iterations to run before applying high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
+            Cut-off frequency in A^-1 for high-pass butterworth filter
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1591,6 +1613,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 butterworth_filter=a0 > butterworth_filter_iter,
+                q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
             )
 
@@ -2083,4 +2106,4 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        return asnumpy(xp.fft.fftshift(xp.fft.fft2(self._probe)))
+        return asnumpy(xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe))))
