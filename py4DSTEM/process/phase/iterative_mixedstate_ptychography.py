@@ -2239,11 +2239,5 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         """Current probe estimate in Fourier space"""
         if not hasattr(self, "_probe"):
             return None
-
-        xp = self._xp
         asnumpy = self._asnumpy
-        return asnumpy(
-            xp.fft.fftshift(
-                xp.fft.fft2(xp.fft.ifftshift(self._probe, axes=(-2, -1))), axes=(-2, -1)
-            )
-        )
+        return asnumpy(self._return_fourier_probe(self._probe[0]))
