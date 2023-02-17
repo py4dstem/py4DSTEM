@@ -1550,7 +1550,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
     def plot_position_correction(
         self,
-        scale=1,
+        scale_arrows=1,
         verbose=True,
         **kwargs,
     ):
@@ -1592,10 +1592,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ax.quiver(
             initial_pos[:, 1],
             initial_pos[:, 0],
-            pos[:, 1] - initial_pos[:, 1],
-            pos[:, 0] - initial_pos[:, 0],
+            (pos[:, 1] - initial_pos[:, 1]) * scale_arrows,
+            (pos[:, 0] - initial_pos[:, 0]) * scale_arrows,
             scale_units="xy",
-            scale=scale,
+            scale=1,
             color=color,
             **kwargs,
         )
@@ -1608,7 +1608,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ax.set_title("Probe positions correction")
 
     def plot_fourier_probe(
-        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+        self,
+        probe=None,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
     ):
         """
         Plot probe in fourier space
@@ -1617,6 +1623,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ----------
         probe: complex array, optional
             if None is specified, uses the `probe_fourier` property
+        cbar: bool, optional
+            if True, adds colorbar
         scalebar: bool, optional
             if True, adds scalebar to probe
         pixelunits: str, optional
@@ -1639,6 +1647,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
             probe,
+            cbar=cbar,
             figax=(fig, ax),
             scalebar=scalebar,
             pixelsize=pixelsize,

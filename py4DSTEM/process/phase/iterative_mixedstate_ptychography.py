@@ -1080,7 +1080,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env = np.ones_like(qra)
+        env = xp.ones_like(qra)
         if q_highpass:
             env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
         if q_lowpass:
@@ -2233,11 +2233,3 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         )
         ax.set_xticks([])
         ax.set_yticks([])
-
-    @property
-    def probe_fourier(self):
-        """Current probe estimate in Fourier space"""
-        if not hasattr(self, "_probe"):
-            return None
-        asnumpy = self._asnumpy
-        return asnumpy(self._return_fourier_probe(self._probe[0]))
