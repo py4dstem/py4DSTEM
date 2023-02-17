@@ -77,7 +77,7 @@ class PtychographicReconstruction(PhaseReconstruction):
     initial_probe_guess: np.ndarray, optional
         Initial guess for complex-valued probe of dimensions (Sx,Sy). If None,
         initialized to ComplexProbe with semiangle_cutoff, energy, and aberrations
-    scan_positions: np.ndarray, optional
+    initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     verbose: bool, optional
@@ -103,7 +103,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
-        scan_positions: np.ndarray = None,
+        initial_scan_positions: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         **kwargs,
@@ -145,7 +145,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._probe_roi_shape = probe_roi_shape
         self._object = initial_object_guess
         self._probe = initial_probe_guess
-        self._scan_positions = scan_positions
+        self._scan_positions = initial_scan_positions
         self._datacube = datacube
         self._dp_mask = dp_mask
         self._verbose = verbose
@@ -273,7 +273,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
         )
-
+        
         # Object Initialization
         if self._object is None:
             pad_x, pad_y = self._object_padding_px
@@ -303,7 +303,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_initial = self._positions_px_initial.copy()
         self._positions_initial[:, 0] *= self.sampling[0]
         self._positions_initial[:, 1] *= self.sampling[1]
-
+        
         # Vectorized Patches
         self._set_vectorized_patch_indices()
 

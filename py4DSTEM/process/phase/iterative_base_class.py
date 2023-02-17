@@ -1109,18 +1109,19 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     raise ValueError()
             else:
                 raise ValueError()
+            
+            if self._rotation_best_transpose:
+                x = (x - np.ptp(x) / 2) / self.sampling[1]
+                y = (y - np.ptp(y) / 2) / self.sampling[0]
+            else:
+                x = (x - np.ptp(x) / 2) / self.sampling[0]
+                y = (y - np.ptp(y) / 2) / self.sampling[1]
+            x, y = np.meshgrid(x, y, indexing="ij")
 
         else:
-            x = positions[:, 0]
-            y = positions[:, 1]
-
-        if self._rotation_best_transpose:
-            x = (x - np.ptp(x) / 2) / self.sampling[1]
-            y = (y - np.ptp(y) / 2) / self.sampling[0]
-        else:
-            x = (x - np.ptp(x) / 2) / self.sampling[0]
-            y = (y - np.ptp(y) / 2) / self.sampling[1]
-        x, y = np.meshgrid(x, y, indexing="ij")
+            positions -= np.mean(positions, axis=0)
+            x = positions[:, 0] / self.sampling[1]
+            y = positions[:, 1] / self.sampling[0]
 
         if rotation_angle is not None:
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
