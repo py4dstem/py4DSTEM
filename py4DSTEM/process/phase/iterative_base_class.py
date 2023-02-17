@@ -78,7 +78,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         probe_roi_shape=None,
         vacuum_probe_intensity=None,
         dp_mask=None,
-        com_shifts = None,
+        com_shifts=None,
     ):
         """
         Datacube preprocssing step, to set the reciprocal- and real-space sampling.
@@ -174,9 +174,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
                     )
-            datacube.calibration.set_Q_pixel_size(
-                Q_pixel_size / resampling_factor_x
-            )
+            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
         if probe_roi_shape is not None:
 
             Qx, Qy = datacube.shape[-2:]
@@ -1050,7 +1048,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
 
         xp = self._xp
-        asnumpy = self._asnumpy
+        # asnumpy = self._asnumpy
 
         # dps = asnumpy(diffraction_intensities)
         # com_x = asnumpy(com_fitted_x)
@@ -1592,16 +1590,16 @@ class PhaseReconstruction(metaclass=ABCMeta):
         pos = self.positions
 
         figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1,0,0,1))
+        color = kwargs.get("color", (1, 0, 0, 1))
         kwargs.pop("figsize", None)
         kwargs.pop("color", None)
-        
+
         fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
             initial_pos[:, 1],
             initial_pos[:, 0],
-            pos[:,1] - initial_pos[:, 1],
-            pos[:,0] - initial_pos[:, 0],
+            pos[:, 1] - initial_pos[:, 1],
+            pos[:, 0] - initial_pos[:, 0],
             scale_units="xy",
             scale=scale,
             color=color,
@@ -1643,7 +1641,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
-        
+
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
             probe,

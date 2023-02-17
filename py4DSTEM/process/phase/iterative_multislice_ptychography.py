@@ -320,7 +320,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
-            com_shifts = force_com_shifts,
+            com_shifts=force_com_shifts,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -363,7 +363,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 xp.asarray(force_com_shifts[0]),
                 xp.asarray(force_com_shifts[1]),
             )
-        
+
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         del self._intensities
@@ -1391,7 +1391,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object = self._object_smoothness_constraint(
                 current_object, gaussian_filter_sigma, pure_phase_object
             )
-        
+
         if butterworth_filter:
             current_object = self._object_butterworth_constraint(
                 current_object,

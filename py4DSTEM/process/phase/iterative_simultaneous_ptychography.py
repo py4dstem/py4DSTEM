@@ -272,8 +272,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         if force_com_shifts is None:
-            force_com_shifts = (None,None,None)
-        
+            force_com_shifts = (None, None, None)
+
         # Note: a lot of the methods below modify state. The only two property we mind this for are
         # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
 
@@ -290,7 +290,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
-            com_shifts = force_com_shifts[0],
+            com_shifts=force_com_shifts[0],
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -334,14 +334,19 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
         # 2nd measurement
-        (measurement_1, _, _, force_com_shifts[1]) = self._preprocess_datacube_and_vacuum_probe(
+        (
+            measurement_1,
+            _,
+            _,
+            force_com_shifts[1],
+        ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube[1],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
             reshaping_method=self._reshaping_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=None,
             dp_mask=None,
-            com_shifts = force_com_shifts[1],
+            com_shifts=force_com_shifts[1],
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -386,14 +391,19 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
-            (measurement_2, _, _, force_com_shifts[2]) = self._preprocess_datacube_and_vacuum_probe(
+            (
+                measurement_2,
+                _,
+                _,
+                force_com_shifts[2],
+            ) = self._preprocess_datacube_and_vacuum_probe(
                 self._datacube[2],
                 diffraction_intensities_shape=self._diffraction_intensities_shape,
                 reshaping_method=self._reshaping_method,
                 probe_roi_shape=self._probe_roi_shape,
                 vacuum_probe_intensity=None,
                 dp_mask=None,
-                com_shifts = force_com_shifts[2],
+                com_shifts=force_com_shifts[2],
             )
 
             self._extract_intensities_and_calibrations_from_datacube(
@@ -441,16 +451,16 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 + mean_diffraction_intensity_1
                 + mean_diffraction_intensity_2
             ) / 3
-            
+
             del amplitudes_0, amplitudes_1, amplitudes_2
 
         else:
-            
+
             self._amplitudes = (amplitudes_0, amplitudes_1)
             self._mean_diffraction_intensity = (
                 mean_diffraction_intensity_0 + mean_diffraction_intensity_1
             ) / 2
-            
+
             del amplitudes_0, amplitudes_1
 
         # explicitly delete namespace
@@ -2024,7 +2034,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             phase_e = gaussian_filter(phase_e, gaussian_filter_sigma)
             electrostatic_obj = xp.exp(1.0j * phase_e)
         else:
-            electrostatic_obj = gaussian_filter(electrostatic_obj, gaussian_filter_sigma)
+            electrostatic_obj = gaussian_filter(
+                electrostatic_obj, gaussian_filter_sigma
+            )
 
         current_object = (electrostatic_obj, None)
 
@@ -2066,7 +2078,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             electrostatic_obj = xp.exp(1.0j * phase_e)
             magnetic_obj = xp.exp(1.0j * phase_m)
         else:
-            electrostatic_obj = gaussian_filter(electrostatic_obj, gaussian_filter_sigma)
+            electrostatic_obj = gaussian_filter(
+                electrostatic_obj, gaussian_filter_sigma
+            )
             magnetic_obj = gaussian_filter(magnetic_obj, gaussian_filter_sigma)
 
         current_object = (electrostatic_obj, magnetic_obj)
