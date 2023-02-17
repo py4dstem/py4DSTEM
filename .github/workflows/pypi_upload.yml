@@ -17,6 +17,9 @@ jobs:
     name: Check if version.py is changed and update if the version.py is not changed
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0        
+          token: ${{ secrets.GH_ACTION_VERSION_UPDATE }}      
       - name: Get changed files
         id: changed-files-specific
         uses: tj-actions/changed-files@v32
@@ -27,25 +30,31 @@ jobs:
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
           echo "Version file not changed, running script to change the version file."
-          python scripts/update_version.py
+          #git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          python .github/scripts/update_version.py
           git config --global user.email "ben.savitzky@gmail.com"
           git config --global user.name "bsavitzky"
-          git commit -a -m "Update version number"
+          git commit -a -m "Auto-update version number (GH Action)"
           git push origin main
   sync_with_dev:
     runs-on: ubuntu-latest
     name: Sync main with dev
     steps:
-      - uses: actions/checkout@v3
       - name: Sync main with dev
-        run: |
-          git fetch origin dev
-          git checkout dev
-          git merge main
+        uses: actions/checkout@v3
+        with:
+          ref: dev
+          fetch-depth: 0
+          token: ${{ secrets.GH_ACTION_VERSION_UPDATE }}
+      - run: |
+          # set strategy to default merge
+          git config pull.rebase false
+          git config --global user.email "ben.savitzky@gmail.com"
+          git config --global user.name "bsavitzky"
+          git pull origin main --commit --no-edit
           git push origin dev
-          
   deploy:
-    needs: check_version
+    needs: update_version
     runs-on: ubuntu-latest
     name: Deploy to PyPI
     steps:
@@ -65,3 +74,5 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
+
+

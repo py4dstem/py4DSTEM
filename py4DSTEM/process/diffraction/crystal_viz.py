@@ -645,7 +645,7 @@ def plot_orientation_zones(
     ax.axes.set_xlim3d(left=plot_limit[0], right=plot_limit[1])
     ax.axes.set_ylim3d(bottom=plot_limit[0], top=plot_limit[1])
     ax.axes.set_zlim3d(bottom=plot_limit[0], top=plot_limit[1])
-    ax.set_box_aspect((1, 1, 1))
+    # ax.set_box_aspect((1, 1, 1))
     ax.set_axis_off()
     # ax.setxticklabels([])
     # fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
@@ -1626,7 +1626,7 @@ def axisEqual3D(ax):
     r = maxsize / 2
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
-    ax.set_box_aspect((1, 1, 1))
+    # ax.set_box_aspect((1, 1, 1))
 
 
 def atomic_colors(Z, scheme="jmol"):

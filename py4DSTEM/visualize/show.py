@@ -1116,7 +1116,7 @@ def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,return
         return fig,ax
 
 def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
-                returnfig=False,**kwargs):
+                title = None, returnfig=False,**kwargs):
     """
     Plots a 2D array with one or more points.
     x and y are the point centers and must have the same length, N.
@@ -1129,6 +1129,7 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
         x,y         (number or iterable of numbers) the point positions
         s           (number or iterable of numbers) the relative point sizes
         scale       (number) the maximum point size
+        title       (str)  title for plot
         pointcolor
         alpha
 
@@ -1137,7 +1138,7 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
         If returnfig==False, the figure and its one axis are returned, and can be
         further edited.
     """
-    fig,ax = show(ar,returnfig=True,**kwargs)
+    fig,ax = show(ar,title = title, returnfig=True,**kwargs)
     d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha,
          'open_circles':open_circles}
     add_points(ax,d)

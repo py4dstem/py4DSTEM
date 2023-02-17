@@ -180,7 +180,6 @@ See a list [here](docs/papers.md).
 * scikit-image
 * scikit-learn
 * ipywidgets
-* qtconsole
 * tqdm
 * gdown
 
