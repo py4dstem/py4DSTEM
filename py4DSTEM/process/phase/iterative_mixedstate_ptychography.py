@@ -2191,6 +2191,47 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             )
 
         return self
+    
+    def plot_fourier_probe(
+        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+    ):
+        """
+        Plot probe in fourier space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+
+        if probe is None:
+            probe = self.probe_fourier[0]
+
+        if pixelsize is None:
+            pixelsize = self._reciprocal_sampling[1]
+        if pixelunits is None:
+            pixelunits = "A^-1"
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        show_complex(
+            probe,
+            figax=(fig, ax),
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            **kwargs,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
 
     @property
     def probe_fourier(self):
@@ -2201,5 +2242,5 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
         return asnumpy(
-            xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe), axes=(-2, -1)))
+            xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe,axes=(-2,-1))), axes=(-2, -1))
         )
