@@ -1647,3 +1647,33 @@ class PhaseReconstruction(metaclass=ABCMeta):
         )
         ax.set_xticks([])
         ax.set_yticks([])
+
+    def _return_fourier_probe(
+        self,
+        probe=None,
+    ):
+        """
+        Returns complex fourier probe shifted to center of array from
+        complex real space probe in center
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        """
+        xp = self._xp
+
+        if probe is None:
+            probe = self._probe
+
+        return xp.fft.fftshift(
+            xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
+        )
+
+    @property
+    def probe_fourier(self):
+        """Current probe estimate in Fourier space"""
+        if not hasattr(self, "_probe"):
+            return None
+        asnumpy = self._asnumpy
+        return asnumpy(self._return_fourier_probe(self._probe))

@@ -2237,13 +2237,3 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
         return self
-
-    @property
-    def probe_fourier(self):
-        """Current probe estimate in Fourier space"""
-        if not hasattr(self, "_probe"):
-            return None
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-        return asnumpy(xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe))))
