@@ -957,7 +957,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         return amplitude * phase
 
     def _object_smoothness_constraint(
-        self, current_object, gaussian_blur_sigma, pure_phase_object
+        self, current_object, gaussian_filter_sigma, pure_phase_object
     ):
         """
         Ptychographic smoothness constraint.
@@ -967,7 +967,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
-        gaussian_blur_sigma: float
+        gaussian_filter_sigma: float
             Standard deviation of gaussian kernel
         pure_phase_object: bool
             If True, gaussian blur performed on phase only
@@ -981,12 +981,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         gaussian_filter = self._gaussian_filter
 
         if pure_phase_object:
-            amplitude = xp.abs(current_object)
             phase = xp.angle(current_object)
-            phase = gaussian_filter(phase, gaussian_blur_sigma)
-            current_object = amplitude * xp.exp(1.0j * phase)
+            phase = gaussian_filter(phase, gaussian_filter_sigma)
+            current_object = xp.exp(1.0j * phase)
         else:
-            current_object = gaussian_filter(current_object, gaussian_blur_sigma)
+            current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
 
@@ -1165,11 +1164,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_probe,
         current_positions,
         pure_phase_object,
-        gaussian_blur_sigma,
         fix_com,
         fix_probe_fourier_amplitude,
         fix_positions,
         global_affine_transformation,
+        gaussian_filter,
+        gaussian_filter_sigma,
         butterworth_filter,
         q_lowpass,
         q_highpass,
@@ -1188,14 +1188,16 @@ class PtychographicReconstruction(PhaseReconstruction):
             Current positions estimate
         pure_phase_object: bool
             If True, object amplitude is set to unity
-        gaussian_blur_sigma: float
-            Standard deviation of gaussian kernel
         fix_com: bool
             If True, probe CoM is fixed to the center
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is set to initial probe
         fix_positions: bool
             If True, positions are not updated
+        gaussian_filter: bool
+            If True, applies real-space gaussian filter
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass: float
@@ -1214,21 +1216,21 @@ class PtychographicReconstruction(PhaseReconstruction):
             Constrained positions estimate
         """
 
-        if gaussian_blur_sigma is not None:
+        if gaussian_filter:
             current_object = self._object_smoothness_constraint(
-                current_object, gaussian_blur_sigma, pure_phase_object
+                current_object, gaussian_filter_sigma, pure_phase_object
             )
-
-        current_object = self._object_threshold_constraint(
-            current_object, pure_phase_object
-        )
-
+        
         if butterworth_filter:
             current_object = self._object_butterworth_constraint(
                 current_object,
                 q_lowpass,
                 q_highpass,
             )
+
+        current_object = self._object_threshold_constraint(
+            current_object, pure_phase_object
+        )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
@@ -1268,8 +1270,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         global_affine_transformation: bool = True,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
-        gaussian_blur_sigma: float = None,
-        gaussian_blur_iter: int = np.inf,
+        gaussian_filter_sigma: float = None,
+        gaussian_filter_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -1320,9 +1322,9 @@ class PtychographicReconstruction(PhaseReconstruction):
             Radius of probe supergaussian support in scaled pixel units, between (0,1]
         probe_support_supergaussian_degree: float, optional
             Degree supergaussian support is raised to, higher is sharper cutoff
-        gaussian_blur_sigma: float, optional
+        gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel
-        gaussian_blur_iter: int, optional
+        gaussian_filter_iter: int, optional
             Number of iterations to run before applying object smoothness constraint
         butterworth_filter_iter: int, optional
             Number of iterations to run before applying high-pass butteworth filter
@@ -1598,19 +1600,18 @@ class PtychographicReconstruction(PhaseReconstruction):
                 error += batch_error
 
             # constraints
-            gaussian_sigma = gaussian_blur_sigma if a0 < gaussian_blur_iter else None
-
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(
                 self._object,
                 self._probe,
                 self._positions_px,
                 pure_phase_object=a0 < pure_phase_object_iter,
-                gaussian_blur_sigma=gaussian_sigma,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
+                gaussian_filter=a0 > gaussian_filter_iter,
+                gaussian_filter_sigma=gaussian_filter_sigma,
                 butterworth_filter=a0 > butterworth_filter_iter,
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
