@@ -1579,6 +1579,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             if hasattr(self, "_tf"):
                 print(self._tf)
 
+        asnumpy = self._asnumpy
+
         extent = [
             0,
             self.sampling[1] * self._object_shape[1],
@@ -1586,16 +1588,23 @@ class PhaseReconstruction(metaclass=ABCMeta):
             0,
         ]
 
-        fig, ax = plt.subplots(figsize=(8, 8))
+        initial_pos = asnumpy(self._positions_px_initial)
+        pos = self.positions
+
+        figsize = kwargs.get("figsize", (6, 6))
+        color = kwargs.get("color", (1,0,0,1))
+        kwargs.pop("figsize", None)
+        kwargs.pop("color", None)
+        
+        fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
-            (self._positions_px_initial.get()[:, 1]) * self.sampling[1],
-            (self._positions_px_initial.get()[:, 0]) * self.sampling[0],
-            (self._positions_px.get()[:, 1] - self._positions_px_initial.get()[:, 1])
-            * self.sampling[1],
-            (self._positions_px.get()[:, 0] - self._positions_px_initial.get()[:, 0])
-            * self.sampling[0],
+            initial_pos[:, 1],
+            initial_pos[:, 0],
+            pos[:,1] - initial_pos[:, 1],
+            pos[:,0] - initial_pos[:, 0],
             scale_units="xy",
             scale=scale,
+            color=color,
             **kwargs,
         )
 
@@ -1604,7 +1613,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ax.set_xlim((extent[0], extent[1]))
         ax.set_ylim((extent[2], extent[3]))
         ax.set_aspect("equal")
-        ax.set_title("Position update")
+        ax.set_title("Probe positions correction")
 
     def plot_fourier_probe(
         self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
@@ -1632,7 +1641,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if pixelunits is None:
             pixelunits = "A^-1"
 
-        fig, ax = plt.subplots(figsize=(8, 8))
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+        
+        fig, ax = plt.subplots(figsize=figsize)
         show_complex(
             probe,
             figax=(fig, ax),
