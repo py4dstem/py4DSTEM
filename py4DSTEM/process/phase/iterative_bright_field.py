@@ -968,6 +968,7 @@ class BFReconstruction(PhaseReconstruction):
             angles="xy",
             scale_units="xy",
             scale=1,
+            **kwargs,
         )
 
         kr_max = xp.max(self._kr)
