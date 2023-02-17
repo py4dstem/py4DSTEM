@@ -2119,7 +2119,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env = np.ones_like(qra)
+        env = xp.ones_like(qra)
         if q_highpass:
             env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
         if q_lowpass:
@@ -2163,7 +2163,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env = np.ones_like(qra)
+        env = xp.ones_like(qra)
         if q_highpass:
             env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
         if q_lowpass:
