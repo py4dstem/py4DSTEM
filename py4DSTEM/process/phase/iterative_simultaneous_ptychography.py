@@ -112,7 +112,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         device: str = "cpu",
         **kwargs,
     ):
-
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -258,7 +257,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
-        force_com_shifts: tuple of tuples of ndarrays (CoMx, CoMy)
+        force_com_shifts: sequence of tuples of ndarrays (CoMx, CoMy)
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
@@ -272,7 +271,16 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         if force_com_shifts is None:
-            force_com_shifts = (None, None, None)
+            force_com_shifts = [None, None, None]
+        elif len(force_com_shifts) == self._num_sim_measurements:
+            force_com_shifts = list(force_com_shifts)
+        else:
+            raise ValueError(
+                (
+                    "force_com_shifts must be a sequence of tuples "
+                    "with the same length as the datasets."
+                )
+            )
 
         # Note: a lot of the methods below modify state. The only two property we mind this for are
         # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
@@ -455,7 +463,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             del amplitudes_0, amplitudes_1, amplitudes_2
 
         else:
-
             self._amplitudes = (amplitudes_0, amplitudes_1)
             self._mean_diffraction_intensity = (
                 mean_diffraction_intensity_0 + mean_diffraction_intensity_1
@@ -560,7 +567,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
-
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
@@ -1092,7 +1098,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         )
 
         if not fix_probe:
-
             object_normalization = xp.sum(
                 (xp.abs(electrostatic_obj_patches) ** 2),
                 axis=0,
@@ -1296,7 +1301,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
         if not fix_probe:
-
             electrostatic_magnetic_abs = xp.abs(
                 electrostatic_obj_patches * magnetic_obj_patches
             )
@@ -1654,7 +1658,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
         if not fix_probe:
-
             electrostatic_magnetic_abs = xp.abs(
                 electrostatic_obj_patches * magnetic_obj_patches
             )
@@ -2705,7 +2708,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             unit=" iter",
             disable=not progress_bar,
         ):
-
             error = 0.0
 
             if a0 == warmup_iter:
@@ -2722,7 +2724,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
             ):
-
                 # batch indices
                 self._positions_px = positions_px[start:end]
                 self._positions_px_fractional = self._positions_px - xp.round(
@@ -2966,7 +2967,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         fig = plt.figure(figsize=figsize)
 
         if plot_probe:
-
             # Electrostatic Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
@@ -3082,7 +3082,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax.set_title(f"Electrostatic object {object_mode}")
 
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
@@ -3116,7 +3115,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)

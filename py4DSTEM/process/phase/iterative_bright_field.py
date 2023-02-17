@@ -52,7 +52,6 @@ class BFReconstruction(PhaseReconstruction):
         verbose: bool = False,
         device: str = "cpu",
     ):
-
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -233,7 +232,7 @@ class BFReconstruction(PhaseReconstruction):
             Gs = xp.fft.fft2(self._stack_BF)
 
             self._xy_shifts = (
-                self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
+                -self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
             )
             dx = self._xy_shifts[:, 0]
             dy = self._xy_shifts[:, 1]
@@ -447,7 +446,6 @@ class BFReconstruction(PhaseReconstruction):
 
         # Loop over all binning values
         for a0 in range(bin_vals.shape[0]):
-
             G_ref = xp.fft.fft2(self._recon_BF)
 
             # Segment the virtual images with current binning values
@@ -466,7 +464,6 @@ class BFReconstruction(PhaseReconstruction):
                 unit=" image subsets",
                 disable=not progress_bar,
             ):
-
                 ind_align = inds_order[a1]
 
                 # Generate mean image for alignment
@@ -650,7 +647,6 @@ class BFReconstruction(PhaseReconstruction):
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
-
             # Get polar mean from FFT of BF reconstruction
             im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
 
@@ -842,7 +838,6 @@ class BFReconstruction(PhaseReconstruction):
 
         # plotting
         if plot_corrected_bf:
-
             figsize = kwargs.get("figsize", (6, 6))
             cmap = kwargs.get("cmap", "magma")
             kwargs.pop("figsize", None)

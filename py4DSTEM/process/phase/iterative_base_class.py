@@ -126,7 +126,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
 
         if diffraction_intensities_shape is not None:
-
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = diffraction_intensities_shape
 
@@ -141,10 +140,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Q_pixel_size = datacube.calibration.get_Q_pixel_size()
 
             if com_shifts is not None:
-                com_shifts *= resampling_factor_x
+                com_shifts = (
+                    com_shifts[0] * resampling_factor_x,
+                    com_shifts[1] * resampling_factor_x,
+                )
 
             if reshaping_method == "bin":
-
                 bin_factor = int(1 / resampling_factor_x)
                 if bin_factor < 1:
                     raise ValueError(
@@ -176,13 +177,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     )
             datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
         if probe_roi_shape is not None:
-
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = probe_roi_shape
             datacube = datacube.pad_Q(output_size=probe_roi_shape)
 
             if vacuum_probe_intensity is not None or dp_mask is not None:
-
                 pad_kx = Sx - Qx
                 pad_kx = (pad_kx // 2, pad_kx // 2 + pad_kx % 2)
 
@@ -190,13 +189,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 pad_ky = (pad_ky // 2, pad_ky // 2 + pad_ky % 2)
 
             if vacuum_probe_intensity is not None:
-
                 vacuum_probe_intensity = np.pad(
                     vacuum_probe_intensity, pad_width=(pad_kx, pad_ky), mode="constant"
                 )
 
             if dp_mask is not None:
-
                 dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
 
         return datacube, vacuum_probe_intensity, dp_mask, com_shifts
@@ -677,7 +674,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     )
 
                 if plot_rotation:
-
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
@@ -726,7 +722,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     fig.tight_layout()
 
             else:
-
                 # Transpose unknown, rotation unknown
                 rotation_angles_deg = xp.asarray(rotation_angles_deg)
                 rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
@@ -845,7 +840,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
-
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
@@ -920,7 +914,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
-
             figsize = kwargs.get("figsize", (8, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -961,7 +954,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default":
-
             figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -1107,7 +1099,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if positions is None:
             if grid_scan_shape is not None:
-
                 nx, ny = grid_scan_shape
 
                 if step_sizes is not None:
@@ -1587,6 +1578,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ]
 
         initial_pos = asnumpy(self._positions_px_initial)
+        initial_pos[:, 0] *= self.sampling[0]
+        initial_pos[:, 1] *= self.sampling[1]
+
         pos = self.positions
 
         figsize = kwargs.get("figsize", (6, 6))
