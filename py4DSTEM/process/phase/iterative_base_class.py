@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
+from py4DSTEM.visualize import show_complex
 from scipy.ndimage import rotate
 
 try:
@@ -126,10 +127,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = diffraction_intensities_shape
 
-            resampling_factor_x = Sx / Qx
+            self._resampling_factor_x = Sx / Qx
             resampling_factor_y = Sy / Qy
 
-            if resampling_factor_x != resampling_factor_y:
+            if self._resampling_factor_x != resampling_factor_y:
                 raise ValueError(
                     "Datacube calibration can only handle uniform Q-sampling."
                 )
@@ -138,7 +139,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
             if reshaping_method == "bin":
 
-                bin_factor = int(1 / resampling_factor_x)
+                bin_factor = int(1 / self._resampling_factor_x)
                 if bin_factor < 1:
                     raise ValueError(
                         f"Calculated binning factor {bin_factor} is less than 1."
@@ -153,7 +154,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     dp_mask = dp_mask[::bin_factor, ::bin_factor]
             else:
                 datacube = datacube.resample_Q(
-                    N=resampling_factor_x, method=reshaping_method
+                    N=self._resampling_factor_x, method=reshaping_method
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = fourier_resample(
@@ -167,8 +168,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
                     )
-            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
-
+            datacube.calibration.set_Q_pixel_size(
+                Q_pixel_size / self._resampling_factor_x
+            )
+        else:
+            self._resampling_factor_x = 1
         if probe_roi_shape is not None:
 
             Qx, Qy = datacube.shape[-2:]
@@ -1044,9 +1048,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        #dps = asnumpy(diffraction_intensities)
-        #com_x = asnumpy(com_fitted_x)
-        #com_y = asnumpy(com_fitted_y)
+        # dps = asnumpy(diffraction_intensities)
+        # com_x = asnumpy(com_fitted_x)
+        # com_y = asnumpy(com_fitted_y)
 
         mean_intensity = 0
 
@@ -1055,11 +1059,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
         for rx in range(self._intensities_shape[0]):
             for ry in range(self._intensities_shape[1]):
                 intensities = get_shifted_ar(
-                    diffraction_intensities[rx, ry], -com_fitted_x[rx, ry], -com_fitted_y[rx, ry], bilinear=True,
-                    device="cpu" if xp is np else "gpu"
+                    diffraction_intensities[rx, ry],
+                    -com_fitted_x[rx, ry],
+                    -com_fitted_y[rx, ry],
+                    bilinear=True,
+                    device="cpu" if xp is np else "gpu",
                 )
 
-                #intensities = xp.asarray(intensities)
+                # intensities = xp.asarray(intensities)
                 mean_intensity += xp.sum(intensities)
 
                 amplitudes[rx, ry] = xp.sqrt(xp.maximum(intensities, 0))
@@ -1547,3 +1554,88 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if return_values:
             return objects, convergence
+
+    def plot_position_correction(
+        self,
+        scale=1,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Function to plot changes to probe positions during ptychography reconstruciton
+
+        Parameters
+        ----------
+        scale: float, optional
+            scaling of quiver arrows
+        verbose: bool, optional
+            if True, prints AffineTransformation if positions have been updated
+        """
+        if verbose:
+            if hasattr(self, "_tf"):
+                print(self._tf)
+
+        extent = [
+            0,
+            self.sampling[1] * self._object_shape[1],
+            self.sampling[0] * self._object_shape[0],
+            0,
+        ]
+
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.quiver(
+            (self._positions_px_initial.get()[:, 1]) * self.sampling[1],
+            (self._positions_px_initial.get()[:, 0]) * self.sampling[0],
+            (self._positions_px.get()[:, 1] - self._positions_px_initial.get()[:, 1])
+            * self.sampling[1],
+            (self._positions_px.get()[:, 0] - self._positions_px_initial.get()[:, 0])
+            * self.sampling[0],
+            scale_units="xy",
+            scale=scale,
+            **kwargs,
+        )
+
+        ax.set_xlabel("x [A]")
+        ax.set_ylabel("y [A]")
+        ax.set_xlim((extent[0], extent[1]))
+        ax.set_ylim((extent[2], extent[3]))
+        ax.set_aspect("equal")
+        ax.set_title("Position update")
+
+    def plot_fourier_probe(
+        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+    ):
+        """
+        Plot probe in fourier space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+
+        if probe is None:
+            probe = self.probe_fourier
+
+        if pixelsize is None:
+            pixelsize = self._reciprocal_sampling[1]
+        if pixelunits is None:
+            pixelunits = "A^-1"
+
+        fig, ax = plt.subplots(figsize=(8, 8))
+        show_complex(
+            probe,
+            figax=(fig, ax),
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            **kwargs,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])

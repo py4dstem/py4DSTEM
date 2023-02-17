@@ -315,15 +315,23 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             if self._probe is None:
                 if self._vacuum_probe_intensity is not None:
                     self._semiangle_cutoff = np.inf
-                    #self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
-                    self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
-                    probe_x0, probe_y0 = get_CoM(self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu")
+                    # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                    self._vacuum_probe_intensity = xp.asarray(
+                        self._vacuum_probe_intensity
+                    )
+                    probe_x0, probe_y0 = get_CoM(
+                        self._vacuum_probe_intensity,
+                        device="cpu" if xp is np else "gpu",
+                    )
                     shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                     shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                     self._vacuum_probe_intensity = get_shifted_ar(
-                            self._vacuum_probe_intensity, shift_x, shift_y, bilinear=True,
-                            device = "cpu" if xp is np else "gpu"
-                        )
+                        self._vacuum_probe_intensity,
+                        shift_x,
+                        shift_y,
+                        bilinear=True,
+                        device="cpu" if xp is np else "gpu",
+                    )
 
                 _probe = (
                     ComplexProbe(
@@ -1030,20 +1038,18 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _object_butterworth_constraint(
-        self, current_object, q_highpass, pure_phase_object
-    ):
+    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
-        High pass butterworth filter
+        Butterworth filter
 
         Parameters
         --------
         current_object: np.ndarray
             Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency in A^-1 for butterworth filter
-        pure_phase_object: bool
-            If True, filtering on phase only
+            Cut-off frequency in A^-1 for high-pass butterworth filter
 
         Returns
         --------
@@ -1051,27 +1057,18 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0])
-        qy = xp.fft.fftfreq(current_object.shape[1])
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env_highpass = 1 / (1 + (qra / q_highpass) ** 4)
+        env = np.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
-        if pure_phase_object:
-            real = xp.real(current_object)
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
-            )
-        else:
-            real = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.real(current_object)) * env_highpass))
-            )
-            imag = xp.real(
-                xp.fft.ifft2((xp.fft.fft2(xp.imag(current_object)) * env_highpass))
-            )
-        current_object = real + 1j * imag
-
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
         return current_object
 
     def _probe_center_of_mass_constraint(self, current_probe):
@@ -1243,6 +1240,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         fix_positions,
         global_affine_transformation,
         butterworth_filter,
+        q_lowpass,
         q_highpass,
         orthogonalize_probe,
     ):
@@ -1270,8 +1268,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             If True, positions are not updated
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency for filter
+            Cut-off frequency in A^-1 for high-pass butterworth filter
         orthogonalize_probe: bool
             If True, probe will be orthogonalized
 
@@ -1296,7 +1296,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         if butterworth_filter:
             current_object = self._object_butterworth_constraint(
-                current_object, q_highpass, pure_phase_object
+                current_object,
+                q_lowpass,
+                q_highpass,
             )
 
         if fix_probe_fourier_amplitude:
@@ -1344,7 +1346,8 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         gaussian_blur_sigma: float = None,
         gaussian_blur_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
-        q_highpass: float = 0.02,
+        q_lowpass: float = None,
+        q_highpass: float = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1398,8 +1401,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             Number of iterations to run before applying object smoothness constraint
         butterworth_filter_iter: int, optional
             Number of iterations to run before applying high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
-            Cut-off frequency for high-pass filter
+            Cut-off frequency in A^-1 for high-pass butterworth filter
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1682,6 +1687,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 butterworth_filter=a0 > butterworth_filter_iter,
+                q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 orthogonalize_probe=orthogonalize_probe,
             )
@@ -2175,4 +2181,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        return asnumpy(xp.fft.fftshift(xp.fft.fft2(self._probe), axes=(-2, -1)))
+        return asnumpy(
+            xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(self._probe), axes=(-2, -1)))
+        )
