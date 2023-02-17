@@ -201,6 +201,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        
         Returns
         --------
         self: PtychographicReconstruction
@@ -213,6 +214,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._datacube,
             self._vacuum_probe_intensity,
             self._dp_mask,
+            force_com_shifts,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -220,6 +222,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
+            com_shifts = force_com_shifts,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -253,18 +256,14 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._com_fitted_y,
             )
         else:
-            force_com_shifts = (
-                xp.asarray(force_com_shifts[0] * self._resampling_factor_x),
-                xp.asarray(force_com_shifts[1] * self._resampling_factor_x),
-            )
 
             (
                 self._amplitudes,
                 self._mean_diffraction_intensity,
             ) = self._normalize_diffraction_intensities(
                 self._intensities,
-                force_com_shifts[0],
-                force_com_shifts[1],
+                xp.asarray(force_com_shifts[0]),
+                xp.asarray(force_com_shifts[1]),
             )
 
         # explicitly delete namespace
