@@ -260,6 +260,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
+        force_com_shifts: float = None,
         **kwargs,
     ):
         """
@@ -294,6 +295,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
+        force_com_shifts: tuple of ndarrays (CoMx, CoMy)
+            Amplitudes come from diffraction patterns shifted with
+            the CoM in the upper left corner for each probe unless
+            shift is overwritten.
 
         Returns
         --------
@@ -307,6 +312,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             self._datacube,
             self._vacuum_probe_intensity,
             self._dp_mask,
+            force_com_shifts,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -314,6 +320,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
+            com_shifts = force_com_shifts,
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -337,15 +344,26 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        (
-            self._amplitudes,
-            self._mean_diffraction_intensity,
-        ) = self._normalize_diffraction_intensities(
-            self._intensities,
-            self._com_fitted_x,
-            self._com_fitted_y,
-        )
+        if force_com_shifts is None:
+            (
+                self._amplitudes,
+                self._mean_diffraction_intensity,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                self._com_fitted_x,
+                self._com_fitted_y,
+            )
+        else:
 
+            (
+                self._amplitudes,
+                self._mean_diffraction_intensity,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                xp.asarray(force_com_shifts[0]),
+                xp.asarray(force_com_shifts[1]),
+            )
+        
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         del self._intensities

@@ -78,6 +78,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         probe_roi_shape=None,
         vacuum_probe_intensity=None,
         dp_mask=None,
+        com_shifts = None,
     ):
         """
         Datacube preprocssing step, to set the reciprocal- and real-space sampling.
@@ -115,6 +116,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             If not None, the vacuum probe intensity is also resampled and padded
         dp_mask, np.ndarray, optional
             If not None, dp_mask is also resampled and padded
+        com_shifts, np.ndarray, optional
+            If not None, com_shifts are multiplied by resampling factor
 
         Returns
         --------
@@ -127,19 +130,22 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = diffraction_intensities_shape
 
-            self._resampling_factor_x = Sx / Qx
+            resampling_factor_x = Sx / Qx
             resampling_factor_y = Sy / Qy
 
-            if self._resampling_factor_x != resampling_factor_y:
+            if resampling_factor_x != resampling_factor_y:
                 raise ValueError(
                     "Datacube calibration can only handle uniform Q-sampling."
                 )
 
             Q_pixel_size = datacube.calibration.get_Q_pixel_size()
 
+            if com_shifts is not None:
+                com_shifts *= resampling_factor_x
+
             if reshaping_method == "bin":
 
-                bin_factor = int(1 / self._resampling_factor_x)
+                bin_factor = int(1 / resampling_factor_x)
                 if bin_factor < 1:
                     raise ValueError(
                         f"Calculated binning factor {bin_factor} is less than 1."
@@ -154,7 +160,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     dp_mask = dp_mask[::bin_factor, ::bin_factor]
             else:
                 datacube = datacube.resample_Q(
-                    N=self._resampling_factor_x, method=reshaping_method
+                    N=resampling_factor_x, method=reshaping_method
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = fourier_resample(
@@ -169,10 +175,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         force_nonnegative=True,
                     )
             datacube.calibration.set_Q_pixel_size(
-                Q_pixel_size / self._resampling_factor_x
+                Q_pixel_size / resampling_factor_x
             )
-        else:
-            self._resampling_factor_x = 1
         if probe_roi_shape is not None:
 
             Qx, Qy = datacube.shape[-2:]
@@ -197,7 +201,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
 
-        return datacube, vacuum_probe_intensity, dp_mask
+        return datacube, vacuum_probe_intensity, dp_mask, com_shifts
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,

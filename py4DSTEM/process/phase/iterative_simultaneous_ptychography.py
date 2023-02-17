@@ -223,6 +223,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
+        force_com_shifts: float = None,
         **kwargs,
     ):
         """
@@ -257,6 +258,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
             Force whether diffraction intensities need to be transposed.
+        force_com_shifts: tuple of tuples of ndarrays (CoMx, CoMy)
+            Amplitudes come from diffraction patterns shifted with
+            the CoM in the upper left corner for each probe unless
+            shift is overwritten.
 
         Returns
         --------
@@ -266,6 +271,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
+        if force_com_shifts is None:
+            force_com_shifts = (None,None,None)
+        
         # Note: a lot of the methods below modify state. The only two property we mind this for are
         # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
 
@@ -274,6 +282,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             measurement_0,
             self._vacuum_probe_intensity,
             self._dp_mask,
+            force_com_shifts[0],
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube[0],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -281,6 +290,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
+            com_shifts = force_com_shifts[0],
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -304,23 +314,34 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        (
-            amplitudes_0,
-            mean_diffraction_intensity_0,
-        ) = self._normalize_diffraction_intensities(
-            self._intensities,
-            self._com_fitted_x,
-            self._com_fitted_y,
-        )
+        if force_com_shifts[0] is None:
+            (
+                amplitudes_0,
+                mean_diffraction_intensity_0,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                self._com_fitted_x,
+                self._com_fitted_y,
+            )
+        else:
+            (
+                amplitudes_0,
+                mean_diffraction_intensity_0,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                xp.asarray(force_com_shifts[0][0]),
+                xp.asarray(force_com_shifts[0][1]),
+            )
 
         # 2nd measurement
-        (measurement_1, _, _,) = self._preprocess_datacube_and_vacuum_probe(
+        (measurement_1, _, _, force_com_shifts[1]) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube[1],
             diffraction_intensities_shape=self._diffraction_intensities_shape,
             reshaping_method=self._reshaping_method,
             probe_roi_shape=self._probe_roi_shape,
             vacuum_probe_intensity=None,
             dp_mask=None,
+            com_shifts = force_com_shifts[1],
         )
 
         self._extract_intensities_and_calibrations_from_datacube(
@@ -344,24 +365,35 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        (
-            amplitudes_1,
-            mean_diffraction_intensity_1,
-        ) = self._normalize_diffraction_intensities(
-            self._intensities,
-            self._com_fitted_x,
-            self._com_fitted_y,
-        )
+        if force_com_shifts[1] is None:
+            (
+                amplitudes_1,
+                mean_diffraction_intensity_1,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                self._com_fitted_x,
+                self._com_fitted_y,
+            )
+        else:
+            (
+                amplitudes_1,
+                mean_diffraction_intensity_1,
+            ) = self._normalize_diffraction_intensities(
+                self._intensities,
+                xp.asarray(force_com_shifts[1][0]),
+                xp.asarray(force_com_shifts[1][1]),
+            )
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
-            (measurement_2, _, _,) = self._preprocess_datacube_and_vacuum_probe(
+            (measurement_2, _, _, force_com_shifts[2]) = self._preprocess_datacube_and_vacuum_probe(
                 self._datacube[2],
                 diffraction_intensities_shape=self._diffraction_intensities_shape,
                 reshaping_method=self._reshaping_method,
                 probe_roi_shape=self._probe_roi_shape,
                 vacuum_probe_intensity=None,
                 dp_mask=None,
+                com_shifts = force_com_shifts[2],
             )
 
             self._extract_intensities_and_calibrations_from_datacube(
@@ -384,14 +416,24 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 **kwargs,
             )
 
-            (
-                amplitudes_2,
-                mean_diffraction_intensity_2,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
+            if force_com_shifts[2] is None:
+                (
+                    amplitudes_2,
+                    mean_diffraction_intensity_2,
+                ) = self._normalize_diffraction_intensities(
+                    self._intensities,
+                    self._com_fitted_x,
+                    self._com_fitted_y,
+                )
+            else:
+                (
+                    amplitudes_2,
+                    mean_diffraction_intensity_2,
+                ) = self._normalize_diffraction_intensities(
+                    self._intensities,
+                    xp.asarray(force_com_shifts[2][0]),
+                    xp.asarray(force_com_shifts[2][1]),
+                )
 
             self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
             self._mean_diffraction_intensity = (
@@ -399,12 +441,16 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 + mean_diffraction_intensity_1
                 + mean_diffraction_intensity_2
             ) / 3
+            
             del amplitudes_0, amplitudes_1, amplitudes_2
+
         else:
+            
             self._amplitudes = (amplitudes_0, amplitudes_1)
             self._mean_diffraction_intensity = (
                 mean_diffraction_intensity_0 + mean_diffraction_intensity_1
             ) / 2
+            
             del amplitudes_0, amplitudes_1
 
         # explicitly delete namespace
