@@ -956,20 +956,20 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        overlap_fft = xp.fft.fft2(overlap[0])
+        overlap_fft = xp.fft.fft2(overlap[:,0])
 
         exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_x_patches * shifted_probes[0]
+                obj_rolled_x_patches * shifted_probes[:,0]
         )
         exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_y_patches * shifted_probes[0]
+                obj_rolled_y_patches * shifted_probes[:,0]
         )
 
         overlap_fft_conj = xp.conj(overlap_fft)
         estimated_intensity = xp.abs(overlap_fft) ** 2
         measured_intensity = amplitudes**2
 
-        flat_shape = (overlap[0].shape[0], -1)
+        flat_shape = (overlap[:,0].shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
