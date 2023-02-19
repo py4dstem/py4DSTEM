@@ -20,7 +20,7 @@ class CrystalPhase:
 
     """
 
-    name: str
+    names: str
     num_crystals: int
 
     def __init__(
