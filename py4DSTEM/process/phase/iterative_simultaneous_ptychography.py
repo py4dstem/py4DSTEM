@@ -2114,8 +2114,12 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+        
+
+        electrostatic_obj, _ = current_object
+        
+        qx = xp.fft.fftfreq(electrostatic_obj.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(electrostatic_obj.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
@@ -2124,8 +2128,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        electrostatic_obj, _ = current_object
 
         electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
         current_object = (electrostatic_obj, None)
@@ -2157,9 +2159,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+        electrostatic_obj, magnetic_obj = current_object
+
+        qx = xp.fft.fftfreq(electrostatic_obj.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(electrostatic_obj.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
@@ -2168,8 +2171,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        electrostatic_obj, magnetic_obj = current_object
 
         electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
         magnetic_obj = xp.fft.ifft2(xp.fft.fft2(magnetic_obj) * env)

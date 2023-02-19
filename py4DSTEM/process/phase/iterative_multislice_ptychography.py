@@ -1180,8 +1180,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
@@ -1191,7 +1191,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
-        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
         return current_object
 
     def _probe_center_of_mass_constraint(self, current_probe):
