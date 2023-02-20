@@ -12,7 +12,7 @@ from py4DSTEM.classes import (
     PointList,
     PointListArray
 )
-from py4DSTEM.emd import tqdmnd
+from emdfile import tqdmnd
 
 def read_v0_7(fp, **kwargs):
     """

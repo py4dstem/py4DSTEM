@@ -3,7 +3,7 @@
 from typing import Optional,Union
 import numpy as np
 
-from py4DSTEM.emd import Array,RootedNode
+from emdfile import Array,RootedNode
 from py4DSTEM.classes import Data, Calibration
 from py4DSTEM.classes.methods import DataCubeMethods
 

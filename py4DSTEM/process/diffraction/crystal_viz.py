@@ -10,8 +10,7 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.diffraction.utils import calc_1D_profile
 
 

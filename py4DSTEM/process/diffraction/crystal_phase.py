@@ -4,8 +4,7 @@ from scipy.optimize import nnls
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointListArray
+from emdfile import tqdmnd, PointListArray
 from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 
@@ -37,10 +36,10 @@ class Crystal_Phase:
                 raise ValueError('Orientation maps must have the same number of entries as crystals.')
             self.orientation_maps = orientation_maps
         else:
-            raise TypeError('orientation_maps must be a list of orientation maps.')    
+            raise TypeError('orientation_maps must be a list of orientation maps.')
         self.name = name
         return
-    
+
     def plot_all_phase_maps(
         self,
         map_scale_values = None,

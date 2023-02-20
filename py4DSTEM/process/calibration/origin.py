@@ -4,8 +4,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointListArray
+from emdfile import tqdmnd, PointListArray
 from py4DSTEM.classes import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D

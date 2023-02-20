@@ -3,8 +3,7 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.classes import RealSlice
 
 def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):

@@ -3,9 +3,8 @@
 import numpy as np
 from pathlib import Path
 from ncempy.io import dm
+from emd import tqdmnd, Array
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import Array
 from py4DSTEM.classes import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 

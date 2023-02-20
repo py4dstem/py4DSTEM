@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
-from py4DSTEM.emd import Array
+from emdfile import Array
 
 
 

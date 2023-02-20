@@ -2,8 +2,7 @@
 
 import numpy as np
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointListArray
+from emdfile import tqdmnd, PointListArray
 from py4DSTEM.process.utils import add_to_2D_array_from_floats
 
 

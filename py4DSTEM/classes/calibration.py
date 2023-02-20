@@ -4,7 +4,7 @@ import numpy as np
 from numbers import Number
 from typing import Optional
 
-from py4DSTEM.emd import Metadata
+from emdfile import Metadata
 from py4DSTEM.classes.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
