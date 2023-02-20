@@ -1,5 +1,6 @@
 """
-Module for reconstructing virtual bright field images by aligning each virtual BF image.
+Module for reconstructing virtual parallax (also known as tilted bright field)
+images by aligning each virtual BF image.
 """
 
 import warnings
@@ -25,9 +26,9 @@ except ImportError:
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class BFReconstruction(PhaseReconstruction):
+class ParallaxReconstruction(PhaseReconstruction):
     """
-    Iterative BrightField Reconstruction Class.
+    Iterative parallax reconstruction class.
 
     Parameters
     ----------
@@ -84,7 +85,7 @@ class BFReconstruction(PhaseReconstruction):
         **kwargs,
     ):
         """
-        Iterative BrightField Reconstruction preprocessing method.
+        Iterative parallax reconstruction preprocessing method.
 
         Parameters
         ----------
@@ -105,7 +106,7 @@ class BFReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        self: BFReconstruction
+        self: ParallaxReconstruction
             Self to accommodate chaining
         """
 
@@ -307,7 +308,7 @@ class BFReconstruction(PhaseReconstruction):
         **kwargs,
     ):
         """
-        Iterative BrightField Reconstruction main reconstruction method.
+        Iterative Parallax Reconstruction main reconstruction method.
 
         Parameters
         ----------
@@ -643,7 +644,12 @@ class BFReconstruction(PhaseReconstruction):
                     f"{self.aberration_A1y:.0f}) Ang"
                 )
             )
-            print(f"Defocus C1             = {self.aberration_C1:.0f} Ang")
+            if self.aberration_C1 > 0:
+                print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
+                print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
+            else:
+                print(f"Aberration C1          = {self.aberration_C1:.0f} Ang")
+                print(f"Defocus dF             =  {-1*self.aberration_C1:.0f} Ang")
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
@@ -691,7 +697,8 @@ class BFReconstruction(PhaseReconstruction):
             )
 
             # plotting input - log scale
-            hist_plot = xp.log(hist_exp)
+            min_hist_val = xp.max(hist_exp) * 1e-3
+            hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
             hist_plot -= xp.min(hist_plot)
             hist_plot /= xp.max(hist_plot)
 
@@ -863,7 +870,7 @@ class BFReconstruction(PhaseReconstruction):
 
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title("Corrected Bright Field Image")
+            ax.set_title("CTF-Corrected Bright Field Image")
 
     def _crop_padded_object(
         self,
