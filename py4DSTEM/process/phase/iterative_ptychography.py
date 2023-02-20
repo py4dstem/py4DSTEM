@@ -1905,131 +1905,156 @@ class PtychographicReconstruction(PhaseReconstruction):
                 raise ValueError()
 
         figsize = kwargs.get("figsize", (12, 7))
-        cmap = kwargs.get("cmap", "magma")
+        cmap = kwargs.get("cmap", "inferno")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
-        errors = self.error_iterations
+        errors = np.array(self.error_iterations)
         objects = [
             self._crop_rotate_object_fov(obj, padding=padding)
             for obj in self.object_iterations
         ]
 
-        if plot_probe:
-            total_grids = (np.prod(iterations_grid) / 2).astype("int")
-            probes = self.probe_iterations
-        else:
-            total_grids = np.prod(iterations_grid)
-        max_iter = len(objects) - 1
-        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
-
-        extent = [
-            0,
-            self.sampling[1] * objects[0].shape[1],
-            self.sampling[0] * objects[0].shape[0],
-            0,
-        ]
-
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
-
-        if plot_convergence:
-            if plot_probe:
-                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
-            else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
-        else:
-            if plot_probe:
-                spec = GridSpec(ncols=1, nrows=2)
-            else:
-                spec = GridSpec(ncols=1, nrows=1)
-
+        # set up axes
         fig = plt.figure(figsize=figsize)
-
-        grid = ImageGrid(
-            fig,
-            spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
-            axes_pad=(0.75, 0.5) if cbar else 0.5,
-            cbar_mode="each" if cbar else None,
-            cbar_pad="2.5%" if cbar else None,
-        )
-
-        for n, ax in enumerate(grid):
-            if object_mode == "phase":
-                im = ax.imshow(
-                    np.angle(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Phase")
-            elif object_mode == "amplitude":
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Amplitude")
-            else:
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]) ** 2,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Intensity")
-
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
-            if cbar:
-                grid.cbar_axes[n].colorbar(im)
-
-        if plot_probe:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            grid = ImageGrid(
-                fig,
-                spec[1],
-                nrows_ncols=(1, iterations_grid[1]),
-                axes_pad=(0.75, 0.5) if cbar else 0.5,
-                cbar_mode="each" if cbar else None,
-                cbar_pad="2.5%" if cbar else None,
-            )
-
-            for n, ax in enumerate(grid):
-                im = ax.imshow(
-                    np.abs(probes[grid_range[n]]) ** 2,
-                    extent=probe_extent,
-                    cmap="Greys_r",
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Probe")
-
-                ax.set_xlabel("x [A]")
-                ax.set_ylabel("y [A]")
-
-                if cbar:
-                    grid.cbar_axes[n].colorbar(im)
-
         if plot_convergence:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
             if plot_probe:
-                ax2 = fig.add_subplot(spec[2])
+                ax_conv = fig.add_axes((0.0, 0.0, 0.2, 1.0))
+                ax_obj = fig.add_axes((0.2, 0.5, 0.8, 0.5))
+                ax_probe = fig.add_axes((0.2, 0.5, 0.8, 0.5))
             else:
-                ax2 = fig.add_subplot(spec[1])
-            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
-            ax2.set_xlabel("Iteration Number")
-            ax2.set_ylabel("Log RMS error")
-            ax2.yaxis.tick_right()
+                ax_conv = fig.add_axes((0.0, 0.0, 0.2, 1.0))
+                ax_obj = fig.add_axes((0.2, 0.0, 0.8, 1.0))
+        else:
+            if plot_probe:
+                ax_obj = fig.add_axes((0.0, 0.5, 1.0, 0.5))
+                ax_probe = fig.add_axes((0.0, 0.5, 1.0, 0.5))
+            else:
+                ax_obj = fig.add_axes((0.0, 0.0, 1.0, 1.0))
 
-        spec.tight_layout(fig)
+
+        # plot convergenge
+        ax_conv.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+        ax_conv.set_ylabel("Log RMS error")
+        ax_conv.set_xlabel("Iteration Number")
+        # ax_conv.yaxis.tick_right()
+
+
+        # if plot_probe:
+        #     total_grids = (np.prod(iterations_grid) / 2).astype("int")
+        #     probes = self.probe_iterations
+        # else:
+        #     total_grids = np.prod(iterations_grid)
+        # max_iter = len(objects) - 1
+        # grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
+
+        # extent = [
+        #     0,
+        #     self.sampling[1] * objects[0].shape[1],
+        #     self.sampling[0] * objects[0].shape[0],
+        #     0,
+        # ]
+
+        # probe_extent = [
+        #     0,
+        #     self.sampling[1] * self._region_of_interest_shape[1],
+        #     self.sampling[0] * self._region_of_interest_shape[0],
+        #     0,
+        # ]
+
+        # if plot_convergence:
+        #     if plot_probe:
+        #         spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
+        #     else:
+        #         spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
+        # else:
+        #     if plot_probe:
+        #         spec = GridSpec(ncols=1, nrows=2)
+        #     else:
+        #         spec = GridSpec(ncols=1, nrows=1)
+
+        # fig = plt.figure(figsize=figsize)
+
+        # grid = ImageGrid(
+        #     fig,
+        #     spec[0],
+        #     nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
+        #     axes_pad=(0.75, 0.5) if cbar else 0.5,
+        #     cbar_mode="each" if cbar else None,
+        #     cbar_pad="2.5%" if cbar else None,
+        # )
+
+        # for n, ax in enumerate(grid):
+        #     if object_mode == "phase":
+        #         im = ax.imshow(
+        #             np.angle(objects[grid_range[n]]),
+        #             extent=extent,
+        #             cmap=cmap,
+        #             **kwargs,
+        #         )
+        #         ax.set_title(f"Iter: {grid_range[n]} Phase")
+        #     elif object_mode == "amplitude":
+        #         im = ax.imshow(
+        #             np.abs(objects[grid_range[n]]),
+        #             extent=extent,
+        #             cmap=cmap,
+        #             **kwargs,
+        #         )
+        #         ax.set_title(f"Iter: {grid_range[n]} Amplitude")
+        #     else:
+        #         im = ax.imshow(
+        #             np.abs(objects[grid_range[n]]) ** 2,
+        #             extent=extent,
+        #             cmap=cmap,
+        #             **kwargs,
+        #         )
+        #         ax.set_title(f"Iter: {grid_range[n]} Intensity")
+
+        #     ax.set_xlabel("x [A]")
+        #     ax.set_ylabel("y [A]")
+        #     if cbar:
+        #         grid.cbar_axes[n].colorbar(im)
+
+        # if plot_probe:
+        #     kwargs.pop("vmin", None)
+        #     kwargs.pop("vmax", None)
+        #     grid = ImageGrid(
+        #         fig,
+        #         spec[1],
+        #         nrows_ncols=(1, iterations_grid[1]),
+        #         axes_pad=(0.75, 0.5) if cbar else 0.5,
+        #         cbar_mode="each" if cbar else None,
+        #         cbar_pad="2.5%" if cbar else None,
+        #     )
+
+        #     for n, ax in enumerate(grid):
+        #         im = ax.imshow(
+        #             np.abs(probes[grid_range[n]]) ** 2,
+        #             extent=probe_extent,
+        #             cmap="Greys_r",
+        #             **kwargs,
+        #         )
+        #         ax.set_title(f"Iter: {grid_range[n]} Probe")
+
+        #         ax.set_xlabel("x [A]")
+        #         ax.set_ylabel("y [A]")
+
+        #         if cbar:
+        #             grid.cbar_axes[n].colorbar(im)
+
+        # if plot_convergence:
+        #     kwargs.pop("vmin", None)
+        #     kwargs.pop("vmax", None)
+        #     if plot_probe:
+        #         ax2 = fig.add_subplot(spec[2])
+        #     else:
+        #         ax2 = fig.add_subplot(spec[1])
+        #     ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+        #     ax2.set_xlabel("Iteration Number")
+        #     ax2.set_ylabel("Log RMS error")
+        #     ax2.yaxis.tick_right()
+
+        # spec.tight_layout(fig)
 
     def visualize(
         self,
