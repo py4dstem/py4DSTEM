@@ -1878,6 +1878,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
+        relative_error = True,
         **kwargs,
     ):
         """
@@ -1909,36 +1910,65 @@ class PtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
+        # Get errors, object waves, probes
         errors = np.array(self.error_iterations)
-        objects = [
-            self._crop_rotate_object_fov(obj, padding=padding)
-            for obj in self.object_iterations
-        ]
+        if len(self.object_iterations) < iterations_grid[1]:
+            inds_plot = np.arange(len(self.object_iterations))
+        else:
+            max_iter = len(self.object_iterations) - 1
+            total_grids = (np.prod(iterations_grid) / 2).astype("int")
+            inds_plot = np.arange(0, max_iter + 1, max_iter // (total_grids - 1))
+        objects = np.hstack([
+            self._crop_rotate_object_fov(obj, padding=padding) 
+            for ind, obj in enumerate(self.object_iterations) if np.any(ind == inds_plot)
+        ])
+
+        print(objects.shape)
+
+        # objects = [
+        #     self._crop_rotate_object_fov(obj, padding=padding)
+        #     for obj in self.object_iterations
+        # ]
 
         # set up axes
         fig = plt.figure(figsize=figsize)
         if plot_convergence:
             if plot_probe:
                 ax_conv = fig.add_axes((0.0, 0.0, 0.2, 1.0))
-                ax_obj = fig.add_axes((0.2, 0.5, 0.8, 0.5))
-                ax_probe = fig.add_axes((0.2, 0.5, 0.8, 0.5))
+                ax_obj = fig.add_axes((0.24, 0.60, 0.75, 0.38))
+                ax_probe = fig.add_axes((0.24, 0.0, 0.75, 0.5))
             else:
                 ax_conv = fig.add_axes((0.0, 0.0, 0.2, 1.0))
-                ax_obj = fig.add_axes((0.2, 0.0, 0.8, 1.0))
+                ax_obj = fig.add_axes((0.24, 0.0, 0.75, 1.0))
         else:
             if plot_probe:
                 ax_obj = fig.add_axes((0.0, 0.5, 1.0, 0.5))
-                ax_probe = fig.add_axes((0.0, 0.5, 1.0, 0.5))
+                ax_probe = fig.add_axes((0.0, 0.0, 1.0, 0.5))
             else:
                 ax_obj = fig.add_axes((0.0, 0.0, 1.0, 1.0))
 
+        # plot convergence
+        if plot_convergence:
+            if relative_error:
+                ax_conv.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax_conv.set_ylabel("Log Relative RMS Error")
+            else:
+                ax_conv.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax_conv.set_ylabel("Log RMS Error")
+            ax_conv.set_xlabel("Iteration Number")
 
-        # plot convergenge
-        ax_conv.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-        ax_conv.set_ylabel("Log RMS error")
-        ax_conv.set_xlabel("Iteration Number")
+        # plot object waves
+        if object_mode == "phase":
+            ax_obj.imshow(np.angle(objects))
+        elif object_mode == "amplitude":
+            ax_obj.imshow(np.abs(objects))
+        else:
+            ax_obj.imshow(np.abs(objects))**2
+        fig.colorbar(im2, cax=cbar_ax)
+
         # ax_conv.yaxis.tick_right()
 
+        # plot object waves
 
         # if plot_probe:
         #     total_grids = (np.prod(iterations_grid) / 2).astype("int")
