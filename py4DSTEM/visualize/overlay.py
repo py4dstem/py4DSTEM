@@ -6,7 +6,7 @@ from numbers import Number
 from math import log
 from fractions import Fraction
 
-from py4DSTEM.emd import PointList
+from emdfile import PointList
 
 
 

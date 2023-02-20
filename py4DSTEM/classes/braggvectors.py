@@ -5,7 +5,7 @@ from typing import Optional,Union
 import numpy as np
 from os.path import basename
 
-from py4DSTEM.emd import (
+from emdfile import (
     Custom,
     PointListArray,
     Metadata

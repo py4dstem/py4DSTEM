@@ -8,7 +8,7 @@ try:
     import numba as nb
 except ImportError:
     pass
-from py4DSTEM.emd.tqdmnd import tqdmnd
+from emdfile import tqdmnd
 from py4DSTEM.classes import DataCube
 
 

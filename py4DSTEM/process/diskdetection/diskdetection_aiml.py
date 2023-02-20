@@ -13,8 +13,7 @@ from scipy.ndimage import gaussian_filter
 from time import time
 from numbers import Number
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.classes import QPoints, BraggVectors
 from py4DSTEM.process.utils import get_maxima_2D
 # from py4DSTEM.process.diskdetection import universal_threshold

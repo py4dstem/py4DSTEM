@@ -11,8 +11,7 @@ from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
 from matplotlib.colors import ListedColormap
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 
 
 def make_orientation_histogram(

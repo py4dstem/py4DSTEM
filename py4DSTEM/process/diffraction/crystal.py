@@ -8,8 +8,7 @@ from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
-from py4DSTEM import tqdmnd
-from py4DSTEM.emd import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
 
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern

@@ -7,7 +7,7 @@
 import numpy as np
 from scipy import optimize
 
-from py4DSTEM.emd import PointListArray
+from emdfile import PointListArray
 from py4DSTEM.preprocess.utils import get_maxima_2D, bin2D
 
 def electron_count(datacube, darkreference, Nsamples=40,

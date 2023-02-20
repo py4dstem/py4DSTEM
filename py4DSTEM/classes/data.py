@@ -3,7 +3,7 @@
 
 import warnings
 
-from py4DSTEM.emd import Node
+from emdfile import Node
 from py4DSTEM.classes import Calibration
 
 

@@ -7,8 +7,8 @@
 
 import numpy as np
 from pathlib import Path
+from emdfile import tqdmnd
 from py4DSTEM.classes import DataCube
-from py4DSTEM.emd.tqdmnd import tqdmnd
 from py4DSTEM.preprocess.utils import bin2D
 
 def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
