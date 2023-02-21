@@ -11,7 +11,7 @@ for x,y in tqdmnd(20,10):
     sleep(0.1)
 """
 
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 from itertools import product
 from functools import reduce
