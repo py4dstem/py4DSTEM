@@ -1278,8 +1278,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
-        plot_live = False,
-        figsize = (12,4)
     ):
         """
         Ptychographic reconstruction main method.
@@ -1526,7 +1524,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ** probe_support_supergaussian_degree
             )
         )
-        
+
         # main loop
         for a0 in tqdmnd(
             max_iter,
