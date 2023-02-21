@@ -1526,54 +1526,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ** probe_support_supergaussian_degree
             )
         )
-
-        # plotting frame
-        if plot_live:
-            b = 0.02
-            plt.ion()
-
-            fig = plt.figure(figsize=figsize)
-            fig.canvas.draw_idle()
-            ax_conv = fig.add_axes((0.0, 0.0, 0.28, 1.0))
-            ax_obj = fig.add_axes((0.29, 0.1, 0.35, 0.9))
-            ax_probe = fig.add_axes((0.64, 0.1, 0.35, 0.9))
-
-            cax_obj = fig.add_axes((0.29+b, 0.01, 0.35-2*b, 0.08))
-            cax_probe = fig.add_axes((0.64+b, 0.01, 0.35-2*b, 0.08))
-
-            # initial appearance
-            ax_conv.set_xlabel("Iteration")
-            ax_conv.set_ylabel("Relative RMS Error")
-
-            im_obj = ax_obj.imshow(
-                np.zeros_like(self.object, dtype='float'),
-                cmap = 'inferno',
-                vmin = 0,
-                vmax = 1,
-            )
-            fig.colorbar(im_obj, cax=cax_obj, orientation='horizontal')
-            cax_obj.set_label('Object Phase [rads]')
-            ax_obj.set_axis_off()
-
-            im_probe = ax_probe.imshow(
-                np.zeros_like(self.probe, dtype='float'),
-                cmap = 'gray',
-                vmin = 0,
-                vmax = 1,
-            )
-            fig.colorbar(im_probe, cax=cax_probe, orientation='horizontal')
-            cax_probe.set_label('Real Space Probe Amplitude')
-            ax_probe.set_axis_off()
-
-            # im_obj.draw()
-            # im_probe.draw()
-            # fig.canvas.draw_idle()
-            # IPython.display.clear_output(wait=True)
-            # plt.draw()
-
-            # plt.show()
-
-
+        
         # main loop
         for a0 in tqdmnd(
             max_iter,
@@ -1647,30 +1600,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                     )
 
                 error += batch_error
-
-            # plotting of current iteration reconstructions and error
-
-            if plot_live:
-                obj = np.angle(
-                    self._crop_rotate_object_fov(
-                        asnumpy(self._object), 
-                        padding=0))
-                im_obj.set_data(obj)
-                print(np.min(obj), np.max(obj))
-                im_obj.set_clim(np.min(obj), np.max(obj))
-
-                probe = np.abs(asnumpy(self._probe))
-                im_probe.set_data(probe)
-                im_probe.set_clim(0, np.max(probe))
-                
-                fig.canvas.draw()
-                fig.show()
-                # fig.canvas.draw()
-                # im_obj.draw()
-                # im_probe.draw()
-                # # fig.canvas.flush_events()
-                # fig.canvas.draw_idle()
-                # plt.show()
 
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
