@@ -1639,7 +1639,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                     self._positions_px
                 )
                 self._set_vectorized_patch_indices()
-                amplitudes = self._amplitudes[shuffled_indices][start:end]
+                amplitudes = self._amplitudes[shuffled_indices[start:end]]
 
                 # forward operator
                 (
