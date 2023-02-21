@@ -2114,10 +2114,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        
 
         electrostatic_obj, _ = current_object
-        
+
         qx = xp.fft.fftfreq(electrostatic_obj.shape[0], self.sampling[0])
         qy = xp.fft.fftfreq(electrostatic_obj.shape[1], self.sampling[1])
         qya, qxa = xp.meshgrid(qy, qx)
@@ -2501,9 +2500,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel
         gaussian_filter_iter: int, optional
-            Number of iterations to run before applying object smoothness constraint
+            Number of iterations to run using object smoothness constraint
         butterworth_filter_iter: int, optional
-            Number of iterations to run before applying high-pass butteworth filter
+            Number of iterations to run using high-pass butteworth filter
         q_highpass: float
             Cut-off frequency for high-pass filter
         store_iterations: bool, optional
@@ -2795,9 +2794,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 warmup_iteration=a0 < warmup_iter,
-                gaussian_filter=a0 > gaussian_filter_iter,
+                gaussian_filter=a0 < gaussian_filter_iter
+                and gaussian_filter_sigma is not None,
                 gaussian_filter_sigma=gaussian_filter_sigma,
-                butterworth_filter=a0 > butterworth_filter_iter,
+                butterworth_filter=a0 < butterworth_filter_iter
+                and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
             )
@@ -2891,6 +2892,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         object_mode: str,
         padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -2907,6 +2909,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -3124,15 +3129,18 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if plot_convergence and hasattr(self, "error_iterations"):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-            errors = self.error_iterations
+            errors = np.array(self.error_iterations)
             if plot_probe:
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-
-            ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+            if relative_error:
+                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax.set_ylabel("Log Rel. RMS error")
+            else:
+                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax.set_ylabel("Log RMS error")
             ax.set_xlabel("Iteration Number")
-            ax.set_ylabel("Log RMS error")
             ax.yaxis.tick_right()
 
         fig.suptitle(f"RMS error: {self.error:.3e}")
@@ -3146,6 +3154,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -3176,6 +3185,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         object_mode: str = "phase",
         cbar: bool = False,
         padding: int = 0,
+        relative_error: bool = True,
         **kwargs,
     ):
         """
@@ -3194,6 +3204,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         Returns
         --------
@@ -3220,6 +3233,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
         else:
@@ -3230,6 +3244,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
 

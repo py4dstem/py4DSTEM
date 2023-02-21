@@ -108,7 +108,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         device: str = "cpu",
         **kwargs,
     ):
-
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -256,7 +255,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._com_fitted_y,
             )
         else:
-
             (
                 self._amplitudes,
                 self._mean_diffraction_intensity,
@@ -273,7 +271,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
         )
-        
+
         # Object Initialization
         if self._object is None:
             pad_x, pad_y = self._object_padding_px
@@ -303,7 +301,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_initial = self._positions_px_initial.copy()
         self._positions_initial[:, 0] *= self.sampling[0]
         self._positions_initial[:, 1] *= self.sampling[1]
-        
+
         # Vectorized Patches
         self._set_vectorized_patch_indices()
 
@@ -362,7 +360,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
-
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
@@ -680,7 +677,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         if not fix_probe:
-
             object_normalization = xp.sum(
                 (xp.abs(object_patches) ** 2),
                 axis=0,
@@ -1271,7 +1267,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
         gaussian_filter_sigma: float = None,
-        gaussian_filter_iter: int = 0,
+        gaussian_filter_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -1325,9 +1321,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel
         gaussian_filter_iter: int, optional
-            Number of iterations to run before applying object smoothness constraint
+            Number of iterations to run using object smoothness constraint
         butterworth_filter_iter: int, optional
-            Number of iterations to run before applying high-pass butteworth filter
+            Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
@@ -1532,7 +1528,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             unit=" iter",
             disable=not progress_bar,
         ):
-
             error = 0.0
 
             # randomize
@@ -1546,7 +1541,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
             ):
-
                 # batch indices
                 self._positions_px = positions_px[start:end]
                 self._positions_px_fractional = self._positions_px - xp.round(
@@ -1605,14 +1599,16 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 self._positions_px,
-                pure_phase_object = a0 < pure_phase_object_iter,
-                fix_com = fix_com and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude = a0 < fix_probe_fourier_amplitude_iter,
-                fix_positions = a0 < fix_positions_iter,
+                pure_phase_object=a0 < pure_phase_object_iter,
+                fix_com=fix_com and a0 >= fix_probe_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
-                gaussian_filter = a0 < gaussian_filter_iter,
+                gaussian_filter=a0 < gaussian_filter_iter
+                and gaussian_filter_sigma is not None,
                 gaussian_filter_sigma=gaussian_filter_sigma,
-                butterworth_filter = a0 < butterworth_filter_iter,
+                butterworth_filter=a0 < butterworth_filter_iter
+                and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
             )
@@ -1693,6 +1689,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         object_mode: str,
         padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1709,6 +1706,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -1765,7 +1765,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         fig = plt.figure(figsize=figsize)
 
         if plot_probe:
-
             # Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
@@ -1847,7 +1846,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
@@ -1856,15 +1854,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         if plot_convergence and hasattr(self, "error_iterations"):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-            errors = self.error_iterations
+            errors = np.array(self.error_iterations)
             if plot_probe:
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-
-            ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+            if relative_error:
+                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax.set_ylabel("Log Rel. RMS error")
+            else:
+                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax.set_ylabel("Log RMS error")
             ax.set_xlabel("Iteration Number")
-            ax.set_ylabel("Log RMS error")
             ax.yaxis.tick_right()
 
         fig.suptitle(f"RMS error: {self.error:.3e}")
@@ -1878,7 +1879,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
-        relative_error = True,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -2029,7 +2030,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             else:
                 ax2 = fig.add_subplot(spec[1])
             if relative_error:
-                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)            
+                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
                 ax2.set_ylabel("Log Rel. RMS error")
             else:
                 ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
@@ -2047,6 +2048,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_mode: str = "phase",
         cbar: bool = False,
         padding: int = 0,
+        relative_error: bool = True,
         **kwargs,
     ):
         """
@@ -2065,6 +2067,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         Returns
         --------
@@ -2091,6 +2096,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
         else:
@@ -2101,6 +2107,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
 

@@ -116,7 +116,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         device: str = "cpu",
         **kwargs,
     ):
-
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -354,7 +353,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 self._com_fitted_y,
             )
         else:
-
             (
                 self._amplitudes,
                 self._mean_diffraction_intensity,
@@ -468,7 +466,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         )
 
         if plot_probe_overlaps:
-
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
@@ -562,7 +559,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         overlap = xp.empty_like(object_patches)
 
         for s in range(self._num_slices):
-
             overlap[s] = object_patches[s] * propagated_probes[s]
 
             if s + 1 < self._num_slices:
@@ -807,9 +803,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             if not fix_probe:
-
                 if s > 0:
-
                     object_normalization = xp.abs(obj) ** 2
                     object_normalization = 1 / xp.sqrt(
                         1e-16
@@ -826,7 +820,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                         probe, xp.conj(self._propagator_arrays[s - 1])
                     )
                 else:
-
                     object_normalization = xp.sum(
                         (xp.abs(obj) ** 2),
                         axis=0,
@@ -908,9 +901,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             if not fix_probe:
-
                 if s > 0:
-
                     object_normalization = xp.abs(obj) ** 2
                     object_normalization = 1 / xp.sqrt(
                         1e-16
@@ -927,7 +918,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                         probe, xp.conj(self._propagator_arrays[s - 1])
                     )
                 else:
-
                     object_normalization = xp.sum(
                         (xp.abs(obj) ** 2),
                         axis=0,
@@ -1498,9 +1488,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel
         gaussian_filter_iter: int, optional
-            Number of iterations to run before applying object smoothness constraint
+            Number of iterations to run using object smoothness constraint
         butterworth_filter_iter: int, optional
-            Number of iterations to run before applying high-pass butteworth filter
+            Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
@@ -1705,7 +1695,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             unit=" iter",
             disable=not progress_bar,
         ):
-
             error = 0.0
 
             # randomize
@@ -1719,7 +1708,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
             ):
-
                 # batch indices
                 self._positions_px = positions_px[start:end]
                 self._positions_px_fractional = self._positions_px - xp.round(
@@ -1783,9 +1771,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
-                gaussian_filter=a0 > gaussian_filter_iter,
+                gaussian_filter=a0 < gaussian_filter_iter
+                and gaussian_filter_sigma is not None,
                 gaussian_filter_sigma=gaussian_filter_sigma,
-                butterworth_filter=a0 > butterworth_filter_iter,
+                butterworth_filter=a0 < butterworth_filter_iter
+                and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
             )
@@ -1867,6 +1857,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         object_mode: str,
         padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1883,6 +1874,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -1942,7 +1936,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         fig = plt.figure(figsize=figsize)
 
         if plot_probe:
-
             # Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
@@ -2001,7 +1994,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
-
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
@@ -2010,15 +2002,18 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if plot_convergence and hasattr(self, "error_iterations"):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-            errors = self.error_iterations
+            errors = np.array(self.error_iterations)
             if plot_probe:
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-
-            ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+            if relative_error:
+                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax.set_ylabel("Log Rel. RMS error")
+            else:
+                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax.set_ylabel("Log RMS error")
             ax.set_xlabel("Iteration Number")
-            ax.set_ylabel("Log RMS error")
             ax.yaxis.tick_right()
 
         fig.suptitle(f"RMS error: {self.error:.3e}")
@@ -2032,6 +2027,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -2050,6 +2046,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         if iterations_grid == "auto":
@@ -2063,7 +2062,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
-        errors = self.error_iterations
+        errors = np.array(self.error_iterations)
         objects = [
             self._crop_rotate_object_fov(np.sum(np.angle(obj), axis=0), padding=padding)
             for obj in self.object_iterations
@@ -2164,9 +2163,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ax2 = fig.add_subplot(spec[2])
             else:
                 ax2 = fig.add_subplot(spec[1])
-            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+            if relative_error:
+                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax2.set_ylabel("Log Rel. RMS error")
+            else:
+                ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax2.set_ylabel("Log RMS error")
             ax2.set_xlabel("Iteration Number")
-            ax2.set_ylabel("Log RMS error")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)
@@ -2179,6 +2182,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str = "phase",
         cbar: bool = False,
         padding: int = 0,
+        relative_error: bool = True,
         **kwargs,
     ):
         """
@@ -2197,6 +2201,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         Returns
         --------
@@ -2223,6 +2230,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
         else:
@@ -2233,6 +2241,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
+                relative_error=relative_error,
                 **kwargs,
             )
 
