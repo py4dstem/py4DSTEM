@@ -2733,7 +2733,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
                 amps = []
                 for amplitudes in self._amplitudes:
-                    amps.append(amplitudes[shuffled_indices][start:end])
+                    amps.append(amplitudes[shuffled_indices[start:end]])
                 amplitudes = tuple(amps)
 
                 # forward operator
