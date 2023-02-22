@@ -1,17 +1,24 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.spatial import Voronoi
-from py4DSTEM.visualize import show
-from py4DSTEM.visualize.overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
-from py4DSTEM.visualize.overlay import add_points
-from py4DSTEM.visualize.vis_grid import show_image_grid
-from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from py4DSTEM.io.datastructure import DataCube,Calibration,PointList
-from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
+from py4DSTEM.io.datastructure import Calibration, DataCube, PointList
 from py4DSTEM.process.calibration import double_sided_gaussian
 from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
+from py4DSTEM.process.utils import convert_ellipse_params, get_voronoi_vertices
+from py4DSTEM.visualize import show
+from py4DSTEM.visualize.overlay import (
+    add_bragg_index_labels,
+    add_ellipses,
+    add_pointlabels,
+    add_points,
+    add_scalebar,
+    add_vector,
+)
+from py4DSTEM.visualize.vis_grid import show_image_grid
+from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
+from scipy.spatial import Voronoi
+
 
 def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -799,6 +806,9 @@ def show_complex(
     vmin = None,
     vmax = None,
     cbar = True,
+    scalebar = None,
+    pixelunits = 'pixels',
+    pixelsize = 1,
     returnfig = False,
     **kwargs
     ):
@@ -812,6 +822,9 @@ def show_complex(
         vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g. 
         vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
         cbar (bool)             : if True, include color wheel
+        scalebar (boo)          : if True, adds scale bar
+        pixelunits (str)        : units for scalebar
+        pixelsize (float)       : size of one pixel in pixelunits for scalebar
         returnfig (bool)        : if True, the function returns the tuple (figure,axis)
         
     Returns:
@@ -864,6 +877,16 @@ def show_complex(
         returnfig = True,
         **kwargs
     )
+    
+    if scalebar is not None and scalebar is not False:
+        scalebar = {
+        'Nx':ar_complex.shape[0],
+        'Ny':ar_complex.shape[1],
+        'pixelsize':pixelsize,
+        'pixelunits':pixelunits,
+        }
+        
+        add_scalebar(ax,scalebar)
 
     #add color bar
     if cbar == True:
