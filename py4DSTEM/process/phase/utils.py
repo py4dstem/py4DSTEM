@@ -11,6 +11,7 @@ except ImportError:
 
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from scipy.ndimage import gaussian_filter
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
@@ -51,6 +52,9 @@ polar_aliases = {
     "Cs": "C30",
     "C5": "C50",
 }
+
+
+### Probe functions
 
 
 class ComplexProbe:
@@ -96,9 +100,9 @@ class ComplexProbe:
         gpts: Tuple[int, int],
         sampling: Tuple[float, float],
         semiangle_cutoff: float = np.inf,
+        rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         device: str = "cpu",
-        rolloff: float = 2,
         focal_spread: float = 0.0,
         angular_spread: float = 0.0,
         gaussian_spread: float = 0.0,
@@ -475,6 +479,23 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     )
 
 
+def projection(u: np.ndarray, v: np.ndarray, xp):
+    """Projection of vector u onto vector v."""
+    return u * xp.vdot(u, v) / xp.vdot(u, u)
+
+
+def orthogonalize(V: np.ndarray, xp):
+    """Non-normalized QR decomposition using repeated projections."""
+    U = V.copy()
+    for i in range(1, V.shape[0]):
+        for j in range(i):
+            U[i, :] -= projection(U[j, :], V[i, :], xp)
+    return U
+
+
+### FFT-shift functions
+
+
 def fourier_translation_operator(
     positions: np.ndarray, shape: tuple, xp=np
 ) -> np.ndarray:
@@ -534,10 +555,18 @@ def fft_shift(array, positions, xp=np):
     -------
         Fourier-shifted array
     """
-    return xp.fft.ifft2(
-        xp.fft.fft2(array)
-        * fourier_translation_operator(positions, array.shape[-2:], xp)
-    )
+    translation_operator = fourier_translation_operator(positions, array.shape[-2:], xp)
+    fourier_array = xp.fft.fft2(array)
+
+    if len(translation_operator.shape) == 3 and len(fourier_array.shape) == 3:
+        shifted_fourier_array = fourier_array[None] * translation_operator[:, None]
+    else:
+        shifted_fourier_array = fourier_array * translation_operator
+
+    return xp.fft.ifft2(shifted_fourier_array)
+
+
+### Standalone DPC functions
 
 
 def calculate_center_of_mass(
@@ -885,3 +914,487 @@ def center_of_mass_relative_rotation(
     com_y = asnumpy(com_y)
 
     return com_x, com_y, rotation_best_deg, rotation_best_transpose
+
+
+### Batching functions
+
+
+def subdivide_into_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None
+):
+    """
+    Split an n integer into m (almost) equal integers, such that the sum of smaller integers equals n.
+
+    Parameters
+    ----------
+    n: int
+        The integer to split.
+    m: int
+        The number integers n will be split into.
+
+    Returns
+    -------
+    list of int
+    """
+    if (num_batches is not None) & (max_batch is not None):
+        raise RuntimeError()
+
+    if num_batches is None:
+        if max_batch is not None:
+            num_batches = (num_items + (-num_items % max_batch)) // max_batch
+        else:
+            raise RuntimeError()
+
+    if num_items < num_batches:
+        raise RuntimeError("num_batches may not be larger than num_items")
+
+    elif num_items % num_batches == 0:
+        return [num_items // num_batches] * num_batches
+    else:
+        v = []
+        zp = num_batches - (num_items % num_batches)
+        pp = num_items // num_batches
+        for i in range(num_batches):
+            if i >= zp:
+                v = [pp + 1] + v
+            else:
+                v = [pp] + v
+        return v
+
+
+def generate_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None, start=0
+):
+    for batch in subdivide_into_batches(num_items, num_batches, max_batch):
+        end = start + batch
+        yield start, end
+
+        start = end
+
+
+#### Affine transformation functions
+# Adapted from https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
+
+
+class AffineTransform:
+    """
+    Affine Transform Class.
+
+    Simplified version of AffineTransform from tike:
+    https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
+
+    AffineTransform() -> Identity
+
+    Parameters
+    ----------
+    scale0: float
+        x-scaling
+    scale1: float
+        y-scaling
+    shear1: float
+        \gamma shear
+    angle: float
+        \theta rotation angle
+    t0: float
+        x-translation
+    t1: float
+        y-translation
+    """
+
+    def __init__(
+        self,
+        scale0: float = 1.0,
+        scale1: float = 1.0,
+        shear1: float = 0.0,
+        angle: float = 0.0,
+        t0: float = 0.0,
+        t1: float = 0.0,
+    ):
+
+        self.scale0 = scale0
+        self.scale1 = scale1
+        self.shear1 = shear1
+        self.angle = angle
+        self.t0 = t0
+        self.t1 = t1
+
+    @classmethod
+    def fromarray(self, T: np.ndarray):
+        """Return an Affine Transfrom from a 2x2 matrix.
+        Use decomposition method from Graphics Gems 2 Section 7.1
+        """
+        R = T[:2, :2].copy()
+        scale0 = np.linalg.norm(R[0])
+        if scale0 <= 0:
+            return AffineTransform()
+        R[0] /= scale0
+        shear1 = R[0] @ R[1]
+        R[1] -= shear1 * R[0]
+        scale1 = np.linalg.norm(R[1])
+        if scale1 <= 0:
+            return AffineTransform()
+        R[1] /= scale1
+        shear1 /= scale1
+        angle = np.arccos(R[0, 0])
+
+        if T.shape[0] > 2:
+            t0, t1 = T[2]
+        else:
+            t0 = t1 = 0.0
+
+        return AffineTransform(
+            scale0=float(scale0),
+            scale1=float(scale1),
+            shear1=float(shear1),
+            angle=float(angle),
+            t0=t0,
+            t1=t1,
+        )
+
+    def asarray(self):
+        """Return an 2x2 matrix of scale, shear, rotation.
+        This matrix is scale @ shear @ rotate from left to right.
+        """
+        cosx = np.cos(self.angle)
+        sinx = np.sin(self.angle)
+        return (
+            np.array(
+                [
+                    [self.scale0, 0.0],
+                    [0.0, self.scale1],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [1.0, 0.0],
+                    [self.shear1, 1.0],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [+cosx, -sinx],
+                    [+sinx, +cosx],
+                ],
+                dtype="float32",
+            )
+        )
+
+    def asarray3(self):
+        """Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right. Expects a
+        homogenous (z) coordinate of 1.
+        """
+        T = np.empty((3, 2), dtype="float32")
+        T[2] = (self.t0, self.t1)
+        T[:2, :2] = self.asarray()
+        return T
+
+    def astuple(self):
+        """Return the constructor parameters in a tuple."""
+        return (
+            self.scale0,
+            self.scale1,
+            self.shear1,
+            self.angle,
+            self.t0,
+            self.t1,
+        )
+
+    def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
+        origin = xp.asarray(origin)
+        tf_matrix = self.asarray()
+        tf_matrix = xp.asarray(tf_matrix)
+        tf_translation = xp.array((self.t0, self.t1)) + origin
+        return ((x - origin) @ tf_matrix) + tf_translation
+
+    def __str__(self):
+        return (
+            "AffineTransform( \n"
+            f"  scale0 = {self.scale0:.4f}, scale1 = {self.scale1:.4f}, \n"
+            f"  shear1 = {self.shear1:.4f}, angle = {self.angle:.4f}, \n"
+            f"  t0 = {self.t0:.4f}, t1 = {self.t1:.4f}, \n"
+            ")"
+        )
+
+
+def estimate_global_transformation(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    xp=np,
+):
+    """Use least squares to estimate the global affine transformation."""
+
+    origin = xp.asarray(origin)
+
+    try:
+        if translation_allowed:
+            a = xp.pad(positions0 - origin, ((0, 0), (0, 1)), constant_values=1)
+        else:
+            a = positions0 - origin
+
+        b = positions1 - origin
+        aT = a.conj().swapaxes(-1, -2)
+        x = xp.linalg.inv(aT @ a) @ aT @ b
+
+        tf = AffineTransform.fromarray(x)
+
+    except xp.linalg.LinAlgError:
+        tf = AffineTransform()
+
+    error = xp.linalg.norm(tf(positions0, origin=origin, xp=xp) - positions1)
+
+    return tf, error
+
+
+def estimate_global_transformation_ransac(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    min_sample: int = 64,
+    max_error: float = 16,
+    min_consensus: float = 0.75,
+    max_iter: int = 20,
+    xp=np,
+):
+    """Use RANSAC to estimate the global affine transformation."""
+    best_fitness = np.inf  # small fitness is good
+    transform = AffineTransform()
+
+    # Choose a subset
+    for subset in np.random.choice(
+        a=len(positions0),
+        size=(max_iter, min_sample),
+        replace=True,
+    ):
+        # Fit to subset
+        subset = np.unique(subset)
+        candidate_model, _ = estimate_global_transformation(
+            positions0=positions0[subset],
+            positions1=positions1[subset],
+            origin=origin,
+            translation_allowed=translation_allowed,
+            xp=xp,
+        )
+
+        # Determine inliars and outliars
+        position_error = xp.linalg.norm(
+            candidate_model(positions0, origin=origin, xp=xp) - positions1,
+            axis=-1,
+        )
+        inliars = position_error <= max_error
+
+        # Check if consensus reached
+        if xp.sum(inliars) / len(inliars) >= min_consensus:
+            # Refit with consensus inliars
+            candidate_model, fitness = estimate_global_transformation(
+                positions0=positions0[inliars],
+                positions1=positions1[inliars],
+                origin=origin,
+                translation_allowed=translation_allowed,
+                xp=xp,
+            )
+            if fitness < best_fitness:
+                best_fitness = fitness
+                transform = candidate_model
+
+    return transform, best_fitness
+
+
+def fourier_ring_correlation(
+    image_1,
+    image_2,
+    pixel_size=None,
+    bin_size=None,
+    sigma=None,
+    align_images=False,
+    upsample_factor=8,
+    device="cpu",
+    plot_frc=True,
+    frc_color="red",
+    half_bit_color="blue",
+):
+    """
+    Computes fourier ring correlation (FRC) of 2 arrays.
+    Arrays must bet the same size.
+
+    Parameters
+     ----------
+    image1: ndarray
+        first image for FRC
+    image2: ndarray
+        second image for FRC
+    pixel_size: tuple
+        size of pixels in A (x,y)
+    bin_size: float, optional
+        size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+    align_images: bool
+        if True, aligns images using DFT upsampling of cross correlation.
+    upsample factor: int
+        if align_images, upsampling for correlation. Must be greater than 2.
+    device: str, optional
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    plot_frc: bool, optional
+        if True, plots frc
+    frc_color: str, optional
+        color of FRC line in plot
+    half_bit_color: str, optional
+        color of half-bit line
+
+    Returns
+    --------
+    q_frc: ndarray
+        spatial frequencies of FRC
+    frc: ndarray
+        fourier ring correlation
+    half_bit: ndarray
+        half-bit criteria
+    """
+
+    if align_images:
+        from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
+
+        image_2 = align_and_shift_images(
+            image_1,
+            image_2,
+            upsample_factor=upsample_factor,
+            device=device,
+        )
+
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    fft_image_1 = xp.fft.fft2(image_1)
+    fft_image_2 = xp.fft.fft2(image_2)
+
+    cc_mixed = xp.real(fft_image_1 * xp.conj(fft_image_2))
+    cc_image_1 = xp.abs(fft_image_1) ** 2
+    cc_image_2 = xp.abs(fft_image_2) ** 2
+
+    # take 1D profile
+    q_frc, cc_mixed_1D, n = return_1D_profile(
+        cc_mixed,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
+    )
+    _, cc_image_1_1D, _ = return_1D_profile(
+        cc_image_1, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size, device=device
+    )
+    _, cc_image_2_1D, _ = return_1D_profile(
+        cc_image_2,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
+    )
+
+    frc = cc_mixed_1D / ((cc_image_1_1D * cc_image_2_1D) ** 0.5)
+    half_bit = 2 / xp.sqrt(n / 2)
+
+    ind_max = xp.argmax(n)
+    q_frc = q_frc[1:ind_max]
+    frc = frc[1:ind_max]
+    half_bit = half_bit[1:ind_max]
+
+    if plot_frc:
+        fig, ax = plt.subplots()
+        if device == "gpu":
+            ax.plot(q_frc.get(), frc.get(), label="FRC", color=frc_color)
+            ax.plot(q_frc.get(), half_bit.get(), label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.get().max()])
+        else:
+            ax.plot(q_frc, frc, label="FRC", color=frc_color)
+            ax.plot(q_frc, half_bit, label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.max()])
+        ax.legend()
+        ax.set_ylim([0, 1])
+
+        if pixel_size is None:
+            ax.set_xlabel(r"Spatial frequency (pixels)")
+        else:
+            ax.set_xlabel(r"Spatial frequency ($\AA$)")
+        ax.set_ylabel("FRC")
+
+    return q_frc, frc, half_bit
+
+
+def return_1D_profile(
+    intensity, pixel_size=None, bin_size=None, sigma=None, device="cpu"
+):
+    """
+    Return 1D radial profile from corner centered array
+
+    Parameters
+     ----------
+    intensity: ndarray
+        Array for computing 1D profile
+    pixel_size: tuple
+        Size of pixels in A (x,y)
+    bin_size: float, optional
+        Size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+    device: str, optional
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+
+    Returns
+    --------
+    q_bins: ndarray
+        spatial frequencies of bins
+    I_bins: ndarray
+        Intensity of bins
+    n: ndarray
+        Number of pixels in each bin
+    """
+    if pixel_size is None:
+        pixel_size = (1, 1)
+
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
+    y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
+    q = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
+    q = q.ravel()
+
+    intensity = intensity.ravel()
+
+    if bin_size is None:
+        bin_size = q[1] - q[0]
+
+    q_bins = xp.arange(0, q.max() + bin_size, bin_size)
+
+    inds = q / bin_size
+    inds_f = xp.floor(inds).astype("int")
+    d_ind = inds - inds_f
+
+    nf = xp.bincount(inds_f, weights=(1 - d_ind), minlength=q_bins.shape[0])
+    nc = xp.bincount(inds_f + 1, weights=(d_ind), minlength=q_bins.shape[0])
+    n = nf + nc
+
+    I_bins0 = xp.bincount(
+        inds_f, weights=intensity * (1 - d_ind), minlength=q_bins.shape[0]
+    )
+    I_bins1 = xp.bincount(
+        inds_f + 1, weights=intensity * (d_ind), minlength=q_bins.shape[0]
+    )
+
+    I_bins = (I_bins0 + I_bins1) / n
+    if sigma is not None:
+        I_bins = gaussian_filter(I_bins, sigma)
+
+    return q_bins, I_bins, n

@@ -1,6 +1,5 @@
 """
-Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely DPC and ptychography.
+Module for reconstructing phase objects from 4DSTEM datasets using iterative methods.
 """
 
 import warnings
@@ -9,7 +8,10 @@ from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
+from py4DSTEM.visualize import show_complex
+from scipy.ndimage import rotate
 
 try:
     import cupy as cp
@@ -18,8 +20,13 @@ except ImportError:
 
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import polar_aliases
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_shifted_ar
+from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
+from py4DSTEM.process.utils import (
+    electron_wavelength_angstrom,
+    fourier_resample,
+    get_shifted_ar,
+)
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -49,34 +56,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _forward(self):
-        """
-        Abstract method subclasses must define to perform forward projection.
-
-        For DPC, this consists of differentiating the current object estimate.
-        For Ptychography, this consists of overlap and Fourier projections.
-        """
-        pass
-
-    @abstractmethod
-    def _adjoint(self):
-        """
-        Abstract method subclasses must define to perform forward projection.
-
-        For DPC, this consists of Fourier-integrating the CoM gradient.
-        For Ptychography, this consists of inverting the modified Fourier amplitude,
-        followed by 'stitching' the probe/object update patches.
-        """
-        pass
-
-    @abstractmethod
-    def _update(self):
-        """
-        Abstract method subclasses must define to update current object estimates.
-        """
-        pass
-
-    @abstractmethod
     def reconstruct(self):
         """
         Abstract method subclasses must define which performs the reconstruction
@@ -91,11 +70,138 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
         pass
 
+    def _preprocess_datacube_and_vacuum_probe(
+        self,
+        datacube,
+        diffraction_intensities_shape=None,
+        reshaping_method="fourier",
+        probe_roi_shape=None,
+        vacuum_probe_intensity=None,
+        dp_mask=None,
+        com_shifts=None,
+    ):
+        """
+        Datacube preprocssing step, to set the reciprocal- and real-space sampling.
+        Let the measured diffraction intensities have size (Rx,Ry,Qx,Qy), with reciprocal-space
+        samping (dkx,dky). This sets a real-space sampling which is inversely proportional to
+        the maximum scattering wavevector (Qx*dkx,Qy*dky).
+
+        Often, it is beneficial to resample the measured diffraction intensities using a different
+        reciprocal-space sampling (dkx',dky'), e.g. downsampling to save memory. This is achieved
+        by specifying a diffraction_intensities_shape (Sx,Sy) which is different than (Qx,Qy).
+        Note this does not affect the maximum scattering wavevector (Qx*dkx,Qy*dky) = (Sx*dkx',Sy*dky'),
+        and thus the real-space sampling stays fixed.
+
+        The real space sampling, (dx, dy), combined with the resampled diffraction_intensities_shape,
+        sets the real-space probe region of interest (ROI) extent (dx*Sx, dy*Sy).
+        Occasionally, one may also want to specify a larger probe ROI extent, e.g when the probe
+        does not comfortably fit without self-ovelap artifacts, or when the scan step sizes are much
+        smaller than the real-space sampling (dx,dy). This can be achieved by specifying a
+        probe_roi_shape, which is larger than diffraction_intensities_shape, which will result in
+        zero-padding of the diffraction intensities.
+
+        Parameters
+        ----------
+        datacube: Datacube
+            Input 4D diffraction pattern intensities
+        diffraction_intensities_shape: (int,int), optional
+            Resampled diffraction intensities shape.
+            If None, no resamping is performed
+        reshaping method: str, optional
+            Reshaping method to use, one of 'bin', 'bilinear' or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        vacuum_probe_intensity, np.ndarray, optional
+            If not None, the vacuum probe intensity is also resampled and padded
+        dp_mask, np.ndarray, optional
+            If not None, dp_mask is also resampled and padded
+        com_shifts, np.ndarray, optional
+            If not None, com_shifts are multiplied by resampling factor
+
+        Returns
+        --------
+        datacube: Datacube
+            Resampled and Padded datacube
+        """
+
+        if diffraction_intensities_shape is not None:
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = diffraction_intensities_shape
+
+            resampling_factor_x = Sx / Qx
+            resampling_factor_y = Sy / Qy
+
+            if resampling_factor_x != resampling_factor_y:
+                raise ValueError(
+                    "Datacube calibration can only handle uniform Q-sampling."
+                )
+
+            Q_pixel_size = datacube.calibration.get_Q_pixel_size()
+
+            if com_shifts is not None:
+                com_shifts = (
+                    com_shifts[0] * resampling_factor_x,
+                    com_shifts[1] * resampling_factor_x,
+                )
+
+            if reshaping_method == "bin":
+                bin_factor = int(1 / resampling_factor_x)
+                if bin_factor < 1:
+                    raise ValueError(
+                        f"Calculated binning factor {bin_factor} is less than 1."
+                    )
+
+                datacube = datacube.bin_Q(N=bin_factor)
+                if vacuum_probe_intensity is not None:
+                    vacuum_probe_intensity = vacuum_probe_intensity[
+                        ::bin_factor, ::bin_factor
+                    ]
+                if dp_mask is not None:
+                    dp_mask = dp_mask[::bin_factor, ::bin_factor]
+            else:
+                datacube = datacube.resample_Q(
+                    N=resampling_factor_x, method=reshaping_method
+                )
+                if vacuum_probe_intensity is not None:
+                    vacuum_probe_intensity = fourier_resample(
+                        vacuum_probe_intensity,
+                        output_size=diffraction_intensities_shape,
+                        force_nonnegative=True,
+                    )
+                if dp_mask is not None:
+                    dp_mask = fourier_resample(
+                        dp_mask,
+                        output_size=diffraction_intensities_shape,
+                        force_nonnegative=True,
+                    )
+            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
+        if probe_roi_shape is not None:
+            Qx, Qy = datacube.shape[-2:]
+            Sx, Sy = probe_roi_shape
+            datacube = datacube.pad_Q(output_size=probe_roi_shape)
+
+            if vacuum_probe_intensity is not None or dp_mask is not None:
+                pad_kx = Sx - Qx
+                pad_kx = (pad_kx // 2, pad_kx // 2 + pad_kx % 2)
+
+                pad_ky = Sy - Qy
+                pad_ky = (pad_ky // 2, pad_ky // 2 + pad_ky % 2)
+
+            if vacuum_probe_intensity is not None:
+                vacuum_probe_intensity = np.pad(
+                    vacuum_probe_intensity, pad_width=(pad_kx, pad_ky), mode="constant"
+                )
+
+            if dp_mask is not None:
+                dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
+
+        return datacube, vacuum_probe_intensity, dp_mask, com_shifts
+
     def _extract_intensities_and_calibrations_from_datacube(
         self,
         datacube: DataCube,
         require_calibrations: bool = False,
-        dp_mask: np.ndarray = None,
     ):
         """
         Common method to extract intensities and calibrations from datacube.
@@ -106,8 +212,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
-        dp_mask: ndarray
-            If not None, apply mask to datacube amplitude
 
         Assigns
         --------
@@ -145,16 +249,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         xp = self._xp
         self._intensities = xp.asarray(datacube.data, dtype=xp.float32)
 
-        if dp_mask is not None:
-            if dp_mask.shape != self._intensities.shape[-2:]:
-                raise ValueError(
-                    (
-                        f"Mask shape should be (Qx,Qy):{self.intensities.shape[-2:]}, "
-                        "not {dp_mask.shape}"
-                    )
-                )
-            self._intensities *= xp.asarray(dp_mask, dtype=xp.float32)
-
         self._intensities_shape = np.array(self._intensities.shape)
         self._intensities_sum = xp.sum(self._intensities, axis=(-2, -1))
 
@@ -181,6 +275,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         elif real_space_units == "A":
             self._scan_sampling = (calibration.get_R_pixel_size(),) * 2
+            self._scan_units = ("A",) * 2
+        elif real_space_units == "nm":
+            self._scan_sampling = (calibration.get_R_pixel_size() * 10,) * 2
             self._scan_units = ("A",) * 2
         else:
             raise ValueError(
@@ -239,6 +336,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     def _calculate_intensities_center_of_mass(
         self,
         intensities: np.ndarray,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
     ):
         """
@@ -248,6 +346,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ----------
         intensities: (Rx,Ry,Qx,Qy) xp.ndarray
             Raw intensities array stored on device, with dtype xp.float32
+        dp_mask: ndarray
+            If not None, apply mask to datacube amplitude
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
 
@@ -282,11 +382,24 @@ class PhaseReconstruction(metaclass=ABCMeta):
         kya, kxa = xp.meshgrid(ky, kx)
 
         # calculate CoM
+        if dp_mask is not None:
+            if dp_mask.shape != self._intensities.shape[-2:]:
+                raise ValueError(
+                    (
+                        f"Mask shape should be (Qx,Qy):{self._intensities.shape[-2:]}, "
+                        f"not {dp_mask.shape}"
+                    )
+                )
+            intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
+        else:
+            intensities_mask = intensities
+
+        intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
         self._com_measured_x = (
-            xp.sum(intensities * kxa[None, None], axis=(-2, -1)) / self._intensities_sum
+            xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1)) / intensities_sum
         )
         self._com_measured_y = (
-            xp.sum(intensities * kya[None, None], axis=(-2, -1)) / self._intensities_sum
+            xp.sum(intensities_mask * kya[None, None], axis=(-2, -1)) / intensities_sum
         )
 
         # Fit function to center of mass
@@ -295,6 +408,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             (asnumpy(self._com_measured_x), asnumpy(self._com_measured_y)),
             fitfunction=fit_function,
         )
+
         self._com_fitted_x = xp.asarray(or_fits[0])
         self._com_fitted_y = xp.asarray(or_fits[1])
 
@@ -560,7 +674,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     )
 
                 if plot_rotation:
-
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
@@ -609,7 +722,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     fig.tight_layout()
 
             else:
-
                 # Transpose unknown, rotation unknown
                 rotation_angles_deg = xp.asarray(rotation_angles_deg)
                 rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
@@ -728,7 +840,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
-
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
@@ -803,7 +914,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
-
             figsize = kwargs.get("figsize", (8, 12))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -844,7 +954,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default":
-
             figsize = kwargs.get("figsize", (8, 4))
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
@@ -931,23 +1040,27 @@ class PhaseReconstruction(metaclass=ABCMeta):
         """
 
         xp = self._xp
-        asnumpy = self._asnumpy
+        # asnumpy = self._asnumpy
 
-        dps = asnumpy(diffraction_intensities)
-        com_x = asnumpy(com_fitted_x)
-        com_y = asnumpy(com_fitted_y)
+        # dps = asnumpy(diffraction_intensities)
+        # com_x = asnumpy(com_fitted_x)
+        # com_y = asnumpy(com_fitted_y)
 
         mean_intensity = 0
 
-        amplitudes = xp.zeros_like(dps)
+        amplitudes = xp.zeros_like(diffraction_intensities)
 
         for rx in range(self._intensities_shape[0]):
             for ry in range(self._intensities_shape[1]):
                 intensities = get_shifted_ar(
-                    dps[rx, ry], -com_x[rx, ry], -com_y[rx, ry], bilinear=True
+                    diffraction_intensities[rx, ry],
+                    -com_fitted_x[rx, ry],
+                    -com_fitted_y[rx, ry],
+                    bilinear=True,
+                    device="cpu" if xp is np else "gpu",
                 )
 
-                intensities = xp.asarray(intensities)
+                # intensities = xp.asarray(intensities)
                 mean_intensity += xp.sum(intensities)
 
                 amplitudes[rx, ry] = xp.sqrt(xp.maximum(intensities, 0))
@@ -986,7 +1099,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if positions is None:
             if grid_scan_shape is not None:
-
                 nx, ny = grid_scan_shape
 
                 if step_sizes is not None:
@@ -997,18 +1109,19 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     raise ValueError()
             else:
                 raise ValueError()
+            
+            if self._rotation_best_transpose:
+                x = (x - np.ptp(x) / 2) / self.sampling[1]
+                y = (y - np.ptp(y) / 2) / self.sampling[0]
+            else:
+                x = (x - np.ptp(x) / 2) / self.sampling[0]
+                y = (y - np.ptp(y) / 2) / self.sampling[1]
+            x, y = np.meshgrid(x, y, indexing="ij")
 
         else:
-            x = positions[:, 0]
-            y = positions[:, 1]
-
-        if self._rotation_best_transpose:
-            x = (x - np.ptp(x) / 2) / self.sampling[1]
-            y = (y - np.ptp(y) / 2) / self.sampling[0]
-        else:
-            x = (x - np.ptp(x) / 2) / self.sampling[0]
-            y = (y - np.ptp(y) / 2) / self.sampling[1]
-        x, y = np.meshgrid(x, y, indexing="ij")
+            positions -= np.mean(positions, axis=0)
+            x = positions[:, 0] / self.sampling[1]
+            y = positions[:, 1] / self.sampling[0]
 
         if rotation_angle is not None:
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
@@ -1172,6 +1285,51 @@ class PhaseReconstruction(metaclass=ABCMeta):
             y0[:, None, None] + y_ind[None, None, :]
         ) % obj_shape[1]
 
+    def _crop_rotate_object_fov(
+        self,
+        array,
+        padding=0,
+    ):
+        """
+        Crops and rotated object to FOV bounded by current pixel positions.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
+        padding: int, optional
+            Optional padding outside pixel positions
+
+        Returns
+        cropped_rotated_array: np.ndarray
+            Cropped and rotated object array
+        """
+
+        asnumpy = self._asnumpy
+        angle = (
+            self._rotation_best_rad
+            if self._rotation_best_transpose
+            else -self._rotation_best_rad
+        )
+
+        tf = AffineTransform(angle=angle)
+        rotated_points = tf(
+            asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
+        )
+        min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
+        min_x = min_x if min_x > 0 else 0
+        min_y = min_y if min_y > 0 else 0
+        max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
+
+        rotated_array = rotate(asnumpy(array), np.rad2deg(-angle), reshape=False)[
+            min_x:max_x, min_y:max_y
+        ]
+
+        if self._rotation_best_transpose:
+            rotated_array = rotated_array.T
+
+        return rotated_array
+
     @property
     def angular_sampling(self):
         """Angular sampling [mrad]"""
@@ -1188,3 +1346,344 @@ class PhaseReconstruction(metaclass=ABCMeta):
             electron_wavelength_angstrom(self._energy) * 1e3 / dk / n
             for dk, n in zip(self.angular_sampling, self._region_of_interest_shape)
         )
+
+    @property
+    def positions(self):
+        """Probe positions [A]"""
+
+        if self.angular_sampling is None:
+            return None
+
+        asnumpy = self._asnumpy
+
+        positions = self._positions_px.copy()
+        positions[:, 0] *= self.sampling[0]
+        positions[:, 1] *= self.sampling[1]
+
+        return asnumpy(positions)
+
+    def tune_angle_and_defocus(
+        self,
+        angle_guess=None,
+        defocus_guess=None,
+        transpose=None,
+        angle_step_size=1,
+        defocus_step_size=20,
+        num_angle_values=5,
+        num_defocus_values=5,
+        max_iter=5,
+        plot_reconstructions=True,
+        plot_convergence=True,
+        return_values=False,
+        **kwargs,
+    ):
+        """
+        Run reconstructions over a parameters space of angles and
+        defocus values.
+
+        Parameters
+        ----------
+        angle_guess: float (degrees), optional
+            initial starting guess for rotation angle between real and reciprocal space
+            if None, uses current initialized values
+        defocus_guess: float (A), optional
+            initial starting guess for defocus
+            if None, uses current initialized values
+        angle_step_size: float (degrees), optional
+            size of change of rotation angle between real and reciprocal space for
+            each step in parameter space
+        defocus_step_size: float (A), optional
+            size of change of defocus for each step in parameter space
+        num_angle_values: int, optional
+            number of values of angle to test, must be >= 1.
+        num_defocus_values: int,optional
+            number of values of defocus to test, must be >= 1
+        max_iter: int, optional
+            number of iterations to run in ptychographic reconstruction
+        plot_reconstructions: bool, optional
+            if True, plot phase of reconstructed objects
+        plot_convergence: bool, optional
+            if True, plots error for each iteration for each reconstruction.
+        return_values: bool, optional
+            if True, returns objects, convergence
+
+        Returns
+        -------
+        objects: list
+            reconstructed objects
+        convergence: np.ndarray
+            array of convergence values from reconstructions
+        """
+        # calculate angles and defocus values to test
+        if angle_guess is None:
+            angle_guess = self._rotation_best_rad * 180 / np.pi
+        if defocus_guess is None:
+            defocus_guess = -self._polar_parameters["C10"]
+        if transpose is None:
+            transpose = self._rotation_best_transpose
+
+        if num_angle_values == 1:
+            angle_step_size = 0
+
+        if num_defocus_values == 1:
+            defocus_step_size = 0
+
+        angles = np.linspace(
+            angle_guess - angle_step_size * (num_angle_values - 1) / 2,
+            angle_guess + angle_step_size * (num_angle_values - 1) / 2,
+            num_angle_values,
+        )
+
+        defocus_values = np.linspace(
+            defocus_guess - defocus_step_size * (num_defocus_values - 1) / 2,
+            defocus_guess + defocus_step_size * (num_defocus_values - 1) / 2,
+            num_defocus_values,
+        )
+
+        if return_values:
+            convergence = []
+            objects = []
+
+        # current initialized values
+        current_verbose = self._verbose
+        current_defocus = -self._polar_parameters["C10"]
+        current_rotation_deg = self._rotation_best_rad * 180 / np.pi
+        current_transpose = self._rotation_best_transpose
+
+        # Gridspec to plot on
+        if plot_reconstructions:
+            if plot_convergence:
+                spec = GridSpec(
+                    ncols=num_defocus_values,
+                    nrows=num_angle_values * 2,
+                    height_ratios=[1, 1 / 4] * num_angle_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_defocus_values, 5 * num_angle_values)
+                )
+            else:
+                spec = GridSpec(
+                    ncols=num_defocus_values,
+                    nrows=num_angle_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_defocus_values, 4 * num_angle_values)
+                )
+
+            fig = plt.figure(figsize=figsize)
+
+        # run loop and plot along the way
+        self._verbose = False
+        for flat_index, (angle, defocus) in enumerate(
+            tqdmnd(angles, defocus_values, desc="Tuning angle and defocus")
+        ):
+            self._polar_parameters["C10"] = -defocus
+            self._probe = None
+            self._object = None
+            self.preprocess(
+                force_com_rotation=angle,
+                force_com_transpose=transpose,
+                plot_center_of_mass=False,
+                plot_rotation=False,
+                plot_probe_overlaps=False,
+            )
+
+            self.reconstruct(
+                reset=True, store_iterations=True, max_iter=max_iter, **kwargs
+            )
+
+            if plot_reconstructions:
+                row_index, col_index = np.unravel_index(
+                    flat_index, (num_angle_values, num_defocus_values)
+                )
+
+                if plot_convergence:
+                    object_ax = fig.add_subplot(spec[row_index * 2, col_index])
+                    convergence_ax = fig.add_subplot(spec[row_index * 2 + 1, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=convergence_ax,
+                        cbar=True,
+                    )
+                    convergence_ax.yaxis.tick_right()
+                else:
+                    object_ax = fig.add_subplot(spec[row_index, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=None,
+                        cbar=True,
+                    )
+
+                object_ax.set_title(
+                    f" angle = {angle:.1f} °, defocus = {defocus:.1f} A \n error = {self.error:.3e}"
+                )
+                object_ax.set_xticks([])
+                object_ax.set_yticks([])
+
+            if return_values:
+                objects.append(self.object)
+                convergence.append(self.error_iterations.copy())
+
+        # initialize back to pre-tuning values
+        self._polar_parameters["C10"] = -current_defocus
+        self._probe = None
+        self._object = None
+        self.preprocess(
+            force_com_rotation=current_rotation_deg,
+            force_com_transpose=current_transpose,
+            plot_center_of_mass=False,
+            plot_rotation=False,
+            plot_probe_overlaps=False,
+        )
+        self._verbose = current_verbose
+
+        if plot_reconstructions:
+            spec.tight_layout(fig)
+
+        if return_values:
+            return objects, convergence
+
+    def plot_position_correction(
+        self,
+        scale_arrows=1,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Function to plot changes to probe positions during ptychography reconstruciton
+
+        Parameters
+        ----------
+        scale: float, optional
+            scaling of quiver arrows
+        verbose: bool, optional
+            if True, prints AffineTransformation if positions have been updated
+        """
+        if verbose:
+            if hasattr(self, "_tf"):
+                print(self._tf)
+
+        asnumpy = self._asnumpy
+
+        extent = [
+            0,
+            self.sampling[1] * self._object_shape[1],
+            self.sampling[0] * self._object_shape[0],
+            0,
+        ]
+
+        initial_pos = asnumpy(self._positions_px_initial)
+        initial_pos[:, 0] *= self.sampling[0]
+        initial_pos[:, 1] *= self.sampling[1]
+
+        pos = self.positions
+
+        figsize = kwargs.get("figsize", (6, 6))
+        color = kwargs.get("color", (1, 0, 0, 1))
+        kwargs.pop("figsize", None)
+        kwargs.pop("color", None)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.quiver(
+            initial_pos[:, 1],
+            initial_pos[:, 0],
+            (pos[:, 1] - initial_pos[:, 1]) * scale_arrows,
+            (pos[:, 0] - initial_pos[:, 0]) * scale_arrows,
+            scale_units="xy",
+            scale=1,
+            color=color,
+            **kwargs,
+        )
+
+        ax.set_xlabel("x [A]")
+        ax.set_ylabel("y [A]")
+        ax.set_xlim((extent[0], extent[1]))
+        ax.set_ylim((extent[2], extent[3]))
+        ax.set_aspect("equal")
+        ax.set_title("Probe positions correction")
+
+    def plot_fourier_probe(
+        self,
+        probe=None,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
+    ):
+        """
+        Plot probe in fourier space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        cbar: bool, optional
+            if True, adds colorbar
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+
+        if probe is None:
+            probe = self.probe_fourier
+
+        if pixelsize is None:
+            pixelsize = self._reciprocal_sampling[1]
+        if pixelunits is None:
+            pixelunits = "A^-1"
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        show_complex(
+            probe,
+            cbar=cbar,
+            figax=(fig, ax),
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            **kwargs,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    def _return_fourier_probe(
+        self,
+        probe=None,
+    ):
+        """
+        Returns complex fourier probe shifted to center of array from
+        complex real space probe in center
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        """
+        xp = self._xp
+
+        if probe is None:
+            probe = self._probe
+
+        return xp.fft.fftshift(
+            xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
+        )
+
+    @property
+    def probe_fourier(self):
+        """Current probe estimate in Fourier space"""
+        if not hasattr(self, "_probe"):
+            return None
+        asnumpy = self._asnumpy
+        return asnumpy(self._return_fourier_probe(self._probe))
