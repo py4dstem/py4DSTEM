@@ -806,13 +806,14 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
     """
     Function to turn a complex array into rgb for plotting
     Args:
-        complex_array: complex numpy array
-        vmin         : minimum value of ampliutde
-        vmax         : maximum value of amplitude
-        hue_start    : phase offset
+        complex_array (2D array)      : complex array
+        vmin (float, optional)        : minimum absolute value
+        vmax (float, optional)        : maximum absolute value
+            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
+            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        hue_start(float, optional)    : phase offset (degrees)
     Returns:
         rgb array for plotting
-
     """
     amp = np.abs(complex_array)
 
@@ -866,17 +867,17 @@ def show_complex(
     Function to plot complex arrays
 
     Args:
-        ar_complex (2d array)   : complex array to be plotted. If ar_complex is list of complex arrarys
+        ar_complex (2D array)       : complex array to be plotted. If ar_complex is list of complex arrarys
             such as [array1, array2], then arrays are horizonally plotted in one figure
-        vmin (float, optional)  : minimum absolute value
-        vmax (float, optional)  : maximum absolute value
-        vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g.
-        vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        cbar (bool)             : if True, include color wheel
-        scalebar (bool)         : if True, adds scale bar
-        pixelunits (str)        : units for scalebar
-        pixelsize (float)       : size of one pixel in pixelunits for scalebar
-        returnfig (bool)        : if True, the function returns the tuple (figure,axis)
+        vmin (float, optional)      : minimum absolute value
+        vmax (float, optional)      : maximum absolute value
+            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
+            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        cbar (bool, optional)       : if True, include color wheel
+        scalebar (bool, optional)   : if True, adds scale bar
+        pixelunits (str, optional)  : units for scalebar
+        pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
+        returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
