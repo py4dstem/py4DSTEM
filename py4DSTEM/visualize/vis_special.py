@@ -802,11 +802,38 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
-def Complex2HSV(complex_array, vmin, vmax, hue_start=90):
+def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
     """
     Function to turn a complex array into rgb for plotting
+    Args:
+        complex_array: complex numpy array
+        vmin         : minimum value of ampliutde
+        vmax         : maximum value of amplitude
+        hue_start    : phase offset
+    Returns:
+        rgb array for plotting
+
     """
     amp = np.abs(complex_array)
+
+    if np.max(amp) == np.min(amp):
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.max(amp)
+    else:
+        if vmin is None:
+            vmin = 0.02
+        if vmax is None:
+            vmax = 0.98
+        vals = np.sort(amp[~np.isnan(amp)])
+        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+        ind_vmin = np.max([0, ind_vmin])
+        ind_vmax = np.min([len(vals) - 1, ind_vmax])
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
 
@@ -855,29 +882,8 @@ def show_complex(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-
-    # define min and max
-    amp = np.abs(ar_complex)
-    if np.max(amp) == np.min(amp):
-        if vmin is None:
-            vmin = 0
-        if vmax is None:
-            vmax = np.max(amp)
-    else:
-        if vmin is None:
-            vmin = 0.02
-        if vmax is None:
-            vmax = 0.98
-        vals = np.sort(amp[~np.isnan(amp)])
-        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
-        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
-        ind_vmin = np.max([0, ind_vmin])
-        ind_vmax = np.min([len(vals) - 1, ind_vmax])
-        vmin = vals[ind_vmin]
-        vmax = vals[ind_vmax]
-
     # convert to complex colors
-    rgb = Complex2HSV(ar_complex, vmin, vmax)
+    rgb = Complex2RGB(ar_complex, vmin, vmax)
 
     # plot
 
@@ -935,7 +941,7 @@ def show_complex(
         ktheta = kra * np.exp(1j * ktheta)
 
         # convert to hsv
-        rgb = Complex2HSV(ktheta, 0, 0.4)
+        rgb = Complex2RGB(ktheta, 0, 0.4)
         ind = kra > 0.4
         rgb[ind] = [1, 1, 1]
 
