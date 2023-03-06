@@ -3,7 +3,6 @@
 import importlib
 from operator import mod
 
-
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
