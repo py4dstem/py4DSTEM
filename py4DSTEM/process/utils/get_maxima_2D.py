@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from .multicorr import upsampled_correlation
+from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 
 def get_maxima_2D(
@@ -78,7 +78,7 @@ def get_maxima_2D(
     maxima = np.sort(maxima, order='intensity')[::-1]
 
     if len(maxima) == 0:
-            return maxima
+        return maxima
 
 
     # filter
@@ -98,12 +98,12 @@ def get_maxima_2D(
 
     # Parabolic subpixel refinement
     for i in range(len(maxima)):
-        Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float)
-        Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
-        Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float)
-        Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float)
-        Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float)
-        Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float)
+        Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float64)
+        Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float64)
+        Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float64)
+        Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float64)
+        Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float64)
+        Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float64)
         deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
         deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
         maxima['x'][i] += deltax

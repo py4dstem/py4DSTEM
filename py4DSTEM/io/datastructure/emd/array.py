@@ -6,8 +6,8 @@ import numpy as np
 import h5py
 from numbers import Number
 
-from .tree import Tree
-from .metadata import Metadata
+from py4DSTEM.io.datastructure.emd.tree import Tree
+from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
 class Array:
     """
@@ -177,28 +177,17 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        self.shape = self.data.shape
-        self.rank = self.data.ndim
-
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
-
-        # flag to help assign dim names and units
-        dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
 
         ## Handle array stacks
 
         if slicelabels is None:
-            self.depth = 0
             self.is_stack = False
 
         else:
-            self.depth = self.shape[-1]
-            self.shape = self.shape[:-1]
-            dim_in_pixels = dim_in_pixels[:-1]
-            self.rank -= 1
             self.is_stack = True
 
             # Populate labels
@@ -216,6 +205,7 @@ class Array:
 
         ## Set dim vectors
 
+        dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
         # if none were passed
         if self.dims is None:
             self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
@@ -271,13 +261,13 @@ class Array:
 
         # if none were passed
         if self.dim_units is None:
-            self.dim_units = [['unknown','pixels'][i] for i in dim_in_pixels]
+            self.dim_units = [['unknown','pixels'][int(i)] for i in dim_in_pixels]
 
         # if some but not all were passed
         elif len(self.dim_units)<self.rank:
             N = len(self.dim_units)
             self.dim_units = [units for units in self.dim_units] + \
-                             [['unknown','pixels'][dim_in_pixels[i]] for i in range(N,self.rank)]
+                             [['unknown','pixels'][int(dim_in_pixels[i])] for i in range(N,self.rank)]
 
         # if all were passed
         elif len(self.dim_units)==self.rank:
@@ -288,9 +278,28 @@ class Array:
             raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
+    # Shape properties
 
+    @property
+    def shape(self):
+        if not self.is_stack:
+            return self.data.shape
+        else:
+            return self.data.shape[:-1]
 
-    #### Methods
+    @property
+    def depth(self):
+        if not self.is_stack:
+            return 0
+        else:
+            return self.data.shape[-1]
+
+    @property
+    def rank(self):
+        if not self.is_stack:
+            return self.data.ndim
+        else:
+            return self.data.ndim - 1
 
 
     ## Slicing
@@ -446,11 +455,11 @@ class Array:
     # HDF5 read/write
 
     def to_h5(self,group):
-        from .io import Array_to_h5
+        from py4DSTEM.io.datastructure.emd.io import Array_to_h5
         Array_to_h5(self,group)
 
     def from_h5(group):
-        from .io import Array_from_h5
+        from py4DSTEM.io.datastructure.emd.io import Array_from_h5
         return Array_from_h5(group)
 
 

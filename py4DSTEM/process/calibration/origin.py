@@ -1,14 +1,14 @@
 # Find the origin of diffraction space
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
-from .probe import get_probe_size
-from ..fit import plane,parabola,bezier_two,fit_2D
-from ..utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-from ...utils.tqdmnd import tqdmnd
-from ...io.datastructure import PointListArray, DataCube
+from py4DSTEM.process.calibration.probe import get_probe_size
+from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
+from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointListArray, DataCube
 
 
 def measure_origin(
@@ -204,7 +204,7 @@ def get_origin_from_braggpeaks(
     braggpeaks,
     Q_shape,
     center_guess = None,
-    score_method = 'distance',
+    score_method = None,
     findcenter="CoM",
     bvm=None,
     **kwargs
@@ -212,19 +212,24 @@ def get_origin_from_braggpeaks(
     """
     Gets the diffraction shifts using detected Bragg disk positions.
 
-    First, a guess at the unscattered beam position is determined, either by taking the
-    CoM of the Bragg vector map, or by taking its maximal pixel.  If the CoM is used, an
-    additional refinement step is used where we take the CoM of a Bragg vector map
-    contructed from a first guess at the central Bragg peaks (as opposed to the BVM of all
-    BPs). Once a unscattered beam position is determined, the Bragg peak closest to this
-    position is identified. The shifts in these peaks positions from their average are
-    returned as the diffraction shifts.
+    If a center guess is not specified, first, a guess at the unscattered beam position is determined, 
+    either by taking the CoM of the Bragg vector map, or by taking its maximal pixel.  Once a unscattered 
+    beam position is determined, the Bragg peak closest to this position is identified. The shifts in these 
+    peaks positions from their average are returned as the diffraction shifts.
 
     Args:
         braggpeaks (PointListArray): the Bragg peak positions
-        Q_Nx, Q_Ny (ints): the shape of diffration space
+        Q_shape (tuple of ints): the shape of diffration space
+        center_guess (tuple of ints):   initial guess for the center
+        score_method (string):     Method used to find center peak
+            -'intensity': finds the most intense Bragg peak near the center
+            -'distance': finds the closest Bragg peak to the center 
+            -'intensity weighted distance': determines center through a combination of 
+                weighting distance and intensity
         findcenter (str): specifies the method for determining the unscattered beam
-            position options: 'CoM', or 'max'
+            position options: 'CoM', or 'max.' Only used if center_guess is None. 
+            CoM (default) finds the center of mass of bragg ector map. 'max' uses
+            the maximum value in the bragg vector map. 
         bvm (array or None): the braggvector map. If None (default), the bvm is
             calculated
 
@@ -241,16 +246,24 @@ def get_origin_from_braggpeaks(
     # assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
     assert isinstance(findcenter, str), "center must be a str"
     assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
-    assert score_method in ["distance", "intensity weighted distance"], "center must be either 'distance' or 'intensity weighted distance'"
+    assert score_method in ["distance", "intensity", "intensity weighted distance", None], "center must be either 'distance' or 'intensity weighted distance'"
 
     R_Nx, R_Ny = braggpeaks.shape
     Q_Nx, Q_Ny = Q_shape
 
+    # Default scoring method
+    if score_method is None:
+        if center_guess is None:
+            score_method = "intensity"
+        else:
+            score_method = "distance"
+
+
     # Get guess at position of unscattered beam (x0,y0)
     if center_guess is None:
         if bvm is None:
-            from ..diskdetection.braggvectormap import get_bragg_vector_map
-            braggvectormap_all = get_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny)
+            from py4DSTEM.process.diskdetection.braggvectormap import get_bragg_vector_map_raw
+            braggvectormap_all = get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny)
         else:
             braggvectormap_all = bvm
         if findcenter == "max":
@@ -288,6 +301,8 @@ def get_origin_from_braggpeaks(
                 if score_method == "distance":
                     r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
                     index = np.argmin(r2)
+                elif score_method == "intensity":
+                    index = np.argmax(pointlist.data["intensity"])
                 elif score_method == "intensity weighted distance":
                     r2 = pointlist.data["intensity"]/(1+((pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2))
                     index = np.argmax(r2)
@@ -380,8 +395,10 @@ def get_origin_beamstop_braggpeaks(
     Returns:
         (2d masked array): the origins
     """
+
     assert(isinstance(braggpeaks,PointListArray))
     R_Nx,R_Ny = braggpeaks.shape
+
 
     # remove peaks outside the annulus
     braggpeaks_masked = braggpeaks.copy()
@@ -440,13 +457,11 @@ def get_origin_beamstop_braggpeaks(
     # return
     mask = found_center
     qx0,qy0 = centers[:,:,0],centers[:,:,1]
+
     return qx0,qy0,mask
 
 
-
-
 ### Functions for fitting the origin
-
 
 def fit_origin(
     data,
@@ -468,7 +483,8 @@ def fit_origin(
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
         mask (2b boolean array, optional): ignore points where mask=False
-        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two' 
+            or 'constant'
         returnfitp (bool, optional): if True, returns the fit parameters
         robust (bool, optional): If set to True, fit will be repeated with outliers
             removed.
@@ -498,54 +514,58 @@ def fit_origin(
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
     assert mask is None or mask.shape == qx0_meas.shape and mask.dtype == bool
-    assert fitfunction in ("plane", "parabola", "bezier_two")
-    if fitfunction == "plane":
-        f = plane
-    elif fitfunction == "parabola":
-        f = parabola
-    elif fitfunction == "bezier_two":
-        f = bezier_two
+    assert fitfunction in ("plane", "parabola", "bezier_two", "constant")
+    if fitfunction == "constant":
+        qx0_fit = np.mean(qx0_meas)*np.ones_like(qx0_meas)
+        qy0_fit = np.mean(qy0_meas)*np.ones_like(qy0_meas)
     else:
-        raise Exception("Invalid fitfunction '{}'".format(fitfunction))
+        if fitfunction == "plane":
+            f = plane
+        elif fitfunction == "parabola":
+            f = parabola
+        elif fitfunction == "bezier_two":
+            f = bezier_two
+        else:
+            raise Exception("Invalid fitfunction '{}'".format(fitfunction))
 
-    # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
-    if isinstance(qx0_meas, np.ma.MaskedArray):
-        mask = np.ma.getmask(qx0_meas)
+        # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
+        if isinstance(qx0_meas, np.ma.MaskedArray):
+            mask = np.ma.getmask(qx0_meas)
 
-    # Fit data
-    if mask is None:
-        popt_x, pcov_x, qx0_fit = fit_2D(
-            f,
-            qx0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-        )
-        popt_y, pcov_y, qy0_fit = fit_2D(
-            f,
-            qy0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-        )
+        # Fit data
+        if mask is None:
+            popt_x, pcov_x, qx0_fit = fit_2D(
+                f,
+                qx0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+            )
+            popt_y, pcov_y, qy0_fit = fit_2D(
+                f,
+                qy0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+            )
 
-    else:
-        popt_x, pcov_x, qx0_fit = fit_2D(
-            f,
-            qx0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-            data_mask=mask == True,
-        )
-        popt_y, pcov_y, qy0_fit = fit_2D(
-            f,
-            qy0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-            data_mask=mask == True,
-        )
+        else:
+            popt_x, pcov_x, qx0_fit = fit_2D(
+                f,
+                qx0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+                data_mask=mask == True,
+            )
+            popt_y, pcov_y, qy0_fit = fit_2D(
+                f,
+                qy0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+                data_mask=mask == True,
+            )
 
     # Compute residuals
     qx0_residuals = qx0_meas - qx0_fit
@@ -554,7 +574,7 @@ def fit_origin(
     # Return
     ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
     if returnfitp:
-        return ans,(popt_x,popt_y,pcov_x,pcov_y)
+        return ans,(popt_x, popt_y, pcov_x, pcov_y)
     else:
         return ans
 

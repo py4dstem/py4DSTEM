@@ -71,7 +71,7 @@ Data
 Type II classes inherit from type I classes.  The (class, parent) pairs are:
 
         Probe                       DiffractionSlice
-        DiffractionImage            DiffractionSlice
+        VirtualDiffraction          DiffractionSlice
         VirtualImage                RealSlice
         StainMap                    RealSlice
 

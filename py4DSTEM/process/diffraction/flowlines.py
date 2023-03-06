@@ -11,8 +11,8 @@ from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
 from matplotlib.colors import ListedColormap
 
-from ...io.datastructure import PointList, PointListArray
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def make_orientation_histogram(
@@ -208,7 +208,7 @@ def make_orientation_histogram(
             orient_hist = orient_hist / np.max(orient_hist)
     elif normalize_intensity_image is True:
         for a0 in range(num_radii):
-            orient_hist[:,:,a0,:] = orient_hist[:,:,a0,:] / np.max(orient_hist[:,:,a0,:])
+            orient_hist[a0,:,:,:] = orient_hist[a0,:,:,:] / np.max(orient_hist[a0,:,:,:])
 
     return orient_hist
 
@@ -752,6 +752,7 @@ def make_flowline_combined_image(
     size_input = orient_flowlines.shape
     size_output = np.array([size_input[0],size_input[1],size_input[2],3])
     im_flowline = np.zeros(size_output)
+    cvals = np.array(cvals)
 
     # Generate all color images
     for a0 in range(size_input[0]):

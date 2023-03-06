@@ -1,7 +1,7 @@
 # Functions for generating masks
 
 import numpy as np
-from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage import binary_dilation
 
 def get_beamstop_mask(dp,qx0,qy0,theta,dtheta=1,w=10,r=10):
     """

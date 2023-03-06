@@ -1,935 +1,482 @@
 # Functions for generating virtual images
-
 import numpy as np
 import dask.array as da
-import h5py
-import warnings
-
-from ..utils.tqdmnd import tqdmnd
-
-
-
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure.py4dstem import Calibration
 
 def get_virtual_image(
     datacube,
     mode,
     geometry,
-    shift_corr = False,
-    eager_compute = True
-    ):
-    """
-    Computes and returns a virtual image from `datacube`. The
-    kind of virtual image is specified by the `mode` argument.
+    centered = False,
+    calibrated = False,
+    shift_center = False,
+    verbose = True,
+    dask = False,
+    return_mask = False,
+    test_config = False
+):
+    '''
+    Function to calculate virtual image
 
     Args:
-        datacube (Datacube)
-        mode (str): must be in
-            ('point','circle','annulus','rectangle',
-            'cpoint','ccircle','cannulus','csquare',
-            'qpoint','qcircle','qannulus','qsquare',
-            'mask').  The first four modes represent point, circular,
-            annular, and rectangular detectors with geomtries specified
-            in pixels, relative to the uncalibrated origin, i.e. the upper
-            left corner of the diffraction plane. The next four modes
-            represent point, circular, annular, and square detectors with
-            geometries specified in pixels, relative to the calibrated origin,
-            taken to be the mean posiion of the origin over all scans.
-            'ccircle','cannulus', and 'csquare' are automatically centered
-            about the origin. The next four modes are identical to these,
-            except that the geometry is specified in q-space units, rather
-            than pixels. In the last mode the geometry is specified with a
-            user provided mask, which can be either boolean or floating point.
-            Floating point masks are normalized by setting their maximum value
-            to 1.
-        geometry (variable): valid entries are determined by the `mode`
-            argument, as follows:
-                - 'point': 2-tuple, (qx,qy)
-                - 'circle': nested 2-tuple, ((qx,qy),r)
-                - 'annulus': nested 2-tuple, ((qx,qy),(ri,ro))
-                - 'rectangle': 4-tuple, (xmin,xmax,ymin,ymax)
-                - 'cpoint': 2-tuple, (qx,qy)
-                - 'ccircle': number, r
-                - 'cannulus': 2-tuple, (ri,ro)
-                - 'csquare': number, s
-                - 'qpoint': 2-tuple, (qx,qy)
-                - 'qcircle': number, r
-                - 'qannulus': 2-tuple, (ri,ro)
-                - 'qsquare': number, s
-                - `mask`: 2D array
-        shift_corr (bool): if True, correct for beam shift. Works only with
-            'c' and 'q' modes - uses the calibrated origin for each pixel,
-            instead of the mean origin position.
+        datacube (Datacube) : datacube class object which stores 4D-dataset
+            needed for calculation
+        mode (str)          : defines geometry mode for calculating virtual image.
+            Options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any 2D array
+        geometry (variable) : valid entries are determined by the `mode`, values
+            in pixels argument, as follows:
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),
+                  (radius_i,radius_o))
+                - 'rectangle', 'square', 'rectangular': a 4-tuple,
+                  (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point
+                  2D array with the same shape as datacube.Qshape
+        centered (bool): if False (default), the origin is in the upper left
+            corner. If True, the mean measured origin in the datacube
+            calibrations is set as center. The measured origin is set with
+            datacube.calibration.set_origin(). In this case, for example, a
+            centered bright field image could be defined by
+            geometry = ((0,0), R). For `mode="mask"`, has no effect.
+        calibrated (bool): if True, geometry is specified in units of 'A^-1'
+            instead of pixels. The datacube's calibrations must have its
+            `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
+             no effect.
+        shift_center (bool): if True, the mask is shifted at each real space
+            position to account for any shifting of the origin of the
+            diffraction images. The datacube's calibration['origin'] parameter
+            must be set (centered = True). The shift applied to each pattern is
+            the difference between the local origin position and the mean origin
+            position over all patterns, rounded to the nearest integer for speed.
+        verbose (bool): if True, show progress bar
+        dask (bool): if True, use dask arrays
+        return_mask (bool or tuple): if False (default) returns a virtual image
+            as usual. If True, does *not* generate or return a virtual image,
+            instead returning the mask that would be used in virtual image
+            computation for any call to this function where
+            `shift_center = False`. Otherwise, must be a 2-tuple of integers
+            corresponding to a scan position (rx,ry); in this case, returns the
+            mask that would be used for virtual image computation at this scan
+            position with `shift_center` set to `True`.
+        test_config: if True, returns the Boolean value of (`centered`,
+            `calibrated`,`shift_center`). Does not compute the virtual image.
 
     Returns:
-        (2D array): the virtual image
+        (2D array) virtual image
+    '''
 
-    """
-    # parse args
-    modes = ('point','circle','annulus','rectangle',
-             'cpoint','ccircle','cannulus','csquare',
-             'qpoint','qcircle','qannulus','qsquare',
-             'mask')
-    assert( mode in modes), f"`mode` was {mode}; must be in {modes}"
-    g=geometry
-    er = 'mode/geometry are mismatched'
-    if mode in ('ccircle','csquare','qcircle','qsquare'):
-        assert(isinstance(g,Number)), er
-    elif mode in ('point','cpoint','cannulus','qpoint','qannulus'):
-        assert(isinstance(g,tuple) and len(g)==2), er
-    elif mode in ('circle'):
-        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2), er
-    elif mode in ('annulus'):
-        assert(isinstance(g,tuple) and len(g)==2 and
-               all([len(g[i])==2 for i in (0,1)])), er
-    elif mode in ('mask'):
-        assert type(mask) == np.ndarray, "`mask` type should be `np.ndarray`"
-        er = "mask and diffraction pattern shapes do not match"
-        assert mask.shape == datacube.Qshape, er
-        mode = 'mask' if g.dtype==bool else 'mask_float'
+    assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
+    'check doc strings for supported modes'
+    if shift_center == True:
+        assert centered, "centered must be True if shift_center is True"
+    if test_config:
+        for x,y in zip(['centered','calibrated','shift_center'],
+                       [centered,calibrated,shift_center]):
+            print(f"{x} = {y}")
+
+    # Get geometry
+    g = get_calibrated_geometry(
+        datacube,
+        mode,
+        geometry,
+        centered,
+        calibrated
+    )
+
+    # Get mask
+    mask = make_detector(datacube.Qshape, mode, g)
+    # if return_mask is True, skip computation
+    if return_mask == True and shift_center == False:
+        return mask
+
+
+    # Calculate images
+
+    # no center shifting
+    if shift_center == False:
+        # dask 
+        if dask == True:
+
+            # set up a generalized universal function for dask distribution
+            def _apply_mask_dask(datacube,mask):
+                virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
+            apply_mask_dask = da.as_gufunc(
+                _apply_mask_dask,signature='(i,j),(i,j)->()',
+                output_dtypes=np.float64,
+                axes=[(2,3),(0,1),()],
+                vectorize=True
+            )
+
+            # compute
+            virtual_image = apply_mask_dask(datacube.data, mask)
+
+        # non-dask
+        else:
+
+            # compute
+            if mask.dtype == 'complex':
+                virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+            else:
+                virtual_image = np.zeros(datacube.Rshape)
+            for rx,ry in tqdmnd(
+                datacube.R_Nx,
+                datacube.R_Ny,
+                disable = not verbose,
+            ):
+                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+
+    # with center shifting
     else:
-        raise Exception(f"Unknown mode {mode}")
 
-
-
-    # select a function
-    dtype = _infer_dtype(datacube)
-    fn_dict = _make_function_dict()
-    fn = fn_dict[mode][shift_corr][dtype]
-
-
-    # run and return
-    im = fn(datacube, geometry)
-    return im
-
-
-
-
-def _make_function_dict():
-    """
-    Creates a dictionary for selecting an imaging function
-    """
-    function_dict = {
-        # mode
-        'point' : {
-            # shift corr
-            True : {
-                # data_type
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : lambda d:d.data[g[0],g[1],:,:],
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'circle' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtualimage_circ_old,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'annulus' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtualimage_ann_old,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'rectangle' : {
-            True : {
-                'numpy' : _get_virtualimage_rect_old,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        # c modes
-        'cpoint' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'ccircle' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'cannulus' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'csquare' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        # q modes
-        'qpoint' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'qcircle' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'qannulus' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'qsquare' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'mask' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        },
-
-        'mask_float' : {
-            True : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-            False : {
-                'numpy' : _get_virtual_image_fn,
-                'dask' : _get_virtual_image_fn
-            },
-        }
-    }
-    return function_dict
-
-
-
-def _infer_dtype(datacube):
-
-    # numpy array /
-    # mem mapped np.array /
-    # h5py dataset 
-    if (type(datacube.data) == np.ndarray or
-        isinstance(datacube.data, np.memmap) or
-        isinstance(datacube.data, h5py.Dataset)):
-        data_type = 'numpy'
-
-    # dask array
-    elif type(datacube.data) == da.Array:
-        data_type = 'dask'
-
-    else:
-        er = f"Unexpected datacube array data type, {type(datacube.data)}"
-        raise Exception(er)
-
-    return data_type
-
-
-
-def _get_virtual_image_fn(datacube):
-    raise Exception("This functions doesn't exist yet!")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def make_circ_mask(
-    datacube,
+        # get shifts
+        assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
+        qx_shift,qy_shift = datacube.calibration.get_origin_shift()
+        qx_shift = qx_shift.round().astype(int)
+        qy_shift = qy_shift.round().astype(int)
+
+        # if return_mask is True, skip computation
+        if return_mask is not False:
+            try:
+                rx,ry = return_mask
+            except TypeError:
+                raise Exception("when `shift_center` is True, return_mask must be a 2-tuple of ints or False")
+            # get shifted mask
+            _mask = np.roll(
+                mask,
+                (qx_shift[rx,ry], qy_shift[rx,ry]),
+                axis=(0,1)
+            )
+            return _mask
+
+        # compute
+        if mask.dtype == 'complex':
+            virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+        else:
+            virtual_image = np.zeros(datacube.Rshape)
+
+        for rx,ry in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            disable = not verbose,
+        ):
+            # get shifted mask
+            _mask = np.roll(
+                mask,
+                (qx_shift[rx,ry], qy_shift[rx,ry]),
+                axis=(0,1)
+            )
+            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
+
+    return virtual_image
+
+
+def get_calibrated_geometry(
+    calibration,
+    mode,
     geometry,
-    return_crop_vals=False
+    centered,
+    calibrated
     ):
     """
-    Make a circular boolean mask centered at (x0,y0) and with radius R
-    in the diffraction plane. The mask returned is the same shape as each
-    diffraction slice.
-
-    If return_crop_vals is True, then they can be used to acceleate.
+    Determine the detector geometry in pixels, given some mode and geometry
+    in calibrated units, where the calibration state is specified by {
+    centered, calibrated}
 
     Args:
-        datacube (DataCube):
-        geometry (2-tuple): (center,radius), where center is
-            a 2-tuple (qx0,qy0), and radius is a number
-        return_crop_vals (Boolean): boolean toggle to return
-            indicies for cropping diffraction pattern
+        calibration (Calibration, DataCube, any object with a .calibration attr,
+        or None) Used to retrieve the center positions. If `None`, confirms that
+        centered and calibrated are False then passes
+        mode: see py4DSTEM.process.virtualimage.get_virtual_image
+        geometry: see py4DSTEM.process.virtualimage.get_virtual_image
+        centered: see py4DSTEM.process.virtualimage.get_virtual_image
+        calibrated: see py4DSTEM.process.virtualimage.get_virtual_image
 
     Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern
-            (xmin,xmax,ymin,ymax)
+        (tuple) the geometry in detector pixels
     """
-    assert isinstance(datacube, DataCube)
-
-    # unpack geometry
-    (x0,y0),R = geometry
-
-    # make mask
-    xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
-    ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
-
-    xsize,ysize = xmax-xmin,ymax-ymin
-    x0_s,y0_s = x0-xmin,y0-ymin
-    mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
-
-    full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
-    full_mask[xmin:xmax,ymin:ymax] = mask
-
-
-    # full mask is same size as diffraction space
-    # If the xmin, xmax, ymin, ymax are returned index values are returned, they could be used when indexing values. 
-    if return_crop_vals:
-        return full_mask, (xmin,xmax,ymin,ymax)
+    # Parse inputs
+    g = geometry
+    if calibration is None:
+        assert calibrated is False and centered is False
+        return g
+    elif isinstance(calibration, Calibration):
+        cal = calibration
     else:
-        return full_mask
+        try:
+            cal = calibration.calibration
+            assert isinstance(cal, Calibration), "`calibration.calibration` must be a Calibration instance"
+        except AttributeError:
+            raise Exception("`calibration` must either be a Calibration instance or have a .calibration attribute")
 
-def make_annular_mask(datacube, geometry):
-    """
-    Make an annular boolean mask centered at (x0,y0), with inner/outer
-    radii of Ri/Ro.
-    Args:
-        datacube (DataCube):
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-        and radii is the 2-tuple (ri,ro)
-    Returns:
-        (2D array): Boolean mask
-    """
+    # Get calibration metadata
+    if centered:
+        assert cal.get_qx0_mean(), "origin needs to be calibrated" 
+        x0_mean, y0_mean = cal.get_origin_mean()
 
-    (x0,y0),(Ri,Ro) = geometry
-
-    assert isinstance(datacube, DataCube)
-    assert Ro>Ri, "Inner radius must be smaller than outer radius"
-
-    xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
-    ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
-
-    xsize,ysize = xmax-xmin,ymax-ymin
-    x0_s,y0_s = x0-xmin,y0-ymin
-    mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
-    mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
-    mask = np.logical_xor(mask_o,mask_i)
+    if calibrated:
+        assert cal['Q_pixel_units'] == 'A^-1', \
+        'check calibration - must be calibrated in A^-1 to use `calibrated=True`'
+        unit_conversion = cal.get_Q_pixel_size()
 
 
-    full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
-    full_mask[xmin:xmax,ymin:ymax] = mask
-    return full_mask
+    # Convert units into detector pixels
 
-def make_rect_mask(datacube, geometry, return_crop_vals=False):
-    """
-    Make a rectangular boolean mask with limits (xmin,xmax,ymin,ymax)
-    in the diffraction plane. Floating point limits will be rounded and cast to ints.
+    # Shift center
+    if centered == True:
+        if mode == 'point':
+            g = (g[0] + x0_mean, g[1] + y0_mean)
+        if mode in('circle', 'circular', 'annulus', 'annular'):
+            g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
+        if mode in('rectangle', 'square', 'rectangular') :
+             g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
-    Args:
-        datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
-        return_crop_vals (Boolean): boolean toggle to return indicies for cropping diffraction pattern
-    Returns:
-        (2D array): Boolean mask
-        (tuple) : index values for croping diffraction pattern (xmin,xmax,ymin,ymax)
-    """
-    xmin,xmax,ymin,ymax = geometry
+    # Scale by the detector pixel size
+    if calibrated == True:
+        if mode == 'point':
+            g = (g[0]/unit_conversion, g[1]/unit_conversion)
+        if mode in('circle', 'circular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                (g[1]/unit_conversion))
+        if mode in('annulus', 'annular'):
+            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
+                (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
+        if mode in('rectangle', 'square', 'rectangular') :
+            g = (g[0]/unit_conversion, g[1]/unit_conversion,
+                 g[2]/unit_conversion, g[3]/unit_conversion)
 
-    assert isinstance(datacube, DataCube)
+    return g
 
-    xmin,xmax = max(0,int(np.round(xmin))),min(datacube.Q_Nx,int(np.round(xmax)))
-    ymin,ymax = max(0,int(np.round(ymin))),min(datacube.Q_Ny,int(np.round(ymax)))
 
-    full_mask = np.zeros(shape=datacube.data.shape[2:], dtype=np.bool_)
-    full_mask[xmin:xmax,ymin:ymax] = True
 
-    if return_crop_vals:
-        return full_mask, (xmin, xmax, ymin, ymax)
-    else:
-        return full_mask
-
-# TODO add logical_and, logical_not functions as well? 
-def combine_masks(masks, operator='or'):
-    """
-    Function to combine multiple masks into single boolean mask, using np.logical_or , np.logical_xor functions.
+def make_detector(
+    shape,
+    mode,
+    geometry,
+):
+    '''
+    Function to return 2D mask
 
     Args:
-        masks (list,tuple): collection of 2D boolean masks
-        operator (str): choice of operator either (or, xor) defaults to 'or'
-
-    Returns:
-        (2D array): Boolean mask
-    """
-    assert(operator.lower() in ('or', 'xor')), 'specified operator not supported, must be "or" or "xor"'
-
-    if operator.lower() == 'or':
-        return np.logical_or.reduce(masks)
-    elif operator.lower() == 'xor':
-        return np.logical_xor.reduce(masks)
-
-# REMOVE THIS ?
-def plot_mask_overlay(mask, dp=None, datacube=None, reduce_func=np.mean, alpha=0.5, *args, **kwargs):
-    """
-    Function to plot the overaly of the mask on a diffraction slice. A diffraction slice or a datacube object may be passed to the function as dp, datacube.
-    If a datacube is passed the function diffraction pattern for the dataset will be calculated (note this could be expesnive for large datasets)
-
-    Args:
-        mask (numpy array): 2D array mask
-        dp (numpy array, optional): a single 2D diffraction pattern . Defaults to None.
-        datacube (py4DSTEM datacube, optional): py4DSTEM datacube object from which a mean or max diffraction pattern will be calculated. Defaults to None.
-        reduce_func (str, optional): function to generate the 2D diffraction pattern from the 4D datacube. Function passed must reduce 4D datacube to 2D diffraction pattern . Defaults to np.mean.
-        alpha (float, optional): [description]. Defaults to 0.5.
-    """
-
-    #TODO clean this function up and bring closer to the standard py4DSTEM way
-    #check the mask is 2D
-    assert mask.ndim == 2, "mask must be 2D slice"
-
-    #check that at least one of diffraction pattern (dp) or a datacube is passed
-    assert dp is not None or datacube is not None, "Must pass a diffraction pattern (dp) or datacube object"
-
-    # check if the diffraction pattern is passed, if it isnt use the datacube and . 
-    if dp is None:
-
-        # apply the function over the first to axes
-        dp = np.apply_over_axes(reduce_func, datacube.data, axes=[0,1])
-        # quick check that dp is 2D and or can trivally converted to 2D i.e. (1,1,n,m)
-
-        # assume that the last two array axis are correct
-        if dp.ndim != 2 and np.all(dp.shape[:-2]) == 1:
-            warnings.warn("Diffraction pattern (dp) returned from function was not 2D, but was trivially shaped (1,1,...,n,m) converting to 2D assuming last two axes are correct. This could be wrong")
-            m,n = dp.shape[-2:]
-            dp = dp.flat[:m*n].reshape((m,n))
-        elif dp.ndim != 2 and np.all(dp.shape[:-2]) != 1:
-            raise Exception("Diffraction pattern (dp) returned from function was not 2D and non-trivial to convert to 2D")
-        else:
-            pass
-        # assert func == 'mean' or func == 'max', "func must be 'mean' or 'max' "
-
-        # if func == 'mean':
-        #     dp = datacube.data.mean(axis=(0,1))
-        # elif func == 'max':
-        #     dp = datacube.data.max(axis=(0,1))
-    else:
-
-        # quick check that dp is 2D and or can trivally converted to 2D i.e. (1,1,n,m)
-        # assume that the last two array axis are correct
-        if dp.ndim != 2 and np.all(dp.shape[:-2]) == 1:
-            warnings.warn("Diffraction pattern (dp) passed was not 2D, but was trivially shaped (1,1,...,n,m) converting to 2D assuming last two axes are correct. This could be wrong")
-            m,n = dp.shape[-2:]
-            dp = dp.flat[:m*n].reshape((m,n))
-        elif dp.ndim != 2 and np.all(dp.shape[:-2]) != 1:
-            raise Exception("Diffraction pattern (dp) passed was not 2D and non-trivial to convert to 2D")
-        else:
-            pass
-
-    # explicitly check the diffraction pattern is 2D should be caught above but just incase,  catch before plotting 
-    assert dp.ndim == 2, "Diffraction pattern (dp) must be a 2D slice"
-
-    #plot the diffraction pattern
-    plt.imshow(dp, cmap='Greys', *args,**kwargs)
-    #plot the mask overlay
-    plt.imshow(mask, alpha=alpha, cmap='Reds', *args, **kwargs)
-    # add a few options 
-    plt.tight_layout()
-    #show the plot
-    plt.show()
-
-#### End of Mask Making Features ####
-
-#### Virtual Imaging Functions ####
-
-##### py4DSTEM funcs V0.13.0 ####
-def _get_virtualimage_rect_old(datacube, geometry, verbose=True, *args, **kwargs):
-    """
-    Get a virtual image using a rectagular detector.
-    Args:
-        datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
-    Returns:
-        (2D array): the virtual image
-    """
-    assert(len(geometry)==4 and all([isinstance(i,(int,np.integer)) for i in geometry])), "Detector geometry was specified incorrectly, must be a set of 4 of integers"
-    xmin,xmax,ymin,ymax = geometry
-    assert(xmax>xmin and ymax>ymin)
-
-    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny,disable=not verbose):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax])
-    return virtual_image
-
-def _get_virtualimage_circ_old(datacube, geometry, verbose=True, *args, **kwargs):
-    """
-    Get a virtual image using a circular detector centered at (x0,y0) and with radius R
-    in the diffraction plane.
-
-    Args:
-        datacube (DataCube):
-        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
-            and radius is a number
+        shape (tuple)      : defines shape of mask, for example (Q_Nx, Q_Ny) where Q_Nx and Q_Ny are mask sizes
+        mode (str)         : defines geometry mode for calculating virtual image
+            options:
+                - 'point' uses singular point as detector
+                - 'circle' or 'circular' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+                - 'rectangle', 'square', 'rectangular', uses rectangular detector
+                - 'mask' flexible detector, any boolean or floating point 2D array with
+                    the same shape as datacube.Qshape or datacube.Rshape for virtual image
+                    or diffraction image respectively
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+            argument, as follows:
+                - 'point': 2-tuple, (qx,qy),
+                   qx and qy are each single float or int to define center
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - 'rectangle', 'square', 'rectangular': 4-tuple, (xmin,xmax,ymin,ymax)
+                - `mask`: flexible detector, any boolean or floating point 2D array with the
+                    same shape as datacube.Qshape or datacube.Rshapefor virtual image
+                    or diffraction image respectively
 
     Returns:
-        (2D array): the virtual image
-    """
-    (x0,y0),R = geometry
-    xmin,xmax = max(0,int(np.floor(x0-R))),min(datacube.Q_Nx,int(np.ceil(x0+R)))
-    ymin,ymax = max(0,int(np.round(y0-R))),min(datacube.Q_Ny,int(np.ceil(y0+R)))
+        virtual detector in the form of a 2D mask (array)
+    '''
+    g = geometry
 
-    xsize,ysize = xmax-xmin,ymax-ymin
-    x0_s,y0_s = x0-xmin,y0-ymin
-    mask = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < R**2, (xsize,ysize)) # Avoids making meshgrids
+    #point mask 
+    if mode == 'point':
+        assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
+        mask = np.zeros(shape, dtype=bool)
 
-    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
-    return virtual_image
+        qx = int(g[0])
+        qy = int(g[1])
 
-def _get_virtualimage_ann_old(datacube, geometry, verbose=True, *args, **kwargs):
-    """
-    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro.
+        mask[qx,qy] = 1
 
-    Args:
-        datacube (DataCube):
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-        and radii is the 2-tuple (ri,ro)
+    #circular mask
+    if mode in('circle', 'circular'):
+        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
+        'specify qx, qy, radius_i as ((qx, qy), radius)'
 
-    Returns:
-        (2D array): the virtual image
-    """
-    (x0,y0),(Ri,Ro) = geometry
-    assert Ro>Ri, "Inner radius must be smaller than outer radius"
-    xmin,xmax = max(0,int(np.floor(x0-Ro))),min(datacube.Q_Nx,int(np.ceil(x0+Ro)))
-    ymin,ymax = max(0,int(np.round(y0-Ro))),min(datacube.Q_Ny,int(np.ceil(y0+Ro)))
+        qxa, qya = np.indices(shape)
+        mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
 
-    xsize,ysize = xmax-xmin,ymax-ymin
-    x0_s,y0_s = x0-xmin,y0-ymin
-    mask_o = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ro**2, (xsize,ysize))
-    mask_i = np.fromfunction(lambda x,y: ((x-x0_s+0.5)**2 + (y-y0_s+0.5)**2) < Ri**2, (xsize,ysize))
-    mask = np.logical_xor(mask_o,mask_i)
+    #annular mask 
+    if mode in('annulus', 'annular'):
+        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2), \
+        'specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))'
 
-    virtual_image = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    for rx,ry in tqdmnd(datacube.R_Nx, datacube.R_Ny, disable=not verbose):
-        virtual_image[rx,ry] = np.sum(datacube.data[rx,ry,xmin:xmax,ymin:ymax]*mask)
-    return virtual_image
-#### End of py4DSTEM funcs V0.13.0 ####
+        assert g[1][1] > g[1][0], "Inner radius must be smaller than outer radius"
 
-#### Dask Function #### 
+        qxa, qya = np.indices(shape)
+        mask1 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 > g[1][0] ** 2
+        mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
+        mask = np.logical_and(mask1, mask2)
 
-@da.as_gufunc(signature='(i,j),(i,j)->()', output_dtypes=np.float64, axes=[(2,3),(0,1),()], vectorize=True)
-def _get_virtual_image_dask(array, mask):
-    """
-    Make a virtual for all probe posistions from a dask array object using a mask in the diffraction plane.
-    Example:
-    image = make_virtual_image_dask(dataset.data, mask).compute()
+    #rectangle mask 
+    if mode in('rectangle', 'square', 'rectangular') :
+        assert(isinstance(g,tuple) and len(g)==4), \
+       'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
+        mask = np.zeros(shape, dtype=bool)
 
-    Args:
-        array (dask array): dask array of 4DSTEM data with shape rx,ry,qx,qy
-        mask (2D numpy array): mask from which virtual image is generated, must be the same shape as diffraction pattern
+        xmin = int(np.round(g[0]))
+        xmax = int(np.round(g[1]))
+        ymin = int(np.round(g[2]))
+        ymax = int(np.round(g[3]))
 
-    Returns:
-        out (2D numpy array): virtual image lazy virtual image, requires explict computation
-    """
-    val = np.sum(np.multiply(array,mask), dtype=np.float64)
-    return val
+        mask[xmin:xmax, ymin:ymax] = 1
 
-def _get_virtualimage_from_mask_dask(datacube, mask, eager_compute=True, *args, **kwargs):
-    """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean,  The mask and diffraction slices must be the same shape
-
-    This should only be used on datasets which are dask arrays.
+    #flexible mask
+    if mode == 'mask':
+        assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
+        assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
+        mask = g
+    return mask
+    
+def make_bragg_mask(
+    Qshape,
+    g1,
+    g2,
+    radius,
+    origin,
+    max_q,
+    return_sum = True,
+    **kwargs,
+    ):
+    '''
+    Creates and returns a mask consisting of circular disks
+    about the points of a 2D lattice.
 
     Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+        Qshape (2 tuple): the shape of diffraction space
+        g1,g2 (len 2 array or tuple): the lattice vectors
+        radius (number): the disk radius
+        origin (len 2 array or tuple): the origin
+        max_q (nuumber): the maxima distance to tile to
+        return_sum (bool): if False, return a 3D array, where each
+            slice contains a single disk; if False, return a single
+            2D masks of all disks
 
     Returns:
-        if eager_compute == True:
-            (2D array): the virtual image
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
-    """
+        (2 or 3D array) the mask
+    '''
+    nas = np.asarray
+    g1,g2,origin = nas(g1),nas(g2),nas(origin)
 
-    if eager_compute:
-        return _get_virtual_image_dask(datacube.data, mask).compute()
+    # Get N,M, the maximum indices to tile out to
+    L1 = np.sqrt(np.sum(g1**2))
+    H = int(max_q/L1) + 1
+    L2 = np.hypot(-g2[0]*g1[1],g2[1]*g1[0])/np.sqrt(np.sum(g1**2))
+    K = int(max_q/L2) + 1
 
-    else:
-        return _get_virtual_image_dask(datacube.data, mask)
+    # Compute number of points
+    N = 0
+    for h in range(-H,H+1):
+        for k in range(-K,K+1):
+            v = h*g1 + k*g2
+            if np.sqrt(v.dot(v)) < max_q:
+                N += 1
 
-def _get_virtualimage_ann_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
-    """
-    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro.
+    #create mask
+    mask = np.zeros((Qshape[0], Qshape[1], N), dtype=bool)
+    N = 0
+    for h in range(-H,H+1):
+        for k in range(-K,K+1):
+            v = h*g1 + k*g2
+            if np.sqrt(v.dot(v)) < max_q:
+                center = origin + v
+                mask[:,:,N] = make_detector(
+                    Qshape,
+                    mode = 'circle',
+                    geometry = (center, radius),
+                )
+                N += 1
 
-    This should only be used on datasets which are dask arrays.
 
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-        and radii is the 2-tuple (ri,ro)
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
+    if return_sum:
+        mask = np.sum(mask, axis = 2)
+    return mask
 
-    Returns:
-        if eager_compute == True:
-            (2D array): the virtual image
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
-    """
 
-    # make the annular mask
-    mask = make_annular_mask(datacube, geometry)
 
-    if eager_compute:
-            return _get_virtual_image_dask(datacube.data, mask).compute()
-    else:
 
-        return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virtualimage_circ_dask(datacube, geometry , eager_compute=True, *args, **kwargs):
 
-    """
-    Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro.
 
-    This should only be used on datasets which are dask arrays.
 
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
-        and radius is a number
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
 
-    Returns:
-        if eager_compute == True:
-            (2D array): the virtual image
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
-    """
 
-    # make the circular mask
 
-    mask = make_circ_mask(datacube, geometry)
 
-    if eager_compute:
-        return _get_virtual_image_dask(datacube.data, mask).compute()
-    else:
-        return _get_virtual_image_dask(datacube.data, mask)
 
-def _get_virtualimage_rect_dask(datacube, geometry, eager_compute=True, *args, **kwargs):
-    """
-    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
-    in the diffraction plane. Floating point limits will be rounded and cast to ints.
-
-
-    Args:
-        datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
-        eager_compute (bool, optional): Flag if it should return virtual image as a numpy or dask array. Defaults to True.
-
-    Returns:
-        if eager_compute == True:
-            (2D array): the virtual image
-        else:
-            (Lazy dask array): Returns a lazy dask array object which can be subsequently computed using array.compute() syntax
-    """
-
-    # make the rectangular mask
-    mask = make_rect_mask(datacube, geometry)
-
-
-    if eager_compute:
-        return _get_virtual_image_dask(datacube.data, mask).compute()
-    else:
-        return _get_virtual_image_dask(datacube.data, mask)
-
-
-#### End of Dask Functions ####
-
-#### Einsum Powered Functions ####
-# TODO I could probably use the boolean array indexes as well rather than multiplication - need to check speeds
-
-def _get_virtualimage_from_mask_einsum(datacube, mask, dtype=np.float64, *args, **kwargs):
-    """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
-
-    Returns:
-        (2D array): the virtual image
-
-    """
-    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
-
-def _get_virtualimage_ann_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
-    """
-    Get a virtual image using an annular detector centered at (x0,y0), with inner/outer
-    radii of Ri/Ro.
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-        and radii is the 2-tuple (ri,ro)
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    # make the annular mask
-    mask = make_annular_mask(datacube, geometry)
-
-    return np.einsum('ijnm,nm->ij', datacube.data, mask, dtype=dtype)
-
-def _get_virtualimage_circ_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
-
-    """
-    Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro.
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
-        and radius is a number
-
-    Returns:
-        (2D array): the virtual image
-    """
-    # make the circular mask
-    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
-
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
-
-def _get_virtualimage_rect_einsum(datacube, geometry, dtype=np.float64, *args, **kwargs):
-    """
-    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
-    in the diffraction plane. Floating point limits will be rounded and cast to ints.
-
-    Args:
-        datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    # make the rectangular mask
-    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
-
-    return np.einsum('ijnm,nm->ij', datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], dtype=dtype)
-
-#### End of Einsum Powered Functions ####
-
-#### Tensordot Powered Functions ####
-def _get_virtualimage_from_mask_tensordot(datacube, mask, *args, **kwargs):
-    """
-    Create a virtual image from a generic mask, i.e. both boolean or non-boolean, the mask and diffraction slices must be the same shape
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        mask (2D array): This can be any mask i.e. both boolean or non-boolean, but it must be the same size as the diffraction slice
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
-
-def _get_virtualimage_ann_tensordot(datacube, geometry, *args, **kwargs):
-    """
-    Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro.
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
-        and radius is a number
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    # make the annular mask
-    mask = make_annular_mask(datacube, geometry)
-
-    return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
-
-def _get_virtualimage_circ_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
-
-    """
-    Get a virtual image using an circular detector centered at (x0,y0), with a
-    radius of Ri/Ro.
-
-    Args:
-        datacube (DataCube): DataCube object where datacube.data is a dask array
-        geometry (2-tuple): (center,radius), where center is the 2-tuple (qx0,qy0),
-        and radius is a number
-        spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    # make the circular mask
-    mask, (xmin,xmax,ymin,ymax) = make_circ_mask(datacube, geometry, return_crop_vals=True)
-
-    if spicy:
-        return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
-    else:
-        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
-
-def _get_virtualimage_rect_tensordot(datacube, geometry, spicy=False, *args, **kwargs):
-    """
-    Get a virtual image using a rectagular detector with limits (xmin,xmax,ymin,ymax)
-    in the diffraction plane. Floating point limits will be rounded and cast to ints.
-
-    Args:
-        datacube (DataCube):
-        geometry (4-tuple of ints): (qxmin,qxmax,qymin,qymax)
-        spicy (bool): dictates if fancy indexing is used (True) or not (False). This will be depreciated after testing
-
-    Returns:
-        (2D array): the virtual image
-    """
-
-    # make the rectangular mask
-    mask, (xmin,xmax,ymin,ymax) = make_rect_mask(datacube, geometry, return_crop_vals=True)
-
-    if spicy:
-        return np.tensordot(datacube.data[:,:,xmin:xmax, ymin:ymax], mask[xmin:xmax, ymin:ymax], axes=((2,3),(0,1)))
-    else:
-        return np.tensordot(datacube.data, mask, axes=((2,3),(0,1)))
-
-### End of Tensordot Powered Functions ####
-
-### Facade Function and Helper Functions ####
-
-
-#### BraggVector Functions ####
-
-# TODO - add pointlistarrays as a possible input for the overall fascade function
-def get_virtualimage_pointlistarray(
+def get_virtual_image_pointlistarray(
     peaks,
+    mode = None,
     geometry = None,
     ):
     """
-    Make an annular boolean mask centered at (x0,y0), with inner/outer
-    radii of Ri/Ro.
+    Make a virtual image from a pointlist array.
+    TODO - implement more virtual detectors.
+
     Args:
         peaks (PointListArray): List of all peaks and intensities.
-        geometry (2-tuple): (center,radii), where center is the 2-tuple (qx0,qy0),
-                            and radii is either max angle, or a 2-tuple (ri,ro)
-                            describing the inner and outer radial ranges.
+        mode (str)          : defines geometry mode for calculating virtual image.
+            Options:
+                - 'circular' or 'circle' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                              argument, as follows:
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - Note that (qx,qy) can be skipped, which assumes peaks centered at (0,0)
+
     Returns:
-        im_virtual (2D numpy array): the output virtual image
+        im_virtual (2D numpy array): the calculated virtual image
     """
 
     # Set geometry
-    if geometry is None:
-        radial_range = None
-    else:
+    if mode is None:
+        if geometry is None:
+            center = None
+            radial_range = np.array((0,np.inf))
+        else:
+            if len(geometry[0]) == 0:
+                center = None
+            else:
+                center = np.array(geometry[0])
+            if isinstance(geometry[1], int) or isinstance(geometry[1], float):
+                radial_range = np.array((0,geometry[1]))
+            elif len(geometry[1]) == 0:
+                radial_range = None
+            else:
+                radial_range = np.array(geometry[1])
+    elif mode == 'circular' or mode == 'circle':
+        radial_range = np.array((0,geometry[1]))
         if len(geometry[0]) == 0:
-            origin = None
+                center = None
         else:
-            origin = np.array(geometry[0])
-        if isinstance(geometry[1], int) or isinstance(geometry[1], float):
-            radial_range = np.array((0,geometry[1]))
-        elif len(geometry[1]) == 0:
-            radial_range = None
+            center = np.array(geometry[0])
+    elif mode == 'annular' or mode == 'annulus':
+        radial_range = np.array(geometry[1])
+        if len(geometry[0]) == 0:
+                center = None
         else:
-            radial_range = np.array(geometry[1])
+            center = np.array(geometry[0])
+
+
 
     # init
     im_virtual = np.zeros(peaks.shape)
@@ -941,10 +488,10 @@ def get_virtualimage_pointlistarray(
             if radial_range is None:
                 im_virtual[rx,ry] = np.sum(p.data['intensity'])
             else:
-                if origin is None:
+                if center is None:
                     qr = np.hypot(p.data['qx'],p.data['qy'])
                 else:
-                    qr = np.hypot(p.data['qx'] - origin[0],p.data['qy'] - origin[1])
+                    qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
                 sub = np.logical_and(
                     qr >= radial_range[0],
                     qr <  radial_range[1])
@@ -954,69 +501,37 @@ def get_virtualimage_pointlistarray(
     return im_virtual
 
 
-#### Mask Making Functions ####
-# lifted from py4DSTEM old funcs
-#TODO Add symmetry mask maker, e.g. define one spot, add symmetry related reflections 
-#TODO Add multiple mask maker, e.g. given list of coordinate tuples create circular masks at each point
-#TODO Add assertion statements 
+def get_virtual_image_braggvectors(
+    bragg_peaks,
+    mode = None,
+    geometry = None,
+    ):
+    '''
+    Function to calculate virtual images from braggvectors / pointlist arrays.
+    TODO - implement these detectors for braggvectors
 
+    Args:
+        bragg_peaks (BraggVectors) : BraggVectors class object which stores bragg peaks
+        mode (str)          : defines geometry mode for calculating virtual image.
+            Options:
+                - 'circular' or 'circle' uses round detector, like bright field
+                - 'annular' or 'annulus' uses annular detector, like dark field
+        geometry (variable) : valid entries are determined by the `mode`, values in pixels
+                              argument, as follows:
+                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
+                   qx, qy and radius, are each single float or int
+                - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
+                   qx, qy, radius_i, and radius_o are each single float or integer
+                - Note that (qx,qy) can be skipped, which assumes peaks centered at (0,0)
+                
+    Returns:
+        im_virtual (2D numpy array): the calculated virtual image
+    '''
 
+    virtual_image = get_virtual_image_pointlistarray(
+        bragg_peaks.vectors,    
+        mode = mode,
+        geometry = geometry,
+        )
 
-
-
-
-#TODO add automagic functions that will pick dask or normal depending on the array type - in progress 
-#TODO add alias names for get get_BF, get_ADF? 
-
-
-
-
-
-
-
-#TODO Work out how to handle name space to access underlying __functions__, use __all__ or something like that 
-
-#__all__ = [
-#    'make_circ_mask',
-#    'make_annular_mask',
-#    'make_rect_mask',
-#    'combine_masks',
-#    'plot_mask_overlay',
-#    'get_virtualimage',
-#    '_get_virtualimage_rect_old',
-#    '_get_virtualimage_circ_old',
-#    '_get_virtualimage_ann_old',
-#    '_infer_detector_geometry',
-#    '_get_virtualimage_from_mask_dask',
-#    '_get_virtualimage_from_mask_einsum',
-#    '_get_virtualimage_from_mask_tensordot'
-#    ]
-
-
-
-
-#    This function is a high level function and calls sub functions from within. Users may prefer to use these subfunctions:
-#
-#    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_dask - operating on dask array objects
-#    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_einsum - operating on numpy objects with non-boolean masks
-#    py4DSTEM.process.virtualimage._get_virtualimage_from_mask_tensordot - operating on numpy objects with boolean masks
-#    py4DSTEM.process.virtualimage.make_circ_mask - make a circular boolean mask
-#    py4DSTEM.process.virtualimage.make_annular_mask' - make a annular boolean mask
-#    py4DSTEM.process.virtualimage.make_rect_mask - make rectangular boolean mask
-#    py4DSTEM.process.virtualimage.combine_masks - function to combine boolean masks
-#    py4DSTEM.process.virtualimage.plot_mask_overlay - tool for visualising a detector boolean or non-boolean masks
-
-
-
-
-
-# Notes from top of get_virtualimage():
-
-    # TODO add ability to pass both mask and geometry where mask acts as bad pixels e.g. beam stop
-    # I decided to do this with switch like statements using a dictionary, in python 3.10, we could use them explicitly. 
-    # This should make it easier to split into two functions if that is the prefered route
-
-    # check one of geometry or mask is passed
-    # I could use np.all(mask) != None, but I want to check its a numpy array as well
-
-
+    return virtual_image

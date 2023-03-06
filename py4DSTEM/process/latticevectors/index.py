@@ -3,8 +3,8 @@
 import numpy as np
 from numpy.linalg import lstsq
 
-from ...io.datastructure import PointList, PointListArray
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
     """
@@ -149,7 +149,7 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
             (ideal_lattice.data['qx'] < 0) | \
             (ideal_lattice.data['qy'] > Q_Ny) | \
             (ideal_lattice.data['qy'] < 0)
-    ideal_lattice.remove_points(deletePeaks)
+    ideal_lattice.remove(deletePeaks)
 
     return ideal_lattice
 

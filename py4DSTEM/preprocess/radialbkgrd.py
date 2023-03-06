@@ -5,7 +5,7 @@ Functions for generating radially averaged backgrounds
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
-from ..process.utils import cartesian_to_polarelliptical_transform
+from py4DSTEM.process.utils import cartesian_to_polarelliptical_transform
 
 ## Create look up table for background subtraction
 def get_1D_polar_background(data,
@@ -63,7 +63,7 @@ def get_1D_polar_background(data,
 
     # Crop polar data to maximum distance which contains information from original image
     if (polarData.mask.sum(axis = (0))==polarData.shape[0]).any():
-            ii = polarData.data.shape[1]
+            ii = polarData.data.shape[1]-1
             while(polarData.mask[:,ii].all()==True):
                 ii = ii-1
             maximalDistance = ii
@@ -74,6 +74,7 @@ def get_1D_polar_background(data,
 
     # Iteratively mask off high intensity peaks
     maskPolar = np.copy(polarData.mask)
+    background1D = np.ma.median(polarData, axis = 0)
     for ii in range(maskUpdateIter+1):
         if ii > 0:
             maskUpdate = np.logical_or(maskPolar,
@@ -83,7 +84,6 @@ def get_1D_polar_background(data,
             maskUpdate[:,colMaskMin] = polarData.mask[:,colMaskMin] # reset empty columns to values of previous iterations
             polarData.mask  = maskUpdate  # Update Mask
 
-        background1D = np.ma.median(polarData, axis = 0)
 
     background1D = np.maximum(background1D, min_background_value)
 

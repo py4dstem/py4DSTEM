@@ -7,8 +7,8 @@
 import numpy as np
 from scipy import optimize
 
-from ..io import PointListArray
-from ..process.utils import get_maxima_2D, bin2D
+from py4DSTEM.io import PointListArray
+from py4DSTEM.process.utils import get_maxima_2D, bin2D
 
 def electron_count(datacube, darkreference, Nsamples=40,
                                             thresh_bkgrnd_Nsigma=4,
@@ -261,7 +261,7 @@ def calculate_thresholds(datacube, darkreference,
     binmax = min(int(np.ceil(np.amax(sample))),int(mean+thresh_xray*stddev))
     binmin = max(int(np.ceil(np.amin(sample))),int(mean-thresh_xray*stddev))
     step = max(1,(binmax-binmin)//1000)
-    bins = np.arange(binmin,binmax,step=step,dtype=np.int)
+    bins = np.arange(binmin,binmax,step=step,dtype=np.int16)
     n, bins = np.histogram(sample,bins=bins)
 
     # Define Guassian to fit to, with parameters p:
