@@ -7,10 +7,9 @@ from time import time
 from tqdm import tqdm
 from dataclasses import dataclass
 
-from ...io.datastructure import PointList
-from ..utils import electron_wavelength_angstrom, single_atom_scatter
-from ..dpc import get_interaction_constant
-from .WK_scattering_factors import compute_WK_factor
+from py4DSTEM.io.datastructure import PointList
+from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
+from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
 
 
 @dataclass
@@ -24,8 +23,10 @@ def calculate_dynamical_structure_factors(
     accelerating_voltage: float,
     method: str = "WK-CP",
     k_max: float = 2.0,
-    thermal_sigma: float = None,
-    tol_structure_factor: float = 1.0e-4,
+    thermal_sigma: Optional[Union[float, dict]] = None,
+    tol_structure_factor: float = 0.0,
+    recompute_kinematic_structure_factors=True,
+    g_vec_precision=None,
     verbose=True,
 ):
     """
@@ -52,13 +53,25 @@ def calculate_dynamical_structure_factors(
         k_max (float):                  max scattering length to compute structure factors to.
                                         Setting this to 2x the k_max used in generating the beamsn
                                         included in a simulation will retain all possible couplings
-        thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
+        thermal_sigma (float or dict{int->float}):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
                                         Units are Å. (This is often written as 〈u〉in papers)
+                                        To specify different 〈u〉 for each element, pass a dictionary
+                                        with Z as the key, mapping to the appropriate float value
         tol_structure_factor (float):   tolerance for removing low-valued structure factors. Reflections
                                         with structure factor below the tolerance will have zero coupling
                                         in the dynamical calculations (i.e. they are the ignored weak beams)
+        recompute_kinematic_structure_factors (bool): When True, recomputes the kinematic structure
+                                        factors using the same tol_structure_factor, and with k_max
+                                        set to *half* the k_max for the dynamical factors. The factor
+                                        of half ensures that every beam in a simulation can couple to
+                                        every other beam (no high-angle couplings in the Bloch matrix
+                                        are set to zero.)
+        g_vec_precision (optional int): If specified, rounds |g| to this many decimal places so that
+                                        automatic caching of the atomic form factors is not slowed
+                                        down due to floating point errors. Setting this to 3 can give
+                                        substantial speedup at the cost of some reduced accuracy
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
@@ -72,9 +85,23 @@ def calculate_dynamical_structure_factors(
         "WK-CP",
     ), "Invalid method specified."
 
+    if "WK" in method:
+        assert (
+            thermal_sigma is not None
+        ), "thermal_sigma must be specifed when using W-K potentials"
+
     # Calculate the reciprocal lattice points to include based on k_max
 
     k_max = np.asarray(k_max)
+
+    if recompute_kinematic_structure_factors:
+        if hasattr(self, "struct_factors"):
+            print("Warning: overriding existing structure factors...")
+        self.calculate_structure_factors(
+            k_max=k_max / 2.0,
+            tol_structure_factor=tol_structure_factor,
+            return_intensities=False,
+        )
 
     # Inverse lattice vectors
     lat_inv = np.linalg.inv(self.lat_real)
@@ -112,108 +139,92 @@ def calculate_dynamical_structure_factors(
     g_vec_all = g_vec_all[:, keep]
     g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
-    # We do not precompute form factors here, instead we rely on using
-    # automatic caching of the form factors.
-
     lobato_lookup = single_atom_scatter()
 
     m0c2 = 5.109989461e5  # electron rest mass, in eV
     relativistic_factor = (m0c2 + accelerating_voltage) / m0c2
 
-    from functools import lru_cache
-
-    # get_f_e returns f^e in units of VÅ^3, with relativistic correction
-    # but not yet converted to
-    @lru_cache(maxsize=2 ** 12)
-    def get_f_e(q, Z, B, method):
+    def get_f_e(q, Z, thermal_sigma, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
             return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
             return np.complex128(
                 relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j)
             )
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=False,
             )
         elif method == "WK-C":
             # WK, core only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=False,
             )
         elif method == "WK-P":
             # WK, phonon only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=True,
             )
         elif method == "WK-CP":
             # WK, core + phonon
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=True,
             )
 
-    display_names = {
-        "Lobato": "Lobato-Van Dyck",
-        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
-        "WK": "Weickenmeier-Kohl",
-        "WK-C": "Weickenmeier-Kohl + Core",
-        "WK-P": "Weickenmeier-Kohl + Phonon",
-        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
-    }
+    # find unique values of Z and |g| for computing atomic form factors
+    Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
+    g_unique, g_inverse = np.unique(
+        np.round(g_vec_leng, g_vec_precision) if g_vec_precision else g_vec_leng,
+        return_inverse=True,
+    )
+
+    f_e_uniq = np.zeros((Z_unique.size, g_unique.size), dtype=np.complex128)
+
+    for idx, Z in enumerate(Z_unique):
+        # get element-specific thermal displacements, if given
+        sigma = thermal_sigma[Z] if isinstance(thermal_sigma, dict) else thermal_sigma
+        f_e_uniq[idx, :] = get_f_e(g_unique, Z, sigma, method)
+
+    # flesh out the dense array of atomic scattering factors
+    f_e = f_e_uniq[np.ix_(Z_inverse, g_inverse)]
 
     # Calculate structure factors
-    struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(
-        range(hkl.shape[1]),
-        desc=f"Computing {display_names[method]} lookup table",
-        disable=not verbose,
-    ):
-        Freal = 0.0
-        Fimag = 0.0
-        for i_pos in range(self.positions.shape[0]):
-            # Get the appropriate atomic form factor:
-            fe = get_f_e(g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method)
-
-            # accumulate the real and imag portions separately (?)
-            Freal += np.real(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-            Fimag += np.imag(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-        struct_factors[i_hkl] = Freal + 1.0j * Fimag
+    struct_factors = np.sum(
+        f_e * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        axis=0,
+    )
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
     struct_factors /= unit_cell_volume
 
     # Remove structure factors below tolerance level
-    keep = np.abs(struct_factors) > tol_structure_factor
+    keep = np.abs(struct_factors) >= tol_structure_factor
     hkl = hkl[:, keep]
 
     g_vec_all = g_vec_all[:, keep]
@@ -229,9 +240,6 @@ def calculate_dynamical_structure_factors(
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(hkl.shape[1])
     }
-
-    # Clear cached scattering factors to free up RAM
-    get_f_e.cache_clear()
 
 
 def generate_dynamical_diffraction_pattern(
@@ -386,9 +394,8 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (
-        2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
-    )  # divide by 2 k_n
+    gamma_fac = 2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
+    gamma = v / gamma_fac  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -413,7 +420,11 @@ def generate_dynamical_diffraction_pattern(
             C @ np.diag(np.exp(2.0j * np.pi * z * gamma)) @ C_inv
             for z in np.atleast_1d(thickness)
         ]
-        return Smatrices, psi_0
+        return (
+            (Smatrices, psi_0, (C, C_inv, gamma, gamma_fac))
+            if return_eigenvectors
+            else (Smatrices, psi_0)
+        )
     elif return_complex:
         # calculate the amplitudes
         amplitudes = [

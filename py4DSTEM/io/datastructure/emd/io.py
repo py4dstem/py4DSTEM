@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 from numbers import Number
 
-from ....utils.tqdmnd import tqdmnd
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 
@@ -96,7 +96,7 @@ def Root_to_h5(root,group):
     ## Write
     grp = group.create_group(root.name)
     grp.attrs.create("emd_group_type",EMD_group_types['Root'])
-    grp.attrs.create("py4dstem_class",metadata.__class__.__name__)
+    grp.attrs.create("py4dstem_class",root.metadata.__class__.__name__)
 
 
 
@@ -114,7 +114,7 @@ def Root_from_h5(group:h5py.Group):
     Returns:
         A Root instance
     """
-    from .root import Root
+    from py4DSTEM.io.datastructure.emd.root import Root
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Metadata group"
@@ -273,7 +273,7 @@ def Metadata_from_h5(group:h5py.Group):
     Returns:
         A Metadata instance
     """
-    from .metadata import Metadata
+    from py4DSTEM.io.datastructure.emd.metadata import Metadata
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Metadata group"
@@ -470,7 +470,7 @@ def Array_from_h5(group:h5py.Group):
     Returns:
         An Array instance
     """
-    from .array import Array
+    from py4DSTEM.io.datastructure.emd.array import Array
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD Array group"
@@ -554,12 +554,15 @@ def PointList_to_h5(
 
     # Add data
     for f,t in zip(pointlist.fields,pointlist.types):
-        group_current_field = grp.create_group(f)
-        group_current_field.attrs.create("dtype", np.string_(t))
-        group_current_field.create_dataset(
-            "data",
+        group_current_field = grp.create_dataset(
+            f,
             data = pointlist.data[f]
         )
+        group_current_field.attrs.create("dtype", np.string_(t))
+        #group_current_field.create_dataset(
+        #    "data",
+        #    data = pointlist.data[f]
+        #)
 
     # Add metadata
     _write_metadata(pointlist, grp)
@@ -580,7 +583,7 @@ def PointList_from_h5(group:h5py.Group):
     Returns:
         A PointList instance
     """
-    from .pointlist import PointList
+    from py4DSTEM.io.datastructure.emd.pointlist import PointList
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD PointList group"
@@ -596,13 +599,13 @@ def PointList_from_h5(group:h5py.Group):
     for field in fields:
         curr_dtype = group[field].attrs["dtype"].decode('utf-8')
         dtype.append((field,curr_dtype))
-    length = len(group[fields[0]+'/data'])
+    length = len(group[fields[0]])
 
     # Get data
     data = np.zeros(length,dtype=dtype)
     if length > 0:
         for field in fields:
-            data[field] = np.array(group[field+'/data'])
+            data[field] = np.array(group[field])
 
     # Make the PointList
     pl = PointList(
@@ -670,7 +673,7 @@ def PointListArray_from_h5(group:h5py.Group):
     Returns:
         A PointListArray instance
     """
-    from .pointlistarray import PointListArray
+    from py4DSTEM.io.datastructure.emd.pointlistarray import PointListArray
     from os.path import basename
 
     er = f"Group {group} is not a valid EMD PointListArray group"

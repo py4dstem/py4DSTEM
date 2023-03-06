@@ -5,9 +5,9 @@ from typing import Optional,Union
 import numpy as np
 import h5py
 
-from ..emd import PointListArray
-from ..emd.tree import Tree
-from ..emd.metadata import Metadata
+from py4DSTEM.io.datastructure.emd import PointListArray
+from py4DSTEM.io.datastructure.emd.tree import Tree
+from py4DSTEM.io.datastructure.emd.metadata import Metadata
 
 
 
@@ -32,7 +32,7 @@ class BraggVectors:
     retrieve the positiona and intensity of the scattering.
     """
 
-    from .braggvectors_fns import (
+    from py4DSTEM.io.datastructure.py4dstem.braggvectors_fns import (
         get_bvm,
         measure_origin,
         fit_origin,
@@ -68,9 +68,9 @@ class BraggVectors:
 
         self._v_uncal = PointListArray(
             dtype = [
-                ('qx',np.float),
-                ('qy',np.float),
-                ('intensity',np.float)
+                ('qx',np.float64),
+                ('qy',np.float64),
+                ('intensity',np.float64)
             ],
             shape = Rshape,
             name = '_v_uncal'
@@ -113,9 +113,9 @@ class BraggVectors:
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
-        braggvector_copy._v_uncal = self._v_uncal
+        braggvector_copy._v_uncal = self._v_uncal.copy()
         try:
-            braggvector_copy._v_cal = self._v_cal
+            braggvector_copy._v_cal = self._v_cal.copy()
         except AttributeError:
             pass
         for k in self.metadata.keys():
@@ -130,13 +130,13 @@ class BraggVectors:
 
     # write
     def to_h5(self,group):
-        from .io import BraggVectors_to_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import BraggVectors_to_h5
         BraggVectors_to_h5(self,group)
 
 
     # read
     def from_h5(group):
-        from .io import BraggVectors_from_h5
+        from py4DSTEM.io.datastructure.py4dstem.io import BraggVectors_from_h5
         return BraggVectors_from_h5(group)
 
 

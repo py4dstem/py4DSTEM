@@ -11,7 +11,7 @@ pip install py4dstem==0.12.23
 **py4DSTEM** is an open source set of python tools for processing and analysis of four-dimensional scanning transmission electron microscopy (4D-STEM) data. Additional information:
 
 - [Our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications.
-- [The py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html),
+- [The py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html).
 - [Our open access 4D-STEM review in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927619000497) describing this project and demonstrating a variety of applications.
 
 
@@ -35,30 +35,34 @@ The tutorials, sample code, module, and function documentation all provide more 
 
 # py4DSTEM Installation
 
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/version.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/installer/conda.svg)](https://conda.anaconda.org/conda-forge)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/latest_release_date.svg)](https://anaconda.org/conda-forge/py4dstem)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/py4dstem/badges/downloads.svg)](https://anaconda.org/conda-forge/py4dstem)
+
 The recommended installation for **py4DSTEM** uses the Anaconda python distribution.
 First, download and install Anaconda: www.anaconda.com/download. 
 If you prefer a more lightweight conda client, you can instead install Miniconda: https://docs.conda.io/en/latest/miniconda.html.
 Then open a conda terminal and run one of the following sets of commands:
 
-**For x86 CPUS e.g. INTEL, AMD processors**
+
 ```
 conda update conda
-conda create -n py4dstem python==3.8
+conda create -n py4dstem
 conda activate py4dstem
-conda install pip
-pip install py4dstem
-```
-**For Apple Silicon CPUs e.g. M1, M1Pro, M1Max, M2 processors**
-```
-conda update conda
-conda create -n py4dstem python==3.8
-conda activate py4dstem
-conda install pyqt hdf5
-conda install pip
-pip install py4dstem
+conda install -c conda-forge py4dstem pymatgen jupyterlab
 ```
 
-**If you're running Windows, you should then also run:**
+Or if you would prefer to install only the base modules of **py4DSTEM**, you can instead run these command lines:
+
+```
+conda update conda
+conda create -n py4dstem
+conda activate py4dstem
+conda install -c conda-forge py4dstem
+```
+
+In Windows you should then also run:
 
 ```
 conda install pywin32
@@ -86,7 +90,8 @@ If you are running on Linux/Unix machine with Nvidia GPU and CUDA capability, ru
 
 ```
 conda update conda
-conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
 conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install "py4dstem[aiml-cuda]"
 ```
@@ -94,7 +99,8 @@ pip install "py4dstem[aiml-cuda]"
 If you are running on Windows with Nvidia GPU and CUDA capability, run
 ```
 conda update conda
-conda create -n py4dstem-aiml python=3.8 -y && conda activate py4dstem-aiml
+conda create -n py4dstem-aiml
+conda activate py4dstem-aiml
 conda install -c conda-forge cudatoolkit=11.0 cudnn=8.1 cupy 
 pip install "py4dstem[aiml-cuda]"
 ```
@@ -102,7 +108,7 @@ pip install "py4dstem[aiml-cuda]"
 If you are running on Windows without any CUDA capable device or any Mac OS X system, run
 ```
 conda update conda
-conda create -n py4dstem python==3.8
+conda create -n py4dstem
 conda activate py4dstem
 conda install pip
 pip install "py4dstem[aiml]"
@@ -173,9 +179,6 @@ See a list [here](docs/papers.md).
 * numba
 * scikit-image
 * scikit-learn
-* PyQt5
-* pyqtgraph
-* qtconsole
 * ipywidgets
 * tqdm
 * gdown
@@ -190,16 +193,11 @@ See a list [here](docs/papers.md).
 
 
 
-### License
-
-GNU GPLv3
-
-**py4DSTEM** is open source software distributed under a GPLv3 license.
-It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open.
-
 
 
 # Acknowledgements
+
+If you use py4DSTEM for a scientific study, please cite [our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477). You are also free to use the py4DSTEM [logo in PDF format](images/py4DSTEM_logo_54.pdf) or [logo in PNG format](images/py4DSTEM_logo_54_export.png) for presentations or posters.
 
 
 [![TRI logo](/images/toyota_research_institute.png)](https://www.tri.global/)
@@ -209,6 +207,13 @@ The developers gratefully acknowledge the financial support of the Toyota Resear
 
 [![DOE logo](/images/DOE_logo.png)](https://www.energy.gov/science/bes/basic-energy-sciences/)
 
-Additional funding has been provided by the US Department of Energy, OFfice of Science, Basic Energy Sciences.
+Additional funding has been provided by the US Department of Energy, Office of Science, Basic Energy Sciences.
 
 
+
+### License
+
+GNU GPLv3
+
+**py4DSTEM** is open source software distributed under a GPLv3 license.
+It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open.

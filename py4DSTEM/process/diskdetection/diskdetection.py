@@ -2,12 +2,13 @@
 # with a vacuum probe.
 
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 
-from ...io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
-from ..utils.get_maxima_2D import get_maxima_2D
-from ..utils.cross_correlate import get_cross_correlation_FT
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
+from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
+from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
+from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
 
@@ -35,7 +36,10 @@ def find_Bragg_disks(
     CUDA_batched = True,
     distributed = None,
 
-    _qt_progress_bar = None,
+    ML = False,
+    ml_model_path = None,
+    ml_num_attempts = 1,
+    ml_batch_size = 8,
     ):
     """
     Finds the Bragg disks in the diffraction patterns represented by `data` by
@@ -141,8 +145,6 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
-        _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
-            execution
 
     Returns:
         (variable): the Bragg peak positions and correlation intensities. If
@@ -187,8 +189,12 @@ def find_Bragg_disks(
             er = f"entry {data} for `data` could not be parsed"
             raise Exception(er)
 
-    # CPU/GPU/cluster
-    if mode == 'datacube':
+    # CPU/GPU/cluster/ML-AI
+
+    if ML:
+        mode = 'dc_ml'
+    
+    elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
         elif distributed is None and CUDA == True:
@@ -206,7 +212,7 @@ def find_Bragg_disks(
             else:
                 er = f"unrecognized distributed mode {distributed_mode}"
                 raise Exception(er)
-
+    # overwrite if ML selected
 
     # select a function
     fns = _get_function_dictionary()
@@ -215,13 +221,17 @@ def find_Bragg_disks(
 
     # prepare kwargs
     kws = {}
-    if _qt_progress_bar is not None:
-        kws['_qt_progress_bar'] = _qt_progress_bar
     # distributed kwargs
     if distributed is not None:
         kws['connect'] = connect
         kws['data_file'] = data_file
         kws['cluster_path'] = cluster_path
+    # ML arguments
+    if ML == True:
+        kws['CUDA'] = CUDA
+        kws['model_path'] = ml_model_path
+        kws['num_attempts'] = ml_num_attempts
+        kws['batch_size'] = ml_batch_size
 
     # run and return
     ans = fn(
@@ -254,6 +264,7 @@ def _get_function_dictionary():
         "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
         "dc_dask" : _find_Bragg_disks_dask,
         "dc_ipyparallel" : _find_Bragg_disks_ipp,
+        "dc_ml" : find_Bragg_disks_aiml
     }
 
     return d
@@ -429,12 +440,7 @@ def _find_Bragg_disks_CPU(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
-
-    if _qt_progress_bar is not None:
-        from PyQt5.QtWidgets import QApplication
-
 
     # Make the BraggVectors instance
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
@@ -453,9 +459,6 @@ def _find_Bragg_disks_CPU(
         unit='DP',
         unit_scale=True
         ):
-        if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(Rx*datacube.R_Ny+Ry+1)
-            QApplication.processEvents()
 
         # Get a diffraction pattern
         dp = datacube.data[rx,ry,:,:]
@@ -507,11 +510,10 @@ def _find_Bragg_disks_CUDA_unbatched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
-    from .diskdetection_cuda import find_Bragg_disks_CUDA
+    from py4DSTEM.process.diskdetection.diskdetection_cuda import find_Bragg_disks_CUDA
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -526,7 +528,6 @@ def _find_Bragg_disks_CUDA_unbatched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=False)
 
     # Populate a BraggVectors instance and return
@@ -554,11 +555,10 @@ def _find_Bragg_disks_CUDA_batched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
-    from .diskdetection_cuda import find_Bragg_disks_CUDA
+    from py4DSTEM.process.diskdetection.diskdetection_cuda import find_Bragg_disks_CUDA
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -573,7 +573,6 @@ def _find_Bragg_disks_CUDA_batched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=True)
 
     # Populate a BraggVectors instance and return
@@ -605,11 +604,10 @@ def _find_Bragg_disks_ipp(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
-    from .diskdetection_parallel import find_Bragg_disks_ipp
+    from py4DSTEM.process.diskdetection.diskdetection_parallel import find_Bragg_disks_ipp
     peaks = find_Bragg_disks_ipp(
         datacube,
         probe,
@@ -631,7 +629,7 @@ def _find_Bragg_disks_ipp(
 
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal[rx,ry] = peaks
+    braggvectors._v_uncal = peaks
     return braggvectors
 
 
@@ -657,11 +655,10 @@ def _find_Bragg_disks_dask(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
-    from .diskdetection_parallel import find_Bragg_disks_dask
+    from py4DSTEM.process.diskdetection.diskdetection_parallel import find_Bragg_disks_dask
     peaks = find_Bragg_disks_dask(
         datacube,
         probe,
@@ -683,7 +680,7 @@ def _find_Bragg_disks_dask(
 
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal[rx,ry] = peaks
+    braggvectors._v_uncal = peaks
     return braggvectors
 
 

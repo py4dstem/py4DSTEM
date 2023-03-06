@@ -1,7 +1,7 @@
 # BraggVectors methods
 
 import numpy as np
-from ..emd import Metadata
+from py4DSTEM.io.datastructure.emd import Metadata
 
 
 # Bragg vector maps
@@ -23,14 +23,20 @@ def get_bvm(
     assert mode in ('raw','centered')
 
     # select peaks
-    peaks = self.vectors if mode=='centered' else self.vectors_uncal
+    if mode=='centered':
+        peaks = self.vectors
+        Q_pixel_size = self.calibration.get_Q_pixel_size()
+    else:
+        peaks = self.vectors_uncal
+        Q_pixel_size = 1.0
 
     # perform computation
-    from ....process.diskdetection import get_bvm
+    from py4DSTEM.process.diskdetection import get_bvm
     bvm = get_bvm(
         peaks,
         Qshape = self.Qshape,
         mode = mode,
+        Q_pixel_size = Q_pixel_size,
     )
     if mode == 'centered':
         self.bvm_centered = bvm
@@ -68,7 +74,7 @@ def measure_origin(
             radii   (2-tuple)
 
     """
-    from ....process.calibration import measure_origin
+    from py4DSTEM.process.calibration import measure_origin
     assert mode in ("beamstop", "no_beamstop")
 
     mode = "bragg_" + mode
@@ -112,6 +118,7 @@ def fit_origin(
     Args:
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+            or 'constant'
         robust (bool, optional): If set to True, fit will be repeated with outliers
             removed.
         robust_steps (int, optional): Optional parameter. Number of robust iterations
@@ -134,18 +141,20 @@ def fit_origin(
     """
     q_meas = self.calibration.get_origin_meas()
 
-    from ....process.calibration import fit_origin
+    from py4DSTEM.process.calibration import fit_origin
     if mask_check_data is True:
         # TODO - replace this bad hack for the mask for the origin fit
         mask = np.logical_not(q_meas[0]==0)
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
             tuple(q_meas),
             mask = mask,
+            fitfunction = fitfunction,
             )
     else:
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
-            tuple(q_meas))
-
+            tuple(q_meas),
+            fitfunction = fitfunction,
+        )
     # try to add to calibration
     try:
         self.calibration.set_origin([qx0_fit,qy0_fit])
@@ -153,7 +162,7 @@ def fit_origin(
         # should a warning be raised?
         pass
     if plot:
-        from ....visualize import show_image_grid
+        from py4DSTEM.visualize import show_image_grid
         if mask is None:
             qx0_meas,qy0_meas = q_meas
             qx0_res_plot = qx0_residuals
@@ -175,12 +184,11 @@ def fit_origin(
                 'H':2,
                 'W':3,
                 'cmap':'RdBu',
-                'clipvals':'manual',
+                'intensity_range':'absolute',
                 'vmin':-1*plot_range,
                 'vmax':1*plot_range,
                 'axsize':(6,2),
-                }
-
+            }
         show_image_grid(
             lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_res_plot,
                       qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_res_plot][i],
@@ -211,7 +219,7 @@ def calibrate(
     except AttributeError:
         raise Exception('No .calibration attribute found')
 
-    from ....process.calibration.braggvectors import calibrate
+    from py4DSTEM.process.calibration.braggvectors import calibrate
 
     v = self.vectors_uncal.copy( name='_v_cal' )
     v = calibrate(
@@ -265,7 +273,7 @@ def choose_lattice_vectors(
             minSpacing, edgeBoundary, maxNumPeaks: filtering applied
             after maximum detection and before subpixel refinement
     """
-    from ....process.utils import get_maxima_2D
+    from py4DSTEM.process.utils import get_maxima_2D
 
     if mode == "centered":
         bvm = self.bvm_centered
@@ -287,7 +295,7 @@ def choose_lattice_vectors(
 
     self.g = g
 
-    from ....visualize import select_lattice_vectors
+    from py4DSTEM.visualize import select_lattice_vectors
     g1,g2 = select_lattice_vectors(
         bvm,
         gx = g['x'],
@@ -315,7 +323,8 @@ def index_bragg_directions(
     """
     From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
     lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
-    reciprocal lattice directions.
+    reciprocal lattice directions. In units of pixels. If calibrated in A^-1, also stores
+    `self.braggdirections_calibrated.` 
 
     Args:
         x0 (float): x-coord of origin
@@ -328,7 +337,7 @@ def index_bragg_directions(
     if y0 is None:
         y0 = self.Qshape[0]/2
 
-    from ....process.latticevectors import index_bragg_directions
+    from py4DSTEM.process.latticevectors import index_bragg_directions
     _, _, braggdirections = index_bragg_directions(
         x0,
         y0,
@@ -340,8 +349,21 @@ def index_bragg_directions(
 
     self.braggdirections = braggdirections
 
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        from py4DSTEM.io.datastructure import PointList
+        coords = [('qx',float),('qy',float),('h',int),('k',int)]
+        temp_array = np.empty([], dtype = coords)
+        braggdirections_calibrated = PointList(data = temp_array)
+        braggdirections_calibrated.add_data_by_field((
+            braggdirections['qx']*self.calibration.get_Q_pixel_size(),
+            braggdirections['qy']*self.calibration.get_Q_pixel_size(),
+            braggdirections['h'],
+            braggdirections['k'],
+            ))
+        self.braggdirections_calibrated = braggdirections_calibrated
+
     if plot:
-        from ....visualize import show_bragg_indexing
+        from py4DSTEM.visualize import show_bragg_indexing
         show_bragg_indexing(
             self.bvm_centered,
             **bvm_vis_params,
@@ -378,15 +400,24 @@ def add_indices_to_braggpeaks(
             locations should be indexed. This can be used to index different regions of
             the scan with different lattices
     """
-    from ....process.latticevectors import add_indices_to_braggpeaks
+    from py4DSTEM.process.latticevectors import add_indices_to_braggpeaks
 
-    bragg_peaks_indexed = add_indices_to_braggpeaks(
-        self.vectors,
-        self.braggdirections,
-        maxPeakSpacing = maxPeakSpacing,
-        qx_shift = self.Qshape[0]/2,
-        qy_shift = self.Qshape[1]/2,
-    )
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections_calibrated,
+            maxPeakSpacing = maxPeakSpacing * self.calibration.get_Q_pixel_size(),
+            qx_shift = self.Qshape[0]/2* self.calibration.get_Q_pixel_size(),
+            qy_shift = self.Qshape[1]/2* self.calibration.get_Q_pixel_size(),
+        )
+    else:
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections,
+            maxPeakSpacing = maxPeakSpacing,
+            qx_shift = self.Qshape[0]/2,
+            qy_shift = self.Qshape[1]/2,
+        )
 
     self.bragg_peaks_indexed = bragg_peaks_indexed
 
@@ -402,7 +433,7 @@ def fit_lattice_vectors_all_DPs(self, returncalc = False):
 
     """
 
-    from ....process.latticevectors import fit_lattice_vectors_all_DPs
+    from py4DSTEM.process.latticevectors import fit_lattice_vectors_all_DPs
     g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_peaks_indexed)
     self.g1g2_map = g1g2_map
     if returncalc:
@@ -418,7 +449,7 @@ def get_strain_from_reference_region(self, mask, returncalc = False):
             wherever mask==True
 
     """
-    from ....process.latticevectors import get_strain_from_reference_region
+    from py4DSTEM.process.latticevectors import get_strain_from_reference_region
 
     strainmap_median_g1g2 = get_strain_from_reference_region(
         self.g1g2_map,
@@ -442,10 +473,10 @@ def get_strain_from_reference_g1g2(self, mask, returncalc = False):
             wherever mask==True
 
     """
-    from ....process.latticevectors import get_reference_g1g2
+    from py4DSTEM.process.latticevectors import get_reference_g1g2
     g1_ref,g2_ref = get_reference_g1g2(self.g1g2_map, mask)
 
-    from ....process.latticevectors import get_strain_from_reference_g1g2
+    from py4DSTEM.process.latticevectors import get_strain_from_reference_g1g2
     strainmap_reference_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
 
     self.strainmap_reference_g1g2 = strainmap_reference_g1g2
@@ -453,7 +484,7 @@ def get_strain_from_reference_g1g2(self, mask, returncalc = False):
     if returncalc:
         return strainmap_reference_g1g2
 
-def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
+def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True, flip_theta = False):
     """
     Starting from a strain map defined with respect to the xy coordinate system of
     diffraction space, i.e. where exx and eyy are the compression/tension along the Qx
@@ -469,7 +500,7 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
     if g_reference is None:
         g_reference = np.subtract(self.g1, self.g2)
 
-    from ....process.latticevectors import get_rotated_strain_map
+    from py4DSTEM.process.latticevectors import get_rotated_strain_map
 
     if mode == "median":
         strainmap_raw = self.strainmap_median_g1g2
@@ -480,6 +511,7 @@ def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True):
         strainmap_raw,
         xaxis_x = g_reference[0],
         xaxis_y = g_reference[1],
+        flip_theta = flip_theta
     )
 
     if returncalc:

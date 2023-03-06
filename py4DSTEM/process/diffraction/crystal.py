@@ -4,14 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
+from copy import deepcopy
+from scipy.optimize import curve_fit
+import sys
 
-from ...io.datastructure import PointList, PointListArray
-from ..utils import single_atom_scatter, electron_wavelength_angstrom
-from ...utils.tqdmnd import tqdmnd
+from py4DSTEM.io.datastructure import PointList, PointListArray
+from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
+from py4DSTEM.utils.tqdmnd import tqdmnd
 
-from .crystal_viz import plot_diffraction_pattern
-from .utils import Orientation
-
+from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
+from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
+from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
+try:
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure
+except ImportError:
+    pass
 
 class Crystal:
     """
@@ -24,7 +32,7 @@ class Crystal:
     # (see https://stackoverflow.com/a/47562412)
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
-    from .crystal_ACOM import (
+    from py4DSTEM.process.diffraction.crystal_ACOM import (
         orientation_plan,
         match_orientations,
         match_single_pattern,
@@ -35,17 +43,23 @@ class Crystal:
         save_ang_file,
     )
 
-    from .crystal_viz import (
+    from py4DSTEM.process.diffraction.crystal_viz import (
         plot_structure,
         plot_structure_factors,
+        plot_scattering_intensity,
         plot_orientation_zones,
         plot_orientation_plan,
         plot_orientation_maps,
         plot_fiber_orientation_maps,
     )
 
+    from py4DSTEM.process.diffraction.crystal_calibrate import (
+        calibrate_pixel_size,
+        calibrate_unit_cell
+    )
+    
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
-    from .crystal_bloch import (
+    from py4DSTEM.process.diffraction.crystal_bloch import (
         generate_dynamical_diffraction_pattern,
         generate_CBED,
         calculate_dynamical_structure_factors,
@@ -89,7 +103,14 @@ class Crystal:
             self.cell = cell
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " elements")
-
+        
+        # pymatgen flag
+        self.pymatgen_available = False
+        
+        # Calculate lattice parameters
+        self.calculate_lattice()
+        
+    def calculate_lattice(self):
         # calculate unit cell lattice vectors
         a = self.cell[0]
         b = self.cell[1]
@@ -115,7 +136,10 @@ class Crystal:
         self.lat_inv = self.metric_inv @ self.lat_real
 
         # pymatgen flag
-        self.pymatgen_available = False
+        if 'pymatgen' in sys.modules:
+            self.pymatgen_available = True            
+        else:
+            self.pymatgen_available = False
         
 
     def from_CIF(CIF, conventional_standard_structure=True):
@@ -180,9 +204,9 @@ class Crystal:
 
         """
         import pymatgen as mg
-        from mp_api import MPRester
         if structure is not None:
             if isinstance(structure, str):
+                from mp_api.client import MPRester
                 with  MPRester(MP_key) as mpr:
                     structure = mpr.get_structure_by_material_id(structure)
 
@@ -198,6 +222,7 @@ class Crystal:
                 else structure
             )
         else:
+            from mp_api.client import MPRester
             with MPRester(MP_key) as mpr: 
                 if formula is None:
                     raise Exception(
@@ -621,10 +646,115 @@ class Crystal:
         else:
             return bragg_peaks
 
+    def generate_ring_pattern(
+        self, 
+        k_max = 2.0,
+        use_bloch = False,
+        thickness = None,
+        bloch_params = None,
+        orientation_plan_params = None,
+        sigma_excitation_error = 0.02,
+        tol_intensity = 1e-3,
+        plot_rings = True,
+        plot_params = {},
+        return_calc = True,
+    ):
+        """
+        Calculate polycrystalline diffraction pattern from structure
+        
+        Args: 
+            k_max (float):                  Maximum scattering vector
+            use_bloch (bool):               if true, use dynamic instead of kinematic approach
+            thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
+                                            only needed for dynamical calculations
+            bloch_params (dict):            optional, parameters to calculate dynamical structure factor, 
+                                            see calculate_dynamical_structure_factors doc strings
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan, 
+                                            see orientation_plan doc strings
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) 
+                                            in units of inverse Angstroms
+            tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
+            plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
+            return_calc (bool):             return radii and intensities 
+
+        Returns: 
+            radii_unique (np array):        radii of ring pattern in units of scattering vector k
+            intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
+        """ 
+       
+        if use_bloch: 
+            assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
+            assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
+            
+        if not hasattr(self, "struct_factors"):
+            self.calculate_structure_factors(
+                k_max = k_max, 
+            )
+    
+        #check accelerating voltage 
+        if hasattr(self, "accel_voltage"): 
+            accelerating_voltage = self.accel_voltage
+        else: 
+            self.accel_voltage = 300e3
+            print("Accelerating voltage not set. Assuming 300 keV!")
+        
+        #check orientation plan
+        if not hasattr(self, "orientation_vecs"):
+            if orientation_plan_params is None: 
+                orientation_plan_params = {
+                    'zone_axis_range': 'auto',
+                    'angle_step_zone_axis': 4, 
+                    'angle_step_in_plane': 4,
+                }    
+            self.orientation_plan(
+                **orientation_plan_params,
+            )
+
+        #calculate intensity and radius for rings 
+        radii = []
+        intensity = []
+        for a0 in range(self.orientation_vecs.shape[0]):
+            if use_bloch:
+                beams = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+                pattern = self.generate_dynamical_diffraction_pattern(
+                    beams = beams,
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    thickness = thickness,
+                )
+            else:  
+                pattern = self.generate_diffraction_pattern(
+                    zone_axis_lattice = self.orientation_vecs[a0],
+                    sigma_excitation_error = sigma_excitation_error, 
+                    tol_intensity = tol_intensity, 
+                    k_max = k_max
+                )
+
+            intensity.append(pattern['intensity'])
+            radii.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
+        
+        intensity = np.concatenate(intensity)
+        radii = np.concatenate(radii)
+
+        radii_unique,idx,inv,cts = np.unique(radii, return_counts=True, return_index=True,return_inverse=True)
+        intensity_unique = np.bincount(inv,weights=intensity)
+
+        if plot_rings == True:
+            from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern 
+            plot_ring_pattern(radii_unique, 
+                intensity_unique, 
+                **plot_params
+            )
+
+        if return_calc == True: 
+            return radii_unique, intensity_unique
 
 
     # Vector conversions and other utilities for Crystal classes
-
     def cartesian_to_lattice(self, vec_cartesian):
         vec_lattice = self.lat_inv @ vec_cartesian
         return vec_lattice / np.linalg.norm(vec_lattice)
@@ -681,7 +811,7 @@ class Crystal:
         proj_x_lattice=None,
         zone_axis_cartesian=None,
         proj_x_cartesian=None,
-        ):
+    ):
         # This helper function parse the various types of orientation inputs,
         # and returns the normalized, projected (x,y,z) cartesian vectors in
         # the form of an orientation matrix.
@@ -694,7 +824,7 @@ class Crystal:
         elif zone_axis_cartesian is not None:
             proj_z = np.array(zone_axis_cartesian)
         else:
-            proj_z = np.array([0,0,1])
+            proj_z = np.array([0, 0, 1])
 
         if proj_x_lattice is not None:
             proj_x = np.array(proj_x_lattice)
@@ -704,10 +834,10 @@ class Crystal:
         elif proj_x_cartesian is not None:
             proj_x = np.array(proj_x_cartesian)
         else:
-            if np.abs(proj_z[2]) > 1-1e-6:
-                proj_x = np.cross(np.array([0,1,0]),proj_z)
+            if np.abs(proj_z[2]) > 1 - 1e-6:
+                proj_x = np.cross(np.array([0, 1, 0]), proj_z)
             else:
-                proj_x = np.array([0,0,-1])
+                proj_x = np.array([0, 0, -1])
 
         # Generate orthogonal coordinate system, normalize
         proj_y = np.cross(proj_z, proj_x)
@@ -722,20 +852,83 @@ class Crystal:
         self,
         g,
         foil_normal=None,
-        ):
-        '''
+    ):
+        """
         Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda].
         If foil normal is not specified, we assume it is [0,0,-1].
-        '''
+        """
         if foil_normal is None:
-            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
-                / (2 - 2*self.wavelength*g[2,:]) 
+            return (2 * g[2, :] - self.wavelength * np.sum(g * g, axis=0)) / (
+                2 - 2 * self.wavelength * g[2, :]
+            )
         else:
-            return (2*g[2,:] - self.wavelength*np.sum(g*g,axis=0)) \
-                / (2*self.wavelength*np.sum(g*foil_normal[:,None],axis=0) - 2*foil_normal[2])
+            return (2 * g[2, :] - self.wavelength * np.sum(g * g, axis=0)) / (
+                2 * self.wavelength * np.sum(g * foil_normal[:, None], axis=0)
+                - 2 * foil_normal[2]
+            )
 
+    def calculate_bragg_peak_histogram(
+        self,
+        bragg_peaks,
+        bragg_k_power = 1.0,
+        bragg_intensity_power = 1.0,
+        k_min = 0.0,
+        k_max = None,
+        k_step = 0.005
+    ):
+        """
+        Prepare experimental bragg peaks for lattice parameter or unit cell fitting.
 
+        Args:
+            bragg_peaks (BraggVectors):         Input Bragg vectors.
+            bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
+                                                to change the weighting of longer scattering vectors
+            bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
+            k_min (float):                      min k value for fitting range (Å^-1)
+            k_max (float):                      max k value for fitting range (Å^-1)
+            k_step (float):                     step size of k in fitting range (Å^-1)
 
+        Returns:
+            bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
+            fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+        """
 
+        # k coordinates
+        if k_max is None:
+            k_max = self.k_max
+        k = np.arange(k_min, k_max + k_step, k_step)
+        k_num = k.shape[0]
 
+        # experimental data histogram
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.vectors[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
+            ]
+        )
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
 
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        int_exp /= np.max(int_exp)
+        return k, int_exp
+    

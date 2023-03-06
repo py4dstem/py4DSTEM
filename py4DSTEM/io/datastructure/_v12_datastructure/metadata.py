@@ -1,4 +1,4 @@
-from . import DataObject
+from py4DSTEM.io.datastructure._v12_datastructure import DataObject
 
 class Metadata(DataObject):
     """

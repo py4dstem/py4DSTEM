@@ -21,7 +21,7 @@ class single_atom_scatter(object):
         self.q_coords = q_coords
         self.units = units
         path = os.path.join(os.path.dirname(__file__), "scattering_factors.txt")
-        self.e_scattering_factors = np.loadtxt(path, dtype=np.float)
+        self.e_scattering_factors = np.loadtxt(path, dtype=np.float64)
 
         return
 

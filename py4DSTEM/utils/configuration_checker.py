@@ -8,7 +8,6 @@ from operator import mod
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
 modules = [
-        'PyQt5',
         'crystal4D',
         'cupy',
         'dask',
@@ -24,17 +23,14 @@ modules = [
         'ncempy',
         'numba',
         'numpy',
-        'orix',
         'pymatgen',
-        'pyqtgraph',
-        'qtconsole',
         'skimage',
         'sklearn',
         'scipy',
         'tensorflow',
         'tensorflow-addons',
         'tqdm'
-]   
+]
 
 # currently this was copy and pasted from setup.py, 
 # hopefully there's a programatic way to do this. 
@@ -47,9 +43,6 @@ module_depenencies = {
         'matplotlib',
         'skimage',
         'sklearn',
-        'PyQt5',
-        'pyqtgraph',
-        'qtconsole',
         'ipywidgets',
         'tqdm',
         'dill',
@@ -59,7 +52,7 @@ module_depenencies = {
         ],
     'ipyparallel': ['ipyparallel', 'dill'],
     'cuda': ['cupy'],
-    'acom': ['pymatgen', 'mp_api', 'orix'],
+    'acom': ['pymatgen', 'mp_api'],
     'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
     'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
     'numba': ['numba']
@@ -80,7 +73,7 @@ class colours:
 
 def create_warning(s:str)->str:
     """
-    Creates a yellow shaded with white font version of string s 
+    Creates a yellow shaded with white font version of string s
 
     Args:
         s (str): string to be turned into a warning style string
@@ -92,7 +85,7 @@ def create_warning(s:str)->str:
     return s
 def create_success(s:str)-> str:
     """
-    Creates a yellow shaded with white font version of string s 
+    Creates a yellow shaded with white font version of string s
 
     Args:
         s (str): string to be turned into a warning style string
@@ -104,7 +97,7 @@ def create_success(s:str)-> str:
     return s
 def create_failure(s:str)->str:
     """
-    Creates a yellow shaded with white font version of string s 
+    Creates a yellow shaded with white font version of string s
 
     Args:
         s (str): string to be turned into a warning style string
@@ -116,7 +109,7 @@ def create_failure(s:str)->str:
     return s
 def create_bold(s:str)->str:
     """
-    Creates a yellow shaded with white font version of string s 
+    Creates a yellow shaded with white font version of string s
 
     Args:
         s (str): string to be turned into a warning style string
@@ -128,7 +121,7 @@ def create_bold(s:str)->str:
     return s
 def create_underline(s:str)->str:
     """
-    Creates an underlined version of string s 
+    Creates an underlined version of string s
 
     Args:
         s (str): string to be turned into an underlined style string
@@ -156,7 +149,7 @@ def get_import_states(modules:list = modules)->dict:
     """
     # Create the import states dict
     import_states_dict = {}
-    
+
     # check if the modules import 
     # and update the states dict to reflect this 
     for m in modules:
@@ -184,7 +177,7 @@ def get_module_states(state_dict:dict)->dict:
     # val is a list of its dependencies 
     # module_dependencies comes from the namespace
     for key, val in module_depenencies.items():
-        
+
         # create a list to store the status of the depencies
         temp_lst = []
 
@@ -192,7 +185,7 @@ def get_module_states(state_dict:dict)->dict:
         # append the bool if they could be imported
         for depend in val:
             temp_lst.append(state_dict[depend])
-        
+
         # check that all the depencies could be imported i.e. state == True
         # and set the state of the module to that 
         module_states[key] = all(temp_lst) == True
@@ -219,14 +212,14 @@ def print_import_states(import_states:dict)->None:
             s = f"{s: <80}"
             print(s)
         #if unable to import i.e. state == False
-        else: 
+        else:
             s = f" Module {m.capitalize()} Import Failed "
             s = create_failure(s)
             s = f"{s: <80}"
             print(s)
     return None
 
-    
+
 
 
 def print_module_states(module_states:dict)->None:
@@ -248,7 +241,7 @@ def print_module_states(module_states:dict)->None:
             s = create_success(s)
             print(s)
         # if something is missing
-        else: 
+        else:
             s = f" Not All Dependencies for {key.capitalize()} are Installed"
             s = create_failure(s)
             print(s)
@@ -292,11 +285,11 @@ def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:
 
     return None
 
-    
+
 def import_tester(m:str)->bool:
     """
     This function will try and import the module, m,
-    it returns the success as boolean and prints a message. 
+    it returns the success as boolean and prints a message.
     Args:
         m (str): string name of a module
 
@@ -308,7 +301,7 @@ def import_tester(m:str)->bool:
 
     # try and import the module
     try:
-        importlib.import_module(m) 
+        importlib.import_module(m)
     except:
         state = False
 
@@ -319,23 +312,23 @@ def import_tester(m:str)->bool:
 
 def check_module_functionality(state_dict:dict)->None:
     """
-    This function checks all the py4DSTEM modules, e.g. acom, ml-ai, and whether all the required dependencies are importable 
+    This function checks all the py4DSTEM modules, e.g. acom, ml-ai, and whether all the required dependencies are importable
 
     Args:
         state_dict (dict): dictionary of the state, i.e. boolean, of all the modules and the ability to import.
-        It will then print in a 'Success' or 'Failure' message. All dependencies must be available to succeed. 
+        It will then print in a 'Success' or 'Failure' message. All dependencies must be available to succeed.
 
     Returns:
-        None: Prints the state of a py4DSTEM module's libaray depencencies 
+        None: Prints the state of a py4DSTEM module's libaray depencencies
     """
-    
+
     # create an empty dict to put module states into:
     module_states = {}
 
     # key is the name of the module e.g. ACOM
     # val is a list of its dependencies 
     for key, val in module_depenencies.items():
-        
+
         # create a list to store the status of the depencies
         temp_lst = []
 
@@ -343,7 +336,7 @@ def check_module_functionality(state_dict:dict)->None:
         # append the bool if they could be imported
         for depend in val:
             temp_lst.append(state_dict[depend])
-        
+
         # check that all the depencies could be imported i.e. state == True
         # and set the state of the module to that 
         module_states[key] = all(temp_lst) == True
@@ -356,7 +349,7 @@ def check_module_functionality(state_dict:dict)->None:
             s = create_success(s)
             print(s)
         # if something is missing
-        else: 
+        else:
             s = f" Not All Dependencies for {key.capitalize()} are Installed"
             s = create_failure(s)
             print(s)
@@ -370,7 +363,7 @@ def check_cupy_gpu(
     **kwargs
     ):
     """
-    This function performs some additional tests which may be useful in 
+    This function performs some additional tests which may be useful in
     diagnosing Cupy GPU performance
 
     Args:
@@ -380,7 +373,7 @@ def check_cupy_gpu(
     # import some libaries
     from pprint import pprint
     import cupy as cp
-    
+
     # check that CUDA is detected correctly
     cuda_availability = cp.cuda.is_available()
     if cuda_availability:
@@ -388,12 +381,12 @@ def check_cupy_gpu(
         s = create_success(s)
         s = f"{s: <80}"
         print(s)
-    else: 
+    else:
         s = f" CUDA is Unavailable "
         s = create_failure(s)
         s = f"{s: <80}"
         print(s)
-    
+
     # Count how many GPUs Cupy can detect
     # probably should change this to a while loop ... 
     for i in range(24):
@@ -411,7 +404,7 @@ def check_cupy_gpu(
         s = f"{s: <80}"
         print(s)
     elif num_gpus_detected >= 24:
-        s = " Detected at least 24 GPUs, could be more " 
+        s = " Detected at least 24 GPUs, could be more "
         s = create_warning(s)
         s = f"{s: <80}"
         print(s)
@@ -425,12 +418,12 @@ def check_cupy_gpu(
     print(f"Detected CUDA Path:\t{cuda_path}")
     cupy_version = cp.__version__
     print(f"Cupy Version:\t\t{cupy_version}")
-    
+
     # if verbose print extra information 
     if gratuitously_verbose:
         for i in range(num_gpus_detected):
             d = cp.cuda.Device(i)
-            s = f"GPU: {i}" 
+            s = f"GPU: {i}"
             s = create_warning(s)
             print(f" {s} ")
             pprint(d.attributes)
@@ -440,7 +433,7 @@ def check_cupy_gpu(
 def print_no_extra_checks(m:str):
     """
     This function prints a warning style message that the module m
-    currently has no extra checks. 
+    currently has no extra checks.
 
     Args:
         m (str): This is the name of the module
@@ -452,7 +445,7 @@ def print_no_extra_checks(m:str):
     s = create_warning(s)
     s = f"{s}"
     print(s)
-    
+
     return None
 
 # dict of extra check functions
@@ -471,10 +464,10 @@ def check_config(
     # egregiously_verbose:bool = False
     )->None:
     """
-    This function checks the state of required imports to run py4DSTEM. 
+    This function checks the state of required imports to run py4DSTEM.
 
-    Default behaviour will provide a summary of install dependencies for each module e.g. Base, ACOM etc. 
-  
+    Default behaviour will provide a summary of install dependencies for each module e.g. Base, ACOM etc.
+
     Args:
         verbose (bool, optional): Will provide the status of all possible requriements for py4DSTEM, and perform any additonal checks. Defaults to False.
         gratuitously_verbose (bool, optional): Provides more indepth analysis. Defaults to False.
@@ -482,13 +475,13 @@ def check_config(
     Returns:
         None
     """
-    
+
     # get the states of all imports 
     states_dict = get_import_states(modules)
 
     # get the states of all modules dependencies
     modules_dict = get_module_states(states_dict)
-    
+
     # print the modules compatiabiltiy 
     # prepare a message 
     modules_checks_message = "Checking Module Dependencies"
@@ -507,6 +500,6 @@ def check_config(
 
         perfrom_extra_checks(import_states=states_dict, verbose=verbose, gratuitously_verbose=gratuitously_verbose)
 
-   
+
 
     return None
