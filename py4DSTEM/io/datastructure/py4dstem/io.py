@@ -309,7 +309,7 @@ def Probe_from_Array(array):
     """
     from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     assert(array.rank == 2), "Array must have 2 dimensions"
-
+    # assert (len(array.data.squeeze().shape) == 2), "Array must have 2 dimensions"
     # get diffraction image metadata
     try:
         md = array.metadata['probe']
