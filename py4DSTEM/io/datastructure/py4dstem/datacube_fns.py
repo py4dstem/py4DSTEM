@@ -1094,7 +1094,7 @@ def find_Bragg_disks(
 def get_beamstop_mask(
     self,
     threshold = 0.25,
-    distance_edge = 4.0,
+    distance_edge = 2.0,
     include_edges = True,
     name = "mask_beamstop",
     returncalc = True,
@@ -1141,9 +1141,8 @@ def get_beamstop_mask(
         mask_beamstop[-1,:] = False
         mask_beamstop[:,-1] = False
 
-
     # Expand mask
-    mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge
+    mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge + 0.1
 
     # Output mask for beamstop
     self.name = name
