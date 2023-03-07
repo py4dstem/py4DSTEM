@@ -5,7 +5,7 @@ with open("README.md","r") as f:
     long_description = f.read()
 
 version_ns = {}
-vpath = convert_path('py4DSTEM/version.py')
+vpath = convert_path('src/version.py')
 with open(vpath) as version_file:
     exec(version_file.read(), version_ns)
 
