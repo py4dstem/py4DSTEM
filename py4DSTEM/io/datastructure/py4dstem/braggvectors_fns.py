@@ -118,6 +118,7 @@ def fit_origin(
     Args:
         mask (2b boolean array, optional): ignore points where mask=True
         fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+            or 'constant'
         robust (bool, optional): If set to True, fit will be repeated with outliers
             removed.
         robust_steps (int, optional): Optional parameter. Number of robust iterations
@@ -147,11 +148,13 @@ def fit_origin(
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
             tuple(q_meas),
             mask = mask,
+            fitfunction = fitfunction,
             )
     else:
         qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
-            tuple(q_meas))
-
+            tuple(q_meas),
+            fitfunction = fitfunction,
+        )
     # try to add to calibration
     try:
         self.calibration.set_origin([qx0_fit,qy0_fit])
@@ -320,7 +323,8 @@ def index_bragg_directions(
     """
     From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
     lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
-    reciprocal lattice directions.
+    reciprocal lattice directions. In units of pixels. If calibrated in A^-1, also stores
+    `self.braggdirections_calibrated.` 
 
     Args:
         x0 (float): x-coord of origin
@@ -344,6 +348,19 @@ def index_bragg_directions(
     )
 
     self.braggdirections = braggdirections
+
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        from py4DSTEM.io.datastructure import PointList
+        coords = [('qx',float),('qy',float),('h',int),('k',int)]
+        temp_array = np.empty([], dtype = coords)
+        braggdirections_calibrated = PointList(data = temp_array)
+        braggdirections_calibrated.add_data_by_field((
+            braggdirections['qx']*self.calibration.get_Q_pixel_size(),
+            braggdirections['qy']*self.calibration.get_Q_pixel_size(),
+            braggdirections['h'],
+            braggdirections['k'],
+            ))
+        self.braggdirections_calibrated = braggdirections_calibrated
 
     if plot:
         from py4DSTEM.visualize import show_bragg_indexing
@@ -385,13 +402,22 @@ def add_indices_to_braggpeaks(
     """
     from py4DSTEM.process.latticevectors import add_indices_to_braggpeaks
 
-    bragg_peaks_indexed = add_indices_to_braggpeaks(
-        self.vectors,
-        self.braggdirections,
-        maxPeakSpacing = maxPeakSpacing,
-        qx_shift = self.Qshape[0]/2,
-        qy_shift = self.Qshape[1]/2,
-    )
+    if self.calibration.get_Q_pixel_units() == 'A^-1':
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections_calibrated,
+            maxPeakSpacing = maxPeakSpacing * self.calibration.get_Q_pixel_size(),
+            qx_shift = self.Qshape[0]/2* self.calibration.get_Q_pixel_size(),
+            qy_shift = self.Qshape[1]/2* self.calibration.get_Q_pixel_size(),
+        )
+    else:
+        bragg_peaks_indexed = add_indices_to_braggpeaks(
+            self.vectors,
+            self.braggdirections,
+            maxPeakSpacing = maxPeakSpacing,
+            qx_shift = self.Qshape[0]/2,
+            qy_shift = self.Qshape[1]/2,
+        )
 
     self.bragg_peaks_indexed = bragg_peaks_indexed
 
