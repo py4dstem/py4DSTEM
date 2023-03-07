@@ -448,14 +448,16 @@ class SyntheticDiskLattice(WPFModelPrototype):
             DP += args[i + 6] / (
                 1.0
                 + np.exp(
-                    4
-                    * (
-                        np.sqrt(
-                            (kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2
+                    np.minimum(
+                        4
+                        * (
+                            np.sqrt(
+                                (kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2
+                            )
+                            - disk_radius
                         )
-                        - disk_radius
-                    )
-                    / disk_width
+                        / disk_width, 
+                    20)
                 )
             )
 
