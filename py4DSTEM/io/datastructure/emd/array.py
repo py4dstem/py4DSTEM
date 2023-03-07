@@ -429,8 +429,12 @@ class Array:
             string += "\n"+space+"with dimensions:"
             string += "\n"
             for n in range(self.rank):
-                string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
-            string += "\n)"
+                # need to handle the edge case of only single value in dims i.e.line scans, 1,512,256,256
+                # check there is more than a single probe poistion
+                if self.dims[n].size < 2: 
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                else:
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
 
         else:
             space = ' '*len(self.__class__.__name__)+'  '
