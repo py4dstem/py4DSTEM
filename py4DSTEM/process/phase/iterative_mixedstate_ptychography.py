@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely (single-slice) ptychography.
+namely mixed-state ptychography.
 """
 
 import warnings
@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from py4DSTEM.visualize import show_complex
 
 try:
     import cupy as cp
@@ -23,6 +24,7 @@ from py4DSTEM.process.phase.utils import (
     estimate_global_transformation_ransac,
     fft_shift,
     generate_batches,
+    orthogonalize,
     polar_aliases,
     polar_symbols,
 )
@@ -32,15 +34,15 @@ from py4DSTEM.utils.tqdmnd import tqdmnd
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicReconstruction(PhaseReconstruction):
+class MixedStatePtychographicReconstruction(PhaseReconstruction):
     """
-    Iterative Ptychographic Reconstruction Class.
+    Mixed-State Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (Sx,Sy)
+    Reconstructed probe dimensions      : (N,Sx,Sy)
     Reconstructed object dimensions     : (Px,Py)
 
-    such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
+    such that (Sx,Sy) is the region-of-interest (ROI) size of our N probes
     and (Px,Py) is the padded-object size we position our ROI around in.
 
     Parameters
@@ -49,6 +51,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    num_probes: int, optional
+        Number of mixed-state probes
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess
     rolloff: float, optional
@@ -92,6 +96,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self,
         datacube: DataCube,
         energy: float,
+        num_probes: int = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
@@ -108,6 +113,21 @@ class PtychographicReconstruction(PhaseReconstruction):
         device: str = "cpu",
         **kwargs,
     ):
+        if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
+            if num_probes is None:
+                raise ValueError(
+                    (
+                        "If initial_probe_guess is None, or a ComplexProbe object, "
+                        "num_probes must be specified."
+                    )
+                )
+        else:
+            if len(initial_probe_guess.shape) != 3:
+                raise ValueError(
+                    "Specified initial_probe_guess must have dimensions (N,Sx,Sy)."
+                )
+            num_probes = initial_probe_guess.shape[0]
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -136,6 +156,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._set_polar_parameters(polar_parameters)
 
         self._energy = energy
+        self._num_probes = num_probes
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
         self._vacuum_probe_intensity = vacuum_probe_intensity
@@ -306,61 +327,91 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._set_vectorized_patch_indices()
 
         # Probe Initialization
-        if self._probe is None:
-            if self._vacuum_probe_intensity is not None:
-                self._semiangle_cutoff = np.inf
-                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
-                )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
-                self._vacuum_probe_intensity = get_shifted_ar(
-                    self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
-                    bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+        if self._probe is None or isinstance(self._probe, ComplexProbe):
+            if self._probe is None:
+                if self._vacuum_probe_intensity is not None:
+                    self._semiangle_cutoff = np.inf
+                    # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
+                    self._vacuum_probe_intensity = xp.asarray(
+                        self._vacuum_probe_intensity
+                    )
+                    probe_x0, probe_y0 = get_CoM(
+                        self._vacuum_probe_intensity,
+                        device="cpu" if xp is np else "gpu",
+                    )
+                    shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
+                    shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
+                    self._vacuum_probe_intensity = get_shifted_ar(
+                        self._vacuum_probe_intensity,
+                        shift_x,
+                        shift_y,
+                        bilinear=True,
+                        device="cpu" if xp is np else "gpu",
+                    )
+
+                _probe = (
+                    ComplexProbe(
+                        gpts=self._region_of_interest_shape,
+                        sampling=self.sampling,
+                        energy=self._energy,
+                        semiangle_cutoff=self._semiangle_cutoff,
+                        rolloff=self._rolloff,
+                        vacuum_probe_intensity=self._vacuum_probe_intensity,
+                        parameters=self._polar_parameters,
+                        device="cpu" if xp is np else "gpu",
+                    )
+                    .build()
+                    ._array
                 )
 
-            self._probe = (
-                ComplexProbe(
-                    gpts=self._region_of_interest_shape,
-                    sampling=self.sampling,
-                    energy=self._energy,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff=self._rolloff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    parameters=self._polar_parameters,
-                    device="cpu" if xp is np else "gpu",
-                )
-                .build()
-                ._array
-            )
-
-        else:
-            if isinstance(self._probe, ComplexProbe):
+            else:
                 if self._probe._gpts != self._region_of_interest_shape:
                     raise ValueError()
                 if hasattr(self._probe, "_array"):
-                    self._probe = self._probe._array
+                    _probe = self._probe._array
                 else:
                     self._probe._xp = xp
-                    self._probe = self._probe.build()._array
-            else:
-                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
+                    _probe = self._probe.build()._array
+
+            self._probe = xp.zeros(
+                (self._num_probes,) + tuple(self._region_of_interest_shape),
+                dtype=xp.complex64,
+            )
+            sx, sy = self._region_of_interest_shape
+            self._probe[0] = _probe
+
+            # Randomly shift phase of other probes
+            for i_probe in range(1, self._num_probes):
+                shift_x = xp.exp(
+                    -2j
+                    * np.pi
+                    * (xp.random.rand() - 0.5)
+                    * ((xp.arange(sx) + 0.5) / sx - 0.5)
+                )
+                shift_y = xp.exp(
+                    -2j
+                    * np.pi
+                    * (xp.random.rand() - 0.5)
+                    * ((xp.arange(sy) + 0.5) / sy - 0.5)
+                )
+                self._probe[i_probe] = (
+                    self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
+                )
+        else:
+            self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         # Normalize probe to match mean diffraction intensity
         # if self._vacuum_probe_intensity is None:
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe[0])) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
-            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+            shifted_probes = fft_shift(
+                self._probe[0], self._positions_px_fractional, xp
+            )
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
@@ -386,7 +437,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
             ax1.imshow(
-                asnumpy(xp.abs(self._probe) ** 2),
+                asnumpy(xp.abs(self._probe[0]) ** 2),
                 extent=probe_extent,
                 cmap=cmap,
                 **kwargs,
@@ -448,7 +499,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
-        overlap = shifted_probes * object_patches
+        overlap = shifted_probes * xp.expand_dims(object_patches, axis=1)
 
         return shifted_probes, object_patches, overlap
 
@@ -473,12 +524,16 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         fourier_overlap = xp.fft.fft2(overlap)
+        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            xp.mean(xp.abs(amplitudes - intensity_norm) ** 2)
             / self._mean_diffraction_intensity
         )
 
-        fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
+        intensity_norm[intensity_norm == 0.0] = np.inf
+        amplitude_modification = amplitudes / intensity_norm
+
+        fourier_modified_overlap = amplitude_modification[:, None] * fourier_overlap
         modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
 
         exit_waves = modified_overlap - overlap
@@ -531,17 +586,23 @@ class PtychographicReconstruction(PhaseReconstruction):
             exit_waves = overlap.copy()
 
         fourier_overlap = xp.fft.fft2(overlap)
+        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            xp.mean(xp.abs(amplitudes - intensity_norm) ** 2)
             / self._mean_diffraction_intensity
         )
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        fourier_projected_factor = amplitudes * xp.exp(
-            1j * xp.angle(fourier_projected_factor)
+        intensity_norm_projected = xp.sqrt(
+            xp.sum(xp.abs(fourier_projected_factor) ** 2, axis=1)
         )
+        intensity_norm_projected[intensity_norm_projected == 0.0] = np.inf
+
+        amplitude_modification = amplitudes / intensity_norm_projected
+        fourier_projected_factor *= amplitude_modification[:, None]
+
         projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
         exit_waves = (
@@ -660,21 +721,23 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
+        probe_normalization = xp.zeros_like(current_object)
+        object_update = xp.zeros_like(current_object)
+
+        for i_probe in range(self._num_probes):
+            probe_normalization += self._sum_overlapping_patches_bincounts(
+                xp.abs(shifted_probes[:, i_probe]) ** 2
+            )
+            object_update += step_size * self._sum_overlapping_patches_bincounts(
+                xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe]
+            )
         probe_normalization = 1 / xp.sqrt(
             1e-16
             + ((1 - normalization_min) * probe_normalization) ** 2
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        current_object += step_size * (
-            self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
-            )
-            * probe_normalization
-        )
+        current_object += object_update * probe_normalization
 
         if not fix_probe:
             object_normalization = xp.sum(
@@ -689,10 +752,10 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             current_probe += step_size * (
                 xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+                    xp.expand_dims(xp.conj(object_patches), axis=1) * exit_waves,
                     axis=0,
                 )
-                * object_normalization
+                * object_normalization[None]
             )
 
         return current_object, current_probe
@@ -737,21 +800,23 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
+        probe_normalization = xp.zeros_like(current_object)
+        current_object = xp.zeros_like(current_object)
+
+        for i_probe in range(self._num_probes):
+            probe_normalization += self._sum_overlapping_patches_bincounts(
+                xp.abs(shifted_probes[:, i_probe]) ** 2
+            )
+            current_object += self._sum_overlapping_patches_bincounts(
+                xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe]
+            )
         probe_normalization = 1 / xp.sqrt(
             1e-16
             + ((1 - normalization_min) * probe_normalization) ** 2
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        current_object = (
-            self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
-            )
-            * probe_normalization
-        )
+        current_object *= probe_normalization
 
         if not fix_probe:
             object_normalization = xp.sum(
@@ -766,10 +831,10 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             current_probe = (
                 xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+                    xp.expand_dims(xp.conj(object_patches), axis=1) * exit_waves,
                     axis=0,
                 )
-                * object_normalization
+                * object_normalization[None]
             )
 
         return current_object, current_probe
@@ -885,20 +950,20 @@ class PtychographicReconstruction(PhaseReconstruction):
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        overlap_fft = xp.fft.fft2(overlap)
+        overlap_fft = xp.fft.fft2(overlap[:, 0])
 
         exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_x_patches * shifted_probes
+            obj_rolled_x_patches * shifted_probes[:, 0]
         )
         exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_y_patches * shifted_probes
+            obj_rolled_y_patches * shifted_probes[:, 0]
         )
 
         overlap_fft_conj = xp.conj(overlap_fft)
         estimated_intensity = xp.abs(overlap_fft) ** 2
         measured_intensity = amplitudes**2
 
-        flat_shape = (overlap.shape[0], -1)
+        flat_shape = (overlap[:, 0].shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
@@ -1037,7 +1102,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         probe_center = xp.array(self._region_of_interest_shape) / 2
-        probe_intensity = asnumpy(xp.abs(current_probe) ** 2)
+        probe_intensity = asnumpy(xp.abs(current_probe[0]) ** 2)
 
         probe_x0, probe_y0 = get_CoM(probe_intensity)
         shifted_probe = fft_shift(
@@ -1066,7 +1131,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         current_probe_fft = xp.fft.fft2(current_probe)
         current_probe_fft_phase = xp.angle(current_probe_fft)
 
-        constrained_probe_fft = self._probe_initial_fft_amplitude * xp.exp(
+        constrained_probe_fft = self._probe_initial_fft_amplitude[None] * xp.exp(
             1j * current_probe_fft_phase
         )
         constrained_probe = xp.fft.ifft2(constrained_probe_fft)
@@ -1090,6 +1155,27 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
 
         return current_probe * self._probe_support_mask
+
+    def _probe_orthogonalization_constraint(self, current_probe):
+        """
+        Ptychographic probe-orthogonalization constraint.
+        Used to ensure mixed states are orthogonal to each other.
+
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Orthogonalized probe estimate
+        """
+        xp = self._xp
+
+        return orthogonalize(current_probe.reshape((self._num_probes, -1)), xp).reshape(
+            current_probe.shape
+        )
 
     def _positions_center_of_mass_constraint(self, current_positions):
         """
@@ -1169,6 +1255,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        orthogonalize_probe,
     ):
         """
         Ptychographic constraints operator.
@@ -1200,7 +1287,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        orthogonalize_probe: bool
+            If True, probe will be orthogonalized
 
         Returns
         --------
@@ -1236,6 +1324,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
+        if orthogonalize_probe:
+            current_probe = self._probe_orthogonalization_constraint(current_probe)
+
         if not fix_positions:
             current_positions = self._positions_center_of_mass_constraint(
                 current_positions
@@ -1260,6 +1351,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
+        orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_fourier_amplitude_iter: int = 0,
         fix_positions_iter: int = np.inf,
@@ -1611,6 +1703,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                orthogonalize_probe=orthogonalize_probe,
             )
 
             if store_iterations:
@@ -1803,14 +1896,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmax", None)
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
-                np.abs(self.probe) ** 2,
+                np.abs(self.probe[0]) ** 2,
                 extent=probe_extent,
                 cmap="Greys_r",
                 **kwargs,
             )
             ax.set_xlabel("x [A]")
             ax.set_ylabel("y [A]")
-            ax.set_title("Reconstructed probe intensity")
+            ax.set_title("Reconstructed probe[0] intensity")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1910,7 +2003,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 raise ValueError()
 
         figsize = kwargs.get("figsize", (12, 7))
-        cmap = kwargs.get("cmap", "inferno")
+        cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
@@ -2009,7 +2102,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             for n, ax in enumerate(grid):
                 im = ax.imshow(
-                    np.abs(probes[grid_range[n]]) ** 2,
+                    np.abs(probes[grid_range[n]][0]) ** 2,
                     extent=probe_extent,
                     cmap="Greys_r",
                     **kwargs,
@@ -2112,3 +2205,44 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    def plot_fourier_probe(
+        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+    ):
+        """
+        Plot probe in fourier space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+
+        if probe is None:
+            probe = self.probe_fourier[0]
+
+        if pixelsize is None:
+            pixelsize = self._reciprocal_sampling[1]
+        if pixelunits is None:
+            pixelunits = "A^-1"
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        show_complex(
+            probe,
+            figax=(fig, ax),
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            **kwargs,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
