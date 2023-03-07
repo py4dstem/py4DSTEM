@@ -114,6 +114,8 @@ class CrystalPhase:
         else:
             intensity = bragg_peaks.data["intensity"][keep]**power_experiment
             intensity0 = bragg_peaks.data["intensity"][np.logical_not(keep)]**power_experiment
+        int_total = np.sum(intensity) 
+
 
         # init basis array
         if include_false_positives:
@@ -393,9 +395,9 @@ class CrystalPhase:
 
 
         if returnfig:
-            return phase_weights, phase_residual, fig, ax
+            return phase_weights, phase_residual, int_total, fig, ax
         else:
-            return phase_weights, phase_residual
+            return phase_weights, phase_residual, int_total
 
     def quantify_phase(
         self,
@@ -421,6 +423,10 @@ class CrystalPhase:
             pointlistarray.shape[0],
             pointlistarray.shape[1],
         ))
+        self.int_total = np.zeros((
+            pointlistarray.shape[0],
+            pointlistarray.shape[1],
+        ))
         
         for rx, ry in tqdmnd(
                 *pointlistarray.shape,
@@ -429,7 +435,7 @@ class CrystalPhase:
                 disable=not progress_bar,
             ):
             # calculate phase weights
-            phase_weights, phase_residual = self.quantify_single_pattern(
+            phase_weights, phase_residual, int_peaks = self.quantify_single_pattern(
                 pointlistarray = pointlistarray,
                 xy_position = (rx,ry),
                 corr_kernel_size = corr_kernel_size,
@@ -443,15 +449,18 @@ class CrystalPhase:
                 )
             self.phase_weights[rx,ry] = phase_weights
             self.phase_residuals[rx,ry] = phase_residual
+            self.int_total[rx,ry] = int_peaks
 
 
     def plot_phase_weights(
         self,
         weight_range = (0.5,1,0),
-        weight_normalize = True,
+        weight_normalize = False,
+        total_intensity_normalize = True,
         cmap = 'gray',
         show_ticks = False,
         show_axes = True,
+        layout = 0,
         figsize = (6,6),
         returnfig = False,
         ):
@@ -459,22 +468,37 @@ class CrystalPhase:
         Plot the individual phase weight maps and residuals.
         """
 
+        # Normalization if required to total DF peak intensity
+        phase_weights = self.phase_weights.copy()
+        phase_residuals = self.phase_residuals.copy()
+        if total_intensity_normalize:
+            sub = self.int_total > 0.0
+            for a0 in range(self.num_fits):
+                phase_weights[:,:,a0][sub] /= self.int_total[sub]
+            phase_residuals[sub] /= self.int_total[sub]
+
         # intensity range for plotting
         if weight_normalize:
-            scale = np.median(np.max(self.phase_weights,axis=2))
+            scale = np.median(np.max(phase_weights,axis=2))
         else:
             scale = 1
         weight_range = np.array(weight_range) * scale
 
         # plotting
-        fig,ax = plt.subplots(
-            self.num_crystals + 1,
-            1,
-            figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
+        if layout == 0:
+            fig,ax = plt.subplots(
+                1,
+                self.num_crystals + 1,
+                figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
+        elif layout == 1:
+            fig,ax = plt.subplots(
+                self.num_crystals + 1,
+                1,
+                figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
 
         for a0 in range(self.num_crystals):
             sub = self.crystal_identity[:,0] == a0
-            im = np.sum(self.phase_weights[:,:,sub],axis=2)
+            im = np.sum(phase_weights[:,:,sub],axis=2)
             im = np.clip(
                 (im - weight_range[0]) / (weight_range[1] - weight_range[0]),
                 0,1)
@@ -496,7 +520,8 @@ class CrystalPhase:
 
         # plot residuals
         im = np.clip(
-                (self.phase_residuals - weight_range[0]) / (weight_range[1] - weight_range[0]),
+                (phase_residuals - weight_range[0]) \
+                / (weight_range[1] - weight_range[0]),
                 0,1)
         ax[self.num_crystals].imshow(
             im,
@@ -522,6 +547,8 @@ class CrystalPhase:
         self,
         weight_threshold = 0.5,
         weight_normalize = True,
+        total_intensity_normalize = True,
+
         plot_combine = False,
         crystal_inds_plot = None,
         phase_colors = np.array((
@@ -534,6 +561,7 @@ class CrystalPhase:
         )),
         show_ticks = False,
         show_axes = True,
+        layout = 0,
         figsize = (6,6),
         return_phase_estimate = False,
         return_rgb_images = False,
@@ -543,9 +571,15 @@ class CrystalPhase:
         Plot the individual phase weight maps and residuals.
         """
 
+        phase_weights = self.phase_weights.copy()
+        if total_intensity_normalize:
+            sub = self.int_total > 0.0
+            for a0 in range(self.num_fits):
+                phase_weights[:,:,a0][sub] /= self.int_total[sub]
+
         # intensity range for plotting
         if weight_normalize:
-            scale = np.median(np.max(self.phase_weights,axis=2))
+            scale = np.median(np.max(phase_weights,axis=2))
         else:
             scale = 1
         weight_threshold = weight_threshold * scale
@@ -564,7 +598,7 @@ class CrystalPhase:
         # phase weights over threshold
         for a0 in range(self.num_crystals):
             sub = self.crystal_identity[:,0] == a0
-            im = np.sum(self.phase_weights[:,:,sub],axis=2)
+            im = np.sum(phase_weights[:,:,sub],axis=2)
             im_all[a0] = np.maximum(im - weight_threshold, 0)
 
         # estimate compositions
@@ -600,11 +634,17 @@ class CrystalPhase:
 
         else:
             # plotting
-            fig,ax = plt.subplots(
-                self.num_crystals,
-                1,
-                figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
-
+            if layout == 0:
+                fig,ax = plt.subplots(
+                    1,
+                    self.num_crystals,
+                    figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
+            elif layout == 1:
+                fig,ax = plt.subplots(
+                    self.num_crystals,
+                    1,
+                    figsize=(figsize[0],(self.num_fits+1)*figsize[1]))
+                
             for a0 in range(self.num_crystals):
                 
                 ax[a0].imshow(
