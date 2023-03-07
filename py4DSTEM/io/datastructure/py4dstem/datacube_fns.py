@@ -1,7 +1,7 @@
 # Functions to become DataCube methods
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt, binary_fill_holes
+from scipy.ndimage import distance_transform_edt, binary_fill_holes, gaussian_filter
 
 
 # Add to tree
@@ -1096,6 +1096,9 @@ def get_beamstop_mask(
     threshold = 0.25,
     distance_edge = 2.0,
     include_edges = True,
+    sigma = 0,
+    use_max_dp = False,
+    scale_radial = None,
     name = "mask_beamstop",
     returncalc = True,
     ):
@@ -1116,19 +1119,37 @@ def get_beamstop_mask(
 
     """
 
-    # Calculate dp_mean if needed
-    if not "dp_mean" in self.tree.keys():
-        self.get_dp_mean();
+    if scale_radial is not None:
+        x = np.arange(self.data.shape[2]) * 2.0 / self.data.shape[2]
+        y = np.arange(self.data.shape[3]) * 2.0 / self.data.shape[3]
+        ya, xa = np.meshgrid(y - np.mean(y), x - np.mean(x))
+        im_scale = 1.0 + np.sqrt(xa**2 + ya**2)*scale_radial
 
-    # normalized dp_mean
-    int_sort = np.sort(self.tree["dp_mean"].data.ravel())
+    # Get image for beamstop mask
+    if use_max_dp:
+        if not "dp_mean" in self.tree.keys():
+            self.get_dp_max();
+        im = self.tree["dp_max"].data.astype('float')
+
+    else:
+        if not "dp_mean" in self.tree.keys():
+            self.get_dp_mean();
+        im = self.tree["dp_mean"].data.astype('float')
+
+    # smooth and scale if needed
+    if sigma > 0.0:
+        im = gaussian_filter(im, sigma, mode='nearest')
+    if scale_radial is not None:
+        im *= im_scale
+
+    # Calcualte beamstop mask
+    int_sort = np.sort(im.ravel())
     ind = np.round(np.clip(
             int_sort.shape[0]*threshold,
             0,int_sort.shape[0])).astype('int')
     intensity_threshold = int_sort[ind]
+    mask_beamstop = im >= intensity_threshold
 
-    # Use threshold to calculate initial mask
-    mask_beamstop = self.tree["dp_mean"].data >= intensity_threshold
 
     # clean up mask
     mask_beamstop = np.logical_not(binary_fill_holes(np.logical_not(mask_beamstop)))

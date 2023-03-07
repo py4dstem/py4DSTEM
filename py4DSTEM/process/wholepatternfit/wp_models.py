@@ -61,17 +61,28 @@ class Parameter:
         initial_value,
         lower_bound: Optional[float] = None,
         upper_bound: Optional[float] = None,
-    ):
+        ):
 
         if hasattr(initial_value, "__iter__"):
+            if len(initial_value) == 2:
+                initial_value = (
+                    initial_value[0],
+                    initial_value[0]-initial_value[1],
+                    initial_value[0]+initial_value[1],
+                    )
             self.set_params(*initial_value)
         else:
             self.set_params(initial_value, lower_bound, upper_bound)
 
-    def set_params(self, initial_value, lower_bound, upper_bound):
+    def set_params(
+        self, 
+        initial_value, 
+        lower_bound, 
+        upper_bound,
+        ):
         self.initial_value = initial_value
         self.lower_bound = lower_bound if lower_bound is not None else -np.inf
-        self.upper_bound = upper_bound if upper_bound is not None else np.inf
+        self.upper_bound = upper_bound if upper_bound is not None else  np.inf
 
     def __str__(self):
         return f"Value: {self.initial_value} (Range: {self.lower_bound},{self.upper_bound})"
