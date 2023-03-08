@@ -86,14 +86,3 @@ py4DSTEM/test/unit_test_data/
 .Trashes
 ehthumbs.db
 Thumbs.db
-Untitled.ipynb
-Demonstration_of_ML-AI.ipynb
-Si_SiGe_exp.h5
-Si_SiGe_ideal_50x200_201x50x256x256.h5
-Si_SiGe_probe.h5
-strain_profile_simulated.csv
-Untitled1.ipynb
-tmp/model_metadata_old.json
-tmp/fcunet_strain_mapping_weights_latest/saved_model.pb
-tmp/fcunet_strain_mapping_weights_latest/variables/variables.data-00000-of-00001
-tmp/fcunet_strain_mapping_weights_latest/variables/variables.index
