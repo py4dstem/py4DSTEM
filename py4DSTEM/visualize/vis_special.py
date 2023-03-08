@@ -4,7 +4,7 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 
-from py4DSTEM.emd import PointList
+from emdfile import PointList
 from py4DSTEM.classes import DataCube,Calibration
 from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
 from py4DSTEM.process.calibration import double_sided_gaussian

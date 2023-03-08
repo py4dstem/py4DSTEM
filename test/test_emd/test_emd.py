@@ -3,8 +3,8 @@ from os.path import join,exists
 from os import remove
 from numpy import array_equal
 
-import py4DSTEM
-from py4DSTEM.io import save,read
+from py4DSTEM import _TESTPATH
+from py4DSTEM import save,read
 from emdfile.read import _is_EMD_file,_get_EMD_rootgroups
 from emdfile.classes import (
     Node,
@@ -16,8 +16,7 @@ from emdfile.classes import (
 )
 
 # Set paths
-dirpath = py4DSTEM._TESTPATH
-path_dm3 = join(dirpath,"small_dm3.dm3")
+dirpath = _TESTPATH
 path_h5 = join(dirpath,"test.h5")
 
 
@@ -105,6 +104,7 @@ class TestEmd:
         """
         assert(isinstance(self.array,Array))
         # save and read
+        print(path_h5)
         save(path_h5,self.array)
         root = read(path_h5)
         new_array = root.tree('array')

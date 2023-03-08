@@ -3,7 +3,7 @@ from py4DSTEM.version import __version__
 
 # submodules
 
-import emdfile
+import emdfile as emd
 from emdfile import tqdmnd
 from py4DSTEM import io
 from py4DSTEM import preprocess
@@ -15,7 +15,7 @@ from py4DSTEM import visualize
 
 # functions
 
-from emdfile import print_h5_tree, write as save
+from emdfile import print_h5_tree, save
 from py4DSTEM.visualize import show
 from py4DSTEM.io import read, import_file
 from py4DSTEM.utils.configuration_checker import check_config
