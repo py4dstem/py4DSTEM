@@ -3,12 +3,22 @@
 Files for testing py4DSTEM functionality using the pytest framework.
 
 
-## Installation
+## Setup
 
-with the pytest framework in mind - to run tests, please first
-intall pytest with
+Install pytest with
 
 `pip install -U pytest`
+
+
+Some tests need data files to run.  In order to avoid distibuting large
+datasets with the package these files do not come pre-installed with the
+package, so you'll need to download them.  To do so, run the
+`download_test_data.py` file in this directory, e.g. with
+
+`python download_test_data.py`
+
+There should now be a new `unit_test_data/` subdirectory containing the
+necessary files for testing.
 
 
 
@@ -26,18 +36,6 @@ single test file or all files in a single test subdirectory with
 `pytest test_dir`
 
 
-
-## Data and filepaths
-
-Some tests need data files to run.  In order to avoid distibuting large
-datasets with the package these files do not come pre-installed with the
-package - you'll need to download them.  To do so, run the
-`download_test_data.py` file in this directory, e.g. with
-
-`python download_test_data.py`
-
-There should now be a new `unit_test_data/` subdirectory containing the
-necessary files for testing.
 
 
 

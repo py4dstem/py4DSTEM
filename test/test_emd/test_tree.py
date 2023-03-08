@@ -4,8 +4,8 @@ from os import remove
 from numpy import array_equal
 import h5py
 
-import py4DSTEM
-from py4DSTEM.io import save,read
+from emdfile import _TESTPATH
+from emdfile import save, read
 from emdfile.read import _is_EMD_file,_get_EMD_rootgroups
 from emdfile.classes import (
     Node,
@@ -17,7 +17,7 @@ from emdfile.classes import (
 )
 
 # Set paths
-dirpath = py4DSTEM._TESTPATH
+dirpath = _TESTPATH
 single_node_path = join(dirpath,"test_h5_single_node.h5")
 unrooted_node_path = join(dirpath,"test_h5_unrooted_node.h5")
 whole_tree_path = join(dirpath,"test_h5_whole_tree.h5")
@@ -215,6 +215,23 @@ class TestTree(TreeBuilder):
         self._del_tree()
 
 
+    @staticmethod
+    def pointlist_equal(pl1,pl2):
+        """
+        Return true iff pl1 and pl2 are equal
+        """
+        # allow for pl1 and pl2 to have the same fields in different order
+        k1,k2 = pl1.fields,pl2.fields
+        assert(all([k in k1 for k in k2]))
+        assert(all([k in k2 for k in k1]))
+        for k in k1:
+            try:
+                assert(array_equal(pl1.data[k],pl2.data[k]))
+            except AssertionError:
+                return False
+        return True
+
+
     def test_nodes(self):
         """
         Confirm that nodes are Nodes, metadata are not nodes
@@ -357,6 +374,22 @@ class TestTreeIO(TreeBuilder):
     def teardown_method(self, method):
         self._del_tree()
 
+
+    @staticmethod
+    def pointlist_equal(pl1,pl2):
+        """
+        Return true iff pl1 and pl2 are equal
+        """
+        # allow for pl1 and pl2 to have the same fields in different order
+        k1,k2 = pl1.fields,pl2.fields
+        assert(all([k in k1 for k in k2]))
+        assert(all([k in k2 for k in k1]))
+        for k in k1:
+            try:
+                assert(array_equal(pl1.data[k],pl2.data[k]))
+            except AssertionError:
+                return False
+        return True
 
 
     # Tests
@@ -564,17 +597,17 @@ class TestTreeIO(TreeBuilder):
         # New objects carry identical data to old objects
         assert(lmd_root._params == self.md_root._params)
         assert(lmd_root2._params == self.md_root2._params)
-        assert(array_equal(lpl3.data, self.pl3.data))
-        assert(array_equal(lpl4.data, self.pl4.data))
+        assert(self.pointlist_equal(lpl3, self.pl3))
+        assert(self.pointlist_equal(lpl4, self.pl4))
         assert(lmd3._params == self.md3._params)
         assert(array_equal(lar.data, self.ar.data))
         assert(lmd._params == self.md._params)
         assert(lmd2._params == self.md2._params)
-        assert(array_equal(lpl.data, self.pl.data))
-        assert(array_equal(lpl2.data, self.pl2.data))
+        assert(self.pointlist_equal(lpl, self.pl))
+        assert(self.pointlist_equal(lpl2, self.pl2))
         for x in range(lpla.shape[0]):
             for y in range(lpla.shape[1]):
-                assert(array_equal(lpla[x,y].data, self.pla[x,y].data))
+                assert(self.pointlist_equal(lpla[x,y], self.pla[x,y]))
 
         pass
 
@@ -615,7 +648,7 @@ class TestTreeIO(TreeBuilder):
         assert(lmd_root2._params == self.md_root2._params)
         for x in range(lpla.shape[0]):
             for y in range(lpla.shape[1]):
-                assert(array_equal(lpla[x,y].data, self.pla[x,y].data))
+                assert(self.pointlist_equal(lpla[x,y], self.pla[x,y]))
 
         pass
 
@@ -656,8 +689,8 @@ class TestTreeIO(TreeBuilder):
         # New objects carry identical data to old objects
         assert(lmd_root._params == self.md_root._params)
         assert(lmd_root2._params == self.md_root2._params)
-        assert(array_equal(lpl3.data, self.pl3.data))
-        assert(array_equal(lpl4.data, self.pl4.data))
+        assert(self.pointlist_equal(lpl3, self.pl3))
+        assert(self.pointlist_equal(lpl4, self.pl4))
         assert(lmd3._params == self.md3._params)
 
         pass
@@ -697,7 +730,7 @@ class TestTreeIO(TreeBuilder):
         # New objects carry identical data to old objects
         assert(lmd_root._params == self.md_root._params)
         assert(lmd_root2._params == self.md_root2._params)
-        assert(array_equal(lpl4.data, self.pl4.data))
+        assert(self.pointlist_equal(lpl4, self.pl4))
         assert(lmd3._params == self.md3._params)
 
         pass
@@ -752,7 +785,7 @@ class TestTreeIO(TreeBuilder):
         assert(not(array_equal(lar.data, self.ar2.data))) # ensure we didn't overwrite
         assert(lmd._params == self.md._params)
         assert(lmd2._params == self.md2._params)
-        assert(array_equal(lpl5.data, self.pl5.data))
+        assert(self.pointlist_equal(lpl5, self.pl5))
 
         pass
 
@@ -801,7 +834,7 @@ class TestTreeIO(TreeBuilder):
         assert(lmd_root2._params == self.md_root2._params)
         assert(array_equal(lar.data, self.ar2.data))    # ensure we did overwrite
         assert(not(array_equal(lar.data, self.ar.data)))
-        assert(array_equal(lpl5.data, self.pl5.data))
+        assert(self.pointlist_equal(lpl5, self.pl5))
 
         pass
 
