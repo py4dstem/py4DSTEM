@@ -4,16 +4,9 @@ from os import remove
 from numpy import array_equal
 
 import py4DSTEM
-from py4DSTEM.io import save,read
-from emdfile.read import _is_EMD_file,_get_EMD_rootgroups
-from emdfile.classes import (
-    Node,
-    Root,
-    Metadata,
-    Array,
-    PointList,
-    PointListArray
-)
+from py4DSTEM import save,read
+emd = py4DSTEM.emd
+
 from py4DSTEM.classes import (
     DataCube,
     BraggVectors,

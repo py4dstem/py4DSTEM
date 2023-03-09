@@ -3,17 +3,9 @@ from os.path import join,exists
 from os import remove
 from numpy import array_equal
 
-from py4DSTEM import _TESTPATH
-from py4DSTEM import save,read
-from emdfile.read import _is_EMD_file,_get_EMD_rootgroups
-from emdfile.classes import (
-    Node,
-    Root,
-    Metadata,
-    Array,
-    PointList,
-    PointListArray
-)
+import py4DSTEM
+emd = py4DSTEM.emd
+_TESTPATH = py4DSTEM._TESTPATH
 
 # Set paths
 dirpath = _TESTPATH
@@ -50,10 +42,10 @@ class TestEmd:
             #- a pointlistarray
         """
         # arrays
-        self.array = Array(
+        self.array = emd.Array(
             data = np.arange(np.prod((4,8))).reshape((4,8))
         )
-        self.array2 = Array(
+        self.array2 = emd.Array(
             data = np.arange(np.prod((4,8,2))).reshape((4,8,2)),
             name = 'array2',
             units = 'meowths',
@@ -102,26 +94,26 @@ class TestEmd:
     def test_array(self):
         """ Save then read as array, and compare its contents before/after
         """
-        assert(isinstance(self.array,Array))
+        assert(isinstance(self.array,emd.Array))
         # save and read
         print(path_h5)
-        save(path_h5,self.array)
-        root = read(path_h5)
+        emd.save(path_h5,self.array)
+        root = emd.read(path_h5)
         new_array = root.tree('array')
         # check it's the same
-        assert(isinstance(new_array,Array))
+        assert(isinstance(new_array,emd.Array))
         assert(array_equal(self.array.data,new_array.data))
 
     def test_array2(self):
         """ Save then read as array, and compare its contents before/after
         """
-        assert(isinstance(self.array2,Array))
+        assert(isinstance(self.array2,emd.Array))
         # save and read
-        save(path_h5,self.array2)
-        root = read(path_h5)
+        emd.save(path_h5,self.array2)
+        root = emd.read(path_h5)
         new_array = root.tree('array2')
         # check it's the same
-        assert(isinstance(new_array,Array))
+        assert(isinstance(new_array,emd.Array))
         assert(array_equal(self.array2.data,new_array.data))
         # check that metadata passed through
         assert(self.array2.name == new_array.name)

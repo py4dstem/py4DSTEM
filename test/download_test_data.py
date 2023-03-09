@@ -1,5 +1,7 @@
-# This file downloads test files to enable running py4DSTEM unit
-# tests with the pytest framework.
+# When run as a Python script, this file
+# makes a folder called 'unit_test_data' if one
+# doesn't already exist, and downloads
+# py4DSTEM's test data there.
 
 
 from py4DSTEM import _TESTPATH
@@ -15,5 +17,5 @@ if __name__ == '__main__':
         destination = filepath,
         overwrite = True
     )
-    #print(filepath)
+
 

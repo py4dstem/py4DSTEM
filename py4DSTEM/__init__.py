@@ -15,9 +15,9 @@ from py4DSTEM import visualize
 
 # functions
 
-from emdfile import print_h5_tree, save
+from emdfile import print_h5_tree
 from py4DSTEM.visualize import show
-from py4DSTEM.io import read, import_file
+from py4DSTEM.io import import_file,read,save
 from py4DSTEM.utils.configuration_checker import check_config
 
 
@@ -32,7 +32,7 @@ from py4DSTEM.classes import DataCube
 # test paths
 
 from os.path import dirname,join
-_TESTPATH = join(dirname(__file__), "test/unit_test_data")
+_TESTPATH = join(dirname(__file__), "../test/unit_test_data")
 
 
 
