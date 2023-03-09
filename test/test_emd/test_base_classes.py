@@ -1,11 +1,7 @@
 import numpy as np
-from emdfile import (
-    Node,
-    Metadata,
-    Array,
-    PointList,
-    PointListArray
-)
+import py4DSTEM
+emd = py4DSTEM.emd
+
 
 
 def test_Node():
@@ -15,8 +11,8 @@ def test_Node():
     # - have a Tree
     # - know how to read/write to/from h5
 
-    root = Node()
-    assert(isinstance(root,Node))
+    root = emd.Node()
+    assert(isinstance(root,emd.Node))
     ##;passert(root.name == 'root')
     ##;passert(isinstance(root.tree, Tree))
 
@@ -28,8 +24,8 @@ def test_Metadata():
     # Metadata class instances should:
     # - TODO
 
-    metadata = Metadata()
-    assert(isinstance(metadata,Metadata))
+    metadata = emd.Metadata()
+    assert(isinstance(metadata,emd.Metadata))
 
 
 def test_Array():
@@ -40,10 +36,10 @@ def test_Array():
     shape = (3,4,5)
     d = np.arange(np.prod(shape)).reshape(shape)
 
-    ar = Array(
+    ar = emd.Array(
         data = d
     )
-    assert(isinstance(ar, Array))
+    assert(isinstance(ar, emd.Array))
 
 
 def test_PointList():
@@ -56,10 +52,10 @@ def test_PointList():
         ('y',float)
     ]
     data = np.zeros(10,dtype=dtype)
-    pointlist = PointList(
+    pointlist = emd.PointList(
         data=data
     )
-    assert(isinstance(pointlist,PointList))
+    assert(isinstance(pointlist,emd.PointList))
 
 def test_PointListArray():
 
@@ -71,11 +67,11 @@ def test_PointListArray():
         ('y',float)
     ]
     shape = (5,5)
-    pointlistarray = PointListArray(
+    pointlistarray = emd.PointListArray(
         dtype = dtype,
         shape = shape
     )
-    assert(isinstance(pointlistarray,PointListArray))
+    assert(isinstance(pointlistarray,emd.PointListArray))
 
 
 
