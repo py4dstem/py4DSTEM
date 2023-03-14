@@ -298,6 +298,7 @@ def plot_scattering_intensity(
     bragg_intensity_power=1.0,
     bragg_k_broadening=0.005,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
+    title: Optional[str] = None,
     returnfig: bool = False,
 ):
     """
@@ -317,6 +318,7 @@ def plot_scattering_intensity(
         bragg_intensity_power (float):      bragg_peaks scaled by intensities**bragg_intensity_power.
         bragg_k_broadening float):          Broadening applied to bragg_peaks.
         figsize (list, tuple, np.ndarray):  Figure size for plot.
+        title (str or None):                Title
         returnfig (bool):                   Return figure and axes handles if this is True.
 
     Returns:
@@ -392,6 +394,8 @@ def plot_scattering_intensity(
     ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
     ax.set_yticks([])
     ax.set_ylabel("Magnitude", fontsize=14)
+    if title is not None:
+        ax.set_title(title, fontsize=16)
 
     if returnfig:
         return fig, ax
