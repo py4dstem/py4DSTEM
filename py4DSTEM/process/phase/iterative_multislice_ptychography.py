@@ -1184,6 +1184,58 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
         return current_object
 
+    def _object_kz_regularization_constraint(
+        self, current_object, kz_regularization_gamma
+    ):
+        """
+        Arctan regularization filter
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        kz_regularization_gamma: float
+            Slice regularization strength
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
+
+        qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
+        qz2 = qza**2 * kz_regularization_gamma**2
+        qr2 = qxa**2 + qya**2
+
+        w = 1 - 2 / np.pi * xp.arctan2(qz2, qr2)
+
+        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
+
+        return current_object
+
+    def _object_identical_slices_constraint(self, current_object):
+        """
+        Strong regularization forcing all slices to be identical
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        object_mean = current_object.mean(0, keepdims=True)
+        current_object[:] = object_mean
+
+        return current_object
+
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic threshold constraint.
@@ -1335,6 +1387,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        kz_regularization_filter,
+        kz_regularization_gamma,
+        identical_slices,
     ):
         """
         Ptychographic constraints operator.
@@ -1361,11 +1416,17 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         gaussian_filter_sigma: float
             Standard deviation of gaussian kernel
         butterworth_filter: bool
-            Cut-off frequency in A^-1 for butterworth filter
+            If True, applies fourier-space butterworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        kz_regularization_filter: bool
+            If True, applies fourier-space arctan regularization filter
+        kz_regularization_gamma: float
+            Slice regularization strength
+        identical_slices: bool
+            If True, forces all object slices to be identical
 
         Returns
         --------
@@ -1388,6 +1449,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 q_lowpass,
                 q_highpass,
             )
+
+        if kz_regularization_filter:
+            current_object = self._object_kz_regularization_constraint(
+                current_object, kz_regularization_gamma
+            )
+
+        if identical_slices:
+            current_object = self._object_identical_slices_constraint(current_object)
 
         current_object = self._object_threshold_constraint(
             current_object, pure_phase_object
@@ -1436,6 +1505,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        kz_regularization_filter_iter: int = np.inf,
+        kz_regularization_gamma: float = None,
+        identical_slices_iter: int = 0,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1495,6 +1567,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        kz_regularization_filter_iter: int, optional
+            Number of iterations to run using kz regularization filter
+        kz_regularization_gamma, float, optional
+            kz regularization strength
+        identical_slices_iter: int, optional
+            Number of iterations to run using identical slices
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1778,6 +1856,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                kz_regularization_filter=a0 < kz_regularization_filter_iter
+                and kz_regularization_gamma is not None,
+                kz_regularization_gamma=kz_regularization_gamma,
+                identical_slices=a0 < identical_slices_iter,
             )
 
             if store_iterations:
