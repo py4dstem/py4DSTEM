@@ -1109,7 +1109,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     raise ValueError()
             else:
                 raise ValueError()
-            
+
             if self._rotation_best_transpose:
                 x = (x - np.ptp(x) / 2) / self.sampling[1]
                 y = (y - np.ptp(y) / 2) / self.sampling[0]
@@ -1321,12 +1321,12 @@ class PhaseReconstruction(metaclass=ABCMeta):
         min_y = min_y if min_y > 0 else 0
         max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
 
-        rotated_array = rotate(asnumpy(array), np.rad2deg(-angle), reshape=False)[
-            min_x:max_x, min_y:max_y
-        ]
+        rotated_array = rotate(
+            asnumpy(array), np.rad2deg(-angle), reshape=False, axes=(-2, -1)
+        )[..., min_x:max_x, min_y:max_y]
 
         if self._rotation_best_transpose:
-            rotated_array = rotated_array.T
+            rotated_array = rotated_array.swapaxes(-2, -1)
 
         return rotated_array
 
