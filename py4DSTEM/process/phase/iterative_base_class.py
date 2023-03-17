@@ -37,6 +37,16 @@ class PhaseReconstruction(metaclass=ABCMeta):
     Defines various common functions and properties for all subclasses to inherit,
     as well as sets up various abstract methods each subclass must define.
     """
+    from py4DSTEM.process.phase.iterative_constraints import (
+        _object_threshold_constraint, 
+        _object_gaussian_constraint, 
+        _object_butterworth_constraint, 
+        _probe_center_of_mass_constraint, 
+        _probe_fourier_amplitude_constraint, 
+        _probe_finite_support_constraint, 
+        _positions_center_of_mass_constraint, 
+        _positions_affine_transformation_constraint, 
+    )
 
     @abstractmethod
     def preprocess(self):
@@ -1578,10 +1588,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             0,
         ]
 
-        initial_pos = asnumpy(self._positions_px_initial)
-        initial_pos[:, 0] *= self.sampling[0]
-        initial_pos[:, 1] *= self.sampling[1]
-
+        initial_pos = asnumpy(self._positions_initial)
         pos = self.positions
 
         figsize = kwargs.get("figsize", (6, 6))
@@ -1687,3 +1694,89 @@ class PhaseReconstruction(metaclass=ABCMeta):
             return None
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
+
+    def _position_correction(
+        self,
+        relevant_object,
+        relevant_probes,
+        relevant_overlap,
+        relevant_amplitudes,
+        current_positions,
+        positions_step_size,
+    ):
+        """
+        Position correction using estimated intensity gradient.
+
+        Parameters
+        --------
+        relevant_object: np.ndarray
+            Current object estimate
+        relevant_probes:np.ndarray
+            fractionally-shifted probes
+        relevant_overlap: np.ndarray
+            object * probe overlap
+        relevant_amplitudes: np.ndarray
+            Measured amplitudes
+        current_positions: np.ndarray
+            Current positions estimate
+        positions_step_size: float
+            Positions step size
+
+        Returns
+        --------
+        updated_positions: np.ndarray
+            Updated positions estimate
+        """
+
+        xp = self._xp
+
+        obj_rolled_x_patches = relevant_object[
+            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
+            self._vectorized_patch_indices_col,
+        ]
+        obj_rolled_y_patches = relevant_object[
+            self._vectorized_patch_indices_row,
+            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
+        ]
+
+        overlap_fft = xp.fft.fft2(relevant_overlap)
+
+        exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
+            obj_rolled_x_patches * relevant_probes
+        )
+        exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
+            obj_rolled_y_patches * relevant_probes
+        )
+
+        overlap_fft_conj = xp.conj(overlap_fft)
+        estimated_intensity = xp.abs(overlap_fft) ** 2
+        measured_intensity = relevant_amplitudes**2
+
+        flat_shape = (relevant_overlap.shape[0], -1)
+        difference_intensity = (measured_intensity - estimated_intensity).reshape(
+            flat_shape
+        )
+
+        partial_intensity_dx = 2 * xp.real(
+            exit_waves_dx_fft * overlap_fft_conj
+        ).reshape(flat_shape)
+        partial_intensity_dy = 2 * xp.real(
+            exit_waves_dy_fft * overlap_fft_conj
+        ).reshape(flat_shape)
+
+        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
+
+        # positions_update = xp.einsum(
+        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
+        # )
+
+        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
+        positions_update = (
+            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
+            @ coefficients_matrix_T
+            @ difference_intensity[..., None]
+        )
+
+        current_positions -= positions_step_size * positions_update[..., 0]
+
+        return current_positions
