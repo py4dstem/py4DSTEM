@@ -21,7 +21,6 @@ from py4DSTEM.io import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
-    estimate_global_transformation_ransac,
     fft_shift,
     generate_batches,
     orthogonalize,
@@ -906,183 +905,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         return current_object, current_probe
 
-    def _position_correction(
-        self,
-        current_object,
-        shifted_probes,
-        overlap,
-        amplitudes,
-        current_positions,
-        positions_step_size,
-    ):
-        """
-        Position correction using estimated intensity gradient.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
-        overlap: np.ndarray
-            object * probe overlap
-        amplitudes: np.ndarray
-            Measured amplitudes
-        current_positions: np.ndarray
-            Current positions estimate
-        positions_step_size: float
-            Positions step size
-
-        Returns
-        --------
-        updated_positions: np.ndarray
-            Updated positions estimate
-        """
-
-        xp = self._xp
-
-        obj_rolled_x_patches = current_object[
-            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
-            self._vectorized_patch_indices_col,
-        ]
-        obj_rolled_y_patches = current_object[
-            self._vectorized_patch_indices_row,
-            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
-        ]
-
-        overlap_fft = xp.fft.fft2(overlap[:, 0])
-
-        exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_x_patches * shifted_probes[:, 0]
-        )
-        exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_y_patches * shifted_probes[:, 0]
-        )
-
-        overlap_fft_conj = xp.conj(overlap_fft)
-        estimated_intensity = xp.abs(overlap_fft) ** 2
-        measured_intensity = amplitudes**2
-
-        flat_shape = (overlap[:, 0].shape[0], -1)
-        difference_intensity = (measured_intensity - estimated_intensity).reshape(
-            flat_shape
-        )
-
-        partial_intensity_dx = 2 * xp.real(
-            exit_waves_dx_fft * overlap_fft_conj
-        ).reshape(flat_shape)
-        partial_intensity_dy = 2 * xp.real(
-            exit_waves_dy_fft * overlap_fft_conj
-        ).reshape(flat_shape)
-
-        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
-
-        # positions_update = xp.einsum(
-        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
-        # )
-
-        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
-        positions_update = (
-            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
-            @ coefficients_matrix_T
-            @ difference_intensity[..., None]
-        )
-
-        current_positions -= positions_step_size * positions_update[..., 0]
-
-        return current_positions
-
-    def _object_threshold_constraint(self, current_object, pure_phase_object):
-        """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        pure_phase_object: bool
-            If True, object amplitude is set to unity
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        phase = xp.exp(1.0j * xp.angle(current_object))
-        if pure_phase_object:
-            amplitude = 1.0
-        else:
-            amplitude = xp.minimum(xp.abs(current_object), 1.0)
-        return amplitude * phase
-
-    def _object_smoothness_constraint(
-        self, current_object, gaussian_filter_sigma, pure_phase_object
-    ):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
-        pure_phase_object: bool
-            If True, gaussian blur performed on phase only
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        if pure_phase_object:
-            phase = xp.angle(current_object)
-            phase = gaussian_filter(phase, gaussian_filter_sigma)
-            current_object = xp.exp(1.0j * phase)
-        else:
-            current_object = gaussian_filter(current_object, gaussian_filter_sigma)
-
-        return current_object
-
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
-        """
-        Butterworth filter
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2)
-
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
-        return current_object
-
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic threshold constraint.
@@ -1111,51 +933,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         return shifted_probe
 
-    def _probe_fourier_amplitude_constraint(self, current_probe):
-        """
-        Ptychographic probe Fourier-amplitude constraint.
-        Used for fixing the probe's amplitude in Fourier space.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Fourier-amplitude constrained probe estimate
-        """
-        xp = self._xp
-
-        current_probe_fft = xp.fft.fft2(current_probe)
-        current_probe_fft_phase = xp.angle(current_probe_fft)
-
-        constrained_probe_fft = self._probe_initial_fft_amplitude[None] * xp.exp(
-            1j * current_probe_fft_phase
-        )
-        constrained_probe = xp.fft.ifft2(constrained_probe_fft)
-
-        return constrained_probe
-
-    def _probe_finite_support_constraint(self, current_probe):
-        """
-        Ptychographic probe support constraint.
-        Used for penalizing focused probes to replicate sample periodicity.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Finite-support constrained probe estimate
-        """
-
-        return current_probe * self._probe_support_mask
-
     def _probe_orthogonalization_constraint(self, current_probe):
         """
         Ptychographic probe-orthogonalization constraint.
@@ -1176,69 +953,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         return orthogonalize(current_probe.reshape((self._num_probes, -1)), xp).reshape(
             current_probe.shape
         )
-
-    def _positions_center_of_mass_constraint(self, current_positions):
-        """
-        Ptychographic position center of mass constraint.
-        Additionally updates vectorized indices used in _overlap_projection.
-
-        Parameters
-        ----------
-        current_positions: np.ndarray
-            Current positions estimate
-
-        Returns
-        --------
-        constrained_positions: np.ndarray
-            CoM constrained positions estimate
-        """
-        xp = self._xp
-
-        current_positions -= xp.mean(current_positions, axis=0) - self._positions_px_com
-        self._positions_px_fractional = current_positions - xp.round(current_positions)
-
-        self._set_vectorized_patch_indices()
-
-        return current_positions
-
-    def _positions_affine_transformation_constraint(
-        self, initial_positions, current_positions
-    ):
-        """
-        Constrains the updated positions to be an affine transformation of the initial scan positions,
-        composing of two scale factors, a shear, and a rotation angle.
-
-        Uses RANSAC to estimate the global transformation robustly.
-        Stores the AffineTransformation in self._tf.
-
-        Parameters
-        ----------
-        initial_positions: np.ndarray
-            Initial scan positions
-        current_positions: np.ndarray
-            Current positions estimate
-
-        Returns
-        -------
-        constrained_positions: np.ndarray
-            Affine-transform constrained positions estimate
-        """
-
-        xp = self._xp
-
-        tf, _ = estimate_global_transformation_ransac(
-            positions0=initial_positions,
-            positions1=current_positions,
-            origin=self._positions_px_com,
-            translation_allowed=True,
-            min_sample=self._num_diffraction_patterns // 10,
-            xp=xp,
-        )
-
-        self._tf = tf
-        current_positions = tf(initial_positions, origin=self._positions_px_com, xp=xp)
-
-        return current_positions
 
     def _constraints(
         self,
@@ -1301,7 +1015,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         """
 
         if gaussian_filter:
-            current_object = self._object_smoothness_constraint(
+            current_object = self._object_gaussian_constraint(
                 current_object, gaussian_filter_sigma, pure_phase_object
             )
 
@@ -1676,8 +1390,8 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
                         self._object,
-                        shifted_probes,
-                        overlap,
+                        shifted_probes[:, 0],
+                        overlap[:, 0],
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
