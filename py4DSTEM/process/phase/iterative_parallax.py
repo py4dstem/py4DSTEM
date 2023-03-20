@@ -786,12 +786,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         Wiener_filter = False,
         Wiener_signal_noise_ratio = 1.0,
         Wiener_filter_low_only = False,
-        # LASSO_filter: bool = False,
-        # LASSO_scale: float = 1.0,
         **kwargs,
     ):
         """
-        CTF correction of the BF image using the measured defocus aberration.
+        CTF correction of the phase image using the measured defocus aberration.
 
         Parameters
         ----------
@@ -801,25 +799,27 @@ class ParallaxReconstruction(PhaseReconstruction):
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
             power of butterworth filter
-        LASSO_filter: bool, optional
-            If True, the measured CTF is fitted to a LASSO-type curve_fit
-        LASSO_scale: float, optional
-            scale of LASSO filter
+        Wiener_filter: bool, optional
+            Use Wiener filtering instead of CTF sign correction.
+        Wiener_signal_noise_ratio: float, optional
+            Signal to noise radio at k = 0 for Wiener filter
+        Wiener_filter_low_only: bool, optional
+            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
         # Fourier coordinates
+        print(self._recon_BF.shape)
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
         ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
-        sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
-
+        # CTF
+        sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
 
         if Wiener_filter:
-
             SNR_inv = xp.sqrt(1 + (kra2**k_info_power) / (
                     (k_info_limit) ** (2 * k_info_power)
                 )) / Wiener_signal_noise_ratio
@@ -835,9 +835,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             # apply correction to mean reconstructed BF image
             im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
-            # fig,ax = plt.subplots(figsize=(10,10))
-            # ax.imshow(np.fft.fftshift(np.abs(CTF_corr)))
-        
         else:
             # CTF without tilt correction (beyond the parallax operator)
             CTF_corr = xp.sign(sin_chi)
@@ -855,7 +852,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Output phase image
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
         self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
-
 
         # plotting
         if plot_corrected_phase:
@@ -885,6 +881,129 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
+
+
+
+
+    def depth_section(
+        self,
+        depth_angstroms = np.arange(-200,200,100),
+        plot_last_image = True,
+        k_info_limit: float = None,
+        k_info_power: float = 1.0,
+        progress_bar = True,
+        **kwargs,
+    ):
+        """
+        CTF correction of the BF image using the measured defocus aberration.
+
+        Parameters
+        ----------
+        depth_angstroms: np.array
+            Specify the depthes 
+        k_info_limit: float, optional
+            maximum allowed frequency in butterworth filter
+        k_info_power: float, optional
+            power of butterworth filter
+
+
+        Returns
+        -------
+        stack_depth: np.array
+            stack of phase images at different depths with shape [depth Nx Ny] 
+
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+        depth_angstroms = np.atleast_1d(depth_angstroms)
+
+        # Fourier coordinates
+        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
+        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
+
+        # information limit
+        if k_info_limit is not None:
+            k_filt = 1 / (1 + (kra2**k_info_power) / (
+                (k_info_limit) ** (2 * k_info_power)
+            ))
+
+        # init
+        stack_depth = xp.zeros((
+            depth_angstroms.shape[0],
+            self._recon_BF.shape[0],
+            self._recon_BF.shape[1]
+        ))
+
+        # main loop
+        for a0 in tqdmnd(
+                depth_angstroms.shape[0],
+                desc="Depth sectioning ",
+                unit="plane",
+                disable=not progress_bar,
+            ):
+            dz = depth_angstroms[a0]
+
+            # Parallax
+            im_depth = xp.zeros_like(self._recon_BF, dtype='complex')
+            for a1 in range(self._stack_BF.shape[0]):
+                dx = self._probe_angles[a1,0] * dz
+                dy = self._probe_angles[a1,1] * dz
+                im_depth += np.fft.fft2(self._stack_BF[a1]) * xp.exp(
+                    self._qx_shift*dx + self._qy_shift*dy
+                    )
+            
+            # CTF correction
+            # TODO - check sign of Fresenal prop
+            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1+dz)) * kra2)
+            CTF_corr = xp.sign(sin_chi)
+            CTF_corr[0, 0] = 0
+            if k_info_limit is not None:
+                CTF_corr *= k_filt
+
+            # apply correction to mean reconstructed BF image
+            stack_depth[a0] = asnumpy(xp.real(xp.fft.ifft2(
+                im_depth * CTF_corr
+            ))) / self._stack_BF.shape[0]
+
+            # if needed, add low pass filter output image
+            
+
+        # # Output phase image
+        # self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
+        # self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
+
+        # plotting
+        if plot_last_image:
+            figsize = kwargs.get("figsize", (6, 6))
+            cmap = kwargs.get("cmap", "magma")
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+
+            fig, ax = plt.subplots(figsize=figsize)
+
+            cropped_object = self._crop_padded_object(stack_depth[-1])
+
+            extent = [
+                0,
+                self._scan_sampling[1] * cropped_object.shape[1],
+                self._scan_sampling[0] * cropped_object.shape[0],
+                0,
+            ]
+
+            ax.imshow(
+                cropped_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            ax.set_title("Parallax-Corrected Phase Image")
+
+        return stack_depth
 
 
     def _crop_padded_object(
