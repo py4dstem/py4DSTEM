@@ -14,17 +14,32 @@ def get_py4DSTEM_topgroups(filepath):
                     topgroups.append(key)
     return topgroups
 
+def is_py4DSTEM_version13(filepath):
+    """ Returns True for data written by a py4DSTEM v0.13.x release.
+    """
+    with h5py.File(filepath,'r') as f:
+        if "emd_group_type" in f.attrs():
+            if f.attrs["emd_group_type"] == 'root':
+                if all([x in f.attrs for x in ("version_major","version_minor")]):
+                    if (f.attrs["version_major"],f.attrs["version_minor"]) == (0,13):
+                        return True
+        else:
+            return False
+
 def is_py4DSTEM_file(filepath):
     """ Returns True iff filepath points to a py4DSTEM formatted (EMD type 2) file.
     """
-    try:
-        topgroups = get_py4DSTEM_topgroups(filepath)
-        if len(topgroups)>0:
-            return True
-        else:
+    if is_py4DSTEM_version13(filepath):
+        return True
+    else:
+        try:
+            topgroups = get_py4DSTEM_topgroups(filepath)
+            if len(topgroups)>0:
+                return True
+            else:
+                return False
+        except OSError:
             return False
-    except OSError:
-        return False
 
 def get_py4DSTEM_version(filepath, topgroup='4DSTEM_experiment'):
     """ Returns the version (major,minor,release) of a py4DSTEM file.

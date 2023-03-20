@@ -11,7 +11,7 @@ def _parse_filetype(fp):
         ".py4dstem",
         ".emd",
     ]:
-        return "H5"
+        return "EMD"
     elif fext in [
         ".dm",
         ".dm3",
