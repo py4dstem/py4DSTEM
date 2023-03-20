@@ -1,5 +1,5 @@
 """
-Module for reconstructing virtual parallax (also known as tilted bright field)
+Module for reconstructing virtual parallax (also known as tilted-shifted bright field)
 images by aligning each virtual BF image.
 """
 
@@ -731,11 +731,15 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_correct(
         self,
-        plot_corrected_bf: bool = True,
+        plot_corrected_phase: bool = True,
         k_info_limit: float = None,
-        k_info_power: float = 2.0,
-        LASSO_filter: bool = False,
-        LASSO_scale: float = 1.0,
+        k_info_power: float = 1.0,
+        Wiener_filter = False,
+        Wiener_signal_noise_ratio = 1.0,
+        transport_of_intensity = False,
+        transport_of_intensity_tau = 0.1,
+        # LASSO_filter: bool = False,
+        # LASSO_scale: float = 1.0,
         **kwargs,
     ):
         """
@@ -743,8 +747,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
-        plot_corrected_bf: bool, optional
-            If True, the CTF-corrected bright field average image is plotted
+        plot_corrected_phase: bool, optional
+            If True, the CTF-corrected phase is plotted
         k_info_limit: float, optional
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
@@ -762,89 +766,126 @@ class ParallaxReconstruction(PhaseReconstruction):
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
         ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
-        sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
 
-        # CTF without tilt correction (beyond the parallax operator)
-        CTF_corr = xp.sign(sin_chi)
-        CTF_corr[0, 0] = 0
 
-        # apply correction to mean reconstructed BF image
-        im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+        if transport_of_intensity:
+            # Use the modified Transport of intensity equation to estimate phase
+            CTF_corr = 1 / xp.maximum(1 - transport_of_intensity_tau * kra2, 0.0001)
+            # im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr       
+
+            # Output phase image
+            self._recon_phase_corrected = -1.0*xp.log(xp.real(
+                xp.fft.ifft2(
+                    xp.fft.fft2(
+                        self._recon_BF / xp.mean(self._recon_BF)
+                        ) * CTF_corr
+                    )
+                ))
+            self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
+
+            fig,ax = plt.subplots(figsize=(8,8))
+            ax.imshow(np.fft.fftshift(CTF_corr))
+
+        else:
+            sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
+
+            if Wiener_filter:
+                SNR_inv = xp.sqrt(1 + (kra2**k_info_power) / (
+                        (k_info_limit) ** (2 * k_info_power)
+                    )) / Wiener_signal_noise_ratio
+                CTF_corr = xp.sign(sin_chi) / (
+                        sin_chi**2 + SNR_inv
+                    )
+                # apply correction to mean reconstructed BF image
+                im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+
+                # fig,ax = plt.subplots(figsize=(10,10))
+                # ax.imshow(np.fft.fftshift(np.abs(CTF_corr)))
+            
+            else:
+                # CTF without tilt correction (beyond the parallax operator)
+                CTF_corr = xp.sign(sin_chi)
+                CTF_corr[0, 0] = 0
+
+                # apply correction to mean reconstructed BF image
+                im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+
+                # if needed, add low pass filter output image
+                if k_info_limit is not None:
+                    im_fft_corr /= 1 + (kra2**k_info_power) / (
+                        (k_info_limit) ** (2 * k_info_power)
+                    )
+
+            # Output phase image
+            self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
+            self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
         # if needed, Fourier filter output image
-        if LASSO_filter:
+        # if LASSO_filter:
 
-            def CTF_fit(kra2_CTFmag, I0, I1, I2, I3, sigma1, sigma2, sigma3):
-                kra2, CTF_mag = kra2_CTFmag
-                int_fit = (
-                    I0
-                    + I1 * np.exp(kra2 / (-2 * sigma1**2))
-                    + I2 * np.exp(kra2 / (-2 * sigma2**2))
-                    + I3 * np.exp(kra2 / (-2 * sigma3**2)) * CTF_mag
-                )
-                return int_fit.ravel()
+        #     def CTF_fit(kra2_CTFmag, I0, I1, I2, I3, sigma1, sigma2, sigma3):
+        #         kra2, CTF_mag = kra2_CTFmag
+        #         int_fit = (
+        #             I0
+        #             + I1 * np.exp(kra2 / (-2 * sigma1**2))
+        #             + I2 * np.exp(kra2 / (-2 * sigma2**2))
+        #             + I3 * np.exp(kra2 / (-2 * sigma3**2)) * CTF_mag
+        #         )
+        #         return int_fit.ravel()
 
-            sin_chi = asnumpy(sin_chi)
-            im_fft_corr = asnumpy(im_fft_corr)
+        #     sin_chi = asnumpy(sin_chi)
+        #     im_fft_corr = asnumpy(im_fft_corr)
 
-            CTF_mag = np.abs(sin_chi)
-            sig = np.abs(im_fft_corr)
-            sig_mean = np.mean(sig)
-            sig_min = np.min(sig)
-            sig_max = np.max(sig)
-            k_max = np.max(asnumpy(kx))
-            coefs = (
-                sig_min,
-                sig_max,
-                sig_mean,
-                sig_mean,
-                k_max / 16.0,
-                k_max / 4.0,
-                k_max / 1.0,
-            )
-            lb = (
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                k_max / 100.0,
-                k_max / 10.0,
-                k_max / 10.0,
-            )
-            ub = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
+        #     CTF_mag = np.abs(sin_chi)
+        #     sig = np.abs(im_fft_corr)
+        #     sig_mean = np.mean(sig)
+        #     sig_min = np.min(sig)
+        #     sig_max = np.max(sig)
+        #     k_max = np.max(asnumpy(kx))
+        #     coefs = (
+        #         sig_min,
+        #         sig_max,
+        #         sig_mean,
+        #         sig_mean,
+        #         k_max / 16.0,
+        #         k_max / 4.0,
+        #         k_max / 1.0,
+        #     )
+        #     lb = (
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         k_max / 100.0,
+        #         k_max / 10.0,
+        #         k_max / 10.0,
+        #     )
+        #     ub = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
 
-            # curve_fit the background image
-            coefs, pcov = curve_fit(
-                CTF_fit,
-                (kra2, CTF_mag),
-                sig.ravel(),
-                p0=coefs,
-                bounds=(lb, ub),
-                maxfev=1000,
-            )
-            coefs_bg = coefs.copy()
-            coefs_bg[3] = 0
-            sig_bg = np.reshape(CTF_fit((kra2, CTF_mag), *coefs_bg), sig.shape)
+        #     # curve_fit the background image
+        #     coefs, pcov = curve_fit(
+        #         CTF_fit,
+        #         (kra2, CTF_mag),
+        #         sig.ravel(),
+        #         p0=coefs,
+        #         bounds=(lb, ub),
+        #         maxfev=1000,
+        #     )
+        #     coefs_bg = coefs.copy()
+        #     coefs_bg[3] = 0
+        #     sig_bg = np.reshape(CTF_fit((kra2, CTF_mag), *coefs_bg), sig.shape)
 
-            # apply LASSO filter
-            im_fft_corr = np.clip(
-                np.abs(im_fft_corr) - sig_bg * LASSO_scale, 0, np.inf
-            ) * np.exp(1j * np.angle(im_fft_corr))
+        #     # apply LASSO filter
+        #     im_fft_corr = np.clip(
+        #         np.abs(im_fft_corr) - sig_bg * LASSO_scale, 0, np.inf
+        #     ) * np.exp(1j * np.angle(im_fft_corr))
 
-            im_fft_corr = xp.asarray(im_fft_corr)
+        #     im_fft_corr = xp.asarray(im_fft_corr)
 
-        # if needed, add low pass filter output image
-        if k_info_limit is not None:
-            im_fft_corr /= 1 + (kra2**k_info_power) / (
-                (k_info_limit) ** (2 * k_info_power)
-            )
 
-        # Output image
-        self._recon_BF_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
-        self.recon_BF_corrected = asnumpy(self._recon_BF_corrected)
 
         # plotting
-        if plot_corrected_bf:
+        if plot_corrected_phase:
             figsize = kwargs.get("figsize", (6, 6))
             cmap = kwargs.get("cmap", "magma")
             kwargs.pop("figsize", None)
@@ -852,7 +893,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig, ax = plt.subplots(figsize=figsize)
 
-            cropped_object = self._crop_padded_object(self._recon_BF_corrected)
+            cropped_object = self._crop_padded_object(self._recon_phase_corrected)
 
             extent = [
                 0,
