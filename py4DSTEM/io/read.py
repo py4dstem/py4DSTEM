@@ -3,10 +3,10 @@
 from pathlib import Path
 from typing import Optional,Union
 
+import py4DSTEM
+emd = py4DSTEM.emd
 from py4DSTEM.io.parsefiletype import _parse_filetype
-from emdfile import read
-from emdfile import _is_EMD_file, _get_EMD_version, _version_is_geq
-from py4DSTEM.io.legacy import is_py4DSTEM_file, get_py4DSTEM_version
+import py4DSTEM.io.legacy as legacy
 
 
 
@@ -15,18 +15,21 @@ def read(
     filepath: Union[str,Path],
     datapath: Optional[str] = None,
     tree: Optional[Union[bool,str]] = True,
+    verbose: Optional[bool] = False,
     **kwargs,
     ):
     """
     A file reader for native py4DSTEM / EMD files.  To read non-native
     formats, use `py4DSTEM.import_file`.
 
-    For files written by py4DSTEM version 0.13+, the function arguments
+    For files written by py4DSTEM version 0.14+, the function arguments
     are those listed here - filepath, datapath, and tree.  See below for
     descriptions.
 
-    For details about the file specification py4DSTEM files (v0.13.15+)
-    are built on top of, see https://emdatasets.com/format/ or
+    Files written by py4DSTEM v0.14+ are EMD 1.0 files, an HDF5 based
+    format.  For a description and complete file specification, see
+    https://emdatasets.com/format/. For the Python implementation of
+    EMD 1.0 read-write routines which py4DSTEM is build on top of, see
     https://github.com/py4dstem/emdfile.
 
     To read file written by older verions of py4DSTEM, different keyword
@@ -68,45 +71,32 @@ def read(
     assert filetype == "H5", f"`py4DSTEM.read` loads native HDF5 formatted files, but a file of type {filetype} was detected.  Try loading it using py4DSTEM.import_file"
 
 
-    # native EMD 1.0 formatted files (py4DSTEM v0.13.15+)
-    if _is_EMD_file(filepath):
-        version = _get_EMD_version(filepath)
-        assert _version_is_geq(version,(1,0,0)), f"EMD version {version} detected. Expected version >= 1.0.0"
-        # py4DSTEM version?
-        # read...
-        # return
-        pass
+    # native EMD 1.0 formatted files (py4DSTEM v0.14+)
+    if emd._is_EMD_file(filepath):
+        version = emd._get_EMD_version(filepath)
+        if verbose: print(f"EMD version {version[0]}.{version[1]}.{version[2]} detected. Reading...")
+        assert emd._version_is_geq(version,(1,0,0)), f"EMD version {version} detected. Expected version >= 1.0.0"
+        data = emd.read(
+            filepath,
+            emdpath = datapath,
+            tree = tree
+        )
+        if verbose: print("Done.")
+        return data
 
 
     # legacy py4DSTEM files (v <= 0.13.14)
     else:
         assert is_py4DSTEM_file(filepath), "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
         version = get_py4DSTEM_version(filepath)
-        # read...
-        # return
-        pass
-
-
-
-
-
-
-
-    # to remove
-
-    # prepare kwargs
-    #kwargs['root'] = root
-    #kwargs['tree'] = tree
-
-    # load data
-    #data = read_py4DSTEM(
-    #    filepath,
-    #    **kwargs
-    #)
-
-    #return data
-
-
-
+        if verbose: print(f"Legacy py4DSTEM version {version[0]}.{version[1]}.{version[2]} file detected. Reading...")
+        kwargs['datapath'] = datapath
+        kwargs['tree'] = tree
+        data = legacy.read_legacy(
+            filepath=filepath,
+            **kwargs,
+        )
+        if verbose: print("Done.")
+        return data
 
 
